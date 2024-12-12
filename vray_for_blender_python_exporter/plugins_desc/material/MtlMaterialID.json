@@ -1,0 +1,46 @@
+
+{
+    "Desciption" : "MtlMaterialID",
+    "ID" : "MtlMaterialID",
+    "Name" : "Mtl Material ID",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "The base material",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_id_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The material ID color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_id_number",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lpe_label",
+            "default" : "",
+            "desc" : "Light path expressions material label which can be used to identify the material (e.g. CR'some_label'L)",
+            "type" : "STRING",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

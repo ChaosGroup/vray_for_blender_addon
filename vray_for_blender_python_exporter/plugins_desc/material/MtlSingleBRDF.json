@@ -1,0 +1,64 @@
+
+{
+    "Desciption" : "MtlSingleBRDF",
+    "ID" : "MtlSingleBRDF",
+    "Name" : "Mtl Single BRDF",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "filter",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Filter to multiply the BRDF result with",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "brdf",
+            "default" : null,
+            "desc" : "The actual shader",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "double_sided",
+            "default" : 1,
+            "desc" : "0 - single sided, 1 - to make the material double-sided, 2 - make back faces pointing at camera transparent for camera rays, 3 - make back faces transparent for all ray types except shadow rays, 4 - same as 3 but back faces are also visible to rays that have been refracted(and are not GI or reflection rays",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "allow_negative_colors",
+            "default" : false,
+            "desc" : "true to allow negative color components; otherwise they will be clamped to 0",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

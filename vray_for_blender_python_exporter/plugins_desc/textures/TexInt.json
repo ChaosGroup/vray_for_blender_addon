@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexInt",
+    "ID" : "TexInt",
+    "Name" : "Int",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0,
+            "desc" : "input",
+            "type" : "INT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

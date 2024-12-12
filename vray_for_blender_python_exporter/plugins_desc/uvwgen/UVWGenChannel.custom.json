@@ -1,0 +1,86 @@
+{
+    "Desciption": "UVWGenChannel",
+    "ID": "UVWGenChannel",
+    "Name": "UVW Gen Channel",
+    "Type": "UVWGEN",
+    "Parameters": [
+        {
+            "attr": "uvw_channel",
+            "default": -1
+        }
+    ],
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Mapping",
+                "type": "UVWGEN"
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "properties",
+                "label": "Properties",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "uvw_channel",
+                        "label": "UVW Channel"
+                    },
+                    {
+                        "name": "nsamples",
+                        "label": "Motion Blur Samples"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "mapping",
+                "label": "Mapping",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "wrap_u"
+                    },
+                    {
+                        "name": "crop_u"
+                    },
+                    {
+                        "name": "wrap_v"
+                    },
+                    {
+                        "name": "crop_v"
+                    },
+                    {
+                        "name": "wrap_w"
+                    },
+                    {
+                        "name": "crop_w"
+                    },
+                    {
+                        "name": "wrap_mode"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "coverage"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "uvw_transform_tex",
+            "uvw_coords",
+            "duvw_scale",
+            "uvwgen",
+            "use_double_sided_mode"
+        ]
+    }
+}

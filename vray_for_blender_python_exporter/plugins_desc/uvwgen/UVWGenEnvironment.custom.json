@@ -1,0 +1,81 @@
+{
+    "ID": "UVWGenEnvironment",
+    "Parameters": [
+        {
+            "attr" : "ground_on",
+            "default" : false,
+            "type" : "BOOL"
+        },
+        {
+            "attr": "uvw_transform",
+            "ui" : {
+                "display_name": "UVW Transform"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mapping_type"
+                    },
+                    {
+                        "name": "wrap_u"
+                    },
+                    {
+                        "name": "wrap_v"
+                    },
+                    {
+                        "name": "wrap_w"
+                    },
+                    {
+                        "name": "crop_u"
+                    },
+                    {
+                        "name": "crop_v"
+                    },
+                    {
+                        "name": "crop_w"
+                    },
+                    {
+                        "name": "duvw_scale",
+                        "label": "DUVW Scale"
+                    },
+                    {
+                        "name": "ground_on",
+                        "label": "Ground"
+                    },
+                    {
+                        "name": "ground_radius",
+                        "active":{
+                            "cond":"::ground_on=1"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mapping_type"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {
+                "name": "uvw_transform"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": true
+    }
+}

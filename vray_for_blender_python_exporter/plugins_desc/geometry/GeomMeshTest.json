@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "GeomMeshTest",
+    "ID" : "GeomMeshTest",
+    "Name" : "Geom Mesh Test",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "sphere_size",
+            "default" : 3.0,
+            "desc" : "Sphere size",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "sphere_segments",
+            "default" : 10,
+            "desc" : "Sphere segments",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "num_spheres",
+            "default" : 100,
+            "desc" : "Number of spheres",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "bbox_size",
+            "default" : 30.0,
+            "desc" : "Box size to fill with spheres",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

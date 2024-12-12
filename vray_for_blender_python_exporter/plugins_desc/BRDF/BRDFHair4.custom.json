@@ -1,0 +1,145 @@
+{
+    "ID": "BRDFHair4",
+    "Name": "V-Ray Hair Next Mtl",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general_parameters",
+                "label": "General Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "melanin"
+                    },
+                    {
+                        "name": "pheomelanin"
+                    },
+                    {
+                        "name": "dye_color"
+                    },
+                    {
+                        "name": "transparency"
+                    },
+                    {
+                        "name": "diffuse_color"
+                    },
+                    {
+                        "name": "diffuse_amount"
+                    },
+                    {
+                        "name": "glossiness"
+                    },
+                    {
+                        "name": "primary_glossiness_boost"
+                    },
+                    {
+                        "name": "softness"
+                    },
+                    {
+                        "name": "highlight_shift"
+                    },
+                    {
+                        "name": "ior"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "glint",
+                "label": "Glint",
+                "attrs": [
+                    {
+                        "name": "glint_strength"
+                    },
+                    {
+                        "name": "glint_variation"
+                    },
+                    {
+                        "name": "glitter_strength"
+                    },
+                    {
+                        "name": "glitter_size"
+                    },
+                    {
+                        "name": "glint_scale"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "randomization",
+                "label": "Randomization",
+                "attrs": [
+                    {
+                        "name": "random_melanin"
+                    },
+                    {
+                        "name": "random_dye_hue"
+                    },
+                    {
+                        "name": "random_dye_saturation"
+                    },
+                    {
+                        "name": "random_dye_value"
+                    },
+                    {
+                        "name": "gray_hair_density"
+                    },
+                    {
+                        "name": "random_glossiness"
+                    },
+                    {
+                        "name": "random_softness"
+                    },
+                    {
+                        "name": "random_highlight_shift"
+                    },
+                    {
+                        "name": "random_ior"
+                    },
+                    {
+                        "name": "random_tangent"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "tint",
+                "label": "Tint",
+                "attrs": [
+                    {
+                        "name": "primary_tint"
+                    },
+                    {
+                        "name": "secondary_tint"
+                    },
+                    {
+                        "name": "transmission_tint"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "advanced",
+                "label": "Advanced",
+                "attrs": [
+                    {
+                        "name": "trace_depth"
+                    },
+                    {
+                        "name": "subdivs"
+                    },
+                    {
+                        "name": "compensate_energy"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

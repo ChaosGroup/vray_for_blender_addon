@@ -1,0 +1,374 @@
+
+{
+    "Desciption" : "SettingsIrradianceMap",
+    "ID" : "SettingsIrradianceMap",
+    "Name" : "Settings Irradiance Map",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "min_rate",
+            "default" : -3,
+            "desc" : "Minimum resolution exponent. E.g. -2 means the irradiance map has at least 2^-2==1/4 the full frame resolution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min rate",
+                "max" : 100,
+                "min" : -100
+            }
+        },
+        
+        {
+            "attr" : "max_rate",
+            "default" : 0,
+            "desc" : "Maximum resolution exponent. E.g. -2 means the irradiance map has at most 2^-2==1/4 the full frame resolution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max rate",
+                "max" : 100,
+                "min" : -100
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 50,
+            "desc" : "Hemispheric subdivs (determines the number of samples/rays that will be used)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "interp_samples",
+            "default" : 20,
+            "desc" : "Interpolation samples",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Interp. samples",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "calc_interp_samples",
+            "default" : 15,
+            "desc" : "Samples looked up during the prepass phase",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Calc. interp. samples",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "interp_frames",
+            "default" : 2,
+            "desc" : "Number of frames to load for the animation irradiance map mode (0 is just the current frame, 1 is one frame before and after etc)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Interp. frames",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "color_threshold",
+            "default" : 0.3000000119209290,
+            "desc" : "Sensitivity to changes in GI intensity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Color threshold",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "normal_threshold",
+            "default" : 0.1000000014901161,
+            "desc" : "Sensitivity to changes in surface normals",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normal threshold",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "distance_threshold",
+            "default" : 0.1000000014901161,
+            "desc" : "Sensitivity to object proximity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Distance threshold",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "detail_enhancement",
+            "default" : false,
+            "desc" : "True if additional DMC sampling should be used to enhance details",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Detail enhancement"
+            }
+        },
+        
+        {
+            "attr" : "detail_radius",
+            "default" : 60.0,
+            "desc" : "Radius for the detail sampling in pixels",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Detail radius [px]",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "detail_subdivs_mult",
+            "default" : 0.3000000119209290,
+            "desc" : "A multiplier for the subdivs when doing detailed sampling",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Detail subdivs mult",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "detail_scale",
+            "default" : "0",
+            "desc" : "The scale mode for the detail enhancement",
+            "items" : 
+            [
+                [ "0", "Screen", "Screen" ],
+                [ "1", "World", "World" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Detail scale"
+            }
+        },
+        
+        {
+            "attr" : "randomize_samples",
+            "default" : true,
+            "desc" : "If true, prepass samples will be randomly displaced",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Randomize samples"
+            }
+        },
+        
+        {
+            "attr" : "interpolation_mode",
+            "default" : "1",
+            "desc" : "How IM samples get inrerpolated: 0=Weighted average, 1=Least-squares fit, 2=Local Delaunay triangulation, 3=Least-squares with Voronoi weights",
+            "items" : 
+            [
+                [ "0", "Weighted average", "Weighted average" ],
+                [ "1", "Least-squares fit", "Least-squares fit" ],
+                [ "2", "Local Delaunay triangulation", "Local Delaunay triangulation" ],
+                
+                [
+                    "3",
+                    "Least-squares with Voronoi weights",
+                    "Least-squares with Voronoi weights"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Interpolation mode"
+            }
+        },
+        
+        {
+            "attr" : "lookup_mode",
+            "default" : "3",
+            "desc" : "Type of sample look-up",
+            "items" : 
+            [
+                [ "0", "Nearest (draft)", "Nearest (draft)" ],
+                [ "1", "Quad-balanced (good)", "Quad-balanced (good)" ],
+                [ "2", "Overlapping (very good/fast)", "Overlapping (very good/fast)" ],
+                [ "3", "Density-based (best)", "Density-based (best)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Lookup mode"
+            }
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Specifies the way the irradiance map is calculated (0=Single frame, 1=Multiframe incremental, 2=From file, 3=Add to current map, 4=Incremental add to current map, 5=Bucket mode, 6=Animation (prepass), 7=Animation (rendering))",
+            "items" : 
+            [
+                [ "0", "Single frame", "Single frame" ],
+                [ "1", "Multiframe incremental", "Multiframe incremental" ],
+                [ "2", "From file", "From file" ],
+                [ "3", "Add to current map", "Add to current map" ],
+                
+                [
+                    "4",
+                    "Incremental add to current map",
+                    "Incremental add to current map"
+                ],
+                [ "5", "Bucket mode", "Bucket mode" ],
+                [ "6", "Animation (prepass)", "Animation (prepass)" ],
+                [ "7", "Animation (rendering)", "Animation (rendering)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "dont_delete",
+            "default" : true,
+            "desc" : "If true, the map will not be deleted from memory at the end of the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Don't delete"
+            }
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "vrmap file to load a previously calculated irradiance map from",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Irradiance File",
+                "file_extensions" : [ "vrmap" ],
+                "file_names" : [ "V-Ray Irradiance map" ]
+            }
+        },
+        
+        {
+            "attr" : "show_samples",
+            "default" : false,
+            "desc" : "If true, the samples in the map will be shown in the final rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show samples"
+            }
+        },
+        
+        {
+            "attr" : "show_calc_phase",
+            "default" : true,
+            "desc" : "Shows the prepasses",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show calc phase"
+            }
+        },
+        
+        {
+            "attr" : "show_direct_light",
+            "default" : false,
+            "desc" : "Shows the direct light during the prepasses (although VRay doesn't need it)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show direct light"
+            }
+        },
+        
+        {
+            "attr" : "multiple_views",
+            "default" : false,
+            "desc" : "True to calculate the irradiance map from multiple viewpoints along the camera path",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use camera path"
+            }
+        },
+        
+        {
+            "attr" : "multipass",
+            "default" : true,
+            "desc" : "If true, V-Ray will do several prepasses; if false, only one prepass at the image resolution will be made",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Multipass"
+            }
+        },
+        
+        {
+            "attr" : "check_sample_visibility",
+            "default" : false,
+            "desc" : "If true, sample visibility will be checked during final rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Check sample visibility"
+            }
+        },
+        
+        {
+            "attr" : "auto_save",
+            "default" : false,
+            "desc" : "If true, the map will be automatically saved at the end of the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto save"
+            }
+        },
+        
+        {
+            "attr" : "auto_save_file",
+            "default" : "",
+            "desc" : "File name to save to if auto_save=1",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Auto save file",
+                "file_extensions" : [ "vrmap" ],
+                "file_names" : [ "V-Ray Irradiance map" ],
+                "file_op" : "save"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

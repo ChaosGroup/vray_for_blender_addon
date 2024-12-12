@@ -1,0 +1,106 @@
+{
+    "ID": "TexAColorOp",
+    "Name": "V-Ray Color Arithmetic",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "items" : 
+            [
+                [ "0", "Result A", "Value of A: A * Mult_A" ],
+                [ "1", "Result B", "Value of B: B * Mult_B" ],
+                [ "2", "Product", "Product: A * B" ],
+                [ "3", "Sum", "Sum: A + B" ],
+                [ "4", "Difference", "Difference: A - B" ],
+                [ "5", "Power", "Power: A ^ B" ],
+                [ "6", "Division", "Division: A / B" ],
+                [ "7", "Min", "min(A, B)" ],
+                [ "8", "Max", "max(A, B)" ],
+                [ "9", "Absolute difference", "Absolute value of the difference: abs(A - B)" ],
+                [ "10", "Lower Intensity Color", "Value of the color with lower intensity" ],
+                [ "11", "Greater Intensity Color", "Value of the color with greater intensity" ],
+                [ "12", "Sin", "Sine: sin(A)" ],
+                [ "13", "Cos", "Cosine: cos(A)" ],
+                [ "14", "Abs", "Absolute value: abs(A)" ],
+                [ "15", "Ceil", "Round up the larger of A and B: ceil(max(A,B))" ],
+                [ "16", "Exp", "Exponent: e^(A+B)" ],
+                [ "17", "Floor", "Round down the smaller of A and B: floor(min(A,B))" ],
+                [ "18", "Log", "Natural logarithm: ln(A)" ],
+                [ "19", "Log10", "Log10: log(A)" ],
+                [ "20", "Sqrt", "Square Root of A" ],
+                [ "21", "Fmod", "Remainder of division: A % B" ],
+                [ "22", "Average", "Average: (A+B)/2" ],
+                [ "23", "Tan", "Tangent: tan(A)" ],
+                [ "24", "Asin", "Arcsine: asin(A)" ],
+                [ "25", "Acos", "Arccosine: acos(A)" ],
+                [ "26", "Atan", "Arctangent: atan(A)" ],
+                [ "27", "Atan 2", "Arctangent 2 of A and B: atan2(A, B)" ],
+                [ "28", "Bias Schlick", "Bias Schlick" ],
+                [ "29", "Gain Schlick", "Gain Schlick" ],
+                [ "30", "Bias Perlin", "Bias Perlin" ],
+                [ "31", "Gain Perlin", "Gain Perlin" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        {
+            "attr": "result",
+            "default" : [0.0, 0.0, 0.0, 0.0],
+            "desc" : "Result of the applying the operation to inputs A and B",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {},
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_a"
+                    },
+                    {
+                        "name": "color_b"
+                    },
+                    {
+                        "name": "mult_a",
+                        "label": "Multiplier A"
+                    },
+                    {
+                        "name": "mult_b",
+                        "label": "Multiplier B"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mode"
+                    }
+                ]
+            }
+        ],
+        "output_sockets":[
+            {
+                "label": "Result",
+                "name": "result",
+                "type": "OUTPUT_TEXTURE"
+            }
+        ]
+    }
+}

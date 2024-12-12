@@ -1,0 +1,43 @@
+
+{
+    "Desciption" : "SphereFade",
+    "ID" : "SphereFade",
+    "Name" : "Sphere Fade",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "gizmos",
+            "default" : null,
+            "desc" : "List of SphereFadeGizmo plugins that will limit the rendering volume",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "empty_color",
+            "default" : [ 0.50, 0.50, 0.50 ],
+            "desc" : "The color to render outside the gizmo volume",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : false,
+            "desc" : "Whether the alpha channel is affected",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "falloff",
+            "default" : 0.2000000029802322,
+            "desc" : "Falloff factor for smooth transition between the inside and outside volume",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

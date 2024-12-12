@@ -1,0 +1,91 @@
+
+{
+    "Desciption" : "MtlRenderStats",
+    "ID" : "MtlRenderStats",
+    "Name" : "Mtl Render Stats",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "Base material",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "camera_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible from the camera (camera rays)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflections_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible in reflections",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refractions_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible in refractions",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gi_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible to GI (generating and receiving)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows_visibility",
+            "default" : true,
+            "desc" : "Whether the object casts shadows (visible to lights for shadow rays)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows_receive",
+            "default" : true,
+            "desc" : "Whether the object receives shadows",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visibility",
+            "default" : 1.0,
+            "desc" : "Overall visibility",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

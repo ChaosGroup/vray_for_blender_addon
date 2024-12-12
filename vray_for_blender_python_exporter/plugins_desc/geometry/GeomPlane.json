@@ -1,0 +1,22 @@
+
+{
+    "Desciption" : "GeomPlane",
+    "ID" : "GeomPlane",
+    "Name" : "Geom Plane",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "real_world_scale",
+            "default" : 0,
+            "desc" : "Specifies whether to use real-world scale, which changes the UV coordinates. 0 - Don't use world scale. 1 - Use world scale",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

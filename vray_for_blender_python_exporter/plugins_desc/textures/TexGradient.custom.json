@@ -1,0 +1,179 @@
+{
+    "ID": "TexGradient",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "middle"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "noise_type"
+                            },
+                            {
+                                "name": "noise_amount"
+                            },
+                            {
+                                "name": "noise_size"
+                            },
+                            {
+                                "name": "noise_iterations"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "noise_phase"
+                            },
+                            {
+                                "name": "noise_low"
+                            },
+                            {
+                                "name": "noise_high"
+                            },
+                            {
+                                "name": "noise_smooth"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "label": "Common Properties",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "label": "Compatibility",
+                        "name": "compatibility_with"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "label": "Color",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "invert"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "label": "Alpha",
+                "layout": "SEPARATOR"
+            },
+            {
+                "align": true,
+                "attrs": [
+                    {
+                        "label": "Alpha From",
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "label": "UV",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "label": "Placement",
+                        "name": "placement_type"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "u"
+                            },
+                            {
+                                "name": "v"
+                            },
+                            {
+                                "name": "w"
+                            },
+                            {
+                                "name": "h"
+                            },
+                            {
+                                "name": "tile_u"
+                            },
+                            {
+                                "name": "tile_v"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "uv_noise_on"
+                            },
+                            {
+                                "name": "uv_noise_amount"
+                            },
+                            {
+                                "name": "uv_noise_levels"
+                            },
+                            {
+                                "name": "uv_noise_size"
+                            },
+                            {
+                                "name": "un_noise_phase"
+                            },
+                            {
+                                "name": "uv_noise_animate"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ]
+}

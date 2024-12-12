@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexBlend",
+    "ID" : "TexBlend",
+    "Name" : "Blend",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_a",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The first color to blend",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_b",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The second color to blend",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "blend_amount",
+            "default" : 0.0,
+            "desc" : "The linear blending weight: color_a dominates toward 0.0, color_b dominates toward 1.0",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "composite",
+            "default" : false,
+            "desc" : "If true, color_b will be composited over color_a with the given weight, taking its alpha into account",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

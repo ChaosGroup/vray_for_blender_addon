@@ -1,0 +1,167 @@
+
+{
+    "Desciption" : "VRayClipper",
+    "ID" : "VRayClipper",
+    "Name" : "V Ray Clipper",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "Enable the clipper",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_light",
+            "default" : true,
+            "desc" : "If enabled, the clipper will affect area light sources as well",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "only_camera_rays",
+            "default" : false,
+            "desc" : "If enabled, the clipper will affect objects as they are directly seen by the camera, but they will appear unchanged to reflection/refraction/GI rays",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clip_lights",
+            "default" : true,
+            "desc" : "Enables or disables the clipping of lights geometry (for example a mesh light)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Clip Lights Geometry"
+            }
+        },
+        
+        {
+            "attr" : "fill_cavities",
+            "default" : false,
+            "desc" : "When ON holes in geometry inside other geometries will be filled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Fill inner cavities"
+            }
+        },
+        
+        {
+            "attr" : "use_obj_mtl",
+            "default" : false,
+            "desc" : "When enabled, the clipper will use the material of each clipped object to fill in the resulting holes. When this is off, the material applied to the clipper object itself will be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Object Material"
+            }
+        },
+        
+        {
+            "attr" : "set_material_id",
+            "default" : false,
+            "desc" : "If true, material_id will be used when shading clipped parts",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_id",
+            "default" : 1,
+            "desc" : "The material ID to use for clipped parts when choosing a material in MtlMulti, if use_material_id is true. This also affects the MaterialID render element",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclusion_nodes",
+            "default" : null,
+            "desc" : "List of node plugins to consider for inclusion/exclusion",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "display_name" : "Exclude",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "exclusion_mode",
+            "default" : true,
+            "desc" : "false to include the nodes listed, true to exclude the nodes listed",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "As Exclusive list"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation for the clipping plane/mesh",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material",
+            "default" : null,
+            "desc" : "Material for shading the surfaces created by clipping",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "object_id",
+            "default" : 0,
+            "desc" : "The object ID assigned to geometry that is clipped by the clipper. This is used only when there is no clip mesh specified",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Object ID",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "clip_mesh",
+            "default" : null,
+            "desc" : "Mesh plugin to use as a clipping mesh instead of a simple plane",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_inside",
+            "default" : "1",
+            "desc" : "Specifies the boolean operation to perform: 0 - intersection, 1 - substraction(scene - clip_mesh)",
+            "items" : 
+            [
+                [ "0", "Intersection", "Intersection" ],
+                [ "1", "Substraction (scene-mesh)", "Substraction (scene-mesh)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mesh Operation"
+            }
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

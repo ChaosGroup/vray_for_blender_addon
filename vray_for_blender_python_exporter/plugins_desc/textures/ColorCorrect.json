@@ -1,0 +1,451 @@
+
+{
+    "Desciption" : "ColorCorrect",
+    "ID" : "ColorCorrect",
+    "Name" : "Color Correct",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "source_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Source color",
+            "type" : "ACOLOR"
+        },
+        
+        {
+            "attr" : "texture_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture being color corrected",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "preprocess",
+            "default" : false,
+            "desc" : "true to enable preprocessing",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Pre-process On",
+                "rollout" : "RGB Pre-process"
+            }
+        },
+        
+        {
+            "attr" : "pre_brightness",
+            "default" : 0.0,
+            "desc" : "Added to the texture brightness",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "pre_contrast",
+            "default" : 1.0,
+            "desc" : "Contrast",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "pre_gamma",
+            "default" : 1.0,
+            "desc" : "Gamma",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "pre_mono",
+            "default" : false,
+            "desc" : "true to convert to grayscale",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "pre_invert",
+            "default" : false,
+            "desc" : "true to invert the input color",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "pre_unmult_alpha",
+            "default" : false,
+            "desc" : "true to unmultiply alpha",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "pre_clamp",
+            "default" : false,
+            "desc" : "true to clamp the input color",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "pre_clamp_min",
+            "default" : 0.0,
+            "desc" : "low clamp value",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "pre_clamp_max",
+            "default" : 1.0,
+            "desc" : "high clamp value",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "pre_clamp_normalize",
+            "default" : false,
+            "desc" : "true to normalize the clamped input to 0.0-1.0",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "hsl_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "HSL On",
+                "rollout" : "HSL"
+            }
+        },
+        
+        {
+            "attr" : "hsl_hue_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsl_hue_gain",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsl_saturation_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsl_saturation_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsl_lightness_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsl_lightness_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "HSV On",
+                "rollout" : "HSV"
+            }
+        },
+        
+        {
+            "attr" : "hsv_hue_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_hue_gain",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_saturation_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_saturation_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_value_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "hsv_value_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "rgba_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "RGBA Channel Mapping On",
+                "rollout" : "RGBA Channel Mapping"
+            }
+        },
+        
+        {
+            "attr" : "red_channel",
+            "default" : "0",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-intensity, 5-in_red, 6-in_green, 7-in_blue, 8-in_alpha, 9-in_intensity, 10-hsl_hue, 11-hsl_saturation, 12-hsl_lightness, 13-hsv_hue, 14-hsv_saturation, 15-hsv_value",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Intensity", "Intensity" ],
+                [ "5", "In Red", "In Red" ],
+                [ "6", "In Green", "In Green" ],
+                [ "7", "In Blue", "In Blue" ],
+                [ "8", "In Alpha", "In Alpha" ],
+                [ "9", "In Intensity", "In Intensity" ],
+                [ "10", "HSL hue", "HSL hue" ],
+                [ "11", "HSL saturation", "HSL saturation" ],
+                [ "12", "HSL lightness", "HSL lightness" ],
+                [ "13", "HSV hue", "HSV hue" ],
+                [ "14", "HSV saturation", "HSV saturation" ],
+                [ "15", "HSV value", "HSV value" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "red_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "red_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "green_channel",
+            "default" : "0",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-intensity, 5-in_red, 6-in_green, 7-in_blue, 8-in_alpha, 9-in_intensity, 10-hsl_hue, 11-hsl_saturation, 12-hsl_lightness, 13-hsv_hue, 14-hsv_saturation, 15-hsv_value",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Intensity", "Intensity" ],
+                [ "5", "In Red", "In Red" ],
+                [ "6", "In Green", "In Green" ],
+                [ "7", "In Blue", "In Blue" ],
+                [ "8", "In Alpha", "In Alpha" ],
+                [ "9", "In Intensity", "In Intensity" ],
+                [ "10", "HSL hue", "HSL hue" ],
+                [ "11", "HSL saturation", "HSL saturation" ],
+                [ "12", "HSL lightness", "HSL lightness" ],
+                [ "13", "HSV hue", "HSV hue" ],
+                [ "14", "HSV saturation", "HSV saturation" ],
+                [ "15", "HSV value", "HSV value" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "green_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "green_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "blue_channel",
+            "default" : "0",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-intensity, 5-in_red, 6-in_green, 7-in_blue, 8-in_alpha, 9-in_intensity, 10-hsl_hue, 11-hsl_saturation, 12-hsl_lightness, 13-hsv_hue, 14-hsv_saturation, 15-hsv_value",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Intensity", "Intensity" ],
+                [ "5", "In Red", "In Red" ],
+                [ "6", "In Green", "In Green" ],
+                [ "7", "In Blue", "In Blue" ],
+                [ "8", "In Alpha", "In Alpha" ],
+                [ "9", "In Intensity", "In Intensity" ],
+                [ "10", "HSL hue", "HSL hue" ],
+                [ "11", "HSL saturation", "HSL saturation" ],
+                [ "12", "HSL lightness", "HSL lightness" ],
+                [ "13", "HSV hue", "HSV hue" ],
+                [ "14", "HSV saturation", "HSV saturation" ],
+                [ "15", "HSV value", "HSV value" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "blue_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "blue_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha_channel",
+            "default" : "0",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-intensity, 5-in_red, 6-in_green, 7-in_blue, 8-in_alpha, 9-in_intensity, 10-hsl_hue, 11-hsl_saturation, 12-hsl_lightness, 13-hsv_hue, 14-hsv_saturation, 15-hsv_value",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Intensity", "Intensity" ],
+                [ "5", "In Red", "In Red" ],
+                [ "6", "In Green", "In Green" ],
+                [ "7", "In Blue", "In Blue" ],
+                [ "8", "In Alpha", "In Alpha" ],
+                [ "9", "In Intensity", "In Intensity" ],
+                [ "10", "HSL hue", "HSL hue" ],
+                [ "11", "HSL saturation", "HSL saturation" ],
+                [ "12", "HSL lightness", "HSL lightness" ],
+                [ "13", "HSV hue", "HSV hue" ],
+                [ "14", "HSV saturation", "HSV saturation" ],
+                [ "15", "HSV value", "HSV value" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha_gain",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "premultiply_new_alpha",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "postprocess",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Post-process On",
+                "rollout" : "RGB Post-process"
+            }
+        },
+        
+        {
+            "attr" : "post_mono",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "post_invert",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "post_clamp",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "post_clamp_min",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "post_clamp_max",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "post_clamp_normalize",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

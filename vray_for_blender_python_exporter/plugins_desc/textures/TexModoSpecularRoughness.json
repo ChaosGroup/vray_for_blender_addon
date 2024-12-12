@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexModoSpecularRoughness",
+    "ID" : "TexModoSpecularRoughness",
+    "Name" : "Modo Specular Roughness",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "modo_specular_roughness",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

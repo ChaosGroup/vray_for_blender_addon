@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "ColorMapperTest",
+    "ID" : "ColorMapperTest",
+    "Name" : "Color Mapper Test",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : 0,
+            "desc" : "The type of color mapping: 0 - linear, 1 - sRGB, 2 - gamma",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "The gamma value if type is set to 2",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clamp_level",
+            "default" : 20.0,
+            "desc" : "The clamp level",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

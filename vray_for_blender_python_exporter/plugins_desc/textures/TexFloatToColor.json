@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexFloatToColor",
+    "ID" : "TexFloatToColor",
+    "Name" : "Float To Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0.0,
+            "desc" : "The float value",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

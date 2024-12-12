@@ -1,0 +1,81 @@
+
+{
+    "Desciption" : "UVWGenExplicit",
+    "ID" : "UVWGenExplicit",
+    "Name" : "UVW Gen Explicit",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "Explicit U input to replace the U value from shaded geometry",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "Explicit V input to replace the V value from shaded geometry",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 0.0,
+            "desc" : "Explicit W input to replace the W value from shaded geometry",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Explicit UVW input to replace the UVW value from shaded geometry",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useSeparateParams",
+            "default" : "0",
+            "desc" : "Choose which inputs to use (0 - Auto, 1 - \"uvw\", 2 - \"u\"/\"v\"/\"w\")",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Automatic (use the one that's set)",
+                    "Automatic (use the one that's set)"
+                ],
+                [ "1", "Use the single uvw parameter", "Use the single uvw parameter" ],
+                
+                [
+                    "2",
+                    "Use separate u, v, w parameters",
+                    "Use separate u, v, w parameters"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Source"
+            }
+        },
+        
+        {
+            "attr" : "user_attribute_scale_enabled",
+            "default" : false,
+            "desc" : "Enables the additional scaling by the '__vray_uvwscale' user attribute from objects",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

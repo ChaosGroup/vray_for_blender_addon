@@ -1,0 +1,502 @@
+
+{
+    "Desciption" : "TexColor8Mix",
+    "ID" : "TexColor8Mix",
+    "Name" : "Color 8 Mix",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "base_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Defines the base (ambient) color to use while mixing",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Defines the compositing color. When using a texture, this parameter is used to define the image",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode1",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Defines the mix layer's intensity in relation to the base color",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha1",
+            "default" : false,
+            "desc" : "Multiply weight by Alpha",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse1",
+            "default" : false,
+            "desc" : "Computes this color, weight, and mixing mode",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode2",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha2",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse2",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color3",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode3",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight3",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha3",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse3",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color4",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode4",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight4",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha4",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse4",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color5",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode5",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight5",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha5",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse5",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color6",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode6",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight6",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha6",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse6",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color7",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode7",
+            "default" : "0",
+            "desc" : "Mix type: 0 (Mix), 1(RGB Intensity), 2(Hide/Reveal), 3(Add), 4(Add Compensate (Blend)), 5(Add Bound), 6(Lighter), 7(Darker), 8(Soft Light), 9(Hard Light), 10(Difference), 11(Hue Offset), 12(Screen)",
+            "items" : 
+            [
+                [ "0", "Mix", "Mix" ],
+                [ "1", "RGB Intensity", "RGB Intensity" ],
+                [ "2", "Hide/Reveal", "Hide/Reveal" ],
+                [ "3", "Add", "Add" ],
+                [ "4", "Add Compensate (Blend)", "Add Compensate (Blend)" ],
+                [ "5", "Add Bound", "Add Bound" ],
+                [ "6", "Lighter", "Lighter" ],
+                [ "7", "Darker", "Darker" ],
+                [ "8", "Soft Light", "Soft Light" ],
+                [ "9", "Hard Light", "Hard Light" ],
+                [ "10", "Difference", "Difference" ],
+                [ "11", "Hue Offset", "Hue Offset" ],
+                [ "12", "Screen", "Screen" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "weight7",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha7",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inuse7",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,219 @@
+{
+    "ID": "RenderChannelMultiMatte",
+    "Name" : "Multi Matte",
+    "Subtype" : "MATTE",
+    "Parameters": [
+        {
+            "attr": "mask_type",
+            "type": "ENUM",
+            "desc": "Specifies how the mask is generated",
+            "default": "1",
+            "items" : 
+            [
+                [ "0", "White", "Create mask for the objects with the specified ID" ],
+                [ "1", "Separate Channels", "Considers all three Red, Green, and Blue IDs" ]
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "id_source",
+            "type": "ENUM",
+            "desc": "Switch between Object and Material ID",
+            "default": "0",
+            "items" : 
+            [
+                [ "0", "Object ID", "Use Object ID as source" ],
+                [ "1", "Multimatte ID", "Use Material ID as source" ]
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "name",
+            "default" : "Multi Matte"
+        },
+        {
+            "attr": "use_mtl_id",
+            "default": true
+        },
+        {
+            "attr": "exclude_list_red",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "exclude_list_red_as_inclusive_set",
+            "options" : {
+                "link_info" : {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "exclude_list_green",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "exclude_list_green_as_inclusive_set",
+            "options" : {
+                "link_info" : {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "exclude_list_blue",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "exclude_list_blue_as_inclusive_set",
+            "options" : {
+                "link_info" : {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "exclude_list_red_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                   "type": "templateIncludeExclude",
+                   "args": {
+                       "bound_property": "exclude_list_red",
+                       "mode_bound_property": "exclude_list_red_as_inclusive_set",
+                       "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "exclude_list_green_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                   "type": "templateIncludeExclude",
+                   "args": {
+                       "bound_property": "exclude_list_green",
+                       "mode_bound_property": "exclude_list_green_as_inclusive_set",
+                       "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        }, 
+        {
+            "attr": "exclude_list_blue_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                   "type": "templateIncludeExclude",
+                   "args": {
+                       "bound_property": "exclude_list_blue",
+                       "mode_bound_property": "exclude_list_blue_as_inclusive_set",
+                       "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "mask_type"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "visible": {"cond": "::mask_type=1"},
+                        "attrs": [
+                            {
+                                "name": "red_id"
+                            },
+                            {
+                                "name": "green_id"
+                            },
+                            {
+                                "name": "blue_id"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "visible": {"cond": "::mask_type=0"},
+                        "attrs": [
+                            {
+                                "name": "red_id",
+                                "label": "Id"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "id_source",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "affect_matte_objects"
+                    },
+                    {
+                        "name": "consider_for_aa",
+                        "label": "Consider for Anti-Aliasing "
+                    },
+                    {
+                        "name": "exclude_list_red_selector",
+                        "label": "Red Channel Objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    },
+                    {
+                        "name": "exclude_list_green_selector",
+                        "label": "Green Channel Objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    },
+                    {
+                        "name": "exclude_list_blue_selector",
+                        "label": "Blue Channel Objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "exclude_list_red",
+                "label": "Red Objects"
+            },
+            {
+                "name": "exclude_list_green",
+                "label": "Green Objects"
+            },
+            {
+                "name": "exclude_list_blue",
+                "label": "Blue Objects"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

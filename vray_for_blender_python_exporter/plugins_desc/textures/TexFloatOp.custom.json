@@ -1,0 +1,128 @@
+{
+    "Name": "V-Ray Float Arithmetic",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "float_a",
+            "default": 1.0,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 2.0
+            }
+        },
+        {
+            "attr": "float_b",
+            "default": 1.0,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 2.0
+            }
+        },
+        {
+            "attr" : "mode",
+            "default" : "2",
+            "items" : 
+            [
+                [ "0", "Product", "Product: A * B" ],
+                [ "1", "Ratio", "Ratio: A / B" ],
+                [ "2", "Sum", "Sum: A + B" ],
+                [ "3", "Difference", "Difference: A - B" ],
+                [ "4", "Power", "Power: A^B" ],
+                [ "5", "Sin", "Sine: sin(A)" ],
+                [ "6", "Cos", "Cosine: cos(A)" ],
+                [ "7", "Min", "min(A, B)" ],
+                [ "8", "Max", "max(A, B)" ],
+                [ "9", "Abs", "Absolute value of A: abs(A)" ],
+                [ "10", "Ceil", "Round up the larger of A and B: ceil(max(A,B))" ],
+                [ "11", "Exp", "Exponent: e^(A+B)" ],
+                [ "12", "Floor", "Round down the smaller of A and B: floor(min(A,B))" ],
+                [ "13", "Log", "Natural logarithm: ln(A)" ],
+                [ "14", "Log10", "Log10: log(A)" ],
+                [ "15", "Sqrt", "Square Root of A" ],
+                [ "16", "Fmod", "Remainder of division: A % B" ],
+                [ "17", "Average", "Average: (A+B)/2" ],
+                [ "18", "Tan", "Tangent: tan(A)" ],
+                [ "19", "Asin", "Arcsine: asin(A)" ],
+                [ "20", "Acos", "Arccosine: acos(A)" ],
+                [ "21", "Atan", "Arctangent: atan(A)" ],
+                [ "22", "Atan 2", "Arctangent 2 of A and B: atan2(A, B)" ],
+                [ "23", "Bias Schlick", "Bias Schlick" ],
+                [ "24", "Gain Schlick", "Gain Schlick" ],
+                [ "25", "Bias Perlin", "Bias Perlin" ],
+                [ "26", "Gain Perlin", "Gain Perlin" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        {
+            "attr": "result",
+            "default" : 0.0,
+            "desc" : "Result of the applying the operation to the first and second number",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {},
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "float_a"
+                    },
+                    {
+                        "name": "float_b"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node":{
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mode"
+                    }
+                ]
+            }
+        ],
+        "output_sockets":[
+            {
+                "label": "Result",
+                "name": "result",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "sin",
+            "cos",
+            "asin",
+            "acos",
+            "atan",
+            "atan2",
+            "abs",
+            "ceil",
+            "exp",
+            "log",
+            "log10",
+            "sqrt",
+            "fmod",
+            "average",
+            "tan"
+        ]
+    }
+}

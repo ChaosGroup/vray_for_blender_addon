@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "RTEngine",
+    "ID" : "RTEngine",
+    "Name" : "RT Engine",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "true to enable the RT engine and false to disable it",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_opencl",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "separate_window",
+            "default" : true,
+            "desc" : "true to open a separate window for the RTEngine, and false to use the V-Ray VFB",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "full_recalc_aa_mask",
+            "default" : false,
+            "desc" : "true to force full AA mask recalculation. Used for direct VR rendering with 'Follow headset' option enabled",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

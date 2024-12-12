@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "TexInvert",
+    "ID" : "TexInvert",
+    "Name" : "Invert",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The texture to be inverted",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The inverted texture color",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

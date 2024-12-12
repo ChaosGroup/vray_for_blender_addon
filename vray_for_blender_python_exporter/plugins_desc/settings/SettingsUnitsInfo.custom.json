@@ -1,0 +1,34 @@
+
+{
+    "ID" : "SettingsUnitsInfo",
+    "Parameters" : [
+        {
+            "attr" : "rgb_color_space",
+            "default" : "1",
+            "desc" : "Selects a display color space for the rendered image.",
+            "items" : 
+            [
+                [ "1", "sRGB", "sRGB is the color space for most monitors and computer displays." ],
+                [ "2", "ACEScg", "ACEScg allows for a greater range of color transformations in post. It is recommended to save the image to 16-bit floating .exr and use the respective OCIO config for a proper display." ]
+            ]
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "rgb_color_space",
+                        "label": "Rendering color space"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false
+    }
+}

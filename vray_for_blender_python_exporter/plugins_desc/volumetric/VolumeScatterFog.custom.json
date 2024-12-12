@@ -1,0 +1,102 @@
+{
+    "Desciption": "VolumeScatterFog",
+    "ID": "VolumeScatterFog",
+    "Name": "V-Ray Volume Scatter Fog",
+    "Type": "EFFECT",
+    "Parameters": [
+        {
+            "attr": "color",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "desc": "Fog transmission color",
+            "default": [
+                0.5,
+                0.5,
+                0.5
+            ]
+        },
+        {
+            "attr": "thickness",
+            "default": 1000000
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "subdivs",
+            "color",
+            "color_tex"
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "emission",
+                "label": "Emission"
+            },
+            {
+                "name": "color_colortex",
+                "label": "Color"
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "closed_volume"
+                    },
+                    {
+                        "name": "environment_fog"
+                    },
+                    {
+                        "name": "color_colortex",
+                        "label": "Color"
+                    },
+                    {
+                        "name": "color_mult",
+                        "label": "Color Multiplier"
+                    },
+                    {
+                        "name": "ior"
+                    },
+                    {
+                        "name": "bias"
+                    },
+                    {
+                        "name": "thickness"
+                    },
+                    {
+                        "name": "light_mult",
+                        "label": "Light Multiplier"
+                    },
+                    {
+                        "name": "scatter_coeff",
+                        "label": "Scatter Coefficient"
+                    },
+                    {
+                        "name": "scatter_direction"
+                    },
+                    {
+                        "name": "scatter_levels"
+                    }
+
+                ]
+            }
+        ]
+    }
+}

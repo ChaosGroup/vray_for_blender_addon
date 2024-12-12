@@ -1,0 +1,52 @@
+{
+    "ID": "RenderView",
+    "Parameters": [
+        {
+            "attr": "clip_near",
+            "default": false,
+            "desc": "Clip near",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "clip_far",
+            "default": false,
+            "desc": "Clip far",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "focalDistance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clipping_near",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clipping_far",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "orthographicWidth",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Type": "CAMERA",
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

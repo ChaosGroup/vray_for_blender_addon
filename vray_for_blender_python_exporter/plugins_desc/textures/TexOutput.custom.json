@@ -1,0 +1,62 @@
+{
+    "ID": "TexOutput",
+    "Name": "V-Ray Output",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "color_mult"
+        },
+        {
+            "attr": "color_offset"
+        },
+        {
+            "attr": "output_mult"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "compatibility_with"
+                    },
+                    {
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "invert"
+                    },
+                    {
+                        "name": "output_clamp",
+                        "label": "Clamp"
+                    },
+                    {
+                        "name": "bump_amount"
+                    },
+                    {
+                        "name": "color_mult",
+                        "label": "RGB Level"
+                    },
+                    {
+                        "name": "color_offset",
+                        "label": "RGB Offset"
+                    },
+                    {
+                        "name": "output_mult",
+                        "label": "Output multiplier"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

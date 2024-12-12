@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "FilterSinc",
+    "ID" : "FilterSinc",
+    "Name" : "Filter Sinc",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 4.0,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

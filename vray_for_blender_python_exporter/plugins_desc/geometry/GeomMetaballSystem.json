@@ -1,0 +1,191 @@
+
+{
+    "Desciption" : "GeomMetaballSystem",
+    "ID" : "GeomMetaballSystem",
+    "Name" : "Geom Metaball System",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "useParticleSize",
+            "default" : "0",
+            "desc" : "true : use particle size; false : use particleRadius for size",
+            "items" : 
+            [
+                [ "0", "Use particle size", "Use particle size" ],
+                [ "1", "Use particleRadius for size", "Use particleRadius for size" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "particleRadius",
+            "default" : 1.0,
+            "desc" : "Size of partiles when useParticleSize is false",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "threshold",
+            "default" : 0.50,
+            "desc" : "Field threshold value",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "stepLength",
+            "default" : 0.1000000014901161,
+            "desc" : "Ray marching step length",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "mbSamples",
+            "default" : 0,
+            "desc" : "Number of samples for motion blur. 0 - Use global settings",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "distanceFunction",
+            "default" : "0",
+            "desc" : "Distance function - 0: Power of two; 1: Power of three; 2: Power of four; 3: Power of five; 4: Hermit in power of two; 5: Hermit in power of three; 6: Hermit in power of five; 7: Wyvill;",
+            "items" : 
+            [
+                [ "0", "Power of two", "Power of two" ],
+                [ "1", "Power of three", "Power of three" ],
+                [ "2", "Power of four", "Power of four" ],
+                [ "3", "Power of five", "Power of five" ],
+                [ "4", "Hermit in power of two", "Hermit in power of two" ],
+                [ "5", "Hermit in power of three", "Hermit in power of three" ],
+                [ "6", "Hermit in power of five", "Hermit in power of five" ],
+                [ "7", "Wyvill", "Wyvill" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "smoothingBumps",
+            "default" : 0,
+            "desc" : "If true - smoothing of the field bump will be performed",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "smoothRadius",
+            "default" : 0.50,
+            "desc" : "Radius of the smoothing filter",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "smoothExpansion",
+            "default" : 0.250,
+            "desc" : "Correction coefficient for surface expansion: from 0.0 to 1.0",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "positiveParticles",
+            "default" : null,
+            "desc" : "List with positive particle systems",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "negativeParticles",
+            "default" : null,
+            "desc" : "List with negative particle systems",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "useTexture",
+            "default" : 0,
+            "desc" : "If true - texture will be applied on field",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "fieldTexture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Field texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "textureFunction",
+            "default" : "0",
+            "desc" : "0 - Multiplication; 1 - Addition;",
+            "items" : 
+            [
+                [ "0", "Multiplication", "Multiplication" ],
+                [ "1", "Addition", "Addition" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "textureMultiplier",
+            "default" : 1.0,
+            "desc" : "Multiplier of the texture",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clampField",
+            "default" : 0,
+            "desc" : "If true - the field will be clamped before texturing",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "clampThreshold",
+            "default" : 1.0,
+            "desc" : "Field clamping level",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "useCache",
+            "default" : 0,
+            "desc" : "If true - voxel cache will be used for intersection speed-up",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "cacheRecursiveBuild",
+            "default" : 0,
+            "desc" : "If true - voxel cache will be build recursively",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "cacheSize",
+            "default" : 3,
+            "desc" : "Cache size: from 1 to 5",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "cacheBlockSize",
+            "default" : 4,
+            "desc" : "Cache consolidation block size: from 1 to 8",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "If off shading an intersection with this geometry will not generate a gbuffer",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

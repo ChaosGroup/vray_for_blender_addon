@@ -1,0 +1,906 @@
+
+{
+    "Desciption" : "TexBerconNoise",
+    "ID" : "TexBerconNoise",
+    "Name" : "Bercon Noise",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "desc" : "The way the valid portion of the texture is applied: 0 - the whole texture is valid, 1 - crop, 2 -place",
+            "items" : 
+            [
+                [ "0", "Whole texture is valid", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "U coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "V coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 1.0,
+            "desc" : "Width of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "h",
+            "default" : 1.0,
+            "desc" : "Height of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : 0.0,
+            "desc" : "Amount of random placement variation",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_u",
+            "default" : false,
+            "desc" : "If true there is horizontal tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_v",
+            "default" : false,
+            "desc" : "If true there is vertical tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_noise_on",
+            "default" : false,
+            "desc" : "If true the noise is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "UV noise on"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_animate",
+            "default" : false,
+            "desc" : "If true the noise is animated. Use \"UV noise phase\" to animate the noise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animate UV noise"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_amount",
+            "default" : 1.0,
+            "desc" : "UV noise amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise amount"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_levels",
+            "default" : 1.0,
+            "desc" : "UV noise iterations",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise levels"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_size",
+            "default" : 1.0,
+            "desc" : "UV noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise size"
+            }
+        },
+        
+        {
+            "attr" : "un_noise_phase",
+            "default" : 0.0,
+            "desc" : "UV noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise phase",
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "cam_space",
+            "default" : false,
+            "desc" : "Calculations in camera space",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "noise_color1",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "noise color 1",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Color 1"
+            }
+        },
+        
+        {
+            "attr" : "noise_color2",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "noise color 2",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Color 2"
+            }
+        },
+        
+        {
+            "attr" : "noise_map1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "noise map 1",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 1 (map)"
+            }
+        },
+        
+        {
+            "attr" : "noise_map2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "noise map 2",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 2 (map)"
+            }
+        },
+        
+        {
+            "attr" : "noise_size",
+            "default" : 25.0,
+            "desc" : "noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size",
+                "min" : 0.0,
+                "rollout" : "General"
+            }
+        },
+        
+        {
+            "attr" : "low_tresh",
+            "default" : 0.0,
+            "desc" : "default = 0.0f",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Low",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "high_tresh",
+            "default" : 1.0,
+            "desc" : "default = 1.0f",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "High",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "uvw_dist",
+            "default" : "1",
+            "desc" : "UVW distance",
+            "items" : 
+            [
+                [ "0", "Normal", "Normal" ],
+                [ "1", "Radial", "Radial" ],
+                [ "2", "Spherical", "Spherical" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "UVW",
+                "rollout" : "Noise Function"
+            }
+        },
+        
+        {
+            "attr" : "noise_function",
+            "default" : "1",
+            "desc" : "noise function",
+            "items" : 
+            [
+                [ "0", "Perlin 2D", "Perlin 2D" ],
+                [ "1", "Perlin 3D", "Perlin 3D" ],
+                [ "2", "Perlin 4D", "Perlin 4D" ],
+                [ "3", "Simplex 2D", "Simplex 2D" ],
+                [ "4", "Simplex 3D", "Simplex 3D" ],
+                [ "5", "Simplex 4D", "Simplex 4D" ],
+                [ "6", "Worley (Voronoi)", "Worley (Voronoi)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Noise Type"
+            }
+        },
+        
+        {
+            "attr" : "noise_phase",
+            "default" : 0.0,
+            "desc" : "noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Phase",
+                "max" : 1000.0,
+                "min" : -1000.0,
+                "soft_max" : 1.0,
+                "soft_min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "worley_spread",
+            "default" : 3.0,
+            "desc" : "worley spread",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Spread",
+                "max" : 1000.0,
+                "min" : 0.0,
+                "soft_max" : 10.0
+            }
+        },
+        
+        {
+            "attr" : "worley_F1",
+            "default" : 1.0,
+            "desc" : "worley F1",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "F1",
+                "max" : 1000.0,
+                "min" : -1000.0,
+                "soft_max" : 10.0,
+                "soft_min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "worley_F2",
+            "default" : 0.0,
+            "desc" : "worley F2",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "F2",
+                "max" : 1000.0,
+                "min" : -1000.0,
+                "soft_max" : 10.0,
+                "soft_min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "worley_F3",
+            "default" : 0.0,
+            "desc" : "worley F3",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "F3",
+                "max" : 1000.0,
+                "min" : -1000.0,
+                "soft_max" : 10.0,
+                "soft_min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "worley_F4",
+            "default" : 0.0,
+            "desc" : "worley F4",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "F4",
+                "max" : 1000.0,
+                "min" : -1000.0,
+                "soft_max" : 10.0,
+                "soft_min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "worley_distance",
+            "default" : "0",
+            "desc" : "worley distance",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Square", "Square" ],
+                [ "2", "Manhattan", "Manhattan" ],
+                [ "3", "Chebychev", "Chebychev" ],
+                [ "4", "Minkovsky 0.5", "Minkovsky 0.5" ],
+                [ "5", "Minkovsky 4", "Minkovsky 4" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Distance"
+            }
+        },
+        
+        {
+            "attr" : "fractal_type",
+            "default" : "0",
+            "desc" : "fractal type",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Fractal", "Fractal" ],
+                [ "2", "Turbulence", "Turbulence" ],
+                [ "3", "fBm", "fBm" ],
+                [ "4", "fBm Turbulence", "fBm Turbulence" ],
+                [ "5", "Hetero Terrain", "Hetero Terrain" ],
+                [ "6", "Hybrid Multi Fractal", "Hybrid Multi Fractal" ],
+                [ "7", "Ridged Multi Fractal", "Ridged Multi Fractal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Fractal",
+                "rollout" : "Noise Fractal"
+            }
+        },
+        
+        {
+            "attr" : "fractal_levels",
+            "default" : 3.0,
+            "desc" : "fractal levels",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Levels",
+                "max" : 20.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "fractal_offset",
+            "default" : 0.0,
+            "desc" : "fractal offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Offset",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "fractal_gain",
+            "default" : 5.0,
+            "desc" : "fractal gain",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gain",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fractal_lacunarity",
+            "default" : 0.0,
+            "desc" : "fractal lacunarity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Lacunarity",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 10.0
+            }
+        },
+        
+        {
+            "attr" : "fractal_H",
+            "default" : 0.0,
+            "desc" : "fractal H",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Exponent",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "use_dist",
+            "default" : false,
+            "desc" : "use distortion",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use distortion",
+                "rollout" : "Distortion"
+            }
+        },
+        
+        {
+            "attr" : "dist_str",
+            "default" : 0.1000000014901161,
+            "desc" : "distortion strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Distortion Strength",
+                "max" : 1000.0,
+                "min" : 0.0,
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "dist_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "distortion map - works similarly to a bump map, solid colors have no effect",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Distortion (map)"
+            }
+        },
+        
+        {
+            "attr" : "dist_map2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for distortion strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Distortion Strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_size",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for the size",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Size (map)",
+                "rollout" : "Map parameters"
+            }
+        },
+        
+        {
+            "attr" : "tex_low",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for low threshold",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Threshold low (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_high",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for high threshold",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Threshold high (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_phase",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for phase",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Phase (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_spread",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for spread",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Spread (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_F1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for F1",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "F1 (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_F2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for F2",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "F2 (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_F3",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for F3",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "F3 (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_F4",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for F4",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "F4 (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_levels",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for fractal levels",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Levels (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for fractal offset",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Offset (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_gain",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for fractal gain",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Gain (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_lacunarity",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for fractal lacunarity",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Lacunarity (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_exponent",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for exponent",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Exponent (map)"
+            }
+        },
+        
+        {
+            "attr" : "use_curve_input",
+            "default" : false,
+            "desc" : "Whether to use a bezier curve",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_output",
+            "default" : 0.0,
+            "desc" : "Calculated blend amount to be tranformed by the bezier curve",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_input",
+            "default" : 0.50,
+            "desc" : "If curve is used the output value will be taken from this texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

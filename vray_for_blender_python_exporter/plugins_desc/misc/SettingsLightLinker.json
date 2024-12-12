@@ -1,0 +1,46 @@
+
+{
+    "Desciption" : "SettingsLightLinker",
+    "ID" : "SettingsLightLinker",
+    "Name" : "Settings Light Linker",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "ignored_lights",
+            "default" : null,
+            "desc" : "List containing lists of plugins. Every sub list contains a light plugin (always the first element) and some node plugins the light is not illuminating",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "ignored_shadow_lights",
+            "default" : null,
+            "desc" : "List containing list of plugins. Every sub list contains a light plugin (always the first element) and some node plugins, which do not cast shadows from this light",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "include_exclude_light_flags",
+            "default" : 0,
+            "desc" : "List containing a flag for every light in the ignored_lights list. 0 - the list is an exclude list (default). 1 - the list is an include list. 2 - ignored_lights is ignored and the light illuminates all objects in the scene, useful for animating the light linking",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "include_exclude_shadow_flags",
+            "default" : 0,
+            "desc" : "List containing a flag for every light in the ignored_shadow_lights list. 0 - the list is an exclude list (default). 1 - the list is an include list. 2 - ignored_shadow_lights is ignored and the light casts shadows from all objects in the scene, useful for animating the light linking",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

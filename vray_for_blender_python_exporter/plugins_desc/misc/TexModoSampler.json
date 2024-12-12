@@ -1,0 +1,230 @@
+
+{
+    "Desciption" : "TexModoSampler",
+    "ID" : "TexModoSampler",
+    "Name" : "Modo Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "locatorTransform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Locator transformation",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cameraDistance",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distance",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objDistance",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "screenR",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "screenX",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "screenY",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "textureU",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "textureV",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distanceX",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objDistanceX",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distanceY",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objDistanceY",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distanceZ",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objDistanceZ",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "backFacing",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "incidenceNobump",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "incidenceAngle",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "locatorIncAngle",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "slope",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "slopeUndisplaced",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "surfaceID",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "thickness",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "envAltitude",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "meshPart",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

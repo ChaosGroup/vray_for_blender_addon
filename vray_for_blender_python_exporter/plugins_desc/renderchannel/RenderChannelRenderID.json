@@ -1,0 +1,29 @@
+
+{
+    "Desciption" : "RenderChannelRenderID",
+    "ID" : "RenderChannelRenderID",
+    "Name" : "Render Channel Render ID",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "RenderID",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

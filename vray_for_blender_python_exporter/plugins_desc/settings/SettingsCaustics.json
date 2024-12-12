@@ -1,0 +1,183 @@
+
+{
+    "Desciption" : "SettingsCaustics",
+    "ID" : "SettingsCaustics",
+    "Name" : "Settings Caustics",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "on",
+            "default" : false,
+            "desc" : "Enable global caustics (forced off in interactive mode)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable caustics"
+            }
+        },
+        
+        {
+            "attr" : "max_photons",
+            "default" : 30,
+            "desc" : "Max. number of photons to look for; if 0, all photons within the search distance will be considered",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max photons",
+                "max" : 10000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "search_distance_units",
+            "default" : "1",
+            "desc" : "0:Pixels; 1:World",
+            "items" : 
+            [
+                [ "0", "Pixels", "Pixels" ],
+                [ "1", "World", "World" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Search Distance Units"
+            }
+        },
+        
+        {
+            "attr" : "search_distance",
+            "default" : 9.999999843067494e+17,
+            "desc" : "Search distance for caustic photons in world units",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Search distance (World)",
+                "max" : 100000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "search_distance_pixels",
+            "default" : 4.0,
+            "desc" : "Search distance for caustic photons in pixels",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Search distance (Pixels)",
+                "max" : 100.0,
+                "min" : 0.50
+            }
+        },
+        
+        {
+            "attr" : "max_density",
+            "default" : 0.0,
+            "desc" : "Photons within this distance will get merged",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max density",
+                "max" : 100000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "multiplier",
+            "default" : 1.0,
+            "desc" : "Multiplier for the caustics",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Multiplier",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Specifies the way the caustics photon map is calculated (0 - New map, 1 - From file, 2 - Progressive)",
+            "items" : 
+            [
+                [ "0", "New map", "New map" ],
+                [ "1", "From file", "From file" ],
+                [ "2", "Progressive", "Progressive" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : ".vrpmap file to load a previous calculated caustics photon map from when \"mode\" is 1",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Caustics Photon Map File",
+                "file_extensions" : [ "vrpmap" ],
+                "file_names" : [ "V-Ray Photon map" ]
+            }
+        },
+        
+        {
+            "attr" : "dont_delete",
+            "default" : true,
+            "desc" : "If true, the caustics photon map will not be deleted after rendering is complete",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Don't delete"
+            }
+        },
+        
+        {
+            "attr" : "auto_save",
+            "default" : false,
+            "desc" : "True to save the caustics photon map automatically at the end of the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto save"
+            }
+        },
+        
+        {
+            "attr" : "auto_save_file",
+            "default" : "",
+            "desc" : "When auto_save=1 this is the filename that will be saved",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Auto save file",
+                "file_extensions" : [ "vrpmap" ],
+                "file_names" : [ "V-Ray Photon map" ],
+                "file_op" : "save"
+            }
+        },
+        
+        {
+            "attr" : "show_calc_phase",
+            "default" : false,
+            "desc" : "True to show the calculation of the caustics map",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show calculation phase"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

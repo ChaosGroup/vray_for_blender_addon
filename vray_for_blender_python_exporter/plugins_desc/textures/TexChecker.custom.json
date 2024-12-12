@@ -1,0 +1,161 @@
+{
+    "ID": "TexChecker",
+    "Name": "V-Ray Checker",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "input",
+                "label": "Input",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "white_color"
+                    },
+                    {
+                        "name": "black_color"
+                    },
+                    {
+                        "name": "contrast"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "output",
+                "label": "Output",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_mult"
+                    },
+                    {
+                        "name": "color_offset"
+                    },
+                    {
+                        "name": "invert"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "alpha_from_intensity",
+                                "label": "Alpha Source"
+                            },
+                            {
+                                "name": "invert_alpha"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "alpha_mult"
+                    },
+                    {
+                        "name": "alpha_offset"
+                    },
+                    {
+                        "name": "nouvw_color"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "mapping",
+                "label": "Mapping",
+                "attrs": [
+                    {
+                        "name": "placement_type",
+                        "label": "Placement"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "tile_u"
+                            },
+                            {
+                                "name": "u"
+                            },
+                            {
+                                "name": "w",
+                                "label": "Width"
+                            },
+                            {
+                                "name": "tile_v"
+                            },
+                            {
+                                "name": "v"
+                            },
+                            {
+                                "name": "h",
+                                "label": "Height"
+                            },
+                            {
+                                "name": "jitter"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "uv noise",
+                "label": "UV Noise",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "uv_noise_on"
+                    },
+                    {
+                        "name": "uv_noise_animate"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "uv_noise_amount"
+                            },
+                            {
+                                "name": "uv_noise_levels"
+                            },
+                            {
+                                "name": "uv_noise_size"
+                            },
+                            {
+                                "name": "un_noise_phase"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "jitter",
+            "ui": {
+                "soft_min": -1.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with"
+        ]
+    }
+}

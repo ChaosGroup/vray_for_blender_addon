@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "TexModoStencil",
+    "ID" : "TexModoStencil",
+    "Name" : "Modo Stencil",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_tex",
+            "default" : 1.0,
+            "desc" : "The base texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "stencil_tex",
+            "default" : 1.0,
+            "desc" : "The stencil texture. Where stencil_tex is < 0.5 the result color is taken from base_tex, where stencil_tex is >= 0.5 the result is taken from stenciled_value",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "stenciled_value",
+            "default" : 0.0,
+            "desc" : "The result where stencil_tex is >= 0.5 ",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

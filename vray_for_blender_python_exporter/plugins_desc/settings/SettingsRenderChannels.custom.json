@@ -1,0 +1,49 @@
+
+{
+    "ID" : "SettingsRenderChannels",
+    "Parameters": [
+        {
+            "attr" : "unfiltered_fragment_method",
+            "desc" : "Determines which fragment to use for unfiltered render elements.",
+            "ui" : {
+                "display_name": "Fragment Method"
+            }
+        },
+        {
+            "attr" : "deep_merge_mode",
+            "desc" : "Determines how to blend fragments within a pixel.",
+            "items" : 
+            [
+                [ "0", "By render ID", "By render ID" ],
+                [ "1", "By z-depth", "By z-depth" ]
+            ]
+        },
+        {
+            "attr" : "deep_merge_coeff",
+            "desc" : "Determines the z-depth blending sensitivity when Deep Merge Mode is 'By z-depth'",
+            "ui" : {
+                "display_name": "Deep Merge Coeff"
+            }
+        }
+    ],
+    "Widget" : 
+    {
+        "widgets" : [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "unfiltered_fragment_method"
+                    },
+                    {
+                        "name": "deep_merge_mode"
+                    },
+                    {
+                        "name": "deep_merge_coeff",
+                        "active": {"cond": "::deep_merge_mode=1"}
+                    }
+                ] 
+            }
+        ]
+    }
+}

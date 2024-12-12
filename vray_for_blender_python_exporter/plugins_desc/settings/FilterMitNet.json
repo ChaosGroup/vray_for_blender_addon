@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "FilterMitNet",
+    "ID" : "FilterMitNet",
+    "Name" : "Filter Mit Net",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 4.0,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "blur",
+            "default" : 0.3333333432674408,
+            "desc" : "The 'B' value in the filter polynomial. Larger values reduce ringing but may cause the image to appear softer",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "ringing",
+            "default" : 0.3333333432674408,
+            "desc" : "The 'C' value in the filter polynomial. Larger values make the result appear sharper but may introduce ringing",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

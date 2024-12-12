@@ -1,0 +1,180 @@
+{
+    "Name": "V-Ray Color Correction",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "source_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "source_color",
+            "tex_prop": "texture_map",
+            "ui": { "display_name": "Source Color" },
+            "desc": "Specifies a bitmap to be color corrected.",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "hue_shift",
+            "ui": {
+                "spin_step": 0.5
+            }
+        },
+        {
+            "attr": "saturation",
+            "ui": {
+                "spin_step": 0.01
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "source_color_colortex"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "channels",
+                "label": "Channels",
+                "attrs": [
+                    {
+                        "name": "rewire_red"
+                    },
+                    {
+                        "name": "rewire_green"
+                    },
+                    {
+                        "name": "rewire_blue"
+                    },
+                    {
+                        "name": "rewire_alpha"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "color",
+                "label": "Color",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "hue_shift"
+                    },
+                    {
+                        "name": "saturation"
+                    },
+                    {
+                        "name": "hue_tint"
+                    },
+                    {
+                        "name": "tint_strength"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "lightness",
+                "label": "Lightness",
+                "attrs": [
+                    {
+                        "name": "lightness_mode"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {"cond": "::lightness_mode=0"},
+                        "attrs": [
+                            {
+                                "name": "brightness"
+                            },
+                            {
+                                "name": "contrast"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {"cond": "::lightness_mode=1"},
+                        "attrs": [
+                            {
+                                "name": "adv_exposure_mode"
+                            },
+                            {
+                                "name": "adv_brightness"
+                            },
+                            {
+                                "name": "adv_contrast"
+                            },
+                            {
+                                "name": "adv_base"
+                            },
+                            {
+                                "name": "adv_offset"
+                            },
+                            {
+                                "name": "adv_use_red"
+                            },
+                            {
+                                "name": "adv_use_green"
+                            },
+                            {
+                                "name": "adv_use_blue"
+                            },
+                            {
+                                "name": "adv_rgb_brightness"
+                            },
+                            {
+                                "name": "adv_rgb_contrast"
+                            },
+                            {
+                                "name": "adv_rgb_base"
+                            },
+                            {
+                                "name": "adv_rgb_offset"
+                            },
+                            {
+                                "name": "adv_printer_lights_per",
+                                "active": {"cond": "::adv_exposure_mode=2"}
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets" : [
+            {
+                "name": "source_color_colortex"
+            },
+            {
+                "name" : "hue_tint"
+            },
+            {
+                "name" : "adv_rgb_brightness"
+            },
+            {
+                "name" : "adv_rgb_contrast"
+            },
+            {
+                "name" : "adv_rgb_base"
+            },
+            {
+                "name" : "adv_rgb_offset"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

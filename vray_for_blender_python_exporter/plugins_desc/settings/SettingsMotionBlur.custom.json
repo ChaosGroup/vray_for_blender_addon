@@ -1,0 +1,21 @@
+{
+    "ID": "SettingsMotionBlur",
+    "Type": "CAMERA",
+    "Parameters": [
+        {
+            "attr": "subdivs",
+            "options": {
+                "visible": false
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "subdivs",
+            "low_samples"
+        ]
+    },
+    "excluded_parameters": [
+        "subdivs"
+    ]
+}

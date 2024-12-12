@@ -1,0 +1,37 @@
+
+{
+    "Desciption" : "TexMultiProjection",
+    "ID" : "TexMultiProjection",
+    "Name" : "Multi Projection",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_textures",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The spherical projection textures; must be using a UVWGenProjection",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "zdepth_offset",
+            "default" : 0.009999999776482582,
+            "desc" : "An offset for the zdepth value to avoid numeric errors",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "zdepth_textures",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The z-depth projection textures",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

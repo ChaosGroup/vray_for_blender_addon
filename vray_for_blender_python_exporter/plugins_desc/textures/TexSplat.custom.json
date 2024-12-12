@@ -1,0 +1,98 @@
+{
+    "ID": "TexSplat",
+    "Name": "V-Ray Splat",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "color1"
+                    },
+                    {
+                        "name": "color2"
+                    },
+                    {
+                        "name": "size"
+                    },
+                    {
+                        "name": "iterations"
+                    },
+                    {
+                        "name": "threshold"
+                    },
+                    {
+                        "name": "smoothing"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "size",
+            "default": 0.5,
+            "ui": {
+                "soft_max": 5.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "iterations",
+            "ui": {
+                "soft_max": 10,
+                "spin_step": 1
+            }
+        },
+        {
+            "attr": "threshold",
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "smoothing",
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size",
+            "un_noise_phase"
+        ]
+    }
+}

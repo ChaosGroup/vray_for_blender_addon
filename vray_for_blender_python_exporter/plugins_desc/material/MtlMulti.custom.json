@@ -1,0 +1,77 @@
+{
+    "ID": "MtlMulti",
+    "Name": "V-Ray Switch Mtl",
+    "Parameters": [
+        {
+            "attr" : "mtlid_gen_float",
+            "desc": "Switch texture",
+            "default" : 1.0,
+            "ui": {
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr" : "wrap_id",
+            "default" : false,
+            "ui" :{
+                "display_name": "Loop Materials"
+            }
+        },
+        {
+            "attr" : "mtlid_gen_float_round_mode",
+            "items" : 
+            [
+                [ "0", "Nearest", "Round Nearest" ],
+                [ "1", "Down", "Round Down" ]
+            ]
+        },
+        {
+            "attr" : "switch_id",
+            "type": "INT", 
+            "desc": "Switch ID",
+            "default" : 0,
+            "ui": {
+                "min": 0,
+                "soft_min": 0,
+                "spin_step": 1,
+                "display_name": "Switch"
+            },
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "switch_id",
+                        "label": "Switch"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "mtlid_gen_float_round_mode",
+                                "label": "Round Mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "wrap_id",
+                        "label": "Loop Materials"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "mtlid_gen"
+        ]
+    }
+}

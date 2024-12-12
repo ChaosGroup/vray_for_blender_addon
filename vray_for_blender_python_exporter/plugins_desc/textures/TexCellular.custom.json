@@ -1,0 +1,115 @@
+{
+    "ID": "TexCellular",
+    "Name": "V-Ray Cellular",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "bg_color"
+                    },
+                    {
+                        "name": "center_color"
+                    },
+                    {
+                        "name": "edge_color"
+                    },
+                    {
+                        "name": "size"
+                    },
+                    {
+                        "name": "spread"
+                    },
+                    {
+                        "name": "density"
+                    },
+                    {
+                        "name": "low"
+                    },
+                    {
+                        "name": "middle"
+                    },
+                    {
+                        "name": "high"
+                    },
+                    {
+                        "name": "fractal"
+                    },
+                    {
+                        "name": "fractal_iterations"
+                    },
+                    {
+                        "name": "fractal_roughness"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "size",
+            "default": 0.1,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "spread",
+            "default": 0.1,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "density",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "components",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size",
+            "un_noise_phase"
+        ]
+    }
+}

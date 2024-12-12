@@ -1,0 +1,218 @@
+{
+    "ID": "UVWGenMayaPlace2dTexture",
+    "Name": "UVW Gen Place 2d Texture",
+    "Parameters": [
+        {
+            "attr": "coverage_u",
+            "default": 1.0,
+            "desc": "U values are remapped to 1.0/coverage_u",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Coverage U"
+            }
+        },
+        {
+            "attr": "coverage_v",
+            "default": 1.0,
+            "desc": "V values are remapped to 1.0/coverage_v",
+            "ui": { 
+                "spin_step": 0.01,
+                "display_name": "Coverage V"
+            }
+        },
+        {
+            "attr": "repeat_u_tex",
+            "default": 1.0,
+            "desc": "Multiplier for U values",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Repeat U"
+            }
+        },
+        {
+            "attr": "repeat_v_tex",
+            "default": 1.0,
+            "desc": "Multiplier for V values",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Repeat V"
+            }
+        },
+        {
+            "attr": "uv_set_name",
+            "default": ""
+        },
+        {
+            "attr": "uvw_channel",
+            "default": -1,
+            "ui": { "display_name": "UVW Channel" }
+        },
+        {
+            "attr": "translate_frame_u",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Translate Frame U"
+            }
+        },
+        {
+            "attr": "translate_frame_v",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Translate Frame V"
+            }
+        },
+        {
+            "attr": "offset_u_tex",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Offset U"
+            }
+        },
+        {
+            "attr": "offset_v_tex",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Offset V"
+            }
+        },
+        {
+            "attr": "noise_u",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Noise U"
+            }
+        },
+        {
+            "attr": "noise_v",
+            "ui": {
+                "spin_step": 0.01,
+                "display_name": "Noise V"
+            }
+        },
+        {
+            "attr": "rotate_frame",
+            "ui": { "display_name": "Rotate Frame"}
+        },
+        {
+            "attr": "rotate_uv_tex",
+            "ui": { "display_name": "Rotate UV"}
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "repeat_u_tex"
+                    },
+                    {
+                        "name": "repeat_v_tex"
+                    },
+                    {
+                        "name": "offset_u_tex"
+                    },
+                    {
+                        "name": "offset_v_tex"
+                    },
+                    {
+                        "name": "rotate_uv_tex",
+                        "label": "Rotate UV"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "coverage_u"
+                    },
+                    {
+                        "name": "coverage_v"
+                    },
+                    {
+                        "name": "translate_frame_u",
+                        "label": "Translate U"
+                    },
+                    {
+                        "name": "translate_frame_v",
+                        "label": "Translate V"
+                    },
+                    {
+                        "name": "rotate_frame"
+                    },
+                    {
+                        "name": "clamp_u"
+                    },
+                    {
+                        "name": "clamp_v"
+                    },
+                    {
+                        "name": "stagger"
+                    },
+                    {
+                        "name": "noise_u"
+                    },
+                    {
+                        "name": "noise_v"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mirror_u"
+                    },
+                    {
+                        "name": "mirror_v"
+                    },
+                    {
+                        "name": "wrap_u"
+                    },
+                    {
+                        "name": "wrap_v"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {
+                "name": "repeat_u_tex"
+            },
+            {
+                "name": "repeat_v_tex"
+            },
+            {
+                "name": "offset_u_tex"
+            },
+            {
+                "name": "offset_v_tex"
+            },
+            {
+                "name": "rotate_uv_tex"
+            }
+       ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "uvw_channel_tex",
+            "nsamples",
+            "coverage_u_tex",
+            "coverage_v_tex",
+            "translate_frame_u_tex",
+            "translate_frame_v_tex",
+            "rotate_frame_tex",
+            "repeat_u",
+            "repeat_v",
+            "offset_u",
+            "offset_v",
+            "rotate_uv",
+            "noise_u_tex",
+            "noise_v_tex"
+        ],
+        "animatable": true
+    }
+}

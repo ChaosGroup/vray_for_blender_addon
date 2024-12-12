@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexAColor",
+    "ID" : "TexAColor",
+    "Name" : "AColor",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "Unused",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "texture",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

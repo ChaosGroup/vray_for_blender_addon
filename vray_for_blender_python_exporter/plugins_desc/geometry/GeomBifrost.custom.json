@@ -1,0 +1,12 @@
+{
+    "ID": "GeomBifrost",
+    "Parameters": [
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    }
+}

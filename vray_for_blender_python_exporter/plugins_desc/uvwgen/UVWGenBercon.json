@@ -1,0 +1,262 @@
+
+{
+    "Desciption" : "UVWGenBercon",
+    "ID" : "UVWGenBercon",
+    "Name" : "UVW Gen Bercon",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "offset_x",
+            "default" : 0.0,
+            "desc" : "the X offset",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_y",
+            "default" : 0.0,
+            "desc" : "the Y offset",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_z",
+            "default" : 0.0,
+            "desc" : "the Z offset",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_x",
+            "default" : 1.0,
+            "desc" : "X size",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_y",
+            "default" : 1.0,
+            "desc" : "Y size",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_z",
+            "default" : 1.0,
+            "desc" : "Z size",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_x",
+            "default" : 0.0,
+            "desc" : "X angle",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_y",
+            "default" : 0.0,
+            "desc" : "Y angle",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_z",
+            "default" : 0.0,
+            "desc" : "Z angle",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_x",
+            "default" : 1,
+            "desc" : "X tiles",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_y",
+            "default" : 1,
+            "desc" : "Y tiles",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_z",
+            "default" : 1,
+            "desc" : "Z tiles",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_x2",
+            "default" : 0.0,
+            "desc" : "second X offset",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_y2",
+            "default" : 0.0,
+            "desc" : "second Y offset",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_z2",
+            "default" : 0.0,
+            "desc" : "second Z offset",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_x2",
+            "default" : 0.0,
+            "desc" : "second X size",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_y2",
+            "default" : 0.0,
+            "desc" : "second Y size",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "size_z2",
+            "default" : 0.0,
+            "desc" : "second Z size",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_x2",
+            "default" : 0.0,
+            "desc" : "second X angle",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_y2",
+            "default" : 0.0,
+            "desc" : "second Y angle",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "angle_z2",
+            "default" : 0.0,
+            "desc" : "second Z angle",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "xyz_lock",
+            "default" : 0,
+            "desc" : "XYZ Lock",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "seed",
+            "default" : 1,
+            "desc" : "Seed",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rand_mat",
+            "default" : 0,
+            "desc" : "Random by material",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rand_obj",
+            "default" : 0,
+            "desc" : "Random by object",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rand_par",
+            "default" : 0,
+            "desc" : "Random by particle",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "map",
+            "default" : 0,
+            "desc" : "Mapping type",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channel",
+            "default" : 0,
+            "desc" : "Mapping channel",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : 1.0,
+            "desc" : "filtering",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode_2d",
+            "default" : 0,
+            "desc" : "2D mode",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cam_space",
+            "default" : false,
+            "desc" : "Calculations in camera space",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

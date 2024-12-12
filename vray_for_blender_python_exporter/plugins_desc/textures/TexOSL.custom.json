@@ -1,0 +1,13 @@
+{
+    "Name": "V-Ray OSL",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ]
+}

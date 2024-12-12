@@ -1,0 +1,59 @@
+{
+    "ID": "TexOpenVDB",
+    "Name": "V-Ray OpenVDB",
+    "Parameters": [
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "mapped",
+                "label": "Mapped",
+                "attrs": [
+                    {
+                        "name": "file"
+                    },
+                    {
+                        "name": "stream"
+                    },
+                    {
+                        "name": "render_grid"
+                    },
+                    {
+                        "name": "velocity_grid"
+                    },
+                    {
+                        "name": "delay_load"
+                    },
+                    {
+                        "name": "interpolation"
+                    },
+                    {
+                        "name": "use_3d_mapping"
+                    },
+                    {
+                        "name": "float_mult"
+                    },
+                    {
+                        "name": "vector_mult"
+                    }
+                ]
+            }
+        ]
+    }
+}

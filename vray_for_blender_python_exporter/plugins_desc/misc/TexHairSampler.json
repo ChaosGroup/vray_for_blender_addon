@@ -1,0 +1,81 @@
+
+{
+    "Desciption" : "TexHairSampler",
+    "ID" : "TexHairSampler",
+    "Name" : "Hair Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "distance_along_strand",
+            "default" : 0.0,
+            "desc" : "Distance along the hair strand where the intersection occurred, in the [0,1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distance_along_strand_absolute",
+            "default" : 0.0,
+            "desc" : "Distance along the hair strand where the intersection occurred, in scene units, normalized to an absolute distance value",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "position_across_strand",
+            "default" : 0.0,
+            "desc" : "The relative position of the intersection across the hair strand width, in [0 1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Color from hair primitive (if present)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_incandescence",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Incandescence from hair primitive (if present)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transparency from hair primitive (if present)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_strand",
+            "default" : 0.0,
+            "desc" : "Random by the hair strand where the intersection occurred, in the [0,1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_max_distance",
+            "default" : 1.0,
+            "desc" : "The maximum distance of strands, when using \"distance_along_strand_absolute\" (denominator)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 9.999999974752427e-07
+            }
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

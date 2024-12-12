@@ -1,0 +1,257 @@
+
+{
+    "Desciption" : "SettingsEnvironment",
+    "ID" : "SettingsEnvironment",
+    "Name" : "Settings Environment",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bg_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Background color that will be used if a ray does not hit anything",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Background"
+            }
+        },
+        
+        {
+            "attr" : "bg_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Background texture map that will be sampled if a ray does not hit anything",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Background Texture"
+            }
+        },
+        
+        {
+            "attr" : "bg_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier used to blend the result between the background texture map and color values",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Background Multiplier",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gi_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Color that will be used if a GI ray does not hit anything",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "gi_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture map that will be sampled if a GI ray does not hit anything",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "gi_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier used to blend the result between the GI texture map and color values",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "reflect_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Color that will be used if a reflected ray does not hit anything",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "reflect_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture map that will be sampled if a reflected ray does not hit anything",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "reflect_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier used to blend the result between the Reflection texture map and color values",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refract_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Color that will be used if a refracted ray does not hit anything",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "refract_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture map that will be sampled if a refracted ray does not hit anything",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "refract_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier used to blend the result between the Refraction texture map and color values",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_matte_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Color that will be used for reflected or refracted rays of matte objects if they do not hit anything",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "secondary_matte_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture map that will be sampled if reflected or refracted ray of matte objects does not hit anything",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "secondary_matte_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier used to blend the result between the Secondary matte texture map and color values",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "environment_volume",
+            "default" : null,
+            "desc" : "A list of environment volumes for the scene",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "num_environment_objects",
+            "default" : 0,
+            "desc" : "Used for implementing image planes",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "global_light_level",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "A global light level multiplier for all lights",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "use_bg",
+            "default" : true,
+            "desc" : "Whether to set the background color/map",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use background"
+            }
+        },
+        
+        {
+            "attr" : "use_gi",
+            "default" : true,
+            "desc" : "Whether to set the GI color/map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_reflect",
+            "default" : true,
+            "desc" : "Whether to set the reflect color/map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_refract",
+            "default" : true,
+            "desc" : "Whether to set the refract color/map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_secondary_matte",
+            "default" : true,
+            "desc" : "Whether to use the secondary matte color/map",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

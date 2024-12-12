@@ -1,0 +1,144 @@
+
+{
+    "Desciption" : "SphericalHarmonicsExporter",
+    "ID" : "SphericalHarmonicsExporter",
+    "Name" : "Spherical Harmonics Exporter",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "anim_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "bands",
+            "default" : 4,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 50,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "bounces",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "ray_bias",
+            "default" : 0.001000000047497451,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "file_name",
+            "default" : "C:\\temp",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrsh", "xml" ]
+            }
+        },
+        
+        {
+            "attr" : "file_format",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "per_normal",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "hit_recording",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "max_mem_usage",
+            "default" : 2000,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "object_space",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "adaptive_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "adaptive_thresh",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "adaptive_depth",
+            "default" : 3,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "adaptive_edge",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "save_obj",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "node",
+            "default" : null,
+            "desc" : "Node of the mesh",
+            "type" : "PLUGIN"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

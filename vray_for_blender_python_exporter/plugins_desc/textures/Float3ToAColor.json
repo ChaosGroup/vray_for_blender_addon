@@ -1,0 +1,62 @@
+
+{
+    "Desciption" : "Float3ToAColor",
+    "ID" : "Float3ToAColor",
+    "Name" : "Float 3 To AColor",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "float1",
+            "default" : 1.0,
+            "desc" : "First color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float2",
+            "default" : 1.0,
+            "desc" : "Second color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float3",
+            "default" : 1.0,
+            "desc" : "Third color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha",
+            "default" : 1.0,
+            "desc" : "Alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

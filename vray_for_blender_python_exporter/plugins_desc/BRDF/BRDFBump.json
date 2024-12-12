@@ -1,0 +1,174 @@
+
+{
+    "Desciption" : "BRDFBump",
+    "ID" : "BRDFBump",
+    "Name" : "Bump",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_brdf",
+            "default" : null,
+            "desc" : "Base BRDF",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_tex_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Bump texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_tex_float",
+            "default" : 0.0,
+            "desc" : "Bump texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_tex_mult",
+            "default" : 1.0,
+            "desc" : "Bump amount",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_tex_mult_tex",
+            "default" : 0.0,
+            "desc" : "Bump amount texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_tex",
+            "default" : null,
+            "desc" : "Bump texture; this is deprecated, use bump_tex_color or bump_tex_float",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_shadows",
+            "default" : false,
+            "desc" : "true to offset the surface shading point, in addition to the normal",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "map_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal_uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the normal map texture when map_type is 1",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "maya_compatible",
+            "default" : false,
+            "desc" : "When this is true the BRDFBump will try to match the Maya bump/normal mapping",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "compute_bump_for_shadows",
+            "default" : true,
+            "desc" : "true to compute bump mapping for shadow rays in case the material is transparent; false to skip the bump map for shadow rays (faster rendering)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_delta_scale",
+            "default" : 1.0,
+            "desc" : "Scale for sampling the bitmap when map_type is 0. Normally this is tied to the ray differentials, but can be changed if necessary",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal_map_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier applied to the normal map",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "additional_bump",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture for additional bump effect. This is used only when map_type is not 0 or 5. This param always work with output from the texture bump output (5)",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_map_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier applied to the additional bump map",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "units",
+            "default" : "0",
+            "desc" : "The units for the bump amount (0 - default scene units; 1 - cm). Only valid if the mode is 0 (\"bump map\")",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "cm", "cm" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue2Z_mapping_method",
+            "default" : 1,
+            "desc" : "Mapping method of the B->Z. 0 : B[0, 1] -> Z[0, 1]. 1 (default) : B[0, 1] -> Z[-1, 1]",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

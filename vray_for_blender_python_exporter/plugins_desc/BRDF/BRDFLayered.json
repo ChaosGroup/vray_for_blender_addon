@@ -1,0 +1,99 @@
+
+{
+    "Desciption" : "BRDFLayered",
+    "ID" : "BRDFLayered",
+    "Name" : "Layered",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "brdfs",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "weights",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "opacities",
+            "default" : 1.0,
+            "desc" : "The opacity of each coat texture",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "additive_mode",
+            "default" : "0",
+            "desc" : "Weight for the material layers. 0 = Default, 1 = Additive. 2 and 3 used by RT GPU only (2 = MDL normalize, 3 = MDL clamp max)",
+            "items" : 
+            [
+                [ "0", "Energy Conserving", "Energy Conserving" ],
+                [ "1", "Additive", "Additive" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

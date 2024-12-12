@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "FilterTriangle",
+    "ID" : "FilterTriangle",
+    "Name" : "Filter Triangle",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 1.50,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

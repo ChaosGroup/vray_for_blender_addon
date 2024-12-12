@@ -1,0 +1,90 @@
+
+{
+    "Desciption" : "TexFresnel",
+    "ID" : "TexFresnel",
+    "Name" : "Fresnel",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "fresnel_ior",
+            "default" : 1.549999952316284,
+            "desc" : "Fresnel ior",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fresnel IOR",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "refract_ior",
+            "default" : 1.549999952316284,
+            "desc" : "Refraction ior of the underlying surface; this is ignored if the surface has a volume shader (the volume IOR is used)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Refraction IOR",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "white_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Refraction (front) color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Front Color"
+            }
+        },
+        
+        {
+            "attr" : "black_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Reflection (side) color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Side Color"
+            }
+        },
+        
+        {
+            "attr" : "fresnel_ior_tex",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refract_ior_tex",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "contribute_to_fresnel_ior_re",
+            "default" : false,
+            "desc" : "Flag that allows the texture to contribute to the Fresnel IOR render element",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

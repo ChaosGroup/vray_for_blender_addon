@@ -1,0 +1,164 @@
+
+{
+    "Desciption" : "UVWGenEnvironment",
+    "ID" : "UVWGenEnvironment",
+    "Name" : "UVW Gen Environment",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_matrix",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Transformation of the input directions. This effectively rotates the environment",
+            "type" : "MATRIX",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation of the resulting UVW coordinates",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapping_type",
+            "default" : "spherical",
+            "desc" : "One of \"angular\", \"cubic\", \"spherical\", \"mirror_ball\", \"screen\", \"max_spherical\", \"spherical_vray\", \"max_cylindrical\" or \"max_shrink_wrap\"",
+            "items" : 
+            [
+                [ "angular", "angular", "angular" ],
+                [ "cubic", "cubic", "cubic" ],
+                [ "spherical", "spherical", "spherical" ],
+                [ "mirror_ball", "mirror_ball", "mirror_ball" ],
+                [ "screen", "screen", "screen" ],
+                [ "max_spherical", "max_spherical", "max_spherical" ],
+                [ "spherical_vray", "spherical_vray", "spherical_vray" ],
+                [ "max_cylindrical", "max_cylindrical", "max_cylindrical" ],
+                [ "max_shrink_wrap", "max_shrink_wrap", "max_shrink_wrap" ],
+                [ "max_world_xyz", "max_world_xyz", "max_world_xyz" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_u",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "No wrapping", "No wrapping" ],
+                [ "1", "Wrap", "Wrap" ],
+                [ "2", "Mirror tile", "Mirror tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_v",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "No wrapping", "No wrapping" ],
+                [ "1", "Wrap", "Wrap" ],
+                [ "2", "Mirror tile", "Mirror tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_w",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "No wrapping", "No wrapping" ],
+                [ "1", "Wrap", "Wrap" ],
+                [ "2", "Mirror tile", "Mirror tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_u",
+            "default" : "0",
+            "desc" : "1 to crop in the u-direction",
+            "items" : 
+            [
+                [ "0", "No", "No" ],
+                [ "1", "Yes", "Yes" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_v",
+            "default" : "0",
+            "desc" : "1 to crop in the v-direction",
+            "items" : 
+            [
+                [ "0", "No", "No" ],
+                [ "1", "Yes", "Yes" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_w",
+            "default" : "0",
+            "desc" : "1 to crop in the w-direction",
+            "items" : 
+            [
+                [ "0", "No", "No" ],
+                [ "1", "Yes", "Yes" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "duvw_scale",
+            "default" : 1.0,
+            "desc" : "Additional scale factor for the texture derivatives",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ground_on",
+            "default" : 0,
+            "desc" : "When on, project the environment from the \"bottom\" hemisphere to the ground plane",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ground_position",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Ground projection center position when ground_on=1",
+            "type" : "VECTOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ground_radius",
+            "default" : 1000.0,
+            "desc" : "Radius of the projection plane around ground_position for which to project",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

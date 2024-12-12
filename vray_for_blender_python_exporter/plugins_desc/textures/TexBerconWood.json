@@ -1,0 +1,934 @@
+
+{
+    "Desciption" : "TexBerconWood",
+    "ID" : "TexBerconWood",
+    "Name" : "Bercon Wood",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "desc" : "The way the valid portion of the texture is applied: 0 - the whole texture is valid, 1 - crop, 2 -place",
+            "items" : 
+            [
+                [ "0", "Whole texture is valid", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "U coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "V coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 1.0,
+            "desc" : "Width of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "h",
+            "default" : 1.0,
+            "desc" : "Height of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : 0.0,
+            "desc" : "Amount of random placement variation",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_u",
+            "default" : false,
+            "desc" : "If true there is horizontal tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_v",
+            "default" : false,
+            "desc" : "If true there is vertical tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_noise_on",
+            "default" : false,
+            "desc" : "If true the noise is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "UV noise on"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_animate",
+            "default" : false,
+            "desc" : "If true the noise is animated. Use \"UV noise phase\" to animate the noise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animate UV noise"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_amount",
+            "default" : 1.0,
+            "desc" : "UV noise amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise amount"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_levels",
+            "default" : 1.0,
+            "desc" : "UV noise iterations",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise levels"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_size",
+            "default" : 1.0,
+            "desc" : "UV noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise size"
+            }
+        },
+        
+        {
+            "attr" : "un_noise_phase",
+            "default" : 0.0,
+            "desc" : "UV noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise phase",
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "cam_space",
+            "default" : false,
+            "desc" : "Calculations in camera space",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "noise_color1",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "noise color 1",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Color 1"
+            }
+        },
+        
+        {
+            "attr" : "noise_color2",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "noise color 2",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Color 2"
+            }
+        },
+        
+        {
+            "attr" : "noise_color3",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "noise color 3",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Grain Color"
+            }
+        },
+        
+        {
+            "attr" : "noise_map1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "noise map 1",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 1 (map)"
+            }
+        },
+        
+        {
+            "attr" : "noise_map2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "noise map 2",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 2 (map)"
+            }
+        },
+        
+        {
+            "attr" : "grain_lock",
+            "default" : false,
+            "desc" : "grain lock",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Grain Color same as Color 2"
+            }
+        },
+        
+        {
+            "attr" : "noise_map3",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "noise map 3",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Grain Color (map)"
+            }
+        },
+        
+        {
+            "attr" : "rand_seed",
+            "default" : 12.34500026702881,
+            "desc" : "random seed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Seed",
+                "min" : 0.0,
+                "rollout" : "General"
+            }
+        },
+        
+        {
+            "attr" : "wood_type",
+            "default" : "0",
+            "desc" : "0:Radial wood, 1:Perlin wood, 2:Simplex wood, 3:Linear wood",
+            "items" : 
+            [
+                [ "0", "Radial wood", "Radial wood" ],
+                [ "1", "Perlin wood", "Perlin wood" ],
+                [ "2", "Simplex wood", "Simplex wood" ],
+                [ "3", "Linear wood", "Linear wood" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Wood type"
+            }
+        },
+        
+        {
+            "attr" : "wood_size",
+            "default" : 3.0,
+            "desc" : "wood size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "low_tresh",
+            "default" : 0.3000000119209290,
+            "desc" : "low treshold",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Low",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "high_tresh",
+            "default" : 1.0,
+            "desc" : "high treshold",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "High",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "wood_skew",
+            "default" : 0.750,
+            "desc" : "wood skew",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Skew",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "width_var",
+            "default" : 0.50,
+            "desc" : "width variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Width Variation",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gain_var",
+            "default" : 0.750,
+            "desc" : "gain variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gain Variation",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "trunk_str",
+            "default" : 1.0,
+            "desc" : "trunk strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Strength",
+                "min" : 0.0,
+                "rollout" : "Trunk wobble"
+            }
+        },
+        
+        {
+            "attr" : "trunk_freq",
+            "default" : 0.03999999910593033,
+            "desc" : "trunk frequency",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Frequency",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "radial_str",
+            "default" : 0.250,
+            "desc" : "radial strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Strength",
+                "min" : 0.0,
+                "rollout" : "Radial noise"
+            }
+        },
+        
+        {
+            "attr" : "radial_freq",
+            "default" : 0.1000000014901161,
+            "desc" : "radial frequency",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Frequency",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "radial_z",
+            "default" : 0.009999999776482582,
+            "desc" : "radial Z frequency",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Z Frequency",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "angle_str",
+            "default" : 0.1000000014901161,
+            "desc" : "angle strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Strength",
+                "min" : 0.0,
+                "rollout" : "Angular noise"
+            }
+        },
+        
+        {
+            "attr" : "angle_freq",
+            "default" : 1.0,
+            "desc" : "angle frequency",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Frequency",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "angle_rad",
+            "default" : 15.0,
+            "desc" : "angle radius",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Radius",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "grain_str",
+            "default" : 0.2000000029802322,
+            "desc" : "grain strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Amount",
+                "min" : 0.0,
+                "rollout" : "Grain"
+            }
+        },
+        
+        {
+            "attr" : "grain_freq",
+            "default" : 5.0,
+            "desc" : "grain frequency",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Frequency",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "use_dist",
+            "default" : false,
+            "desc" : "use distortion",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use distortion",
+                "rollout" : "Distortion"
+            }
+        },
+        
+        {
+            "attr" : "dist_str",
+            "default" : 0.1000000014901161,
+            "desc" : "distortion strength",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Strength",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dist_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "distortion map - works similarly to a bump map, solid colors have no effect",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Distortion (map)"
+            }
+        },
+        
+        {
+            "attr" : "dist_map2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for distortion strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Distortion Strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "samples",
+            "default" : 4,
+            "desc" : "samples",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Samples",
+                "min" : 1,
+                "rollout" : "Super Sampling"
+            }
+        },
+        
+        {
+            "attr" : "tex_size",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for the size",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Size (map)",
+                "rollout" : "Map parameters"
+            }
+        },
+        
+        {
+            "attr" : "tex_low",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for low treshhold",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Threshold low (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_high",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for high greshhold",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Threshold high (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_skew",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for skew",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Skew (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_width_var",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for width variation",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Width variation (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_gain_var",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for gain variation",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Gain variation (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_trunk_str",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for trunk strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Trunk strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_trunk_freq",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for trunk frequency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Trunk frequency (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_radial_str",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for radial strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Radial strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_radial_freq",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for radial frequency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Radial frequency (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_z_str",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for radial z strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Radial Z frequency (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_ang_str",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for angular strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Angular strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_ang_freq",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for angular frequency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Angular frequency (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_ang_rad",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for angular radius",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Angular radius (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_grain_str",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for grain strength",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Grain strength (map)"
+            }
+        },
+        
+        {
+            "attr" : "tex_grain_freq",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "texture for grain frequency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Grain frequency (map)"
+            }
+        },
+        
+        {
+            "attr" : "use_curve_input",
+            "default" : false,
+            "desc" : "Whether to use a bezier curve",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_output",
+            "default" : 0.0,
+            "desc" : "Calculated blend amount to be tranformed by the bezier curve",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_input",
+            "default" : 0.50,
+            "desc" : "If curve is used the output value will be taken from this texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

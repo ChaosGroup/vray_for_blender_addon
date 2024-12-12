@@ -1,0 +1,81 @@
+
+{
+    "Desciption" : "SettingsRegionsGenerator",
+    "ID" : "SettingsRegionsGenerator",
+    "Name" : "Settings Regions Generator",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "xc",
+            "default" : 48,
+            "desc" : "Maximum bucket width",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "yc",
+            "default" : 48,
+            "desc" : "Maximum bucket height",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "xymeans",
+            "default" : "0",
+            "desc" : "Size in pixels or number of regions",
+            "items" : 
+            [
+                [ "0", "Size in pixels", "Size in pixels" ],
+                [ "1", "Number of regions", "Number of regions" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Size in pixels or number of regions"
+            }
+        },
+        
+        {
+            "attr" : "seqtype",
+            "default" : "4",
+            "desc" : "Sequence type",
+            "items" : 
+            [
+                [ "0", "Top-Bottom", "Top-Bottom" ],
+                [ "1", "Left-Right", "Left-Right" ],
+                [ "2", "Checker", "Checker" ],
+                [ "3", "Spiral", "Spiral" ],
+                [ "4", "Triangulation", "Triangulation" ],
+                [ "5", "Hilbert curve", "Hilbert curve" ],
+                [ "6", "Random", "Random" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "reverse",
+            "default" : false,
+            "desc" : "Reverse the order in which buckets are generated",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "dynbuckets",
+            "default" : "1",
+            "desc" : "Enable dynamic splitting of the final buckets into smaller buckets (better CPU utilization). Ignored on GPU",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Enabled", "Enabled" ],
+                [ "2", "Enabled (legacy algorithm)", "Enabled (legacy algorithm)" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

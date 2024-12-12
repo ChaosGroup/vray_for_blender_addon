@@ -1,0 +1,39 @@
+
+{
+    "Desciption" : "TexLut",
+    "ID" : "TexLut",
+    "Name" : "Lut",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "basemap",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "cube" ]
+            }
+        },
+        
+        {
+            "attr" : "use_logspace",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,989 @@
+
+{
+    "Desciption" : "SunLight",
+    "ID" : "SunLight",
+    "Name" : "Sun Light",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "true if the light is casting light (turned on) and false otherwise; it only makes sense to use this parameter if it is animated, or if another object depends on this node but it must not be rendered",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the Sun. Only the rotation determines its position in the sky. The translation is used only for photon mapping",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pivot_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Pivot point offset relative to center of local coordinate space. Does NOT affect rendering",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color of the light",
+            "type" : "ACOLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the color parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affectDiffuse",
+            "default" : true,
+            "desc" : "True if the light produces diffuse lighting and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect diffuse",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "affectSpecular",
+            "default" : true,
+            "desc" : "True if the light produces specular hilights and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect specular"
+            }
+        },
+        
+        {
+            "attr" : "affectAtmospherics",
+            "default" : true,
+            "desc" : "True if the light affects atmospheric effects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect atmospherics"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_contribution",
+            "default" : 1.0,
+            "desc" : "Diffuse contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "specular_contribution",
+            "default" : 1.0,
+            "desc" : "Specular contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "atmospherics_contribution",
+            "default" : 1.0,
+            "desc" : "Contribution of the light to atmospheric effects",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "use_global_light_level",
+            "default" : true,
+            "desc" : "true if the light should use the global light level setting",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of strings identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumped_below_surface_check",
+            "default" : false,
+            "desc" : "True if the bumped normal should be used to check if the light direction is below the surface",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Bumped normal check"
+            }
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of parameter samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows",
+            "default" : true,
+            "desc" : "true if the light casts shadows and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Shadows"
+            }
+        },
+        
+        {
+            "attr" : "shadowColor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shadow color. Anything but black is not physically accurate",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowColor_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the shadowColor parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowBias",
+            "default" : 0.0,
+            "desc" : "Shadow offset from the surface. Higher values move the shadow toward the object while lower values move it away. Extreme values can cause undesired results like shadow leaking or detached shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Shadow bias",
+                "soft_max" : 0.1000000014901161,
+                "soft_min" : -0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "photonSubdivs",
+            "default" : 500,
+            "desc" : "Used when calculating the Global Photon Map. Lower values mean more noisy results but will render faster. Higher values produce smoother results but take more time",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Photon subdivs",
+                "min" : 0,
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "causticSubdivs",
+            "default" : 1000,
+            "desc" : "Used when calculating Caustics. Lower values mean more noisy results but will render faster. Higher values produce smoother results but take more time",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Caustics subdivs",
+                "min" : 0,
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "diffuseMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the diffuse photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Diffuse multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "causticMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the caustics photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Caustics multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "cutoffThreshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Light cut-off threshold (speed optimization). If the light intensity for a point is below this threshold, the light will not be computed. Larger values cut away more of the light, while lower values make the light range larger. When this value is 0.0, the light is calculated for all surfaces",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Cut-off threshold",
+                "min" : 0.0,
+                "rollout" : "Sampling",
+                "soft_max" : 0.50,
+                "spin_step" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "is_instance_prototype",
+            "default" : 0,
+            "desc" : "If light is an instance prototype its \"enabled\" parameter value is ignored (light is treated as disabled when processing the plugin instance itself), but is taken into account when generating instances of this light",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "Channels"
+            }
+        },
+        
+        {
+            "attr" : "channels_raw",
+            "default" : null,
+            "desc" : "Render channels the raw diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_diffuse",
+            "default" : null,
+            "desc" : "Render channels the diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_specular",
+            "default" : null,
+            "desc" : "Render channels the specular result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_full",
+            "default" : null,
+            "desc" : "Render channels the full (direct+indirect) result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lpe_label",
+            "default" : "",
+            "desc" : "Light path expressions light label which can be used to identify the light",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "decay_near_on",
+            "default" : false,
+            "desc" : "True if near decay is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Near Decay On",
+                "rollout" : "Decay"
+            }
+        },
+        
+        {
+            "attr" : "decay_near_start",
+            "default" : 0.0,
+            "desc" : "A distance value where the near decay starts",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Near Decay Start",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "decay_near_end",
+            "default" : 10.0,
+            "desc" : "A distance value where the near decay ends",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Near Decay End",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "decay_far_on",
+            "default" : false,
+            "desc" : "True if far decay is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Far Decay On"
+            }
+        },
+        
+        {
+            "attr" : "decay_far_start",
+            "default" : 20.0,
+            "desc" : "A distance value where the far decay starts",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Far Decay Start",
+                "min" : 0.0,
+                "soft_max" : 30.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "decay_far_end",
+            "default" : 30.0,
+            "desc" : "A distance value where the far decay ends",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Far Decay End",
+                "min" : 0.0,
+                "rollout" : "<EndRollout>",
+                "soft_max" : 30.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "units",
+            "default" : "0",
+            "desc" : "Units for the intensity (0 - default, 1 - lumens, 2 - lm/m/m/sr, 3 - watts, 4 - w/m/m/sr)",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "Lumens", "Lumens" ],
+                [ "2", "lm/m/m/sr", "lm/m/m/sr" ],
+                [ "3", "Watts", "Watts" ],
+                [ "4", "w/m/m/sr", "w/m/m/sr" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "intensity",
+            "default" : 1.0,
+            "desc" : "Light intensity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "intensity_tex",
+            "default" : 0.0,
+            "desc" : "A float texture that if present will override the intensity parameter",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Controls the number of samples for sampling the light's shadows. Higher values produce smoother results but take more time to render. This parameter is controlled by the Min Shading Rate in the image sampler (SettingsImageSampler::min_shade_rate), when SettingsDMCSampler::use_local_subdivs=0",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "Sampling"
+            }
+        },
+        
+        {
+            "attr" : "invisible",
+            "default" : false,
+            "desc" : "When on, this option makes the sun invisible, both to the camera and to reflections",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "storeWithIrradianceMap",
+            "default" : false,
+            "desc" : "When this option is on and GI calculation is set to Irradiance map V-Ray will calculate the effects of this light and store them in the irradiance map. The result is that the irradiance map is computed more slowly but the rendering takes less time. You can also save the irradiance map and reuse it later",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Store with irradiance map"
+            }
+        },
+        
+        {
+            "attr" : "affectReflections",
+            "default" : true,
+            "desc" : "True if the light appears in reflections and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect reflections"
+            }
+        },
+        
+        {
+            "attr" : "noDecay",
+            "default" : false,
+            "desc" : "When enabled, the intensity of the light will have no fall off with distance. Normally the light intensity is inversely proportional to the square of the distance from the light (surfaces that are farther from the light are darker than surfaces which are closer to the light)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "doubleSided",
+            "default" : false,
+            "desc" : "Controls whether light is emitted from both sides of each face",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for use by shaders, render elements, etc",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useMIS",
+            "default" : true,
+            "desc" : "This parameter is for debugging only. It should always be set to true in user scenes. When set to false, rendering quality is not optimal",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use multiple importance sampling",
+                "rollout" : "Advanced"
+            }
+        },
+        
+        {
+            "attr" : "intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Use to control the brightness of the Sun",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "target_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the Sun target point. Used only for photon mapping",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "turbidity",
+            "default" : 3.0,
+            "desc" : "Determines the amount of dust in the air and affects the color of the sun and sky. Smaller values produce a clear/blue sky, larger values yellow and orange",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 1.799999952316284
+            }
+        },
+        
+        {
+            "attr" : "ozone",
+            "default" : 0.3499999940395355,
+            "desc" : "Affects the color of the sun light (between 0.0 and 1.0). Smaller values make the sunlight more yellow, larger values make it blue",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "size_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the visible size of the sun. Affects the appearance of the sun disc as seen by the camera and reflections, as well as the blurriness of the sun shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sky_model",
+            "default" : "0",
+            "desc" : "Selects the procedural model used to simulate the TexSky texture (0 - Preetham, 1 - CIE Clear, 2 - Overcast, 3 - Hosek, 4 - PRG Clear Sky, 5 - PRG Clear Sky New)",
+            "items" : 
+            [
+                [ "0", "Preetham et al", "Preetham et al" ],
+                [ "1", "CIE Clear", "CIE Clear" ],
+                [ "2", "CIE Overcast", "CIE Overcast" ],
+                [ "3", "Hosek et al", "Hosek et al" ],
+                [ "4", "PRG Clear Sky", "PRG Clear Sky" ],
+                [ "5", "PRG Clear Sky New", "PRG Clear Sky New" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "horiz_illum",
+            "default" : 25000.0,
+            "desc" : "Specifies the intensity (in lx) of the illumination on horizontal surfaces coming from the sky. Used by CIE models",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "altitude",
+            "default" : 0.0,
+            "desc" : "Specifies the observer altitude which affects the sky and horizon appearance. Used by the PRG Clear Sky New model",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "color_mode",
+            "default" : "0",
+            "desc" : "This option affects the way the color in the Filter color parameter affects the color of the sun (0 - Filter, 1 - Direct, 2 - Override)",
+            "items" : 
+            [
+                [ "0", "Filter", "Filter" ],
+                [ "1", "Direct", "Direct" ],
+                [ "2", "Override", "Override" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "filter_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Sunlight color. Used to add user control to light color definition",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ground_albedo",
+            "default" : [ 0.2000000029802322, 0.2000000029802322, 0.2000000029802322 ],
+            "desc" : "Reflective property of the \"ground\". Affects sky-dome brightness and color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blend_angle",
+            "default" : 5.739170551300049,
+            "desc" : "The angle (in degrees) (up from the horizon) where the sky starts to blend with the ground albedo. Values close to 0.0 produce a sharper horizon line, while larger values produce a softer horizon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 90.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "horizon_offset",
+            "default" : 0.0,
+            "desc" : "Horizon offset under the sky-dome. Allows the user to manually lower the horizon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 90.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "water_vapour",
+            "default" : 2.0,
+            "desc" : "Controls the amount of water vapor in the atmosphere which affects the sky color",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "up_vector",
+            "default" : [ 0.0, 0.0, 1.0 ],
+            "desc" : "Specifies an up vector different from the one for the scene (SettingsUnitsInfo::scene_upDir)",
+            "type" : "VECTOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "atmos_shadows",
+            "default" : true,
+            "desc" : "true if the light casts shadows from atmosperics and false otherwise",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadow_subdivs",
+            "default" : 8,
+            "desc" : "Controls the number of samples for the area shadow of the sun. More subdivs produce area shadows with better quality but render slower",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "photon_radius",
+            "default" : 50.0,
+            "desc" : "The radius of the area where photons would be shot. This parameter's effect is visible when photons are used in the GI solutions or caustics",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "rollout" : "Photon emission"
+            }
+        },
+        
+        {
+            "attr" : "clouds_on",
+            "default" : false,
+            "desc" : "Enable clouds",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Clouds"
+            }
+        },
+        
+        {
+            "attr" : "clouds_ground_shadows",
+            "default" : false,
+            "desc" : "Enable clouds' ground shadows",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clouds_density",
+            "default" : 0.50,
+            "desc" : "Controls the density of the clouds",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_variety",
+            "default" : 0.3000000119209290,
+            "desc" : "Controls the variety of the clouds",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_cirrus_amount",
+            "default" : 0.2000000029802322,
+            "desc" : "Specifies cirrus clouds amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_offset_x",
+            "default" : 0.0,
+            "desc" : "Clouds offset in x direction specified in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Clouds Longitude Offset",
+                "max" : 1000000.0,
+                "min" : -1000000.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_offset_y",
+            "default" : 0.0,
+            "desc" : "Clouds offset in y direction specified in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Clouds Latitude Offset",
+                "max" : 1000000.0,
+                "min" : -1000000.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_height",
+            "default" : 1000.0,
+            "desc" : "Clouds height in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 5000.0,
+                "min" : 500.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_thickness",
+            "default" : 500.0,
+            "desc" : "Clouds thickness in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 10.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_phase_x",
+            "default" : 0.0,
+            "desc" : "Clouds phase in x direction specified in percentage (%)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Clouds Longitude Phase",
+                "max" : 1000000.0,
+                "min" : -1000000.0,
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_phase_y",
+            "default" : 0.0,
+            "desc" : "Clouds phase in y direction specified in percentage (%)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Clouds Latitude Phase",
+                "max" : 1000000.0,
+                "min" : -1000000.0,
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_enscape_compatibility",
+            "default" : false,
+            "desc" : "Set to true to match the clouds to Enscape",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clouds_density_multiplier",
+            "default" : 1.0,
+            "desc" : "Clouds density multiplier to make clouds look darker/brighter",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_seed",
+            "default" : 0,
+            "desc" : "Random seed for the clouds generation. '0' matches the Enscape clouds",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clouds_contrails_on",
+            "default" : false,
+            "desc" : "Enable contrails",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clouds_contrails_num_planes",
+            "default" : 5,
+            "desc" : "Number of airplane trails on the sky",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "clouds_contrails_strength",
+            "default" : 0.50,
+            "desc" : "Strength of the contrails",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_contrails_distortion",
+            "default" : 0.50,
+            "desc" : "Distortion of the contrails",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_contrails_offset_x",
+            "default" : 0.0,
+            "desc" : "Contrails offset in x direction specified in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Contrails Longitude Offset",
+                "max" : 1000000.0,
+                "min" : -1000000.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_contrails_offset_y",
+            "default" : 0.0,
+            "desc" : "Contrails offset in y direction specified in meters",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Contrails Latitude Offset",
+                "max" : 1000000.0,
+                "min" : -1000000.0
+            }
+        },
+        
+        {
+            "attr" : "clouds_contrails_time",
+            "default" : 0.0,
+            "desc" : "Time influencing the airplanes positions",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000000.0,
+                "min" : -1000000.0
+            }
+        },
+        
+        {
+            "attr" : "is_instance_prototype",
+            "default" : 0,
+            "desc" : "If light is an instance prototype its \"enabled\" parameter value is ignored (light is treated as disabled when processing the plugin instance itself), but is taken into account when generating instances of this light",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "LIGHT",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

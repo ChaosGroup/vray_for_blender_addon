@@ -1,0 +1,34 @@
+{
+    "ID": "MtlOSL",
+    "Name": "V-Ray Mtl OSL",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "shader",
+                "label": "Shader",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "max_ray_depth"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "input_parameters",
+            "output_closure",
+            "uvwgen",
+            "include_path",
+            "shader_type",
+            "inline_shader",
+            "graph_owner",
+            "flip_textures",
+            "channels"
+        ]
+    }
+}

@@ -1,0 +1,312 @@
+
+{
+    "Desciption" : "TexOCIO",
+    "ID" : "TexOCIO",
+    "Name" : "OCIO",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "basemap",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Operation mode (0 - ColorSpace, 1 - CDL Transform, 2 - File Transform, 3 - LogConvert, 4 - Display, 5 - Look)",
+            "items" : 
+            [
+                [ "0", "ColorSpace", "ColorSpace" ],
+                [ "1", "CDL Transform", "CDL Transform" ],
+                [ "2", "File Transform", "File Transform" ],
+                [ "3", "LogConvert", "LogConvert" ],
+                [ "4", "Display", "Display" ],
+                [ "5", "Look", "Look" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "config_file",
+            "default" : "",
+            "desc" : "OCIO configuration file (*.ocio)",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "ocio" ]
+            }
+        },
+        
+        {
+            "attr" : "ocio_stored_env",
+            "default" : "",
+            "desc" : "stored OCIO environment config for slave renders (*.ocio)",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "config_src",
+            "default" : "0",
+            "desc" : "Config source: 0 - auto (env, stored env for slaves, file, internal), 1 - environment, 2 - file, 3 - internal",
+            "items" : 
+            [
+                [ "0", "Auto", "Auto" ],
+                [ "1", "Environment", "Environment" ],
+                [ "2", "File", "File" ],
+                [ "3", "Internal", "Internal" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "colorspace_in",
+            "default" : "",
+            "desc" : "ColorSpace: input colorspace/role",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "colorspace_out",
+            "default" : "",
+            "desc" : "ColorSpace: output colorspace/role",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "cdl_slope",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "CDLTransform: slope",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "cdl_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "CDLTransform: offset",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "cdl_power",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "CDLTransform: power",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "cdl_saturation",
+            "default" : 1.0,
+            "desc" : "CDLTransform: saturation",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "cdl_direction",
+            "default" : "0",
+            "desc" : "CDLTransform: direction (0 - forward, 1 - inverse)",
+            "items" : 
+            [
+                [ "0", "Forward", "Forward" ],
+                [ "1", "Inverse", "Inverse" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "cdl_use_file",
+            "default" : false,
+            "desc" : "CDLTransform: true - get slope, offset, power and saturation from the specified file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "cdl_file",
+            "default" : "",
+            "desc" : "CDLTransform: file (.cc or .ccc)",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "cc", "ccc" ]
+            }
+        },
+        
+        {
+            "attr" : "cdl_cccid",
+            "default" : "",
+            "desc" : "CDLTransform: cccid (if needed)",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "filetr_file",
+            "default" : "",
+            "desc" : "FileTransform: color correction file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : 
+                [
+                    "3dl",
+                    "ccc",
+                    "cc",
+                    "csp",
+                    "lut",
+                    "itx",
+                    "cube",
+                    "mga",
+                    "spi1d",
+                    "spi3d",
+                    "spimtx",
+                    "cub",
+                    "vf"
+                ]
+            }
+        },
+        
+        {
+            "attr" : "filetr_cccid",
+            "default" : "",
+            "desc" : "FileTransform: cccid (if needed)",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "filetr_direction",
+            "default" : "0",
+            "desc" : "FileTransform: direction (0 - forward, 1 - inverse)",
+            "items" : 
+            [
+                [ "0", "Forward", "Forward" ],
+                [ "1", "Inverse", "Inverse" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "filetr_interpolation",
+            "default" : "0",
+            "desc" : "FileTransform: interpolation (0 - nearest, 1 - linear, 2 - tetrahedral, 3 - best)",
+            "items" : 
+            [
+                [ "0", "Nearest", "Nearest" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Tetrahedral", "Tetrahedral" ],
+                [ "3", "Best", "Best" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "logconvert_operation",
+            "default" : "0",
+            "desc" : "LogConvert: operation (0 - log to lin, 1 - lin to log)",
+            "items" : 
+            [
+                [ "0", "Log to lin", "Log to lin" ],
+                [ "1", "Lin to log", "Lin to log" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "disp_input_colorspace",
+            "default" : "",
+            "desc" : "Display: input colorspace/role",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "disp_display_device",
+            "default" : "",
+            "desc" : "Display: device",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "disp_view_transform",
+            "default" : "",
+            "desc" : "Display: view transform",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "look_input_colorspace",
+            "default" : "",
+            "desc" : "Look: input colorspace/role",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "look_looks",
+            "default" : "",
+            "desc" : "Look: looks",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "look_output_colorspace",
+            "default" : "",
+            "desc" : "Look: output colorspace/role",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "look_direction",
+            "default" : "0",
+            "desc" : "Look: direction (0 - forward, 1 - inverse)",
+            "items" : 
+            [
+                [ "0", "Forward", "Forward" ],
+                [ "1", "Inverse", "Inverse" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "look_ignore_errors",
+            "default" : 0,
+            "desc" : "Look: ignore errors",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "context_keys",
+            "default" : "",
+            "desc" : "List of context key names",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "context_values",
+            "default" : "",
+            "desc" : "List of context values",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "inout_type",
+            "default" : "0",
+            "desc" : "This parameter is currently ignored. Input/Output type: 0 - use colorspaces, 1 - use roles",
+            "items" : 
+            [
+                [ "0", "Colorspaces", "Colorspaces" ],
+                [ "1", "Roles", "Roles" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

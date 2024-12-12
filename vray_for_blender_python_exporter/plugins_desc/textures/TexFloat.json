@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexFloat",
+    "ID" : "TexFloat",
+    "Name" : "Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0.0,
+            "desc" : "input",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

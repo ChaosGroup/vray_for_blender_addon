@@ -1,0 +1,57 @@
+{
+    "ID": "TexEdges",
+    "Name": "V-Ray Edges",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "edges_tex"
+                    },
+                    {
+                        "name": "bg_tex"
+                    },
+                    {
+                        "name": "show_hidden_edges"
+                    },
+                    {
+                        "name": "width_type"
+                    },
+                    {
+                        "name": "pixel_width",
+                        "active": {
+                            "cond": "::width_type=1"
+                        }
+                    },
+                    {
+                        "name": "world_width",
+                        "active": {
+                            "cond": "::width_type=0"
+                        }
+                    },
+                    {
+                        "name": "show_subtriangles"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "world_width",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "raytraced",
+            "raytraced_consider_same_object_only",
+            "raytraced_mode"
+        ]
+    }
+}

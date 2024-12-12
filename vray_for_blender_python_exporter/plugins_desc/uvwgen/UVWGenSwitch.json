@@ -1,0 +1,40 @@
+
+{
+    "Desciption" : "UVWGenSwitch",
+    "ID" : "UVWGenSwitch",
+    "Name" : "UVW Gen Switch",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "nodes",
+            "default" : null,
+            "desc" : "List of geometric objects",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgens",
+            "default" : null,
+            "desc" : "A list of UVWGen plugins for the respective elements in the 'nodes' list",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "default",
+            "default" : null,
+            "desc" : "A default UVWGen used if the shaded node is not in the list",
+            "type" : "PLUGIN",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

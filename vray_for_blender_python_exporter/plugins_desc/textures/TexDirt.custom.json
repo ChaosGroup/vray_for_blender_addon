@@ -1,0 +1,411 @@
+{
+    "ID": "TexDirt",
+    "Name": "V-Ray Dirt",
+    "Parameters": [
+        {
+            "attr": "black_color",
+            "label": "Occluded Color",
+            "desc": "Specifies the color for occluded areas."
+        },
+        {
+            "attr": "white_color",
+            "label": "Unoccluded Color",
+            "desc": "Specifies the color for unoccluded areas."
+        },
+        {
+            "attr": "radius",
+            "desc": "Determines the size of the area (in scene units) where the dirt effect is produced.",
+            "default": 50.0
+        },
+        {
+            "attr": "distribution",
+            "desc": "Forces the rays to gather closer to the surface normal. This results in the dirt area narrowing closer to the contact edges. For ambient occlusion, set this parameter to 1.0 to get distribution similar to the ambient lighting on a diffuse surface.",
+            "ui": {
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "falloff",
+            "desc": "Controls the spread of the transition between occluded and unoccluded areas."
+        },
+        {
+            "attr": "subdivs",
+            "//Comment": "Recommended default of 3 subdivs for optimal performance.",
+            "default": 3,
+            "desc": "Controls the number of samples that V-Ray takes to calculate the dirt effect. Lower values render faster but produce a more noisy result. Low Noise threshold values in the Image Sampler clean the result further."
+        },
+        {
+            "attr": "bias_x",
+            "label": "Bias X",
+            "desc": "Forces the dirt effect in the X direction.\nNegative values could be used to invert the direction.",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "bias_y",
+            "label": "Bias Y",
+            "desc": "Forces the dirt effect in the Y direction.\nNegative values could be used to invert the direction.",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "bias_z",
+            "label": "Bias Z",
+            "desc": "Forces the dirt effect in the Z direction.\nNegative values could be used to invert the direction.",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "ignore_for_gi",
+            "label": "Ignore for GI",
+            "desc": "When enabled, the dirt effect is ignored in GI calculations."
+        },
+        {
+            "attr": "ignore_bump",
+            "desc": "Excludes bump maps from dirt computations. The option is useful, when the bump effect is too strong and may produce undesirable effects such as holes."
+        },
+        {
+            "attr": "consider_same_object_only",
+            "desc": "When enabled, the dirt affects only the objects themselves, without including contact surfaces and edges. Same object is considered by: 1 - same Shadable instance, 2 - by render ID; 3 - by object ID; 4 - by user attribute. When disabled, the entire scene geometry is participating in the final result."
+        },
+        {
+            "attr": "user_attribute",
+            "desc": "User attribute name when \"Consider Same Object Only\" is set to \"User Attribute\"."
+        },
+        {
+            "attr": "affect_alpha",
+            "desc": "When enabled, the texture receives an alpha component from the generated dirt distribution and this way makes the unoccluded area transparent. When disabled, the alpha values from the textures used in Occluded and Unoccluded color slots are applied."
+        },
+        {
+            "attr": "double_sided",
+            "desc": "When enabled, rays are traced from both sides of the faces. This creates an effect where both crevices and edges are occluded."
+        },
+        {
+            "attr": "work_with_transparency",
+            "label": "Ignore Invisible Objects",
+            "desc": "When enabled, V-Ray Dirt takes into account the opacity of the occluding objects. This can be used, for example, if you want to calculate ambient occlusion from opacity-mapped trees etc. When disabled, occluding objects are always assumed to be opaque. Note that working with correct opacity is slower, since the occluding objects' materials need to be evaluated. V-Ray GPU supports this only with lights and their 'Invisible' parameter and geometry render stats."
+        },
+        {
+            "attr": "ignore_self_occlusion",
+            "desc": "When enabled, the object does not occlude itself. It is occluded only by other objects in the scene"
+        },
+        {
+            "attr": "thin_mode",
+            "desc": "When enabled, enhances the look of thin surfaces by casting less dirt on them. It is available only for the Inner Occlusion mode."
+        },
+        {
+            "attr": "mode",
+            "desc": "Ambient Occlusion - Normal ambient occlusion is calculated. Traces rays uniformly in all directions.\n\nReflection Occlusion (Phong, Blinn, Ward) - The difference with Ambient Occlusion is the direction in which rays are traced. The direction depends on the viewing angle and the spread of the rays depends on the Reflection Glossiness and BRDF Type used.\n\nInner Occlusion - Inverts the effect with respect to surface normals - e.g. instead of crevices, open corners are shaded with the occluded color. Rays are traced inside the surface.\n\nAmbient + Inner Occlusion - A combination of Ambient Occlusion and Inner Occlusion modes used for an enhanced weathering effect."
+        },
+        {
+            "attr": "environment_occlusion",
+            "desc": "When enabled, includes contribution from the environment to the shading of unoccluded areas."
+        },
+        {
+            "attr": "affect_reflection_elements",
+            "desc": "When enabled, the ambient reflection affects the reflection render elements. This can be used to create reflection masks."
+        },
+        {
+            "attr": "glossiness",
+            "desc": "Controls the spread of the rays traced for Reflection Occlusion. A value of 1 means that just a single ray is traced (just like when tracing clear reflections), smaller values spread multiple rays in the approximate reflection direction."
+        },
+        {
+            "attr": "render_nodes",
+            "label": "Exclude list",
+            "desc": "Allows disabling the calculations of the dirt map for specific objects."
+        },
+        {
+            "attr": "render_nodes_inclusive",
+            "label": "As Inclusive",
+            "desc": "Reverses the Exclude list - only objects in the list will be shaded by the dirt map."
+        },
+        {
+            "attr": "use_texture_for_excluded",
+            "//Comment": "Not exposed in the UI for consistency - not used in other integrations.",
+            "desc": "When enabled the texture will return the unoccluded color texture, if the object is excluded. Otherwise return (0,0,0,0)."
+        },
+        {
+            "attr": "affect_result_nodes",
+            "label": "Result Affect",
+            "desc": "Allows excluding objects from affecting the calculation of the dirt map. Excluded objects will be considered \"invisible\" for the calculations of the dirt map."
+        },
+        {
+            "attr": "affect_result_nodes_inclusive",
+            "label": "As Inclusive",
+            "desc": "Reverses the Result Affect list - only objects in the list will affect the calculation of the dirt map."
+        },
+        {
+            "attr": "screen_space_radius",
+            "//Comment": "Not exposed in the UI for consistency - not used in other integrations.",
+            "desc": "If enabled, the radius is rescaled based on the distance from the camera."
+        },
+        {
+            "attr": "streaks_ambient",
+            "label": "Ambient Streaks",
+            "desc": "Draws streaks across the dirt effect, respective to the ambient occlusion."
+        },
+        {
+            "attr": "streaks_inner",
+            "label": "Inner Streaks",
+            "desc": " Draws streaks across the dirt effect respective to the inner occlusion."
+        },
+        {
+            "attr": "streaks_blur",
+            "desc": "Blurs the dirt streaks. Uses a different algorithm with different visual representation of the streaks."
+        },
+        {
+            "attr": "blur",
+            "desc": "Specifies the shape of the cone used for inner occlusion sampling."
+        },
+        {
+            "attr": "streaks_size",
+            "desc": "Controls the thickness of the streaks relative to the object."
+        },
+        {
+            "attr": "streaks_density",
+            "desc": "Controls the density of the streaks - 0 means no streaks and 1 means all streaks."
+        },
+        {
+            "attr": "render_nodes_object_selector",
+            "type": "TEMPLATE",
+            "desc": "Allows disabling the calculations of the dirt map for specific object.",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "bound_property": "render_nodes",
+                        "mode_bound_property": "render_nodes_inclusive",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "affect_result_object_selector",
+            "type": "TEMPLATE",
+            "desc": "Allows excluding object from affecting the calculation of the dirt map. Excluded object will be considered \"invisible\" for the calculations of the dirt map.",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "bound_property": "affect_result_nodes",
+                        "mode_bound_property": "affect_result_nodes_inclusive",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "mode",
+                        "label": "Occlusion Mode"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "black_color"
+                    },
+                    {
+                        "name": "white_color"
+                    },
+                    {
+                        "name": "radius"
+                    },
+                    {
+                        "name": "distribution",
+                        "active": {
+                            "cond": "::mode=0;::mode>3"
+                        }
+                    },
+                    {
+                        "name": "falloff"
+                    },
+                    {
+                        "name": "subdivs"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "bias",
+                        "label": "Bias",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "bias_x"
+                            },
+                            {
+                                "name": "bias_y"
+                            },
+                            {
+                                "name": "bias_z"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "streaks",
+                        "label": "Streaks",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "streaks_ambient",
+                                "label": "Ambient Streaks",
+                                "active": {
+                                    "cond": "::mode!=4"
+                                }
+                            },
+                            {
+                                "name": "streaks_inner",
+                                "label": "Inner Streaks",
+                                "active": {
+                                    "cond": "::mode>3"
+                                }
+                            },
+                            {
+                                "name": "streaks_blur",
+                                "label": "Streaks Blur",
+                                "active": {
+                                    "cond": "::mode!=4"
+                                }
+                            },
+                            {
+                                "name": "streaks_size",
+                                "active": {
+                                    "cond": "::mode!=4"
+                                }
+                            },
+                            {
+                                "name": "streaks_density",
+                                "active": {
+                                    "cond": "::mode!=4"
+                                }
+                            },
+                            {
+                                "name": "blur",
+                                "active": {
+                                    "cond": "::mode!=4"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "thin_mode",
+                        "active": {
+                            "cond": "::mode>3"
+                        }
+                    },
+                    {
+                        "name": "ignore_for_gi"
+                    },
+                    {
+                        "name": "ignore_bump"
+                    },
+                    {
+                        "name": "consider_same_object_only"
+                    },
+                    {
+                        "name": "double_sided"
+                    },
+                    {
+                        "name": "work_with_transparency",
+                        "label": "Ignore Invisible Objects"
+                    },
+                    {
+                        "name": "ignore_self_occlusion"
+                    },
+                    {
+                        "name": "environment_occlusion"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "affect_reflection_elements",
+                        "active": {
+                            "cond": "::mode!=0,::mode!=4,::mode!=5"
+                        }
+                    },
+                    {
+                        "name": "glossiness",
+                        "active": {
+                            "cond": "::mode!=0,::mode!=4,::mode!=5"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "Exclude / Include",
+                "label": "Exclude / Include",
+                "attrs": [
+                    {
+                        "name": "render_nodes_object_selector",
+                        "label": "Include / Exclude",
+                        "list_label": "Object List"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "Affected By",
+                "label": "Affected By",
+                "attrs": [
+                    {
+                        "name": "affect_result_object_selector",
+                        "label": "Include / Exclude",
+                        "list_label": "Object List"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "white_color"
+            },
+            {
+                "name": "black_color"
+            },
+            {
+                "name": "radius"
+            },
+            {
+                "name": "glossiness"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "use_texture_for_excluded",
+            "affect_alpha",
+            "subdivs_as_samples",
+            "screen_space_radius",
+            "user_attribute"
+        ],
+        "animatable": true
+    }
+}

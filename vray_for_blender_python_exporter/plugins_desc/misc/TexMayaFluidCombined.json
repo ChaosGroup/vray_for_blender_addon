@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexMayaFluidCombined",
+    "ID" : "TexMayaFluidCombined",
+    "Name" : "Maya Fluid Combined",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "tex1",
+            "default" : null,
+            "desc" : "The first texture. Should support the EXT_MAYA_FLUID_TEXTURE interface",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "tex2",
+            "default" : null,
+            "desc" : "The second texture. Should support the EXT_MAYA_FLUID_TEXTURE interface",
+            "type" : "PLUGIN"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

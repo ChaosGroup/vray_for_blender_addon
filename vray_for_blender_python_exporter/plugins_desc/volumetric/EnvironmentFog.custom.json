@@ -1,0 +1,360 @@
+{
+    "ID": "EnvironmentFog",
+    "Name": "V-Ray Environment Fog",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "ui": {
+                "display_name": "Fog Color"
+            },
+            "desc": "Defines the color of the fog, when it is illuminated by light sources",
+            "default": [
+                0.7,
+                0.7,
+                0.7
+            ]
+        },
+        {
+            "attr": "emission_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "emission",
+            "tex_prop": "emission_tex",
+            "ui": {
+                "display_name": "Emission Color"
+            },
+            "desc": "Fog emission color. Controls the fog emission (self-illumination). You can use this parameter to substitute the ambient illumination inside the fog, instead of using GI",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "transparency_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "transparency",
+            "tex_prop": "transparency_tex",
+            "ui": {
+                "display_name": "Fog Transparency"
+            },
+            "desc": "The transparency of the Fog volume at thickness given by the Fog distance parameteri.e. the color of a white ray after traveling the specified distance inside the fog volume.Non-gray colors will result in colored attenuation of the light passing through the fog. This parameter changes the extinction coefficient of the fog while the 'Fog Color' parameter sets the single scattering albedo",
+            "default": [
+                0.375,
+                0.375,
+                0.375
+            ]
+        },
+        {
+            "attr": "density_tex",
+            "default": 1.0
+        },
+        {
+            "attr": "emission_mult_tex",
+            "default": 1.0
+        },
+        {
+            "attr": "transparency_tex",
+            "default": [
+                0.8,
+                0.8,
+                0.8
+            ]
+        },
+        {
+            "attr": "affect_background",
+            "default": true
+        },
+        {
+            "attr": "gizmos",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "lights",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterLights"
+                }
+            }
+        },
+        {
+            "attr": "gizmo_selector",
+            "type": "TEMPLATE",
+            "desc": "List of mesh objects to use as gizmos",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "gizmos",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "light_selector",
+            "type": "TEMPLATE",
+            "desc": "List of lights which will affect the environment fog",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "lights",
+                        "filter_function": "filters.filterLights"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "height",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "fade_out_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "step_size",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_colortex"
+                    },
+                    {
+                        "name": "phase_function"
+                    },
+                    {
+                        "name": "distance"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "use_height",
+                        "custom_draw": "drawHeightProp"
+                    },
+                    {
+                        "active": {
+                            "cond": "::use_height=1"
+                        },
+                        "name": "height",
+                        "custom_draw": "drawHeightProp"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "density_tex",
+                        "label": "Fog Density"
+                    },
+                    {
+                        "name": "emission_colortex"
+                    },
+                    {
+                        "name": "emission_mult",
+                        "label": "Emission Multiplier"
+                    },
+                    {
+                        "name": "transparency_colortex"
+                    },
+                    {
+                        "name": "ior",
+                        "label": "IOR"
+                    },
+                    {
+                        "name": "deep_output"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "global_illumination",
+                "label": "Global Illumination",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "scatter_gi"
+                    },
+                    {
+                        "name": "scatter_bounces",
+                        "active": {
+                            "cond": "::scatter_gi=1"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "ray_filter",
+                "label": "Ray Filter",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "affect_background"
+                    },
+                    {
+                        "name": "affect_alpha"
+                    },
+                    {
+                        "name": "affect_reflections"
+                    },
+                    {
+                        "name": "affect_refractions"
+                    },
+                    {
+                        "name": "affect_shadows"
+                    },
+                    {
+                        "name": "affect_gi"
+                    },
+                    {
+                        "name": "affect_camera"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "raymarching",
+                "label": "Raymarching",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "simplify_gi"
+                    },
+                    {
+                        "name": "step_size"
+                    },
+                    {
+                        "name": "max_steps"
+                    },
+                    {
+                        "name": "tex_samples"
+                    },
+                    {
+                        "name": "cutoff_threshold"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "fadeout",
+                "label": "Fade Out",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "fade_out_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "fade_out_radius"
+                    },
+                    {
+                        "name": "per_object_fade_out_radius"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "gizmo_selector",
+                        "label": "Gizmo Objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "light_select",
+                "label": "Light Set",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "light_mode"
+                    },
+                    {
+                        "name": "light_selector",
+                        "label": "Light Set",
+                        "list_label": "Light List"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "gizmos"
+            },
+            {
+                "name": "lights"
+            },
+            {
+                "name": "color_colortex"
+            },
+            {
+                "name": "density_tex",
+                "label": "Fog Density"
+            },
+            {
+                "name": "emission_colortex",
+                "label": "Emission Color"
+            },
+            {
+                "name": "emission_mult_tex",
+                "label": "Emission Multiplier"
+            },
+            {
+                "name": "transparency_colortex"
+            }
+        ]
+    },
+    "Type": "EFFECT",
+    "Options": {
+        "excluded_parameters": [
+            "subdivs",
+            "color",
+            "emission",
+            "transparency"
+        ]
+    }
+}

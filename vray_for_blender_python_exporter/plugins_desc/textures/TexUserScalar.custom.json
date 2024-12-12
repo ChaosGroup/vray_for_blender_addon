@@ -1,0 +1,35 @@
+{
+    "Name": "V-Ray User Scalar",
+    "Subtype": "UTILITY",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "user_attribute"
+                    },
+                    {
+                        "name": "default_value"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node":{
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Scalar",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "scalar"
+        ]
+    }
+}

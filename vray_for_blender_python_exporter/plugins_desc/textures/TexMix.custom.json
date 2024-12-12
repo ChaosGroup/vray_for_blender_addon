@@ -1,0 +1,82 @@
+{
+    "ID": "TexMix",
+    "Name": "V-Ray Mix",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "mix_amount",
+            "default": 0.5,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "transition_upper",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "transition_lower",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "mix_map",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Node": {
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "color1"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color2"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "mix_amount"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "transition_upper"
+                    },
+                    {
+                        "name": "transition_lower"
+                    },
+                    {
+                        "name": "use_curve"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "compatibility_with",
+            "color",
+            "out_transparency",
+            "out_intensity"
+        ],
+        "animatable": true
+    }
+}

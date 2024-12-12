@@ -1,0 +1,51 @@
+{
+    "ID": "VRayClipper",
+    "Parameters": [
+        {
+            "attr": "enabled",
+            "default": false
+        },
+        {
+            "attr": "exclusion_nodes",
+            "type": "PLUGIN"
+        },
+        {
+            "attr": "invert_inside",
+            "default": "1",
+            "desc": "Specifies the boolean operation to perform: 0 - intersection, 1 - subtraction(scene - clip_mesh)",
+            "items": [
+                [
+                    "0",
+                    "Intersection",
+                    "Intersection"
+                ],
+                [
+                    "1",
+                    "Subtraction (scene-mesh)",
+                    "Subtraction (scene-mesh)"
+                ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Operation"
+            }
+        },
+        {
+            "attr": "use_obj_mesh",
+            "name": "Mesh mode",
+            "desc": "Use object mesh instead of plane for clipping",
+            "type": "BOOL",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": []
+    },
+    "Type": "OBJECT",
+    "Options": {
+        "excluded_parameters": []
+    }
+}

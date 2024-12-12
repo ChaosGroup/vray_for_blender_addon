@@ -1,0 +1,46 @@
+
+{
+    "Desciption" : "TexICC",
+    "ID" : "TexICC",
+    "Name" : "ICC",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "basemap",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "icc" ]
+            }
+        },
+        
+        {
+            "attr" : "render_intent",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "blackpoint",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

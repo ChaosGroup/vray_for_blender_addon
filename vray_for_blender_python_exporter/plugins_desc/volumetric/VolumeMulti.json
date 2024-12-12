@@ -1,0 +1,22 @@
+
+{
+    "Desciption" : "VolumeMulti",
+    "ID" : "VolumeMulti",
+    "Name" : "Volume Multi",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "volumes",
+            "default" : null,
+            "desc" : "List of volumetric shaders to apply together",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

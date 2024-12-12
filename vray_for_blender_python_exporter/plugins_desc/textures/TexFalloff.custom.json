@@ -1,0 +1,155 @@
+{
+    "ID": "TexFalloff",
+    "Name": "V-Ray Falloff",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "use_blend_curve",
+            "default": false,
+            "desc": "",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "type",
+            "items": [
+                [
+                    "0",
+                    "Towards / away",
+                    "Towards / away"
+                ],
+                [
+                    "1",
+                    "Perpendicular / parallel",
+                    "Perpendicular / parallel"
+                ],
+                [
+                    "2",
+                    "Fresnel",
+                    "Fresnel"
+                ],
+                [
+                    "4",
+                    "Distance blend",
+                    "Distance blend"
+                ]
+            ]
+        },
+        {
+            "attr": "dist_near",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "dist_far",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "direction_type"
+                    },
+                    {
+                        "name": "use_blend_input"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "alpha_mult",
+                        "label": "Output Amount"
+                    },
+                    {
+                        "name": "color_offset",
+                        "label": "RGB Offset"
+                    },
+                    {
+                        "name": "color_mult",
+                        "label": "RGB Level"
+                    },
+                    {
+                        "name": "color1",
+                        "label": "Front Color"
+                    },
+                    {
+                        "name": "color2",
+                        "label": "Side Color"
+                    },
+                    {
+                        "name": "type",
+                        "label": "Falloff Type"
+                    },
+                    {
+                        "name": "direction_type",
+                        "label": "Falloff Direction"
+                    },
+                    {
+                        "name": "fresnel_ior",
+                        "active": {
+                            "cond": "::type=2"
+                        }
+                    },
+                    {
+                        "name": "dist_extrapolate",
+                        "active": {
+                            "cond": "::type=4"
+                        }
+                    },
+                    {
+                        "name": "dist_near",
+                        "active": {
+                            "cond": "::type=4"
+                        }
+                    },
+                    {
+                        "name": "dist_far",
+                        "active": {
+                            "cond": "::type=4"
+                        }
+                    },
+                    {
+                        "name": "explicit_dir",
+                        "active": {
+                            "cond": "::direction_type=3"
+                        }
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity",
+            "blend_output",
+            "node_ref_offset",
+            "compatibility_with",
+            "invert_alpha",
+            "alpha_offset",
+            "nouvw_color",
+            "blend_input",
+            "use_blend_input"
+        ],
+        "animatable": true
+    }
+}

@@ -1,0 +1,2119 @@
+
+{
+    "Desciption" : "PhxShaderSim",
+    "ID" : "PhxShaderSim",
+    "Name" : "Phx Shader Sim",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "Set to false to disable rendering",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cache",
+            "default" : null,
+            "desc" : "The Phoenix cache that will be used with this simulator",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "contentTime",
+            "default" : -1,
+            "desc" : "force using an externally set content time",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "frame_duration",
+            "default" : 0.0,
+            "desc" : "Override the frame duration in the cache",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "play_speed",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wind_from_movement",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "unit_scale",
+            "default" : 1.0,
+            "desc" : "The scaling between simulation and scene time units",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "node_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The node-to-world transformation for the instance that uses this Simulator",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_node_transform_for_instancing",
+            "default" : false,
+            "desc" : "If we need to take \"node_transform\" into consideration when creating volumes with instancers",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "renderAsVolumetric",
+            "default" : false,
+            "desc" : "Set to true if the plugin should be registered in PhoenixVolumeRegister and rendered as VRayVolumetricPlugin",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render",
+            "default" : true,
+            "desc" : "Set to false to disable rendering. The data is still loaded and Phoenix textures and Fire Lights will still work",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Rendering"
+            }
+        },
+        
+        {
+            "attr" : "rendMode",
+            "default" : "0",
+            "desc" : "Render mode enum, one of the PhxRenderSets::RendMode enum values",
+            "items" : 
+            [
+                [ "0", "Volumetric", "Volumetric" ],
+                [ "1", "Volumetric Geometry", "Volumetric Geometry" ],
+                [ "2", "Volumetric Heat Haze", "Volumetric Heat Haze" ],
+                [ "3", "Isosurface", "Isosurface" ],
+                [ "4", "Mesh", "Mesh" ],
+                [ "5", "Ocean Mesh", "Ocean Mesh" ],
+                [ "6", "Cap Mesh", "Cap Mesh" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Render Mode"
+            }
+        },
+        
+        {
+            "attr" : "rendstep",
+            "default" : 90,
+            "desc" : "Percentage of the cell size. Lower values take longer to render",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Step %",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "rendshadstep",
+            "default" : 200,
+            "desc" : "Percentage of the cell size. Lower values take longer to render",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Shadow Step %",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : true,
+            "desc" : "jitter",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Jittering"
+            }
+        },
+        
+        {
+            "attr" : "borderFade",
+            "default" : 0.0,
+            "desc" : "Border opacity fade out for volumes",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Border Fade",
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sampler",
+            "default" : "1",
+            "desc" : "Sampler type: 0-box; 1-linear; 2-spherical",
+            "items" : 
+            [
+                [ "0", "Box", "Box" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Spherical", "Spherical" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Sampler Type"
+            }
+        },
+        
+        {
+            "attr" : "velocity_mult",
+            "default" : 1.0,
+            "desc" : "Velocity multiplier for the volume renderer",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Motion Blur Multiplier",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "varg",
+            "default" : 0,
+            "desc" : "0-normal velocity; 2-texture",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "vtex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Velocity Texture - used by Maya Fluids",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Velocity Texture"
+            }
+        },
+        
+        {
+            "attr" : "mod_v",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocities",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Specify directly the velocities in distance per frame",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sarg",
+            "default" : "32",
+            "desc" : "Source of the surface data: 0-Texture; 1-Temperature; 2-Smoke; 3-Speed; 10-Fuel; 22-Viscosity; 32-Grid Channel from the 'surface_chan' parameter",
+            "items" : 
+            [
+                [ "0", "Texture", "Texture" ],
+                [ "32", "Grid Channel", "Grid Channel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Surface Channel"
+            }
+        },
+        
+        {
+            "attr" : "surface_chan",
+            "default" : "Smoke_phx",
+            "desc" : "String name of the grid channel that the Mesh/Isosurface is based on when 'sarg' is set to SfChGrid. This is more flexible for 3rd party caches that use string names, compared to the integer enum values used previously for Phoenix grid channels",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Grid Channel Name"
+            }
+        },
+        
+        {
+            "attr" : "stex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Surface Texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Surface Texture"
+            }
+        },
+        
+        {
+            "attr" : "surflevel",
+            "default" : 0.1000000014901161,
+            "desc" : "Isosurface Level",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Isosurface Level",
+                "max" : 10000.0,
+                "min" : -10000.0
+            }
+        },
+        
+        {
+            "attr" : "solidbelow",
+            "default" : false,
+            "desc" : "Invert Volume",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Invert Volume"
+            }
+        },
+        
+        {
+            "attr" : "usegizmo",
+            "default" : 0,
+            "desc" : "enable using of render cutter",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Use Render Cutter"
+            }
+        },
+        
+        {
+            "attr" : "gizmo",
+            "default" : null,
+            "desc" : "geometry to define the rendering volume",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Cutter Geometry"
+            }
+        },
+        
+        {
+            "attr" : "gizmo_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "world transformation of the Render Cutter",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invgizmo",
+            "default" : 0,
+            "desc" : "invert the volume of the render cutter",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Invert Cutter"
+            }
+        },
+        
+        {
+            "attr" : "oceanlevel",
+            "default" : 50.0,
+            "desc" : "Mesh 'ocean' level",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Ocean Level %",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "oceantransitionzone",
+            "default" : 10.0,
+            "desc" : "The width of the zone where the liquid level of the simulator gradually fades into the ocean level, as a fraction of the smaller of the horizontal sides of the simulator",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Ocean Border Fade %",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "meshsubdiv",
+            "default" : 2.0,
+            "desc" : "Ocean mesh camera subdivisions",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Ocean Subdivisions"
+            }
+        },
+        
+        {
+            "attr" : "oceanhorizrough",
+            "default" : 1.0,
+            "desc" : "Horizon roughness of the ocean mesh",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Horizon Roughness"
+            }
+        },
+        
+        {
+            "attr" : "oceanextramargin",
+            "default" : 0.0,
+            "desc" : "The ocean is generated only in the camera view, which can lead to problems when using camera motion blur, using reflections, or when the ocean casts shadows on objects underwater. This option allows you to extend the ocean further from the borders of the camera view in order to solve such issues. The parameter is in % of the image size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Off-Screen Margin %"
+            }
+        },
+        
+        {
+            "attr" : "pureocean",
+            "default" : false,
+            "desc" : "In Ocean Mesh or Cap Mesh mode, the cache files will not be used and the ocean will be built without cache files for each frame",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Pure Ocean"
+            }
+        },
+        
+        {
+            "attr" : "uwglasses",
+            "default" : false,
+            "desc" : "In Ocean Mesh or Cap Mesh mode, when the camera is placed under the water, the fog and the refraction of the liquid material will be applied to the view",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Underwater Goggles"
+            }
+        },
+        
+        {
+            "attr" : "mbself",
+            "default" : false,
+            "desc" : "In all Mesh modes, some motion blurred vertices might penetrate the opposite side of the geometry. When enabled, this option prevents such situations",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Prevent Moblur Self Intersect"
+            }
+        },
+        
+        {
+            "attr" : "smoothmesh",
+            "default" : 0,
+            "desc" : "Mesh smoothing iterations",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Mesh Smoothness",
+                "max" : 20,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "smooth_normals",
+            "default" : "1",
+            "desc" : "In order to get an even smoother looking result, even if the mesh is low res, the normals can be smoothed as well. However, when Ocean displacement is used to add fine details, the smoothing of normals should not diminish that and can be turned off. 0-Always; 1-When Displacement is Off; 2-Never",
+            "items" : 
+            [
+                [ "0", "Always", "Always" ],
+                [ "1", "When Displacement is Off", "When Displacement is Off" ],
+                [ "2", "Never", "Never" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mesh Smooth Normals"
+            }
+        },
+        
+        {
+            "attr" : "useprt",
+            "default" : false,
+            "desc" : "Use FLIP Liquid particles for smoothing the mesh",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Liquid Particles for Smoothing"
+            }
+        },
+        
+        {
+            "attr" : "prtsz",
+            "default" : 0.50,
+            "desc" : "Size of the particles used for mesh smoothing",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Smoothing Particle Size"
+            }
+        },
+        
+        {
+            "attr" : "cachestretchzone",
+            "default" : 0.05999999865889549,
+            "desc" : "The width of the zone where the cache data from the inner part of the cache would be copied all the way to the walls in order to fill air pockets that might exist in 3rd party caches, as a fraction of each of the simulator's sides",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement",
+            "default" : false,
+            "desc" : "Enable Displacement",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Displacement"
+            }
+        },
+        
+        {
+            "attr" : "displmul",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Displacement Amount",
+                "max" : 1000.0,
+                "min" : -1000.0
+            }
+        },
+        
+        {
+            "attr" : "displ0",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "displ1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "displ2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Displacement Texture"
+            }
+        },
+        
+        {
+            "attr" : "displ2d",
+            "default" : "1",
+            "desc" : "",
+            "items" : 
+            [
+                [ "0", "Gradient Driven", "Gradient Driven" ],
+                [ "1", "Surface Driven", "Surface Driven" ],
+                [ "2", "Vector", "Vector" ],
+                [ "3", "Advection", "Advection" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Type"
+            }
+        },
+        
+        {
+            "attr" : "fadebylevel",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Vertical Fade Level"
+            }
+        },
+        
+        {
+            "attr" : "displfade",
+            "default" : 20.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Vertical Fade Level",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fadebyvel",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Fade Above Velocity"
+            }
+        },
+        
+        {
+            "attr" : "displvelfade",
+            "default" : 20.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fade Above Velocity",
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "usefadeobj",
+            "default" : 0,
+            "desc" : "Use 1 to enable the displacement fading around an object",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displgeomfade",
+            "default" : 20.0,
+            "desc" : "The distance around the object where the displacement is going to be reduced",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fadeobj",
+            "default" : null,
+            "desc" : "The object that is going to be used for displacement fade",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fadeobj_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "world transformation of the object",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hhfactor",
+            "default" : 1.0,
+            "desc" : "Heat Haze",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Heat Haze",
+                "max" : 100000.0,
+                "min" : -100000.0,
+                "soft_max" : 1000.0,
+                "soft_min" : -1000.0
+            }
+        },
+        
+        {
+            "attr" : "material_id",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Volumetric Material ID",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Volumetric Material ID"
+            }
+        },
+        
+        {
+            "attr" : "volzdepth",
+            "default" : "0",
+            "desc" : "if true, write to the z-depth render element",
+            "items" : 
+            [
+                [ "0", "Disable", "Disable" ],
+                [ "1", "Standard Element", "Standard Element" ],
+                [ "2", "Separate Element", "Separate Element" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Volumetric Z-Depth"
+            }
+        },
+        
+        {
+            "attr" : "volnorm",
+            "default" : "0",
+            "desc" : "if true, write to normals in volume mode",
+            "items" : 
+            [
+                [ "0", "Disable", "Disable" ],
+                [ "1", "Separate Element", "Separate Element" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Volumetric Normals"
+            }
+        },
+        
+        {
+            "attr" : "volumetric_mode_geometry_RE",
+            "default" : true,
+            "desc" : "If true, the shader will write to the geometric render elements (f.e. normals, velocity) even if rendered as volumetric",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "earg",
+            "default" : "32",
+            "desc" : "Source of the Fire Color Data: 0-Disabled; 1-Temperature; 2-Smoke; 3-Speed; 4-Texture; 5-RGB; 10-Fuel; 32-Grid Channel from the 'fire_color_chan' parameter",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "4", "Texture", "Texture" ],
+                [ "32", "Grid Channel", "Grid Channel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Based On"
+            }
+        },
+        
+        {
+            "attr" : "fire_color_chan",
+            "default" : "Temperature_phx",
+            "desc" : "String name of the grid channel that the Fire Color is based on when 'earg' is set to EmChGrid. This is more flexible for 3rd party caches that use string names, compared to the integer enum values used previously for Phoenix grid channels",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Grid Channel Name"
+            }
+        },
+        
+        {
+            "attr" : "etex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Fire Texture"
+            }
+        },
+        
+        {
+            "attr" : "mod_e",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Modulate By Texture"
+            }
+        },
+        
+        {
+            "attr" : "fire_opacity_mode",
+            "default" : "1",
+            "desc" : "0 - Use Smoke Opacity - fire will use the same opacity that is set in the 'Smoke Opacity' rollout. This way there will be no fire in cells where there is no smoke.\n1 - Fully Visible - fire will always use 'Opacity Multiplier', regardless of the smoke opacity.\n2 - Use Own Opacity - the Fire Luminance Gradient is used to determine the opacity",
+            "items" : 
+            [
+                [ "0", "Use Smoke Opacity", "Use Smoke Opacity" ],
+                [ "1", "Fully Visible", "Fully Visible" ],
+                [ "2", "Use Own Opacity", "Use Own Opacity" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Fire Opacity Mode"
+            }
+        },
+        
+        {
+            "attr" : "blackbody",
+            "default" : 1.0,
+            "desc" : "Implicitly multiply the fire diagram with a black body exponent",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Physically Based"
+            }
+        },
+        
+        {
+            "attr" : "mod_et",
+            "default" : "0",
+            "desc" : "0 - Grid Channel; 1 - Grid Channel mult Texture; 2 - Texture;",
+            "items" : 
+            [
+                [ "0", "Don't Use Opacity Texture", "Don't Use Opacity Texture" ],
+                [ "1", "Multiply Opacity By Texture", "Multiply Opacity By Texture" ],
+                [ "2", "Fire Opacity From Texture", "Fire Opacity From Texture" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Fire Opacity Source"
+            }
+        },
+        
+        {
+            "attr" : "ettex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Fire Opacity Texture"
+            }
+        },
+        
+        {
+            "attr" : "emult",
+            "default" : 1.0,
+            "desc" : "multiplier for the fre color",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fire Multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "etmult",
+            "default" : 1.0,
+            "desc" : "multiplier for the fire opacity if Fire Opacity Mode is set to Use Own Opacity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Opacity Multiplier",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ecolor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "raw emissive table",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ecolor_positions",
+            "default" : 0.0,
+            "desc" : "positions of the emission color ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ecolor_colors",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the emission color ramp",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ecolor_interpolations",
+            "default" : 3,
+            "desc" : "Currently not used!",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ecolor_remap",
+            "default" : null,
+            "desc" : "The gradient for remapping the Fire base channel to self-illumination color",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Fire Color Gradient"
+            }
+        },
+        
+        {
+            "attr" : "elum_positions",
+            "default" : 1.0,
+            "desc" : "positions of the luminance ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "elum_values",
+            "default" : 0.0,
+            "desc" : "values of the luminance ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "elum_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline, 4: bezier, 5: logarithmic+bezier",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "elum_remap",
+            "default" : null,
+            "desc" : "The gradient for remapping the Fire base channel to self-illumination intensity",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Fire Luminance Gradient"
+            }
+        },
+        
+        {
+            "attr" : "ecolor_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Offset"
+            }
+        },
+        
+        {
+            "attr" : "ecolor_scale",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Scale",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "al_enable",
+            "default" : true,
+            "desc" : "enable the additional emissive lights",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Create Fire Lights"
+            }
+        },
+        
+        {
+            "attr" : "lights",
+            "default" : 0,
+            "desc" : "additional number of emissive lights",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Lights Count",
+                "max" : 1000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "al_placing",
+            "default" : "2",
+            "desc" : "emissive lights placement type, 0-simple, 1-inside, 2-grid",
+            "items" : 
+            [
+                [ "0", "Simple", "Simple" ],
+                [ "1", "Inside", "Inside" ],
+                [ "2", "Reduced Grid", "Reduced Grid" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Lights Placement"
+            }
+        },
+        
+        {
+            "attr" : "al_sampling",
+            "default" : "1",
+            "desc" : "sampling type, 0-simple, 1-DMC",
+            "items" : 
+            [
+                [ "0", "Simple", "Simple" ],
+                [ "1", "DMC", "DMC" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Sampling"
+            }
+        },
+        
+        {
+            "attr" : "lightsmultself",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light Power on Self",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lightsmult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light Power on Scene",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "selfshadow",
+            "default" : "2",
+            "desc" : "if 1, the emission lights will cast raytraced shadows to the volume. if 2, a grid map will be used to determine illumination",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Ray-traced", "Ray-traced" ],
+                [ "2", "Grid-based", "Grid-based" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Self-shadowing"
+            }
+        },
+        
+        {
+            "attr" : "gridreduct",
+            "default" : 5.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light Grid Resolution %",
+                "max" : 100.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "lightscut",
+            "default" : 0.001000000047497451,
+            "desc" : "cut off threshold for the lights",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light Cut-off",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "al_decay",
+            "default" : "2",
+            "desc" : "0-none, 1-inverse, 2-inverse square",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Inverse", "Inverse" ],
+                [ "2", "Inverse Square", "Inverse Square" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Decay Type"
+            }
+        },
+        
+        {
+            "attr" : "al_subdivs",
+            "default" : 8,
+            "desc" : "number of subdivision for the DMC light sampling",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Direct Subdivs",
+                "max" : 20000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "al_csubdivs",
+            "default" : 1000,
+            "desc" : "number of caustics subdivision for lights",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Caustics Subdivs",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "al_cmult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Caustics Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "firelightsspec",
+            "default" : false,
+            "desc" : "if true, the emissive lights will affect specular, so they will be visible in glossy reflections",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "persistlights",
+            "default" : false,
+            "desc" : "if true, the emissive lights will be created, even if the volume is not renderable",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Create Lights Even If Not Renderable"
+            }
+        },
+        
+        {
+            "attr" : "instancedlights",
+            "default" : false,
+            "desc" : "If true, the emissive lights will be created for instanced volumes",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "radmult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light radius multiplier",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "self_illum_map_min_pow",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "darg",
+            "default" : "5",
+            "desc" : "Source of the Smoke Color Data: 0-Disabled; 1-Temperature; 2-Smoke; 3-Speed; 4-Texture; 5-Constant Color; 6-RGB; 10-Fuel; 32-Grid Channel from the 'smoke_color_chan' parameter",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "4", "Texture", "Texture" ],
+                [ "5", "Constant Color", "Constant Color" ],
+                [ "32", "Grid Channel", "Grid Channel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Based On"
+            }
+        },
+        
+        {
+            "attr" : "smoke_color_chan",
+            "default" : "Smoke_phx",
+            "desc" : "String name of the grid channel that the Smoke Color is based on when 'darg' is set to DfChGrid. This is more flexible for 3rd party caches that use string names, compared to the integer enum values used previously for Phoenix grid channels",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Grid Channel Name"
+            }
+        },
+        
+        {
+            "attr" : "dtex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Smoke Color Texture"
+            }
+        },
+        
+        {
+            "attr" : "mod_d",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Modulate By Texture"
+            }
+        },
+        
+        {
+            "attr" : "simple_color",
+            "default" : [ 0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 1.0 ],
+            "desc" : "Constant Color",
+            "type" : "ACOLOR",
+            "ui" : 
+            {
+                "display_name" : "Constant Color"
+            }
+        },
+        
+        {
+            "attr" : "noscatter",
+            "default" : "3",
+            "desc" : "0-ray-traced; 1-disabled; 2-approximate; 3-approximate+shadows",
+            "items" : 
+            [
+                [ "0", "Ray-Traced (GI Only)", "Ray-Traced (GI Only)" ],
+                [ "1", "Disabled", "Disabled" ],
+                [ "2", "Approximate", "Approximate" ],
+                [ "3", "Approximate+Shadows", "Approximate+Shadows" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Scattering"
+            }
+        },
+        
+        {
+            "attr" : "bounces",
+            "default" : 0,
+            "desc" : "max GI bounces",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Scatter Depth"
+            }
+        },
+        
+        {
+            "attr" : "phase_function",
+            "default" : 0.0,
+            "desc" : "Controls the phase function used for the anisotropic volumetric scattering computation. Accepts values in the interval [-1 1]. Negative values correspond to backward scattering, positive values to forward scattering and a value of zero to isotropic ('diffuse'). This parameter is ignored by the 'Approximate' and 'Approximate+Shadows' scattering modes",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Phase Function",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "anisotropic_scattering_optimization",
+            "default" : 1,
+            "desc" : "Controls the application of optimized anisotropic scattering: 0 - disabled; 1 - enabled (more values can be added in the future). When enabled the anisotropic scattering optimization can significantly reduce the render times for highly scattering volumes (clouds for example). Due to certain assumptions made as part of the optimization, the optimized rendering result will more or less deviate from the rendering result produced by the exact (brute-force) anisotropic scattering computation. This parameter is ignored by the Approximate and Approximate+Shadows scattering modes",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Optimize Anisotropic Scattering"
+            }
+        },
+        
+        {
+            "attr" : "lightcache",
+            "default" : true,
+            "desc" : "if true, a light cache will be used for diffuse lighting",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Volume Light Cache"
+            }
+        },
+        
+        {
+            "attr" : "lightcachesr",
+            "default" : 0.8999999761581421,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light Cache Speedup",
+                "max" : 0.9990000128746033,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transfown",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Own Light Scatter Mult",
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transfext",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "External Scatter Mult",
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "difmul",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Diffuse Multiplier",
+                "max" : 4.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shad_strength",
+            "default" : 1.0,
+            "desc" : "The strength of the shadow",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Shadow Strength",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dcolor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "raw diffuse table",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dcolor_positions",
+            "default" : 0.0,
+            "desc" : "positions of the diffuse color ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dcolor_colors",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the diffuse color ramp",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dcolor_interpolations",
+            "default" : 3,
+            "desc" : "Currently not used!",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dcolor_remap",
+            "default" : null,
+            "desc" : "The gradient for remapping the Diffuse input to a diffuse color",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Diffuse Color Gradient"
+            }
+        },
+        
+        {
+            "attr" : "dcolor_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Offset"
+            }
+        },
+        
+        {
+            "attr" : "dcolor_scale",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Scale",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "targ",
+            "default" : "0",
+            "desc" : "Source of the Smoke Color Data: 0-Simple Smoke; 1-Temperature; 2-Smoke; 3-Speed; 4-Texture; 10-Fuel; 32-Grid Channel from the 'smoke_opacity_chan' parameter",
+            "items" : 
+            [
+                [ "0", "Simple Smoke", "Simple Smoke" ],
+                [ "4", "Texture", "Texture" ],
+                [ "32", "Grid Channel", "Grid Channel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Based On"
+            }
+        },
+        
+        {
+            "attr" : "smoke_opacity_chan",
+            "default" : "Smoke_phx",
+            "desc" : "String name of the grid channel that the Smoke Opacity is based on when 'targ' is set to TrChGrid. This is more flexible for 3rd party caches that use string names, compared to the integer enum values used previously for Phoenix grid channels",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Grid Channel Name"
+            }
+        },
+        
+        {
+            "attr" : "ttex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Smoke Opacity Texture"
+            }
+        },
+        
+        {
+            "attr" : "mod_t",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Modulate By Texture"
+            }
+        },
+        
+        {
+            "attr" : "transpmode",
+            "default" : 1,
+            "desc" : "if 1, the values are interpreted as opacity instead of transparency",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smoketransp",
+            "default" : 0.50,
+            "desc" : "Simple Smoke Factor",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Simple Smoke Opacity",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stoptransp",
+            "default" : 0.9990000128746033,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "skiptransp",
+            "default" : 0.001000000047497451,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Minimum Visible Opacity"
+            }
+        },
+        
+        {
+            "attr" : "alphaunitscale",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Scale Opacity by Scene Units"
+            }
+        },
+        
+        {
+            "attr" : "basedensityscale",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "optvolpass",
+            "default" : true,
+            "desc" : "Enables the \"Optimizing Volumetrics\" prepass for grids over 15 million voxels which speeds up their sampling during rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Optimize Big Volumetric Grids"
+            }
+        },
+        
+        {
+            "attr" : "absorption_arg",
+            "default" : "0",
+            "desc" : "Source for the Absorption data 0-Constant Color; 1-Texture",
+            "items" : 
+            [
+                [ "0", "Constant Color", "Constant Color" ],
+                [ "1", "Texture", "Texture" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "absorption_color",
+            "default" : [ 0.3750, 0.3750, 0.3750 ],
+            "desc" : "Absorption Color",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Absorption Color"
+            }
+        },
+        
+        {
+            "attr" : "absorption_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Absorption Texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Absorption Texture"
+            }
+        },
+        
+        {
+            "attr" : "transp",
+            "default" : 0.0,
+            "desc" : "raw transparency table",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transp_positions",
+            "default" : 0.0,
+            "desc" : "positions of the transparency ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transp_values",
+            "default" : 0.0,
+            "desc" : "values of the transparency ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transp_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transp_remap",
+            "default" : null,
+            "desc" : "The gradient for remapping the Opacity input to opacity",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Opacity Gradient"
+            }
+        },
+        
+        {
+            "attr" : "transp_offset",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Offset"
+            }
+        },
+        
+        {
+            "attr" : "transp_scale",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Input Scale",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "tmult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Opacity Scale",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transp_power",
+            "default" : 1.0,
+            "desc" : "deprecated",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "shadow_opacity",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cell_aspect",
+            "default" : 1.0,
+            "desc" : "Cell stretch aspect for the 3 axes",
+            "elements_count" : 3,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pmprimary",
+            "default" : 0,
+            "desc" : "enable/disable particle mode of primary rays. Used as a boolean, even though it's exported as an int",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pmbounces",
+            "default" : 1,
+            "desc" : "enable/disable particle mode of secondary rays. Used as a boolean, even though it's exported as an int",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "left_handed_coord",
+            "default" : false,
+            "desc" : "deprecated",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "brdfscatter",
+            "default" : 0.250,
+            "desc" : "A parameter used to replicate previous behavior of GI illumination. Use value of 1.0f to reproduce the original V-Ray for 3ds Max behavior",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "brdfscatternogi",
+            "default" : 0.250,
+            "desc" : "A parameter used to replicate previous behavior of direct illumination (GI turned off). Use value of 1.0f to reproduce the original V-Ray for 3ds Max behavior",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "usebias",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrapx",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrapy",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrapz",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useLegacyLightLinkingForVRayStd",
+            "default" : true,
+            "desc" : "If true, the 'lightlinks' parameter will be used for light linking, and 'shadowBreakings' for shadow breaking. This method for light linking is kept for compatibility with V-Ray versions that cannot export SettingsLightLinker properly for volumes. For new scenarios, export the light linking using the SettingsLightLinker plugin!",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lightlinks",
+            "default" : null,
+            "desc" : "Kept for backwards compatibility (see useLegacyLightLinkingForVRayStd parameter for more details). Use SettingsLightLinker to specify the light linking in \"Volumetric\" render mode for new scenarios! Used only when useLegacyLightLinkingForVRayStd is true, in that case it specifies all lights that should illuminate the volume \"Volumetric\" render mode",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowBreakings",
+            "default" : null,
+            "desc" : "Kept for backwards compatibility (see useLegacyLightLinkingForVRayStd parameter for more details). Use SettingsLightLinker to specify the shadow breaking in \"Volumetric\" render mode for new scenarios! Used only when useLegacyLightLinkingForVRayStd is true, in that case it specifies all lights that should not create shadows for this volume in \"Volumetric\" render mode",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocities_from_uvw",
+            "default" : false,
+            "desc" : "Create velocity channel from uvw movement",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coord_method",
+            "default" : "0",
+            "desc" : "The texture coordinates generation method",
+            "items" : 
+            [
+                [ "0", "Fixed", "Fixed" ],
+                [ "1", "Grid", "Grid" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Coordinate Method"
+            }
+        },
+        
+        {
+            "attr" : "gamma_mult",
+            "default" : 1.0,
+            "desc" : "Gamma multiplier for the volume rendering output",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mbgrid",
+            "default" : false,
+            "desc" : "Use a more realistic grid-based motion blur, at the expense of more memory and a render pre-pass",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Grid Based Motion Blur"
+            }
+        },
+        
+        {
+            "attr" : "vol_moblur_method",
+            "default" : 0,
+            "desc" : "The Grid-Based motion blur method could be used instead of the default Ray-Traced method in cases when you need more visible motion blur streaks, especially with faster moving fluids. However, it could produce glitches and uses more memory",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Volumetric Motion Blur"
+            }
+        },
+        
+        {
+            "attr" : "mbsmooth",
+            "default" : 3,
+            "desc" : "Number of Gaussian passes to smooth out the grid-based motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normalized_positions",
+            "default" : 0,
+            "desc" : "If true, ecolor_position, dcolor_positions and transp_positions are in the 0-1 range and e/d/tcolor_offset and e/d/tcolor_scale convert their ranges. This is used by hosts where the ramp controls are fixed between 0-1, unlike Phoenix's native ramps",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "generate_gi",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Generate GI",
+                "rollout" : "Visibility"
+            }
+        },
+        
+        {
+            "attr" : "receive_gi",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Receive GI"
+            }
+        },
+        
+        {
+            "attr" : "gen_gi_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Generate GI mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "rec_gi_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Receive GI mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "generate_caust",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Generate Caustics"
+            }
+        },
+        
+        {
+            "attr" : "receive_caust",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Receive Caustics"
+            }
+        },
+        
+        {
+            "attr" : "caust_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Caustics mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "camera_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Visible to Camera",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "reflections_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Visible to Reflections"
+            }
+        },
+        
+        {
+            "attr" : "refractions_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Visible to Refractions"
+            }
+        },
+        
+        {
+            "attr" : "gi_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Visible to GI"
+            }
+        },
+        
+        {
+            "attr" : "shadows_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Cast Shadows"
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_raw",
+            "default" : null,
+            "desc" : "Render channels the raw diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_diffuse",
+            "default" : null,
+            "desc" : "Render channels the diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_specular",
+            "default" : null,
+            "desc" : "Render channels the specular result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for the rendering. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "user_attributes",
+            "default" : "",
+            "desc" : "A list of user defined attributes in the form \"attrName1=value1;attrName2=value2\" where values are usually numbers, strings or R,G,B triplets. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "user_attributes_bin",
+            "default" : 0,
+            "desc" : "Serialized user attributes (refer to BinUserAttributesWriter). The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "LIGHT",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

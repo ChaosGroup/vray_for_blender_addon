@@ -1,0 +1,21 @@
+{
+    "Name": "V-Ray Luminance",
+    "Subtype": "UTILITY",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "input"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

@@ -1,0 +1,88 @@
+{
+    "ID": "TexStucco",
+    "Name": "V-Ray Stucco",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "color1"
+                    },
+                    {
+                        "name": "color2"
+                    },
+                    {
+                        "name": "size"
+                    },
+                    {
+                        "name": "thickness"
+                    },
+                    {
+                        "name": "threshold"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "size",
+            "default": 0.1,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "thickness",
+            "default": 0.1,
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "threshold",
+            "default": 0.5,
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size",
+            "un_noise_phase"
+        ]
+    }
+}

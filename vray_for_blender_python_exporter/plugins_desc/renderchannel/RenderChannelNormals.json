@@ -1,0 +1,36 @@
+
+{
+    "Desciption" : "RenderChannelNormals",
+    "ID" : "RenderChannelNormals",
+    "Name" : "Render Channel Normals",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "Normals",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

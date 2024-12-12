@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "TexBifrostVVMix",
+    "ID" : "TexBifrostVVMix",
+    "Name" : "Bifrost VV Mix",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "velocity_mult",
+            "default" : 1.0,
+            "desc" : "The velocity texture multiplier",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "vorticity_mult",
+            "default" : 1.0,
+            "desc" : "The vorticity texture multiplier",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "velocity_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The vorticity texture. This must be connected to the bifrostVelocity color set of the mesh",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "vorticity_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The vorticity texture. This must be connected to the bifrostVorticity color set of the mesh",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "out_value",
+            "default" : 0.0,
+            "desc" : "The result float value of the velocity/vorticity mix",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

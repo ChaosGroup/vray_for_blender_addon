@@ -1,0 +1,186 @@
+
+{
+    "Desciption" : "TexMultiFloat",
+    "ID" : "TexMultiFloat",
+    "Name" : "Multi Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "ids_list",
+            "default" : 0,
+            "desc" : "A list of material/object IDs",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "The mode for the texture (0 - use face material ID, 1 - use object ID, 12 - random by composite seed, 30 - the ID is taken from the ID generator texture(id_gen_tex)). Modes between 2 and 11 are deprecated in favor of the composite seed usage",
+            "items" : 
+            [
+                [ "0", "Face material ID", "Face material ID" ],
+                [ "1", "Object ID", "Object ID" ],
+                [ "12", "Random by composite seed", "Random by composite seed" ],
+                [ "30", "Use ID generator texture", "Use ID generator texture" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "id_gen_tex",
+            "default" : 0.0,
+            "desc" : "Used when mode is \"Use ID Generator texture\"(30). Supports Integer textures as input",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "ID Generator texture"
+            }
+        },
+        
+        {
+            "attr" : "id_gen_tex_round_mode",
+            "default" : "0",
+            "desc" : "How to round the values returned by 'id_gen_tex' when converting them to an integer. When 'interpolate' is enabled, this parameter is ignored and the values are always rounded down",
+            "items" : 
+            [
+                [ "0", "Round Nearest", "Round Nearest" ],
+                [ "1", "Round Down", "Round Down" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "interpolate",
+            "default" : false,
+            "desc" : "Used when mode is \"Use ID Generator texture\"(30). When enabled, consecutive textures in the texture list are blended with a weight equal to the fractional part of the number returned by id_gen_tex",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "loop_textures",
+            "default" : 0,
+            "desc" : "Whether IDs outside of the ID list range will be wrapped inside the range (using modulo of the ID count)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "seed",
+            "default" : 0,
+            "desc" : "The seed used for the random number generation in random modes",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "hue_variation",
+            "default" : 0.0,
+            "desc" : "Hue random variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "saturation_variation",
+            "default" : 0.0,
+            "desc" : "Saturation random variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gamma_variation",
+            "default" : 0.0,
+            "desc" : "Gamma random variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_mode",
+            "default" : "0",
+            "desc" : "The composite-seed flags for the texture (1 - random by node handle, 2 - random by render id, 4 - random by node name, 8 - random by particle ID, 16 - random by instance ID, 32 - random by face material ID, 64 - random by object ID, 128 - random by mesh element, 256 - random by user attribute, 512 - random by scene name, 1024 - random by tile)",
+            "items" : 
+            [
+                [ "1", "Random by node handle", "Random by node handle" ],
+                [ "2", "Random by render ID", "Random by render ID" ],
+                [ "4", "Random by node name", "Random by node name" ],
+                [ "8", "Random by particle ID", "Random by particle ID" ],
+                [ "16", "Random by instance ID", "Random by instance ID" ],
+                [ "32", "Random by face material ID", "Random by face material ID" ],
+                [ "64", "Random by object ID", "Random by object ID" ],
+                [ "128", "Random by mesh element", "Random by mesh element" ],
+                [ "256", "Random by user attribute", "Random by user attribute" ],
+                [ "512", "Random by scene name", "Random by scene name" ],
+                [ "1024", "Random by tile", "Random by tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "random_user_attr_name",
+            "default" : "",
+            "desc" : "User attribute that serves to override input in user-id mode",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "random_user_mode",
+            "default" : "0",
+            "desc" : "Random mode override when in user-id mode (0 - random by node handle, 1 - random by render id, 2 - random by node name, 3 - random by particle ID, 4 - random by instance ID, 5 - random by face material ID, 6 - random by object ID, 7 - random by mesh element, 9 - random by scene name.)",
+            "items" : 
+            [
+                [ "0", "Random by node handle", "Random by node handle" ],
+                [ "1", "Random by render ID", "Random by render ID" ],
+                [ "2", "Random by node name", "Random by node name" ],
+                [ "3", "Random by particle ID", "Random by particle ID" ],
+                [ "4", "Random by instance ID", "Random by instance ID" ],
+                [ "5", "Random by face material ID", "Random by face material ID" ],
+                [ "6", "Random by object ID", "Random by object ID" ],
+                [ "7", "Random by mesh element", "Random by mesh element" ],
+                [ "9", "Random by scene name", "Random by scene name" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "textures_list",
+            "default" : null,
+            "desc" : "A list of the sub-float-textures",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "default_texture",
+            "default" : 0.0,
+            "desc" : "The default float texture color",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

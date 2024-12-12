@@ -1,0 +1,14 @@
+{
+    "ID": "TexCondition",
+    "Parameters": [
+        {
+            "attr": "operation",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    }
+}

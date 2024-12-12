@@ -1,0 +1,656 @@
+{
+    "ID": "SunLight",
+    "Parameters": [
+        {
+            "attr": "shadow_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "shadow_color",
+            "tex_prop": "shadow_color_tex",
+            "ui": {},
+            "desc": "The shadow color. Anything but black is not physically accurate.",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "intensity_multiplier",
+            "ui": {
+                "soft_max": 2.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "size_multiplier",
+            "ui": {
+                "soft_max": 100.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "sky_model",
+            "default": "4",
+            "items": [
+                [
+                    "0",
+                    "Preetham et al",
+                    "Preetham et al"
+                ],
+                [
+                    "1",
+                    "CIE Clear",
+                    "CIE Clear"
+                ],
+                [
+                    "2",
+                    "CIE Overcast",
+                    "CIE Overcast"
+                ],
+                [
+                    "3",
+                    "Hosek et al",
+                    "Hosek et al"
+                ],
+                [
+                    "4",
+                    "PRG Clear Sky",
+                    "PRG Clear Sky"
+                ]
+            ]
+        },
+        {
+            "attr": "clouds_on",
+            "desc": "Enables the cloud system."
+        },
+        {
+            "attr": "clouds_ground_shadows",
+            "desc": "Calculates precise shadows from the clouds at every point of the scene, otherwise a single shadow is cast if the sun is blocked by a cloud at the current camera position."
+        },
+        {
+            "attr": "clouds_density",
+            "desc": "Controls the density of the clouds. A value of 1 fills up the sky with clouds.",
+            "subtype": "PERCENTAGE",
+            "precision": 0,
+            "options": {
+                "value_conv_factor": 100.0
+            }
+        },
+        {
+            "attr": "clouds_variety",
+            "subtype": "PERCENTAGE",
+            "precision": 0,
+            "options": {
+                "value_conv_factor": 100.0
+            }
+        },
+        {
+            "attr": "clouds_seed",
+            "desc": "Generates a random value, based on the given number, to change the pattern of the clouds and the contrails."
+        },
+        {
+            "attr": "clouds_cirrus_amount",
+            "desc": "A value of 1 fills the sky with cirrus clouds, while 0 produces no cirrus clouds.",
+            "subtype": "PERCENTAGE",
+            "precision": 0,
+            "options": {
+                "value_conv_factor": 100.0
+            }
+        },
+        {
+            "attr": "clouds_thickness",
+            "desc": "Clouds thickness in meters. Lower values make the clouds thin and sheer/lucent, while higher values make them full and heavy.",
+            "subtype": "DISTANCE",
+            "ui": {
+                "spin_step": 10,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_offset_x",
+            "subtype": "DISTANCE",
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 10,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_offset_y",
+            "subtype": "DISTANCE",
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 10,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_phase_x",
+            "desc": "Phase by longitude in percentage (%). The appearance of the clouds loops at 0, 100, 200, etc. This parameter can be animated to resemble natural clouds appearance.",
+            "precision": 2,
+            "ui": {
+                "spin_step": 10
+            }
+        },
+        {
+            "attr": "clouds_phase_y",
+            "desc": "Phase by latitude in percentage (%). The appearance of the clouds loops at 0, 100, 200, etc. This parameter can be animated to resemble natural clouds appearance.",
+            "precision": 2,
+            "ui": {
+                "spin_step": 10
+            }
+        },
+        {
+            "attr": "clouds_contrails_on",
+            "desc": "Simulates plane contrails in the sky."
+        },
+        {
+            "attr": "clouds_contrails_num_planes",
+            "desc": "The number of contrails in the sky."
+        },
+        {
+            "attr": "clouds_contrails_strength",
+            "desc": "Determines the opacity of the contrails. Lower values create transparent, older looking trails."
+        },
+        {
+            "attr": "clouds_contrails_distortion",
+            "desc": "The amount of distortion in the contrails."
+        },
+        {
+            "attr": "clouds_contrails_offset_x",
+            "subtype": "DISTANCE",
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_contrails_offset_y",
+            "subtype": "DISTANCE",
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_contrails_time",
+            "desc": "Determines how far the contrails progress along the sky.",
+            "ui": {
+                "soft_min": -50.0,
+                "soft_max": 50.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "diffuse_contribution",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "specular_contribution",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "atmospherics_contribution",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "shadowBias",
+            "default": 0.01,
+            "ui": {
+                "soft_max": 100.0,
+                "spin_step": 0.1,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "causticSubdivs",
+            "default": 1500,
+            "ui": {
+                "soft_max": 4000
+            }
+        },
+        {
+            "attr": "causticMult",
+            "ui": {
+                "soft_max": 20.0
+            }
+        },
+        {
+            "attr": "filter_color",
+            "update": "onUpdateAttribute"
+        },
+        {
+            "attr": "color_temp_mode",
+            "default": "0",
+            "desc": "Choose between RGB color and color temperature",
+            "items": [
+                [
+                    "0",
+                    "Color",
+                    "Color"
+                ],
+                [
+                    "1",
+                    "Temperature",
+                    "Temperature"
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "temperature",
+            "default": 6500.0,
+            "desc": "Color temperature in K",
+            "type": "FLOAT",
+            "update": "onUpdateAttribute",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "bumped_below_surface_check",
+            "default": true
+        },
+        {
+            "attr": "blend_angle",
+            "subtype": "ANGLE",
+            "options": {
+                "value_conv_factor": 0.017453292519943295
+            }
+        },
+        {
+            "attr": "horiz_illum",
+            "ui": {
+                "spin_step": 1000
+            }
+        },
+        {
+            "attr": "clouds_height",
+            "ui": {
+                "spin_step": 100,
+                "value_conv_factor": 0.1,
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "clouds_density_multiplier",
+            "desc": "A multiplier to the Density parameter. The larger the value, the darker the sky becomes at the horizon. Setting a value of 0 produces no clouds, regardless of the Density value."
+        },
+        {
+            "attr": "decay_near_start",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_near_end",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_start",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_end",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "photon_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "intensity_multiplier",
+                        "label": "Intensity"
+                    },
+                    {
+                        "name": "size_multiplier",
+                        "label": "Size"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_mode"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "color_temp_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "filter_color",
+                        "active": {
+                            "cond": "::color_temp_mode=0"
+                        }
+                    },
+                    {
+                        "name": "temperature",
+                        "active": {
+                            "cond": "::color_temp_mode=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "sky_model"
+                    },
+                    {
+                        "name": "ground_albedo"
+                    },
+                    {
+                        "name": "horiz_illum",
+                        "active": {
+                            "cond": "::sky_model=1;::sky_model=2"
+                        }
+                    },
+                    {
+                        "name": "blend_angle"
+                    },
+                    {
+                        "name": "horizon_offset"
+                    },
+                    {
+                        "name": "turbidity",
+                        "active": {
+                            "cond": "::sky_model!=4"
+                        }
+                    },
+                    {
+                        "name": "ozone",
+                        "active": {
+                            "cond": "::sky_model!=4"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "clouds",
+                "label": "Clouds",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "clouds_on",
+                        "label": "Clouds On"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::clouds_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "clouds_ground_shadows",
+                                "label": "Ground Shadows"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "clouds_density",
+                                "label": "Density",
+                                "slider": false
+                            },
+                            {
+                                "name": "clouds_density_multiplier",
+                                "label": "Density Multiplier"
+                            },
+                            {
+                                "name": "clouds_variety",
+                                "label": "Variety"
+                            },
+                            {
+                                "name": "clouds_seed",
+                                "label": "Seed"
+                            },
+                            {
+                                "name": "clouds_cirrus_amount",
+                                "label": "Cirrus Amount"
+                            },
+                            {
+                                "name": "clouds_height",
+                                "label": "Height (m)"
+                            },
+                            {
+                                "name": "clouds_thickness",
+                                "label": "Thickness (m)"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "clouds_offset_x",
+                                "label": "Longitude Offset (m)"
+                            },
+                            {
+                                "name": "clouds_offset_y",
+                                "label": "Latitude Offset (m)"
+                            },
+                            {
+                                "name": "clouds_phase_x",
+                                "label": "Longitude Phase (%)"
+                            },
+                            {
+                                "name": "clouds_phase_y",
+                                "label": "Latitude Phase (%)"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "clouds_contrails_on",
+                                "label": "Enable Contrails"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "active": {
+                                    "cond": "::clouds_contrails_on!=0"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "clouds_contrails_num_planes",
+                                        "label": "Number of Contrails"
+                                    },
+                                    {
+                                        "name": "clouds_contrails_strength",
+                                        "label": "Contrails Strength"
+                                    },
+                                    {
+                                        "name": "clouds_contrails_distortion",
+                                        "label": "Contrails Distortion"
+                                    },
+                                    {
+                                        "name": "clouds_contrails_offset_x",
+                                        "label": "Contrails Offset Longitude (m)"
+                                    },
+                                    {
+                                        "name": "clouds_contrails_offset_y",
+                                        "label": "Contrails Offset Latitude (m)"
+                                    },
+                                    {
+                                        "name": "clouds_contrails_time",
+                                        "label": "Contrails Time"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "affectDiffuse"
+                    },
+                    {
+                        "name": "affectSpecular"
+                    },
+                    {
+                        "name": "affectAtmospherics"
+                    },
+                    {
+                        "name": "diffuse_contribution",
+                        "active": {
+                            "cond": "::affectDiffuse!=0"
+                        }
+                    },
+                    {
+                        "name": "specular_contribution",
+                        "active": {
+                            "cond": "::affectSpecular!=0"
+                        }
+                    },
+                    {
+                        "name": "atmospherics_contribution",
+                        "active": {
+                            "cond": "::affectAtmospherics!=0"
+                        }
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label",
+                        "show": {
+                            "prop": "0"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "shadows",
+                "label": "Shadows",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "shadow_color_colortex",
+                                "label": "Shadow Color"
+                            },
+                            {
+                                "name": "shadowBias"
+                            },
+                            {
+                                "name": "atmos_shadows"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "photon emission",
+                "label": "Photon emission",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "photon_radius"
+                    },
+                    {
+                        "name": "causticSubdivs"
+                    },
+                    {
+                        "name": "causticMult"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "transform",
+                "label": "Transform",
+                "type": "TRANSFORM"
+            },
+            {
+                "name": "ground_albedo",
+                "label": "Ground albedo color",
+                "type": "COLOR"
+            },
+            {
+                "name": "shadow_color_colortex",
+                "label": "Shadow color",
+                "type": "COLOR_TEXTURE"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "up_vector",
+            "channels_diffuse",
+            "channels_full",
+            "channels_raw",
+            "channels_specular",
+            "shadow_subdivs",
+            "photonSubdivs",
+            "diffuseMult",
+            "water_vapour"
+        ],
+        "animatable": true
+    }
+}

@@ -1,0 +1,29 @@
+
+{
+    "Desciption" : "VolumeChannels",
+    "ID" : "VolumeChannels",
+    "Name" : "Volume Channels",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_volume",
+            "default" : null,
+            "desc" : "A volumetric plugin to use with material select render channels",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this volume will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,48 @@
+
+{
+    "Desciption" : "TexMaxGamma",
+    "ID" : "TexMaxGamma",
+    "Name" : "Max Gamma",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The input texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "multiplier",
+            "default" : 1.0,
+            "desc" : "The texture multiplier. Applied before gamma/color_space",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "color_space",
+            "default" : "0",
+            "desc" : "The color space (0 - linear; 1 - inverse gamma; 2 - sRGB)",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Inverse gamma", "Inverse gamma" ],
+                [ "2", "sRGB", "sRGB" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "The gamma value of the texture",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

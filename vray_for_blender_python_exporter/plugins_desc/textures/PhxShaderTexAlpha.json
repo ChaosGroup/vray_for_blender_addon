@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "PhxShaderTexAlpha",
+    "ID" : "PhxShaderTexAlpha",
+    "Name" : "Phx Shader Tex Alpha",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "ttex",
+            "default" : 0.0,
+            "desc" : "the input float texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "",
+            "type" : "ACOLOR"
+        },
+        
+        {
+            "attr" : "out_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "the output color",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

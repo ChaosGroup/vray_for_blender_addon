@@ -1,0 +1,15 @@
+{
+    "ID": "RTEngine",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "use_opencl"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "TexMotionOcclusion",
+    "ID" : "TexMotionOcclusion",
+    "Name" : "Motion Occlusion",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : 0,
+            "desc" : "Determines what to output as default texture: 0 - backward occlusion, 1 - forward occlusion",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "backward_occlusion",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The screen position and occlusion of the shaded point at the start of the motion blur interval",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "forward_occlusion",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The screen position and occlusion of the shaded point at the end of the motion blur interval",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "near_threshold",
+            "default" : 1.0,
+            "desc" : "Occlusion hits closer than this distance will be ignored for backward and forward motion occlusion",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "far_threshold",
+            "default" : 2.0,
+            "desc" : "Occlusion hits farther than this distance will be fully considered for backward and forward motion occlusion",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,120 @@
+{
+    "ID": "TexNormalBump",
+    "Name": "V-Ray Normal Bump",
+    "Parameters": [
+        {
+            "attr": "bump_tex_color",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bump_tex_float",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "additional_bump",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bump_tex_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "bump_delta_scale",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "normal_map_rotation_angle",
+            "default": 0.0,
+            "ui": {
+                "soft_min": -180.0,
+                "soft_max": 180.0,
+                "spin_step": 5.0
+            }
+        },
+        {
+            "attr": "normal_uvwgen",
+            "type": "UVWGEN"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "bump_tex_mult"
+                    },
+                    {
+                        "name": "map_type"
+                    },
+                    {
+                        "name": "normal_uvwgen_auto"
+                    },
+                    {
+                        "name": "maya_compatible"
+                    },
+                    {
+                        "name": "bump_delta_scale"
+                    },
+                    {
+                        "name": "normal_map_mult"
+                    },
+                    {
+                        "name": "bump_map_mult"
+                    },
+                    {
+                        "name": "additional_bump_type"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "blue2Z_mapping_method"
+                    },
+                    {
+                        "name": "normal_map_rotation_angle"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets" : [
+            {
+                "name": "bump_tex_color"
+            },
+            {
+                "name": "bump_tex_mult"
+            },
+            {
+                "name": "bump_tex_float"
+            },
+            {
+                "name": "additional_bump"
+            },
+            {
+                "name": "normal_uvwgen"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "bump_tex_mult_tex"
+        ]
+    }
+}

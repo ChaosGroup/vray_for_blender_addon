@@ -1,0 +1,13 @@
+{
+    "ID": "VRayScene",
+    "Parameters": [
+        {
+            "attr": "filepath",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Type": "GEOMETRY",
+    "Options": {
+        "excluded_parameters": []
+    }
+}

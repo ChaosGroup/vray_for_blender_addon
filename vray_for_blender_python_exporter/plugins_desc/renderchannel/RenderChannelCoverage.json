@@ -1,0 +1,29 @@
+
+{
+    "Desciption" : "RenderChannelCoverage",
+    "ID" : "RenderChannelCoverage",
+    "Name" : "Render Channel Coverage",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "Coverage",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

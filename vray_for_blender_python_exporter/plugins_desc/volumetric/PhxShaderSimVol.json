@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "PhxShaderSimVol",
+    "ID" : "PhxShaderSimVol",
+    "Name" : "Phx Shader Sim Vol",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "force_prob_samples",
+            "default" : -1,
+            "desc" : "Probabilistic samples override, -1 won't override",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "force_prob_samples_gi",
+            "default" : -1,
+            "desc" : "Probabilistic samples for GI override, -1 won't override",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

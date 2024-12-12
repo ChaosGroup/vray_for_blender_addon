@@ -1,0 +1,127 @@
+{
+    "ID": "RenderChannelObjectSelect",
+    "Name" : "Object Select",
+    "Subtype" : "MATTE",
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Object Select"
+        },
+        {
+            "attr": "light_object_ids_as_string",
+            "desc": "list of IDs and ranges of IDs. Each ID is separated by commas and can either be a single number or a range of numbers denoted by hyphens. \nExample: '1,2,7,4-6'",
+            "type" : "STRING",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "id_selection_mode",
+            "type": "ENUM",
+            "desc": "The ID selection option",
+            "default": "0",
+            "items": [
+                ["0", "Single ID", "Single ID"],
+                ["1", "Range IDs", "Inclusive ID range"],
+                ["2", "Custom IDs", "Comma-separated list of IDs"]
+            ],
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "id_min",
+            "type": "INT",
+            "desc": "Minimum ID in range",
+            "default": 0,
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "id_max",
+            "type": "INT",
+            "desc": "Maximum ID in range",
+            "default": 0,
+            "options": {
+               "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "use_mtl_id",
+                        "label": "Use Multimatte ID"
+                    },
+                    {
+                        "name": "affect_matte_objects"
+                    },
+                    {
+                        "name": "consider_for_aa",
+                        "label": "Consider for Anti-Aliasing "
+
+                    },
+                    {
+                        "name": "denoise"
+                    },
+                    {
+                        "name": "color_mapping"
+                    },
+                    {
+                        "layout": "SEPARATOR",
+                        "label": "Selection"
+                    },
+                    {
+                        "name": "id_selection_mode",
+                        "label": "IDs Selection Mode"
+                    },
+                    {
+                        "name": "id",
+                        "label": "ID",
+                        "visible": {"cond": "::id_selection_mode=0"}
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "visible": {"cond": "::id_selection_mode=1"},
+                        "attrs": [
+                            {
+                                "name": "id_min",
+                                "label": "Start ID"
+                            },
+                            {
+                                "name": "id_max",
+                                "label": "End ID"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "light_object_ids_as_string",
+                        "label": "IDs",
+                        "visible": {"cond": "::id_selection_mode=2"}
+                    },
+                    {
+                        "name": "invert_selection"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "id"
+        ]
+    }
+}

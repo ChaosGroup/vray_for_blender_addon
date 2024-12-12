@@ -1,0 +1,284 @@
+
+{
+    "Desciption" : "TexFloatOp",
+    "ID" : "TexFloatOp",
+    "Name" : "Float Op",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "float_a",
+            "default" : 0.0,
+            "desc" : "The first number",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_b",
+            "default" : 0.0,
+            "desc" : "The second number",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "product",
+            "default" : 0.0,
+            "desc" : "float_a*float_b",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ratio",
+            "default" : 0.0,
+            "desc" : "float_a/float_b",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sum",
+            "default" : 0.0,
+            "desc" : "float_a+float_b",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "difference",
+            "default" : 0.0,
+            "desc" : "float_a-float_b",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "power",
+            "default" : 0.0,
+            "desc" : "The first number raised to the power of the second number",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sin",
+            "default" : 0.0,
+            "desc" : "sin(float_a*float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cos",
+            "default" : 0.0,
+            "desc" : "cos(float_a*float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "asin",
+            "default" : 0.0,
+            "desc" : "asin(float_a*float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "acos",
+            "default" : 0.0,
+            "desc" : "acos(float_a*float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "atan",
+            "default" : 0.0,
+            "desc" : "atan(float_a*float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "atan2",
+            "default" : 0.0,
+            "desc" : "atan2(float_b, float_a), computes the arctangent of float_b/float_a",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "min",
+            "default" : 0.0,
+            "desc" : "min(float_a, float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max",
+            "default" : 0.0,
+            "desc" : "max(float_a, float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "abs",
+            "default" : 0.0,
+            "desc" : "abs(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ceil",
+            "default" : 0.0,
+            "desc" : "ceil(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exp",
+            "default" : 0.0,
+            "desc" : "exp(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "floor",
+            "default" : 0.0,
+            "desc" : "floor(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "log",
+            "default" : 0.0,
+            "desc" : "log(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "log10",
+            "default" : 0.0,
+            "desc" : "log10(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sqrt",
+            "default" : 0.0,
+            "desc" : "square root of float_a",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fmod",
+            "default" : 0.0,
+            "desc" : "fmod(float_a, float_b)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "average",
+            "default" : 0.0,
+            "desc" : "(float_a+float_b)*0.5",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tan",
+            "default" : 0.0,
+            "desc" : "tan(float_a)",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bias_schlick",
+            "default" : 0.0,
+            "desc" : "A:=float_a; B:=float_b; A/((1/B-2)*(1-A)+1), computes the Bias(x, y) function as defined by Christophe Schlick",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gain_schlick",
+            "default" : 0.0,
+            "desc" : "A:=float_a; B:=float_b; if B<0.5: (Bias(2*A-1, B)+1)/2 else Bias(2*A, 1-B)/2, computes the Gain(x, y) function as defined by Christophe Schlick",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bias_perlin",
+            "default" : 0.0,
+            "desc" : "A:=float_a; B:=float_b; A^(log(B)/log(0.5)), computes the Bias(x, y) function as defined by Kenneth Perlin",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gain_perlin",
+            "default" : 0.0,
+            "desc" : "A:=float_a; B:=float_b; if B<0.5: Bias(2*A, 1-B)/2 else 1-(Bias(2-2*A, 1-B)/2, computes the Bias(x, y) function as defined by Kenneth Perlin",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "2",
+            "desc" : "Which output should be used as the default output of the texture. Useful if the type of the operation needs to be animatable.\n0=Product; 1=Ratio; 2=Sum; 3=Difference; 4=Power; 5=Sin; 6=Cos; 7=Min; 8=Max; 9=abs; 10=ceil; 11=exp; 12=floor; 13=log; 14=log10; 15=sqrt; 16=fmod; 17=average; 18=tan; 19=asin; 20=acos; 21=atan; 22=atan2; 23=Bias (Christophe Schlick approximation of Kenneth Perlin's Bias definition); 24=Gain (Christophe Schlick approximation of Kenneth Perlin's Gain definition); 25=Bias (Kenneth Perlin's original Bias definition); 26=Gain (Kenneth Perlin's original Gain definition)",
+            "items" : 
+            [
+                [ "0", "Product", "Product" ],
+                [ "1", "Ratio", "Ratio" ],
+                [ "2", "Sum", "Sum" ],
+                [ "3", "Difference", "Difference" ],
+                [ "4", "Power", "Power" ],
+                [ "5", "Sin", "Sin" ],
+                [ "6", "Cos", "Cos" ],
+                [ "7", "Min", "Min" ],
+                [ "8", "Max", "Max" ],
+                [ "9", "abs", "abs" ],
+                [ "10", "ceil", "ceil" ],
+                [ "11", "exp", "exp" ],
+                [ "12", "floor", "floor" ],
+                [ "13", "log", "log" ],
+                [ "14", "log10", "log10" ],
+                [ "15", "sqrt", "sqrt" ],
+                [ "16", "fmod", "fmod" ],
+                [ "17", "average", "average" ],
+                [ "18", "tan", "tan" ],
+                [ "19", "asin", "asin" ],
+                [ "20", "acos", "acos" ],
+                [ "21", "atan", "atan" ],
+                [ "22", "atan2", "atan2" ],
+                [ "23", "Bias Schlick", "Bias Schlick" ],
+                [ "24", "Gain Schlick", "Gain Schlick" ],
+                [ "25", "Bias Perlin", "Bias Perlin" ],
+                [ "26", "Gain Perlin", "Gain Perlin" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

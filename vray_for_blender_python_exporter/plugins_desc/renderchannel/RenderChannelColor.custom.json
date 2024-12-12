@@ -1,0 +1,47 @@
+{
+    "ID": "RenderChannelColor",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "color_mapping"
+                    },
+                    {
+                        "name": "consider_for_aa"
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "derive_raw_channels"
+                    },
+                    {
+                        "name": "vfb_color_corrections"
+                    },
+                    {
+                        "name": "denoise"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        }
+    ],
+    "Options": {
+        "animatable": false
+    }
+}

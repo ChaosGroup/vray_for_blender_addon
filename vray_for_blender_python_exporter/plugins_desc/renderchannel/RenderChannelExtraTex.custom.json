@@ -1,0 +1,103 @@
+{
+    "ID": "RenderChannelExtraTex",
+    "Name" : "Extra Tex",
+    "Subtype" : "UTILITY",
+    "Parameters": [
+        {
+            "attr" : "exclude_list",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "exclude_list_as_inclusive_set",
+            "options" : {
+                "link_info" : {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "object_select",
+            "type": "TEMPLATE",
+            "desc": "List of objects to include/exclude in the Extra Tex",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "bound_property": "exclude_list",
+                        "mode_bound_property": "exclude_list_as_inclusive_set",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr" : "name",
+            "default" : "Extra Tex"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "object_select",
+                        "label": "Affected objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "consider_for_aa",
+                        "label": "Consider for Anti-Aliasing "
+                    },
+                    {
+                        "name": "affect_matte_objects"
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "force_32_bit_output"
+                    },
+                    {
+                        "name": "force_lossless_compression"
+                    },
+                    {
+                        "name": "denoise"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+           {
+               "name": "texmap"
+           },
+           {
+            "name": "exclude_list",
+            "label": "Objects"
+           }
+       ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "consider_for_aa",
+            "affect_matte_objects",
+            "force_32_bit_output",
+            "force_lossless_compression",
+            "background"
+        ]
+    }
+}

@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "TexMaskMax",
+    "ID" : "TexMaskMax",
+    "Name" : "Mask Max",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The base texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "mask",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The mask texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "invert_mask",
+            "default" : false,
+            "desc" : "true to invert the mask",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

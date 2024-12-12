@@ -1,0 +1,10 @@
+{
+    "ID": "SphereFade",
+    "Parameters": [],
+    "Type": "EFFECT",
+    "Options": {
+        "excluded_parameters": [
+            "gizmos"
+        ]
+    }
+}

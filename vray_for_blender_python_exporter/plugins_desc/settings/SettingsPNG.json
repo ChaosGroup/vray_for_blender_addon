@@ -1,0 +1,38 @@
+
+{
+    "Desciption" : "SettingsPNG",
+    "ID" : "SettingsPNG",
+    "Name" : "Settings PNG",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compression",
+            "default" : 9,
+            "desc" : "Compression for PNG output (0-9)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 9,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "bits_per_channel",
+            "default" : "8",
+            "desc" : "Bits per channel (8 or 16)",
+            "items" : 
+            [
+                [ "8", "8 bits", "8 bits" ],
+                [ "16", "16 bits", "16 bits" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

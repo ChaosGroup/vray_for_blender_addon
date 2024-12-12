@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "TexRemapFloat",
+    "ID" : "TexRemapFloat",
+    "Name" : "Remap Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "value",
+            "default" : 0.0,
+            "desc" : "Value to remap",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "low",
+            "default" : 0.0,
+            "desc" : "Low boundary",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "high",
+            "default" : 1.0,
+            "desc" : "High boundary",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

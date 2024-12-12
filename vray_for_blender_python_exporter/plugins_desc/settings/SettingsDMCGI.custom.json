@@ -1,0 +1,20 @@
+{
+    "ID": "SettingsDMCGI",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "depth"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "subdivs"
+        ]
+    }
+}

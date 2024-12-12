@@ -1,0 +1,138 @@
+
+{
+    "Desciption" : "GeomBifrost",
+    "ID" : "GeomBifrost",
+    "Name" : "Geom Bifrost",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "The path to the OpenVDB file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vdb" ]
+            }
+        },
+        
+        {
+            "attr" : "stream",
+            "default" : 0,
+            "desc" : "If \"file\" is missing, read the vdb data from a memory stream",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "render_grid",
+            "default" : "",
+            "desc" : "The name of the OpenVDB grid to render",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "velocity_grid",
+            "default" : "",
+            "desc" : "The name of the OpenVDB velocity grid to use for motion blur",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "delay_load",
+            "default" : true,
+            "desc" : "If true, delay load the OpenVDB voxels until requested",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "interpolation",
+            "default" : "1",
+            "desc" : "The grid interpolation sampler (0:linear, 1:quadratic: 2:none)",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Quadratic", "Quadratic" ],
+                [ "2", "None", "None" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "If off, shading an intersection with this mesh will not generate a gbuffer",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "positions",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The positions of the particles",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "velocities",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The velocities of the particles",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "userScalar1PP",
+            "default" : 0.0,
+            "desc" : "Custom per particle user scalar",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "ids",
+            "default" : 0,
+            "desc" : "The particle ids",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "age_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle age",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "acceleration_pp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle acceleration",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST"
+        },
+        
+        {
+            "attr" : "texture_coord_u",
+            "default" : 0.0,
+            "desc" : "The u texture coordinate of the particles",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "texture_coord_v",
+            "default" : 0.0,
+            "desc" : "The v texture coordinate of the particles",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

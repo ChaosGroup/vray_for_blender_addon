@@ -1,0 +1,43 @@
+
+{
+    "Desciption" : "xsiUVWGenEnvironment",
+    "ID" : "xsiUVWGenEnvironment",
+    "Name" : "xsi UVW Gen Environment",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_matrix",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Transformation of the input directions",
+            "type" : "MATRIX"
+        },
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation of the resulting UVW coordinates",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "mapping_type",
+            "default" : "1",
+            "desc" : "spherical(0), cylindrical(1), cubic strip(2), cubic cross sideways(3), cubic cross(4)",
+            "items" : 
+            [
+                [ "0", "Spherical", "Spherical" ],
+                [ "1", "Cylindrical", "Cylindrical" ],
+                [ "2", "Cubic strip", "Cubic strip" ],
+                [ "3", "Cubic cross sideways", "Cubic cross sideways" ],
+                [ "4", "Cubic cross", "Cubic cross" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

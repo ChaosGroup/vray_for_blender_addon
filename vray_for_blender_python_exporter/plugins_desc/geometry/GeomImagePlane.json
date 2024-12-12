@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "GeomImagePlane",
+    "ID" : "GeomImagePlane",
+    "Name" : "Geom Image Plane",
+    "Parameters" : [],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

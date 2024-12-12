@@ -1,0 +1,43 @@
+
+{
+    "Desciption" : "SettingsVertexBaker",
+    "ID" : "SettingsVertexBaker",
+    "Name" : "Settings Vertex Baker",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "objects",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "color_set_name",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "bake_rgb_color",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "bake_alpha",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

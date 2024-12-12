@@ -1,0 +1,64 @@
+{
+    "ID": "MtlRenderStats",
+    "Name": "V-Ray Mtl Render Stats",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "",
+            "type": "BOOL",
+            "ui": {},
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "channels"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "camera_visibility",
+                        "label": "Primary Visibility"
+                    },
+                    {
+                        "name": "reflections_visibility",
+                        "label": "Visible in reflections"
+                    },
+                    {
+                        "name": "refractions_visibility",
+                        "label": "Visible in refractions"
+                    },
+                    {
+                        "name": "shadows_visibility",
+                        "label": "Casts shadows"
+                    },
+                    {
+                        "name": "shadows_receive",
+                        "label": "Receives shadows"
+                    },
+                    {
+                        "name": "gi_visibility",
+                        "label": "Visible to GI"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "base_mtl",
+                "type": "BRDF",
+                "label": "Base material"
+            }
+        ]
+    }
+}

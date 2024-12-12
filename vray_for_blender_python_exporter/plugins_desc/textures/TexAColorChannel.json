@@ -1,0 +1,51 @@
+
+{
+    "Desciption" : "TexAColorChannel",
+    "ID" : "TexAColorChannel",
+    "Name" : "AColor Channel",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_a",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color for channel source",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Input Color"
+            }
+        },
+        
+        {
+            "attr" : "mult_a",
+            "default" : 1.0,
+            "desc" : "Multiplier for the result",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Which component of the color should be returned - 0:red;1:green;2:blue;3:alpha;4:intensity",
+            "items" : 
+            [
+                [ "0", "red", "red" ],
+                [ "1", "green", "green" ],
+                [ "2", "blue", "blue" ],
+                [ "3", "alpha", "alpha" ],
+                [ "4", "intensity", "intensity" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

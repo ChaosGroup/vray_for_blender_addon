@@ -1,0 +1,23 @@
+{
+    "Name": "V-Ray RGB to HSV",
+    "Subtype": "UTILITY",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "inRgb"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "color"
+        ]
+    }
+}

@@ -1,0 +1,30 @@
+
+{
+    "Desciption" : "UVWGenObject",
+    "ID" : "UVWGenObject",
+    "Name" : "UVW Gen Object",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation applied to the original UVW values from the geometry",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "duvw_scale",
+            "default" : 1.0,
+            "desc" : "Additional scale factor for the texture derivatives",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "TexXSIFalloff",
+    "ID" : "TexXSIFalloff",
+    "Name" : "XSI Falloff",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "curve_falloff",
+            "default" : 1.0,
+            "desc" : "Curve falloff",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "facing_refl",
+            "default" : 1.0,
+            "desc" : "Facing reflectivity",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "perp_refl",
+            "default" : 1.0,
+            "desc" : "Perpendicular reflectivity",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "white_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Refraction (front) color",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "black_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Reflection (side) color",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

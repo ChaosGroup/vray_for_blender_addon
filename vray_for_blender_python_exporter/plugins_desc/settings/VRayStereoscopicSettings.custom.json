@@ -1,0 +1,30 @@
+{
+    "ID": "VRayStereoscopicSettings",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Use Stereoscopic",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "eye_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "focus_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

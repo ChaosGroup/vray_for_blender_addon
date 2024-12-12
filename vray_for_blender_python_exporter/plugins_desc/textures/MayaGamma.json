@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "MayaGamma",
+    "ID" : "MayaGamma",
+    "Name" : "Maya Gamma",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The input color",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Gamma values",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

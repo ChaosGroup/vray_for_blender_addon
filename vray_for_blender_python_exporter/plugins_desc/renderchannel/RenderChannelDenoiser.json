@@ -1,0 +1,247 @@
+
+{
+    "Desciption" : "RenderChannelDenoiser",
+    "ID" : "RenderChannelDenoiser",
+    "Name" : "Render Channel Denoiser",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "True to enable the denoising render element",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable"
+            }
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "denoiser",
+            "desc" : "The name of the render element containing the denoised image",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Render element name"
+            }
+        },
+        
+        {
+            "attr" : "engine",
+            "default" : "0",
+            "desc" : "The denoising engine to use. The default V-Ray denoiser (0) is slower but may produce better results and has a version that runs on CPUs. The NVIDIA AI denoiser (1) is very fast but may be less accurate and requires a compatible NVIDIA GPU. The Intel Open Image Denoise (2) is fast and runs on CPUs (it utilizes advanced instructions sets like AVX2, AVX512). Note that the three denoising engines use slightly different render elements",
+            "items" : 
+            [
+                [ "0", "Default V-Ray denoiser", "Default V-Ray denoiser" ],
+                [ "1", "NVIDIA AI denoiser", "NVIDIA AI denoiser" ],
+                [ "2", "Intel Open Image Denoise", "Intel Open Image Denoise" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "2",
+            "desc" : "The way the denoiser operates (0 - Only generate the needed render elements without running the denoiser, 1 - Hide the channel with the denoised result in VFB, 2 - Show the channel with the denoised result in VFB)",
+            "items" : 
+            [
+                [ "0", "Only generate render elements", "Only generate render elements" ],
+                
+                [
+                    "1",
+                    "Hide the channel with the denoised result in VFB",
+                    "Hide the channel with the denoised result in VFB"
+                ],
+                
+                [
+                    "2",
+                    "Show the channel with the denoised result in VFB",
+                    "Show the channel with the denoised result in VFB"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "Deprecated. Only single pass denoising is supported",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Single pass denoise on RGB only",
+                    "Single pass denoise on RGB only"
+                ],
+                
+                [
+                    "1",
+                    "Denoise render elements separately",
+                    "Denoise render elements separately"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "preset",
+            "default" : "1",
+            "desc" : "[Does not apply to NVIDIA denoiser and Intel Open Image Denoise] Set the strength and radius to a few predefined values (0 - Mild denoising with strength 0.5 and radius 5, 1 - Default denoising with strength 1 and radius 10, 2 - Strong denoising with strength 2 and radius 15, 3 - Custom values from the \"strength\" and \"radius\" parameters",
+            "items" : 
+            [
+                [ "0", "Mild", "Mild" ],
+                [ "1", "Default", "Default" ],
+                [ "2", "Strong", "Strong" ],
+                [ "3", "Custom", "Custom" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "strength",
+            "default" : 1.0,
+            "desc" : "[Does not apply to NVIDIA denoiser and Intel Open Image Denoise] The main denoiser control. Lower values modify the original image less, but may fail to clean up noise. Larger values are more effective at denoising, but may cause loss of detail. 0.5 is for mild denoising, 1.0 for normal strength and 2.0 for strong denoising",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "radius",
+            "default" : 10.0,
+            "desc" : "[Does not apply to NVIDIA denoiser and Intel Open Image Denoise] The pixel radius within which to look for similar pixel blocks. Larger values are slower, but may produce smoother results. Lower values are faster but may produce blotches. This value does not affect the strength of the denoising. A value of 10 is sufficient for most cases",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 50.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "use_gpu",
+            "default" : false,
+            "desc" : "[Does not apply to NVIDIA denoiser and Intel Open Image Denoise] Enable usage of GPU version if OpenCL support is found",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use GPU acceleration"
+            }
+        },
+        
+        {
+            "attr" : "progressive_update",
+            "default" : 0,
+            "desc" : "Deprecated. This has no effect. Use SettingsImageSampler::progressive_effectsUpdate.gpuSupport=(full)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "generate_render_elements",
+            "default" : "2",
+            "desc" : "Deprecated",
+            "items" : 
+            [
+                [ "0", "Manual", "Manual" ],
+                [ "1", "Depending on denoising type", "Depending on denoising type" ],
+                
+                [
+                    "2",
+                    "All possible denoising elements",
+                    "All possible denoising elements"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "silence_optix_init_error",
+            "default" : false,
+            "desc" : "V-Ray denoiser may be chosen over the NVIDIA denoiser in the event of initialization failure even if the latter is explicitly selected.  This flag determines whether the full error message should be printed to the user or not",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Silence NVIDIA init error"
+            }
+        },
+        
+        {
+            "attr" : "wrap_around_borders",
+            "default" : false,
+            "desc" : "Specifies that the denoised image can be wrapper around the left/right border. The denoiser can then use this information to avoid generating artifacts over the seamed area",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Panorama"
+            }
+        },
+        
+        {
+            "attr" : "temporal_mode",
+            "default" : false,
+            "desc" : "Specifies if NVIDIA AI denoiser should use temporal mode. Recommended for animations",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Temporal"
+            }
+        },
+        
+        {
+            "attr" : "denoise_alpha",
+            "default" : true,
+            "desc" : "Specifies if the alpha channel should be denoised",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Denoise alpha"
+            }
+        },
+        
+        {
+            "attr" : "optix_use_upscale",
+            "default" : false,
+            "desc" : "When denoiser mode is NVIDIA, specifies if the denoiser should upscale",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "NVIDIA AI upscale"
+            }
+        },
+        
+        {
+            "attr" : "oidn_prefilter",
+            "default" : false,
+            "desc" : "When denoiser mode is Intel, specifies if the inputs should be prefiltered before the main denoising pass",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "OIDN prefilter"
+            }
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

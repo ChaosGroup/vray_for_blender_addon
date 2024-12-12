@@ -1,0 +1,82 @@
+{
+    "ID": "MtlRoundEdges",
+    "Name": "V-Ray Mtl Round Edges",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Enable the round edges effect. Only available if the object has a V-Ray material node tree.",
+            "type": "BOOL",
+            "ui": {},
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "radius",
+            "default": 0.01
+        },
+        {
+            "attr": "radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "radius"
+                    },
+                    {
+                        "name": "raytraced_consider_same_object_only",
+                        "label": "Consider Same Object Only"
+                    },
+                    {
+                        "name": "raytraced_mode",
+                        "label": "Corners"
+                    }
+                ]
+            }
+        ],
+        "sidebar": [
+            {
+                "layout": "ROLLOUT",
+                "name": "round_edges",
+                "label": "Round Edges",
+                "use_prop": "use",
+                "attrs": [
+                    {
+                        "name": "radius"
+                    },
+                    {
+                        "name": "raytraced_consider_same_object_only",
+                        "label": "Consider Same Object Only"
+                    },
+                    {
+                        "name": "raytraced_mode",
+                        "label": "Corners"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "base_mtl",
+                "type": "BRDF",
+                "label": "Base material"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "raytraced"
+        ]
+    }
+}

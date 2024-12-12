@@ -1,0 +1,145 @@
+{
+    "ID": "TexRemap",
+    "Name": "V-Ray Remap",
+    "Subtype": "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "input_color",
+                        "label": "Input"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "type",
+                        "label": "Type",
+                        "custom_draw": "drawCurveTemplate"
+                    },
+                    {
+                        "name": "color_spline_type",
+                        "active": {
+                            "cond": "::type=1"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "set range",
+                "label": "Set Range",
+                "attrs": [
+                    {
+                        "name": "input_min"
+                    },
+                    {
+                        "name": "input_max"
+                    },
+                    {
+                        "name": "output_min"
+                    },
+                    {
+                        "name": "output_max"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "color_spline_type",
+            "default" : "0",
+            "desc" : "Color spline type to export",
+            "items" : 
+            [
+                [ "0", "Combined", "Combined"],
+                [ "1", "RGB", "RGB"]
+            ],
+            "type" : "ENUM",
+            "ui" : {},
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "input_min_tex",
+            "ui": { "display_name": "Input Min" },
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "input_max_tex",
+            "ui": { "display_name": "Input Max" },
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "input_min",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "input_max",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr" : "type",
+            "default" : "1",
+            "desc" : "Type of conversion: 1:RemapColor, 2:RemapHSV",
+            "items" : 
+            [
+                [ "1", "Remap Color", "Remap Color" ],
+                [ "2", "Remap HSV", "Remap HSV" ]
+            ]
+        },
+        {
+            "attr": "output_min",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "output_max",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        }
+    ],
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "out_color"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "input_value",
+            "input_bias",
+            "input_bias_tex",
+            "float_positions",
+            "float_values",
+            "float_types",
+            "color_values",
+            "alpha_from_intensity"
+        ]
+    }
+}

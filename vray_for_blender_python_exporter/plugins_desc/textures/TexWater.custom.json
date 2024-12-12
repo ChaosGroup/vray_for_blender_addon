@@ -1,0 +1,81 @@
+{
+    "ID": "TexWater",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": false,
+                        "attrs": [
+                            {
+                                "name": "height_mult"
+                            },
+                            {
+                                "name": "choppy_mult"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "wind_direction"
+                            },
+                            {
+                                "name": "wind_direction_mult"
+                            },
+                            {
+                                "name": "wind_magnitude"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "align": false,
+                "attrs": [
+                    {
+                        "name": "movement_rate"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "align": false,
+                "attrs": [
+                    {
+                        "name": "resolution"
+                    },
+                    {
+                        "name": "patch_size"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "align": false,
+                "attrs": [
+                    {
+                        "name": "seed"
+                    },
+                    {
+                        "name": "use_3d_mapping"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui" : {
+                "display_name": "Mapping"
+            }
+        }
+    ]
+}

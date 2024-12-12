@@ -1,0 +1,227 @@
+
+{
+    "Desciption" : "SettingsGI",
+    "ID" : "SettingsGI",
+    "Name" : "Settings GI",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "on",
+            "default" : false,
+            "desc" : "True to turn GI calculation on",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "On"
+            }
+        },
+        
+        {
+            "attr" : "refract_caustics",
+            "default" : true,
+            "desc" : "Enable refractive caustics",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Refractive Caustics"
+            }
+        },
+        
+        {
+            "attr" : "reflect_caustics",
+            "default" : 0,
+            "desc" : "Enable reflective caustics",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Reflective Caustics"
+            }
+        },
+        
+        {
+            "attr" : "saturation",
+            "default" : 1.0,
+            "desc" : "Saturation factor for the GI contribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Saturation",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "contrast",
+            "default" : 1.0,
+            "desc" : "Contrast factor for the GI contribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Contrast",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "contrast_base",
+            "default" : 0.50,
+            "desc" : "Center point for the contrast curve",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Contrast Base",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_engine",
+            "default" : "0",
+            "desc" : "GI engine to use for the first light bounce",
+            "items" : 
+            [
+                [ "0", "Irradiance Map", "Irradiance Map" ],
+                [ "1", "Photon Map", "Photon Map" ],
+                [ "2", "Brute force", "Brute force" ],
+                [ "3", "Light Cache", "Light Cache" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Primary Engine"
+            }
+        },
+        
+        {
+            "attr" : "primary_multiplier",
+            "default" : 1.0,
+            "desc" : "Multiplier for the primary GI contribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Primary Multiplier",
+                "max" : 1000000.0,
+                "min" : 0.0,
+                "spin_step" : 0.05000000074505806
+            }
+        },
+        
+        {
+            "attr" : "secondary_engine",
+            "default" : "2",
+            "desc" : "GI engine to use for the second and later light bounces",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Photon Map", "Photon Map" ],
+                [ "2", "Brute force", "Brute force" ],
+                [ "3", "Light Cache", "Light Cache" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Secondary Engine"
+            }
+        },
+        
+        {
+            "attr" : "secondary_multiplier",
+            "default" : 1.0,
+            "desc" : "Multiplier for the secondary GI contribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Secondary Multiplier",
+                "max" : 1.0,
+                "min" : 0.0,
+                "spin_step" : 0.05000000074505806
+            }
+        },
+        
+        {
+            "attr" : "ray_distance_on",
+            "default" : false,
+            "desc" : "Enable ray_distance",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Ray Distance On"
+            }
+        },
+        
+        {
+            "attr" : "ray_distance",
+            "default" : 100000.0,
+            "desc" : "GI is traced only up to this distance",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Ray Distance",
+                "max" : 100000.0,
+                "min" : 0.0,
+                "spin_step" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "ao_on",
+            "default" : false,
+            "desc" : "Enable ambient occlusion",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Ambient Occlusion On"
+            }
+        },
+        
+        {
+            "attr" : "ao_amount",
+            "default" : 0.8000000119209290,
+            "desc" : "Ambient occlusion multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "AO Multiplier",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ao_radius",
+            "default" : 10.0,
+            "desc" : "Ambient occlusion radius",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "AO Radius",
+                "max" : 100000000.0,
+                "min" : 0.0,
+                "spin_step" : 0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "ao_subdivs",
+            "default" : 8,
+            "desc" : "Controls the number of AO samples to take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "AO Subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

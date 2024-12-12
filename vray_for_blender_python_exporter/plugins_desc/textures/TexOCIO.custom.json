@@ -1,0 +1,158 @@
+{
+    "Name": "V-Ray OCIO",
+    "Parameters": [
+        {
+            "attr": "config_file",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "basemap"
+                    },
+                    {
+                        "name": "config_src"
+                    },
+                    {
+                        "name": "config_file"
+                    },
+                    {
+                        "name": "inout_type"
+                    },
+                    {
+                        "name": "mode"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "color space",
+                "label": "Color Space",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "colorspace_in",
+                        "label": "In"
+                    },
+                    {
+                        "name": "colorspace_out",
+                        "label": "Out"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "look",
+                "label": "Look",
+                "attrs": [
+                    {
+                        "name": "look_input_colorspace"
+                    },
+                    {
+                        "name": "look_looks"
+                    },
+                    {
+                        "name": "look_output_colorspace"
+                    },
+                    {
+                        "name": "look_direction"
+                    },
+                    {
+                        "name": "look_ignore_errors"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "cdl transform",
+                "label": "CDL Transform",
+                "attrs": [
+                    {
+                        "name": "cdl_slope"
+                    },
+                    {
+                        "name": "cdl_offset"
+                    },
+                    {
+                        "name": "cdl_power"
+                    },
+                    {
+                        "name": "cdl_saturation"
+                    },
+                    {
+                        "name": "cdl_direction"
+                    },
+                    {
+                        "name": "cdl_use_file"
+                    },
+                    {
+                        "name": "cdl_file"
+                    },
+                    {
+                        "name": "cdl_cccid"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "file transform",
+                "label": "File Transform",
+                "attrs": [
+                    {
+                        "name": "filetr_file"
+                    },
+                    {
+                        "name": "filetr_cccid"
+                    },
+                    {
+                        "name": "filetr_direction"
+                    },
+                    {
+                        "name": "filetr_interpolation"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "log convert",
+                "label": "Log Convert",
+                "attrs": [
+                    {
+                        "name": "logconvert_operation"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "display",
+                "label": "Display",
+                "attrs": [
+                    {
+                        "name": "disp_input_colorspace"
+                    },
+                    {
+                        "name": "disp_display_device"
+                    },
+                    {
+                        "name": "disp_view_transform"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "ocio_stored_env",
+            "context_keys",
+            "context_values"
+        ]
+    }
+}

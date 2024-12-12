@@ -1,0 +1,22 @@
+
+{
+    "Desciption" : "TexPerVertexHairSampler",
+    "ID" : "TexPerVertexHairSampler",
+    "Name" : "Per Vertex Hair Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "vertex_values",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Colors for each vertex the hair. Each values should match a vertex from the hair geometry",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

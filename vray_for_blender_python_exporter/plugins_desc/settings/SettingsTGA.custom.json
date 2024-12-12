@@ -1,0 +1,15 @@
+{
+    "ID": "SettingsTGA",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "compression"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

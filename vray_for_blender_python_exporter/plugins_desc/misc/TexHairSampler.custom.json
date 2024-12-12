@@ -1,0 +1,52 @@
+{
+    "Name": "V-Ray Hair Sampler",
+    "Subtype": "UTILITY",
+    "Type": "TEXTURE",
+    "Parameters": [
+        {
+            "attr": "hair_max_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "hair_max_distance"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "distance_along_strand"
+            },
+            {
+                "name": "distance_along_strand_absolute"
+            },
+            {
+                "name": "position_across_strand"
+            },
+            {
+                "name": "random_by_strand"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "hair_color",
+            "hair_incandescence",
+            "hair_transparency"
+        ]
+    }
+}

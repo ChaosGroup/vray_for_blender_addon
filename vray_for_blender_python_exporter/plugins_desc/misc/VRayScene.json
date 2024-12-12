@@ -1,0 +1,676 @@
+
+{
+    "Desciption" : "VRayScene",
+    "ID" : "VRayScene",
+    "Name" : "V Ray Scene",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "filepath",
+            "default" : "",
+            "desc" : "Path to a *.vrscene file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "File Path",
+                "file_extensions" : [ "vrscene" ],
+                "file_names" : [ "V-Ray Scene" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Additional transform for the whole scene",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "use_transform",
+            "default" : true,
+            "desc" : "Whether to use the additional \"transform\" parameter",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "add_nodes",
+            "default" : true,
+            "desc" : "Add nodes from the included files",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Include geometry",
+                "rollout" : "Scene elements"
+            }
+        },
+        
+        {
+            "attr" : "add_lights",
+            "default" : true,
+            "desc" : "Add lights from the included files",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Include lights"
+            }
+        },
+        
+        {
+            "attr" : "anim_override",
+            "default" : false,
+            "desc" : "Override animation settings",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable animation override",
+                "rollout" : "Animation override"
+            }
+        },
+        
+        {
+            "attr" : "anim_speed",
+            "default" : 1.0,
+            "desc" : "Animation playback speed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Speed",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anim_type",
+            "default" : "0",
+            "desc" : "Animation playback type (0 - Loop; 1 - Once; 2 - Ping-Pong; 3 - Still)",
+            "items" : 
+            [
+                [ "0", "Loop", "Loop" ],
+                [ "1", "Once", "Once" ],
+                [ "2", "Ping-Pong", "Ping-Pong" ],
+                [ "3", "Still", "Still" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Playback Type"
+            }
+        },
+        
+        {
+            "attr" : "anim_offset",
+            "default" : 0.0,
+            "desc" : "Animation initial frame offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Offset",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anim_start",
+            "default" : 0,
+            "desc" : "Specifies the first frame of the animation sequence",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Start",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "anim_length",
+            "default" : 0,
+            "desc" : "Specifies the length of the animation sequence",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Length",
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "material_override",
+            "default" : null,
+            "desc" : "Override material",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "hidden_objects",
+            "default" : "",
+            "desc" : "Plugin names list to hide",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "hidden_objects_inclusive",
+            "default" : 1,
+            "desc" : "Specifies if \"hidden_objects\" list is inclusive",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "disable",
+            "default" : false,
+            "desc" : "Disable loader",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : -1,
+            "desc" : "Object ID override",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "user_attributes_bin",
+            "default" : 0,
+            "desc" : "User attributes that will be added to generated nodes in serialized form (refer to BinUserAttributesWriter)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "object_properties",
+            "default" : null,
+            "desc" : "Object properties",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mw_use",
+            "default" : false,
+            "desc" : "Use MtlWrapper",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_use_irrad_map",
+            "default" : true,
+            "desc" : "Allow enable/disable of irradiance map per surface",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use irradiance map",
+                "rollout" : "Additional surface properties"
+            }
+        },
+        
+        {
+            "attr" : "mw_generate_gi",
+            "default" : 1.0,
+            "desc" : "Controls the GI generated by the material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Generated GI mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_receive_gi",
+            "default" : 1.0,
+            "desc" : "Controls the GI received by the material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Received GI mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_generate_caustics",
+            "default" : 1.0,
+            "desc" : "Controls the caustics generated by the material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Generated caustics mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_receive_caustics",
+            "default" : 1.0,
+            "desc" : "Controls the caustics received by the material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Received caustics mult.",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_alpha_contribution",
+            "default" : 1.0,
+            "desc" : "The contribution of the resulting color to the alpha channel",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0,
+                "rollout" : "Matte properties"
+            }
+        },
+        
+        {
+            "attr" : "mw_matte_surface",
+            "default" : false,
+            "desc" : "Makes the material appear as a matte material, which shows the background, instead of the base material, when viewed directly",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_shadows",
+            "default" : false,
+            "desc" : "Turn this on to make shadows visible on the matte surface",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_affect_alpha",
+            "default" : false,
+            "desc" : "Turn this on to make shadows affect the alpha contribution of the matte surface",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_shadow_tint_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Tint for the shadows on the matte surface",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "mw_shadow_brightness",
+            "default" : 1.0,
+            "desc" : "An optional brightness parameter for the shadows on the matte surface.A value of 0.0 will make the shadows completely invisible, while a value of 1.0 will show the full shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_reflection_amount",
+            "default" : 1.0,
+            "desc" : "Shows the reflections of the base material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_refraction_amount",
+            "default" : 1.0,
+            "desc" : "Shows the refractions of the base material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_gi_amount",
+            "default" : 1.0,
+            "desc" : "Determines the amount of gi shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "GI amount",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mw_no_gi_on_other_mattes",
+            "default" : true,
+            "desc" : "This will cause the material to appear as a matte object in reflections, refractions, GI etc for other matte objects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "No GI on other mattes"
+            }
+        },
+        
+        {
+            "attr" : "mw_matte_for_secondary_rays",
+            "default" : "0",
+            "desc" : "Set this to 1 to make the material act as matte for all secondary rays (reflections and refractions); if set to 2, the material will perform automatic projection mapping of the environment map on the matte geometry",
+            "items" : 
+            [
+                [ "0", "Disable", "Disable" ],
+                [ "1", "Without Projection Mapping", "Without Projection Mapping" ],
+                [ "2", "With Projection Mapping", "With Projection Mapping" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Matte for sec. rays"
+            }
+        },
+        
+        {
+            "attr" : "mw_gi_surface_id",
+            "default" : 0,
+            "desc" : "If two objects have different GI surface ids, the light cache samples of the two objects will not be blended",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "GI surface ID",
+                "min" : 0,
+                "rollout" : "Miscellaneous"
+            }
+        },
+        
+        {
+            "attr" : "mw_gi_quality_multiplier",
+            "default" : 1.0,
+            "desc" : "A multiplier for GI quality",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "GI quality mult.",
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "mw_maya_background_shader_compatibility",
+            "default" : false,
+            "desc" : "Setting this to true will make the matte alpha opaque so that the alpha of objects behind the matte won't be seen",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_trace_depth",
+            "default" : -1,
+            "desc" : "The maximum reflection depth (-1 is controlled by the global options)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "mw_channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "mw_generate_render_elements",
+            "default" : true,
+            "desc" : "Setting this to false makes objects to not affect the render elements",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_reflection_exclude",
+            "default" : null,
+            "desc" : "A list of plugins that will be excluded from reflections",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "mw_reflection_list_is_inclusive",
+            "default" : false,
+            "desc" : "Setting this to true will turn the reflection exclude list into inclusive (inverted)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mw_refraction_exclude",
+            "default" : null,
+            "desc" : "A list of plugins that will be excluded from refractions",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "mw_refraction_list_is_inclusive",
+            "default" : false,
+            "desc" : "Setting this to true will turn the refraction exclude list into inclusive (inverted)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_use",
+            "default" : false,
+            "desc" : "Use MtlRenderStats",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_camera_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible from the camera (camera rays)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_reflections_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible in reflections",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_refractions_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible in refractions",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_gi_visibility",
+            "default" : true,
+            "desc" : "Whether the object is visible to GI (generating and receiving)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_shadows_visibility",
+            "default" : true,
+            "desc" : "Whether the object casts shadows (visible to lights for shadow rays)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_shadows_receive",
+            "default" : true,
+            "desc" : "Whether the object receives shadows",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "mrs_visibility",
+            "default" : 1.0,
+            "desc" : "Overall visibility",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "0",
+            "desc" : "Axis flipping: 0 - do not transform the coordinate system, 1 - detect up axis automatically, 2 - transform the axis from 3ds max to Maya, 3 - transform the axis from Maya to 3ds max coordinate system",
+            "items" : 
+            [
+                [ "0", "As Is", "As Is" ],
+                [ "1", "Auto", "Auto" ],
+                [ "2", "Z-Up To Y-Up", "Z-Up To Y-Up" ],
+                [ "3", "Y-Up To Z-Up", "Y-Up To Z-Up" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Flip Axis Mode"
+            }
+        },
+        
+        {
+            "attr" : "use_overrides",
+            "default" : false,
+            "desc" : "Use runtime overrides",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "override_snippet",
+            "default" : "",
+            "desc" : "Runtime plugin parameter overrides. A string in vrscene format",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "override_filepath",
+            "default" : "",
+            "desc" : "Runtime plugin parameter overrides. A path to an override file in vrscene format",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "override_mtl_link",
+            "default" : null,
+            "desc" : "Placeholder for material used for overrides(could be MtlMulti). Needed only so that the material is linked to this plugin",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "Channels"
+            }
+        },
+        
+        {
+            "attr" : "channels_raw",
+            "default" : null,
+            "desc" : "Render channels the raw diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_diffuse",
+            "default" : null,
+            "desc" : "Render channels the diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_specular",
+            "default" : null,
+            "desc" : "Render channels the specular result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_full",
+            "default" : null,
+            "desc" : "Render channels the full (direct+indirect) result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "preload_assets",
+            "default" : false,
+            "desc" : "Performs early loading of the scene assets right after the scene is built",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "override_settings_options",
+            "default" : false,
+            "desc" : "Override the additional options in the sequence render settings",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "override_render_elements",
+            "default" : false,
+            "desc" : "Override the render channels",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "parser",
+            "default" : null,
+            "desc" : "Custom scene parser",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "usd_root_path",
+            "default" : "",
+            "desc" : "The USD stage mask, also known as the root path to import (only valid for USD scene)",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "apply_usd_meters_scale",
+            "default" : 0,
+            "desc" : "Determine if the UsdStage metersPerUnit metadata should be taken into account to automatically scale the scene",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

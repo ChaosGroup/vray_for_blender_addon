@@ -1,0 +1,179 @@
+{
+    "ID": "UVWGenProjection",
+    "Parameters": [
+        {
+            "attr": "type",
+            "default": "2",
+            "desc": "Mapping type (0 - none; 1 - planar; 2 - spherical; 3 - cylindrical; 4 - cubic; 5 - triplanar; 6 - perspective;",
+            "items": [
+                [
+                    "0",
+                    "None",
+                    "None"
+                ],
+                [
+                    "1",
+                    "Planar",
+                    "Planar"
+                ],
+                [
+                    "2",
+                    "Spherical",
+                    "Spherical"
+                ],
+                [
+                    "3",
+                    "Cylindrical",
+                    "Cylindrical"
+                ],
+                [
+                    "5",
+                    "Cubic",
+                    "Cubic"
+                ],
+                [
+                    "6",
+                    "Triplanar",
+                    "Triplanar"
+                ],
+                [
+                    "8",
+                    "Perspective",
+                    "Perspective"
+                ]
+            ],
+            "type": "ENUM",
+            "ui": {}
+        },
+        {
+            "attr": "u_angle",
+            "ui": {
+                "soft_min": 5.0,
+                "soft_max": 360.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "v_angle",
+            "ui": {
+                "soft_min": 5.0,
+                "soft_max": 180.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "uvw_transform",
+            "ui" : {
+                "display_name": "UVW Transform"
+            }
+        }
+    ],
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "object_space"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "properties",
+                "label": "Properties",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "object_space"
+                    },
+                    {
+                        "name": "u_angle",
+                        "active":{
+                            "cond":"::type=2;::type=3"
+                        }
+                    },
+                    {
+                        "name": "v_angle",
+                        "active":{
+                            "cond":"::type=2"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "nsamples",
+                        "label": "Motion Blur Samples"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label": "Mapping",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "wrap_u"
+                            },
+                            {
+                                "name": "crop_u"
+                            },
+                            {
+                                "name": "wrap_v"
+                            },
+                            {
+                                "name": "crop_v"
+                            },
+                            {
+                                "name": "wrap_w"
+                            },
+                            {
+                                "name": "crop_w"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "user_attribute_scale_enabled",
+                        "label": "Use Additional Scale"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "uvw_transform_tex",
+            "direction",
+            "hide_backface",
+            "hide_occluded",
+            "include_overscan",
+            "fitfill",
+            "fittype",
+            "film_gate_w",
+            "film_gate_h",
+            "camera_settings",
+            "camera_view",
+            "bitmap",
+            "rest_position_tex",
+            "rest_normal_tex"
+        ],
+        "animatable": true
+    }
+}

@@ -1,0 +1,115 @@
+
+{
+    "Desciption" : "TexWater",
+    "ID" : "TexWater",
+    "Name" : "Water",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "height_mult",
+            "default" : 1.0,
+            "desc" : "multiplier for the height of the water",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "wind_direction",
+            "default" : 0.0,
+            "desc" : "direction of the wind",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "wind_magnitude",
+            "default" : 0.0,
+            "desc" : "magnitude of the wind",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "wind_direction_mult",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "choppy_mult",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "movement_rate",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "seed",
+            "default" : 1,
+            "desc" : "Used to produce different waters",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "resolution",
+            "default" : "4",
+            "desc" : "Resolution -> real resolution is 2^res",
+            "items" : 
+            [
+                [ "0", "32", "32" ],
+                [ "1", "64", "64" ],
+                [ "2", "128", "128" ],
+                [ "3", "256", "256" ],
+                [ "4", "512", "512" ],
+                [ "5", "1024", "1024" ],
+                [ "6", "2048", "2048" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "patch_size",
+            "default" : 128.0,
+            "desc" : "Size of the patch -> real resolution is 2^res",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

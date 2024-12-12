@@ -1,0 +1,220 @@
+{
+    "ID": "BRDFCarPaint2",
+    "Name": "V-Ray Car Paint 2 Mtl",
+    "Parameters": [
+        {
+            "attr": "base_glossiness_tail",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "base_bump_color",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "base_bump_amount",
+            "default": 1.0,
+            "ui": {
+                "soft_min": -5.0,
+                "soft_max": 5.0
+            }
+        },
+        {
+            "attr": "flake_random_color",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "flake_orientation_tail",
+            "ui": {
+                "soft_max": 100.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "flake_glossiness",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "flake_scale",
+            "default": 0.5
+        },
+        {
+            "attr": "flake_scale_triplanar",
+            "ui": {
+                "soft_max": 100.0,
+                "spin_step": 1.0,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "flake_map_size",
+            "ui": {
+                "soft_max": 4096,
+                "spin_step": 32
+            }
+        },
+        {
+            "attr": "coat_bump_amount",
+            "default": 1.0,
+            "ui": {
+                "soft_min": -5.0,
+                "soft_max": 5.0
+            }
+        },
+        {
+            "attr": "coat_bump_color",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "base layer parameters",
+                "label": "Base Layer Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "base_color"
+                    },
+                    {
+                        "name": "base_reflection"
+                    },
+                    {
+                        "name": "base_glossiness"
+                    },
+                    {
+                        "name": "base_glossiness_tail"
+                    },
+                    {
+                        "name": "base_traceReflections"
+                    },
+                    {
+                        "name": "base_bump_amount"
+                    },
+                    {
+                        "name": "base_bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "flake layer parameters",
+                "label": "Flake Layer Parameters",
+                "attrs": [
+                    {
+                        "name": "flake_color"
+                    },
+                    {
+                        "name": "flake_orientation"
+                    },
+                    {
+                        "name": "flake_orientation_tail"
+                    },
+                    {
+                        "name": "flake_glossiness"
+                    },
+                    {
+                        "name": "flake_density"
+                    },
+                    {
+                        "name": "flake_scale"
+                    },
+                    {
+                        "name": "flake_scale_triplanar"
+                    },
+                    {
+                        "name": "flake_size"
+                    },
+                    {
+                        "name": "flake_map_size"
+                    },
+                    {
+                        "name": "flake_seed"
+                    },
+                    {
+                        "name": "mapping_type"
+                    },
+                    {
+                        "name": "mapping_channel"
+                    },
+                    {
+                        "name": "flake_traceReflections"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "coat layer parameters",
+                "label": "Coat Layer Parameters",
+                "attrs": [
+                    {
+                        "name": "coat_color"
+                    },
+                    {
+                        "name": "coat_amount"
+                    },
+                    {
+                        "name": "coat_ior"
+                    },
+                    {
+                        "name": "coat_glossiness"
+                    },
+                    {
+                        "name": "coat_traceReflections"
+                    },
+                    {
+                        "name": "coat_bump_amount"
+                    },
+                    {
+                        "name": "coat_bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "traceReflections"
+                    },
+                    {
+                        "name": "trace_depth"
+                    },
+                    {
+                        "name": "doubleSided"
+                    },
+                    {
+                        "name": "cutoff_threshold"
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "base_bump_float",
+            "coat_bump_float",
+            "subdivs",
+            "flake_uvwgen",
+            "use_environment_override",
+            "environment_priority"
+        ]
+    }
+}

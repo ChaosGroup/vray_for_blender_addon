@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexModoReflectionRoughness",
+    "ID" : "TexModoReflectionRoughness",
+    "Name" : "Modo Reflection Roughness",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "blurry_reflections",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "modo_reflection_roughness",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

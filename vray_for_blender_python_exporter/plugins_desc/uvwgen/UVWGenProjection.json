@@ -1,0 +1,338 @@
+
+{
+    "Desciption" : "UVWGenProjection",
+    "ID" : "UVWGenProjection",
+    "Name" : "UVW Gen Projection",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Initial transformation on the uvw coordinates, before applying the mapping type and other parameters",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_transform_tex",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A texture overriding uvw_transform",
+            "type" : "TRANSFORM_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tex_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Final transformation on the resulting uvw coordinates, after applying the mapping type and other parameters",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "type",
+            "default" : "1",
+            "desc" : "Mapping type (0 - none; 1 - planar; 2 - spherical; 3 - cylindrical; 4 - ball; 5 - cubic; 6 - triplanar; 8 - perspective; 9 - modo cubic; 10 - modo box; 11 - c4d spherical; 12 - c4d cylindrical; 13 - c4d cubic; 14 - Rhino Box; 15 - Object",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Planar", "Planar" ],
+                [ "2", "Spherical", "Spherical" ],
+                [ "3", "Cylindrical", "Cylindrical" ],
+                [ "4", "Ball", "Ball" ],
+                [ "5", "Cubic", "Cubic" ],
+                [ "6", "Triplanar", "Triplanar" ],
+                [ "8", "Perspective", "Perspective" ],
+                [ "9", "Modo cubic", "Modo cubic" ],
+                [ "10", "Modo box", "Modo box" ],
+                [ "11", "Cinema 4D Spherical", "Cinema 4D Spherical" ],
+                [ "12", "Cinema 4D Cylindrical", "Cinema 4D Cylindrical" ],
+                [ "13", "Cinema 4D Cubic", "Cinema 4D Cubic" ],
+                [ "14", "Rhino Box", "Rhino Box" ],
+                [ "15", "Object", "Object" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : 0,
+            "desc" : "This is used to differentiate between UVW generators exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, 2 - Cinema4D, ..",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u_angle",
+            "default" : 3.141592741012573,
+            "desc" : "The angle that corresponds to U=1 for spherical mapping",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "v_angle",
+            "default" : 1.570796370506287,
+            "desc" : "The angle that corresponds to V=1 for spherical mapping",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "camera_settings",
+            "default" : null,
+            "desc" : "SettingsCamera plugin used for the 'perspective' mapping type",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "camera_view",
+            "default" : null,
+            "desc" : "RenderView plugin used for the 'perspective' mapping type",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fitfill",
+            "default" : "0",
+            "desc" : "0 - Fit fill; 1 - Horizontal; 2 - Vertical;",
+            "items" : 
+            [
+                [ "0", "Fit fill", "Fit fill" ],
+                [ "1", "Horizontal", "Horizontal" ],
+                [ "2", "Vertical", "Vertical" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fittype",
+            "default" : "0",
+            "desc" : "0 - None; 1 - Match camera film gate; 2 - Match camera resolution;",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Match camera file gate", "Match camera file gate" ],
+                [ "2", "Match camera resolution", "Match camera resolution" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bitmap",
+            "default" : null,
+            "desc" : "If we are projecting a bitmap, this is the bitmap's buffer, we need it to implement vertical/horizontal fit",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_gate_w",
+            "default" : 1.0,
+            "desc" : "Film gate width for 'perspective' mapping type",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_gate_h",
+            "default" : 1.0,
+            "desc" : "Film gate height for 'perspective' mapping type",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hide_backface",
+            "default" : false,
+            "desc" : "Determine whether to project on back faces of polygons when in perspective mode",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hide_occluded",
+            "default" : false,
+            "desc" : "Determine whether to project on occluded points when in perspective mode",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "object_space",
+            "default" : false,
+            "desc" : "If true the projection will be applied in the object space of the currently shaded geometry",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "include_overscan",
+            "default" : false,
+            "desc" : "True to include camera overscan in perspective mode",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of uvw transform samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "direction",
+            "default" : "0",
+            "desc" : "Direction of projection for planar, spherical and cylindrical projections (0 - both; 1 - forward; 2 - backward)",
+            "items" : 
+            [
+                [ "0", "Both", "Both" ],
+                [ "1", "Forward", "Forward" ],
+                [ "2", "Backward", "Backward" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_u",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_v",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_w",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_u",
+            "default" : "0",
+            "desc" : "1 to crop in the u-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_v",
+            "default" : "0",
+            "desc" : "1 to crop in the v-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_w",
+            "default" : "0",
+            "desc" : "1 to crop in the w-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rest_position_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture to be used as reference vertices for projections. Usually TexUserColor sampling geometry map channel. For V-Ray GPU only TexUserColor is considered",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rest_normal_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture to be used as reference normals for tri-planar and cubic projection. Usually TexUserColor sampling geometry map channel. For V-Ray GPU only TexUserColor is considered",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_reference_points",
+            "default" : "1",
+            "desc" : "0 - Do not use reference points, 1 - Use reference mesh / rest attributes for projection calculations as sampled from the 'rest' textures, 2 - Use the reference points, but apply additional object-to-world transformation (only for camera projection). Ignored if object_space=1",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Direct Reference", "Direct Reference" ],
+                [ "2", "World Transformed Reference", "World Transformed Reference" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Use Reference Points for Projections"
+            }
+        },
+        
+        {
+            "attr" : "user_attribute_scale_enabled",
+            "default" : false,
+            "desc" : "Enables the additional scaling by the '__vray_uvwscale' user attribute from objects",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

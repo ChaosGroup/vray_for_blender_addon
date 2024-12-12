@@ -1,0 +1,23 @@
+{
+    "ID": "UVWGenObject",
+    "Parameters": [
+        {
+            "attr" : "duvw_scale",
+            "options" : {
+                "visible": false
+            }
+        },
+        {
+            "attr": "uvw_transform",
+            "ui" : {
+                "display_name": "UVW Transform"
+            }
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "duvw_scale"
+        ]
+    }
+}

@@ -1,0 +1,43 @@
+
+{
+    "Desciption" : "TexMayaFluidProcedural",
+    "ID" : "TexMayaFluidProcedural",
+    "Name" : "Maya Fluid Procedural",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "1",
+            "desc" : "0 : constant(1.0); 1 : X gradient; 2 : Y gradient; 3 : Z gradient; 4 : center gradient; 5 : -X gradient; 6 : -Y gradient; 7 : -Z gradient; 8 : sphere; 9 : cube; 10 : cone; 11 : double cone;",
+            "items" : 
+            [
+                [ "0", "Constant(1.0)", "Constant(1.0)" ],
+                [ "1", "X gradient", "X gradient" ],
+                [ "2", "Y gradient", "Y gradient" ],
+                [ "3", "Z gradient", "Z gradient" ],
+                [ "4", "Center gradient", "Center gradient" ],
+                [ "5", "-X gradient", "-X gradient" ],
+                [ "6", "-Y gradient", "-Y gradient" ],
+                [ "7", "-Z gradient", "-Z gradient" ],
+                [ "8", "Sphere", "Sphere" ],
+                [ "9", "Cube", "Cube" ],
+                [ "10", "Cone", "Cone" ],
+                [ "11", "Double cone", "Double cone" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "edge_fade_out",
+            "default" : 0.0,
+            "desc" : "Since the cube drop-off shape is computed a little differently, we need this here for this particular case",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

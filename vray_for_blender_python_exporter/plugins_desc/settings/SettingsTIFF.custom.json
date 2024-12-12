@@ -1,0 +1,18 @@
+{
+    "ID": "SettingsTIFF",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "bits_per_channel"
+                    },
+                    {
+                        "name": "interleaved"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

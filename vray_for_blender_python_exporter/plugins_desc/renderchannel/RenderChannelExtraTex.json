@@ -1,0 +1,104 @@
+
+{
+    "Desciption" : "RenderChannelExtraTex",
+    "ID" : "RenderChannelExtraTex",
+    "Name" : "Render Channel Extra Tex",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "ExtraTexChannel",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "consider_for_aa",
+            "default" : true,
+            "desc" : "true to consider this render element for anti-aliasing (may slow down rendering)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider for Anti-Aliasing"
+            }
+        },
+        
+        {
+            "attr" : "affect_matte_objects",
+            "default" : true,
+            "desc" : "false to not affect Matte Objects",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "texmap",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The texture that will be rendered into this channel",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "exclude_list",
+            "default" : null,
+            "desc" : "Depending on the value of exclude_list_as_inclusive_set, a list of plugins that will be affected or ignored by the texture",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "exclude_list_as_inclusive_set",
+            "default" : false,
+            "desc" : "When true apply extra texture only to objects in exclude_list. When false apply extra texture to all objects out of exclude_list",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "force_32_bit_output",
+            "default" : false,
+            "desc" : "Forces 32-bit float output even in half-float images",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "force_lossless_compression",
+            "default" : false,
+            "desc" : "Forces lossless compression for this channel when DWAA/DWAB compression is used",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "denoise",
+            "default" : false,
+            "desc" : "true to denoise the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "background",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The texture that will be used as background",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

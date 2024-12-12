@@ -1,0 +1,48 @@
+{
+    "ID": "GeomStaticMesh",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "primary_visibility"
+                    },
+                    {
+                        "name": "dynamic_geometry"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "label": "OpenSubdiv",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "osd_subdiv_type"
+                    },
+                    {
+                        "label": "Level",
+                        "name": "osd_subdiv_level"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "osd_preserve_map_borders"
+                    },
+                    {
+                        "name": "osd_preserve_geometry_borders"
+                    },
+                    {
+                        "name": "osd_subdiv_uvs"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

@@ -1,0 +1,51 @@
+{
+    "ID": "GeomStaticSmoothedMesh",
+    "Name" : "V-Ray Subdivision",
+    "Parameters":
+    [
+        {
+            "attr" : "water_level",
+            "default" : -1.0
+        },
+        {
+            "attr" : "use_globals",
+            "default" : false
+        }
+    ],
+    "Node":{
+        "widgets": [],
+        "input_sockets":[]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "edge_length"
+                    },
+                    {
+                        "name": "view_dep",
+                        "label": "View Dependent"
+                    },
+                    {
+                        "name": "max_subdivs"
+                    },
+                    {
+                        "name": "use_bounds",
+                        "label": "Tight Bounds"
+                    },
+                    {
+                        "name": "displacement_amount",
+                        "label": "Amount"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "mesh"
+        ]
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "ID": "CameraPhysical",
+    "Parameters": [
+        {
+            "attr": "lens_file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "auto_lens_shift",
+            "default": false,
+            "desc": "Calculate lens shift automatically",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Use Physical Camera",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "subdivs",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "focal_length",
+            "default": 50.0,
+            "get": "propertyGet",
+            "set": "propertySet",
+            "precision": 3
+        },
+        {
+            "attr": "focus_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "target_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Type": "CAMERA",
+    "Options": {
+        "excluded_parameters": [
+            "subdivs"
+        ],
+        "animatable": false
+    },
+    "excluded_parameters": [
+        "subdivs"
+    ]
+}

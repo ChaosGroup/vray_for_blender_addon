@@ -1,0 +1,29 @@
+{
+    "ID": "MayaGamma",
+    "Node":{
+        "widgets": [
+            {
+                "layout": "ROW",
+                "attrs": [
+                    {
+                        "label": "Gamma",
+                        "name": "gamma"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROW",
+                "attrs": [
+                    {
+                        "label": "Gamma",
+                        "name": "gamma"
+                    }
+                ]
+            }
+        ]
+    }
+}

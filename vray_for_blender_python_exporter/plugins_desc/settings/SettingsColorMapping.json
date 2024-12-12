@@ -1,0 +1,159 @@
+
+{
+    "Desciption" : "SettingsColorMapping",
+    "ID" : "SettingsColorMapping",
+    "Name" : "Settings Color Mapping",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "Type of color mapping",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Exponential", "Exponential" ],
+                [ "2", "HSV exponential", "HSV exponential" ],
+                [ "3", "Intensity exponential", "Intensity exponential" ],
+                [ "4", "Gamma correction", "Gamma correction" ],
+                [ "5", "Intensity gamma", "Intensity gamma" ],
+                [ "6", "Reinhard", "Reinhard" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Type"
+            }
+        },
+        
+        {
+            "attr" : "affect_background",
+            "default" : true,
+            "desc" : "True if color mapping should affect the background",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect background"
+            }
+        },
+        
+        {
+            "attr" : "dark_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for dark colors",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Dark multiplier",
+                "max" : 1000.0,
+                "min" : -1000.0
+            }
+        },
+        
+        {
+            "attr" : "bright_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for bright colors",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Bright multiplier",
+                "max" : 1000.0,
+                "min" : -1000.0
+            }
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "Additional gamma correction. What gets affected depends on the value of \"adaptation_only\"",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gamma",
+                "max" : 20.0,
+                "min" : 0.05000000074505806
+            }
+        },
+        
+        {
+            "attr" : "subpixel_mapping",
+            "default" : false,
+            "desc" : "True if the color mapping should be applied on a subpixel level",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Subpixel mapping"
+            }
+        },
+        
+        {
+            "attr" : "clamp_output",
+            "default" : false,
+            "desc" : "True if colors should be clamped after color mapping",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Clamp output"
+            }
+        },
+        
+        {
+            "attr" : "clamp_level",
+            "default" : 1.0,
+            "desc" : "The level at which colors will be clamped if clamping is on",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Clamp level",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "adaptation_only",
+            "default" : "0",
+            "desc" : "Specifies whether color mapping and gamma are applied to the image: 0 - both color mapping and gamma are applied; 1 - nothing is applied; 2 - only color mapping is applied",
+            "items" : 
+            [
+                [ "0", "Color mapping and gamma", "Color mapping and gamma" ],
+                [ "1", "None (don't apply anything)", "None (don't apply anything)" ],
+                [ "2", "Color mapping only (no gamma)", "Color mapping only (no gamma)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "linearWorkflow",
+            "default" : false,
+            "desc" : "DEPRECATED! Only for porting legacy scenes",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Linear workflow"
+            }
+        },
+        
+        {
+            "attr" : "exposure",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Additional image exposure multiplier",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Image exposure"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

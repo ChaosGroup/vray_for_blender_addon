@@ -1,0 +1,96 @@
+
+{
+    "Desciption" : "RenderChannelColorModo",
+    "ID" : "RenderChannelColorModo",
+    "Name" : "Render Channel Color Modo",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "ColorChannel",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "alias",
+            "default" : 1000,
+            "desc" : "Internal unique identifier for this channel type",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "color_mapping",
+            "default" : false,
+            "desc" : "true to apply color mapping to the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "consider_for_aa",
+            "default" : false,
+            "desc" : "true to consider this render element for anti-aliasing (may slow down rendering)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider for Anti-Aliasing"
+            }
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "derive_raw_channels",
+            "default" : true,
+            "desc" : "true if raw channels should be derived from the respective color and filter channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "vfb_color_corrections",
+            "default" : true,
+            "desc" : "False to disable ALL VFB color corrections(sRGB, curves, white balance, etc...) when saving the channel data to a file or showing it on a display. True to apply VFB color corrections when saving the channel data to a file or showing it on a display. If true some color corrections might still be disabled, based on the type of file being saved",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "denoise",
+            "default" : false,
+            "desc" : "true to denoise the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "aa_override_foreground_intensity",
+            "default" : false,
+            "desc" : "USE WITH CAUTION - setting this to true can increase render times significantly ! Used only when consider_for_aa is true",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "aa_foreground_intensity",
+            "default" : 0.0,
+            "desc" : "This should be setup by the exporter. It should have a unique value for each render element that has it enabled. And the minimum difference between these values should be big enough to achieve good AA on black/white edges",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

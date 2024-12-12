@@ -1,0 +1,350 @@
+
+{
+    "Desciption" : "SettingsRTEngine",
+    "ID" : "SettingsRTEngine",
+    "Name" : "Settings RT Engine",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "trace_depth",
+            "default" : 5,
+            "desc" : "Deprecated, use SettingsOptions::mtl_maxDepth. Use Maximum trace depth for reflections/refractions etc",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Trace depth",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "gi_depth",
+            "default" : 3,
+            "desc" : "Maximum trace depth for GI",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "GI depth",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "cpu_bundle_size",
+            "default" : 64,
+            "desc" : "Number of samples to bundle for the V-Ray engine in one thread",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "CPU Ray bundle size",
+                "max" : 1024,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "cpu_samples_per_pixel",
+            "default" : 4,
+            "desc" : "Number of samples per pixel for the V-Ray engine",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "CPU Rays per pixel",
+                "max" : 128,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "gpu_bundle_size",
+            "default" : 256,
+            "desc" : "Number of samples to bundle for the V-Ray GPU engine in one thread",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "GPU Ray bundle size",
+                "max" : 1024,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "gpu_samples_per_pixel",
+            "default" : 16,
+            "desc" : "Number of samples per pixel for the V-Ray GPU engine",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "GPU Rays per pixel",
+                "max" : 128,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "low_gpu_thread_priority",
+            "default" : false,
+            "desc" : "When true, V-Ray GPU tries to utilize the GPUs with attached displays less. If this is true, it works best with gpu_samples_per_pixel=1 and gpu_bundle_size=64 (or less)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Low GPU thread priority"
+            }
+        },
+        
+        {
+            "attr" : "coherent_tracing",
+            "default" : false,
+            "desc" : "true to enable coherent tracing of gi/reflections/refractions etc",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Coherent tracing"
+            }
+        },
+        
+        {
+            "attr" : "stereo_mode",
+            "default" : false,
+            "desc" : "Non-zero to enable side-by-side stereo rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable stereo"
+            }
+        },
+        
+        {
+            "attr" : "stereo_eye_distance",
+            "default" : 6.50,
+            "desc" : "Distance between the two cameras for stereo mode",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Stereo eye distance"
+            }
+        },
+        
+        {
+            "attr" : "stereo_focus",
+            "default" : "2",
+            "desc" : "Focus mode (0 - none, 1 - rotation, 2 - shear)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Rotation", "Rotation" ],
+                [ "2", "Shear", "Shear" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Stereo focus mode"
+            }
+        },
+        
+        {
+            "attr" : "opencl_texsize",
+            "default" : 512,
+            "desc" : "GPU maximum texture size if the value of opencl_resizeTextures allows resizing. Bigger textures are scaled to fit this size",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "GPU Texture Size",
+                "max" : 8192,
+                "min" : 64
+            }
+        },
+        
+        {
+            "attr" : "opencl_resizeTextures",
+            "default" : "1",
+            "desc" : "Texture transfer mode for the GPU. Note that on-demand mipmapping is available only in non-interactive mode",
+            "items" : 
+            [
+                [ "0", "Full size textures", "Full size textures" ],
+                [ "1", "Resize textures", "Resize textures" ],
+                [ "2", "On-demand mipmapping", "On-demand mipmapping" ],
+                [ "3", "Compressed", "Compressed" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "GPU Resize textures"
+            }
+        },
+        
+        {
+            "attr" : "opencl_textureFormat",
+            "default" : "1",
+            "desc" : "Format for the textures on the GPU (0 - 32-bit float per channel; 1 - 16-bit half float per channel; 2 - 8-bit per channel)",
+            "items" : 
+            [
+                [ "0", "32-bit float per channel", "32-bit float per channel" ],
+                [ "1", "16-bit half float per channel", "16-bit half float per channel" ],
+                [ "2", "8-bit per channel", "8-bit per channel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "GPU Texture Format"
+            }
+        },
+        
+        {
+            "attr" : "progressive_samples_per_pixel",
+            "default" : false,
+            "desc" : "Progressive increase for 'Rays per pixel' (from 1 to real value). Use this for faster feadback",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Progressive rays per pixel"
+            }
+        },
+        
+        {
+            "attr" : "undersampling",
+            "default" : 4,
+            "desc" : "Non-zero to use undersampling, 0 otherwise. The value specifies the blur resolution. Value of n means 1/(2^n) initial resolution in each dimension",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Undersampling",
+                "max" : 5,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "disable_render_elements",
+            "default" : false,
+            "desc" : "If true, the interactive engine will produce only RGBA. Default is false",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Disable render elements"
+            }
+        },
+        
+        {
+            "attr" : "max_render_time",
+            "default" : 0.0,
+            "desc" : "Max render time in minutes (0 = inf)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max. render time (min)",
+                "max" : 525600.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_sample_level",
+            "default" : 10000,
+            "desc" : "Max paths per pixel (0 = inf)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max. paths per pixel",
+                "max" : 1000000000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "noise_threshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Noise threshold for the image sampler (0 = none)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max. noise"
+            }
+        },
+        
+        {
+            "attr" : "max_draw_interval",
+            "default" : 0,
+            "desc" : "Max time, in milliseconds, between (partial) image updates (0=disable partial image updates)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "min_draw_interval",
+            "default" : 0,
+            "desc" : "Min time, in milliseconds, between image updates (0=show all frames)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "interactive",
+            "default" : 0,
+            "desc" : "Flag used to disable some production-only features in interactive mode",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "enable_bucket_sampler",
+            "default" : 0,
+            "desc" : "If 1, V-Ray GPU will check the sampler type in SettingsImageSampler, and it will use the settings there, if there sampler type is \"bucket\". Default is (0=use progressive)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "out_of_core",
+            "default" : false,
+            "desc" : "When true, V-Ray GPU Out-of-core codepath will be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Out of core"
+            }
+        },
+        
+        {
+            "attr" : "disable_auto_rpp",
+            "default" : false,
+            "desc" : "When true, overrides and disables the auto RPP and auto bundle size options",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Disable auto RPP"
+            }
+        },
+        
+        {
+            "attr" : "out_of_core_textures",
+            "default" : false,
+            "desc" : "When true, V-Ray GPU Out-of-core pinned memory allocation will be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Out of core textures"
+            }
+        },
+        
+        {
+            "attr" : "out_of_core_textures_threshold",
+            "default" : 1,
+            "desc" : "Textures larger than this threshold (in MB) will get allocated in pinned memory",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Out of core textures threshold",
+                "max" : 10000,
+                "min" : 0
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

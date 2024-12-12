@@ -1,0 +1,92 @@
+
+{
+    "Desciption" : "TexMayaFluidTransformed",
+    "ID" : "TexMayaFluidTransformed",
+    "Name" : "Maya Fluid Transformed",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "object_to_world",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation from object(texture) space to world space",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "object_to_world_autosize",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation from object(texture) space to world space excluding the dynamic offset from auto-resize",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "fluid_tex",
+            "default" : null,
+            "desc" : "The base texture. Should support the EXT_MAYA_FLUID_TEXTURE interface",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "fluid_value_scale",
+            "default" : 1.0,
+            "desc" : "Multiplier for the value taken from fluid_tex",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "noise_tex_on",
+            "default" : false,
+            "desc" : "Is the built-in noise enabled ?",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "noise_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The fluid's built-in noise",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "noise_gain",
+            "default" : 0.0,
+            "desc" : "Tells how much of the noise should be blended with the grid/gradient values",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "noise_size",
+            "default" : 1.0,
+            "desc" : "The size of the fluid container used for noise calculation. In Maya it's the real size scaled by 0.2",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "dynamic_offset_x",
+            "default" : 0.0,
+            "desc" : "The x dynamic offset of the fluid container",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "dynamic_offset_y",
+            "default" : 0.0,
+            "desc" : "The y dynamic offset of the fluid container",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "dynamic_offset_z",
+            "default" : 0.0,
+            "desc" : "The z dynamic offset of the fluid container",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

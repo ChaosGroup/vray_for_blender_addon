@@ -1,0 +1,558 @@
+
+{
+    "Desciption" : "BRDFAlSurface",
+    "ID" : "BRDFAlSurface",
+    "Name" : "Al Surface",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Overall bump map (applied to all components)",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "rollout" : "Bump",
+                "tab" : "V-Ray alSurface"
+            }
+        },
+        
+        {
+            "attr" : "bump_amount",
+            "default" : 1.0,
+            "desc" : "Bump amount",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "Opacity map",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "Diffuse and Opacity"
+            }
+        },
+        
+        {
+            "attr" : "diffuse",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The diffuse surface color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Diffuse Color"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_strength",
+            "default" : 1.0,
+            "desc" : "The strength of the diffuse component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "diffuse_bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Additional diffuse bump map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "diffuse_bump_amount",
+            "default" : 1.0,
+            "desc" : "Diffuse bump amount",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "diffuse_bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect1",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The first specular color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Color",
+                "rollout" : "Reflection 1"
+            }
+        },
+        
+        {
+            "attr" : "reflect1_strength",
+            "default" : 1.0,
+            "desc" : "The strength of the first specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Strength",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "reflect1_roughness",
+            "default" : 0.50,
+            "desc" : "The roughness of the first specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Roughness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "reflect1_ior",
+            "default" : 1.399999976158142,
+            "desc" : "The IOR for the first specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 IOR"
+            }
+        },
+        
+        {
+            "attr" : "reflect1_distribution",
+            "default" : "0",
+            "desc" : "The BRDF distribution type for the first specular component (0 - Beckmann, 1 - GGX)",
+            "items" : 
+            [
+                [ "0", "Beckmann", "Beckmann" ],
+                [ "1", "GGX", "GGX" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Distribution"
+            }
+        },
+        
+        {
+            "attr" : "reflect1_bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Additional bump map for the first specular component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Reflect 1 Bump Map"
+            }
+        },
+        
+        {
+            "attr" : "reflect1_bump_amount",
+            "default" : 1.0,
+            "desc" : "Additional bump amount for the first specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Bump Amount"
+            }
+        },
+        
+        {
+            "attr" : "reflect1_bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Reflect 1 Bump Type"
+            }
+        },
+        
+        {
+            "attr" : "reflect2",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The second specular color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Color",
+                "rollout" : "Reflection 2"
+            }
+        },
+        
+        {
+            "attr" : "reflect2_strength",
+            "default" : 0.0,
+            "desc" : "The strength of the second specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Strength",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "reflect2_roughness",
+            "default" : 0.50,
+            "desc" : "The roughness of the second specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Roughness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "reflect2_ior",
+            "default" : 1.399999976158142,
+            "desc" : "The IOR for the second specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 IOR"
+            }
+        },
+        
+        {
+            "attr" : "reflect2_distribution",
+            "default" : "0",
+            "desc" : "The BRDF distribution type for the second specular component (0 - Beckmann, 1 - GGX)",
+            "items" : 
+            [
+                [ "0", "Beckmann", "Beckmann" ],
+                [ "1", "GGX", "GGX" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Distribution"
+            }
+        },
+        
+        {
+            "attr" : "reflect2_bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Additional bump map for the second specular component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Reflect 2 Bump Map"
+            }
+        },
+        
+        {
+            "attr" : "reflect2_bump_amount",
+            "default" : 1.0,
+            "desc" : "Additional bump amount for the second specular component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Bump Amount"
+            }
+        },
+        
+        {
+            "attr" : "reflect2_bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Reflect 2 Bump Type"
+            }
+        },
+        
+        {
+            "attr" : "sss_mix",
+            "default" : 0.0,
+            "desc" : "Mix between the diffuse component and the SSS component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS Mix",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "SSS"
+            }
+        },
+        
+        {
+            "attr" : "sss_mode",
+            "default" : "0",
+            "desc" : "Sub-surface scattering mode (0 - diffusion; 1 - directional)",
+            "items" : 
+            [
+                [ "0", "Diffusion", "Diffusion" ],
+                [ "1", "Directional", "Directional" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "SSS Mode"
+            }
+        },
+        
+        {
+            "attr" : "sss_density_scale",
+            "default" : 1.0,
+            "desc" : "Scale for the SSS effect; smaller values make light go deeper into the object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "SSS Density Scale",
+                "min" : 9.999999974752427e-07
+            }
+        },
+        
+        {
+            "attr" : "sss1_weight",
+            "default" : 1.0,
+            "desc" : "Weight of the first SSS component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 1 Weight",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sss1_color",
+            "default" : [ 0.4390000104904175, 0.1560000032186508, 0.07800000160932541, 1.0 ],
+            "desc" : "Color of the first SSS component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 1 Color"
+            }
+        },
+        
+        {
+            "attr" : "sss1_radius",
+            "default" : 1.50,
+            "desc" : "Radius for the first SSS component. Larger values cause light to go deeper into the surface",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 1 Radius",
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "sss2_weight",
+            "default" : 1.0,
+            "desc" : "Weight of the second SSS component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 2 Weight",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sss2_color",
+            "default" : [ 0.4390000104904175, 0.07999999821186066, 0.01799999922513962, 1.0 ],
+            "desc" : "Color of the second SSS component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 2 Color"
+            }
+        },
+        
+        {
+            "attr" : "sss2_radius",
+            "default" : 4.0,
+            "desc" : "Radius for the second SSS component. Larger values cause light to go deeper into the surface",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 2 Radius",
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "sss3_weight",
+            "default" : 1.0,
+            "desc" : "Weight of the third SSS component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 3 Weight",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sss3_color",
+            "default" : [ 0.5230000019073486, 0.6370000243186951, 0.6669999957084656, 1.0 ],
+            "desc" : "Color of the third SSS component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 3 Color"
+            }
+        },
+        
+        {
+            "attr" : "sss3_radius",
+            "default" : 0.750,
+            "desc" : "Radius for the third SSS component. Larger values cause light to go deeper into the surface",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "SSS 3 Radius",
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "reflect_max_depth",
+            "default" : 5,
+            "desc" : "Maximum depth for reflections; set to -1 to use the global depth",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : -1,
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "reflect_subdivs",
+            "default" : 8,
+            "desc" : "Subdivs for sampling reflections when local subdivs are enabled",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "sss_subdivs",
+            "default" : 8,
+            "desc" : "Subdivs for sampling SSS when local subdivs are enabled",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "SSS Subdivs",
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "consider_all_objects",
+            "default" : false,
+            "desc" : "When enabled, the shader will bleed SSS between all objects in the scene; when disabled, only objects with the same raytrace SSS ID are considered",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

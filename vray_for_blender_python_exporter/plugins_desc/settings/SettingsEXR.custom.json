@@ -1,0 +1,37 @@
+{
+    "ID": "SettingsEXR",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "compression"
+                    },
+                    {
+                        "name": "bits_per_channel"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "extra_attributes"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "auto_data_window"
+                    },
+                    {
+                        "name": "write_integer_ids"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

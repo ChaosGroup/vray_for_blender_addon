@@ -1,0 +1,15 @@
+{
+    "ID": "SettingsJPEG",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "quality"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

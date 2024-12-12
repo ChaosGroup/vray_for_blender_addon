@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "SettingsTextureCache",
+    "ID" : "SettingsTextureCache",
+    "Name" : "Settings Texture Cache",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "cache_size",
+            "default" : 0,
+            "desc" : "Texture cache size. This parameter is set as value of envirment variable VRAY_TEXTURE_CACHE before renderBegin",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "max_mipmap_resolution",
+            "default" : 0,
+            "desc" : "Sets the max resultion used while render for mipmaped files. If set to zero, the original file resolution is used",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

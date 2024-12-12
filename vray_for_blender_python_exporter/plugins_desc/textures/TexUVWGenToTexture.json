@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexUVWGenToTexture",
+    "ID" : "TexUVWGenToTexture",
+    "Name" : "UVW Gen To Texture",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

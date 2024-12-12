@@ -1,0 +1,26 @@
+{
+    "ID": "FilterMitNet",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "blur"
+                    },
+                    {
+                        "name": "ringing"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

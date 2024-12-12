@@ -1,0 +1,22 @@
+
+{
+    "Desciption" : "TexFloatPerVertexHairSampler",
+    "ID" : "TexFloatPerVertexHairSampler",
+    "Name" : "Float Per Vertex Hair Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "vertex_values",
+            "default" : 0.0,
+            "desc" : "Colors for each vertex the hair. Each values should match a vertex from the hair geometry",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

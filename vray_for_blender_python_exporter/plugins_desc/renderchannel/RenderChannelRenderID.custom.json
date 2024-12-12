@@ -1,0 +1,31 @@
+{
+    "ID": "RenderChannelRenderID",
+    "Name" : "Render ID",
+    "Subtype" : "MATTE",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Render ID"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

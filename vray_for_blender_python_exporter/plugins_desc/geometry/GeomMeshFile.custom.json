@@ -1,0 +1,315 @@
+{
+    "ID": "GeomMeshFile",
+    "Parameters": [
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "proxy_attach_mode",
+            "default": "NONE",
+            "desc": "Proxy attach mode",
+            "items": [
+                [
+                    "NONE",
+                    "None",
+                    "Don't attach proxy"
+                ],
+                [
+                    "NEW",
+                    "New object",
+                    "Attach proxy to new object"
+                ],
+                [
+                    "THIS",
+                    "This object",
+                    "Attach proxy to this object"
+                ],
+                [
+                    "REPLACE",
+                    "Replace",
+                    "Replace this object with proxy"
+                ]
+            ],
+            "available": [
+                "BLENDER"
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "apply_transforms",
+            "default": false,
+            "desc": "Apply rotation, location and scale",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "add_suffix",
+            "default": true,
+            "desc": "Add \"_proxy\" suffix to object and mesh names",
+            "name": "Add suffix",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "animation",
+            "default": "NONE",
+            "desc": "Animated proxy",
+            "name": "Animation",
+            "items": [
+                [
+                    "NONE",
+                    "None",
+                    "No animation"
+                ],
+                [
+                    "MANUAL",
+                    "Manual",
+                    "Set manually"
+                ],
+                [
+                    "SCENE",
+                    "Scene",
+                    "Get from scene"
+                ]
+            ],
+            "available": [
+                "BLENDER"
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "dirpath",
+            "default": "//proxy",
+            "desc": "Proxy generation directory",
+            "name": "Path",
+            "subtype": "DIR_PATH",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "STRING",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "add_velocity",
+            "default": false,
+            "desc": "This makes it possible to add motion blur to the final animation. However exporting this extra information takes longer. If you are not going to need motion blur it makes sense to disable this option",
+            "name": "Add velocity",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "filename",
+            "default": "",
+            "desc": "Proxy file name. If empty object's name is used",
+            "name": "Name",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "STRING",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "animation_range",
+            "default": "SCENE",
+            "desc": "Animation range type",
+            "items": [
+                [
+                    "MANUAL",
+                    "Manual",
+                    "Set manually"
+                ],
+                [
+                    "SCENE",
+                    "Scene",
+                    "Get from scene"
+                ]
+            ],
+            "name": "Animation range",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "frame_start",
+            "default": 1,
+            "desc": "Proxy generation start frame",
+            "name": "Start Frame",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "INT",
+            "ui": {
+                "min": 1,
+                "soft_min": 1
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "frame_end",
+            "default": 250,
+            "desc": "Proxy generation end frame",
+            "name": "End Frame",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "INT",
+            "ui": {
+                "min": 1,
+                "soft_min": 1
+            },
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "file"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "scale"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "label": "Type",
+                                "name": "anim_type"
+                            },
+                            {
+                                "label": "Override",
+                                "name": "anim_override"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "active": {
+                            "cond": "::anim_override=1"
+                        },
+                        "align": true,
+                        "attrs": [
+                            {
+                                "label": "Speed",
+                                "name": "anim_speed"
+                            },
+                            {
+                                "label": "Offset",
+                                "name": "anim_offset"
+                            },
+                            {
+                                "label": "Start",
+                                "name": "anim_start"
+                            },
+                            {
+                                "label": "Length",
+                                "name": "anim_length"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "name": "flip_axis"
+                            },
+                            {
+                                "name": "compute_bbox"
+                            },
+                            {
+                                "name": "smooth_uv"
+                            },
+                            {
+                                "name": "smooth_uv_borders"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "compute_normals"
+                            },
+                            {
+                                "active": {
+                                    "cond": "::compute_normals=1"
+                                },
+                                "label": "Angle",
+                                "name": "smooth_angle"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "primary_visibility"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": []
+    }
+}

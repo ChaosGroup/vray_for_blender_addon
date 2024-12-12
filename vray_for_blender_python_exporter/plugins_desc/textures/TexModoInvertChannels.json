@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexModoInvertChannels",
+    "ID" : "TexModoInvertChannels",
+    "Name" : "Modo Invert Channels",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "invert_red",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "invert_green",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "invert_blue",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,85 @@
+
+{
+    "Desciption" : "TexModoEnvironmentColor",
+    "ID" : "TexModoEnvironmentColor",
+    "Name" : "Modo Environment Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "2",
+            "desc" : "0 : Constant, 1 : 2 Color Gradient, 2 : 4 Color Gradient, 3 : CIE Overcast Sky, 4 : Physically-based Daylight",
+            "items" : 
+            [
+                [ "0", "Constant", "Constant" ],
+                [ "1", "2 Color Gradient", "2 Color Gradient" ],
+                [ "2", "4 Color Gradient", "4 Color Gradient" ],
+                [ "3", "CIE Overcast Sky", "CIE Overcast Sky" ],
+                [ "4", "Physically-based Daylight", "Physically-based Daylight" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "zenith_color",
+            "default" : [ 0.8999999761581421, 0.8999999761581421, 0.8999999761581421 ],
+            "desc" : "",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "sky_color",
+            "default" : [ 0.3400000035762787, 0.3400000035762787, 0.3400000035762787 ],
+            "desc" : "",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "ground_color",
+            "default" : [ 0.3400000035762787, 0.3400000035762787, 0.3400000035762787 ],
+            "desc" : "",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "nadir_color",
+            "default" : [ 0.02999999932944775, 0.02999999932944775, 0.02999999932944775 ],
+            "desc" : "",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "sky_exponent",
+            "default" : 4.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "ground_exponent",
+            "default" : 4.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "sky_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Used when type is 4 (physically-based daylight). Should point to a texture plug-in of type TexSky",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "sky_clamp_brightness",
+            "default" : false,
+            "desc" : "True to clamp the physical sky brightness",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

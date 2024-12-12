@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "TexMayaHairIncandescence",
+    "ID" : "TexMayaHairIncandescence",
+    "Name" : "Maya Hair Incandescence",
+    "Parameters" : [],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,34 @@
+{
+    "ID": "RenderChannelGlossiness",
+    "Name" : "Glossiness",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs":[
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name" : "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },  
+                    {
+                        "name" : "filtering"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Glossines"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

@@ -1,0 +1,56 @@
+
+{
+    "Desciption" : "TexCondition",
+    "ID" : "TexCondition",
+    "Name" : "Condition",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "operation",
+            "default" : 0,
+            "desc" : "The condition check: 0 - equal, 1 - not equal, 2 - greater than, 3 - greater or equal, 4 - less than, 5 - less or equal",
+            "type" : "INT_TEXTURE"
+        },
+        
+        {
+            "attr" : "op_a",
+            "default" : 0.0,
+            "desc" : "The first number to compare",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "op_b",
+            "default" : 0.0,
+            "desc" : "The second number to compare",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "result_true",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color to return if the condition is true",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "result_false",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color to return if the condition is false",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,67 @@
+
+{
+    "Desciption" : "TexColorCurve",
+    "ID" : "TexColorCurve",
+    "Name" : "Color Curve",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The value from this texture is controlled by the profile curve",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "inputScalar",
+            "default" : 0.0,
+            "desc" : "If present input is ignored, and this is used instead",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "rkeys",
+            "default" : 0.0,
+            "desc" : "Quadruplets of 2d vectors for each bezier segment for the red curve",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "gkeys",
+            "default" : 0.0,
+            "desc" : "Quadruplets of 2d vectors for each bezier segment for the green curve",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "bkeys",
+            "default" : 0.0,
+            "desc" : "Quadruplets of 2d vectors for each bezier segment for the blue curve",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "use_alpha",
+            "default" : false,
+            "desc" : "Get alpha from curve",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "akeys",
+            "default" : 0.0,
+            "desc" : "Quadruplets of 2d vectors for each bezier segment for the alpha curve",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

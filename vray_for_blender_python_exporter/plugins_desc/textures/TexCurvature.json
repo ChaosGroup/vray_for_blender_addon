@@ -1,0 +1,184 @@
+
+{
+    "Desciption" : "TexCurvature",
+    "ID" : "TexCurvature",
+    "Name" : "Curvature",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "The curvature mode (0 - Legacy, 1 - Convex, 2 - Concave, 3 - Both)",
+            "items" : 
+            [
+                [ "0", "Legacy", "Legacy" ],
+                [ "1", "Convex", "Convex" ],
+                [ "2", "Concave", "Concave" ],
+                [ "3", "Both", "Both" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Number of sample to take when sampling normals around intersection (subdivs*subdivs)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 128,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "sample_spread",
+            "default" : 1.0,
+            "desc" : "Sampling radius",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "out_color_min",
+            "default" : 0.0,
+            "desc" : "Output color min value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Min Output Color",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "out_color_max",
+            "default" : 1.0,
+            "desc" : "Output color max value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max Output Color",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "The scale relative to which the curvature is computed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000000.0,
+                "min" : 9.999999974752427e-07
+            }
+        },
+        
+        {
+            "attr" : "trace_distance",
+            "default" : 5.0,
+            "desc" : "The maximum distance to search for intersections. Bigger values will decrease the performance, but may produce more correct result",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "threshold",
+            "default" : 0.0,
+            "desc" : "Curvature values below this threshold will be ignored",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "out_color_gain",
+            "default" : 1.0,
+            "desc" : "Curvature output correction gain",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Output Color Gain",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "out_color_lift",
+            "default" : 0.0,
+            "desc" : "Curvature output correction lift",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Output Color Lift",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "out_color_gamma",
+            "default" : 1.0,
+            "desc" : "Curvature output correction gamma",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Output Color Gamma",
+                "max" : 100.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "out_color_pivot",
+            "default" : 1.0,
+            "desc" : "Curvature output correction pivot",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Output Color Pivot",
+                "max" : 100.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "out_color_clamp",
+            "default" : false,
+            "desc" : "Whether curvature output should be clamped to [0;1]",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Output Color Clamp"
+            }
+        },
+        
+        {
+            "attr" : "ignore_bump",
+            "default" : false,
+            "desc" : "Whether bumped normals should be ignored when calculating curvature",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

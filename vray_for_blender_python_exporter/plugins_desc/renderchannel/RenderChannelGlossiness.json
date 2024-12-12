@@ -1,0 +1,43 @@
+
+{
+    "Desciption" : "RenderChannelGlossiness",
+    "ID" : "RenderChannelGlossiness",
+    "Name" : "Render Channel Glossiness",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "GlossinessColorChannel",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "alias",
+            "default" : 1000,
+            "desc" : "Internal unique identifier for this channel type",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

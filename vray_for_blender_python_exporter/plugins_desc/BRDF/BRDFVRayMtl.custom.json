@@ -1,0 +1,646 @@
+{
+    "ID": "BRDFVRayMtl",
+    "Name": "V-Ray Mtl",
+    "Parameters": [
+        {
+            "attr": "opacity",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "opacity_color",
+            "ui": {
+                "display_name": "Opacity"
+            }
+        },
+        {
+            "attr": "opacity_source",
+            "default": "1"
+        },
+        {
+            "attr": "roughness_model",
+            "default": "1"
+        },
+        {
+            "attr": "fresnel",
+            "default": true
+        },
+        {
+            "attr": "gtr_energy_compensation",
+            "default": "1"
+        },
+        {
+            "attr": "new_gtr_anisotropy",
+            "default": true
+        },
+        {
+            "attr": "option_double_sided",
+            "default": true
+        },
+        {
+            "attr": "gtr_gamma",
+            "ui": {
+                "display_name": "GGX Tail Falloff",
+                "max": 1000.0,
+                "min": 0.001000000047497451,
+                "soft_max": 10.0,
+                "soft_min": 2.0
+            }
+        },
+        {
+            "attr": "opacity_mode",
+            "default": "2",
+            "desc": "The opacity mode (1 - Clip, 2 - Stochastic)",
+            "items": [
+                [
+                    "1",
+                    "Clip",
+                    "Clip"
+                ],
+                [
+                    "2",
+                    "Stochastic",
+                    "Stochastic"
+                ]
+            ]
+        },
+        {
+            "attr": "reflect_depth",
+            "default": 8
+        },
+        {
+            "attr": "refract_depth",
+            "default": 8
+        },
+        {
+            "attr": "refract_affect_shadows",
+            "default": true
+        },
+        {
+            "attr": "translucency",
+            "default": "0",
+            "desc": "Translucency mode (1 - None; 2 - Volumetric (water) model; 3 - SSS (wax) model)",
+            "items": [
+                [
+                    "0",
+                    "None",
+                    "None"
+                ],
+                [
+                    "5",
+                    "Volumetric",
+                    "Volumetric (water) model"
+                ],
+                [
+                    "6",
+                    "SSS",
+                    "SSS (wax) model"
+                ]
+            ]
+        },
+        {
+            "attr": "fog_depth",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "fog_mult",
+            "desc": "Depth for the absorption",
+            "ui": {
+                "display_name": "Depth (cm)",
+                "min": 0.01,
+                "soft_min": 0.01,
+                "soft_max": 10.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "fog_color",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "fog_color_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "fog_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "fog_color",
+            "tex_prop": "fog_color_tex",
+            "ui": {
+                "display_name": "Fog color",
+                "rollout": "Fog",
+                "tab": "V-Ray Material Advanced"
+            },
+            "desc": "The absorption (fog) color",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "diffuse",
+            "default": [
+                0.8,
+                0.8,
+                0.8,
+                1.0
+            ]
+        },
+        {
+            "attr": "thin_film_thickness_min",
+            "ui": {
+                "spin_step": 5.0
+            }
+        },
+        {
+            "attr": "thin_film_thickness_max",
+            "ui": {
+                "spin_step": 5.0
+            }
+        },
+        {
+            "attr": "reflect_dim_distance",
+            "default": 100.0
+        },
+        {
+            "attr": "coat_bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "coat_bump_amount",
+            "ui": {
+                "soft_min": -5.0,
+                "soft_max": 5.0,
+                "spin_step": 0.05,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bump_amount",
+            "ui": {
+                "soft_min": -5.0,
+                "soft_max": 5.0,
+                "spin_step": 0.05,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "anisotropy_uvwgen",
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "option_energy_mode",
+            "default": "0",
+            "items": [
+                [
+                    "0",
+                    "RGB",
+                    "RGB"
+                ],
+                [
+                    "1",
+                    "Monochrome",
+                    "Monochrome"
+                ]
+            ],
+            "type": "ENUM"
+        },
+        {
+            "attr": "reflect_dim_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "translucency_thickness",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "diffuse",
+                "label": "Diffuse",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "diffuse",
+                        "label": "Color"
+                    },
+                    {
+                        "name": "roughness"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "opacity_mode"
+                    },
+                    {
+                        "name": "opacity_color",
+                        "label": "Opacity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "self_illumination",
+                        "label": "Self-Illumination"
+                    },
+                    {
+                        "name": "self_illumination_gi"
+                    },
+                    {
+                        "name": "compensate_camera_exposure"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "reflection",
+                "label": "Reflection",
+                "attrs": [
+                    {
+                        "name": "brdf_type"
+                    },
+                    {
+                        "name": "reflect",
+                        "label": "Color"
+                    },
+                    {
+                        "name": "reflect_glossiness",
+                        "label": "Glossiness"
+                    },
+                    {
+                        "name": "gtr_gamma"
+                    },
+                    {
+                        "name": "metalness"
+                    },
+                    {
+                        "name": "option_use_roughness"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "fresnel",
+                        "label": "Fresnel",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "fresnel"
+                            },
+                            {
+                                "name": "fresnel_ior_lock"
+                            },
+                            {
+                                "name": "fresnel_ior"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "anisotropy",
+                        "label": "Anisotropy",
+                        "attrs": [
+                            {
+                                "name": "anisotropy"
+                            },
+                            {
+                                "name": "anisotropy_rotation"
+                            },
+                            {
+                                "name": "anisotropy_derivation"
+                            },
+                            {
+                                "name": "anisotropy_axis"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "thin film",
+                        "label": "Thin Film",
+                        "attrs": [
+                            {
+                                "name": "thin_film_on"
+                            },
+                            {
+                                "name": "thin_film_thickness_min",
+                                "label": "Thickness Min (nm)"
+                            },
+                            {
+                                "name": "thin_film_thickness_max",
+                                "label": "Thickness Max (nm)"
+                            },
+                            {
+                                "name": "thin_film_thickness"
+                            },
+                            {
+                                "name": "thin_film_ior"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "reflection advanced",
+                        "label": "Reflection Advanced",
+                        "attrs": [
+                            {
+                                "name": "reflect_trace"
+                            },
+                            {
+                                "name": "reflect_depth"
+                            },
+                            {
+                                "name": "reflect_dim_distance_on"
+                            },
+                            {
+                                "name": "reflect_dim_distance"
+                            },
+                            {
+                                "name": "reflect_dim_distance_falloff"
+                            },
+                            {
+                                "name": "option_reflect_on_back"
+                            },
+                            {
+                                "name": "hilight_soften"
+                            },
+                            {
+                                "name": "reflect_affect_alpha"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "coat",
+                "label": "Coat",
+                "attrs": [
+                    {
+                        "name": "coat_color"
+                    },
+                    {
+                        "name": "coat_amount"
+                    },
+                    {
+                        "name": "coat_glossiness"
+                    },
+                    {
+                        "name": "coat_ior"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "coat bump",
+                        "label": "Bump",
+                        "attrs": [
+                            {
+                                "name": "coat_bump_lock"
+                            },
+                            {
+                                "name": "coat_bump_map"
+                            },
+                            {
+                                "name": "coat_bump_amount"
+                            },
+                            {
+                                "name": "coat_bump_type"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "refraction",
+                "label": "Refraction",
+                "attrs": [
+                    {
+                        "name": "refract",
+                        "label": "Color"
+                    },
+                    {
+                        "name": "refract_glossiness"
+                    },
+                    {
+                        "name": "refract_ior"
+                    },
+                    {
+                        "name": "refract_affect_shadows"
+                    },
+                    {
+                        "name": "refract_thin_walled"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "translucency",
+                        "label": "Translucency",
+                        "attrs": [
+                            {
+                                "name": "translucency"
+                            },
+                            {
+                                "name": "fog_color_colortex",
+                                "label": "Fog Color",
+                                "visible": {
+                                    "cond": "::translucency=0;::translucency=5"
+                                }
+                            },
+                            {
+                                "name": "fog_color_colortex",
+                                "label": "Scatter Radius",
+                                "visible": {
+                                    "cond": "::translucency=6"
+                                }
+                            },
+                            {
+                                "name": "fog_mult",
+                                "label": "Depth (cm)",
+                                "visible": {
+                                    "cond": "::translucency=0;::translucency=5"
+                                }
+                            },
+                            {
+                                "name": "fog_mult",
+                                "label": "Scale (cm)",
+                                "visible": {
+                                    "cond": "::translucency=6"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "name": "translucency_options",
+                                "active": {
+                                    "cond": "::translucency=5;::translucency=6"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "translucency_surfaceLighting",
+                                        "label": "Illumination"
+                                    },
+                                    {
+                                        "name": "translucency_color",
+                                        "label": "Scatter Color",
+                                        "visible": {
+                                            "cond": "::translucency=0;::translucency=5"
+                                        }
+                                    },
+                                    {
+                                        "name": "translucency_color",
+                                        "label": "SSS Color",
+                                        "visible": {
+                                            "cond": "::translucency=6"
+                                        }
+                                    },
+                                    {
+                                        "name": "translucency_amount",
+                                        "label": "SSS Amount",
+                                        "active": {
+                                            "cond": "::translucency=6;::translucency=5"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "refraction advanced",
+                        "label": "Refraction Advanced",
+                        "attrs": [
+                            {
+                                "name": "refract_trace"
+                            },
+                            {
+                                "name": "refract_depth"
+                            },
+                            {
+                                "name": "refract_affect_alpha"
+                            },
+                            {
+                                "name": "dispersion_on"
+                            },
+                            {
+                                "name": "dispersion",
+                                "active": {
+                                    "cond": "::dispersion_on!=0"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "sheen",
+                "label": "Sheen",
+                "attrs": [
+                    {
+                        "name": "sheen_color"
+                    },
+                    {
+                        "name": "sheen_glossiness"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "bump",
+                "label": "Bump",
+                "attrs": [
+                    {
+                        "name": "bump_map"
+                    },
+                    {
+                        "name": "bump_amount"
+                    },
+                    {
+                        "name": "bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "option_cutoff"
+                    },
+                    {
+                        "name": "option_energy_mode",
+                        "label": "Preserve energy"
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "fog_color",
+            "fog_color_tex",
+            "hilight_glossiness",
+            "hilight_glossiness_lock",
+            "reflect_subdivs",
+            "refract_subdivs",
+            "fog_bias",
+            "fog_unit_scale_on",
+            "translucency_light_mult",
+            "translucency_scatter_dir",
+            "translucency_scatter_coeff",
+            "translucency_thickness",
+            "option_glossy_rays_as_gi",
+            "option_glossy_fresnel",
+            "option_use_irradiance_map",
+            "use_environment_override",
+            "environment_override",
+            "environment_priority",
+            "refl_interpolation_on",
+            "refl_imap_min_rate",
+            "refl_imap_max_rate",
+            "refl_imap_color_thresh",
+            "refl_imap_norm_thresh",
+            "refl_imap_samples",
+            "reflect_exit_color",
+            "refr_interpolation_on",
+            "refr_imap_min_rate",
+            "refr_imap_max_rate",
+            "refr_imap_color_thresh",
+            "refr_imap_norm_thresh",
+            "refr_imap_samples",
+            "refract_exit_color_on",
+            "refract_exit_color",
+            "channels",
+            "volume",
+            "option_fix_dark_edges"
+        ],
+        "animatable": true
+    }
+}

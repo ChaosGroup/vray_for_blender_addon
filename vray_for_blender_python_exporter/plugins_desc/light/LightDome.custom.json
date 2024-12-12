@@ -1,0 +1,392 @@
+{
+    "ID": "LightDome",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "color",
+            "tex_prop": "dome_tex",
+            "use_tex_prop": "use_dome_tex",
+            "ui": {
+                "display_name": "Dome Color"
+            },
+            "desc": "The color of the light.",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "update": "onUpdateAttribute"
+        },
+        {
+            "attr": "color_mode",
+            "default": "0",
+            "desc": "Choose between RGB color and color temperature",
+            "items": [
+                [
+                    "0",
+                    "Color",
+                    "Color"
+                ],
+                [
+                    "1",
+                    "Temperature",
+                    "Temperature"
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "temperature",
+            "default": 6500.0,
+            "desc": "Color temperature in K",
+            "type": "FLOAT",
+            "update": "onUpdateAttribute",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "intensity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dome_finite_on",
+            "default": false,
+            "type": "BOOL"
+        },
+        {
+            "attr": "dome_spherical",
+            "default": true
+        },
+        {
+            "attr": "dome_adaptive",
+            "default": true
+        },
+        {
+            "attr": "finite_radius",
+            "default": 50.0,
+            "ui": {
+                "soft_min": 5.0,
+                "soft_max": 200.0,
+                "spin_step": 0.1,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "finite_cameraHeight",
+            "default": 10.0,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.1,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "shadowBias",
+            "default": 0.02,
+            "ui": {
+                "soft_min": -0.1,
+                "soft_max": 0.1,
+                "spin_step": 0.001,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "shadowColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "shadowColor",
+            "tex_prop": "shadowColor_tex",
+            "ui": {
+                "display_name": "Shadow color"
+            },
+            "desc": "The shadow color. Anything but black is not physically accurate",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "bumped_below_surface_check",
+            "default": true
+        },
+        {
+            "attr": "dome_lock_texture",
+            "ui": {
+                "display_name": "Lock texture to dome"
+            },
+            "desc": "Lock dome texture to dome orientation.",
+            "default": true,
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "dome_targetRadius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "dome_emitRadius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "dome_rayDistance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "color_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "color_colortex",
+                        "label": "Color 1",
+                        "active": {
+                            "cond": "::color_mode=0"
+                        }
+                    },
+                    {
+                        "name": "temperature",
+                        "active": {
+                            "cond": "::color_mode=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "dome_spherical"
+                    },
+                    {
+                        "name": "dome_adaptive"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "finite dome",
+                        "label": "Finite Dome",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "dome_finite_on",
+                                "label": "Finite Dome"
+                            },
+                            {
+                                "name": "finite_radius",
+                                "active": {
+                                    "cond": "::dome_finite_on != 0"
+                                }
+                            },
+                            {
+                                "name": "finite_cameraHeight",
+                                "active": {
+                                    "cond": "::dome_finite_on != 0"
+                                }
+                            },
+                            {
+                                "name": "finite_groundBlend",
+                                "active": {
+                                    "cond": "::dome_finite_on != 0"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "dome_lock_texture"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "affectDiffuse"
+                    },
+                    {
+                        "name": "affectSpecular"
+                    },
+                    {
+                        "name": "affectReflections"
+                    },
+                    {
+                        "name": "affectAtmospherics"
+                    },
+                    {
+                        "name": "affect_alpha"
+                    },
+                    {
+                        "name": "diffuse_contribution",
+                        "active": {
+                            "cond": "::affectDiffuse!=0"
+                        }
+                    },
+                    {
+                        "name": "specular_contribution",
+                        "active": {
+                            "cond": "::affectSpecular!=0;::affectReflections!=0"
+                        }
+                    },
+                    {
+                        "name": "atmospherics_contribution",
+                        "active": {
+                            "cond": "::affectAtmospherics!=0"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "cutoffThreshold"
+                    },
+                    {
+                        "name": "tex_resolution"
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label",
+                        "show": {
+                            "prop": "0"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "shadows",
+                "label": "Shadows",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "shadowBias"
+                            },
+                            {
+                                "name": "shadowColor_colortex"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "photon emission",
+                "label": "Photon Emission",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "dome_targetRadius"
+                    },
+                    {
+                        "name": "dome_emitRadius",
+                        "label": "Emit Distance"
+                    },
+                    {
+                        "name": "causticSubdivs"
+                    },
+                    {
+                        "name": "causticMult"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "transform"
+            },
+            {
+                "name": "pivot_offset"
+            },
+            {
+                "name": "color_colortex"
+            },
+            {
+                "name": "shadowColor_colortex"
+            },
+            {
+                "name": "intensity_tex"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "channels_diffuse",
+            "channels_full",
+            "channels_raw",
+            "channels_specular",
+            "color_tex",
+            "use_global_light_level",
+            "photonSubdivs",
+            "diffuseMult",
+            "subdivs",
+            "storeWithIrradianceMap",
+            "objectID",
+            "useMIS",
+            "allow_low_resolution",
+            "dome_rayDistanceMode",
+            "dome_rayDistance",
+            "dome_grid_res",
+            "dome_u_tiles",
+            "tex_adaptive"
+        ],
+        "animatable": true
+    }
+}

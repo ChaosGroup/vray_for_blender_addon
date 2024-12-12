@@ -1,0 +1,134 @@
+
+{
+    "Desciption" : "TexEdges",
+    "ID" : "TexEdges",
+    "Name" : "Edges",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "edges_tex",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Edges color"
+            }
+        },
+        
+        {
+            "attr" : "bg_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Background color"
+            }
+        },
+        
+        {
+            "attr" : "show_hidden_edges",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show hidden edges"
+            }
+        },
+        
+        {
+            "attr" : "width_type",
+            "default" : "0",
+            "desc" : "0 : World units, 1 : Pixels",
+            "items" : 
+            [
+                [ "0", "World units", "World units" ],
+                [ "1", "Pixels", "Pixels" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Width type"
+            }
+        },
+        
+        {
+            "attr" : "pixel_width",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Pixel width",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "world_width",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "World width",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "show_subtriangles",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show sub-triangles"
+            }
+        },
+        
+        {
+            "attr" : "raytraced",
+            "default" : true,
+            "desc" : "true to use raytracing to compute the rounded corners and false to use static mesh analysis",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "raytraced_consider_same_object_only",
+            "default" : true,
+            "desc" : "true to consider only corners on the same object, and false to consider other intersecting objects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider same object only"
+            }
+        },
+        
+        {
+            "attr" : "raytraced_mode",
+            "default" : "0",
+            "desc" : "Which corners to smooth: 0 - both convex and concave; 1 - convex only; 2 - concave only",
+            "items" : 
+            [
+                [ "0", "Convex and Concave", "Convex and Concave" ],
+                [ "1", "Convex only", "Convex only" ],
+                [ "2", "Concave only", "Concave only" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

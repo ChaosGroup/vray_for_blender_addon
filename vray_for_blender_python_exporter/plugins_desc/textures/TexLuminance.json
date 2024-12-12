@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexLuminance",
+    "ID" : "TexLuminance",
+    "Name" : "Luminance",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "luminance",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

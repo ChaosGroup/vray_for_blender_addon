@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexModoOpacityToVRayWeight",
+    "ID" : "TexModoOpacityToVRayWeight",
+    "Name" : "Modo Opacity To V Ray Weight",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "layer_mask",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

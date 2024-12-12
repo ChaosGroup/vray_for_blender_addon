@@ -1,0 +1,52 @@
+{
+    "ID": "EnvFogMeshGizmo",
+    "Name" : "V-Ray Environment Fog Mesh Gizmo",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "fade_out_radius"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    },
+    "Node":{
+        "input_sockets":[
+            {
+                "name" : "transform"
+            },
+            
+            {
+                "name" : "geometry"
+            },
+            
+            {
+                "name" : "lights"
+            }
+        ],
+
+        "output_sockets":[
+            {
+                "name": "_default_",
+                "label": "Output",
+                "type": "EFFECT"
+            }
+        ],
+
+        "widgets": [
+            {
+                "layout": "ROW",
+                "attrs": [
+                    {
+                        "name": "fade_out_radius"
+                    }
+                ]
+            }
+        ]
+    },
+
+    "Type": "EFFECT"
+}

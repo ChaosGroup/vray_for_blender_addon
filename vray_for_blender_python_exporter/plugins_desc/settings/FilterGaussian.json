@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "FilterGaussian",
+    "ID" : "FilterGaussian",
+    "Name" : "Filter Gaussian",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 3.0,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

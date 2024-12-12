@@ -1,0 +1,35 @@
+
+{
+    "Desciption" : "RenderChannelLightMix",
+    "ID" : "RenderChannelLightMix",
+    "Name" : "Render Channel Light Mix",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "create_rest_channel",
+            "default" : false,
+            "desc" : "Create an additional Rest channel being saved to file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "denoise",
+            "default" : false,
+            "desc" : "true to denoise all light channels; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "tag_lightmix",
+            "default" : false,
+            "desc" : "true to add a flag to the light mix channel. All light selects part of the Light Mix must have light_select_in_lightmix=true. With this flag set to true it is possible to have LightSelects outside of the LightMix",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

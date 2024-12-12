@@ -1,0 +1,72 @@
+
+{
+    "Desciption" : "TexMaxHairInfo",
+    "ID" : "TexMaxHairInfo",
+    "Name" : "Max Hair Info",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "output",
+            "default" : "0",
+            "desc" : "Specifies the way of blending between the two input color textures. The value means : 0 - position along strand, 1 - random by strand id,2 - Hair color, 3 - Hair opacity, 4 - Hair transparency, 5 - Hair incandescence, 6 - Position along strand absolute, 7 - Position across strand",
+            "items" : 
+            [
+                [ "0", "Position along strand", "Position along strand" ],
+                [ "1", "Random by strand index", "Random by strand index" ],
+                [ "2", "Hair Color", "Hair Color" ],
+                [ "3", "Hair opacity", "Hair opacity" ],
+                [ "4", "Hair transparency", "Hair transparency" ],
+                [ "5", "Hair incandescence", "Hair incandescence" ],
+                
+                [
+                    "6",
+                    " Position along strand absolute",
+                    " Position along strand absolute"
+                ],
+                [ "7", " Position across strand", " Position across strand" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "seed_offset",
+            "default" : 1,
+            "desc" : "Seed offset",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "color_a",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Color A",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_b",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color B",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 0.50,
+            "desc" : "Bias",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "max_distance",
+            "default" : 1.0,
+            "desc" : "Max distance",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,495 @@
+
+{
+    "Desciption" : "VolumeVRayToon",
+    "ID" : "VolumeVRayToon",
+    "Name" : "Volume V Ray Toon",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "toonChannelsOnly",
+            "default" : false,
+            "desc" : "Apply only to toon render channels",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Toon Render Elements Only",
+                "rollout" : "V-Ray Toon",
+                "tab" : "V-Ray Toon"
+            }
+        },
+        
+        {
+            "attr" : "widthType",
+            "default" : "0",
+            "desc" : "0:Pixels; 1:World",
+            "items" : 
+            [
+                [ "0", "Pixels", "Pixels" ],
+                [ "1", "World", "World" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Width Units"
+            }
+        },
+        
+        {
+            "attr" : "lineColor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The outer color of the cartoon line",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Line Color"
+            }
+        },
+        
+        {
+            "attr" : "lineColor_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The outer color texture of the cartoon line",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Line Color (map)"
+            }
+        },
+        
+        {
+            "attr" : "lineWidth",
+            "default" : 1.50,
+            "desc" : "Cartoon line width",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Line Width",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lineWidth_tex",
+            "default" : 0.0,
+            "desc" : "Cartoon line width texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Line Width (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "innerLineControl",
+            "default" : true,
+            "desc" : "Use same lineColor/Width param values for both silhouette and inner edges",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Inner Line Control"
+            }
+        },
+        
+        {
+            "attr" : "lineColorInner",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The color of the cartoon line at inner edges",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Line Color Inner"
+            }
+        },
+        
+        {
+            "attr" : "lineColorInner_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color of the cartoon line at inner edges",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Line Color Inner (map)"
+            }
+        },
+        
+        {
+            "attr" : "lineWidthInner",
+            "default" : 1.50,
+            "desc" : "Cartoon line width of inner lines",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Line Width Inner",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lineWidthInner_tex",
+            "default" : 0.0,
+            "desc" : "Cartoon line width texture at inner edges",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Line Width Inner (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "Opacity of the cartoon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Opacity",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity_tex",
+            "default" : 0.0,
+            "desc" : "Opacity texture of the cartoon line",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Opacity (map)",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "outerOverlapThreshold",
+            "default" : 0.0,
+            "desc" : "This determines when outer edges will be created for overlapping parts of one and the same object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Outer Overlap Threshold",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "compensateExposure",
+            "default" : false,
+            "desc" : "Compensate V-Ray physical camera exposure",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Compensate Exposure"
+            }
+        },
+        
+        {
+            "attr" : "materialEdges",
+            "default" : false,
+            "desc" : "Draw contours on material boundaries",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Material Edges"
+            }
+        },
+        
+        {
+            "attr" : "hideInnerEdges",
+            "default" : false,
+            "desc" : "True : show outlines and not interior edges, false : show all edges",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Hide Inner Edges"
+            }
+        },
+        
+        {
+            "attr" : "normalThreshold",
+            "default" : 0.6999999880790710,
+            "desc" : "This determines when lines will be created for parts of the same object with varying surface normals (for example, at the inside edges of a box). A value of 0.0 means that only 90 degrees or larger angles will generate internal lines. Higher values mean that more smooth normals can also generate an edge. Don't set this value to pure 1.0 as this will fill curved objects completely",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normal Threshold",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "overlapThreshold",
+            "default" : 0.9499999880790710,
+            "desc" : "This determines when inner edges will be created for overlapping parts of one and the same object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Overlap Threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "doSecondaryRays",
+            "default" : false,
+            "desc" : "True : show toon lines in reflections/refractions. Note that this may increase render times",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Visible in Reflection/Refraction"
+            }
+        },
+        
+        {
+            "attr" : "traceBias",
+            "default" : 0.2000000029802322,
+            "desc" : "This parameter depends on the scale of your scene",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Trace Bias",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "distortion_tex",
+            "default" : 0.0,
+            "desc" : "This works like a bump map - a simple constant value won't do, you need to connect a texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Distortion (map)"
+            }
+        },
+        
+        {
+            "attr" : "excludeList",
+            "default" : null,
+            "desc" : "Specifies which objects will be affected by the VRayToon atmospheric",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "display_name" : "Exclude List",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "excludeType",
+            "default" : false,
+            "desc" : "True : apply toon effect only to objects in excludeList; false : apply toon effect to all objects out of excludeList",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "As Inclusive List"
+            }
+        },
+        
+        {
+            "attr" : "depthCurveOn",
+            "default" : false,
+            "desc" : "Enable depth-based line width",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Depth Curve On",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "minDepth",
+            "default" : 0.001000000047497451,
+            "desc" : "Minimum depth",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Minimum Depth",
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "maxDepth",
+            "default" : 10000.0,
+            "desc" : "Maximum depth",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Maximum Depth",
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "depthCurvePositions",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth Curve Positions",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "depthCurveInterpolations",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth Curve Interpolations"
+            }
+        },
+        
+        {
+            "attr" : "depthCurveValues",
+            "default" : null,
+            "desc" : "Curve controlling the line width based on depth",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth Curve Values"
+            }
+        },
+        
+        {
+            "attr" : "depthCurveExternal",
+            "default" : null,
+            "desc" : "If this parameter is set, it will be used instead of depthCurvePositions, depthCurveInterpolations and depthCurveValues to provide an external curve for controlling the line width based on depth",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Depth Curve"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveOn",
+            "default" : false,
+            "desc" : "Enable view angle-based line width",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Angular Curve On",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "angularCurvePositions",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular Curve Positions",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "angularCurveInterpolations",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular Curve Interpolations"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveValues",
+            "default" : null,
+            "desc" : "Curve controlling the line width based on view angle",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular Curve Values"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveExternal",
+            "default" : null,
+            "desc" : "If this parameter is set, it will be used instead of angularCurvePositions, angularCurveInterpolations and angularCurveValues to provide an external curve for controlling the line width based on view angle",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Angular Curve"
+            }
+        },
+        
+        {
+            "attr" : "compatibilityMode",
+            "default" : "0",
+            "desc" : "0:V-Ray 3; 1:V-Ray Next",
+            "items" : 
+            [
+                [ "0", "V-Ray 3", "V-Ray 3" ],
+                [ "1", "V-Ray Next", "V-Ray Next" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Edge Sampling Compatibility",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "toonMaterialOnly",
+            "default" : 0,
+            "desc" : "Apply only for objects object with a material implementing ToonEdgeParamsInterface (e.g. BRDFToonOverride, BRDFToonMtl)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Toon  Material Only"
+            }
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

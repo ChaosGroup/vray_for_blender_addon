@@ -1,0 +1,79 @@
+{
+    "ID": "VolumeAerialPerspective",
+    "Name": "V-Ray Volume Aerial Perspective",
+    "Parameters": [
+        {
+            "attr": "sun",
+            "type": "OBJECT",
+            "filter_type": "light",
+            "filter_vray_type": "SUN",
+            "desc": "Specifies which sun will be affected by the effect"
+        },
+        {
+            "attr": "distance",
+            "ui": {
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "atm_height",
+            "ui": {
+                "units": "meters",
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "sun",
+                        "label": "Sun",
+                        "search_bar_for": "objects"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "distance",
+                        "label": "Visibility Range (m)"
+                    },
+                    {
+                        "name": "atm_height",
+                        "label": "Atmospheric Layer Height (m)"
+                    },
+                    {
+                        "name": "inscat_mult",
+                        "label": "Inscattered Light Multiplier"
+                    },
+                    {
+                        "name": "filter_color"
+                    },
+                    {
+                        "name": "affect_env"
+                    },
+                    {
+                        "name": "affect_bg"
+                    },
+                    {
+                        "name": "affect_alpha"
+                    },
+                    {
+                        "name": "sun",
+                        "label": "Sun"
+                    }
+                ]
+            }
+        ]
+    },
+    "Type": "EFFECT"
+}

@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "SettingsCurrentFrame",
+    "ID" : "SettingsCurrentFrame",
+    "Name" : "Settings Current Frame",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "current_frame",
+            "default" : 0,
+            "desc" : "Current frame value. Used in interactive mode to force a frame change",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

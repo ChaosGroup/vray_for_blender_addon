@@ -1,0 +1,75 @@
+{
+    "Parameters": [
+        {
+            "attr": "color1",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color1_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color1_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color1",
+            "tex_prop": "color1_tex",
+            "ui": {},
+            "desc": "First color",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "color2",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color2_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "color2_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color2",
+            "tex_prop": "color2_tex",
+            "ui": {},
+            "desc": "Second color",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "color1",
+            "color1_tex",
+            "color2",
+            "color2_tex"
+        ]
+    },
+    "excluded_parameters": [
+        "color1_tex",
+        "color2",
+        "color2_tex",
+        "color1"
+    ]
+}

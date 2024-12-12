@@ -1,0 +1,69 @@
+
+{
+    "Desciption" : "TexRaySwitch",
+    "ID" : "TexRaySwitch",
+    "Name" : "Ray Switch",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "default_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "This texture is used if texture is not set for specific ray type or if the ray type is unknown",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Default tex"
+            }
+        },
+        
+        {
+            "attr" : "shadow_ray_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "This texture is used for shadow rays",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Shadow rays tex"
+            }
+        },
+        
+        {
+            "attr" : "gi_ray_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "This texture is used for GI rays",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "GI rays tex"
+            }
+        },
+        
+        {
+            "attr" : "reflect_ray_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "This texture is used for reflection rays",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflection rays tex"
+            }
+        },
+        
+        {
+            "attr" : "refract_ray_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "This texture is used for refraction rays",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Refraction rays tex"
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

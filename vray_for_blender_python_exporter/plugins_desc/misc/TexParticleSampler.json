@@ -1,0 +1,140 @@
+
+{
+    "Desciption" : "TexParticleSampler",
+    "ID" : "TexParticleSampler",
+    "Name" : "Particle Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "rgbPP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle color",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "incandescencePP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle emission/incandescence",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "acceleration",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle acceleration",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "worldVelocity",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle velocity in world space",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userVector1PP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle user color 1",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userVector2PP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle user color 2",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userVector3PP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle user color 3",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userVector4PP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle user color 4",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userVector5PP",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle user color 5",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "age",
+            "default" : 0.0,
+            "desc" : "Per-particle age",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "lifespanPP",
+            "default" : 0.0,
+            "desc" : "Per-particle lifespan",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "opacityPP",
+            "default" : 0.0,
+            "desc" : "Per-particle opacity",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userScalar1PP",
+            "default" : 0.0,
+            "desc" : "Per-particle user scalar 1",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userScalar2PP",
+            "default" : 0.0,
+            "desc" : "Per-particle user scalar 2",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userScalar3PP",
+            "default" : 0.0,
+            "desc" : "Per-particle user scalar 3",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userScalar4PP",
+            "default" : 0.0,
+            "desc" : "Per-particle user scalar 4",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "userScalar5PP",
+            "default" : 0.0,
+            "desc" : "Per-particle user scalar 5",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "def_color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,112 @@
+{
+    "ID": "BRDFStochasticFlakes",
+    "Name": "V-Ray Stochastic Flakes Mtl",
+    "Parameters": [
+        {
+            "attr": "random_color_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "uvwgen",
+            "subdivs",
+            "tex_subdivs"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "colored_flakes_option"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "basic_parameters",
+                "label": "Basic parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enable_flakes"
+                    },
+                    {
+                        "name": "num_flakes"
+                    },
+                    {
+                        "name": "hilight_glossiness"
+                    },
+                    {
+                        "name": "blur_angle"
+                    },
+                    {
+                        "name": "reflect_filter"
+                    },
+                    {
+                        "name": "mapping_type"
+                    },
+                    {
+                        "name": "map_channel"
+                    },
+                    {
+                        "name": "flake_scale"
+                    },
+                    {
+                        "name": "brdf_type"
+                    },
+                    {
+                        "name": "seed"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "colored_flakes_parameters",
+                "label": "Colored flakes parameters",
+                "attrs": [
+                    {
+                        "name": "colored_flakes_option"
+                    },
+                    {
+                        "name": "saturation",
+                        "active": {"cond": "::colored_flakes_option=1"}
+                    },
+                    {
+                        "name": "lightness",
+                        "active": {"cond": "::colored_flakes_option=1"}
+                    },
+                    {
+                        "name": "white_average",
+                        "active": {"cond": "::colored_flakes_option!=0"}
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "advanced_parameters",
+                "label": "Advanced parameters",
+                "attrs": [
+                    {
+                        "name": "blend_min"
+                    },
+                    {
+                        "name": "blend_max"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,41 @@
+
+{
+    "Desciption" : "TexRGBMultiplyMax",
+    "ID" : "TexRGBMultiplyMax",
+    "Name" : "RGB Multiply Max",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_a",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The first texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_b",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The second texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha_mode",
+            "default" : "2",
+            "desc" : "Alpha mode (0 - from color_a, 1 - from color_b, 2 - multiply",
+            "items" : 
+            [
+                [ "0", "From color_a", "From color_a" ],
+                [ "1", "From color_b", "From color_b" ],
+                [ "2", "Multiply", "Multiply" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

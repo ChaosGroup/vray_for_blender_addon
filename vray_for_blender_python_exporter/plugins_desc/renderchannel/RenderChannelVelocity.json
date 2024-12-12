@@ -1,0 +1,70 @@
+
+{
+    "Desciption" : "RenderChannelVelocity",
+    "ID" : "RenderChannelVelocity",
+    "Name" : "Render Channel Velocity",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "Velocity",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clamp_velocity",
+            "default" : true,
+            "desc" : "When true, velocity is clamped between -1 and 1",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max_velocity",
+            "default" : 1.0,
+            "desc" : "Velocity is normalized (divided) with this value. Used to normalize the velocity between 0 and 1 if the output image format does not support floating - point colors",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max_velocity_last_frame",
+            "default" : 0.0,
+            "desc" : "Used internally to transfer the max_velocity value from the previous frame in animations",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ignore_z",
+            "default" : true,
+            "desc" : "If true, the Z component will be fixed at 0",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

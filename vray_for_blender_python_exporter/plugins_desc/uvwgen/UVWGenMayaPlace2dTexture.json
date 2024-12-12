@@ -1,0 +1,308 @@
+
+{
+    "Desciption" : "UVWGenMayaPlace2dTexture",
+    "ID" : "UVWGenMayaPlace2dTexture",
+    "Name" : "UVW Gen Maya Place 2d Texture",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_channel",
+            "default" : 1,
+            "desc" : "Index of the mapping channel to use (from GeomStaticMesh::map_channels)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_channel_tex",
+            "default" : 0,
+            "desc" : "Used when more than one mesh has UV linking specified for this 2d placement. If present will override uvw_channel",
+            "type" : "INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "Optional UVWGen from which the initial uvw coordinates will be taken, instead of the surface point",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coverage_u",
+            "default" : 1.0,
+            "desc" : "U values are remapped to 1.0/coverage_u",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coverage_u_tex",
+            "default" : 0.0,
+            "desc" : "U values are remapped to 1.0/coverage_u",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coverage_v",
+            "default" : 1.0,
+            "desc" : "V values are remapped to 1.0/coverage_v",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coverage_v_tex",
+            "default" : 0.0,
+            "desc" : "V values are remapped to 1.0/coverage_v",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "translate_frame_u",
+            "default" : 0.0,
+            "desc" : "Translate the frame in U direction after applying rotate_frame (and before wrap, coverage, clamp)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "translate_frame_u_tex",
+            "default" : 0.0,
+            "desc" : "Translate the frame in U direction after applying rotate_frame (and before wrap, coverage, clamp)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "translate_frame_v",
+            "default" : 0.0,
+            "desc" : "Translate the frame in V direction after applying rotate_frame (and before wrap, coverage, clamp)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "translate_frame_v_tex",
+            "default" : 0.0,
+            "desc" : "Translate the frame in V direction after applying rotate_frame (and before wrap, coverage, clamp)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rotate_frame",
+            "default" : 0.0,
+            "desc" : "Rotate the frame after applying UV noise",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "rotate_frame_tex",
+            "default" : 0.0,
+            "desc" : "Rotate the frame after applying UV noise",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mirror_u",
+            "default" : false,
+            "desc" : "If true, every other tile outside the [0;1] range will be mirrored in U",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mirror_v",
+            "default" : false,
+            "desc" : "If true, every other tile outside the [0;1] range will be mirrored in V",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_u",
+            "default" : true,
+            "desc" : "If true, U values outside the [0;1] range will wrap back to [0;1]",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_v",
+            "default" : true,
+            "desc" : "If true, V values outside the [0;1] range will wrap back to [0;1]",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stagger",
+            "default" : false,
+            "desc" : "If true, tiles in the V direction will add +0.5 to the U value for a 'staggering' effect",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clamp_u",
+            "default" : false,
+            "desc" : "Clamp the 'U' coordinate when accessing texture coordinate outside the [0,1] range",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clamp_v",
+            "default" : false,
+            "desc" : "Clamp the 'V' coordinate when accessing texture coordinate outside the [0,1] range",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_u",
+            "default" : 1.0,
+            "desc" : "Multiplier for U values",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_u_tex",
+            "default" : 0.0,
+            "desc" : "Multiplier for U values",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_v",
+            "default" : 1.0,
+            "desc" : "Multiplier for V values",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_v_tex",
+            "default" : 0.0,
+            "desc" : "Multiplier for V values",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_u",
+            "default" : 0.0,
+            "desc" : "Offset added to U before mirroring (after wrap, coverage, clamp)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_u_tex",
+            "default" : 0.0,
+            "desc" : "Offset added to U before mirroring (after wrap, coverage, clamp)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_v",
+            "default" : 0.0,
+            "desc" : "Offset added to V before mirroring (after wrap, coverage, clamp)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "offset_v_tex",
+            "default" : 0.0,
+            "desc" : "Offset added to V before mirroring (after wrap, coverage, clamp)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rotate_uv",
+            "default" : 0.0,
+            "desc" : "Rotate the UVs after mirroring",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "rotate_uv_tex",
+            "default" : 0.0,
+            "desc" : "Rotate the UVs after mirroring",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "noise_u",
+            "default" : 0.0,
+            "desc" : "Noise magnitude multiplier in U direction",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "noise_u_tex",
+            "default" : 0.0,
+            "desc" : "Noise magnitude multiplier in U direction",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "noise_v",
+            "default" : 0.0,
+            "desc" : "Noise magnitude multiplier in V direction",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "noise_v_tex",
+            "default" : 0.0,
+            "desc" : "Noise magnitude multiplier in V direction",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 1,
+            "desc" : "The number of parameter samples to take for motion blur. 0 means the global value. 1 means motion blur should be disabled for this plugin",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_set_name",
+            "default" : "",
+            "desc" : "The name of the uv channel that should be used",
+            "type" : "STRING",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

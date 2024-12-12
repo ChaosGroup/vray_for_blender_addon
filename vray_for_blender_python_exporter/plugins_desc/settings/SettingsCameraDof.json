@@ -1,0 +1,149 @@
+
+{
+    "Desciption" : "SettingsCameraDof",
+    "ID" : "SettingsCameraDof",
+    "Name" : "Settings Camera Dof",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "on",
+            "default" : false,
+            "desc" : "True to indicate DOF should be computed",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable depth-of-field"
+            }
+        },
+        
+        {
+            "attr" : "aperture",
+            "default" : 5.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Aperture",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "center_bias",
+            "default" : 0.0,
+            "desc" : "Center bias for the DOF effect; between -1.0f and 1.0f; 0.0f means no bias",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Center bias",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "focal_dist",
+            "default" : 200.0,
+            "desc" : "Focus distance in scene units",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Focus distance",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sides_on",
+            "default" : false,
+            "desc" : "True to make the aperture a regular polygon, instead of a circle",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Sides"
+            }
+        },
+        
+        {
+            "attr" : "sides_num",
+            "default" : 5,
+            "desc" : "Sides of the polygon, if 'Sides' is true",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Number of sides",
+                "max" : 12,
+                "min" : 3
+            }
+        },
+        
+        {
+            "attr" : "rotation",
+            "default" : 0.0,
+            "desc" : "Rotation angle of the aperture blades (sides)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Rotation",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anisotropy",
+            "default" : 0.0,
+            "desc" : "Anisotropy; allows an anamorphic effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Anisotropy",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 1,
+            "desc" : "Determines the number of samples for the DOF effect",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs",
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a SettingsCamera node from affecting the main VRayRenderer sequence and frame data",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Don't affect settings"
+            }
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "The original scene name of the camera associated with the plugin",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Scene name"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

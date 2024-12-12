@@ -1,0 +1,173 @@
+{
+    "ID": "BRDFSSS2Complex",
+    "Name": "V-Ray Fast SSS2",
+    "Parameters": [
+        {
+            "attr": "scatter_radius_mult",
+            "ui": {
+                "soft_max": 10.0,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "scale",
+            "ui": {
+                "soft_max": 5.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "ior",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "trace_reflections",
+            "default": true
+        },
+        {
+            "attr": "max_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "opacity",
+            "specular_subdivs",
+            "geometry_based_sampling",
+            "prepass_rate",
+            "prepass_id",
+            "prepass_mode",
+            "prepass_fileName",
+            "auto_density",
+            "samples_per_unit_area",
+            "surface_offset",
+            "preview_samples",
+            "max_distance",
+            "background_color",
+            "samples_color",
+            "subdivs",
+            "front_scatter",
+            "back_scatter",
+            "interpolation_accuracy",
+            "prepass_blur",
+            "consider_all_objects",
+            "channels",
+            "linear_workflow"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "diffuse and sss layer",
+                "label": "Diffuse and SSS layer",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "overall_color"
+                    },
+                    {
+                        "name": "diffuse_color"
+                    },
+                    {
+                        "name": "diffuse_amount"
+                    },
+                    {
+                        "name": "color_mode"
+                    },
+                    {
+                        "name": "sub_surface_color"
+                    },
+                    {
+                        "name": "scatter_radius"
+                    },
+                    {
+                        "name": "scatter_radius_mult",
+                        "label": "Scatter Radius (cm)"
+                    },
+                    {
+                        "name": "phase_function"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "ior",
+                        "label": "Index of Refraction"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "specular layer",
+                "label": "Specular layer",
+                "attrs": [
+                    {
+                        "name": "specular_color"
+                    },
+                    {
+                        "name": "specular_amount"
+                    },
+                    {
+                        "name": "specular_glossiness"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "name": "specular_layout",
+                        "attrs": [
+                            {
+                                "name": "reflection_depth",
+                                "active": {
+                                    "cond": "::trace_reflections=1"
+                                }
+                            },
+                            {
+                                "name": "trace_reflections"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "single_scatter"
+                    },
+                    {
+                        "name": "cutoff_threshold"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "name": "options_layout",
+                        "label": "options_layout",
+                        "attrs": [
+                            {
+                                "name": "refraction_depth"
+                            },
+                            {
+                                "name": "scatter_gi"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,30 @@
+
+{
+    "Desciption" : "volumeXSIMulti",
+    "ID" : "volumeXSIMulti",
+    "Name" : "volume XSI Multi",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "volumes",
+            "default" : null,
+            "desc" : "A list of volume plugins",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "ids_list",
+            "default" : 1,
+            "desc" : "A list of material IDs",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

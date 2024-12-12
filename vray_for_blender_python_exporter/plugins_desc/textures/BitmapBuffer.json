@@ -1,0 +1,199 @@
+
+{
+    "Desciption" : "BitmapBuffer",
+    "ID" : "BitmapBuffer",
+    "Name" : "Bitmap Buffer",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "filter_type",
+            "default" : "1",
+            "desc" : "-1 - nearest; 0 - no filtering; 1 - mip-map filtering; 2 - summed area table filtering; 3 - elliptical filtering; 4 - deprecated, do not use; 5 - sharp mip-map filtering",
+            "items" : 
+            [
+                [ "-1", "Nearest", "Nearest" ],
+                [ "0", "No filtering", "No filtering" ],
+                [ "1", "Mip-map filtering", "Mip-map filtering" ],
+                [ "2", "Summed are table filtering", "Summed are table filtering" ],
+                [ "3", "Elliptical filtering", "Elliptical filtering" ],
+                [ "5", "Sharp mip-map filtering", "Sharp mip-map filtering" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "filter_blur",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "transfer_function",
+            "default" : "1",
+            "desc" : "0 - linear, 1 - gamma corrected, 2 - sRGB, 3 - auto",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Gamma corrected", "Gamma corrected" ],
+                [ "2", "sRGB", "sRGB" ],
+                [ "3", "Auto", "Auto" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "rgb_color_space",
+            "default" : "",
+            "desc" : "The linear RGB color space of the texture. Default: \"raw\". Texture will be converted from this color space to the renderer color space. Builtin supported linear color spaces are \"raw\" for no conversion, \"lin_srgb\" for sRGB, and \"acescg\" for ACEScg. If the OCIO environment variable is set or if the SettingsUnitsInfo \"ocio_config_file\" parameter is set, the value can be any color space available in the OCIO config. This conversion is applied after the transfer function. The parameter transfer_function must be set, or else texture filtering will NOT work correctly",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "maya_compatible",
+            "default" : false,
+            "desc" : "If true alpha can be generated from intensity.Maya checks if alpha is 1.0 everywhere, and if so, uses the intensity for alpha value",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "allow_negative_colors",
+            "default" : false,
+            "desc" : "if false negative colors will be clamped",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "interpolation",
+            "default" : "0",
+            "desc" : "Interpolation method for the mip-map filtering (0 - bilinear, 1 - bicubic, 2 - biquadratic, 3 - 3dsMax (interpolation is based on the input bitmap format:for 8-bit files - use bicubic, for floating point or tiled - use bilinear))",
+            "items" : 
+            [
+                [ "0", "Bilinear", "Bilinear" ],
+                [ "1", "Bicubic", "Bicubic" ],
+                [ "2", "Biquadratic", "Biquadratic" ],
+                [ "3", "3dsMax auto", "3dsMax auto" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "frame_number",
+            "default" : -2147483648,
+            "desc" : "When working with image sequences, this parameter specifies which image out of the sequence should be used.  If parameter is omitted or defaulted, the frame number depends on the current frame time value",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "frame_offset",
+            "default" : 0,
+            "desc" : "Start frame offset for image sequences",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "The file name; can contain <UDIM> or <UVTILE> tags for Mari or Mudbox tiles respectively,or $nU and $nV for explicit tiles; lower-case tags consider the tiles as starting from 0 whereas upper-case tags start from 1",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : 
+                [
+                    "exr",
+                    "png",
+                    "bmp",
+                    "tga",
+                    "hdr",
+                    "jpg",
+                    "jpeg",
+                    "pic",
+                    "tif",
+                    "tiff",
+                    "psd",
+                    "vrimg",
+                    "sgi",
+                    "rgb",
+                    "rgba"
+                ]
+            }
+        },
+        
+        {
+            "attr" : "load_file",
+            "default" : true,
+            "desc" : "if set to false, the file would not be loaded",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "frame_sequence",
+            "default" : false,
+            "desc" : "True if there are multiple files for animation with frame number in their names. Enables replacing \"<frameNum>\" in the given 'file' string with current frame number",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_data_window",
+            "default" : true,
+            "desc" : "true to use the data window information in e.g. OpenEXR files; otherwise false",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "psd_group_name",
+            "default" : 0,
+            "desc" : "Legacy parameter for PSD files. Contains a text string encoded as an int array",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "psd_alpha_name",
+            "default" : 0,
+            "desc" : "Legacy parameter for PSD files. Contains a text string encoded as an int array",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "ifl_start_frame",
+            "default" : 0,
+            "desc" : "Image file list first frame number",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "ifl_playback_rate",
+            "default" : 1.0,
+            "desc" : "Image file list frame rate multiplier",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "ifl_end_condition",
+            "default" : "0",
+            "desc" : "Image file list (IFL) end condition: 0 - Loop; 1 - Ping Pong; 2 - Hold;",
+            "items" : 
+            [
+                [ "0", "Loop", "Loop" ],
+                [ "1", "Ping Pong", "Ping Pong" ],
+                [ "2", "Hold", "Hold" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,99 @@
+
+{
+    "Desciption" : "TexOpenVDB",
+    "ID" : "TexOpenVDB",
+    "Name" : "Open VDB",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "The path to the OpenVDB file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vdb" ]
+            }
+        },
+        
+        {
+            "attr" : "stream",
+            "default" : 0,
+            "desc" : "If \"file\" is missing, read the vdb data from a memory stream",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "render_grid",
+            "default" : "",
+            "desc" : "The name of the OpenVDB grid to render",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "velocity_grid",
+            "default" : "",
+            "desc" : "The name of the OpenVDB velocity grid to use for motion blur",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "delay_load",
+            "default" : true,
+            "desc" : "If true, delay load the OpenVDB voxels until requested",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "interpolation",
+            "default" : "1",
+            "desc" : "The grid interpolation sampler (0:linear, 1:quadratic: 2:none)",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Quadratic", "Quadratic" ],
+                [ "2", "None", "None" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "use_3d_mapping",
+            "default" : false,
+            "desc" : "whther to ignore the uvw generator and use world mapping",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "float_mult",
+            "default" : 1.0,
+            "desc" : "Texture multiplier for float data",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "vector_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Texture multiplier for vector data",
+            "type" : "ACOLOR"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

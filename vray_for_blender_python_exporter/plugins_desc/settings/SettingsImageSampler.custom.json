@@ -1,0 +1,288 @@
+{
+    "ID": "SettingsImageSampler",
+    "Parameters": [
+        {
+            "attr": "filter_type",
+            "default": "FilterLanczos",
+            "desc": "Antialiasing filter type",
+            "items": [
+                [
+                    "NONE",
+                    "None",
+                    ""
+                ],
+                [
+                    "FilterArea",
+                    "Area",
+                    ""
+                ],
+                [
+                    "FilterBox",
+                    "Box",
+                    ""
+                ],
+                [
+                    "FilterCatmullRom",
+                    "Catmull-Rom",
+                    ""
+                ],
+                [
+                    "FilterCookVariable",
+                    "Cook Variable",
+                    ""
+                ],
+                [
+                    "FilterGaussian",
+                    "Gaussian",
+                    ""
+                ],
+                [
+                    "FilterLanczos",
+                    "Lanczos",
+                    ""
+                ],
+                [
+                    "FilterMitNet",
+                    "Mitchell-Netravali",
+                    ""
+                ],
+                [
+                    "FilterSinc",
+                    "Sinc",
+                    ""
+                ],
+                [
+                    "FilterTriangle",
+                    "Triangle",
+                    ""
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "render_mask_mode",
+            "update": "onUpdateRenderMaskMode"
+        },
+        {
+            "attr": "render_mask_object_selector",
+            "desc": "Objects to use for render mask.",
+            "type" : "OBJECT",
+            "filter_type": "geometry",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "render_mask_collection_selector",
+            "desc": "Collection to use for render mask.",
+            "type" : "OBJECT",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "render_mask_object_ids_list",
+            "desc": "Object IDs to use for render mask, separated by a semicolon.",
+            "type" : "STRING",
+            "options": {
+                "derived": true
+            },
+            "ui" : {
+                "display_name" : "Object IDs"
+            }
+        },
+        {
+            "attr": "render_mask_texture_file",
+            "type": "STRING",
+            "desc": "Texture to use as a render mask.",
+            "default": "",
+            "subtype": "FILE_PATH",
+            "options": {
+                "derived": true
+            },
+            "ui" : {
+                "display_name" : "Texture"
+            }
+        },
+        {
+            "attr" : "type",
+            "default" : "3",
+            "desc" : "The type of the image sampler (Bucket or Progressive)",
+            "items" : 
+            [
+                [ "1", "Bucket", "Bucket" ],
+                [ "3", "Progressive", "Progressive" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Sampler Type"
+            }
+        },
+        {
+            "attr": "lock_subdivs",
+            "desc" : "Using fixed subdivs",
+            "default": false,
+            "type": "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Lock Subdivs"
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "dmc_fireflyRemoval",
+            "desc" : "Enable firefly removal for the bucket samplers",
+            "default": false,
+            "type": "BOOL"
+        },
+        {
+            "attr" : "progressive_maxSubdivs",
+            "default" : 100
+        },
+        {
+            "attr" : "dmc_maxSubdivs",
+            "default" : 24
+        },
+        {
+            "attr" : "dmc_adaptivity_clamp",
+            "default" : 1.5
+        },
+        {
+            "attr" : "min_shade_rate",
+            "default" : 6
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "type"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "lock_subdivs"
+                    }
+                ],
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1"
+                }
+            },
+            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1,::lock_subdivs=0"
+                },
+                "attrs": [
+                    {
+                        "name": "dmc_minSubdivs"
+                    },
+                    {
+                        "name": "dmc_maxSubdivs"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1,::lock_subdivs=1"
+                },
+                "attrs": [
+                    {
+                        "name": "dmc_minSubdivs",
+                        "label": "Subdivs"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1"
+                },
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "name": "dmc_threshold",
+                                "label": "Noise Limit"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1"
+                },
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "name": "dmc_fireflyRemoval",
+                                "label": "Firefly Removal"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=3"
+                },
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "progressive_minSubdivs"
+                            },
+                            {
+                                "name": "progressive_maxSubdivs"
+                            },
+                            {
+                                "name": "progressive_threshold"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "progressive_maxTime"
+                            },
+                            {
+                                "name": "progressive_bundleSize"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "progressive_showMask"
+        ],
+        "animatable": false
+    }
+}

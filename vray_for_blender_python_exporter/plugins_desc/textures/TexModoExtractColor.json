@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexModoExtractColor",
+    "ID" : "TexModoExtractColor",
+    "Name" : "Modo Extract Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

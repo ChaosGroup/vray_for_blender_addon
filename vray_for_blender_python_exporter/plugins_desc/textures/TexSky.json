@@ -1,0 +1,217 @@
+
+{
+    "Desciption" : "TexSky",
+    "ID" : "TexSky",
+    "Name" : "Sky",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Use to control the brightness of the Sun",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "target_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the Sun target point. Used only for photon mapping",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "turbidity",
+            "default" : 3.0,
+            "desc" : "Determines the amount of dust in the air and affects the color of the sun and sky. Smaller values produce a clear/blue sky, larger values yellow and orange",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 1.799999952316284
+            }
+        },
+        
+        {
+            "attr" : "ozone",
+            "default" : 0.3499999940395355,
+            "desc" : "Affects the color of the sun light (between 0.0 and 1.0). Smaller values make the sunlight more yellow, larger values make it blue",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "size_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the visible size of the sun. Affects the appearance of the sun disc as seen by the camera and reflections, as well as the blurriness of the sun shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sky_model",
+            "default" : "0",
+            "desc" : "Selects the procedural model used to simulate the TexSky texture (0 - Preetham, 1 - CIE Clear, 2 - Overcast, 3 - Hosek, 4 - PRG Clear Sky, 5 - PRG Clear Sky New)",
+            "items" : 
+            [
+                [ "0", "Preetham et al", "Preetham et al" ],
+                [ "1", "CIE Clear", "CIE Clear" ],
+                [ "2", "CIE Overcast", "CIE Overcast" ],
+                [ "3", "Hosek et al", "Hosek et al" ],
+                [ "4", "PRG Clear Sky", "PRG Clear Sky" ],
+                [ "5", "PRG Clear Sky New", "PRG Clear Sky New" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "horiz_illum",
+            "default" : 25000.0,
+            "desc" : "Specifies the intensity (in lx) of the illumination on horizontal surfaces coming from the sky. Used by CIE models",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "altitude",
+            "default" : 0.0,
+            "desc" : "Specifies the observer altitude which affects the sky and horizon appearance. Used by the PRG Clear Sky New model",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "color_mode",
+            "default" : "0",
+            "desc" : "This option affects the way the color in the Filter color parameter affects the color of the sun (0 - Filter, 1 - Direct, 2 - Override)",
+            "items" : 
+            [
+                [ "0", "Filter", "Filter" ],
+                [ "1", "Direct", "Direct" ],
+                [ "2", "Override", "Override" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "filter_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Sunlight color. Used to add user control to light color definition",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ground_albedo",
+            "default" : [ 0.2000000029802322, 0.2000000029802322, 0.2000000029802322 ],
+            "desc" : "Reflective property of the \"ground\". Affects sky-dome brightness and color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blend_angle",
+            "default" : 5.739170551300049,
+            "desc" : "The angle (in degrees) (up from the horizon) where the sky starts to blend with the ground albedo. Values close to 0.0 produce a sharper horizon line, while larger values produce a softer horizon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 90.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "horizon_offset",
+            "default" : 0.0,
+            "desc" : "Horizon offset under the sky-dome. Allows the user to manually lower the horizon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 90.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "water_vapour",
+            "default" : 2.0,
+            "desc" : "Controls the amount of water vapor in the atmosphere which affects the sky color",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "up_vector",
+            "default" : [ 0.0, 0.0, 1.0 ],
+            "desc" : "Specifies an up vector different from the one for the scene (SettingsUnitsInfo::scene_upDir)",
+            "type" : "VECTOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the Sun. Only the rotation determines its position in the sky. The translation is used only for photon mapping",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invisible",
+            "default" : false,
+            "desc" : "When on, this option makes the sun invisible, both to the camera and to reflections",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "sun",
+            "default" : null,
+            "desc" : "If specified, all parameters are taken from the sun; otherwise, the sky parameters are used",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sun_dir_only",
+            "default" : 0,
+            "desc" : "Use only the direction of the specified sun (don't inherit all other parameters)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Sun direction only"
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

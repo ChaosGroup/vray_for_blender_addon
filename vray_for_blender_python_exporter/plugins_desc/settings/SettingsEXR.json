@@ -1,0 +1,110 @@
+
+{
+    "Desciption" : "SettingsEXR",
+    "ID" : "SettingsEXR",
+    "Name" : "Settings EXR",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compression",
+            "default" : "3",
+            "desc" : "Compression for OpenEXR output (0 - default, 1 - no compression, 2 - RLE, 3 - ZIPS, 4 - ZIP, 5 - PIZ, 6 - PXR24, 7 - B44, 8 - B44A, 9 - DWAA, 10 - DWAB)",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "No Compression", "No Compression" ],
+                [ "2", "Run-Length", "Run-Length" ],
+                [ "3", "Scanline ZIP", "Scanline ZIP" ],
+                [ "4", "Block ZIP", "Block ZIP" ],
+                [ "5", "PIZ", "PIZ" ],
+                [ "6", "PXR24", "PXR24" ],
+                [ "7", "B44", "B44" ],
+                [ "8", "B44A", "B44A" ],
+                [ "9", "DWAA", "DWAA" ],
+                [ "10", "DWAB", "DWAB" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "bits_per_channel",
+            "default" : "16",
+            "desc" : "Bits per channel (16 or 32)",
+            "items" : 
+            [
+                [ "16", "16 bits (half-float)", "16 bits (half-float)" ],
+                [ "32", "32 bits (full float)", "32 bits (full float)" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "extra_attributes",
+            "default" : "",
+            "desc" : "Extra attributes to write in the header. Multiple attributes should be separated by ';'. Some extra attributes are recognized by the EXR library. For example, the DWAA/DWAB compression level can be set with the 'dwaCompressionLevel' attribute. For a list of available attributes refer to ImfStandardAttributes.h in the OpenEXR source files",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "auto_data_window",
+            "default" : "0",
+            "desc" : "Data window for scanline-based multichannel OpenEXR files (0 - current render region, 1 - auto data window based on the alpha channel, 2 - whole image)",
+            "items" : 
+            [
+                [ "0", "render region", "render region" ],
+                [ "1", "auto", "auto" ],
+                [ "2", "whole image", "whole image" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "write_integer_ids",
+            "default" : false,
+            "desc" : "true to write integer element ids when using Image Format exr",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "multipart",
+            "default" : false,
+            "desc" : "true to create multi-part exr file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "deep_alpha_colors",
+            "default" : "0",
+            "desc" : "Deep alpha colors (0 - monochrome, 1 - RGB, 2 - monochrome+RGB)",
+            "items" : 
+            [
+                [ "0", "Monochrome", "Monochrome" ],
+                [ "1", "RGB", "RGB" ],
+                [ "2", "Monochrome+RGB", "Monochrome+RGB" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "display_window",
+            "default" : 0,
+            "desc" : "The visible image region, excluding overscan. It expects a list of 4 integers, representing the top-left and bottom-right corners in this order: left, top, right, bottom",
+            "elements_count" : 4,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "data_window_offset",
+            "default" : 0,
+            "desc" : "This makes it possible to offset/translate the data window values stored in the OpenEXR file. Useful when you want to have display window from [0,0] and data window which contains overscan areas. It expects a list of 2 integers, representing the offset in the order: left, top",
+            "elements_count" : 2,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

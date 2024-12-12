@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "SettingsHair",
+    "ID" : "SettingsHair",
+    "Name" : "Settings Hair",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "min_hair_width",
+            "default" : 0.0,
+            "desc" : "Minimum hair width in pixels, for plugins that support it and do not have that option overridden",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,122 @@
+
+{
+    "Desciption" : "MtlMulti",
+    "ID" : "MtlMulti",
+    "Name" : "Mtl Multi",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "mtls",
+            "default" : null,
+            "desc" : "(Deprecated; use mtls_list/ids_list instead). A list of two-element lists with the material id and the material plugin",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtls_list",
+            "default" : null,
+            "desc" : "A list of the materials",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "volumes_list",
+            "default" : null,
+            "desc" : "A list of volumes",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ids_list",
+            "default" : 0,
+            "desc" : "A list of material IDs for the matching elements of mtls_list",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shader_sets_list",
+            "default" : "",
+            "desc" : "A list of shader set names to be matched to the materials. On GPU this only works with one geometry per material",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_shader_set_patterns",
+            "default" : false,
+            "desc" : "Allow the use of wildcard patterns in shader_sets_list. On GPU this only works with one geometry per material",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtlid_gen",
+            "default" : 0,
+            "desc" : "An integer texture that generates material ids; if not present, neither mtlid_gen_float is present then surface material id will be used",
+            "type" : "INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtlid_gen_float",
+            "default" : 0.0,
+            "desc" : "A float texture that generates material ids; if not present, neither mtlid_gen is present then surface material id will be used",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtlid_gen_float_round_mode",
+            "default" : "0",
+            "desc" : "How to round the values returned by 'mtlid_gen_float' when converting them to an integer",
+            "items" : 
+            [
+                [ "0", "Round Nearest", "Round Nearest" ],
+                [ "1", "Round Down", "Round Down" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_id",
+            "default" : false,
+            "desc" : "true to wrap the material ID's to the largest specified ID for the material",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

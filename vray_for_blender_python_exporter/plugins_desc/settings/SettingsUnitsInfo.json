@@ -1,0 +1,87 @@
+
+{
+    "Desciption" : "SettingsUnitsInfo",
+    "ID" : "SettingsUnitsInfo",
+    "Name" : "Settings Units Info",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "meters_scale",
+            "default" : 1.0,
+            "desc" : "The number by which a 3d distance must be multiplied to convert it into meters",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "photometric_scale",
+            "default" : 0.001000000047497451,
+            "desc" : "The number by which the power of photometric lights should be scaled when rendering",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "scene_upDir",
+            "default" : [ 0.0, 0.0, 1.0 ],
+            "desc" : "The 'up' direction for the scene",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "seconds_scale",
+            "default" : 1.0,
+            "desc" : "The number by which a scene time unit must be multiplied to convert it to seconds",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "frames_scale",
+            "default" : 0.0,
+            "desc" : "Frames per second, equal to 1/seconds_scale. If it is 0, then seconds_scale is used instead",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "rgb_color_space",
+            "default" : "1",
+            "desc" : "Sets the rendering color space (0 - legacy CIE RGB, 1 - sRGB, 2 - ACEScg)",
+            "items" : 
+            [
+                [ "0", "Legacy CIE RGB", "Legacy CIE RGB" ],
+                [ "1", "sRGB", "sRGB" ],
+                [ "2", "ACEScg", "ACEScg" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coordinate_system",
+            "default" : "0",
+            "desc" : "The handedness of the coordinate system. 0 - Right-handed coordinate system. 1 - Left-handed coordinate system",
+            "items" : 
+            [
+                [ "0", "Right-Handed", "Right-Handed" ],
+                [ "1", "Left-Handed", "Left-Handed" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ocio_config_file",
+            "default" : "",
+            "desc" : "OCIO config filepath if ever used",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "ocio" ]
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

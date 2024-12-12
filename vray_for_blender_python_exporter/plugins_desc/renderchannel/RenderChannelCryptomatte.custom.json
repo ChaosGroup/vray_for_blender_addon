@@ -1,0 +1,62 @@
+{
+    "ID": "RenderChannelCryptomatte",
+    "Name" : "Cryptomatte",
+    "Subtype" : "MATTE",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "id_type"
+                    },
+                    {
+                        "name": "user_attribute"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "add_root_object_name",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "num_level"
+                    },
+                    {
+                        "name": "write_metadata"
+                    },
+                    {
+                        "name": "object_path_start_slash"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Cryptomatte"
+        },
+        {
+            "attr" : "write_metadata",
+            "default" : "1"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "id_type_prefix"
+        ]
+    }
+}

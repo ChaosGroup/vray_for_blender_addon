@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "FilterCatmullRom",
+    "ID" : "FilterCatmullRom",
+    "Name" : "Filter Catmull Rom",
+    "Parameters" : [],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

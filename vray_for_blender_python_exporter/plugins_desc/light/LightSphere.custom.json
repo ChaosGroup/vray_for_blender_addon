@@ -1,0 +1,363 @@
+{
+    "ID": "LightSphere",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "ui": {
+                "display_name": "Color"
+            },
+            "desc": "The color of the light.",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "update": "onUpdateAttribute"
+        },
+        {
+            "attr": "color_mode",
+            "default": "0",
+            "desc": "Choose between RGB color and color temperature",
+            "items": [
+                [
+                    "0",
+                    "Color",
+                    "Color"
+                ],
+                [
+                    "1",
+                    "Temperature",
+                    "Temperature"
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "temperature",
+            "default": 6500.0,
+            "desc": "Color temperature in K",
+            "type": "FLOAT",
+            "update": "onUpdateAttribute",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "intensity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "shadowColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "shadowColor",
+            "tex_prop": "shadowColor_tex",
+            "ui": {
+                "display_name": "Shadow color"
+            },
+            "desc": "The shadow color. Anything but black is not physically accurate",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "decay_near_start",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_near_end",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_start",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_end",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "shadowBias",
+            "default": 0.02,
+            "ui": {
+                "soft_min": -0.1,
+                "soft_max": 0.1,
+                "spin_step": 0.001,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "intensity",
+            "default": 30.0,
+            "ui": {
+                "soft_max": 500.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "bumped_below_surface_check",
+            "default": true
+        },
+        {
+            "attr": "radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "color_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "color_colortex",
+                        "active": {
+                            "cond": "::color_mode=0"
+                        }
+                    },
+                    {
+                        "name": "temperature",
+                        "active": {
+                            "cond": "::color_mode=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "radius"
+                    },
+                    {
+                        "name": "sphere_segments"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "occludeLights",
+                        "active": {
+                            "cond": "::invisible!=0"
+                        }
+                    },
+                    {
+                        "name": "affectDiffuse"
+                    },
+                    {
+                        "name": "affectSpecular"
+                    },
+                    {
+                        "name": "affectReflections"
+                    },
+                    {
+                        "name": "affectAtmospherics"
+                    },
+                    {
+                        "name": "diffuse_contribution",
+                        "active": {
+                            "cond": "::affectDiffuse!=0"
+                        }
+                    },
+                    {
+                        "name": "specular_contribution",
+                        "active": {
+                            "cond": "::affectSpecular!=0;::affectReflections!=0"
+                        }
+                    },
+                    {
+                        "name": "atmospherics_contribution",
+                        "active": {
+                            "cond": "::affectAtmospherics!=0"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "cutoffThreshold"
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label",
+                        "show": {
+                            "prop": "0"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "shadows",
+                "label": "Shadows",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "shadowBias"
+                            },
+                            {
+                                "name": "shadowColor_colortex"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "photon emission",
+                "label": "Photon Emission",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "causticSubdivs"
+                    },
+                    {
+                        "name": "causticMult"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "decay",
+                "label": "Decay",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "decay_near_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_near_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_near_start"
+                            },
+                            {
+                                "name": "decay_near_end"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "decay_far_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_far_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_far_start"
+                            },
+                            {
+                                "name": "decay_far_end"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "transform"
+            },
+            {
+                "name": "pivot_offset"
+            },
+            {
+                "name": "color_colortex"
+            },
+            {
+                "name": "shadowColor_colortex"
+            },
+            {
+                "name": "intensity_tex"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "objectID",
+            "channels_diffuse",
+            "channels_full",
+            "channels_raw",
+            "channels_specular",
+            "use_global_light_level",
+            "photonSubdivs",
+            "diffuseMult",
+            "subdivs",
+            "storeWithIrradianceMap",
+            "useMIS",
+            "noDecay"
+        ],
+        "animatable": true
+    }
+}

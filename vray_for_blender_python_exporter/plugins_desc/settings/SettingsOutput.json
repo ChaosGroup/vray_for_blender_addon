@@ -1,0 +1,456 @@
+
+{
+    "Desciption" : "SettingsOutput",
+    "ID" : "SettingsOutput",
+    "Name" : "Settings Output",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "img_width",
+            "default" : 640,
+            "desc" : "Output image width",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Image width"
+            }
+        },
+        
+        {
+            "attr" : "img_height",
+            "default" : 480,
+            "desc" : "Output image height",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Image height"
+            }
+        },
+        
+        {
+            "attr" : "img_pixelAspect",
+            "default" : 1.0,
+            "desc" : "Output image pixel aspect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Pixel aspect"
+            }
+        },
+        
+        {
+            "attr" : "img_file",
+            "default" : "",
+            "desc" : "Output image filename. See also img_dir",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "File name"
+            }
+        },
+        
+        {
+            "attr" : "img_dir",
+            "default" : "",
+            "desc" : "Output image directory. See also img_file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Dir name"
+            }
+        },
+        
+        {
+            "attr" : "img_file_add_dot",
+            "default" : true,
+            "desc" : "Dot-delimited frame number in the output file name",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Dot-delimited frame number"
+            }
+        },
+        
+        {
+            "attr" : "img_file_needFrameNumber",
+            "default" : false,
+            "desc" : "If true, the frame number is added to the image file name",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_separateAlpha",
+            "default" : false,
+            "desc" : "If true, the alpha channel will be written to a separate file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_noAlpha",
+            "default" : false,
+            "desc" : "If true, the alpha channel will not be written the final image",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_dontSaveRgbChannel",
+            "default" : "0",
+            "desc" : "0 - the RGB channel will be saved to disk alongside other channels, 1 - the RGB channel will not be saved to disk, 2 - only the RGB/effectsResult channel will be saved to disk",
+            "items" : 
+            [
+                [ "0", "Output All", "Output All" ],
+                [ "1", "Skip RGB", "Skip RGB" ],
+                [ "2", "Only RGB", "Only RGB" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "RGB Channel Output"
+            }
+        },
+        
+        {
+            "attr" : "img_saveVelocityZeroBase",
+            "default" : false,
+            "desc" : "If true, Velocity channel will be saved zero base instead of the default 0.5 based",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_apply_cc_channels",
+            "default" : false,
+            "desc" : "If true, VFB color corrections will be applied to render channels",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_deepFile",
+            "default" : false,
+            "desc" : "If true, V-Ray will will generate deep image file (valid for vrst and exr)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_rawFile",
+            "default" : false,
+            "desc" : "If true, V-Ray will render to a tiled file format (.vrimg or .exr). This is automatically turned on for file formats that only support tiled writing (like .vrimg)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_rawFileVFB",
+            "default" : 1,
+            "desc" : "If writing to a tiled file format, specifies whether a memory VFB window should be displayed (0 - no memory VFB, 1 - full memory VFB, 2 - preview). Set to 0 when rendering huge resolutions",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "img_rawFileSaveColorCorrections",
+            "default" : false,
+            "desc" : "If true, the VFB color corrections will be saved in the raw file if possible",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_saveCryptomattesSeparately",
+            "default" : false,
+            "desc" : "If true then save Cryptomatte elements separately from the raw image file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_clearMode",
+            "default" : "0",
+            "desc" : "How to clear the image in the VFB before rendering each frame",
+            "items" : 
+            [
+                [ "0", "Don't clear", "Don't clear" ],
+                [ "1", "Cross", "Cross" ],
+                [ "2", "Fields", "Fields" ],
+                [ "3", "Darken", "Darken" ],
+                [ "4", "Tint blue", "Tint blue" ],
+                [ "5", "Clear to black", "Clear to black" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Clear mode"
+            }
+        },
+        
+        {
+            "attr" : "anim_start",
+            "default" : 0.0,
+            "desc" : "Start of animation range in time units",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Start animation"
+            }
+        },
+        
+        {
+            "attr" : "anim_end",
+            "default" : 1.0,
+            "desc" : "End of animation range in time units",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "End animation"
+            }
+        },
+        
+        {
+            "attr" : "anim_frame_padding",
+            "default" : 4,
+            "desc" : "Animation Frame Name Padding",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Frame Padding"
+            }
+        },
+        
+        {
+            "attr" : "anim_renumber_on",
+            "default" : false,
+            "desc" : "If true, frame renumbering is used",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "anim_renumber_start",
+            "default" : 0.0,
+            "desc" : "Start number for renumber frames",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Renumber start number"
+            }
+        },
+        
+        {
+            "attr" : "anim_renumber_step",
+            "default" : 1.0,
+            "desc" : "Renumber frames step",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Renumber frames step"
+            }
+        },
+        
+        {
+            "attr" : "anim_ren_frame_start",
+            "default" : 0.0,
+            "desc" : "First frame of animation range",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "First frame of animation range"
+            }
+        },
+        
+        {
+            "attr" : "frame_start",
+            "default" : 0,
+            "desc" : "The frame number at the start of the animation range",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Frame start"
+            }
+        },
+        
+        {
+            "attr" : "frames_per_second",
+            "default" : 1.0,
+            "desc" : "Number of frames per unit time",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Frames per unit time"
+            }
+        },
+        
+        {
+            "attr" : "frames",
+            "default" : null,
+            "desc" : "List of frames to be rendered. May contain intervals in the form of lists with start and end frame",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "rgn_left",
+            "default" : 0.0,
+            "desc" : "Image output region left coord",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Image output region left coord"
+            }
+        },
+        
+        {
+            "attr" : "rgn_width",
+            "default" : 640.0,
+            "desc" : "Image output region width",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Image output region width"
+            }
+        },
+        
+        {
+            "attr" : "rgn_top",
+            "default" : 0.0,
+            "desc" : "Image output region top coord",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Image output region top coord"
+            }
+        },
+        
+        {
+            "attr" : "rgn_height",
+            "default" : 480.0,
+            "desc" : "Image output region height",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Image output region height"
+            }
+        },
+        
+        {
+            "attr" : "bmp_width",
+            "default" : 640,
+            "desc" : "Output bitmap width. Not to be confused with img_width. This is the sampling resolution, not the file resolution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap width"
+            }
+        },
+        
+        {
+            "attr" : "bmp_height",
+            "default" : 480,
+            "desc" : "Output bitmap height. Not to be confused with img_height. This is the sampling resolution, not the file resolution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap height"
+            }
+        },
+        
+        {
+            "attr" : "r_left",
+            "default" : 0,
+            "desc" : "Bitmap output region left coord",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap output region left coord"
+            }
+        },
+        
+        {
+            "attr" : "r_width",
+            "default" : 640,
+            "desc" : "Bitmap output region width",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap output region width"
+            }
+        },
+        
+        {
+            "attr" : "r_top",
+            "default" : 0,
+            "desc" : "Bitmap output region top coord",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap output region top coord"
+            }
+        },
+        
+        {
+            "attr" : "r_height",
+            "default" : 480,
+            "desc" : "Bitmap output region height",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap output region height"
+            }
+        },
+        
+        {
+            "attr" : "poly_regions",
+            "default" : "",
+            "desc" : "Multipolygons region definition (json string). If defined and valid, it will be used as render region. Otherwise bitmap output region params will be used",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "frame_stamp_enabled",
+            "default" : false,
+            "desc" : "true to enable the VFB frame stamp",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "frame_stamp_text",
+            "default" : "",
+            "desc" : "Frame stamp text",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "relements_separateFolders",
+            "default" : false,
+            "desc" : "true to save render elements in separate folders",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "relements_separate_rgba",
+            "default" : false,
+            "desc" : "true to save the main RGBA elment in a separate folder too, if relements_separateFolders is specified",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "relements_divider",
+            "default" : ".",
+            "desc" : "Render elements name separator",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "film_offset_x",
+            "default" : 0.0,
+            "desc" : "Horizontal film offset",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "film_offset_y",
+            "default" : 0.0,
+            "desc" : "Vertical film offset",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

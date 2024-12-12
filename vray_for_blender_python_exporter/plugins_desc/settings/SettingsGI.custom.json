@@ -1,0 +1,203 @@
+{
+    "ID": "SettingsGI",
+    "Parameters": [
+        {
+            "attr": "on",
+            "default": true
+        },
+        {
+            "available": [
+                "BLENDER"
+            ],
+            "attr": "spherical_harmonics",
+            "desc": "Bake or render spherical harmonics",
+            "type": "ENUM",
+            "items": [
+                [
+                    "BAKE",
+                    "Bake",
+                    ""
+                ],
+                [
+                    "RENDER",
+                    "Render",
+                    ""
+                ]
+            ],
+            "default": "BAKE",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "reflect_caustics",
+            "default": true,
+            "desc": "Enable reflective caustics",
+            "type": "BOOL"
+        },
+        {
+            "attr": "primary_engine",
+            "default": "2",
+            "desc": "GI engine to use for the first light bounce",
+            "items": [
+                [
+                    "0",
+                    "Irradiance Map",
+                    "Irradiance Map"
+                ],
+                [
+                    "1",
+                    "Photon Map",
+                    "Photon Map"
+                ],
+                [
+                    "2",
+                    "Brute force",
+                    "Brute force"
+                ],
+                [
+                    "3",
+                    "Light Cache",
+                    "Light Cache"
+                ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Primary Engine"
+            }
+        },
+        {
+            "attr": "secondary_engine",
+            "default": "3",
+            "desc": "GI engine to use for the second and later light bounces",
+            "items": [
+                [
+                    "0",
+                    "None",
+                    "None"
+                ],
+                [
+                    "2",
+                    "Brute force",
+                    "Brute force"
+                ],
+                [
+                    "3",
+                    "Light Cache",
+                    "Light Cache"
+                ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Secondary Engine"
+            }
+        },
+        {
+            "attr": "use_light_cache_for_interactive",
+            "type": "BOOL",
+            "desc": "Allow use of Light Cache for interactive rendering. If this setting is 'off', Brute Force will be used regardless of the 'Engine' selection",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "ray_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "ao_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "on"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "layout": "COLUMN",
+                "active": {
+                    "cond": "::on=1"
+                },
+                "attrs": [
+                    {
+                        "name": "primary_engine"
+                    },
+                    {
+                        "name": "primary_multiplier"
+                    },
+                    {
+                        "name": "secondary_engine"
+                    },
+                    {
+                        "name": "secondary_multiplier"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "active": {
+                    "cond": "::on=1"
+                },
+                "attrs": [
+                    {
+                        "name": "ray_distance_on"
+                    },
+                    {
+                        "name": "ray_distance"
+                    }
+                ]
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "ao_on"
+                    }
+                ],
+                "active": {
+                    "cond": "::on=1"
+                },
+                "layout": "ROW"
+            },
+            {
+                "layout": "COLUMN",
+                "active": {
+                    "cond": "::on=1"
+                },
+                "attrs": [
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::ao_on=1"
+                        },
+                        "attrs": [
+                            {
+                                "name": "ao_amount"
+                            },
+                            {
+                                "name": "ao_subdivs"
+                            },
+                            {
+                                "name": "ao_radius"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

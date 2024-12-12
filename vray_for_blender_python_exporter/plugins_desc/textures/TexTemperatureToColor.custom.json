@@ -1,0 +1,15 @@
+{
+    "ID": "TexTemperatureToColor",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "temperature"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

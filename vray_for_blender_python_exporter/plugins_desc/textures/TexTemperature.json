@@ -1,0 +1,62 @@
+
+{
+    "Desciption" : "TexTemperature",
+    "ID" : "TexTemperature",
+    "Name" : "Temperature",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_mode",
+            "default" : 0,
+            "desc" : "Output mode: 0 - from color; 1 - from temperature mode",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "temperature",
+            "default" : 6500.0,
+            "desc" : "Temperature in Kelvins",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.50, 0.50, 0.50 ],
+            "desc" : "Color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rgb_multiplier",
+            "default" : 1.0,
+            "desc" : "Color multiplier",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha",
+            "default" : 1.0,
+            "desc" : "Alpha color channel",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gamma_correction",
+            "default" : 1.0,
+            "desc" : "Gamma correction value",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

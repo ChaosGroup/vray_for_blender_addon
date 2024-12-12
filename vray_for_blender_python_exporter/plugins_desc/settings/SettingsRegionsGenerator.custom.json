@@ -1,0 +1,43 @@
+{
+    "ID": "SettingsRegionsGenerator",
+    "Parameters": [
+        {
+            "attr" : "xc",
+            "default" : 64,
+            "desc" : "The bucket size in pixels."
+        },
+        {
+            "attr" : "seqtype",
+            "desc" : "Determines the order in which the buckets are rendered."
+        },
+        {
+            "attr" : "reverse",
+            "desc" : "Reverse the bucket sequence order."
+        }
+    ],
+    "Widget" : 
+    {
+        "widgets" : [
+            {
+                "layout": "COLUMN",
+                "align":true,
+                "attrs": [
+                    {
+                        "name": "seqtype",
+                        "label": "Sequence"
+                    },
+                    {
+                        "name": "reverse",
+                        "label": "Reverse Sequence"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "dynbuckets"
+        ],
+        "animatable": false
+    }
+}

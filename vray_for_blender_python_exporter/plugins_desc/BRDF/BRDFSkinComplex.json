@@ -1,0 +1,544 @@
+
+{
+    "Desciption" : "BRDFSkinComplex",
+    "ID" : "BRDFSkinComplex",
+    "Name" : "Skin Complex",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "Values below 1.0 will make the object look as if it is bigger. Values above 1.0 will make it look as if it is smaller",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0,
+                "rollout" : "General parameters",
+                "tab" : "V-Ray Skin"
+            }
+        },
+        
+        {
+            "attr" : "max_sss_amount",
+            "default" : 1.0,
+            "desc" : "The maximum summed weight of the SSS components",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Max SSS amount",
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_reflection_amount",
+            "default" : 1.0,
+            "desc" : "The maximum summed weight of the reflection components",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Max refl amount",
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Opacity",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "diffuse_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "diffuse_amount",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shallow_color",
+            "default" : [ 0.7764706611633301, 0.6039215922355652, 0.5450980663299561, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "shallow_amount",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shallow_radius",
+            "default" : 0.1000000014901161,
+            "desc" : "The radius for shallow scattering, in cm",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Shallow Radius (in cm)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "medium_color",
+            "default" : [ 0.6823529601097107, 0.4078431725502014, 0.1333333402872086, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "medium_amount",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "medium_radius",
+            "default" : 0.50,
+            "desc" : "The radius for medium scattering, in cm",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Medium Radius (in cm)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "deep_color",
+            "default" : [ 0.9294118285179138, 0.07843137532472610, 0.03921568766236305, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "deep_amount",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "deep_radius",
+            "default" : 2.0,
+            "desc" : "The radius for deep scattering, in cm",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Deep Radius (in cm)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_reflecton_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. color",
+                "rollout" : "Primary reflection"
+            }
+        },
+        
+        {
+            "attr" : "primary_reflection_amount",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. amount",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_reflection_glossiness",
+            "default" : 0.6000000238418579,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_reflection_subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "primary_reflection_fresnel",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. fresnel"
+            }
+        },
+        
+        {
+            "attr" : "primary_reflection_fresnel_ior",
+            "default" : 1.330000042915344,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Prim. refl. fresnel IOR",
+                "max" : 100.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflecton_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. color",
+                "rollout" : "Secondary reflection"
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflection_amount",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. amount",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflection_glossiness",
+            "default" : 0.6000000238418579,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflection_subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflection_fresnel",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. fresnel"
+            }
+        },
+        
+        {
+            "attr" : "secondary_reflection_fresnel_ior",
+            "default" : 1.330000042915344,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Sec. refl. fresnel IOR",
+                "max" : 100.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "multiple_scattering",
+            "default" : "2",
+            "desc" : "The algorithm used to compute multiple scattering: 0 - prepass-based illumination map; 1 - object space illumination map; 2 - raytraced; 3 - none (diffuse approx.)",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Prepass-based illumination map",
+                    "Prepass-based illumination map"
+                ],
+                [ "1", "Object-based illumination map", "Object-based illumination map" ],
+                [ "2", "Raytraced", "Raytraced" ],
+                [ "3", "None", "None" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Multiple scattering options"
+            }
+        },
+        
+        {
+            "attr" : "scatter_gi",
+            "default" : false,
+            "desc" : "true to enable scattering of GI rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Scatter GI"
+            }
+        },
+        
+        {
+            "attr" : "raytraced_scatter_textures",
+            "default" : false,
+            "desc" : "true to scatter SSS textures when using raytraced scattering",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "raytraced_subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "prepass_rate",
+            "default" : -1,
+            "desc" : "Sampling density for the illumination map",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : -100
+            }
+        },
+        
+        {
+            "attr" : "prepass_id",
+            "default" : 0,
+            "desc" : "0 to calculate a separate illuminataion map for this shader; otherwise all shaders with the same prepass ID will share the same illumination map",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "prepass_interpolation_accuracy",
+            "default" : 1.0,
+            "desc" : "Interpolation accuracy for the illumination map; normally 1.0 is fine",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "geom_auto_density",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto density"
+            }
+        },
+        
+        {
+            "attr" : "geom_samples_per_unit_area",
+            "default" : 16.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Samples per unit area",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "geom_surface_offset",
+            "default" : 0.001000000047497451,
+            "desc" : "An offset along the geometric surface normal at which to perform shading in order to avoid surface acne",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Surface offset",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "geom_preview_samples",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Preview samples"
+            }
+        },
+        
+        {
+            "attr" : "geom_max_distance",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max distance",
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "geom_background_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Background color"
+            }
+        },
+        
+        {
+            "attr" : "geom_samples_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Samples color"
+            }
+        },
+        
+        {
+            "attr" : "option_reflections_trace",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Trace reflections",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "option_reflections_maxDepth",
+            "default" : 5,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Reflection max depth",
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "option_reflections_cutoff",
+            "default" : 0.001000000047497451,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Reflection cutoff",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

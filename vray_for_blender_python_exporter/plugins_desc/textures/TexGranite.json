@@ -1,0 +1,413 @@
+
+{
+    "Desciption" : "TexGranite",
+    "ID" : "TexGranite",
+    "Name" : "Granite",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "wrap",
+            "default" : true,
+            "desc" : "If true UVWs outside [-1;1] will wrap back to the valid range",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "desc" : "The way the valid portion of the texture is applied: 0 - the whole texture is valid, 1 - crop, 2 -place",
+            "items" : 
+            [
+                [ "0", "Whole texture is valid", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "U coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "V coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 1.0,
+            "desc" : "Width of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "h",
+            "default" : 1.0,
+            "desc" : "Height of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : 0.0,
+            "desc" : "Amount of random placement variation",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_u",
+            "default" : false,
+            "desc" : "If true there is horizontal tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_v",
+            "default" : false,
+            "desc" : "If true there is vertical tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_noise_on",
+            "default" : false,
+            "desc" : "If true the noise is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "UV noise on"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_animate",
+            "default" : false,
+            "desc" : "If true the noise is animated. Use \"UV noise phase\" to animate the noise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animate UV noise"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_amount",
+            "default" : 1.0,
+            "desc" : "UV noise amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise amount"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_levels",
+            "default" : 1.0,
+            "desc" : "UV noise iterations",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise levels"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_size",
+            "default" : 1.0,
+            "desc" : "UV noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise size"
+            }
+        },
+        
+        {
+            "attr" : "un_noise_phase",
+            "default" : 0.0,
+            "desc" : "UV noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise phase",
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "color1_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 1"
+            }
+        },
+        
+        {
+            "attr" : "color2_tex",
+            "default" : [ 0.5490000247955322, 0.7839999794960022, 0.3919999897480011, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 2"
+            }
+        },
+        
+        {
+            "attr" : "color3_tex",
+            "default" : [ 0.6269999742507935, 0.8240000009536743, 0.8230000138282776, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color 3"
+            }
+        },
+        
+        {
+            "attr" : "filler_color_tex",
+            "default" : [ 0.5879999995231628, 0.2939999997615814, 0.1959999948740005, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Filler Color"
+            }
+        },
+        
+        {
+            "attr" : "cell_size",
+            "default" : 0.1500000059604645,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "density",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mix_ratio",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "spottyness",
+            "default" : 0.3000000119209290,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Spottiness",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "randomness",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "threshold",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "creases",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,167 @@
+
+{
+    "Desciption" : "GeomStaticNURBS",
+    "ID" : "GeomStaticNURBS",
+    "Name" : "Geom Static NURBS",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "cvs",
+            "default" : null,
+            "desc" : "List of lists. Each inner list defines one NURB spline with control vertices (vectors)",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "weights",
+            "default" : null,
+            "desc" : "List of lists. Each inner list contains the weights (floats) for one NURB spline. Must match the control vertices lists in 'cvs'",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "trims",
+            "default" : null,
+            "desc" : "List of TrimmingRegion objects. The orientation is used to determine whether the trim will generate geometry inside of it or outside of it",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "listTrimCurves",
+            "default" : null,
+            "desc" : "List of NURBSCurve objects - the trimming curves",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "trimsComplex",
+            "default" : null,
+            "desc" : "A single TrimmingRegionsComplex plug-in containing all the trim information",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "uKnots",
+            "default" : 0.0,
+            "desc" : "U direction knot values",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "vKnots",
+            "default" : 0.0,
+            "desc" : "V direction knot values",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "maxSubdivDepth",
+            "default" : 5,
+            "desc" : "Maximum depth of subdivision when tessellating the NURBS",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "flatnessCoef",
+            "default" : 0.009999999776482582,
+            "desc" : "Specifies how far the approximation can deviate from the actual NURBS surface",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "regularSubdiv",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "regularUSteps",
+            "default" : 20,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "regularVSteps",
+            "default" : 20,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "uDirectionType",
+            "default" : 0,
+            "desc" : "(0 - Clamped, 1 - Closed, 2 - Open)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "vDirectionType",
+            "default" : 0,
+            "desc" : "(0 - Clamped, 1 - Closed, 2 - Open)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "uDegree",
+            "default" : 3,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "vDegree",
+            "default" : 3,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "flipNormals",
+            "default" : false,
+            "desc" : "If true, invert the directions ",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "generateStatic",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "Whether this geometry is visible to primary camera rays",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "reference_nurbs",
+            "default" : null,
+            "desc" : "The reference nurbs object which is used to calculate the uvw coordinates when a 3d placement is used",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "reference_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transform of the reference nurbs object",
+            "type" : "TRANSFORM"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

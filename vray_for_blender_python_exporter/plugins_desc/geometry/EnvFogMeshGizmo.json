@@ -1,0 +1,47 @@
+
+{
+    "Desciption" : "EnvFogMeshGizmo",
+    "ID" : "EnvFogMeshGizmo",
+    "Name" : "Env Fog Mesh Gizmo",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "geometry",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lights",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fade_out_radius",
+            "default" : 0.0,
+            "desc" : "fade out effect for the edges",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

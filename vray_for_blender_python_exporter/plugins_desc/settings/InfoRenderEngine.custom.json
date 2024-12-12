@@ -1,0 +1,12 @@
+{
+    "ID": "InfoRenderEngine",
+    "Options": {
+        "excluded_parameters": [
+            "version",
+            "build",
+            "build_number",
+            "build_date"
+        ],
+        "animatable": false
+    }
+}

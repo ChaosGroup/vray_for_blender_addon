@@ -1,0 +1,38 @@
+
+{
+    "Desciption" : "TexMeshVertexColor",
+    "ID" : "TexMeshVertexColor",
+    "Name" : "Mesh Vertex Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "colors",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST"
+        },
+        
+        {
+            "attr" : "alphas",
+            "default" : 1.0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "faces",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

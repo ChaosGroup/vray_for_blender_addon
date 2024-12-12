@@ -1,0 +1,156 @@
+{
+    "ID": "TexCurvature",
+    "Name": "V-Ray Curvature",
+    "Parameters": [
+        {
+            "attr": "mode",
+            "desc": "Legacy - Generates a grayscale output for the overall curvature of the mesh, which combines convex and concave curvature.\n\nConvex - Generates a grayscale output, based on the mesh's outward curve.\n\nConcave - Generates a grayscale output, based on the mesh's inward curve.\n\nBoth - Generates a red output for the convex curvature, and a green output for the concave curvature."
+        },
+        {
+            "attr": "subdivs",
+            "//Comment": "Recommended default of 4 samples for optimal performance. subdivs_as_samples=1 is used (as forced global override), which changes the meaning of this value from subdivs to samples.",
+            "default": 4,
+            "desc": "Controls the number of samples around each shaded point.",
+            "ui": {
+                "soft_min": 1,
+                "soft_max": 16
+            }
+        },
+        {
+            "attr": "sample_spread",
+            "desc": "Controls the radius of the sampled region.",
+            "ui": {
+                "soft_max": 50.0
+            }
+        },
+        {
+            "attr": "out_color_min",
+            "label": "Min Output Color",
+            "desc": "The minimum output color value for the most concave area. Default value is 0 - black.",
+            "ui": {
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "out_color_max",
+            "label": "Max Output Color",
+            "desc": "The maximum output color value for the most convex area. Default value is 1 - white.",
+            "ui": {
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "scale",
+            "desc": "The scale relative to which the curvature is computed.",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "trace_distance",
+            "desc": "The maximum distance to search for intersections. Bigger values will decrease the performance, but may produce more correct result."
+        },
+        {
+            "attr": "threshold",
+            "desc": "Curvature values below this threshold are ignored and are shown as pure black. This focuses the curvature effect only around the most curved areas of the mesh."
+        },
+        {
+            "attr": "out_color_gain",
+            "desc": "Multiplies the output values.",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "out_color_lift",
+            "desc": "Uniformly lightens the output values.",
+            "ui": {
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "out_color_gamma",
+            "desc": "Applies gamma correction to the output values.",
+            "ui": {
+                "soft_max": 3.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "out_color_pivot",
+            "desc": "Pivots the value to the gamma correction (output values equal to the pivot value are left unchanged).",
+            "ui": {
+                "soft_max": 3.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "out_color_clamp",
+            "desc": "Clamps the Min and Max Output Color values to a [0,1] range."
+        },
+        {
+            "attr": "ignore_bump",
+            "desc": "Excludes bump from curvature calcutations."
+        },
+        {
+            "attr": "trace_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "threshold"
+                    },
+                    {
+                        "name": "subdivs"
+                    },
+                    {
+                        "name": "sample_spread"
+                    },
+                    {
+                        "name": "ignore_bump"
+                    },
+                    {
+                        "name": "out_color_min"
+                    },
+                    {
+                        "name": "out_color_max"
+                    },
+                    {
+                        "name": "out_color_gain"
+                    },
+                    {
+                        "name": "out_color_lift"
+                    },
+                    {
+                        "name": "out_color_gamma"
+                    },
+                    {
+                        "name": "out_color_pivot"
+                    },
+                    {
+                        "name": "out_color_clamp"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "trace_distance"
+        ],
+        "animatable": true
+    }
+}

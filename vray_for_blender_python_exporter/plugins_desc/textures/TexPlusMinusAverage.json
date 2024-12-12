@@ -1,0 +1,73 @@
+
+{
+    "Desciption" : "TexPlusMinusAverage",
+    "ID" : "TexPlusMinusAverage",
+    "Name" : "Plus Minus Average",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "operation",
+            "default" : "1",
+            "desc" : "0 - No operation; 1 - Sum; 2 - Subtract from first; 3 - Average",
+            "items" : 
+            [
+                [ "0", "No operation", "No operation" ],
+                [ "1", "Sum", "Sum" ],
+                [ "2", "Subtract from first", "Subtract from first" ],
+                [ "3", "Average", "Average" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "input1D",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "input2D",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "input3D",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "output1D",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "output2D",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "output3D",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

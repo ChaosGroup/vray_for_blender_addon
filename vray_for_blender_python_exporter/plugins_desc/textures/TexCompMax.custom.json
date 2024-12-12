@@ -1,0 +1,72 @@
+{
+    "ID": "TexCompMax",
+    "Node":{
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "operator"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "operator"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "label": "Common Properties",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "label": "Compatibility",
+                        "name": "compatibility_with"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "label": "Color",
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "invert"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "label": "Alpha",
+                "layout": "SEPARATOR"
+            },
+            {
+                "align": true,
+                "attrs": [
+                    {
+                        "label": "Alpha From",
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

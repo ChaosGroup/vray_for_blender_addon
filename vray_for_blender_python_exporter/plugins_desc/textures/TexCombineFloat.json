@@ -1,0 +1,63 @@
+
+{
+    "Desciption" : "TexCombineFloat",
+    "ID" : "TexCombineFloat",
+    "Name" : "Combine Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "value",
+            "default" : 0.0,
+            "desc" : "The scalar value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "texture",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "texture_multiplier",
+            "default" : 1.0,
+            "desc" : "The texture multiplier (blends between the value and the texture)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "texture_clamp",
+            "default" : false,
+            "desc" : "true if the texture should be clamped to 1 from above (it is always clamped to 0 from below)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "result_multiplier",
+            "default" : 1.0,
+            "desc" : "A multiplier for the resulit (after inversion, if result_invert is true)",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

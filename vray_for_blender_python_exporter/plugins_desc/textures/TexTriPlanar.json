@@ -1,0 +1,310 @@
+
+{
+    "Desciption" : "TexTriPlanar",
+    "ID" : "TexTriPlanar",
+    "Name" : "Tri Planar",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture_mode",
+            "default" : "0",
+            "desc" : "Specifies whether to use the same texture on all axes, or separate textures for each axis, or separate texture for each axis in each direction",
+            "items" : 
+            [
+                [ "0", "Same texture on all axes", "Same texture on all axes" ],
+                
+                [
+                    "1",
+                    "Different texture on each axis",
+                    "Different texture on each axis"
+                ],
+                
+                [
+                    "2",
+                    "Different texture on each axis in each direction",
+                    "Different texture on each axis in each direction"
+                ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "texture_x",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The base texture, or the texture for the X axis if texture mode is set to different textures",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "texture_y",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture for the Y axis",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "texture_z",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture for the Z axis",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "texture_negx",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture for the negative X axis",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "texture_negy",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture for the negative Y axis",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "texture_negz",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture for the negative Z axis",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "size",
+            "default" : 0.0,
+            "desc" : "Adjust the size of the texture in scene units",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "rollout" : "",
+                "soft_max" : 10.0
+            }
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "Scale of the texture; larger values increase the number of texture repeats, lower values make the texture larger",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "blend",
+            "default" : 1.0,
+            "desc" : "Amount of blending at the plane seams",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "frame_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Offset from the reference frame center (object or reference node)",
+            "type" : "VECTOR_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "texture_rotation",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Texture rotations for the three axes, in degrees, in texture space",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "texture_rotation_map",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Texture rotations for the three axes in texture space, from 0.0 to 1.0",
+            "type" : "VECTOR_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_texture_offset",
+            "default" : false,
+            "desc" : "Randomize the texture offset in texture space",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "random_texture_rotation",
+            "default" : false,
+            "desc" : "Randomize the texture rotation from one object to another, in texture space. The \"texture rotation\" parameter, if non-zero, is used as increments for the rotation",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "random_axis",
+            "default" : false,
+            "desc" : "Randomly permute the axes",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "random_frame_rotation",
+            "default" : false,
+            "desc" : "Random frame rotation (in object or reference space)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "random_mode",
+            "default" : "0",
+            "desc" : "Specifies what to use to randomize the offset/rotation",
+            "items" : 
+            [
+                [ "0", "By face material ID", "By face material ID" ],
+                [ "1", "By object render ID", "By object render ID" ],
+                [ "2", "By particle ID", "By particle ID" ],
+                [ "3", "By instance ID", "By instance ID" ],
+                [ "4", "By user attribute", "By user attribute" ],
+                [ "5", "Auto", "Auto" ],
+                [ "6", "By mesh element", "By mesh element" ],
+                [ "7", "By node handle", "By node handle" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_user_attribute",
+            "default" : "",
+            "desc" : "User attribute source for the \"By user attribute\" random mode",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ref_space",
+            "default" : "0",
+            "desc" : "The space that the projection takes place in, either local object space, or some other object in the scene. If the space is set to reference object(Node), but no object is specified, world space is used",
+            "items" : 
+            [
+                [ "0", "Local object", "Local object" ],
+                [ "1", "Reference to another object", "Reference to another object" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Reference space",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "node_ref_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The reference object's world transform, when the reference space is set to reference object(Node). If this parameter is missing, world space is used",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "blend_method",
+            "default" : "0",
+            "desc" : "Blending method",
+            "items" : 
+            [
+                [ "0", "Legacy", "Legacy" ],
+                [ "1", "Improved", "Improved" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_displaced_surface",
+            "default" : true,
+            "desc" : "If enabled, calculate the texture based on the displaced surface. Otherwise use the original. Does nothing when not using displacement",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rest_position_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture to be used as reference vertices. Usually TexUserColor sampling geometry map channel",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "rest_normal_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture to be used as reference normals. Usually TexUserColor sampling geometry map channel",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

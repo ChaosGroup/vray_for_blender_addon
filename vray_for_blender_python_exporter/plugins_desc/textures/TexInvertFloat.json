@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexInvertFloat",
+    "ID" : "TexInvertFloat",
+    "Name" : "Invert Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : 1.0,
+            "desc" : "The texture to be inverted",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

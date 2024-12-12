@@ -1,0 +1,476 @@
+
+{
+    "Desciption" : "TexRemap",
+    "ID" : "TexRemap",
+    "Name" : "Remap",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "Type of conversion: 0:RemapValue, 1:RemapColor, 2:RemapHSV",
+            "items" : 
+            [
+                [ "0", "Remap Value", "Remap Value" ],
+                [ "1", "Remap Color", "Remap Color" ],
+                [ "2", "Remap HSV", "Remap HSV" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_value",
+            "default" : 0.0,
+            "desc" : "Used for type=0. Result is out_value or out_color with float_* or color_* parameters respectively",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_color",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Used for type=1 and type=2. Result is out_color (or the default output)",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_bias",
+            "default" : 0.0,
+            "desc" : "Exponent e=(1-bias)/(1+bias) applied to input_value",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_bias_tex",
+            "default" : 0.0,
+            "desc" : "Texture override for input_bias",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_min",
+            "default" : 0.0,
+            "desc" : "Rescaling parameter for both input_value and input_color components. The formula is (x-input_min)/(input_max-input_min)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_min_tex",
+            "default" : 0.0,
+            "desc" : "Texture override for input_min",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_max",
+            "default" : 1.0,
+            "desc" : "Rescaling parameter for both input_value and input_color components. The formula is (x-input_min)/(input_max-input_min)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "input_max_tex",
+            "default" : 0.0,
+            "desc" : "Texture override for input_max",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "output_min",
+            "default" : 0.0,
+            "desc" : "Output values and colors are rescaled linearly to fit between output_min and output_max",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "output_max",
+            "default" : 1.0,
+            "desc" : "Output values and colors are rescaled linearly to fit between output_min and output_max",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_positions",
+            "default" : 0.0,
+            "desc" : "Key input values",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the floats (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input float values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_positions",
+            "default" : 0.0,
+            "desc" : "Key input values (equal for all color channels)",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Output color values the key values should map to",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the colors (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input color values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the red channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the red channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the red channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input red values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the green channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the green channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the green channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input green values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the blue channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the blue channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the blue channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input blue values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hue_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the hue channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hue_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the hue channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hue_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the hue channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hue_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input hue values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "saturation_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the saturation channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "saturation_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the saturation channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "saturation_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the saturation channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "saturation_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input saturation values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "value_positions",
+            "default" : 0.0,
+            "desc" : "Key input values for the value channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "value_values",
+            "default" : 0.0,
+            "desc" : "Output float values the key values should map to for the value channel",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "value_types",
+            "default" : "0",
+            "desc" : "Interpolation types for each key of the value channel (None - 0; Linear - 1; Smooth - 2; Spline - 3; Bezier (with tangents) - 4)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Smooth", "Smooth" ],
+                [ "3", "Spline", "Spline" ],
+                [ "4", "Bezier", "Bezier" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "value_tangents",
+            "default" : 0.0,
+            "desc" : "Tangents for input value channel values. Each position should have 4 values in the following order: left_x, left_y, right_x, right_y. Considered only for interpolation type 4",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : false,
+            "desc" : "If true, the resulting alpha is the color intensity; otherwise the alpha is taken from the colors",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_value",
+            "default" : 0.0,
+            "desc" : "The output float value, depending on input_value and float_* params",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The output color, depending on input_value & color_* params or input_color & rgb/hsv params, according to 'type'. This is equivalent to the default output",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

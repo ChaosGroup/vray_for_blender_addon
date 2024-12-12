@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexModoInvert",
+    "ID" : "TexModoInvert",
+    "Name" : "Modo Invert",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The texture to be inverted",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "Parameter that enables the inverting to be animated",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

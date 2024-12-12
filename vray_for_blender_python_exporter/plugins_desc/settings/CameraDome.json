@@ -1,0 +1,54 @@
+
+{
+    "Desciption" : "CameraDome",
+    "ID" : "CameraDome",
+    "Name" : "Camera Dome",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "flip_x",
+            "default" : false,
+            "desc" : "Flip in the horizontal image direction",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "flip_y",
+            "default" : false,
+            "desc" : "Flip in the vertical image direction",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "fov",
+            "default" : 0.7853981852531433,
+            "desc" : "Field of view (radians)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a PhysicalCamera node from affecting the main VRayRenderer sequence and frame data",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "The original scene name of the camera associated with the plugin",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Scene name"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

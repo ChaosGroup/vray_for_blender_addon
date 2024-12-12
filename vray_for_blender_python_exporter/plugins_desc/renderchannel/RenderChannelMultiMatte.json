@@ -1,0 +1,129 @@
+
+{
+    "Desciption" : "RenderChannelMultiMatte",
+    "ID" : "RenderChannelMultiMatte",
+    "Name" : "Render Channel Multi Matte",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "MultiMatte",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red_id",
+            "default" : 0,
+            "desc" : "The object ID that will be written as the red channel (0 to disable the red channel)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green_id",
+            "default" : 0,
+            "desc" : "The object ID that will be written as the green channel (0 to disable the green channel)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue_id",
+            "default" : 0,
+            "desc" : "The object ID that will be written as the blue channel (0 to disable the blue channel)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_mtl_id",
+            "default" : false,
+            "desc" : "true to use the material IDs instead of the object IDs",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_matte_objects",
+            "default" : true,
+            "desc" : "false to not affect Matte Objects",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "consider_for_aa",
+            "default" : false,
+            "desc" : "true to consider this render element for antialiasing (may slow down rendering)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_red",
+            "default" : null,
+            "desc" : "Exclude list for the red ID",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_red_as_inclusive_set",
+            "default" : true,
+            "desc" : "true : apply multimatte only to objects in excludeList_red; false : apply multimatte to all objects out of excludeList_red",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_green",
+            "default" : null,
+            "desc" : "Exclude list for the green ID",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_green_as_inclusive_set",
+            "default" : true,
+            "desc" : "true : apply multimatte only to objects in excludeList_green; false : apply multimatte to all objects out of excludeList_green",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_blue",
+            "default" : null,
+            "desc" : "Exclude list for the blue ID",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_blue_as_inclusive_set",
+            "default" : true,
+            "desc" : "true : apply multimatte only to objects in excludeList_blue; false : apply multimatte to all objects out of excludeList_blue",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

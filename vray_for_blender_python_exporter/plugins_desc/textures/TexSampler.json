@@ -1,0 +1,542 @@
+
+{
+    "Desciption" : "TexSampler",
+    "ID" : "TexSampler",
+    "Name" : "Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "point",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shading point in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pointReference",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shading point in reference space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pointObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shading point in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pointCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shading point in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pointRelative",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shading point in relative space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth normal in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normalReference",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth normal in reference space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normalCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth normal in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normalObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth normal in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normalRelative",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth normal in relative space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflection",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth reflection vector in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflectionObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth reflection vector in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflectionCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth reflection vector in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflectionRelative",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth reflection vector in relative space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refraction",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth refraction vector in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refractionObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth refraction vector in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refractionCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth refraction vector in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refractionRelative",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The smooth refraction vector in relative space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumpNormal",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The bump normal in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumpNormalCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The bump map normal in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumpNormalObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The bump map normal in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumpNormalRelative",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The bump map normal in relative space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gnormal",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The geometric normal in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "camToWorld",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation from camera to world space",
+            "type" : "OUTPUT_TRANSFORM_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "view_dir",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The viewing direction",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "frame_time",
+            "default" : 0.0,
+            "desc" : "The current frame (image) time",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ray_time",
+            "default" : 0.0,
+            "desc" : "The ray time within the motion blur interval",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "frame_index_offset",
+            "default" : 0.0,
+            "desc" : "The number of frames offset from the current frame when rendering long motion blur intervals, whole number",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "facing_ratio",
+            "default" : 0.0,
+            "desc" : "The cosine of the angle between the normal and the viewing direction",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_id",
+            "default" : 0,
+            "desc" : "The surface material id, if the surface supports it",
+            "type" : "OUTPUT_INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flipped_normal",
+            "default" : 0.0,
+            "desc" : "Zero if the face is front facing and one if it is backfacing the camera",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cameraNearClipPlane",
+            "default" : 0.0,
+            "desc" : "The camera near clipping plane, calculated from the scene bounding box and the camera transform in the frame data",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cameraFarClipPlane",
+            "default" : 0.0,
+            "desc" : "The camera far clipping plane, calculated from the scene bounding box and the camera transform in the frame data",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvCoord",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The uvw coordinates of the point being shaded. These are the coordinates of channel 0",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvCoordClamp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The clamped uvw coordinates of the point being shaded. These are the coordinates of channel 0",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvCoordTile",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The tiled uvw coordinates of the point being shaded. These are the coordinates of channel 0",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rayDirection",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The viewing direction in camera space. Used for the samplerInfo node in Maya",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pixelCenter",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The current sample image coordinates. Used for the samplerInfo node in Maya",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentUCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The U axis of the currently shaded point's UVW space, transformed in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentVCamera",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The V axis of the currently shaded point's UVW space, transformed in camera space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentUObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The U axis of the currently shaded point's UVW space, transformed in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentVObject",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The V axis of the currently shaded point's UVW space, transformed in object space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentUWorld",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The U axis of the currently shaded point's UVW space, transformed in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tangentVWorld",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The V axis of the currently shaded point's UVW space, transformed in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ray_depth",
+            "default" : 0.0,
+            "desc" : "The ray depth",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "path_length",
+            "default" : 0.0,
+            "desc" : "The path length",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transparency_level",
+            "default" : 0.0,
+            "desc" : "The transparency level",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "object_id",
+            "default" : 0,
+            "desc" : "The object ID of the hit object",
+            "type" : "OUTPUT_INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "parent_object_id",
+            "default" : 0,
+            "desc" : "The object ID of the parent object",
+            "type" : "OUTPUT_INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instance_id",
+            "default" : 0,
+            "desc" : "The instance ID of the hit object",
+            "type" : "OUTPUT_INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocity",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The velocity at the intersection point, in scene units per frame, in world space",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "speed",
+            "default" : 0.0,
+            "desc" : "The speed (the magnitude of the velocity) at the intersection point, in scene units per frame",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_renderID",
+            "default" : 0.0,
+            "desc" : "Random value based on RenderID of the object",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_polyShell",
+            "default" : 0.0,
+            "desc" : "Random value based on the polygon shell (connected mesh component) the current face belongs to",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_scene_name",
+            "default" : 0.0,
+            "desc" : "Random value based on scene name of the object",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_instanceID",
+            "default" : 0.0,
+            "desc" : "Random value based on various instance identifiers (instance index, particle index, etc). Same as random_by_renderID, but without mixing with Render ID",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_set_name",
+            "default" : "",
+            "desc" : "The name of the uv channel that should be used",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_index",
+            "default" : -1,
+            "desc" : "The index of the uv channel that should be used in case there is no uv set name",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refraction_ior",
+            "default" : 1.0,
+            "desc" : "Index of refraction of the object",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The relative coordinate system to use",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gpu_adaptive_lights_voxels",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Used for dev debug only (users don't need this).This is the position of the GPU voxel for the GPU adaptive lights",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "face_index",
+            "default" : 0,
+            "desc" : "Index of triangle face hit by ray (-1 if not applicable)",
+            "type" : "OUTPUT_INT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "barycentric_coords",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Barycentric coordinates of ray intersection point (0,0,0 if not applicable)",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reference_vertex_attr",
+            "default" : "",
+            "desc" : "Attribute name to use for reference vertices. ",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reference_normal_attr",
+            "default" : "",
+            "desc" : "Attribute name to use for reference normals",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attribute_overrides",
+            "default" : false,
+            "desc" : "If true parameters having User Attribute overrides will be using the overrides",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

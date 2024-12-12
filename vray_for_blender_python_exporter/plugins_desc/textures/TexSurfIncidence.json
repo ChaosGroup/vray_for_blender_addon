@@ -1,0 +1,61 @@
+
+{
+    "Desciption" : "TexSurfIncidence",
+    "ID" : "TexSurfIncidence",
+    "Name" : "Surf Incidence",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "inc_mode",
+            "default" : 0,
+            "desc" : "Incidence mode",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 100.0,
+            "desc" : "Controls the contrast between dark and light areas of shading",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "gain",
+            "default" : 100.0,
+            "desc" : "Controls the brightness of the effect",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "custom_vector",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "custom vector",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : 0,
+            "desc" : "Invert if enabled",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "range",
+            "default" : "0",
+            "desc" : "Range (0 - 0 to 90 degrees, 1 - 0 to 180 degrees)",
+            "items" : 
+            [
+                [ "0", "0 to 90 degrees", "0 to 90 degrees" ],
+                [ "1", "0 to 180 degrees", "0 to 180 degrees" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

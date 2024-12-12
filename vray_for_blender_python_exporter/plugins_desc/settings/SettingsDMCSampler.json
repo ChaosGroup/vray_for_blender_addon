@@ -1,0 +1,100 @@
+
+{
+    "Desciption" : "SettingsDMCSampler",
+    "ID" : "SettingsDMCSampler",
+    "Name" : "Settings DMC Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "time_dependent",
+            "default" : false,
+            "desc" : "If this is true, the sample pattern will vary from frame to frame",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animated noise pattern"
+            }
+        },
+        
+        {
+            "attr" : "adaptive_amount",
+            "default" : 0.8500000238418579,
+            "desc" : "Amount of adaptive sampling; 1.0 means full adaptation; 0.0 means no adaptation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Adaptive amount",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "adaptive_threshold",
+            "default" : 0.004999999888241291,
+            "desc" : "Noise threshold that determines when to stop sampling. Lower values reduce noise, but may take longer to render",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Adaptive threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "adaptive_min_samples",
+            "default" : 16,
+            "desc" : "Minimum amount of samples to take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Adaptive min samples",
+                "max" : 1000,
+                "min" : 2
+            }
+        },
+        
+        {
+            "attr" : "subdivs_mult",
+            "default" : 1.0,
+            "desc" : "A global subdivs multiplier. Handy for reducing overall quality for draft renders",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs multiplier",
+                "max" : 1000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_seed",
+            "default" : 0,
+            "desc" : "If non-zero, a random seed for the DMC sampler",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_local_subdivs",
+            "default" : true,
+            "desc" : "true if shading subdivs in materials/lights/GI should be used, and false (recommended) to determine subdivs automatically",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_blue_noise_optimization",
+            "default" : false,
+            "desc" : "Enable blue noise optimization for the sampling pattern",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,170 @@
+{
+    "ID": "SettingsColorMapping",
+    "Parameters": [
+        {
+            "attr": "type",
+            "default": "6"
+        }, 
+        {
+            "attr": "affect_background",
+            "default": true
+        }, 
+        {
+            "attr": "subpixel_mapping",
+            "default": false
+        }, 
+        {
+            "attr": "gamma",
+            "default": 2.2
+        }, 
+        {
+            "attr": "adaptation_only",
+            "default": "2"
+        }, 
+        {
+            "attr": "input_gamma",
+            "default": 1,
+            "desc": "Input gamma for textures",
+            "available": [
+                "BLENDER"
+            ],
+            "type": "FLOAT",
+            "ui": {
+                "max": 1048576,
+                "min": -1048576,
+                "soft_max": 64,
+                "soft_min": 0
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_input_gamma",
+            "desc": "Use global \"Input Gamma\" for textures",
+            "type": "BOOL",
+            "default": false,
+            "available": [
+                "BLENDER"
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "sync_with_gamma",
+            "desc": "Set Blender \"Color Management\" Gamma to (1.0 / ColorMapping.Gamma)",
+            "type": "BOOL",
+            "default": false,
+            "available": [
+                "BLENDER"
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "preview_use_scene_cm",
+            "name": "Use For Preview",
+            "desc": "Use current scene \"Color Mapping\" settings",
+            "type": "BOOL",
+            "default": true,
+            "available": [
+                "BLENDER"
+            ],
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROW",
+                "attrs": [
+                    {
+                        "name": "adaptation_only"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "type"
+                        
+                    },
+                    {
+                        "name": "dark_mult",
+                        "label": "Multiplier",
+                        "visible": {
+                            "cond": "::type=6"
+                        }
+                    },
+                    {
+                        "name": "bright_mult",
+                        "label": "Burn",
+                        "visible": {
+                            "cond": "::type=6"
+                        }
+                    },
+                    {
+                        "name": "bright_mult",
+                        "label": "Multiplier",
+                        "visible": {
+                            "cond": "::type=5;::type=4"
+                        }
+                    },
+                    {
+                        "name": "dark_mult",
+                        "label": "Inverse Gamma",
+                        "visible": {
+                            "cond": "::type=5;::type=4"
+                        }
+                    },
+                    {
+                        "name": "bright_mult",
+                        "visible": {
+                            "cond": "::type<4"
+                        }
+                    },
+                    {
+                        "name": "dark_mult",
+                        "visible": {
+                            "cond": "::type<4"
+                        }
+                    },
+                    {
+                        "name": "gamma"
+                    },
+                    {
+                        "name": "affect_background"
+                    },
+                    {
+                        "name": "subpixel_mapping"
+                    },
+                    {
+                        "name": "use_input_gamma"
+                    },
+                    {
+                        "name": "input_gamma",
+                        "active": {
+                            "cond": "::use_input_gamma!=0"
+                        }
+                    },
+                    {
+                        "name": "sync_with_gamma",
+                        "label": "Sync With CM Gamma"
+                    },
+                    {
+                        "name": "preview_use_scene_cm"
+                    }
+
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false
+    }
+}

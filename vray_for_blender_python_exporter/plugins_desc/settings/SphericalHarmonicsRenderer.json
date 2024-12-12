@@ -1,0 +1,74 @@
+
+{
+    "Desciption" : "SphericalHarmonicsRenderer",
+    "ID" : "SphericalHarmonicsRenderer",
+    "Name" : "Spherical Harmonics Renderer",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file_name",
+            "default" : "C:\\temp",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrsh", "xml" ]
+            }
+        },
+        
+        {
+            "attr" : "use_single_vrsh",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "precalc_light_per_frame",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "sample_environment",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "is_hemispherical",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 30,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "apply_filtering",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "filter_strength",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

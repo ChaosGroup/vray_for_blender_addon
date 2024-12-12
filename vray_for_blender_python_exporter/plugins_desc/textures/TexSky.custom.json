@@ -1,0 +1,146 @@
+{
+    "ID": "TexSky",
+    "Name": "V-Ray Sky",
+    "Parameters": [
+        {
+            "attr": "auto_sun",
+            "default": true,
+            "desc": "Attach Sun automatically and take settings from it",
+            "name": "Find Sun Automatically",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "sky_model",
+            "default" : "4",
+            "items" : 
+            [
+                [ "0", "Preetham et al", "Preetham et al" ],
+                [ "1", "CIE Clear", "CIE Clear" ],
+                [ "2", "CIE Overcast", "CIE Overcast" ],
+                [ "3", "Hosek et al", "Hosek et al" ],
+                [ "4", "PRG Clear Sky", "PRG Clear Sky" ]
+            ]
+        },
+        {
+            "attr" : "sun",
+            "poll": "sunFilter",
+            "object_type": "Object",
+            "type": "OBJECT"
+        },
+        {
+            "attr" : "sun_dir_only",
+            "type" : "BOOL",
+            "ui" : { "display_name": "Sun Direction Only" }
+        },
+        {
+            "attr": "horiz_illum",
+            "ui" : 
+            {
+                "min": 0,
+                "spin_step": 1000
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "basic",
+                "label": "Basic",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "intensity_multiplier"
+                    },
+                    {
+                        "name": "turbidity",
+                        "active": {
+                            "cond": "::sky_model!=4"
+                        }
+                    },
+                    {
+                        "name": "ozone",
+                        "active": {
+                            "cond": "::sky_model!=4"
+                        }
+                    },
+                    {
+                        "name": "size_multiplier"
+                    },
+                    {
+                        "name": "sky_model"
+                    },
+                    {
+                        "name": "horiz_illum",
+                        "active": {
+                            "cond": "::sky_model=1;::sky_model=2"
+                        }
+                    },
+                    {
+                        "name": "color_mode"
+                    },
+                    {
+                        "name": "filter_color"
+                    },
+                    {
+                        "name": "ground_albedo"
+                    },
+                    {
+                        "name": "blend_angle"
+                    },
+                    {
+                        "name": "horizon_offset"
+                    },
+                    {
+                        "name": "water_vapour"
+                    }
+                ],
+                "active": {
+                    "cond": "::sun_dir_only=1;::sun=NONE"
+                }
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "invisible",
+                        "active": {
+                            "cond": "::sun!=NONE"
+                        }
+                    },
+                    {
+                        "name": "sun",
+                        "search_bar_for": "objects"
+                    },
+                    {
+                        "name": "sun_dir_only",
+                        "active": {
+                            "cond": "::sun!=NONE"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets" : [
+            {
+                "name": "filter_color"
+            },
+            {
+                "name": "ground_albedo"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "target_transform"
+        ],
+        "animatable": true
+    }
+}

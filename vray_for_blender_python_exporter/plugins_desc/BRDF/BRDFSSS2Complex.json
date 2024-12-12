@@ -1,0 +1,502 @@
+
+{
+    "Desciption" : "BRDFSSS2Complex",
+    "ID" : "BRDFSSS2Complex",
+    "Name" : "SSS 2 Complex",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "Values below 1.0 will make the object look as if it is bigger. Values above 1.0 will make it look as if it is smaller",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0,
+                "rollout" : "General parameters",
+                "tab" : "V-Ray Fast SSS2"
+            }
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.50,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Index of refraction",
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 3.0
+            }
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "Opacity texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "overall_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Diffuse and sub-surface scattering layers"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "diffuse_amount",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sub_surface_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "This parameter has different effect based on the color mode value: 0 - Sub-surface color: Specifies the general color for the sub-surface layer of the material; 1 - Scatter Coefficient: Specifies the outside color for the sub-surface layer of the material and also affects its outer translucency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sub-surface Color"
+            }
+        },
+        
+        {
+            "attr" : "scatter_radius",
+            "default" : [ 0.9200000166893005, 0.5199999809265137, 0.1749999970197678, 1.0 ],
+            "desc" : "This parameter has different effect based on the color mode value: 0 - Scatter Color: Specifies the internal scattering color for the material; 1 - Fog Color: Specifies the inside or backlit color of the object and affects its inner translucency",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Scatter Color"
+            }
+        },
+        
+        {
+            "attr" : "scatter_radius_mult",
+            "default" : 2.0,
+            "desc" : "The scatter color will be multiplied by this number",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Scatter Radius (in cm)",
+                "min" : 0.0,
+                "soft_max" : 10.0
+            }
+        },
+        
+        {
+            "attr" : "phase_function",
+            "default" : 0.0,
+            "desc" : "Specifies a value between -1.0 and 1.0 that determines the general way light scatters inside the material. A value of 0.0 means that light scatters uniformly in all directions (isotropic scattering). Positive values mean that light scatters predominantly forward. Negative values mean that light scatters mostly backward",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "color_mode",
+            "default" : "0",
+            "desc" : "Determines the meaning of the sub surface color and scatter radius parameters: 0 - sub-surface color and scatter color (radius); 1 - scatter coefficient and fog color",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Sub-surface color and scatter radius",
+                    "Sub-surface color and scatter radius"
+                ],
+                
+                [
+                    "1",
+                    "Scatter coefficient and fog color",
+                    "Scatter coefficient and fog color"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "specular_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Specifies the specular color for the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Specular layer"
+            }
+        },
+        
+        {
+            "attr" : "specular_amount",
+            "default" : 1.0,
+            "desc" : "Specifies the strength of the specular component for the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "specular_glossiness",
+            "default" : 0.6000000238418579,
+            "desc" : "Determines the glossiness (highlights shape). A value of 1.0 produces sharp reflections, lower values produce more blurred reflections and highlights",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "specular_subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "cutoff_threshold",
+            "default" : 0.009999999776482582,
+            "desc" : "Specifies a threshold below which reflections are not traced",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "trace_reflections",
+            "default" : false,
+            "desc" : "Enables the calculations of glossy reflections. When disabled, only highlights are calculated",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflection_depth",
+            "default" : 5,
+            "desc" : "Specifies the number of reflection bounces for the material",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "geometry_based_sampling",
+            "default" : "2",
+            "desc" : "0 - Prepass-based illumination map; 1 - Object-based illumination map; 2 - Raytraced; 3 - None (diffuse approx.);",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Prepass-based illumination map",
+                    "Prepass-based illumination map"
+                ],
+                [ "1", "Object-based illumination map", "Object-based illumination map" ],
+                [ "2", "Raytraced", "Raytraced" ],
+                [ "3", "None", "None" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Multiple scattering",
+                "rollout" : "Multiple scattering"
+            }
+        },
+        
+        {
+            "attr" : "prepass_rate",
+            "default" : -1,
+            "desc" : "Sampling density for the illumination map",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : -100
+            }
+        },
+        
+        {
+            "attr" : "prepass_id",
+            "default" : 0,
+            "desc" : "0 to calculate a separate illuminataion map for this shader; otherwise all shaders with the same prepass ID will share the same illumination map",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "prepass_mode",
+            "default" : "0",
+            "desc" : "Prepass mode: 0 - calculate new irradiance map for each frame (meaningless in RT); 1 - calculate and save map for each frame (meaningless in RT); 2 - load saved irradiance map for each frame; 3 - calculate and save map only for the first rendered frame; 4 - load saved irradiance map on the first rendered frame only",
+            "items" : 
+            [
+                [ "0", "New for each frame", "New for each frame" ],
+                [ "1", "Save map for each frame", "Save map for each frame" ],
+                [ "2", "Load saved map for each frame", "Load saved map for each frame" ],
+                [ "3", "Save map only for first frame", "Save map only for first frame" ],
+                
+                [
+                    "4",
+                    "Load saved map for first frame",
+                    "Load saved map for first frame"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "prepass_fileName",
+            "default" : "",
+            "desc" : "File path template for saved irradiance map files, frame number is appended for modes 1 and 2",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Prepass File",
+                "file_extensions" : [ "vrsssmap" ],
+                "file_names" : [ "VRayFastSSS2 illumination map" ]
+            }
+        },
+        
+        {
+            "attr" : "auto_density",
+            "default" : false,
+            "desc" : "If this parameter is true then 'Samples per unit area' will be computed automatically",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "samples_per_unit_area",
+            "default" : 16.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "surface_offset",
+            "default" : 0.001000000047497451,
+            "desc" : "An offset along the geometric surface normal at which to perform shading in order to avoid surface acne",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "preview_samples",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max_distance",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "background_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "samples_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "single_scatter",
+            "default" : "1",
+            "desc" : "Controls how the single scattering component is calculated. 0 - None: No single scattering component is calculated; 1 - Simple: Approximates the single scattering component from the surface lighting; 2 - Raytraced (solid): Accurately calculates the single scattering component by sampling the volume inside the object. Only the volume is raytraced; no refraction rays on the other side of the object are traced; 3 - Raytraced (refractive): Similar to the Raytraced (solid) mode, but in addition refraction rays are traced",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Simple", "Simple" ],
+                [ "2", "Raytraced (solid)", "Raytraced (solid)" ],
+                [ "3", "Raytraced (refractive)", "Raytraced (refractive)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Single scatter subdivisions",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Single scatter subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "refraction_depth",
+            "default" : 5,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "front_scatter",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Front lighting"
+            }
+        },
+        
+        {
+            "attr" : "back_scatter",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Back lighting"
+            }
+        },
+        
+        {
+            "attr" : "scatter_gi",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Scatter GI"
+            }
+        },
+        
+        {
+            "attr" : "interpolation_accuracy",
+            "default" : 1.0,
+            "desc" : "Interpolation accuracy for the illumination map; normally 1.0 is fine",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "prepass_blur",
+            "default" : 1.200000047683716,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "consider_all_objects",
+            "default" : false,
+            "desc" : "When enabled, the shader will bleed SSS between all objects in the scene; when disabled, only objects with the same raytrace SSS ID are considered",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "linear_workflow",
+            "default" : false,
+            "desc" : "Set to true to apply the inverse of gamma correction",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

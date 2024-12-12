@@ -1,0 +1,15 @@
+{
+    "ID": "FilterGaussian",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

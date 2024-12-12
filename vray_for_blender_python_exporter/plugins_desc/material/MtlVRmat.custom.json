@@ -1,0 +1,11 @@
+{
+    "ID": "MtlVRmat",
+    "Name": "V-Ray VRmat Mtl",
+    "Parameters":
+    [
+        {
+            "attr" : "filename",
+            "update": "onFileNameAttributeUpdate"
+        }
+    ]
+}

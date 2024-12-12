@@ -1,0 +1,18 @@
+{
+    "ID": "SettingsPNG",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "compression"
+                    },
+                    {
+                        "name": "bits_per_channel"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

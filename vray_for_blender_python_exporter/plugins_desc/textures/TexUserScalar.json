@@ -1,0 +1,61 @@
+
+{
+    "Desciption" : "TexUserScalar",
+    "ID" : "TexUserScalar",
+    "Name" : "User Scalar",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "attribute_priority",
+            "default" : "0",
+            "desc" : "User attribute lookup priority - 0 for map channel, 1 for user attribute",
+            "items" : 
+            [
+                [ "0", "Map Channel", "Map Channel" ],
+                [ "1", "User Attribute", "User Attribute" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Attribute Look-Up Priority"
+            }
+        },
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : 0,
+            "desc" : "Compatibility mode (0 - Default (Maya); 1 - Houdini).Currently affects the shading of some application specific attributes (P, N for Houdini)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "default_value",
+            "default" : 0.0,
+            "desc" : "Default value if the attribute is not found",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attribute",
+            "default" : "",
+            "desc" : "User attribute name of type float or color; OR name of mapping channel",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scalar",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

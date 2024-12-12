@@ -1,0 +1,288 @@
+
+{
+    "Desciption" : "GeomStaticMesh",
+    "ID" : "GeomStaticMesh",
+    "Name" : "Geom Static Mesh",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "vertices",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Array of Vector vertex positions for the mesh (in object space)",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "faces",
+            "default" : 0,
+            "desc" : "Array of indices into the 'vertices' array. Each three consecutive indices form a triangle",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "normals",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Array of normal vectors",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "faceNormals",
+            "default" : 0,
+            "desc" : "Array of indices into the 'normals' array. Each three consecutive indices form a triangle, so each vertex can have a unique normal for each triangle it is part of. The size of this array should match the size of 'faces'",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "map_channels",
+            "default" : null,
+            "desc" : "A list of mapping channels; each channel itself is a list of 3 elements - the channel index, the channel vertices and the channel faces",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "map_channels_names",
+            "default" : "",
+            "desc" : "A list containing the names of the mapping channels",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "edge_visibility",
+            "default" : 0,
+            "desc" : "A list of edge visibility flags, each integer in the list has edge visibility information for 10 consecutive faces (3 bits per face)",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "face_mtlIDs",
+            "default" : 0,
+            "desc" : "Material IDs for each face",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "shaders_names",
+            "default" : null,
+            "desc" : "A list of shader names; each item is a list of 2 elements - 0: face material ID, 1: shader name",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "smooth_derivs",
+            "default" : null,
+            "desc" : "A list of mapping channels with smooth derivs; this can also be a single boolean value to specify whether all channels are smooth",
+            "elements_count" : 0,
+            "type" : "LIST_LIST"
+        },
+        
+        {
+            "attr" : "weld_threshold",
+            "default" : -1.0,
+            "desc" : "If this parameter is present, the vertices of the mesh which are within the given threshold of one another will be welded. If absent or negative, no welding is performed",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "reference_mesh",
+            "default" : null,
+            "desc" : "The reference mesh which is used to calculate the uvw coordinates when a 3d placement is used",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "reference_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transform of the reference mesh",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "Whether this geometry is visible to primary camera rays. If off shading an intersection with this mesh will not generate a gbuffer",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "dynamic_geometry",
+            "default" : "0",
+            "desc" : "Build time optimization modes. When set, V-Ray will reduce build times for ray accelerating structures at the cost of slightly increased render time. 0 - None; 1 - Dynamic Geometry; 2 - Embree Geometry",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Dynamic", "Dynamic" ],
+                [ "2", "Embree", "Embree" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "smooth_uv_borders",
+            "default" : true,
+            "desc" : "True to smooth UVs at mesh borders when rendering this mesh as a subdivision surface",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "smooth_uv",
+            "default" : true,
+            "desc" : "True to smooth UVs when rendering this mesh as a subdivision surface",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Smooth UVs"
+            }
+        },
+        
+        {
+            "attr" : "velocities",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per vertex velocities, taken from a ColorSet in Maya",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "first_poly_vertices",
+            "default" : 0,
+            "desc" : "A list of indices of the first vertices of the polygons of degree greater than 4. Used by the OpenSubdiv library for subdivision",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "osd_subdiv_enable",
+            "default" : true,
+            "desc" : "True to enable OpenSubdiv subdivision",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable OpenSubdiv",
+                "rollout" : "OpenSubdiv (static subdivision)"
+            }
+        },
+        
+        {
+            "attr" : "osd_subdiv_level",
+            "default" : 0,
+            "desc" : "Level of OpenSubdiv subdivision. 0 means no subdivison",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivision level",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "osd_subdiv_type",
+            "default" : "0",
+            "desc" : "Type of OpenSubdiv subdivision. 0 - Catmull Clark, 1 - Loop",
+            "items" : 
+            [
+                [ "0", "Catmull-Clark", "Catmull-Clark" ],
+                [ "1", "Loop", "Loop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Type"
+            }
+        },
+        
+        {
+            "attr" : "osd_subdiv_uvs",
+            "default" : true,
+            "desc" : "True to smooth UVs when applying subdivision with OpenSubdiv",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Subdivide UVs"
+            }
+        },
+        
+        {
+            "attr" : "osd_preserve_map_borders",
+            "default" : "1",
+            "desc" : "Different modes for subdividing the uv boundaries with OpenSubdiv. The valid values are: 0 - none; 1 - internal; 2 - all",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Internal", "Internal" ],
+                [ "2", "All", "All" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Preserve map borders"
+            }
+        },
+        
+        {
+            "attr" : "osd_preserve_geometry_borders",
+            "default" : false,
+            "desc" : "True to keep the geometry boundaries in place while subdividing the mesh with OpenSubdiv",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Preserve geometry borders"
+            }
+        },
+        
+        {
+            "attr" : "edge_creases_vertices",
+            "default" : 0,
+            "desc" : "The indices of the vertices of the creased edges. Contains two indices per edge",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "edge_creases_sharpness",
+            "default" : 0.0,
+            "desc" : "Sharpness values for each creased edge",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "vertex_creases_vertices",
+            "default" : 0,
+            "desc" : "A list of creased vertices",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "vertex_creases_sharpness",
+            "default" : 0.0,
+            "desc" : "The sharpness values of the creased vertices",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : 0,
+            "desc" : "Compatibility mode (0 - Default (Maya); 1 - Houdini; 2 - 3dsMax extended time instancing). Currently affects velocity interpolation and motion blur samples processing",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

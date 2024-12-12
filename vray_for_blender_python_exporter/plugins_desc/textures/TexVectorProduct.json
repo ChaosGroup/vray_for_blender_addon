@@ -1,0 +1,72 @@
+
+{
+    "Desciption" : "TexVectorProduct",
+    "ID" : "TexVectorProduct",
+    "Name" : "Vector Product",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "operation",
+            "default" : "1",
+            "desc" : "Operation (0 - No operation, 1 - Dot Product, 2 - Cross Product, 3 - Vector Matrix Product, 4 - Point Matrix Product)",
+            "items" : 
+            [
+                [ "0", "No operation", "No operation" ],
+                [ "1", "Dot Product", "Dot Product" ],
+                [ "2", "Cross Product", "Cross Product" ],
+                [ "3", "Vector Matrix Product", "Vector Matrix Product" ],
+                [ "4", "Point Matrix Product", "Point Matrix Product" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "input1",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Right operand",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Right Operand"
+            }
+        },
+        
+        {
+            "attr" : "input2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Left operand",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Left Operand"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation for vector and point matrix products",
+            "type" : "TRANSFORM_TEXTURE"
+        },
+        
+        {
+            "attr" : "normalize",
+            "default" : false,
+            "desc" : "When this is true the output vector will be normalized (in case of dot product, the input vectors are normalized before the operation)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

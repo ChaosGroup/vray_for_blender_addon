@@ -1,0 +1,22 @@
+{
+    "Name": "V-Ray Invert Float",
+    "Subtype": "UTILITY",
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Float",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [],
+        "default_output": 
+        {
+            "label": "Float",
+            "type": "OUTPUT_FLOAT_TEXTURE"
+        }
+    }
+}

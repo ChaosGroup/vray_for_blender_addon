@@ -1,0 +1,197 @@
+{
+    "ID": "LightDirect",
+    "Parameters": [
+        {
+            "attr": "color_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "intensity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "shadowColor_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "shadowColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "shadowColor",
+            "tex_prop": "shadowColor_tex",
+            "ui": {},
+            "desc": "The shadow color. Anything but black is not physically accurate",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "shadowBias",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "name": "units"
+                            },
+                            {
+                                "name": "intensity"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "attrs": [
+                            {
+                                "name": "color"
+                            },
+                            {
+                                "name": "beamRadius"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "shadows"
+                            },
+                            {
+                                "name": "shadowBias"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "shadowColor"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "photonSubdivs"
+                            },
+                            {
+                                "name": "diffuseMult"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "causticSubdivs"
+                            },
+                            {
+                                "name": "causticMult"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "storeWithIrradianceMap"
+                            },
+                            {
+                                "name": "bumped_below_surface_check"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "cutoffThreshold"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "specular_contribution"
+                            },
+                            {
+                                "name": "diffuse_contribution"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "areaSpeculars"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "use_global_light_level"
+        ]
+    },
+    "excluded_parameters": [
+        "shadowColor_tex"
+    ]
+}

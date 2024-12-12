@@ -1,0 +1,275 @@
+
+{
+    "Desciption" : "BRDFFlakes2",
+    "ID" : "BRDFFlakes2",
+    "Name" : "Flakes 2",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "flake_color",
+            "default" : [ 0.3000000119209290, 0.4000000059604645, 0.8000000119209290, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Flakes parameters",
+                "tab" : "V-Ray Flakes"
+            }
+        },
+        
+        {
+            "attr" : "flake_random_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Texture to sample random flake colors from",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "flake_orientation",
+            "default" : 0.05000000074505806,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flake_orientation_tail",
+            "default" : 2.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "flake_glossiness",
+            "default" : 0.8999999761581421,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 0.9499999880790710,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flake_density",
+            "default" : 4.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flake_scale",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flake_scale_triplanar",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flake_size",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "flake_map_size",
+            "default" : 2048,
+            "desc" : "The size of the internal flakes map",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 8192,
+                "min" : 32
+            }
+        },
+        
+        {
+            "attr" : "flake_seed",
+            "default" : 1,
+            "desc" : "The random seed for the flakes",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 65536,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "flake_uvwgen",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flake_bin_subdivs",
+            "default" : 255,
+            "desc" : "Square root of the total number bins used for flakes filtering",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapping_type",
+            "default" : "0",
+            "desc" : "The mapping method for the flakes (0 - explicit mapping channel, 1 - triplanar projection in object space)",
+            "items" : 
+            [
+                [ "0", "Mapping channel", "Mapping channel" ],
+                [ "1", "Triplanar", "Triplanar" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapping_channel",
+            "default" : 0,
+            "desc" : "The mapping channel when the mapping_type is 0",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "traceReflections",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Trace reflections",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "trace_depth",
+            "default" : -1,
+            "desc" : "The maximum reflection depth (-1 is controlled by the global options)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "doubleSided",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Double sided"
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "cutoff_threshold",
+            "default" : 0.001000000047497451,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "use_environment_override",
+            "default" : false,
+            "desc" : "True to use the 'environment override' texture",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Environment override"
+            }
+        },
+        
+        {
+            "attr" : "environment_override",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Environment override texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "environment_priority",
+            "default" : 0,
+            "desc" : "Environment override priority (used when several materials override it along a ray path)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : -1000
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

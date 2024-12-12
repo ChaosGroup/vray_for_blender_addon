@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "TexColorExponential",
+    "ID" : "TexColorExponential",
+    "Name" : "Color Exponential",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The value used in the operation",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "factor",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The factor to be used in the operation",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "operation",
+            "default" : "0",
+            "desc" : "The operation: 0=Exponential, 1=Logarithm, 2=Bias, 3=Gain",
+            "items" : 
+            [
+                [ "0", "Exponential", "Exponential" ],
+                [ "1", "Logarithm", "Logarithm" ],
+                [ "2", "Bias", "Bias" ],
+                [ "3", "Gain", "Gain" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "use_alpha",
+            "default" : false,
+            "desc" : "Apply operation to alpha channel",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

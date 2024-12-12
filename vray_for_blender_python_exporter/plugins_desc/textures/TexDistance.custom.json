@@ -1,0 +1,167 @@
+{
+    "ID": "TexDistance",
+    "Name": "V-Ray Distance",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "inside_separate",
+            "default": true
+        },
+        {
+            "attr": "distance",
+            "subtype": "DISTANCE"
+        },
+        {
+            "attr": "object_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "objects",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "objects",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "distance"
+                    },
+                    {
+                        "name": "far_tex"
+                    },
+                    {
+                        "name": "near_tex",
+                        "active": {
+                            "cond": "::outside_separate=0"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "inside_separate"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "active": {
+                                    "cond": "::inside_separate!=0"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "inside_solid"
+                                    },
+                                    {
+                                        "name": "inside_tex"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "outside_separate"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "active": {
+                                    "cond": "::outside_separate!=0"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "outside_solid"
+                                    },
+                                    {
+                                        "name": "outside_tex"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "object_selector",
+                        "label": "Objects",
+                        "list_label": "Objects",
+                        "draw_container": "ROLLOUT"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "distance"
+            },
+            {
+                "name": "far_tex"
+            },
+            {
+                "name": "near_tex"
+            },
+            {
+                "name": "inside_tex"
+            },
+            {
+                "name": "outside_tex"
+            },
+            {
+                "name": "objects"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity"
+        ]
+    }
+}

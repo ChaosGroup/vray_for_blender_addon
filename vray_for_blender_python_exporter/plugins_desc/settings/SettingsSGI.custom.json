@@ -1,0 +1,15 @@
+{
+    "ID": "SettingsSGI",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "bits_per_channel"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

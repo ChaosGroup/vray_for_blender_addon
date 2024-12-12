@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "TexColorToFloat",
+    "ID" : "TexColorToFloat",
+    "Name" : "Color To Float",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The color value",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

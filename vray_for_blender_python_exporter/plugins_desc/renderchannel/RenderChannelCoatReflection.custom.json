@@ -1,0 +1,59 @@
+{
+    "ID": "RenderChannelCoatReflection",
+    "Name" : "Coat Reflection",
+    "Subtype" : "ADVANCED",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "color_mapping"
+                    },
+                    {
+                        "name": "consider_for_aa",
+                        "label": "Consider for Anti-Aliasing "
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "derive_raw_channels"
+                    },
+                    {
+                        "name": "vfb_color_corrections"
+                    },
+                    {
+                        "name": "denoise"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Coat Reflection"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "light_select_mode",
+            "light_path_expression",
+            "light_select_matte"
+        ]
+    }
+}

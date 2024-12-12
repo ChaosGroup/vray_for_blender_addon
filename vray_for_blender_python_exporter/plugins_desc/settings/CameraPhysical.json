@@ -1,0 +1,542 @@
+
+{
+    "Desciption" : "CameraPhysical",
+    "ID" : "CameraPhysical",
+    "Name" : "Camera Physical",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "This defines how the shutter works (0 - Still camera, 1 - Movie camera, 2 - Video camera",
+            "items" : 
+            [
+                [ "0", "Still", "Still" ],
+                [ "1", "Movie", "Movie" ],
+                [ "2", "Video", "Video" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "film_width",
+            "default" : 36.0,
+            "desc" : "Film gate in mm",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "focal_length",
+            "default" : 40.0,
+            "desc" : "Focal length in mm",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "zoom_factor",
+            "default" : 1.0,
+            "desc" : "Zoom factor",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "distortion",
+            "default" : 0.0,
+            "desc" : "Distortion amount",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distortion_type",
+            "default" : "0",
+            "desc" : "Type of optical distortion (0 - Quadratic, 1 - Cubic, 2 - Lens file, 3 - Texture)",
+            "items" : 
+            [
+                [ "0", "Quadratic", "Quadratic" ],
+                [ "1", "Cubic", "Cubic" ],
+                [ "2", "Lens file", "Lens file" ],
+                [ "3", "Texture", "Texture" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "f_number",
+            "default" : 8.0,
+            "desc" : "F-stop",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "F-stop",
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "lens_shift",
+            "default" : 0.0,
+            "desc" : "Lens shift",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Vertical tilt"
+            }
+        },
+        
+        {
+            "attr" : "shutter_speed",
+            "default" : 300.0,
+            "desc" : "The shutter speed in seconds^-1 for still camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shutter_angle",
+            "default" : 180.0,
+            "desc" : "Shutter angle in degrees for movie camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shutter_offset",
+            "default" : 0.0,
+            "desc" : "Shutter offset in degrees for movie camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : -360.0
+            }
+        },
+        
+        {
+            "attr" : "latency",
+            "default" : 0.0,
+            "desc" : "Shutter latency in seconds for video camera",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ISO",
+            "default" : 200.0,
+            "desc" : "Sensor sensitivity (unbounded)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "specify_focus",
+            "default" : false,
+            "desc" : "Set to true to enable the focus_distance parameter",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "focus_distance",
+            "default" : 200.0,
+            "desc" : "Focus distance in world units (if specify_focus=1). Affects the lens light attenuation and thin lens model",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "targeted",
+            "default" : true,
+            "desc" : "Has no effect. Target distance is used when the focus distance is not used (if specify_focus=0)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "target_distance",
+            "default" : 200.0,
+            "desc" : "Target distance (if specify_focus=0). Affects only the distance of the focal plane",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dof_display_threshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Display threshold for depth-of-field",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exposure",
+            "default" : "1",
+            "desc" : "0 - disable exposure color correction; 1 - physical exposure color correction; 2 - exposure color correction from exposure value",
+            "items" : 
+            [
+                [ "0", "No exposure", "No exposure" ],
+                [ "1", "Physical Exposure", "Physical Exposure" ],
+                [ "2", "Exposure Value", "Exposure Value" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "white_balance",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "White point color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "vignetting",
+            "default" : 1.0,
+            "desc" : "Strength of vignetting effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "blades_enable",
+            "default" : false,
+            "desc" : "Set to true to enable Bokeh effects",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blades_num",
+            "default" : 5,
+            "desc" : "Number of blades - 0 disables Bokeh",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 20,
+                "min" : 2
+            }
+        },
+        
+        {
+            "attr" : "blades_rotation",
+            "default" : 0.0,
+            "desc" : "Blade rotation in radians",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "center_bias",
+            "default" : 0.0,
+            "desc" : "Bias toward the center of the lens for DOF sampling",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "anisotropy",
+            "default" : 0.0,
+            "desc" : "Bokeh anisotropy",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "use_dof",
+            "default" : false,
+            "desc" : "Set to true to enable raytraced depth of field effect",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable DOF"
+            }
+        },
+        
+        {
+            "attr" : "use_moblur",
+            "default" : false,
+            "desc" : "Set to true to enable motion blur",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Motion Blur"
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 1,
+            "desc" : "Deprecated. This has no effect",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a PhysicalCamera node from affecting the main VRayRenderer sequence and frame data",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lens_file",
+            "default" : "",
+            "desc" : "LENS file with camera lens-type image distortion description",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrlens" ]
+            }
+        },
+        
+        {
+            "attr" : "specify_fov",
+            "default" : false,
+            "desc" : "Set to true to use explicit field of view from the \"fov\" value and false to use the focal length",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fov",
+            "default" : 1.570796370506287,
+            "desc" : "The FOV value (in radians) to use when specify_fov is true",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "horizontal_shift",
+            "default" : 0.0,
+            "desc" : "The horizontal lens shift",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Horizontal tilt"
+            }
+        },
+        
+        {
+            "attr" : "horizontal_offset",
+            "default" : 0.0,
+            "desc" : "The horizontal offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Horizontal shift"
+            }
+        },
+        
+        {
+            "attr" : "vertical_offset",
+            "default" : 0.0,
+            "desc" : "The vertical offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Vertical shift"
+            }
+        },
+        
+        {
+            "attr" : "distortion_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Distortion texture to use when distortion_type=3. Values are in image space - (0,0) maps to bottom left, (1,1) maps to top right",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Distortion texture"
+            }
+        },
+        
+        {
+            "attr" : "bmpaperture_enable",
+            "default" : false,
+            "desc" : "Set to true to enable the use of bitmap aperture",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Bitmap aperture",
+                "max" : 2048.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "bmpaperture_resolution",
+            "default" : 512,
+            "desc" : "Texture sampling resolution for the importance sampling",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Bitmap resolution"
+            }
+        },
+        
+        {
+            "attr" : "bmpaperture_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Aperture texture to use when bmpaperture_enable=1. The aperture is open where the texture is white",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Bitmap aperture texture"
+            }
+        },
+        
+        {
+            "attr" : "optical_vignetting",
+            "default" : 0.0,
+            "desc" : "Optical vignetting (\"cat's eye bokeh\") amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 3.0,
+                "min" : -3.0
+            }
+        },
+        
+        {
+            "attr" : "bmpaperture_affects_exposure",
+            "default" : true,
+            "desc" : "This will make the Bitmap Aperture's size and shape affect the exposure",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Bitmap affects exposure"
+            }
+        },
+        
+        {
+            "attr" : "enable_thin_lens_equation",
+            "default" : true,
+            "desc" : "Determine if the focus distance will affect the fov or focal length calculation due to thin lens equation",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable thin lens equation"
+            }
+        },
+        
+        {
+            "attr" : "rolling_shutter_mode",
+            "default" : "0",
+            "desc" : "Rolling shutter mode: 0=Disabled, 1=Top to bottom, 2=Bottom to top, 3=Left to right, 4=Right to left",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Top to bottom", "Top to bottom" ],
+                [ "2", "Bottom to top", "Bottom to top" ],
+                [ "3", "Left to right", "Left to right" ],
+                [ "4", "Right to left", "Right to left" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rolling_shutter_duration",
+            "default" : 200.0,
+            "desc" : "Rolling shutter duration (the time for the shutter to pass through the image) in seconds^-1",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Rolling shutter speed",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "exposure_value",
+            "default" : 0.0,
+            "desc" : "Exposure value to use with exposure mode 2",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Exposure value"
+            }
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "The original scene name of the camera associated with the plugin",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Scene name"
+            }
+        },
+        
+        {
+            "attr" : "camera_shader_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Camera shader",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Camera shader texture"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

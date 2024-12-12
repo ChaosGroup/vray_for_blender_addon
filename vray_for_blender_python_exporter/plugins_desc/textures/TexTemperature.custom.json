@@ -1,0 +1,54 @@
+{
+    "ID": "TexTemperature",
+    "Name": "V-Ray Temperature",
+    "Parameters": [
+        {
+            "attr" : "color_mode_enum",
+            "desc" : "Color Output mode",
+            "default" : "0",
+            "items" : 
+            [
+                [ "0", "Color", "Color Output mode - from color" ],
+                [ "1", "Temperature", "Color Output mode - from temperature mode" ]
+            ],
+            "type" : "ENUM",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "color_mode_enum",
+                        "label": "Color Mode"
+                    },
+                    {
+                        "name": "temperature",
+                        "active" : {"cond" : "::color_mode_enum=1"}
+                    },
+                    {
+                        "name": "color",
+                        "active" : {"cond" : "::color_mode_enum=0"}
+                    },
+                    {
+                        "name": "rgb_multiplier"
+                    },
+                    {
+                        "name": "alpha"
+                    },
+                    {
+                        "name": "gamma_correction"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

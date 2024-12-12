@@ -1,0 +1,40 @@
+{
+    "Name": "V-Ray Invert",
+    "Subtype": "UTILITY",
+    "ID": "TexInvert",
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "invert_alpha"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "texture",
+                        "label": "Input"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "color"
+        ]
+    }
+}

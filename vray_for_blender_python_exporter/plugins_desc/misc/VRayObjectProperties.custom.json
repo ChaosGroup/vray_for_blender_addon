@@ -1,0 +1,265 @@
+{
+    "Desciption": "VRayObjectProperties",
+    "ID": "VRayObjectProperties",
+    "Name": "V-Ray Object Properties",
+    "Parameters": [
+        {
+            "attr": "reflection_list_is_inclusive",
+            "default": false
+        },
+        {
+            "attr": "refraction_list_is_inclusive",
+            "default": false
+        },
+        {
+            "attr": "reflection_object_selector",
+            "type": "TEMPLATE",
+            "desc": "A list of plugins that will be excluded from reflection",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "filter_function": "filters.filterGeometries",
+                        "mode_bound_property": "reflection_list_is_inclusive",
+                        "bound_property": "reflection_exclude"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "refraction_object_selector",
+            "type": "TEMPLATE",
+            "desc": "A list of plugins that will be excluded from refraction",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "filter_function": "filters.filterGeometries",
+                        "mode_bound_property": "refraction_list_is_inclusive",
+                        "bound_property": "refraction_exclude"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "render_stats_use",
+            "default": true
+        },
+        {
+            "attr": "wrapper_use",
+            "default": true
+        },
+        {
+            "attr" : "matte_surface",
+            "update": "onMattePropsUpdate"
+        },
+        {
+            "attr": "use_surface",
+            "default": false,
+            "desc": "Use Surface properties",
+            "name": "Use surface properties",
+            "type": "BOOL",
+            "update": "onSurfacePropsUpdate",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_visibility",
+            "default": false,
+            "desc": "Use Visibility properties",
+            "name": "Use visibility properties",
+            "type": "BOOL",
+            "update": "onVisibilityPropsUpdate",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for the rendering",
+            "type" : "INT",
+            "ui": {
+                "display_name" : "Object ID"
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "override_motion_blur_samples",
+            "default" : false,
+            "desc" : "When enabled, overrides the default number of samples that are used to sample the current object for motion blur.",
+            "type" : "BOOL",
+            "ui": {
+                "display_name" : "Override Motion Blur Samples"
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "motion_blur_samples",
+            "default" : 2,
+            "desc" : "When Override Motion Blur Samples is enabled, this value is used when sampling the motion blur created by the current object.",
+            "type" : "INT",
+            "ui": {
+                "display_name" : "Motion Blur Samples"
+            },
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "matte surface",
+                "label": "Matte Surface",
+                "use_prop": "matte_surface",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "alpha_contribution"
+                    },
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "name": "affect_alpha"
+                    },
+                    {
+                        "name": "shadow_tint_color"
+                    },
+                    {
+                        "name": "shadow_brightness"
+                    },
+                    {
+                        "name": "reflection_amount"
+                    },
+                    {
+                        "name": "refraction_amount"
+                    },
+                    {
+                        "name": "gi_amount"
+                    },
+                    {
+                        "name": "no_gi_on_other_mattes"
+                    },
+                    {
+                        "name": "matte_for_secondary_rays",
+                        "label": "Matte for Secondary Rays"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "surface properties",
+                "label": "Surface Properties",
+                "use_prop": "use_surface",
+                "attrs": [
+                    {
+                        "name": "generate_gi",
+                        "label": "Generate GI Multiplier"
+                    },
+                    {
+                        "name": "receive_gi",
+                        "label": "Receive GI Multiplier"
+                    },
+                    {
+                        "name": "gi_quality_multiplier"
+                    },
+                    {
+                        "name": "receive_caustics",
+                        "label": "Caustics Multiplier"
+                    },
+                    {
+                        "name": "gi_surface_id"
+                    },
+                    {
+                        "name": "generate_render_elements"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "visibility options",
+                "label": "Visibility Options",
+                "use_prop": "use_visibility",
+                "attrs": [
+                    {
+                        "name": "visibility"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "camera_visibility"
+                            },
+                            {
+                                "name": "reflections_visibility",
+                                "label": "Visible in Reflections"
+                            },
+                            {
+                                "name": "refractions_visibility",
+                                "label": "Visible in Refractions"
+                            },
+                            {
+                                "name": "shadows_visibility",
+                                "label": "Cast Shadows"
+                            },
+                            {
+                                "name": "shadows_receive",
+                                "label": "Receive Shadows"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "include_exclude",
+                        "label": "Include / Exclude",
+                        "attrs": [
+                            {
+                                "layout": "ROLLOUT",
+                                "name": "Reflection Objects",
+                                "label": "Reflection Objects",
+                                "attrs": [
+                                    {
+                                        "name": "reflection_object_selector",
+                                        "list_label": "Objects List"
+                                    }
+                                ]
+                            },
+                            {
+                                "layout": "ROLLOUT",
+                                "name": "Refraction Objects",
+                                "label": "Refraction Objects",
+                                "attrs": [
+                                    {
+                                        "name": "refraction_object_selector",
+                                        "list_label": "Objects List"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "channels",
+            "use_irrad_map",
+            "maya_background_shader_compatibility",
+            "alpha_contribution_tex",
+            "shadow_brightness_tex",
+            "reflection_filter_tex",
+            "trace_depth",
+            "gi_visibility"
+        ]
+    }
+}

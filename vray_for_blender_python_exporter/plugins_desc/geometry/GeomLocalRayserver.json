@@ -1,0 +1,23 @@
+
+{
+    "Desciption" : "GeomLocalRayserver",
+    "ID" : "GeomLocalRayserver",
+    "Name" : "Geom Local Rayserver",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "source_geometry",
+            "default" : null,
+            "desc" : "The instancing source. Support any plugin providing EXT_STATIC_GEOM_SOURCE or EXT_VRAY_HIERARCHICAL_PARAMETERIZED_NODE interfaces",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexXSIVertexColorLookup",
+    "ID" : "TexXSIVertexColorLookup",
+    "Name" : "XSI Vertex Color Lookup",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "channel",
+            "default" : 0,
+            "desc" : "The channel number * 3 + a number indicating which of the x,y or z values are used",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "factor",
+            "default" : 1.0,
+            "desc" : "Weight multiplication factor",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "weight_min",
+            "default" : 0.0,
+            "desc" : "Minimum weight (w/o factor)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "weight_max",
+            "default" : 1.0,
+            "desc" : "Minimum weight (w/o factor)",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

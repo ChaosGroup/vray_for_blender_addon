@@ -1,0 +1,54 @@
+{
+    "Name": "V-Ray Blend Bump Normal",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr" : "normalMap1",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr" : "normalMap2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr" : "bumpMap1",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr" : "bumpMap2",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+           {
+               "layout": "COLUMN",
+               "attrs": [
+                    {
+                        "name": "normalMapWeight1"
+                    },
+                    {
+                        "name": "normalMapWeight2"
+                    },
+                    {
+                        "name": "bumpMapWeight1"
+                    },
+                    {
+                        "name": "bumpMapWeight2"
+                    },
+                    {
+                        "name": "sharpen"
+                    }
+               ]
+           }
+       ]
+    }
+}

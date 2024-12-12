@@ -1,0 +1,27 @@
+{
+    "ID": "RenderChannelCoverage",
+    "Name" : "Coverage",
+    "Subtype" : "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

@@ -1,0 +1,64 @@
+{
+    "ID": "RenderChannelLightSelect",
+    "Name" : "Light Select",
+    "Subtype" : "ADVANCED",
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Light Select"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "color_mapping"
+                    },
+                    {
+                        "name": "consider_for_aa",
+                        "label": "Consider for Anti-Aliasing "
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "derive_raw_channels"
+                    },
+                    {
+                        "name": "vfb_color_corrections"
+                    },
+                    {
+                        "name": "denoise"
+                    },
+                    {
+                        "name": "light_select_mode"
+                    },
+                    {
+                        "name": "light_path_expression"
+                    },
+                    {
+                        "name": "light_select_matte"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    }
+}

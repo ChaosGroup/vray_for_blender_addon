@@ -1,0 +1,79 @@
+{
+    "ID": "SettingsOutput",
+    "Parameters": [
+        {
+            "attr": "img_dir",
+            "subtype": "DIR_PATH"
+        },
+        {
+            "attr": "img_format",
+            "desc": "Output image format",
+            "items": [
+                [
+                    "0",
+                    "PNG",
+                    ""
+                ],
+                [
+                    "1",
+                    "JPEG",
+                    ""
+                ],
+                [
+                    "2",
+                    "TIFF",
+                    ""
+                ],
+                [
+                    "3",
+                    "TGA",
+                    ""
+                ],
+                [
+                    "4",
+                    "SGI",
+                    ""
+                ],
+                [
+                    "5",
+                    "OpenEXR",
+                    ""
+                ],
+                [
+                    "6",
+                    "VRayImage",
+                    "V-Ray Image Format"
+                ]
+            ],
+            "default": "1",
+            "name": "Image Format",
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "relements_separateFiles",
+            "name": "Separate Files",
+            "desc": "Save render channels in separate files",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "output_overwrite_warn",
+            "default": true,
+            "desc": "Show warning dialog when rendered images will be overwritten",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

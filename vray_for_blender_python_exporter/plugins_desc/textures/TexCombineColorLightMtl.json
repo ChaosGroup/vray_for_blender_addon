@@ -1,0 +1,37 @@
+
+{
+    "Desciption" : "TexCombineColorLightMtl",
+    "ID" : "TexCombineColorLightMtl",
+    "Name" : "Combine Color Light Mtl",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The color value",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "result_multiplier",
+            "default" : 1.0,
+            "desc" : "A multiplier for the final result",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,43 @@
+{
+    "ID": "SettingsCamera",
+    "Parameters": [
+        {
+            "attr": "fov"
+        },
+        {
+            "attr": "override_fov",
+            "default": false,
+            "desc": "Override FOV",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "auto_exposure",
+                        "label": "Auto Exposure"
+                    },
+                    {
+                        "name": "auto_white_balance",
+                        "label": "Auto White Balance"
+                    },
+                    {
+                        "name": "auto_corrections_mode",
+                        "label": "Auto Corrections Mode"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Type": "CAMERA",
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

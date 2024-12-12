@@ -1,0 +1,277 @@
+
+{
+    "Desciption" : "RenderView",
+    "ID" : "RenderView",
+    "Name" : "Render View",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Camera transform - position and rotation",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fov",
+            "default" : 0.7853981852531433,
+            "desc" : "Horizontal field of view",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "focalDistance",
+            "default" : 1.0,
+            "desc" : "Focus distance in scene units",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "aperture",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lens_rotation",
+            "default" : 0.0,
+            "desc" : "Aperture blades rotation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "frame_samples",
+            "default" : 2,
+            "desc" : "Number of samples per frame for the transformation",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clipping",
+            "default" : false,
+            "desc" : "true to enable clipping planes",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clipping_near",
+            "default" : 0.0,
+            "desc" : "The near clipping plane",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "clipping_far",
+            "default" : 9.999999843067494e+17,
+            "desc" : "The far clipping plane",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "zoom",
+            "default" : 1.0,
+            "desc" : "Zoom factor",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "orthographic",
+            "default" : false,
+            "desc" : "Orhographic projection camera when true, perspective projection otherwise",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "orthographicWidth",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ortho_adjust_to_scene",
+            "default" : true,
+            "desc" : "True to adjusts an orthographic view to encompass the entire scene",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a RenderView node from affecting the main VRayRenderer sequence and frame data",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_scene_offset",
+            "default" : true,
+            "desc" : "If true, the scene will be internally translated relative to the render view",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mayaFocalLength",
+            "default" : 1.0,
+            "desc" : "Used to save camera info to vrimg file",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mayaApperture",
+            "default" : 1.0,
+            "desc" : "Used to save camera info to vrimg file",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_on",
+            "default" : "0",
+            "desc" : "Enable stereo rendering and select output layout",
+            "items" : 
+            [
+                [ "0", "disbled", "disbled" ],
+                [ "1", "enabled, side-by-side", "enabled, side-by-side" ],
+                [ "2", "enabled, top-bottom", "enabled, top-bottom" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_eye_distance",
+            "default" : 1.0,
+            "desc" : "The distance between the two stereo views",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_interocular_method",
+            "default" : "0",
+            "desc" : "Specifies the camera position relative to the left and right views: 0 - center, 1 - keep left view, 2 - keep right view",
+            "items" : 
+            [
+                [ "0", "center", "center" ],
+                [ "1", "keep left view", "keep left view" ],
+                [ "2", "keep right view", "keep right view" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_specify_focus",
+            "default" : false,
+            "desc" : "true to specify a separate distance for the stereo focus",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_focus_distance",
+            "default" : 1.0,
+            "desc" : "The focus distance if specify_focus is enabled",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_focus_method",
+            "default" : "0",
+            "desc" : "The focus method: 0 - parallel, 1 - rotate, 2 - shift",
+            "items" : 
+            [
+                [ "0", "parallel", "parallel" ],
+                [ "1", "rotate", "rotate" ],
+                [ "2", "shift", "shift" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_view",
+            "default" : "0",
+            "desc" : "Specifies which view to render: 0 - both views, 1 - left view, 2 - right view",
+            "items" : 
+            [
+                [ "0", "both views", "both views" ],
+                [ "1", "left view", "left view" ],
+                [ "2", "right view", "right view" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stereo_top_merge_angle",
+            "default" : 1.047197580337524,
+            "desc" : "Top merge angle for panoramic pole merging",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "stereo_bottom_merge_angle",
+            "default" : 1.047197580337524,
+            "desc" : "Bottom merge angle for panoramic pole merging",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "stereo_pole_merge_method",
+            "default" : 0,
+            "desc" : "Specifies the panoramic pole merging method: 0 - a smooth method used originally in V-Ray, 1 - use a cosine function, compatible with other renderers",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "The original scene name of the camera associated with the plugin",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Scene name"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

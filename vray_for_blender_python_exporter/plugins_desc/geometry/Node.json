@@ -1,0 +1,160 @@
+
+{
+    "Desciption" : "Node",
+    "ID" : "Node",
+    "Name" : "Node",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Object-to-world space transformation for the object",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "pivot_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Pivot point offset relative to center of local coordinate space. Does NOT affect rendering",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "geometry",
+            "default" : null,
+            "desc" : "Geometry source plugin for this object",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "material",
+            "default" : null,
+            "desc" : "Material for the object surface. If this is invalid the object will render transparent",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "volume",
+            "default" : null,
+            "desc" : "Volumetric shader if this object isn't an opaque surface",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of transform samples for motion blur",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "lights",
+            "default" : null,
+            "desc" : "List of lights that will be used with this object instead of all scene lights",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "visible",
+            "default" : true,
+            "desc" : "true if the object is renderable (visible) and false otherwise; it only makes sense to use this parameter if it is animated, or if another object depends on this node but it must not be rendered",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "user_attributes",
+            "default" : "",
+            "desc" : "A list of user defined attributes in the form \"attrName1=value1;attrName2=value2\" where values are usually numbers, strings or R,G,B triplets",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "user_attributes_bin",
+            "default" : 0,
+            "desc" : "Serialized user attributes (refer to BinUserAttributesWriter)",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for the rendering",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "If off shading an intersection with this mesh will not generate a gbuffer (object is invisible to direct camera rays)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "time_for_geometry",
+            "default" : 0.0,
+            "desc" : "If this is used (controlled by 'use_time_for_geometry') it will be given as the time for which the instance should be created and the geometry should be compiled for geometry that supports being created only at a certain time (currently only GeomMeshFile). Note that this time will not be used for the transform of the node - the current frame time will be used for that",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "use_time_for_geometry",
+            "default" : false,
+            "desc" : "If true the 'time_for_geometry' parameter will be used",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "map_channels",
+            "default" : null,
+            "desc" : "A plugin providing map channels override data via EXT_EXTERNAL_MAP_CHANNELS interface",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "bake_subdiv_filepath",
+            "default" : "",
+            "desc" : "A file path for baking subdivision geometry to a *.vrmesh file. This will abort frame rendering!",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "object_space_displacement",
+            "default" : 0,
+            "desc" : "Parameter to pass to the GeomDisplacedMesh wrapper created by the node. See GeomDisplacedMesh::object_space_displacement",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "is_instance_prototype",
+            "default" : 0,
+            "desc" : "Set to true to disable this node from being compiled. Used for optimizing instancer wrapper nodes",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "object_properties",
+            "default" : null,
+            "desc" : "Object properties",
+            "type" : "PLUGIN",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

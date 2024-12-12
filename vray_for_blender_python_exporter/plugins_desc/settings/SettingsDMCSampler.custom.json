@@ -1,0 +1,30 @@
+{
+    "ID": "SettingsDMCSampler",
+    "Parameters": [
+        {
+            "attr": "time_dependent",
+            "default": true,
+            "ui": {
+                "display_name": "Animated Noise Pattern"
+            }
+        },
+        {
+            "attr": "use_local_subdivs",
+            "default": false
+        },
+        {
+            "attr": "use_blue_noise_optimization",
+            "default": true
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "adaptive_amount",
+            "adaptive_threshold",
+            "subdivs_mult",
+            "adaptive_min_samples",
+            "random_seed"
+        ],
+        "animatable": false
+    }
+}

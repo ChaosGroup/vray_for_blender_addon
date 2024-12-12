@@ -1,0 +1,327 @@
+
+{
+    "Desciption" : "TexPtex",
+    "ID" : "TexPtex",
+    "Name" : "Ptex",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "ptex_file",
+            "default" : "",
+            "desc" : "The Ptex texture file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "ptx" ]
+            }
+        },
+        
+        {
+            "attr" : "use_image_sequence",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "image_number",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "image_offset",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "ifl_start_frame",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "ifl_playback_rate",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ifl_end_condition",
+            "default" : "0",
+            "desc" : "Image file list (IFL) end condition: 0 - Loop; 1 - Ping Pong; 2 - Hold;",
+            "items" : 
+            [
+                [ "0", "Loop", "Loop" ],
+                [ "1", "Ping Pong", "Ping Pong" ],
+                [ "2", "Hold", "Hold" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "filter_type",
+            "default" : "0",
+            "desc" : "Type of filter used for the texture",
+            "items" : 
+            [
+                [ "0", "No filtering", "No filtering" ],
+                [ "1", "Bi-linear", "Bi-linear" ],
+                [ "2", "Box", "Box" ],
+                [ "3", "Gaussian", "Gaussian" ],
+                [ "4", "Bicubic", "Bicubic" ],
+                [ "5", "B-Splice", "B-Splice" ],
+                [ "6", "Catmull-Rom", "Catmull-Rom" ],
+                [ "7", "Mitchell", "Mitchell" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "width",
+            "default" : 1.0,
+            "desc" : "width parameter used for filtering",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "blur",
+            "default" : 0.0,
+            "desc" : "blur parameter used for filtering",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sharpness",
+            "default" : 0.0,
+            "desc" : "Sharpness parameter for the general bicubic filter",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lerp",
+            "default" : false,
+            "desc" : "Interpolation between mipmap levels",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Interpolation between mipmap levels"
+            }
+        },
+        
+        {
+            "attr" : "anisotropic_filtering",
+            "default" : true,
+            "desc" : "Allow anisotropic texture filtering",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "reverse_vertices",
+            "default" : false,
+            "desc" : "Reverses the order of vertices",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Reverse vertex order"
+            }
+        },
+        
+        {
+            "attr" : "cache_size",
+            "default" : 50,
+            "desc" : "The size of the texture cache(in MB)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Cache size(MBs)",
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "auto_color",
+            "default" : true,
+            "desc" : "Use automatic color channel selection",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto select color channels"
+            }
+        },
+        
+        {
+            "attr" : "r_channel",
+            "default" : 0,
+            "desc" : "The index of the channel which will be used as a red channel",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "g_channel",
+            "default" : 1,
+            "desc" : "The index of the channel which will be used as a green channel",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "b_channel",
+            "default" : 2,
+            "desc" : "The index of the channel which will be used as a blue channel",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "auto_alpha",
+            "default" : true,
+            "desc" : "Use automatic alpha channel selection",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto select alpha channel"
+            }
+        },
+        
+        {
+            "attr" : "a_channel",
+            "default" : -1,
+            "desc" : "The index of the channel which will be used as a alpha channel",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "alpha_type",
+            "default" : "-1",
+            "desc" : "Where to take the alpha from",
+            "items" : 
+            [
+                [ "0", "Solid", "Solid" ],
+                [ "1", "Alpha from texture", "Alpha from texture" ],
+                [ "2", "Alpha from luminance", "Alpha from luminance" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "color_space",
+            "default" : "1",
+            "desc" : "0 - linear, 1 - gamma corrected, 2 - sRGB",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Gamma corrected", "Gamma corrected" ],
+                [ "2", "sRGB", "sRGB" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 0.05000000074505806
+            }
+        },
+        
+        {
+            "attr" : "vertices",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "origFaces",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "faces",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "origFacesDegree",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The final texture color",
+            "type" : "OUTPUT_TEXTURE"
+        },
+        
+        {
+            "attr" : "color_gain",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

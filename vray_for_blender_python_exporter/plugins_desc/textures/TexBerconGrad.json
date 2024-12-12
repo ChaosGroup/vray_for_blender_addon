@@ -1,0 +1,507 @@
+
+{
+    "Desciption" : "TexBerconGrad",
+    "ID" : "TexBerconGrad",
+    "Name" : "Bercon Grad",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "desc" : "The way the valid portion of the texture is applied: 0 - the whole texture is valid, 1 - crop, 2 -place",
+            "items" : 
+            [
+                [ "0", "Whole texture is valid", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "U coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "V coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 1.0,
+            "desc" : "Width of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "h",
+            "default" : 1.0,
+            "desc" : "Height of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : 0.0,
+            "desc" : "Amount of random placement variation",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_u",
+            "default" : false,
+            "desc" : "If true there is horizontal tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_v",
+            "default" : false,
+            "desc" : "If true there is vertical tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_noise_on",
+            "default" : false,
+            "desc" : "If true the noise is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "UV noise on"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_animate",
+            "default" : false,
+            "desc" : "If true the noise is animated. Use \"UV noise phase\" to animate the noise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animate UV noise"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_amount",
+            "default" : 1.0,
+            "desc" : "UV noise amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise amount"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_levels",
+            "default" : 1.0,
+            "desc" : "UV noise iterations",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise levels"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_size",
+            "default" : 1.0,
+            "desc" : "UV noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise size"
+            }
+        },
+        
+        {
+            "attr" : "un_noise_phase",
+            "default" : 0.0,
+            "desc" : "UV noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise phase",
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "cam_space",
+            "default" : false,
+            "desc" : "Calculations in camera space",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "positions",
+            "default" : 0.50,
+            "desc" : "positions of the given colors",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "the given colors",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "the texture used for mapped gradient ramp",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gradient_type",
+            "default" : "0",
+            "desc" : "0:1D linear, 1:2D radial, 2:2D rectangle, 3:2D diagonal, 4:2D Pong, 5:2D Spiral, 6:2D Sweep, 7:2D tartan, 8:3D Spherical, 9:3D Box",
+            "items" : 
+            [
+                [ "0", "1D linear", "1D linear" ],
+                [ "1", "2D radial", "2D radial" ],
+                [ "2", "2D rectangle", "2D rectangle" ],
+                [ "3", "2D diagonal", "2D diagonal" ],
+                [ "4", "2D Pong", "2D Pong" ],
+                [ "5", "2D Spiral", "2D Spiral" ],
+                [ "6", "2D Sweep", "2D Sweep" ],
+                [ "7", "2D tartan", "2D tartan" ],
+                [ "8", "3D Spherical", "3D Spherical" ],
+                [ "9", "3D Box", "3D Box" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "interpolation",
+            "default" : "0",
+            "desc" : "0:linear, 1:smooth, 2:solid nearest, 3:solid left, 4:solid right",
+            "items" : 
+            [
+                [ "0", "linear", "linear" ],
+                [ "1", "smooth", "smooth" ],
+                [ "2", "solid nearest", "solid nearest" ],
+                [ "3", "solid left", "solid left" ],
+                [ "4", "solid right", "solid right" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.600000023841858,
+            "desc" : "Fresnel ior to use",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reverse",
+            "default" : 0,
+            "desc" : "Whether to reverse the gradient",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "range_min",
+            "default" : 0.0,
+            "desc" : "Minimum range",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "range_max",
+            "default" : 1.0,
+            "desc" : "Maximum range",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "range_loop",
+            "default" : "0",
+            "desc" : "0:Stretch, 1:Tile, 2:Mirror, 3:None",
+            "items" : 
+            [
+                [ "0", "Stretch", "Stretch" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror", "Mirror" ],
+                [ "3", "None", "None" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_dist",
+            "default" : 0,
+            "desc" : "Whether to use distortion",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dist_str",
+            "default" : 0.0,
+            "desc" : "Distortion strength",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dist_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Distortion texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "0:UVW, 1:Normal, 2:Distance, 3:Light, 4:Map, 5:Random, 6:Particle age, 7:Particle speed, 8:Particle size",
+            "items" : 
+            [
+                [ "0", "UVW", "UVW" ],
+                [ "1", "Normal", "Normal" ],
+                [ "2", "Distance", "Distance" ],
+                [ "3", "Light", "Light" ],
+                [ "4", "Map", "Map" ],
+                [ "5", "Random", "Random" ],
+                [ "6", "Particle age", "Particle age" ],
+                [ "7", "Particle speed", "Particle speed" ],
+                [ "8", "Particle size", "Particle size" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal_type",
+            "default" : "0",
+            "desc" : "0:View, 1:Local X, 2:Local Y, 3:Local Z, 4:World X, 5:World Y, 6:World Z, 7:Camera X, 8:Camera Y, 9:Camera Z, 10:To Object, 11:Object Z",
+            "items" : 
+            [
+                [ "0", "View", "View" ],
+                [ "1", "Local X", "Local X" ],
+                [ "2", "Local Y", "Local Y" ],
+                [ "3", "Local Z", "Local Z" ],
+                [ "4", "World X", "World X" ],
+                [ "5", "World Y", "World Y" ],
+                [ "6", "World Z", "World Z" ],
+                [ "7", "Camera X", "Camera X" ],
+                [ "8", "Camera Y", "Camera Y" ],
+                [ "9", "Camera Z", "Camera Z" ],
+                [ "10", "To Object", "To Object" ],
+                [ "11", "Object Z", "Object Z" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal_function",
+            "default" : "0",
+            "desc" : "0:Perpendicular, 1:Towards, 2:Fresnel",
+            "items" : 
+            [
+                [ "0", "Perpendicular", "Perpendicular" ],
+                [ "1", "Towards", "Towards" ],
+                [ "2", "Fresnel", "Fresnel" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_curve_input",
+            "default" : false,
+            "desc" : "Whether to use a bezier curve",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_output",
+            "default" : 0.0,
+            "desc" : "Calculated blend amount to be tranformed by the bezier curve",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "curve_input",
+            "default" : 0.50,
+            "desc" : "If curve is used the gradient value will be taken from this texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

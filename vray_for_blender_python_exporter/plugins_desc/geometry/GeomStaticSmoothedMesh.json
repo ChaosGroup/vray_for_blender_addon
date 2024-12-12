@@ -1,0 +1,223 @@
+
+{
+    "Desciption" : "GeomStaticSmoothedMesh",
+    "ID" : "GeomStaticSmoothedMesh",
+    "Name" : "Geom Static Smoothed Mesh",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "mesh",
+            "default" : null,
+            "desc" : "The triangle mesh that will be displaced",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "displacement_tex_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The displacement texture. Its intensity is used if the displacement is 2d",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "displacement_tex_float",
+            "default" : 0.0,
+            "desc" : "The displacement texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "displacement_amount",
+            "default" : 1.0,
+            "desc" : "Determines the displacement amount for white areas in the displacement map; if use_globals is true this is multiplied by the global displacement amount option",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "displacement_shift",
+            "default" : 0.0,
+            "desc" : "This constant value is added to the displacement map",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "keep_continuity",
+            "default" : false,
+            "desc" : "If true, the plugin will attempt to keep the continuity of the displaced surface",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "water_level",
+            "default" : -1.000000015047466e+30,
+            "desc" : "Geometry below this displacement level will be clipped away",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "vector_displacement",
+            "default" : 0,
+            "desc" : "When this is 1, the red, green and blue channels of displacement_tex_color will be used to perform vector displacement with base 0.5; if this is 2, then the map matches the Mudbox displacement maps in absolute tangent space; 3 - vector displacement in object space",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "map_channel",
+            "default" : 0,
+            "desc" : "The mapping channel to use for vector displacement",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "map_channel_name",
+            "default" : "",
+            "desc" : "The mapping channel name to use for vector displacement. Overrides the map_channel parameter if valid",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "image_width",
+            "default" : 0,
+            "desc" : "This parameter overrides the imgWidth paramter from VRayFrameData during the calculation of the subdivision depth",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "cache_normals",
+            "default" : false,
+            "desc" : "If this option is equal to 1 then the normals of the generated triangles are cached. It has effect only if the surface is displaced",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "object_space_displacement",
+            "default" : false,
+            "desc" : "If true, the parent transformation will affect the amount of displacement. Used only when doing 3D displacement",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "static_subdiv",
+            "default" : false,
+            "desc" : "True if the resulting triangles of the subdivision algorithm will be inserted into the rayserver as static geometry",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Static subdivision"
+            }
+        },
+        
+        {
+            "attr" : "use_globals",
+            "default" : true,
+            "desc" : "If true, the global displacement quality settings will be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use global settings"
+            }
+        },
+        
+        {
+            "attr" : "view_dep",
+            "default" : true,
+            "desc" : "If use_globals is false, this determines if view-dependent tessellation is used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "View dependent"
+            }
+        },
+        
+        {
+            "attr" : "edge_length",
+            "default" : 4.0,
+            "desc" : "If use_globals is false, this determines the approximate edge length for the sub-triangles",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Edge length",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_subdivs",
+            "default" : 256,
+            "desc" : "If use_globals is false, this determines the maximum subdivisions for a triangle of the original mesh",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max subdivisions",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "use_bounds",
+            "default" : false,
+            "desc" : "If true, the min/max values for the displacement texture are specified by the min_bound and max_bound parameters; if false, these are calculated automatically",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "min_bound",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The lowest value for the displacement texture",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "max_bound",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "The biggest value for the displacement texture",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "preserve_map_borders",
+            "default" : "-1",
+            "desc" : "The valid values are: -1 - not set; 0 - none; 1 - internal; 2 - all",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Internal", "Internal" ],
+                [ "2", "All", "All" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Preserve map borders"
+            }
+        },
+        
+        {
+            "attr" : "preserve_geometry_borders",
+            "default" : false,
+            "desc" : "If true, edges on the geometry border won't be subdivided",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Preserve geometry borders"
+            }
+        },
+        
+        {
+            "attr" : "classic_catmark",
+            "default" : false,
+            "desc" : "If equal to 1 then the classical Catmull-Clark masks will be used for meshes which contain only quadrangles",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Classic Catmull-Clark"
+            }
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,112 @@
+
+{
+    "Desciption" : "RenderChannelCryptomatte",
+    "ID" : "RenderChannelCryptomatte",
+    "Name" : "Render Channel Cryptomatte",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "name",
+            "default" : "VRayCryptomatte",
+            "desc" : "Full channel name and directly use for the main Cryptomatte layer. Additional rank layers have a integer suffix appended",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "alias",
+            "default" : 158,
+            "desc" : "Internal unique identifier for this channel type",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "True if the rank layer channels should be written to deep files",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "id_type",
+            "default" : "0",
+            "desc" : "Defines which criteria is used to represent individual cryptomatte object.0 = Node name, 1 = Node material name, 2 = Node name with hierarchy (must start with scene/), 3 = Node user attribute,4 = Node asset/reference name (must start with asset/), 5 = Node layer name (must start with layer/), 6 = Sub object name, 7 = Material path",
+            "items" : 
+            [
+                [ "0", "Node name", "Node name" ],
+                [ "1", "Node material name", "Node material name" ],
+                [ "2", "Node name with hierarchy", "Node name with hierarchy" ],
+                [ "3", "Node user attribute", "Node user attribute" ],
+                [ "4", "Node asset/reference name", "Node asset/reference name" ],
+                [ "5", "Node layer name", "Node layer name" ],
+                [ "6", "Sub object name", "Sub object name" ],
+                [ "7", "Material Path", "Material Path" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "user_attribute",
+            "default" : "",
+            "desc" : "The user attribute name if id_type is 3",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "add_root_object_name",
+            "default" : "2",
+            "desc" : "Controls whether the root object name will be added to the sub object name in the manifest when id_type is 6. 0 = No root object name, 1 = Add short name, 2 = Add full name",
+            "items" : 
+            [
+                [ "0", "No Name", "No Name" ],
+                [ "1", "Short Name", "Short Name" ],
+                [ "2", "Full Name", "Full Name" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "num_level",
+            "default" : 6,
+            "desc" : "The number of Cryptomatte rank layers (the number of distinguishable objects within a pixel)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Number of layers",
+                "min" : 1,
+                "soft_max" : 12
+            }
+        },
+        
+        {
+            "attr" : "id_type_prefix",
+            "default" : "",
+            "desc" : "Optional prefix to find the proper scene_name slot from the VRayPlugin",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "write_metadata",
+            "default" : "2",
+            "desc" : "Controls if metadata will be appended to the EXR extra attributes.0 = The plugin will not append any metadata, 1 = Write metadata and manifest",
+            "items" : 
+            [
+                [ "0", "Don't append metadata", "Don't append metadata" ],
+                [ "1", "Write metadata and manifest", "Write metadata and manifest" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "object_path_start_slash",
+            "default" : false,
+            "desc" : "Prepend forward slash for object paths (if necessary)",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

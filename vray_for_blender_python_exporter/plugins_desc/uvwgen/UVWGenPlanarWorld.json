@@ -1,0 +1,164 @@
+
+{
+    "Desciption" : "UVWGenPlanarWorld",
+    "ID" : "UVWGenPlanarWorld",
+    "Name" : "UVW Gen Planar World",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Initial transformation on the uvw coordinates, before mirror, crop etc",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_transform_tex",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A texture overriding uvw_transform",
+            "type" : "TRANSFORM_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tex_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Final transformation on the resulting uvw coordinates, after mirror, crop etc",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of uvw transform samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_u",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_v",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_w",
+            "default" : "0",
+            "desc" : "0 - no wrapping, 1 - wrap, 2 - mirror tile",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror Tile", "Mirror Tile" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_u",
+            "default" : "0",
+            "desc" : "1 to crop in the u-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_v",
+            "default" : "0",
+            "desc" : "1 to crop in the v-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "crop_w",
+            "default" : "0",
+            "desc" : "1 to crop in the w-direction",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Crop", "Crop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coverage",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Coverage",
+            "type" : "VECTOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_coords",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The uvw coordinates for the specified channel at the current shading point",
+            "type" : "OUTPUT_VECTOR_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "wrap_mode",
+            "default" : "0",
+            "desc" : "Wrap mode (0 - wrap on 0.5 boundary; 1 - wrap on integer boundary",
+            "items" : 
+            [
+                [ "0", "On 0.5 boundary", "On 0.5 boundary" ],
+                [ "1", "On integer boundary", "On integer boundary" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "duvw_scale",
+            "default" : 1.0,
+            "desc" : "Additional scale factor for the texture derivatives",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

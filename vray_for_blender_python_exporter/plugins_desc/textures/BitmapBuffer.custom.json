@@ -1,0 +1,102 @@
+{
+    "ID": "BitmapBuffer",
+    "Parameters": [
+        {
+            "attr": "bitmap",
+            "default": "",
+            "desc": "Output BitmapBuffer plugin",
+            "type": "OUTPUT_PLUGIN",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr" : "interpolation",
+            "default" : "0",
+            "desc" : "Interpolation method for the mip-map filtering (0 - bilinear, 1 - bicubic, 2 - biquadratic)",
+            "items" : 
+            [
+                [ "0", "Bilinear", "Bilinear" ],
+                [ "1", "Bicubic", "Bicubic" ],
+                [ "2", "Biquadratic", "Biquadratic" ],
+                [ "3", "3dsMax auto", "3dsMax auto" ]
+            ],
+            "type" : "ENUM"
+        },
+        {
+            "attr" : "transfer_function",
+            "default" : "3"
+        },
+        {
+            "attr" : "rgb_color_space",
+            "default" : "lin_srgb",
+            "items" : 
+            [
+                [ "raw", "Raw", "No conversion" ],
+                [ "lin_srgb", "sRGB", "sRGB" ],
+                [ "acescg", "ACEScg", "ACEScg" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "BitmapBuffer",
+                "label": "Bitmap",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "file",
+                        "custom_draw": "widgetDrawFile"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "filter_type",
+                        "label": "Filter"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "interpolation",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "filter_blur",
+                        "active": {
+                            "cond": "::filter_type!=0"
+                        }
+                    },
+                    {
+                        "name": "transfer_function"
+                    },
+                    {
+                        "name": "gamma",
+                        "active": {
+                            "cond": "::transfer_function=1"
+                        }
+                    },
+                    {
+                        "name": "rgb_color_space",
+                        "label": "Color space"
+                    },
+                    {
+                        "name": "allow_negative_colors"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "psd_alpha_name",
+            "psd_group_name"
+        ]
+    }
+}

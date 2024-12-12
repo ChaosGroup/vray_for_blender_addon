@@ -1,0 +1,29 @@
+{
+    "ID": "RenderChannelNormals",
+    "Name" : "Normals",
+    "Subtype" : "GEOMETRY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "filtering"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

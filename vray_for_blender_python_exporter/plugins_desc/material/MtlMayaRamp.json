@@ -1,0 +1,267 @@
+
+{
+    "Desciption" : "MtlMayaRamp",
+    "ID" : "MtlMayaRamp",
+    "Name" : "Mtl Maya Ramp",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_positions",
+            "default" : null,
+            "desc" : "positions of the color ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "color_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the color ramp",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "color_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "color_input",
+            "default" : 0,
+            "desc" : "0: light angle, 1: facing angle, 2: brightness, 3: normalized brightness",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "transp_positions",
+            "default" : null,
+            "desc" : "positions of the transparency ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "transp_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the transparency ramp",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "transp_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "incan_positions",
+            "default" : null,
+            "desc" : "positions of the incandescence ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "incan_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the incandescence ramp",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "incan_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "specular_positions",
+            "default" : null,
+            "desc" : "positions of the specular ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "specular_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the specular ramp",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "specular_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "environm_positions",
+            "default" : null,
+            "desc" : "positions of the environment ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "environm_colors",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "colors of the environment ramp",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "environm_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "specularRollOff_positions",
+            "default" : null,
+            "desc" : "positions of the specular roll off ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "specularRollOff_values",
+            "default" : 0.0,
+            "desc" : "values of the specular roll off ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "specularRollOff_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "reflectivity_positions",
+            "default" : null,
+            "desc" : "positions of the reflectivity ramp",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "reflectivity_values",
+            "default" : 0.0,
+            "desc" : "values of the reflectivity ramp",
+            "elements_count" : 0,
+            "type" : "FLOAT_TEXTURE_LIST"
+        },
+        
+        {
+            "attr" : "reflectivity_interpolations",
+            "default" : 0,
+            "desc" : "0: none, 1: linear, 2: smooth, 3: spline",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "ambient_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "ambient texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "eccentricity_tex",
+            "default" : 0.50,
+            "desc" : "eccentricity float texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "specularity_tex",
+            "default" : 1.0,
+            "desc" : "specularity float texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "diffuse_tex",
+            "default" : 0.50,
+            "desc" : "diffuse float texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "fscatter_tex",
+            "default" : 0.0,
+            "desc" : "forward scatter float texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "reflection_limit",
+            "default" : 0,
+            "desc" : "reflection limit",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "refractions",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.549999952316284,
+            "desc" : "IOR for the material; this is ignored if the surface has a volume shader (the volume IOR is used)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "refraction_limit",
+            "default" : -1,
+            "desc" : "The maximum refraction bounces",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "volume",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "bump_brdf",
+            "default" : null,
+            "desc" : "bump BRDF used internally for bump mapping",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,58 @@
+
+{
+    "Desciption" : "TexCondition2",
+    "ID" : "TexCondition2",
+    "Name" : "Condition 2",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "operation",
+            "default" : "0",
+            "desc" : "0 : Equal; 1 : Not equal; 2 : Greater than; 3 : Greater or equal; 4 : Less than; 5 : Less or equal",
+            "items" : 
+            [
+                [ "0", "Equal", "Equal" ],
+                [ "1", "Not equal", "Not equal" ],
+                [ "2", "Greater than", "Greater than" ],
+                [ "3", "Greater or equal", "Greater or equal" ],
+                [ "4", "Less than", "Less than" ],
+                [ "5", "Less or equal", "Less or equal" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "first_term",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "second_term",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "color_if_true",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_if_false",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

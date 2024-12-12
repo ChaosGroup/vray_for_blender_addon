@@ -1,0 +1,160 @@
+
+{
+    "Desciption" : "RawBitmapBuffer",
+    "ID" : "RawBitmapBuffer",
+    "Name" : "Raw Bitmap Buffer",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "filter_type",
+            "default" : "1",
+            "desc" : "-1 - nearest; 0 - no filtering; 1 - mip-map filtering; 2 - summed area table filtering; 3 - elliptical filtering; 4 - deprecated, do not use; 5 - sharp mip-map filtering",
+            "items" : 
+            [
+                [ "-1", "Nearest", "Nearest" ],
+                [ "0", "No filtering", "No filtering" ],
+                [ "1", "Mip-map filtering", "Mip-map filtering" ],
+                [ "2", "Summed are table filtering", "Summed are table filtering" ],
+                [ "3", "Elliptical filtering", "Elliptical filtering" ],
+                [ "5", "Sharp mip-map filtering", "Sharp mip-map filtering" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "filter_blur",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "transfer_function",
+            "default" : "1",
+            "desc" : "0 - linear, 1 - gamma corrected, 2 - sRGB, 3 - auto",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Gamma corrected", "Gamma corrected" ],
+                [ "2", "sRGB", "sRGB" ],
+                [ "3", "Auto", "Auto" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "rgb_color_space",
+            "default" : "",
+            "desc" : "The linear RGB color space of the texture. Default: \"raw\". Texture will be converted from this color space to the renderer color space. Builtin supported linear color spaces are \"raw\" for no conversion, \"lin_srgb\" for sRGB, and \"acescg\" for ACEScg. If the OCIO environment variable is set or if the SettingsUnitsInfo \"ocio_config_file\" parameter is set, the value can be any color space available in the OCIO config. This conversion is applied after the transfer function. The parameter transfer_function must be set, or else texture filtering will NOT work correctly",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "gamma",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "maya_compatible",
+            "default" : false,
+            "desc" : "If true alpha can be generated from intensity.Maya checks if alpha is 1.0 everywhere, and if so, uses the intensity for alpha value",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "allow_negative_colors",
+            "default" : false,
+            "desc" : "if false negative colors will be clamped",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "interpolation",
+            "default" : "0",
+            "desc" : "Interpolation method for the mip-map filtering (0 - bilinear, 1 - bicubic, 2 - biquadratic, 3 - 3dsMax (interpolation is based on the input bitmap format:for 8-bit files - use bicubic, for floating point or tiled - use bilinear))",
+            "items" : 
+            [
+                [ "0", "Bilinear", "Bilinear" ],
+                [ "1", "Bicubic", "Bicubic" ],
+                [ "2", "Biquadratic", "Biquadratic" ],
+                [ "3", "3dsMax auto", "3dsMax auto" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "frame_number",
+            "default" : -2147483648,
+            "desc" : "When working with image sequences, this parameter specifies which image out of the sequence should be used.  If parameter is omitted or defaulted, the frame number depends on the current frame time value",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "frame_offset",
+            "default" : 0,
+            "desc" : "Start frame offset for image sequences",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "pixels",
+            "default" : 0,
+            "desc" : "The raw pixel values used in the bitmap. The values should be packed (no padding) and are reinterpret-cast to the appropriate type according to pixels_type",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "alpha_pixels",
+            "default" : 0,
+            "desc" : "Optional raw alpha values. Alpha=1 is used if this is empty and type is RGB/Gray. Can be set to a list of one value for constant alpha. Otherwise must match 'pixels' array size",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "pixels_type",
+            "default" : "0",
+            "desc" : "0: 8-bit RGBA, 1: float RGBA, 2: 8-bit RGBE, 3: 16-bit RGBA, 4: 8-bit RGB, 5: half RGBA, 6: float Gray, 7: 8-bit Gray, 8: half Gray, 9: signed 8-bit Gray, 10: signed 8-bit RGB, 11: signed 8-bit RGBA, 12: signed 16-bit RGBA",
+            "items" : 
+            [
+                [ "0", "8-bit RGBA", "8-bit RGBA" ],
+                [ "1", "Float RGBA", "Float RGBA" ],
+                [ "2", "8-bit RGBE", "8-bit RGBE" ],
+                [ "3", "16-bit RGBA", "16-bit RGBA" ],
+                [ "4", "8-bit RGB", "8-bit RGB" ],
+                [ "5", "Half-Float RGBA", "Half-Float RGBA" ],
+                [ "6", "Float Grayscale", "Float Grayscale" ],
+                [ "7", "8-bit Grayscale", "8-bit Grayscale" ],
+                [ "8", "Half-Float Grayscale", "Half-Float Grayscale" ],
+                [ "9", "Signed 8-bit Grayscale", "Signed 8-bit Grayscale" ],
+                [ "10", "Signed 8-bit RGB", "Signed 8-bit RGB" ],
+                [ "11", "Signed 8-bit RGBA", "Signed 8-bit RGBA" ],
+                [ "12", "Signed 16-bit RGBA", "Signed 16-bit RGBA" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "width",
+            "default" : 0,
+            "desc" : "The width of the raw bitmap",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "height",
+            "default" : 0,
+            "desc" : "The height of the raw bitmap",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

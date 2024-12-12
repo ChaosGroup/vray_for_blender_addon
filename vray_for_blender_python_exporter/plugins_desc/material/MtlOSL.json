@@ -1,0 +1,105 @@
+
+{
+    "Desciption" : "MtlOSL",
+    "ID" : "MtlOSL",
+    "Name" : "Mtl OSL",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "shader_file",
+            "default" : "",
+            "desc" : "Path to either *.osl or *.oso file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "oso", "osl" ],
+                "file_names" : [ "OSL object code file", "OSL shader file" ],
+                "file_op" : "load",
+                "rollout" : "Basic Parameters",
+                "tab" : "V-Ray OSL Material"
+            }
+        },
+        
+        {
+            "attr" : "input_parameters",
+            "default" : null,
+            "desc" : "Input parameter values in the order and type declared by the OSL shader. Each odd position of the list is a parameter name and the even position after it is the value",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "output_closure",
+            "default" : "",
+            "desc" : "Name of the output closure color as declared in the OSL shader",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the material",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "max_ray_depth",
+            "default" : 5,
+            "desc" : "Maximum trace depth allowed for material evaluation",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "include_path",
+            "default" : "",
+            "desc" : "Alternative include directory",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "shader_type",
+            "default" : 0,
+            "desc" : "0 - load an external shader file, 1 - load an embedded OSL shader, 2 - load an embedded OSO shader",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "inline_shader",
+            "default" : "",
+            "desc" : "OSL or OSO source code in Base64 representation",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "graph_owner",
+            "default" : 1,
+            "desc" : "0 - does not manage an OSL shader group, 1 - manages a separate shader group.A node should be a graph owner if there is at least one non-OSL node that it is connected to.If a node is a graph owner it takes care of the building of the graph itself and providing outputs to any TexOSLOutputSelector that it is connected to",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "flip_textures",
+            "default" : 0,
+            "desc" : "0 - do not flip textures, 1 - flip textures along the Y axis (for compatibility with 3ds Max)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

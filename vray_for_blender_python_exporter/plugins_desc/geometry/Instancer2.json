@@ -1,0 +1,255 @@
+
+{
+    "Desciption" : "Instancer2",
+    "ID" : "Instancer2",
+    "Name" : "Instancer 2",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "acceleration_pp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle acceleration",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "colors",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Per-particle diffuse color",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "emission_pp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle emission color",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_1",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector1PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_2",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector2PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_3",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector3PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_4",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector4PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_5",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector5PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "age_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle age",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lifespan_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle lifespan",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "opacity_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle opacity",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_1",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar1PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_2",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar2PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_3",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar3PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_4",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar4PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_5",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar5PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instances",
+            "default" : null,
+            "desc" : "A list of N+1 elements where N is the number of instances; the first element is a time value, the rest are lists with elements: particle id, transform, velocity transform, hasInstanceTime, instanceTime, additional_params_flags, additional_param_1, ..., additional_param_N, visibility, node, node, node, ..",
+            "type" : "LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instances_material_override",
+            "default" : null,
+            "desc" : "Use override material even if particle has a material specified",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of transform samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visible",
+            "default" : true,
+            "desc" : "If false, no geometry will be generated and rendered",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shading_needs_ids",
+            "default" : false,
+            "desc" : "Set to true if the particle shade data sent to the instanced geometry needs to include the particle ID",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_additional_params",
+            "default" : false,
+            "desc" : "If this is set to 'true' the lists in the 'instances' parameter have additional parameters after 'time instancing' parameters - an int with flags indicating what parameters follow and after that the parameters that follow. Their types depend on the flags in the int and are in a strictly defined order. New flags may be added and additional parameters for them can be added at the end of the chain. The flags are defined in HierarchicalParameterizedNodeParameters in an enum",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_visibility",
+            "default" : false,
+            "desc" : "Use particle visibility. If set to 'true' the lists in the 'instances' parameter have particle visibility parameter after 'additional parameters'",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_direct_velocity",
+            "default" : false,
+            "desc" : "Directly interpolate particle velocity",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render_ids_gen_mode",
+            "default" : "0",
+            "desc" : "Values for this parameter other than 0 are EXPERIMENTAL and WORK IN PROGRESS. This parameter tells the Instancer how to generate the render IDs for its instances. 0 - each instance has the same render ID as its source Node. 1 - all instances have the same render ID even those generated from different Nodes. 2 - all instances have different render IDs even those generated from the same Node",
+            "items" : 
+            [
+                [ "0", "Same as source Node", "Same as source Node" ],
+                [ "1", "Same for all instances", "Same for all instances" ],
+                [ "2", "Different for all instances", "Different for all instances" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Render IDs Mode"
+            }
+        },
+        
+        {
+            "attr" : "extra_channels",
+            "default" : null,
+            "desc" : "Extra channels that hold auxiliary instances data",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_time_instancing",
+            "default" : 1,
+            "desc" : "If this is set to 1 or 2 the 'instances' parameter will contain the elements hasInstanceTime (bool) and instanceTime (double). Otherwise, they should not be present.0 - no time instancing applied. 1 - time instancing applied - only sequential times/samples permitted2 - time instancing applied - arbitrary times/samples permitted (used along with TimeInstancedGeom)",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,208 @@
+{
+    "ID": "BRDFAlSurface",
+    "Name": "V-Ray AL Surface Mtl",
+    "Parameters": [
+        {
+            "attr": "bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "diffuse_bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "reflect1_bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "reflect2_bump_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bump_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "diffuse_bump_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "reflect1_bump_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "reflect2_bump_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "sss1_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "sss2_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "sss3_radius",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "reflect_subdivs",
+            "sss_subdivs"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "bump",
+                "label": "Bump",
+                "attrs": [
+                    {
+                        "name": "bump_amount"
+                    },
+                    {
+                        "name": "bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "diffuse",
+                "label": "Diffuse and Opacity",
+                "attrs": [
+                    {
+                        "name": "opacity"
+                    },
+                    {
+                        "name": "diffuse"
+                    },
+                    {
+                        "name": "diffuse_strength"
+                    },
+                    {
+                        "name": "diffuse_bump_amount"
+                    },
+                    {
+                        "name": "diffuse_bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "reflection",
+                "label": "Reflection 1",
+                "attrs": [
+                    {
+                        "name": "reflect1"
+                    },
+                    {
+                        "name": "reflect1_strength"
+                    },
+                    {
+                        "name": "reflect1_roughness"
+                    },
+                    {
+                        "name": "reflect1_ior"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "reflect1_distribution",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "reflect1_bump_amount"
+                    },
+                    {
+                        "name": "reflect1_bump_type"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "sss",
+                "label": "SSS",
+                "attrs": [
+                    {
+                        "name": "sss_mix"
+                    },
+                    {
+                        "layout": "ROW",
+                        "name": "sss_mode",
+                        "attrs": [
+                            {
+                                "name": "sss_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "sss1_weight"
+                    },
+                    {
+                        "name": "sss1_color"
+                    },
+                    {
+                        "name": "sss1_radius"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "sss2_weight"
+                    },
+                    {
+                        "name": "sss2_color"
+                    },
+                    {
+                        "name": "sss2_radius"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "sss3_weight"
+                    },
+                    {
+                        "name": "sss3_color"
+                    },
+                    {
+                        "name": "sss3_radius"
+                    }
+                ]
+            }
+        ]
+    }
+}

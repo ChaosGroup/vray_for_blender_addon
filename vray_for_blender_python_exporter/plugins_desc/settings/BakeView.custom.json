@@ -1,0 +1,52 @@
+{
+    "ID": "BakeView",
+    "Parameters": [
+        {
+            "attr": "uv_channel",
+            "default": false,
+            "desc": "UV channel to use",
+            "type": "INT",
+            "ui": {
+                "min": 0
+            },
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "bake_material",
+            "default": "",
+            "desc": "Material for \"Bake By Material\"",
+            "type": "STRING",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "square_resolution",
+            "desc": "Set square resolution",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Use texture baking",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "bake_uvwgen",
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

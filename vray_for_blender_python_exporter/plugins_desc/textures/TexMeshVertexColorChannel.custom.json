@@ -1,0 +1,57 @@
+{
+    "ID": "TexMeshVertexColorChannel",
+    "Name": "V-Ray Mesh Vertex Color Channel",
+    "Parameters": [
+        {
+            "attr": "data_select",
+            "default": "1",
+            "desc": "Use UV",
+            "items": [
+                [
+                    "0",
+                    "UV",
+                    "Use UV channels"
+                ],
+                [
+                    "1",
+                    "Color",
+                    "Use Color channels"
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "default_color",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "default_color"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "channelIndex",
+            "channel_name"
+        ],
+        "animatable": true
+    }
+}

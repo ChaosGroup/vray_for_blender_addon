@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "TexParticleDiffuse",
+    "ID" : "TexParticleDiffuse",
+    "Name" : "Particle Diffuse",
+    "Parameters" : [],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

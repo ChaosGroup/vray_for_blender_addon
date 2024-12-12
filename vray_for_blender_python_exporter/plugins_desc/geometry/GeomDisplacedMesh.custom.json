@@ -1,0 +1,244 @@
+{
+    "ID": "GeomDisplacedMesh",
+    "Parameters": [
+        {
+            "attr": "type",
+            "default": "Normal",
+            "desc": "Displacement type",
+            "items": [
+                [
+                    "0",
+                    "Normal",
+                    "Normal displacement"
+                ],
+                [
+                    "1",
+                    "2D",
+                    "2D displacement"
+                ],
+                [
+                    "2",
+                    "Vector",
+                    "Vector displacement"
+                ],
+                [
+                    "3",
+                    "Vector (Absolute)",
+                    "Vector displacement"
+                ],
+                [
+                    "4",
+                    "Vector (Object)",
+                    "Vector displacement"
+                ]
+            ],
+            "name": "Mode",
+            "type": "ENUM",
+            "update": "onUpdateDisplacementType",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "water_level",
+            "default": -1.0
+        },
+        {
+            "attr": "displacement_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "displacement_shift",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "water_level",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "displacement_amount",
+                        "label": "Amount"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {
+                "name": "min_bound"
+            },
+            {
+                "name": "max_bound"
+            },
+            {
+                "name": "displace_2d_transform"
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "type"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "displacement_amount"
+                            },
+                            {
+                                "name": "displacement_shift"
+                            },
+                            {
+                                "name": "water_level"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "attrs": [
+                            {
+                                "name": "resolution"
+                            },
+                            {
+                                "name": "precision"
+                            },
+                            {
+                                "name": "keep_continuity"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "use_globals"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "active": {
+                    "cond": "::use_globals=0"
+                },
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "edge_length"
+                            },
+                            {
+                                "name": "max_subdivs"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "align": true,
+                        "attrs": [
+                            {
+                                "name": "view_dep"
+                            },
+                            {
+                                "name": "tight_bounds"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "use_bounds"
+                    }
+                ],
+                "active": {
+                    "cond": "::type!=1;"
+                },
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "active": {
+                            "cond": "::type!=1,::use_bounds=1"
+                        },
+                        "attrs": [
+                            {
+                                "name": "min_bound"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    },
+                    {
+                        "active": {
+                            "cond": "::type!=1,::use_bounds=1"
+                        },
+                        "attrs": [
+                            {
+                                "name": "max_bound"
+                            }
+                        ],
+                        "layout": "COLUMN"
+                    }
+                ]
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "static_displacement"
+                    },
+                    {
+                        "name": "cache_normals"
+                    },
+                    {
+                        "name": "filter_texture",
+                        "active": {
+                            "cond": "::type!=0"
+                        }
+                    },
+                    {
+                        "active": {
+                            "cond": "::filter_texture=1"
+                        },
+                        "name": "filter_blur"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "mesh"
+        ]
+    }
+}

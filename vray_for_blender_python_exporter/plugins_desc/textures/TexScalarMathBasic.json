@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexScalarMathBasic",
+    "ID" : "TexScalarMathBasic",
+    "Name" : "Scalar Math Basic",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "op",
+            "default" : 0,
+            "desc" : "Operation: Add(), Subtract(), Multiply(), Divide(), Minimum(), Maximum()",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "input1",
+            "default" : 0.0,
+            "desc" : "The first scalar input",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "input2",
+            "default" : 0.0,
+            "desc" : "The second scalar input",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "max_displacement",
+            "default" : -1.0,
+            "desc" : "Specifies the maximum displacement value.  If the displacement value is higher than the Max Displacement value, displacement will be clipped",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "ID": "SettingsIrradianceMap",
+    "Parameters": [
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "auto_save_file",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

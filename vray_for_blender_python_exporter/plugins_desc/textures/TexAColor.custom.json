@@ -1,0 +1,17 @@
+{
+    "ID": "TexAColor",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "options": {
+                "visible": false
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    },
+    "excluded_parameters": [
+        "uvwgen"
+    ]
+}

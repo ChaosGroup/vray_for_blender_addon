@@ -1,0 +1,135 @@
+
+{
+    "Desciption" : "SettingsRaycaster",
+    "ID" : "SettingsRaycaster",
+    "Name" : "Settings Raycaster",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "maxLevels",
+            "default" : 80,
+            "desc" : "Max. tree depth",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max tree depth",
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "minLeafSize",
+            "default" : 0.0,
+            "desc" : "Min. voxel size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Min leaf size",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "faceLevelCoef",
+            "default" : 1.0,
+            "desc" : "Balance coefficient between depth and faces per voxel",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Face/level coeff",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dynMemLimit",
+            "default" : 0,
+            "desc" : "Limit for dynamic geometry, in megabytes. 0 means no limit. Negative numbers mean the amount of physical RAM with the negative number added to it",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Dyn. memory limit (MBs)"
+            }
+        },
+        
+        {
+            "attr" : "optLevel",
+            "default" : "0",
+            "desc" : "Optimization level (must be 0)",
+            "items" : 
+            [
+                [ "0", "Low", "Low" ],
+                [ "2", "Average", "Average" ],
+                [ "4", "High", "High" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Tree build quality"
+            }
+        },
+        
+        {
+            "attr" : "embreeUse",
+            "default" : true,
+            "desc" : "Enable/Disable using the Embree ray caster. Embree is the faster option",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Embree"
+            }
+        },
+        
+        {
+            "attr" : "embreeUseMB",
+            "default" : true,
+            "desc" : "Enable/Disable using the Embree ray caster for motion blur",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Embree for Motion Blur"
+            }
+        },
+        
+        {
+            "attr" : "embreeHair",
+            "default" : true,
+            "desc" : "Enable/Disable the Embree ray caster for hair",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Embree for hair"
+            }
+        },
+        
+        {
+            "attr" : "embreeLowMemory",
+            "default" : false,
+            "desc" : "Try to conserve memory, using potentially slower algorithms",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Conserve Memory"
+            }
+        },
+        
+        {
+            "attr" : "embreeRayPackets",
+            "default" : false,
+            "desc" : "Turn on the packet ray casting",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Ray Packets"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

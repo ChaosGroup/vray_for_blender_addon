@@ -1,0 +1,75 @@
+
+{
+    "Desciption" : "MtlVRmat",
+    "ID" : "MtlVRmat",
+    "Name" : "Mtl V Rmat",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "filename",
+            "default" : "",
+            "desc" : "A .vrmat, .vismat, .vrscene or .mtlx file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Material File",
+                "file_extensions" : [ "vrmat", "vismat", "vrscene", "mtlx" ],
+                "rollout" : "Parameters",
+                "tab" : "V-Ray VRmat"
+            }
+        },
+        
+        {
+            "attr" : "mtlx_document",
+            "default" : "",
+            "desc" : "MaterialX XML document as a string",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "MaterialX document"
+            }
+        },
+        
+        {
+            "attr" : "mtlname",
+            "default" : "",
+            "desc" : "Which material to use. Top-level <Asset> name or MtlSingleBRDF name if .vrscene",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Material Name"
+            }
+        },
+        
+        {
+            "attr" : "mtlindex",
+            "default" : -1,
+            "desc" : "If >=0, specifies an index of the material to use and mtlname is ignored. Only valid for MaterialX files",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "MaterialX Node Index"
+            }
+        },
+        
+        {
+            "attr" : "param_override",
+            "default" : "",
+            "desc" : "(xml only) Override for a specific instance of a parameter. Requires full asset path plus '/paramname'.\n\tValid XML and vrmat syntax for the respective parameter is expected. Multiple overrides can be specified with colons.\n\tExample: \"/Paint/Diffuse/color=<r>0.8</r><g>0.4</g><b>0.4</b>;/Paint/Diffuse/roughness=0.8\"",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "param_override_all",
+            "default" : "",
+            "desc" : "(xml only) Override for all instances of a parameter. Requires only plugin type plus '/paramname'.\n\tValid XML and vrmat syntax for the respective parameter is expected. Multiple overrides can be specified with colons.\n\tExample: \"MtlASGVIS/bump_units=1;BitmapBuffer/color_space=2\"",
+            "type" : "STRING"
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexRgbaCombine",
+    "ID" : "TexRgbaCombine",
+    "Name" : "Rgba Combine",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "red",
+            "default" : 0.0,
+            "desc" : "Red channel input",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "green",
+            "default" : 0.0,
+            "desc" : "Green channel input",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "blue",
+            "default" : 0.0,
+            "desc" : "Blue channel input",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha",
+            "default" : 0.0,
+            "desc" : "Alpha channel input",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,230 @@
+
+{
+    "Desciption" : "BakeView",
+    "ID" : "BakeView",
+    "Name" : "Bake View",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bake_node",
+            "default" : null,
+            "desc" : "The node to bake",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "target_nodes",
+            "default" : null,
+            "desc" : "The target objects for projection baking",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "bake_uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dilation",
+            "default" : 2.0,
+            "desc" : "Number of pixels to expand around geometry",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flip_derivs",
+            "default" : false,
+            "desc" : "true to flip the texture direction derivatives (reverses bump mapping)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u_min",
+            "default" : 0.0,
+            "desc" : "The minimum u value to bake",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v_min",
+            "default" : 0.0,
+            "desc" : "The minimum v value to bake",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u_max",
+            "default" : 1.0,
+            "desc" : "The maximum u value to bake",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v_max",
+            "default" : 1.0,
+            "desc" : "The maximum v value to bake",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation to translate the provided UV coordinates to the expected UV space",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fov",
+            "default" : 0.7853981852531433,
+            "desc" : "Field of view",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "projection_baking",
+            "default" : 0,
+            "desc" : "0 - normal baking, 1 - projection baking",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : 0,
+            "desc" : "0 - outside, 1 - inside, 2 - outside first, the inside, 3 - inside first, the outside, 4 - closest",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal",
+            "default" : 0,
+            "desc" : "0 - Smooth normal, 1 - Geometry normal",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max_depth",
+            "default" : 0.0,
+            "desc" : "Geometry that is intersected further than this value along the ray will be ignored. If the value is zero then no geometry will be ignored",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ray_offset",
+            "default" : 0.0,
+            "desc" : "The ray's beginning will be offseted this much along the normal",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "from_camera",
+            "default" : 0,
+            "desc" : "0 - shade reflections, etc. from rays along surface normal; 1 - bake from rays originating from camera",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_bake_nodes",
+            "default" : null,
+            "desc" : "List of nodes to bake on a single image",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_bake_uvwgens",
+            "default" : null,
+            "desc" : "UVW generator for each node in mapped_bake_nodes. Alternatively use \"bake_uvwgen\" to assign the same UVW generator to all nodes",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_x0",
+            "default" : 0,
+            "desc" : "Leftmost coordinate of the output region of each node in mapped_bake_nodes",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_y0",
+            "default" : 0,
+            "desc" : "Topmost coordinate of the output region of each node in mapped_bake_nodes",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_x1",
+            "default" : 0,
+            "desc" : "Rightmost coordinate of the output region of each node in mapped_bake_nodes",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_y1",
+            "default" : 0,
+            "desc" : "Bottommost coordinate of the output region of each node in mapped_bake_nodes",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapped_bake_nodes_auto",
+            "default" : false,
+            "desc" : "True to bake 'mapped_bake_nodes' into a single image without mapped regions",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

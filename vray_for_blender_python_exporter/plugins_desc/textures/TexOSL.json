@@ -1,0 +1,362 @@
+
+{
+    "Desciption" : "TexOSL",
+    "ID" : "TexOSL",
+    "Name" : "OSL",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator for the texture",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Mapped"
+            }
+        },
+        
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "desc" : "The way the valid portion of the texture is applied: 0 - the whole texture is valid, 1 - crop, 2 -place",
+            "items" : 
+            [
+                [ "0", "Whole texture is valid", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "u",
+            "default" : 0.0,
+            "desc" : "U coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "v",
+            "default" : 0.0,
+            "desc" : "V coordinate of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "w",
+            "default" : 1.0,
+            "desc" : "Width of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "h",
+            "default" : 1.0,
+            "desc" : "Height of the valid texture sector",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : 0.0,
+            "desc" : "Amount of random placement variation",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_u",
+            "default" : false,
+            "desc" : "If true there is horizontal tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_v",
+            "default" : false,
+            "desc" : "If true there is vertical tiling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_noise_on",
+            "default" : false,
+            "desc" : "If true the noise is enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "UV noise on"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_animate",
+            "default" : false,
+            "desc" : "If true the noise is animated. Use \"UV noise phase\" to animate the noise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Animate UV noise"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_amount",
+            "default" : 1.0,
+            "desc" : "UV noise amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise amount"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_levels",
+            "default" : 1.0,
+            "desc" : "UV noise iterations",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise levels"
+            }
+        },
+        
+        {
+            "attr" : "uv_noise_size",
+            "default" : 1.0,
+            "desc" : "UV noise size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise size"
+            }
+        },
+        
+        {
+            "attr" : "un_noise_phase",
+            "default" : 0.0,
+            "desc" : "UV noise phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "UV noise phase",
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "shader_file",
+            "default" : "",
+            "desc" : "Path to either *.osl or *.oso file",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "oso", "osl" ],
+                "file_names" : [ "OSL object code file", "OSL shader file" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "input_parameters",
+            "default" : null,
+            "desc" : "Input parameter values in the order and type declared by the OSL shader. Each odd position of the list is a parameter name and the even position after it is the value",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "output_color",
+            "default" : "",
+            "desc" : "Name of the color output parameter as declared in the OSL shader",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "output_alpha",
+            "default" : "",
+            "desc" : "Name of the alpha output parameter as declared in the OSL shader",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "include_path",
+            "default" : "",
+            "desc" : "Alternative include directory",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "shader_type",
+            "default" : 0,
+            "desc" : "0 - load an external shader file, 1 - load an embedded OSL shader, 2 - load an embedded OSO shader",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "inline_shader",
+            "default" : "",
+            "desc" : "OSL or OSO source code in Base64 representation",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "graph_owner",
+            "default" : 1,
+            "desc" : "0 - does not manage an OSL shader group, 1 - manages a separate shader group.A node should be a graph owner if there is at least one non-OSL node that it is connected to.If a node is a graph owner it takes care of the building of the graph itself and providing outputs to any TexOSLOutputSelector that it is connected to",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "flip_textures",
+            "default" : 0,
+            "desc" : "0 - do not flip textures, 1 - flip textures along the Y axis (for compatibility with 3ds Max)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "is_camera_shader",
+            "default" : 0,
+            "desc" : "0 - this OSL CANNOT be used as a camera shader, 1 - this OSL can ONLY be used as a camera shader",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

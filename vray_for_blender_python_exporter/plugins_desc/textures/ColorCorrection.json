@@ -1,0 +1,359 @@
+
+{
+    "Desciption" : "ColorCorrection",
+    "ID" : "ColorCorrection",
+    "Name" : "Color Correction",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "source_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Source color",
+            "type" : "ACOLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The texture being color corrected",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rewire_red",
+            "default" : "0",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-redinv, 5-greeninv, 6-blueinv, 7-alphainv, 8-monochrome, 9-One, 10-Zero",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Redinv", "Redinv" ],
+                [ "5", "Greeninv", "Greeninv" ],
+                [ "6", "Blueinv", "Blueinv" ],
+                [ "7", "Alphainv", "Alphainv" ],
+                [ "8", "Monochrome", "Monochrome" ],
+                [ "9", "One", "One" ],
+                [ "10", "Zero", "Zero" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Channels"
+            }
+        },
+        
+        {
+            "attr" : "rewire_green",
+            "default" : "1",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-redinv, 5-greeninv, 6-blueinv, 7-alphainv, 8-monochrome, 9-One, 10-Zero",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Redinv", "Redinv" ],
+                [ "5", "Greeninv", "Greeninv" ],
+                [ "6", "Blueinv", "Blueinv" ],
+                [ "7", "Alphainv", "Alphainv" ],
+                [ "8", "Monochrome", "Monochrome" ],
+                [ "9", "One", "One" ],
+                [ "10", "Zero", "Zero" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "rewire_blue",
+            "default" : "2",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-redinv, 5-greeninv, 6-blueinv, 7-alphainv, 8-monochrome, 9-One, 10-Zero",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Redinv", "Redinv" ],
+                [ "5", "Greeninv", "Greeninv" ],
+                [ "6", "Blueinv", "Blueinv" ],
+                [ "7", "Alphainv", "Alphainv" ],
+                [ "8", "Monochrome", "Monochrome" ],
+                [ "9", "One", "One" ],
+                [ "10", "Zero", "Zero" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "rewire_alpha",
+            "default" : "3",
+            "desc" : "0-red, 1-green, 2-blue, 3-alpha, 4-redinv, 5-greeninv, 6-blueinv, 7-alphainv, 8-monochrome, 9-One, 10-Zero",
+            "items" : 
+            [
+                [ "0", "Red", "Red" ],
+                [ "1", "Green", "Green" ],
+                [ "2", "Blue", "Blue" ],
+                [ "3", "Alpha", "Alpha" ],
+                [ "4", "Redinv", "Redinv" ],
+                [ "5", "Greeninv", "Greeninv" ],
+                [ "6", "Blueinv", "Blueinv" ],
+                [ "7", "Alphainv", "Alphainv" ],
+                [ "8", "Monochrome", "Monochrome" ],
+                [ "9", "One", "One" ],
+                [ "10", "Zero", "Zero" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "hue_shift",
+            "default" : 0.0,
+            "desc" : "added to the color hue",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 180.0,
+                "min" : -180.0,
+                "rollout" : "Color"
+            }
+        },
+        
+        {
+            "attr" : "saturation",
+            "default" : 0.0,
+            "desc" : "added to the color saturation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "hue_tint",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Hue tint",
+            "type" : "ACOLOR"
+        },
+        
+        {
+            "attr" : "tint_strength",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lightness_mode",
+            "default" : "0",
+            "desc" : "Lightness mode (0 - standard, 1 - advanced)",
+            "items" : 
+            [
+                [ "0", "Standard", "Standard" ],
+                [ "1", "Advanced", "Advanced" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Lightness"
+            }
+        },
+        
+        {
+            "attr" : "brightness",
+            "default" : 0.0,
+            "desc" : "Value is added to the texture brightness",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "contrast",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 2.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "adv_exposure_mode",
+            "default" : "0",
+            "desc" : "Exposure mode (0 - Gain, 1 - F-Stops, 2 - Printer Lights)",
+            "items" : 
+            [
+                [ "0", "Gain", "Gain" ],
+                [ "1", "F-Stops", "F-Stops" ],
+                [ "2", "Printer Lights", "Printer Lights" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Exposure Mode"
+            }
+        },
+        
+        {
+            "attr" : "adv_brightness",
+            "default" : 1.0,
+            "desc" : "Color multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Brightness",
+                "max" : 10.0,
+                "min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "adv_contrast",
+            "default" : 1.0,
+            "desc" : "Color contrast",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gamma / Contrast",
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "adv_base",
+            "default" : 1.0,
+            "desc" : "Contrast base",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Base",
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "adv_offset",
+            "default" : 0.0,
+            "desc" : "Color offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Offset",
+                "max" : 2.0,
+                "min" : -2.0
+            }
+        },
+        
+        {
+            "attr" : "adv_use_red",
+            "default" : false,
+            "desc" : "true to use the red component ov the adv_rgb_* parameters",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Red",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "adv_use_green",
+            "default" : false,
+            "desc" : "true to use the green component ov the adv_rgb_* parameters",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Green"
+            }
+        },
+        
+        {
+            "attr" : "adv_use_blue",
+            "default" : false,
+            "desc" : "true to use the blue component ov the adv_rgb_* parameters",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Blue"
+            }
+        },
+        
+        {
+            "attr" : "adv_rgb_brightness",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Color multiplier rgb",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "RGB Brightness"
+            }
+        },
+        
+        {
+            "attr" : "adv_rgb_contrast",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Color contrast rgb",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "RGB Contrast"
+            }
+        },
+        
+        {
+            "attr" : "adv_rgb_base",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Contrast base rgb",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "RGB Base"
+            }
+        },
+        
+        {
+            "attr" : "adv_rgb_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Color offset rgb",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "RGB Offset"
+            }
+        },
+        
+        {
+            "attr" : "adv_printer_lights_per",
+            "default" : 0.0,
+            "desc" : "Printer lights per",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Printer Lights per Stop",
+                "rollout" : ""
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

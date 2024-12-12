@@ -1,0 +1,241 @@
+
+{
+    "Desciption" : "GeomInstancer",
+    "ID" : "GeomInstancer",
+    "Name" : "Geom Instancer",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "use_rayserver",
+            "default" : false,
+            "desc" : "For internal usage only. Wrap instance into the rayserver. If turned off the behaviour is similar to the Instancer2 plugin. This is automatically turned off internally for GPU",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sources",
+            "default" : null,
+            "desc" : "Instancing sources. Supports any plugin providing EXT_STATIC_GEOM_SOURCE or EXT_VRAY_HIERARCHICAL_PARAMETERIZED_NODE interfaces. A lists of 1 or 2 lists: List(Node) or List(List(Node0,Node1,...,NodeN), List(0,1,...,N)): 1 - nodes; 2 - per-instance index into the first list (-1 means unset)). Single list with single value means all values are the same for all instances",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instances_generator",
+            "default" : null,
+            "desc" : "An external plugin that generates instances data",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "use_source_transform",
+            "default" : "1",
+            "desc" : "Multiply instance transform with the source transform (0: Off, 1: On, 2: For lights only)",
+            "items" : 
+            [
+                [ "0", "Off", "Off" ],
+                [ "1", "On", "On" ],
+                [ "2", "Lights only", "Lights only" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "Path to a *.vrscene file. If set then other sources are ignored",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "File Path",
+                "file_extensions" : [ "vrscene" ],
+                "file_names" : [ "V-Ray Scene" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "transforms_vector",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Instance transforms vector (4 vectors are one transform: 3 columns of the matrix and offset)",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transforms",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Instance transforms",
+            "elements_count" : 0,
+            "type" : "TRANSFORM_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "base_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Additional instance transform. Useful when source type is not Node, but you need Node::transform like additional transform",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocities",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Instance velocities. Optional, if set then transform for the end of the motion blur interval will be ignored",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list",
+            "default" : "",
+            "desc" : "Plugin instance names list to hide when \"file\" is used. ",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exclude_list_inclusive",
+            "default" : 0,
+            "desc" : "When on, the \"exclude_list\" is considered an \"Include List\"",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "1",
+            "desc" : "Axis flipping when \"file\" is used: 0 - do not transform the coordinate system, 1 - detect up axis automatically, 2 - transform the axis from Z-up to Y-up, 3 - transform the axis from Y-up to Z-up",
+            "items" : 
+            [
+                [ "0", "As Is", "As Is" ],
+                [ "1", "Auto", "Auto" ],
+                [ "2", "Z-Up To Y-Up", "Z-Up To Y-Up" ],
+                [ "3", "Y-Up To Z-Up", "Y-Up To Z-Up" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Flip Axis Mode"
+            }
+        },
+        
+        {
+            "attr" : "shaders",
+            "default" : null,
+            "desc" : "Instance shaders. Optional, allows shader override per-instance. A lists of 1 or 2 lists: List(shader) or List(List(shd0,shd1,...,shdN), List(0,1,...,N)): 1 - materials; 2 - per-instance index into the first list (-1 means unset))",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trimmers",
+            "default" : null,
+            "desc" : "Instance face trimming plugins. Optional, allows trimming faces per-instance. A lists of 1 or 2 lists: List(plugin) or List(List(plg0,plg1,...,plgN), List(0,1,...,N)): 1 - plugins; 2 - per-instance index into the first list (-1 means unset))",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shaders_match",
+            "default" : null,
+            "desc" : "Scene name based shader overrides when \"file\" is used. Works only in rayserver mode. A list of lists. Each inner list has the format [\"path\", shaderPlugin, ...]. Path element supports wildcard pattern matching. For example List(List(\"scene/cubes/pCube[1]*\", red1@material, \"scene/spheres/pSphere[12]/*\", VRayMtl4@material)). ",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shaders_match_indexes",
+            "default" : -1,
+            "desc" : "Instance scene name shader override index into \"shaders_match\" list",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shaders_match_file",
+            "default" : "",
+            "desc" : "Scene name based shader override file. If set \"shaders_match\" and \"shaders_match_indexes\" are ignored",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "map_channels",
+            "default" : null,
+            "desc" : "Instance map channel overrides. Optional; allows map channel override per-instance.  A lists of 1 or 2 lists: List(map_channel) or List(List(mc0,mc1,...,mcN), List(0,1,...,N)): 1 - materials; 2 - per-instance index into the first list (-1 means unset))",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "extra_channels",
+            "default" : null,
+            "desc" : "Extra channels that hold auxiliary instances data",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "object_properties",
+            "default" : null,
+            "desc" : "Instances object properties. A lists of 1 or 2 lists: List(VRayObjectProperties) or List(List(ObjProps0,ObjProps1,...,ObjPropsN), List(0,1,...,N)): 1 - nodes; 2 - per-instance index into plugins (-1 means unset)). Single list with single value means all values are the same for all instances",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attributes",
+            "default" : null,
+            "desc" : "User attribute values per-instance. A lists of lists. Each sub-list could be: List(0 - attribute name; 1 - int / float list of values per-instance) or List(0 - attribute name; 1 - strings; 2 - per-instance index into strings (-1 means unset)) Single value list means all values are the same for all instances",
+            "elements_count" : 0,
+            "type" : "LIST_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "light_color_override",
+            "default" : "",
+            "desc" : "Name of user attribute to be used to multiply (tint) light color",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "light_intensity_override",
+            "default" : "",
+            "desc" : "Name of user attribute to be used to multiply light intensity",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instance_ids",
+            "default" : -1,
+            "desc" : "Unique ID of the instance. Sorted in ascending order",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

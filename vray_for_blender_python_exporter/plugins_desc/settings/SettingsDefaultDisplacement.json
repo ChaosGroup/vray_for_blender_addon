@@ -1,0 +1,108 @@
+
+{
+    "Desciption" : "SettingsDefaultDisplacement",
+    "ID" : "SettingsDefaultDisplacement",
+    "Name" : "Settings Default Displacement",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "override_on",
+            "default" : true,
+            "desc" : "Deprecated. This has no effect",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Override Max"
+            }
+        },
+        
+        {
+            "attr" : "edgeLength",
+            "default" : 4.0,
+            "desc" : "Maximum edge length of the displaced sub-triangles",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Edge length",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "viewDependent",
+            "default" : true,
+            "desc" : "If true 'Edge length' is specified in pixels; otherwise 'Edge length' is in scene units",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "View dependent"
+            }
+        },
+        
+        {
+            "attr" : "maxSubdivs",
+            "default" : 256,
+            "desc" : "Maximum subdivisions for a triangle from the original undisplaced mesh",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max subdivs",
+                "max" : 4096,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "tightBounds",
+            "default" : true,
+            "desc" : "If true the displacement map will be presampled to determine the exact displacement bounds",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Tight bounds"
+            }
+        },
+        
+        {
+            "attr" : "amount",
+            "default" : 1.0,
+            "desc" : "A global multiplier for the displacement amount",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Amount",
+                "max" : 100.0,
+                "min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "relative",
+            "default" : false,
+            "desc" : "When true, displacement scales with object size",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Relative"
+            }
+        },
+        
+        {
+            "attr" : "zero_subdivs_optimization",
+            "default" : true,
+            "desc" : "If true, the original mesh will be used if no subdivisions are required",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Zero subdivisions optimization"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

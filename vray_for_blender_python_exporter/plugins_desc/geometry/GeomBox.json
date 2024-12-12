@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "GeomBox",
+    "ID" : "GeomBox",
+    "Name" : "Geom Box",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size_x",
+            "default" : 1.0,
+            "desc" : "The size in the X direction",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "size_y",
+            "default" : 1.0,
+            "desc" : "The size in the Y direction",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "size_z",
+            "default" : 1.0,
+            "desc" : "The size in the Z direction",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "is_volumetric",
+            "default" : false,
+            "desc" : "true to handle the case when the camera is inside the box",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

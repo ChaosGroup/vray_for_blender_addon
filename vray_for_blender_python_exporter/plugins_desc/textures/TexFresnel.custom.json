@@ -1,0 +1,35 @@
+{
+    "ID": "TexFresnel",
+    "Parameters": [
+        {
+            "attr": "fresnel_ior_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "refract_ior_tex",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "fresnel_ior"
+                    },
+                    {
+                        "name": "refract_ior"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": []
+    }
+}

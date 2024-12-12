@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "RenderChannelBackToBeauty",
+    "ID" : "RenderChannelBackToBeauty",
+    "Name" : "Render Channel Back To Beauty",
+    "Parameters" : [],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

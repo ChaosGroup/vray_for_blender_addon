@@ -1,0 +1,121 @@
+
+{
+    "Desciption" : "BRDFLight",
+    "ID" : "BRDFLight",
+    "Name" : "Light",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The self-illumination color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Light color",
+                "rollout" : "V-Ray Light Mtl",
+                "tab" : "V-Ray Light Mtl"
+            }
+        },
+        
+        {
+            "attr" : "colorMultiplier",
+            "default" : 1.0,
+            "desc" : "Color Multiplier",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Color multiplier"
+            }
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transparency of the BRDF",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "doubleSided",
+            "default" : false,
+            "desc" : "If false, the light color is black for back-facing surfaces",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Double sided"
+            }
+        },
+        
+        {
+            "attr" : "emitOnBackSide",
+            "default" : true,
+            "desc" : "Emit on back side",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Emit on back side"
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "compensateExposure",
+            "default" : false,
+            "desc" : "Compensate camera exposure",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Compensate exposure"
+            }
+        },
+        
+        {
+            "attr" : "multiplyByOpacity",
+            "default" : false,
+            "desc" : "When enabled the color of the light brdf is multiplied by the brdf's opacity ( inverse of the brdf's transparency )",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Multiply by opacity"
+            }
+        },
+        
+        {
+            "attr" : "affect_gi",
+            "default" : true,
+            "desc" : "When enabled, the light emission affects GI rays and illuminates the scene",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect GI"
+            }
+        },
+        
+        {
+            "attr" : "transparency_invert",
+            "default" : false,
+            "desc" : "Invert transparency (transparency is opacity)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Invert transparency"
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

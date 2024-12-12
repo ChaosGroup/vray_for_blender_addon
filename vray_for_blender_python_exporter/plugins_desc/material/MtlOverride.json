@@ -1,0 +1,150 @@
+
+{
+    "Desciption" : "MtlOverride",
+    "ID" : "MtlOverride",
+    "Name" : "Mtl Override",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "The normal material (visible to the camera)",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Base Material",
+                "rollout" : "Material override",
+                "tab" : "V-Ray Override Material"
+            }
+        },
+        
+        {
+            "attr" : "enable_gi_mtl",
+            "default" : true,
+            "desc" : "Enable the GI material",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable GI Material",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "gi_mtl",
+            "default" : null,
+            "desc" : "The GI material",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "GI Material"
+            }
+        },
+        
+        {
+            "attr" : "enable_reflect_mtl",
+            "default" : true,
+            "desc" : "Enable the reflection material",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Reflection Material",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "reflect_mtl",
+            "default" : null,
+            "desc" : "The reflection material",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Reflection Material"
+            }
+        },
+        
+        {
+            "attr" : "enable_refract_mtl",
+            "default" : true,
+            "desc" : "Enable the refraction material",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Refraction Material",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "refract_mtl",
+            "default" : null,
+            "desc" : "The refraction material",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Refraction Material"
+            }
+        },
+        
+        {
+            "attr" : "enable_shadow_mtl",
+            "default" : true,
+            "desc" : "Enable the shadow material",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable Shadow Material",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "shadow_mtl",
+            "default" : null,
+            "desc" : "The shadow material",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Shadow Material"
+            }
+        },
+        
+        {
+            "attr" : "use_environment_override",
+            "default" : false,
+            "desc" : "True to use the 'environment override' texture",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Environment override"
+            }
+        },
+        
+        {
+            "attr" : "environment_override",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Environment override texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "environment_priority",
+            "default" : 0,
+            "desc" : "Environment override priority (used when several materials override it along a ray path)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : -1000
+            }
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

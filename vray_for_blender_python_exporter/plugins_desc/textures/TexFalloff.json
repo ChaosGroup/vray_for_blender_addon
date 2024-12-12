@@ -1,0 +1,283 @@
+
+{
+    "Desciption" : "TexFalloff",
+    "ID" : "TexFalloff",
+    "Name" : "Falloff",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : "0",
+            "desc" : "This is used to differentiate between textures exported from different applications. The value means : 0 - 3ds Max (this is also the default), 1 - Maya, ..",
+            "items" : 
+            [
+                [ "0", "Max", "Max" ],
+                [ "1", "Maya", "Maya" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Common"
+            }
+        },
+        
+        {
+            "attr" : "alpha_from_intensity",
+            "default" : "0",
+            "desc" : "If 2 - the alpha is forced to 1.0f; 1 - the resulting alpha is the color intensity (if compatibility_with is 0) or the color luminance (if compatibility_with is 1); 0 - the alpha is taken from the bitmap alpha",
+            "items" : 
+            [
+                [ "0", "Bitmap alpha", "Bitmap alpha" ],
+                [ "1", "Color intensity/luminance", "Color intensity/luminance" ],
+                [ "2", "Force opaque", "Force opaque" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the resulting texture color will be inverted (complementary)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_alpha",
+            "default" : true,
+            "desc" : "If true and invert is on, the resulting texture alpha will be inverted too. If false, just the color will be inverted",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "A multiplier for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_offset",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "An additional offset for the texture color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha_offset",
+            "default" : 0.0,
+            "desc" : "An additional offset for the texture alpha",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nouvw_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The color when there are no valid uvw coordinates",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "No UVs Color"
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_transparency",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting transparency",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_alpha",
+            "default" : 0.0,
+            "desc" : "The resulting alpha",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "out_intensity",
+            "default" : 0.0,
+            "desc" : "The resulting intensity",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "color1",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "First color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Second color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "Type (0 - towards/away, 1 - perpendicular/parallel, 2 - Fresnel, 3 - shadow/light, 4 - distance blend)",
+            "items" : 
+            [
+                [ "0", "Towards / away", "Towards / away" ],
+                [ "1", "Perpendicular / parallel", "Perpendicular / parallel" ],
+                [ "2", "Fresnel", "Fresnel" ],
+                [ "3", "Shadow / light", "Shadow / light" ],
+                [ "4", "Distance blend", "Distance blend" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "direction_type",
+            "default" : "0",
+            "desc" : "Direction type (0 - viewZ, 1 - viewX, 2 - viewY, 3 - explicit, 4 - localX, 5 - localY, 6 - localZ, 7 - worldX, 8 - worldY, 9 - worldZ, 10 - ref node offset)",
+            "items" : 
+            [
+                [ "0", "View Z", "View Z" ],
+                [ "1", "View X", "View X" ],
+                [ "2", "View Y", "View Y" ],
+                [ "3", "Explicit", "Explicit" ],
+                [ "4", "Local X", "Local X" ],
+                [ "5", "Local Y", "Local Y" ],
+                [ "6", "Local Z", "Local Z" ],
+                [ "7", "World X", "World X" ],
+                [ "8", "World Y", "World Y" ],
+                [ "9", "World Z", "World Z" ],
+                [ "10", "Ref node offset", "Ref node offset" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "node_ref_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The offset of the referenced object used when Direction type is 'object'",
+            "type" : "VECTOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fresnel_ior",
+            "default" : 1.600000023841858,
+            "desc" : "IOR for the Fresnel falloff type",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fresnel IOR",
+                "max" : 20.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dist_extrapolate",
+            "default" : false,
+            "desc" : "Extrapolate for the distance blend falloff type",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Distance Extrapolate"
+            }
+        },
+        
+        {
+            "attr" : "dist_near",
+            "default" : 0.0,
+            "desc" : "Near distance for the distance blend falloff type",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Distance Near",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dist_far",
+            "default" : 100.0,
+            "desc" : "Far distance for the distance blend falloff type",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Distance Far",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "explicit_dir",
+            "default" : [ 0.0, 0.0, 1.0 ],
+            "desc" : "Direction for the explicit direction type",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "display_name" : "Explicit Direction"
+            }
+        },
+        
+        {
+            "attr" : "blend_output",
+            "default" : 0.0,
+            "desc" : "The blending amount, based on the parameters",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_blend_input",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blend_input",
+            "default" : 0.50,
+            "desc" : "If specified and use_blend_input is true, the final blending amount will be taken from this texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

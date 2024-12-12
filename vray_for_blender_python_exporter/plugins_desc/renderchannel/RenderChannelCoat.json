@@ -1,0 +1,135 @@
+
+{
+    "Desciption" : "RenderChannelCoat",
+    "ID" : "RenderChannelCoat",
+    "Name" : "Render Channel Coat",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "ColorChannel",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "alias",
+            "default" : 163,
+            "desc" : "Internal unique identifier for this channel type",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "color_mapping",
+            "default" : false,
+            "desc" : "true to apply color mapping to the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "consider_for_aa",
+            "default" : false,
+            "desc" : "true to consider this render element for anti-aliasing (may slow down rendering)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider for Anti-Aliasing"
+            }
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "derive_raw_channels",
+            "default" : true,
+            "desc" : "true if raw channels should be derived from the respective color and filter channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "vfb_color_corrections",
+            "default" : true,
+            "desc" : "False to disable ALL VFB color corrections(sRGB, curves, white balance, etc...) when saving the channel data to a file or showing it on a display. True to apply VFB color corrections when saving the channel data to a file or showing it on a display. If true some color corrections might still be disabled, based on the type of file being saved",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "denoise",
+            "default" : false,
+            "desc" : "true to denoise the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "light_select_mode",
+            "default" : "0",
+            "desc" : "The light select mode. Sets what type of lighting contribution is generated in the element (0 - direct diffuse and specular, 1 - raw direct lighting, 2 - direct diffuse, 3 - direct specular, 4 - full, 5 - indirect diffuse and specular, 6 - indirect diffuse, 7 - indirect specular, 8 - subsurface, 9 - light path expression, 12 - direct diffuse shadow, 13 - direct specular shadow)",
+            "items" : 
+            [
+                [ "0", "Direct illumination", "Direct illumination" ],
+                [ "1", "Direct raw", "Direct raw" ],
+                [ "2", "Direct diffuse", "Direct diffuse" ],
+                [ "3", "Direct specular", "Direct specular" ],
+                [ "4", "Full", "Full" ],
+                [ "5", "Indirect", "Indirect" ],
+                [ "6", "Indirect diffuse", "Indirect diffuse" ],
+                [ "7", "Indirect specular", "Indirect specular" ],
+                [ "8", "Subsurface", "Subsurface" ],
+                [ "9", "Light path expression", "Light path expression" ],
+                [ "12", "Direct diffuse shadow", "Direct diffuse shadow" ],
+                [ "13", "Direct specular shadow", "Direct specular shadow" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "light_path_expression",
+            "default" : "",
+            "desc" : "Light path expression string based on the OSL syntax. It can be used to filter certain light contributions. Enabled when light_select_mode is \"light path expression\"",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "light_select_matte",
+            "default" : false,
+            "desc" : "If true and the light select mode is diffuse shadow mode, only contributions on matte surfaces will be captured",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Matte objects only"
+            }
+        },
+        
+        {
+            "attr" : "light_select_in_lightmix",
+            "default" : false,
+            "desc" : "If true the light select is part of a Light Mix. When set only light selects with this flag will be part of the LightMix",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

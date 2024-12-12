@@ -1,0 +1,14 @@
+{
+    "ID": "UVWGenExplicit",
+    "Parameters": [
+        {
+            "attr": "uvw",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    }
+}

@@ -1,0 +1,157 @@
+{
+    "ID": "TexBitmap",
+    "Parameters": [
+        {
+            "attr" : "placement_type",
+            "default" : "0",
+            "items" : 
+            [
+                [ "0", "Full", "Whole texture is valid" ],
+                [ "1", "Crop", "Crop" ],
+                [ "2", "Place", "Place" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        {
+            "attr" : "tile",
+            "items" : 
+            [
+                [ "0", "No tiling", "No tiling" ],
+                [ "1", "Tile in UV", "Tile in UV" ],
+                [ "2", "Tile in U", "Tile in U" ],
+                [ "3", "Tile in V", "Tile in V" ],
+                
+                [
+                    "4",
+                    "Tile in UV - No Filter",
+                    "Tile in UV - No Filter"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        {
+            "attr": "uv_noise_on",
+            "default": false
+        },
+        {
+            "attr" : "jitter",
+            "ui": {
+                "soft_min": -1.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "color",
+                "label" : "Color",
+                "attrs": [
+                    {
+                        "name": "color_mult"
+                    },
+                    {
+                        "name": "color_offset"
+                    },
+                    {
+                        "name": "invert",
+                        "label": "Invert color"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "alpha",
+                "label" : "Alpha",
+                "attrs": [
+                    {
+                        "label": "Alpha Source",
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "alpha_mult"
+                    },
+                    {
+                        "name": "alpha_offset"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label" : "Mapping",
+                "name": "mapping",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "placement_type",
+                        "label": "Placement"
+                    },
+                    {
+                        "label": "Tiling",
+                        "name": "tile"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {"cond": "::placement_type=2"},
+                        "attrs": [
+                            {
+                                "name": "tile_u"
+                            },
+                            {
+                                "name": "tile_v"
+                            },
+                            {
+                                "name": "jitter"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "label" : "UV Noise",
+                        "name": "uv_noise",
+                        "attrs": [
+                            {
+                                "name": "uv_noise_on"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "active": {"cond": "::uv_noise_on!=0"},
+                                "attrs": [
+                                    {
+                                        "name": "uv_noise_amount"
+                                    },
+                                    {
+                                        "name": "uv_noise_levels"
+                                    },
+                                    {
+                                        "name": "uv_noise_size"
+                                    },
+                                    {
+                                        "name": "uv_noise_animate"
+                                    },
+                                    {
+                                        "name": "un_noise_phase",
+                                        "active": {"cond": "::uv_noise_animate!=0"}
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}

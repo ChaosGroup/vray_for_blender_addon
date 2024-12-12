@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "SphereFadeGizmo",
+    "ID" : "SphereFadeGizmo",
+    "Name" : "Sphere Fade Gizmo",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transform for positioning the gizmo in world space",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "radius",
+            "default" : 1.0,
+            "desc" : "Radius of the sphere/cylinder or side of the box (according to 'shape' type)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "invert",
+            "default" : false,
+            "desc" : "If true, the volume *outside* the gizmo will be rendered and the inside volume is excluded",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "shape",
+            "default" : 0,
+            "desc" : "Determines the shape of the gizmo (0 - Sphere, 1 - Box, 2 - Cylinder with the Y-axis as height)",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

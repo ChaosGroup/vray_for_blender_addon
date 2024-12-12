@@ -1,0 +1,48 @@
+{
+    "ID": "TexLayeredMax",
+    "Name" : "V-Ray Layered",
+    "Parameters": [
+        {
+            "attr" : "blend_modes",
+            "default" : 1,
+            "desc" : "Blend modes list",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "properties",
+                "label": "Properties",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "invert"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    },
+                    {
+                        "name": "allow_negative_colors"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "nouvw_color",
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity",
+            "alpha"
+        ]
+    }
+}

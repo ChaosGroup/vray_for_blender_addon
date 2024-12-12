@@ -1,0 +1,152 @@
+{
+    "ID": "TexTriPlanar",
+    "Name": "V-Ray Triplanar",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "blend_method",
+            "default": "1"
+        },
+        {
+            "attr": "size",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 1000.0,
+                "spin_step": 1.0,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "blend",
+            "default": 0.1
+        },
+        {
+            "attr": "texture_mode",
+            "update": "onUpdateMode"
+        },
+        {
+            "attr": "ref_object",
+            "desc": "Scene object whose transormation will be used as a reference space",
+            "type": "STRING",
+            "default": "",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "texture_rotation_map",
+            "subtype": "EULER"
+        },
+        {
+            "attr": "frame_offset",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Color",
+                "type": "OUTPUT_TEXTURE"
+            },
+            {
+                "name": "out_intensity"
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "texture_mode"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "blend_method",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "size"
+                    },
+                    {
+                        "name": "blend"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "frame_offset"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "texture_rotation_map",
+                                "label": "Texture Rotation"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "ref_space"
+                    },
+                    {
+                        "name": "ref_object",
+                        "label": "Reference Object",
+                        "active": {
+                            "cond": "::ref_space=1"
+                        },
+                        "custom_draw": "widgetDrawRefObject"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "use_displaced_surface"
+                    },
+                    {
+                        "name": "random_texture_offset"
+                    },
+                    {
+                        "name": "random_texture_rotation"
+                    },
+                    {
+                        "name": "random_axis"
+                    },
+                    {
+                        "name": "random_frame_rotation"
+                    },
+                    {
+                        "name": "random_mode"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "random_user_attribute",
+            "out_intensity",
+            "rest_position_tex",
+            "rest_normal_tex",
+            "scale",
+            "texture_rotation"
+        ],
+        "animatable": true
+    }
+}

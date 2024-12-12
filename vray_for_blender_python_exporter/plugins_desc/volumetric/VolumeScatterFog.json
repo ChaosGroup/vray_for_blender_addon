@@ -1,0 +1,113 @@
+
+{
+    "Desciption" : "VolumeScatterFog",
+    "ID" : "VolumeScatterFog",
+    "Name" : "Volume Scatter Fog",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "emission",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Fog emission color (makes the fog appear glowing)",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.50, 0.50, 0.50 ],
+            "desc" : "Fog transmission color",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Fog color texture map. Overrides 'color'",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : 0.1000000014901161,
+            "desc" : "Fog color exponent multiplier",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.0,
+            "desc" : "The index of refraction for the volume",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 0.0,
+            "desc" : "Makes the fog more/less transparent than normal in the thin parts. When the value is nonzero, applies a 1/(1+bias) exponent to the distance measure",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "closed_volume",
+            "default" : false,
+            "desc" : "If true, the fog will shade only closed volumes",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Subdivs for the scattering samples",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "thickness",
+            "default" : 9.999999843067494e+17,
+            "desc" : "Maximum distance to trace into the objects",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "light_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the sss effect",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "scatter_coeff",
+            "default" : 0.0,
+            "desc" : "Scatter coefficient (0.0 is full scattering; 1.0 is purely directional)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "scatter_direction",
+            "default" : 1.0,
+            "desc" : "Scatter direction (0.0 is forward away from the viewer; 1.0 is backward towards the viewer)",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "scatter_levels",
+            "default" : 1,
+            "desc" : "Maximum number of scattering bounces",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "environment_fog",
+            "default" : false,
+            "desc" : "true if this is environment fog and false if it is inside an object",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

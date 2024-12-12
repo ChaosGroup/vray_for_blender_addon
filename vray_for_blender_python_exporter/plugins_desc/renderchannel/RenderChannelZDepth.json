@@ -1,0 +1,92 @@
+
+{
+    "Desciption" : "RenderChannelZDepth",
+    "ID" : "RenderChannelZDepth",
+    "Name" : "Render Channel Z Depth",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "ZDepth",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "depth_from_camera",
+            "default" : false,
+            "desc" : "If true, the black/white depth values will be taken from the camera near/far clipping distances instead",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "depth_raw",
+            "default" : false,
+            "desc" : "Write depth value without remapping or clamping",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "depth_black",
+            "default" : 0.0,
+            "desc" : "This depth will map to value 0.0",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "depth_white",
+            "default" : 1000.0,
+            "desc" : "This depth will map to value 1.0",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "depth_clamp",
+            "default" : true,
+            "desc" : "If true, zdepth is clamped between 0 and 1",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "filtering",
+            "default" : true,
+            "desc" : "Whether the image filter will be applied to this channel",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "depth_invert",
+            "default" : false,
+            "desc" : "If true zdepth is inverted",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "force_infinity_black",
+            "default" : false,
+            "desc" : "Set infinite depth value to 0.0",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "dont_filter_env",
+            "default" : false,
+            "desc" : "Don't filter object edges against the environment",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

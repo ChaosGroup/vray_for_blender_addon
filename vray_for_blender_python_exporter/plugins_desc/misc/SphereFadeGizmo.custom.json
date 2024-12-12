@@ -1,0 +1,18 @@
+{
+    "ID": "SphereFadeGizmo",
+    "Parameters": [
+        {
+            "attr": "object",
+            "desc": "",
+            "type": "STRING",
+            "default": "",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Type": "EFFECT",
+    "Options": {
+        "excluded_parameters": []
+    }
+}

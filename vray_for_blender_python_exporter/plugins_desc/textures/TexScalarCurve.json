@@ -1,0 +1,29 @@
+
+{
+    "Desciption" : "TexScalarCurve",
+    "ID" : "TexScalarCurve",
+    "Name" : "Scalar Curve",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0.0,
+            "desc" : "The value from this texture is controlled by the profile curve",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "keys",
+            "default" : 0.0,
+            "desc" : "Quadruplets of 2d vectors (two floats) for each bezier segment",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

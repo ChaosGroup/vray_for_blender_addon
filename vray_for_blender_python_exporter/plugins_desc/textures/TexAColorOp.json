@@ -1,0 +1,393 @@
+
+{
+    "Desciption" : "TexAColorOp",
+    "ID" : "TexAColorOp",
+    "Name" : "AColor Op",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color_a",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The first color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_b",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The second color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mult_a",
+            "default" : 1.0,
+            "desc" : "Multiplier for the first color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mult_b",
+            "default" : 1.0,
+            "desc" : "Multiplier for the second color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "result_alpha",
+            "default" : 0.0,
+            "desc" : "The alpha for the result; if not specified, the resulting alpha taken from the first color)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Which output should be used as the default output of the texture (0 - result_a, 1 - result_b, 2 - product, 3 - sum,4 - difference, 5 - power, 6 - division, 7 - Minimum, 8 - Maximum, 9 - absolute difference, 10 - Lower intensity color, 11 - Greater intensity color,12 - sin, 13 - cos, 14 - abs, 15 - ceil, 16 - exp, 17 - floor, 18 - log, 19 - log10, 20 - sqrt, 21 - fmod, 22 - average, 23 - tan, 24 - asin,25 - acos, 26 - atan, 27 - atan2, 28 - Bias (Christophe Schlick approximation of Kenneth Perlin's Bias definition), 29 - Gain (Christophe Schlick approximation of Kenneth Perlin's Gain definition)30 - Bias (Kenneth Perlin's original Bias definition), 31 - Gain (Kenneth Perlin's original Gain definition)",
+            "items" : 
+            [
+                [ "0", "result_a", "result_a" ],
+                [ "1", "result_b", "result_b" ],
+                [ "2", "product", "product" ],
+                [ "3", "sum", "sum" ],
+                [ "4", "difference", "difference" ],
+                [ "5", "power", "power" ],
+                [ "6", "division", "division" ],
+                [ "7", "minimum", "minimum" ],
+                [ "8", "maximum", "maximum" ],
+                [ "9", "absolute difference", "absolute difference" ],
+                [ "10", "lower intensity color", "lower intensity color" ],
+                [ "11", "greater intensity color", "greater intensity color" ],
+                [ "12", "sin", "sin" ],
+                [ "13", "cos", "cos" ],
+                [ "14", "abs", "abs" ],
+                [ "15", "ceil", "ceil" ],
+                [ "16", "exp", "exp" ],
+                [ "17", "floor", "floor" ],
+                [ "18", "log", "log" ],
+                [ "19", "log10", "log10" ],
+                [ "20", "sqrt", "sqrt" ],
+                [ "21", "fmod", "fmod" ],
+                [ "22", "average", "average" ],
+                [ "23", "tan", "tan" ],
+                [ "24", "asin", "asin" ],
+                [ "25", "acos", "acos" ],
+                [ "26", "atan", "atan" ],
+                [ "27", "atan2", "atan2" ],
+                [ "28", "Bias Schlick", "Bias Schlick" ],
+                [ "29", "Gain Schlick", "Gain Schlick" ],
+                [ "30", "Bias Perlin", "Bias Perlin" ],
+                [ "31", "Gain Perlin", "Gain Perlin" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "product",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "(color_a*mult_a)*(color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "division",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "(color_a*mult_a)/(color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "minimum",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Min(color_a*mult_a , color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "maximum",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Max(color_a*mult_a , color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sum",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "(color_a*mult_a)+(color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "difference",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "(color_a*mult_a)-(color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "absolute_difference",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "abs((color_a*mult_a)-(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lower_intensity_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "if intensity(color_a*mult_a) <= intensity(color_b*mult_b): color_a*mult_a else color_b*mult_b",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "greater_intensity_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "if intensity(color_a*mult_a) >= intensity(color_b*mult_b): color_a*mult_a else color_b*mult_b",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "result_a",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "color_a*mult_a",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "result_b",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "color_b*mult_b",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "red",
+            "default" : 0.0,
+            "desc" : "(color_a*mult_a).r",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "green",
+            "default" : 0.0,
+            "desc" : "(color_a*mult_a).g",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blue",
+            "default" : 0.0,
+            "desc" : "(color_a*mult_a).b",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "alpha",
+            "default" : 0.0,
+            "desc" : "(color_a*mult_a).a",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "intensity",
+            "default" : 0.0,
+            "desc" : "mult_a*(color_a.r+color_a.g+color_a.b)/3.0",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "power",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "(color_a*mult_a)^mult_b",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sin",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "sin((color_a*mult_a)*(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cos",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "cos((color_a*mult_a)*(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "asin",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "asin((color_a*mult_a)*(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "acos",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "acos((color_a*mult_a)*(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "atan",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "atan((color_a*mult_a)*(color_b*mult_b))",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "atan2",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "atan2((color_b*mult_b), (color_a*mult_a)), computes the arctangent of (color_b*mult_b)/(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "abs",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "abs(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ceil",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "ceil(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exp",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "exp(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "floor",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "floor(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "log",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "log(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "log10",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "log10(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sqrt",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "square root of color_a*mult_a",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fmod",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "fmod(color_a*mult_a, color_b*mult_b)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "average",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "((color_b*mult_b)+(color_b*mult_b))*0.5",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tan",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "tan(color_a*mult_a)",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bias_schlick",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A:=color_a*mult_a; B:=color_b*mult_b; A/((1/B-2)*(1-A)+1), computes the Bias(x, y) function as defined by Christophe Schlick",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gain_schlick",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A:=color_a*mult_a; B:=color_b*mult_b; if B<0.5: (Bias(2*A-1, B)+1)/2 else Bias(2*A, 1-B)/2, computes the Gain(x, y) function as defined by Christophe Schlick",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bias_perlin",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A:=color_a*mult_a; B:=color_b*mult_b; A^(log(B)/log(0.5)), computes the Bias(x, y) function as defined by Kenneth Perlin",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gain_perlin",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A:=color_a*mult_a; B:=color_b*mult_b; if B<0.5: Bias(2*A, 1-B)/2 else 1-(Bias(2-2*A, 1-B)/2, computes the Bias(x, y) function as defined by Kenneth Perlin",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

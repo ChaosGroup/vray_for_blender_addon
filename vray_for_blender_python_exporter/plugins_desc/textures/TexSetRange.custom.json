@@ -1,0 +1,79 @@
+{
+    "Name": "V-Ray Set Range",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "oldMin",
+            "default": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "oldMax",
+            "default": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "newMin",
+            "default": [
+                0.0,
+                0.0,
+                0.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "newMax",
+            "default": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ]
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "inputs",
+                "label": "Inputs",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "value"
+                    },
+                    {
+                        "name": "oldMin",
+                        "label": "Input Min"
+                    },
+                    {
+                        "name": "oldMax",
+                        "label": "Input Max"
+                    },
+                    {
+                        "name": "newMin",
+                        "label": "Output Min"
+                    },
+                    {
+                        "name": "newMax",
+                        "label": "Output Max"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "color"
+        ]
+    }
+}

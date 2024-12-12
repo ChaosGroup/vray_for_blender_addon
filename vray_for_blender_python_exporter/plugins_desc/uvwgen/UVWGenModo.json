@@ -1,0 +1,170 @@
+
+{
+    "Desciption" : "UVWGenModo",
+    "ID" : "UVWGenModo",
+    "Name" : "UVW Gen Modo",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uv_set_name",
+            "default" : "",
+            "desc" : "The name of the uv channel that should be used. The special values *empty string* and '(none)' will use the first available uv channel when rendering in RT GPU. In this case, the value of uv_set_index is ignored",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_set_index",
+            "default" : 0,
+            "desc" : "Used only as a fallback when UV maps identified with a string are not supported by a sub-system ( for example V-Ray GPU, or texture baking ). Deprecated",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "Optional UVWGen from which the initial uvw coordinates will be taken, instead of using 'uv_set_name'",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen_has_local_tm",
+            "default" : true,
+            "desc" : "When set to false uvwgen->getLocalUVWTransform must not be used, instead uvwgen->getUVW must be used",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_mode_u",
+            "default" : "1",
+            "desc" : "Horizontal tiling mode",
+            "items" : 
+            [
+                [ "0", "Reset", "Reset" ],
+                [ "1", "Repeat", "Repeat" ],
+                [ "2", "Mirror", "Mirror" ],
+                [ "3", "Edge", "Edge" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tile_mode_v",
+            "default" : "1",
+            "desc" : "Vertical tiling mode",
+            "items" : 
+            [
+                [ "0", "Reset", "Reset" ],
+                [ "1", "Repeat", "Repeat" ],
+                [ "2", "Mirror", "Mirror" ],
+                [ "3", "Edge", "Edge" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_u",
+            "default" : 1.0,
+            "desc" : "How many times to repeat the UV space horizontally",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "repeat_v",
+            "default" : 1.0,
+            "desc" : "How many times to repeat the UV space vertically",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rotation",
+            "default" : 0.0,
+            "desc" : "Rotation of the UV space in radians",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture_offset_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color value of this texture is added to the generated UVW coordinates",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture_offset_random",
+            "default" : 0.0,
+            "desc" : "Similar to texture_offset_tex, but used for implementing random texture offsets from MODO. The value of this scalar texture is used as an offset for the U coordinate, the V offset is derived from it by a random number generator",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "texture_offset_amplitude",
+            "default" : 1.0,
+            "desc" : "Multiplier for the values in the 'texture_offset' texture",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uv_matrix",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "These are the m00...m22 channels from MODO. The matrix is in row-major order",
+            "type" : "MATRIX",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cylindrical_base_uvwgen",
+            "default" : false,
+            "desc" : "The cylindrical projection applies the repeat_u/repeat_v options a little differently",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "legacy_uv_rotation",
+            "default" : false,
+            "desc" : "Changes the pivot used to apply the repeat_u/repeat_v and uv_matrix transformations. Only used when uvwgen is NULL  i.e. the UV coordinates come from an UV map and not from a projection",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gpu_override",
+            "default" : "0",
+            "desc" : "When enabled uv_set_name, uv_set_index and uvwgen are ignored",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "SolidObject", "SolidObject" ],
+                [ "2", "SolidWorld", "SolidWorld" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gpu_override_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Additional transformation used only when gpu_override is not 0",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

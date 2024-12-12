@@ -1,0 +1,402 @@
+
+{
+    "Desciption" : "TexDirt",
+    "ID" : "TexDirt",
+    "Name" : "Dirt",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "white_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Specifies the color that is returned by the texture for unoccluded areas (areas where a surface is fully exposed to ambient light)",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Unoccluded Color"
+            }
+        },
+        
+        {
+            "attr" : "black_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Specifies the color that is returned by the texture for occluded areas (areas where a surface's ambient lighting is limited or blocked)",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Occluded Color"
+            }
+        },
+        
+        {
+            "attr" : "radius",
+            "default" : 10.0,
+            "desc" : "Determines the amount of area (in scene units) where the TexDirt effect is produced",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "distribution",
+            "default" : 1.0,
+            "desc" : "Forces the rays to gather closer to the surface normal. This results in the dirt area narrowing closer to the contact edges. For ambient occlusion, set this parameter to 1.0 to get distribution similar to the ambient lighting on a diffuse surface",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "falloff",
+            "default" : 0.0,
+            "desc" : "Controls the speed of the transition between occluded and unoccluded areas",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Controls the number of samples that V-Ray takes to calculate the dirt effect. Lower values render faster but produce a more noisy result. This parameter works independently from the Use Local Subdivs parameter in the DMC Sampler, so changes affect the scene even if Use local subdivs is disabled. Low Noise threshold values in the Image Sampler clean the result further",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "bias_x",
+            "default" : 0.0,
+            "desc" : "Biases the normals to the X axis so that the dirt effect is forced to those directions. Negative values could be used to invert the direction of the effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "bias_y",
+            "default" : 0.0,
+            "desc" : "Biases the normals to the Y axis so that the dirt effect is forced to those directions. Negative values could be used to invert the direction of the effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "bias_z",
+            "default" : 0.0,
+            "desc" : "Biases the normals to the Z axis so that the dirt effect is forced to those directions. Negative values could be used to invert the direction of the effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 100.0,
+                "soft_min" : -100.0
+            }
+        },
+        
+        {
+            "attr" : "ignore_for_gi",
+            "default" : true,
+            "desc" : "Determines whether the dirt effect is taken into consideration for GI calculations or not",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Ignore For GI"
+            }
+        },
+        
+        {
+            "attr" : "ignore_bump",
+            "default" : false,
+            "desc" : "Determines whether to take bump into account",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Ignore bump"
+            }
+        },
+        
+        {
+            "attr" : "consider_same_object_only",
+            "default" : "0",
+            "desc" : "If not 0 the dirt affects only the objects themselves without including contact surfaces and edges. Same object is considered by: 1 - same Shadable instance, 2 - by render ID; 3 - by object ID; 4 - by user attribute. When disabled, the entire scene geometry participates in the final result",
+            "items" : 
+            [
+                [ "0", "Off", "Off" ],
+                [ "1", "Shading instance", "Shading instance" ],
+                [ "2", "Render ID", "Render ID" ],
+                [ "3", "Object ID", "Object ID" ],
+                [ "4", "User Attribute", "User Attribute" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attribute",
+            "default" : "",
+            "desc" : "User attribute name when consider_same_object_only=4",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invert_normal",
+            "default" : false,
+            "desc" : "Changes the direction of tracing the rays. When disabled, the rays are traced outside the surface; when enabled they are traced inside the surface. This allows us to revert the effect with respect to surface normals - e.g. instead of crevices, open corners are shaded with the occluded color",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : false,
+            "desc" : "When enabled use resulting occlusion value as output alpha. Otherwise interpolate between occluded & unoccluded alphas",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "double_sided",
+            "default" : false,
+            "desc" : "When enabled, the rays needed to generate the dirt map are shot from both sides of the faces (both in the direction of the normals and in the opposite direction)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "work_with_transparency",
+            "default" : false,
+            "desc" : "When enabled, TexDirt will take into account the opacity of the occluding objects. This can be used, for example, if you want to calculate ambient occlusion from opacity-mapped trees etc. When disabled, occluding objects are always assumed to be opaque. Note that working with correct opacity is slower, since in that case TexDirt must examine and evaluate the material on the occluding objects.V-Ray GPU supports this only with lights and their 'Invisible' parameter and geometry render stats",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ignore_self_occlusion",
+            "default" : false,
+            "desc" : "When enabled, the object does not occlude itself. It is occluded only by other objects in the scene",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "thin_mode",
+            "default" : false,
+            "desc" : "When enabled, the inner mode disregards surfaces that are not orthogonal to the shade surface, thus resulting in less dirt on thin objects",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Specifies the mode in which the dirt map is calculated. 0 - ambient occlusion; 1 - Phong reflection occlusion; 2 - Blinn reflection occlusion; 3 - Ward reflection occlusion; 4 - Inner occlusion; 5 - Ambient + inner occlusion",
+            "items" : 
+            [
+                [ "0", "Ambient occlusion", "Ambient occlusion" ],
+                [ "1", "Phong reflection occlusion", "Phong reflection occlusion" ],
+                [ "2", "Blinn reflection occlusion", "Blinn reflection occlusion" ],
+                [ "3", "Ward reflection occlusion", "Ward reflection occlusion" ],
+                [ "4", "Inner occlusion", "Inner occlusion" ],
+                [ "5", "Ambient + inner occlusion", "Ambient + inner occlusion" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "environment_occlusion",
+            "default" : false,
+            "desc" : "When enabled, V-Ray uses the environment when calculating the occlusion of areas that are not occluded by other objects",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_reflection_elements",
+            "default" : false,
+            "desc" : "When enabled, the ambient reflection affects the reflection render elements. This can be used to create reflection masks",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "glossiness",
+            "default" : 1.0,
+            "desc" : "Controls the spread of the rays traced for reflection occlusion (mode>0). A value of 1 means that just a single ray is traced (just like when tracing clear reflections), smaller values make the spread of the traced rays",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "render_nodes",
+            "default" : null,
+            "desc" : "Allows you to disable the calculation of the dirt map for specific objects. Excluded objects will not be shaded by the dirt map",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "display_name" : "Exclude",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "render_nodes_inclusive",
+            "default" : false,
+            "desc" : "When enabled reverses the meaning of the Exclude list - only objects in the list will be shaded by the dirt map",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "As Inclusive list"
+            }
+        },
+        
+        {
+            "attr" : "use_texture_for_excluded",
+            "default" : true,
+            "desc" : "When enabled the texture will return the unoccluded color texture, if the object is excluded. Otherwise return (0,0,0,0)",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_result_nodes",
+            "default" : null,
+            "desc" : "Specifies a list of objects which will affect the calculation of the dirt map. Excluded objects will be considered \"invisible\" for the calculations of the dirt map",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "display_name" : "Result Affect",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "affect_result_nodes_inclusive",
+            "default" : false,
+            "desc" : "This option controls the meaning of the Result Affect option. When on the Result Affect is considered as an \"Include list\" and when off then the Result Affect is considered as \"Exclude list\"",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "As Inclusive list"
+            }
+        },
+        
+        {
+            "attr" : "subdivs_as_samples",
+            "default" : false,
+            "desc" : "Enable to make the subdivs independent of the image sampler quality",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "screen_space_radius",
+            "default" : false,
+            "desc" : "If enabled, the radius is rescaled based on the distance from the camera",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "streaks_ambient",
+            "default" : false,
+            "desc" : "Specifies whether there should be ambient streaks",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "streaks_inner",
+            "default" : false,
+            "desc" : "Specifies whether there should be inner streaks",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "streaks_blur",
+            "default" : false,
+            "desc" : "Specifies whether an algorithm with blurred streak must be used. The blur is controlled through the distribution parameter",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "blur",
+            "default" : 0.1000000014901161,
+            "desc" : "Specifies the shape of the cone used for inner occlusion sampling",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "streaks_size",
+            "default" : 50.0,
+            "desc" : "Specifies the size of each streak relative to the object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 500.0
+            }
+        },
+        
+        {
+            "attr" : "streaks_density",
+            "default" : 1.0,
+            "desc" : "Specifies the density of the streaks - 0 means no streaks and 1 means all streaks",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

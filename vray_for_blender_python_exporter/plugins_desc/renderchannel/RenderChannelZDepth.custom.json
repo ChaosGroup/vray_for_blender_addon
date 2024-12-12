@@ -1,0 +1,56 @@
+{
+    "ID": "RenderChannelZDepth",
+    "Name" : "Z Depth",
+    "Subtype" : "GEOMETRY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name" : "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name" : "depth_from_camera"
+                    },
+                    {
+                        "name" : "depth_black"
+                    },
+                    {
+                        "name" : "depth_white"
+                    },
+                    {
+                        "name" : "depth_clamp"
+                    },
+                    {
+                        "name" : "filtering"
+                    },
+                    {
+                        "name" : "depth_invert"
+                    },
+                    {
+                        "name" : "force_infinity_black"
+                    },
+                    {
+                        "name" : "dont_filter_env"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Z Depth"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

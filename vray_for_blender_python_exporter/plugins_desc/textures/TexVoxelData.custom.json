@@ -1,0 +1,25 @@
+{
+    "ID": "TexVoxelData",
+    "Parameters": [
+        {
+            "attr": "domain",
+            "default": "",
+            "desc": "Simulation domain",
+            "name": "Domain",
+            "type": "GEOMETRY",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    }
+}

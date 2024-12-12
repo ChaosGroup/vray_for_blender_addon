@@ -1,0 +1,112 @@
+{
+    "ID": "BRDFFlakes2",
+    "Name": "V-Ray Flakes 2 Mtl",
+    "Parameters": [
+        {
+            "attr": "flake_random_color",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "flake_uvwgen",
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "flake_scale_triplanar",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "flakes_parameters",
+                "label": "Flakes Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "flake_color"
+                    },
+                    {
+                        "name": "flake_orientation"
+                    },
+                    {
+                        "name": "flake_orientation_tail"
+                    },
+                    {
+                        "name": "flake_glossiness"
+                    },
+                    {
+                        "name": "flake_density"
+                    },
+                    {
+                        "name": "flake_scale"
+                    },
+                    {
+                        "name": "flake_scale_triplanar"
+                    },
+                    {
+                        "name": "flake_size"
+                    },
+                    {
+                        "name": "flake_map_size"
+                    },
+                    {
+                        "name": "flake_seed"
+                    },
+                    {
+                        "name": "flake_uvwgen"
+                    },
+                    {
+                        "name": "mapping_type"
+                    },
+                    {
+                        "name": "mapping_channel"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "traceReflections"
+                    },
+                    {
+                        "name": "trace_depth"
+                    },
+                    {
+                        "name": "doubleSided"
+                    },
+                    {
+                        "name": "cutoff_threshold"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "environment_override",
+                "label": "Environment override",
+                "attrs": [
+                    {
+                        "name": "use_environment_override"
+                    },
+                    {
+                        "name": "environment_override"
+                    },
+                    {
+                        "name": "environment_priority"
+                    }
+                ]
+            }
+        ]
+    },
+    "excluded_parameters": [
+        "flake_bin_subdivs",
+        "subdivs"
+    ]
+}

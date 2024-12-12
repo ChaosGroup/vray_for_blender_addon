@@ -1,0 +1,264 @@
+{
+    "ID": "TexTiles",
+    "Name": "V-Ray Tiles",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "common",
+                "label": "Common",
+                "attrs": [
+                    {
+                        "name": "compatibility_with"
+                    },
+                    {
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "invert"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    },
+                    {
+                        "name": "color_mult"
+                    },
+                    {
+                        "name": "color_offset"
+                    },
+                    {
+                        "name": "alpha_mult"
+                    },
+                    {
+                        "name": "alpha_offset"
+                    },
+                    {
+                        "name": "nouvw_color"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "mapped",
+                "label": "Mapped",
+                "attrs": [
+                    {
+                        "name": "placement_type"
+                    },
+                    {
+                        "name": "u"
+                    },
+                    {
+                        "name": "v"
+                    },
+                    {
+                        "name": "w"
+                    },
+                    {
+                        "name": "h"
+                    },
+                    {
+                        "name": "jitter"
+                    },
+                    {
+                        "name": "tile_u"
+                    },
+                    {
+                        "name": "tile_v"
+                    },
+                    {
+                        "name": "uv_noise_on"
+                    },
+                    {
+                        "name": "uv_noise_animate"
+                    },
+                    {
+                        "name": "uv_noise_amount"
+                    },
+                    {
+                        "name": "uv_noise_levels"
+                    },
+                    {
+                        "name": "uv_noise_size"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs":[
+                    {
+                        "name": "un_noise_phase"
+                    },
+                    {
+                        "name": "pattern_type"
+                    },
+                    {
+                        "name": "color_mortar"
+                    },
+                    {
+                        "name": "color_tiles"
+                    },
+                    {
+                        "name": "horizontal_count"
+                    },
+                    {
+                        "name": "vertical_count"
+                    },
+                    {
+                        "name": "color_variance"
+                    },
+                    {
+                        "name": "fade_variance"
+                    },
+                    {
+                        "name": "horizontal_gap"
+                    },
+                    {
+                        "name": "vertical_gap"
+                    },
+                    {
+                        "name": "holes"
+                    },
+                    {
+                        "name": "edge_roughness"
+                    },
+                    {
+                        "name": "random_seed"
+                    },
+                    {
+                        "name": "line_shift"
+                    },
+                    {
+                        "name": "random_shift"
+                    },
+                    {
+                        "name": "row_modify"
+                    },
+                    {
+                        "name": "per_row"
+                    },
+                    {
+                        "name": "row_change"
+                    },
+                    {
+                        "name": "column_modify"
+                    },
+                    {
+                        "name": "per_column"
+                    },
+                    {
+                        "name": "column_change"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "horizontal_count",
+            "default": 2.0,
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "vertical_count",
+            "default": 2.0,
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "color_variance",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "fade_variance",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "horizontal_gap",
+            "default": 0.5,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "vertical_gap",
+            "default": 0.5,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "edge_roughness",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "line_shift",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "random_shift",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "per_row",
+            "ui": {
+                "soft_max": 10,
+                "spin_step": 1
+            }
+        },
+        {
+            "attr": "row_change",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "per_column",
+            "ui": {
+                "soft_max": 10,
+                "spin_step": 1
+            }
+        },
+        {
+            "attr": "column_change",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

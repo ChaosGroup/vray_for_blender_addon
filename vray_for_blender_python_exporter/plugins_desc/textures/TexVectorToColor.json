@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexVectorToColor",
+    "ID" : "TexVectorToColor",
+    "Name" : "Vector To Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

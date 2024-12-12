@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "MtlStreakFade",
+    "ID" : "MtlStreakFade",
+    "Name" : "Mtl Streak Fade",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "Base material",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "fade",
+            "default" : 1.0,
+            "desc" : "1.0f - no fade, < 1.0f - fade",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

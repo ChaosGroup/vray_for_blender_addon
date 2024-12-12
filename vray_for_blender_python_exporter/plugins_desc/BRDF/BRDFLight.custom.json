@@ -1,0 +1,76 @@
+{
+    "ID": "BRDFLight",
+    "Name": "V-Ray Light Mtl",
+    "Parameters": [
+        {
+            "attr": "color",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "colorMultiplier",
+            "ui": {
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "transparency",
+            "comment": "The value is stored in the Blender scene as opacity. Conversion is applied during the export.",
+            "ui" : {
+                "display_name": "Opacity"
+            },
+            "default": [1.0, 1.0, 1.0, 1.0]
+        },
+        {
+            "attr": "emitOnBackSide",
+            "default": true
+        },
+        {
+            "attr": "multiplyByOpacity",
+            "default": true
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "color"
+                    },
+                    {
+                        "name": "colorMultiplier"
+                    },
+                    {
+                        "name": "transparency"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "emitOnBackSide"
+                    },
+                    {
+                        "name": "compensateExposure"
+                    },
+                    {
+                        "name": "multiplyByOpacity"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "doubleSided",
+            "channels"
+        ]
+    }
+}

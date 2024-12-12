@@ -1,0 +1,395 @@
+
+{
+    "Desciption" : "SettingsImageSampler",
+    "ID" : "SettingsImageSampler",
+    "Name" : "Settings Image Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "The type of the image sampler (0 - fixed rate, 1 - adaptive, 2 [deprecated] - adaptive subdivision, 3 - progressive)",
+            "items" : 
+            [
+                [ "0", "Fixed rate", "Fixed rate" ],
+                [ "1", "Adaptive", "Adaptive" ],
+                [ "2", "Adaptive subdivision", "Adaptive subdivision" ],
+                [ "3", "Progressive", "Progressive" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Sampler Type"
+            }
+        },
+        
+        {
+            "attr" : "min_shade_rate",
+            "default" : 0,
+            "desc" : "Control the number of rays shot for AA versus rays for other effects like glossy reflections, GI, area shadows etc. Higher values mean that less time will be spent on AA, and more effort will be put in the sampling of shading effects",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min shading rate",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "fixed_subdivs",
+            "default" : 1,
+            "desc" : "Controls the number of samples the fixed sampler will take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "fixed_per_pixel_filtering",
+            "default" : false,
+            "desc" : "True to enable per-pixel filtering for the fixed sampler",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Per-pixel filtering"
+            }
+        },
+        
+        {
+            "attr" : "dmc_minSubdivs",
+            "default" : 1,
+            "desc" : "Controls the minimum number of samples the adaptive DMC image sampler will take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "dmc_maxSubdivs",
+            "default" : 4,
+            "desc" : "Controls the maximum number of samples the adaptive DMC image sampler may take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max subdivs",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "dmc_threshold",
+            "default" : 0.009999999776482582,
+            "desc" : "Color threshold for the adaptive DMC image sampler",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Threshold",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dmc_per_pixel_filtering",
+            "default" : false,
+            "desc" : "True to enable per-pixel filtering for the adaptive DMC and progressive image samplers",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Per-pixel filtering"
+            }
+        },
+        
+        {
+            "attr" : "dmc_adaptivity_clamp",
+            "default" : 100.0,
+            "desc" : "Threshold to stop sampling overexposed areas of the image",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Adaptivity clamp"
+            }
+        },
+        
+        {
+            "attr" : "dmc_fireflyRemoval",
+            "default" : 0.0,
+            "desc" : "Values larger than 0.0 enable firefly removal for the bucket samplers",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "subdivision_minRate",
+            "default" : -1,
+            "desc" : "Determines the minimum sampling rate for the adaptive subdivision sampler. A value of 0 means that samples will be one pixel apart. Positive values will put samples inside the pixels, while negative values will space the samples over several pixels",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min rate",
+                "max" : 8,
+                "min" : -3
+            }
+        },
+        
+        {
+            "attr" : "subdivision_maxRate",
+            "default" : 2,
+            "desc" : "Determines the maximum sampling rate for the adaptive subdivision sampler. A value of 0 means that samples will be one pixel apart. Positive values will put samples inside the pixels, while negative values will space the samples over several pixels",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max rate",
+                "max" : 8,
+                "min" : -3
+            }
+        },
+        
+        {
+            "attr" : "subdivision_jitter",
+            "default" : true,
+            "desc" : "If this is true, samples will be displaced randomly, for better AA of nearly horizontal or vertical edges",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Jitter"
+            }
+        },
+        
+        {
+            "attr" : "subdivision_threshold",
+            "default" : 0.1500000059604645,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Threshold",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "subdivision_edges",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Edges"
+            }
+        },
+        
+        {
+            "attr" : "subdivision_normals",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Normals"
+            }
+        },
+        
+        {
+            "attr" : "subdivision_normals_threshold",
+            "default" : 0.1000000014901161,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normals threshold",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "progressive_minSubdivs",
+            "default" : 1,
+            "desc" : "Controls the minimum number of samples the progressive image sampler will take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min subdivs",
+                "max" : 1000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "progressive_maxSubdivs",
+            "default" : 4,
+            "desc" : "Controls the maximum number of samples the progressive image sampler may take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max subdivs",
+                "max" : 1000000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "progressive_threshold",
+            "default" : 0.009999999776482582,
+            "desc" : "Noise threshold for the progressive image sampler",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Noise threshold",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "progressive_maxTime",
+            "default" : 0.0,
+            "desc" : "Max. render time for the progressive image sampler in minutes",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max. render time in min",
+                "max" : 1500.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "progressive_bundleSize",
+            "default" : 64,
+            "desc" : "Bundle size for the progressive image sampler",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Ray bundle size",
+                "max" : 2048,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "progressive_showMask",
+            "default" : false,
+            "desc" : "If true, the AA mask will be rendered",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show AA mask"
+            }
+        },
+        
+        {
+            "attr" : "progressive_progNoiseThreshold",
+            "default" : 80,
+            "desc" : "Progressive noise threshold active pixels percent at which the threshold is reduced",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Progressive noise threshold",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "progressive_effectsUpdate",
+            "default" : 10,
+            "desc" : "Approximate percentage of render time which post effects updates will take",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Image effects update freq.",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "render_mask_mode",
+            "default" : "0",
+            "desc" : "Sets the mode for the render mask. The mode controls which render_mask_* parameter will be used to generate the mask from (0 - Disable, 1 - Texture, 2 - Objects, 3 - ObjectIDs)",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Texture", "Texture" ],
+                [ "2", "Objects", "Objects" ],
+                [ "3", "ObjectIDs", "ObjectIDs" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render_mask_texture",
+            "default" : 0.0,
+            "desc" : "Texture used for render mask when render_mask_mode=Texture.This accepts float textures, where a value of <=1e-6, means that V-Ray won't render in this pixel",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "render_mask_objects",
+            "default" : null,
+            "desc" : "List of Node/GeomGen plugins which will be used for render mask when render_mask_mode=Objects",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render_mask_object_ids",
+            "default" : 0,
+            "desc" : "List of integers object ids, which will be used for render mask when render_mask_mode=ObjectIDs",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render_mask_clear",
+            "default" : "1",
+            "desc" : "Render mask clearing mode. Affects only IPR rendering. If enabled, the parts that are not rendered will be blank, rather than keeping the old image",
+            "items" : 
+            [
+                [ "0", "Don't clear", "Don't clear" ],
+                [ "1", "Clear", "Clear" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "progressive_autoswitch_effectsresult",
+            "default" : true,
+            "desc" : "True if the VFB should switch to effectsResult channel during rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Autoswitch to effectsResult"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

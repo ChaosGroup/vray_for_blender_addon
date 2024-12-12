@@ -1,0 +1,130 @@
+{
+    "ID": "TexRamp",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "properties",
+                "label": "Properties",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "type"
+                    },
+                    {
+                        "name": "invert",
+                        "label": "Invert Colors"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "noise",
+                "label": "Noise",
+                "attrs": [
+                    {
+                        "name": "uv_noise_on"
+                    },
+                    {
+                        "name": "uv_noise_animate"
+                    },
+                    {
+                        "name": "uv_noise_amount"
+                    },
+                    {
+                        "name": "uv_noise_levels"
+                    },
+                    {
+                        "name": "uv_noise_size"
+                    },
+                    {
+                        "name": "un_noise_phase"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "u_wave"
+                    },
+                    {
+                        "name": "v_wave"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "noise_amount"
+                    },
+                    {
+                        "name": "noise_frequency"
+                    },
+                    {
+                        "name": "hue_noise_amount"
+                    },
+                    {
+                        "name": "hue_noise_frequency"
+                    },
+                    {
+                        "name": "saturation_noise_amount"
+                    },
+                    {
+                        "name": "saturation_noise_frequency"
+                    },
+                    {
+                        "name": "value_noise_amount"
+                    },
+                    {
+                        "name": "value_noise_frequency"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "context",
+                "label": "Context",
+                "default_closed": false,
+                "attrs": []
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "positions",
+            "colors",
+            "interpolation",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v"
+        ]
+    }
+}

@@ -1,0 +1,82 @@
+
+{
+    "Desciption" : "MtlRoundEdges",
+    "ID" : "MtlRoundEdges",
+    "Name" : "Mtl Round Edges",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "Base material",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Base Material"
+            }
+        },
+        
+        {
+            "attr" : "radius",
+            "default" : 1.0,
+            "desc" : "Rounding radius",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "radius_mode",
+            "default" : "0",
+            "desc" : "0 - the radius parameter is in object space, 1 - the radius parameter is in world space",
+            "items" : 
+            [
+                [ "0", "Object space", "Object space" ],
+                [ "1", "World space", "World space" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "raytraced",
+            "default" : true,
+            "desc" : "True to use raytracing to compute the rounded corners and false to use static mesh analysis",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "raytraced_consider_same_object_only",
+            "default" : true,
+            "desc" : "True to consider only corners on the same object, and false to consider other intersecting objects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider same object only"
+            }
+        },
+        
+        {
+            "attr" : "raytraced_mode",
+            "default" : "0",
+            "desc" : "Which corners to smooth: 0 - both convex and concave; 1 - convex only; 2 - concave only",
+            "items" : 
+            [
+                [ "0", "Convex and Concave", "Convex and Concave" ],
+                [ "1", "Convex only", "Convex only" ],
+                [ "2", "Concave only", "Concave only" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

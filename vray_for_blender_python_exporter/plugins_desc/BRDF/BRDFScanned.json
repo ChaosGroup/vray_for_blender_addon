@@ -1,0 +1,441 @@
+
+{
+    "Desciption" : "BRDFScanned",
+    "ID" : "BRDFScanned",
+    "Name" : "Scanned",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrscan" ],
+                "file_names" : [ "Scanned material" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "paintcolor",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Paint replacement color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Paint replacement color"
+            }
+        },
+        
+        {
+            "attr" : "filtercolor",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Filter color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Filter color"
+            }
+        },
+        
+        {
+            "attr" : "ccmult",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Clear Coat Multiplier",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Clear coat multiplier"
+            }
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tiling_factor",
+            "default" : 1.0,
+            "desc" : "Global multiplier for U and V coordinates",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "param_block",
+            "default" : 0,
+            "desc" : "All parameters serialized to a binary param block",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "plain",
+            "default" : 0,
+            "desc" : "Option to disable the texturing",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "invgamma",
+            "default" : 1.0,
+            "desc" : "Inverse gamma factor",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "saturation",
+            "default" : 1.0,
+            "desc" : "Saturation control",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "DepthMul",
+            "default" : 1.0,
+            "desc" : "Displacement and parallax multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "filter",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Multiplier filter color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvtrans",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "UV mapping transformation",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumpmul",
+            "default" : 1.0,
+            "desc" : "Altitude sensitive Bump multiplier, applied gradually below the bumpstart altitude",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "bumpstart",
+            "default" : 0.50,
+            "desc" : "The altitude where the Bump multiplier starts to appear",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "cutoff",
+            "default" : 0.009999999776482582,
+            "desc" : "Stop tracing ray weight",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 0.1000000014901161,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "mapChannel",
+            "default" : 1,
+            "desc" : "UV mapping channel",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 10,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "trace_depth",
+            "default" : 5,
+            "desc" : "Limit of the ray depth",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "ccior",
+            "default" : 1.0,
+            "desc" : "Clear coat index of refraction",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "cchlight",
+            "default" : 1,
+            "desc" : "Enable the direct light response of the clear coat ",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "ccbump",
+            "default" : 1.0,
+            "desc" : "Clear coat bump multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "UnfRefl",
+            "default" : 0,
+            "desc" : "Disable the importance sampler, all the rays are spawned uniformly",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "twoside",
+            "default" : 0,
+            "desc" : "Render the material on both the geometry sides",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "displace",
+            "default" : 0,
+            "desc" : "Enable  the the edge displacement",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "notransp",
+            "default" : 0,
+            "desc" : "Disample  the transparency/translucency",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "paintstrength",
+            "default" : 1.0,
+            "desc" : "Strength of the paint replacement filter",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fltstrength",
+            "default" : 1.0,
+            "desc" : "Strength of the multiplier filter",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "NoCachedGI",
+            "default" : 0,
+            "desc" : "Disable the use of cached light regardless of the selected GI engine",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "ccmetalrefl",
+            "default" : 0.0,
+            "desc" : "Introduce coloring of the clear coat reflections by the underlaying material",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ccmul",
+            "default" : 0.0,
+            "desc" : "Clear coat reflections general multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "triplanar",
+            "default" : 0,
+            "desc" : "Triplanar control flags, 1 enable, 2 random offset, 4 random rotation",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 7,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "BWforGI",
+            "default" : 0,
+            "desc" : "Colorless GI switch, used when the paint will be replaced on post",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "ccglossy",
+            "default" : 400.0,
+            "desc" : "Clear coat glossiness in rad^-1 units",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ccglossyvar",
+            "default" : 0.0,
+            "desc" : "Clear coat glossiness fall off variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sssmul",
+            "default" : 1.0,
+            "desc" : "SSS multiplier, the bigger value increases the scattering distance",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "uvflags",
+            "default" : 0,
+            "desc" : "UV mapping control flags (mirror alternating)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 3,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "usedmaps",
+            "default" : 0,
+            "desc" : "Enable flags of the maps (ior,filter,paint)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 7,
+                "min" : 0
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

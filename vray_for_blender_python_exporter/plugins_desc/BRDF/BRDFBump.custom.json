@@ -1,0 +1,74 @@
+{
+    "ID": "BRDFBump",
+    "Name": "V-Ray Bump Mtl",
+    "Parameters": [
+        {
+            "attr" : "base_brdf",
+            "desc" : "Base BRDF Material",
+            "ui" : {
+                "display_name": "Base Material"
+            }
+        },
+        {
+            "attr" : "bump_tex_color",
+            "options": {"linked_only": true}
+        },
+        {
+            "attr": "bump_tex_mult_tex",
+            "default": 1.0,
+            "ui": {
+                "soft_min": -5.0,
+                "soft_max": 5.0
+            }
+        },
+        {
+            "attr": "bump_delta_scale",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 2.0
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "map_type"
+                    },
+                    {
+                        "name": "bump_tex_mult_tex",
+                        "label": "Bump Multiplier"
+                    },
+                    {
+                        "name": "bump_delta_scale"
+                    },
+                    {
+                        "name": "bump_shadows"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "bump_tex_float",
+            "bump_tex_mult_tex",
+            "bump_tex",
+            "normal_uvwgen",
+            "maya_compatible",
+            "compute_bump_for_shadows",
+            "additional_bump",
+            "normal_map_mult",
+            "bump_map_mult",
+            "units",
+            "blue2Z_mapping_method",
+            "channels"
+        ]
+    }
+}

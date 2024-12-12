@@ -1,0 +1,339 @@
+{
+    "ID": "VolumeVRayToon",
+    "Name": "V-Ray Volume Toon",
+    "Type": "EFFECT",
+    "Parameters": [
+        {
+            "attr": "toonMaterialOnly",
+            "type": "BOOL"
+        },
+        {
+            "attr": "widthType",
+            "desc": "Units used for the width of the cartoon lines"
+        },
+        {
+            "attr": "innerLineControl",
+            "desc": "Cartoon inner line width",
+            "default": true,
+            "update": "onUpdateInnerLine"
+        },
+        {
+            "attr": "lineColor_tex",
+            "desc": "Determines the color of the outlines"
+        },
+        {
+            "attr": "lineColorInner_tex",
+            "desc": "Determines the color of the inner lines"
+        },
+        {
+            "attr": "lineWidth_tex",
+            "desc": "Determines the width of the outlines in the currently selected units",
+            "default": 1.5,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "lineWidthInner_tex",
+            "desc": "Determines the width of the inner lines in the currently selected units",
+            "default": 1.5,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "excludeList",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "excludeType",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "object_select",
+            "type": "TEMPLATE",
+            "desc": "List of object to which to apply the toon effect",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "bound_property": "excludeList",
+                        "mode_bound_property": "excludeType",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "distortion_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "opacity_tex",
+            "desc": "Opacity of the cartoon line",
+            "default": 1.0
+        },
+        {
+            "attr": "depth_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the depth-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "angular_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the view-angle-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "depthCurveOn",
+            "desc": "Enable depth-based line width"
+        },
+        {
+            "attr": "angularCurveOn",
+            "desc": "Enable view-angle-based line width"
+        },
+        {
+            "attr": "minDepth",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "maxDepth",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "basic",
+                "label": "Basic",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "toonChannelsOnly"
+                    },
+                    {
+                        "name": "toonMaterialOnly"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "widthType",
+                        "label": "Width Units"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "lineColor_tex",
+                        "label": "Line Color"
+                    },
+                    {
+                        "name": "lineWidth_tex",
+                        "label": "Line width"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "innerLineControl"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::innerLineControl!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "lineColorInner_tex",
+                                "label": "Inner Line Color"
+                            },
+                            {
+                                "name": "lineWidthInner_tex",
+                                "label": "Inner Line Width"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "opacity_tex"
+                    },
+                    {
+                        "name": "outerOverlapThreshold"
+                    },
+                    {
+                        "name": "compensateExposure"
+                    },
+                    {
+                        "name": "materialEdges"
+                    },
+                    {
+                        "name": "hideInnerEdges"
+                    },
+                    {
+                        "name": "normalThreshold"
+                    },
+                    {
+                        "name": "overlapThreshold"
+                    },
+                    {
+                        "name": "doSecondaryRays"
+                    },
+                    {
+                        "name": "traceBias"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "object_select",
+                        "label": "Include / Exclude",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "depth_scaling",
+                "label": "Depth Scaling",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "depthCurveOn"
+                    },
+                    {
+                        "layout": "BOX",
+                        "active": {
+                            "cond": "::depthCurveOn!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "minDepth"
+                            },
+                            {
+                                "name": "maxDepth"
+                            },
+                            {
+                                "name": "depth_curve",
+                                "label": "Depth Curve",
+                                "custom_draw": "drawCurveTemplate"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "angular_scaling",
+                "label": "Angular Scaling",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "angularCurveOn"
+                    },
+                    {
+                        "layout": "BOX",
+                        "active": {
+                            "cond": "::angularCurveOn!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "angular_curve",
+                                "label": "Angular Curve",
+                                "custom_draw": "drawCurveTemplate"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "widthType"
+                    },
+                    {
+                        "name": "innerLineControl"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {
+                "name": "lineColor_tex",
+                "label": "Line Color"
+            },
+            {
+                "name": "lineWidth_tex",
+                "label": "Line Width"
+            },
+            {
+                "name": "lineColorInner_tex",
+                "label": "Inner Line Color"
+            },
+            {
+                "name": "lineWidthInner_tex",
+                "label": "Inner Line Width"
+            },
+            {
+                "name": "opacity_tex",
+                "label": "Line Opacity"
+            },
+            {
+                "name": "traceBias",
+                "label": "Trace Bias"
+            },
+            {
+                "name": "distortion_tex",
+                "label": "Distortion map"
+            },
+            {
+                "name": "excludeList",
+                "label": "Objects"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "depthCurveExternal",
+            "angularCurveExternal",
+            "compatibilityMode",
+            "lineColor",
+            "lineColorInner",
+            "lineWidth",
+            "lineWidthInner",
+            "opacity"
+        ]
+    }
+}

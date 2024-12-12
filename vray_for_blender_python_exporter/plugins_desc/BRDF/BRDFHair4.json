@@ -1,0 +1,396 @@
+
+{
+    "Desciption" : "BRDFHair4",
+    "ID" : "BRDFHair4",
+    "Name" : "Hair 4",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "melanin",
+            "default" : 0.3000000119209290,
+            "desc" : "The melanin content of the hair fibre. 0 corresponds to white hair, 0.1-0.2 blonde, 0.3-0.4 red, 0.5-0.8 brown and 0.8-1.0 black hair",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "General Parameters",
+                "tab" : "V-Ray Hair Next"
+            }
+        },
+        
+        {
+            "attr" : "pheomelanin",
+            "default" : 0.0,
+            "desc" : "The redness (pheomelanin content) of the hair fibre as fraction of all melanin. 1.0 makes the hair redder",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dye_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color tint to apply to the hair",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Transparency",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "diffuse_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Diffuse hair color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "diffuse_amount",
+            "default" : 0.0,
+            "desc" : "Multiplier for the diffuse color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "glossiness",
+            "default" : 0.50,
+            "desc" : "The glossiness along the hair strand. It primarily controls the width of the highlight, essentially how shiny the hair appears",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_glossiness_boost",
+            "default" : 0.4000000059604645,
+            "desc" : "Additional scaling factor to boost the primary reflection glossiness. This can be useful for reproducing the effect of shiny coating on rough looking fur",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "softness",
+            "default" : 0.50,
+            "desc" : "The glossiness across the hair strand. It controls the overall softness of the hair",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "highlight_shift",
+            "default" : 2.0,
+            "desc" : "How much the highlights are shifted along the hair by the cuticles on the hair fibre. Values in the range 2-4 are typical for human hair",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 40.0,
+                "min" : -40.0,
+                "soft_max" : 10.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.549999952316284,
+            "desc" : "Hair index of refration. The animal cuticle scales often form a layered structure, resulting in increased primary reflection. This can be modeled with higher index of refraction. The typical value for human hair is 1.55",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 1.0,
+                "soft_max" : 5.0,
+                "soft_min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "glint_strength",
+            "default" : 0.2000000029802322,
+            "desc" : "The strength of the second more focused colored highlight",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "Glint"
+            }
+        },
+        
+        {
+            "attr" : "glint_variation",
+            "default" : 0.3000000119209290,
+            "desc" : "The amount of random variation along the strand applied to the colored highlights",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "glitter_strength",
+            "default" : 0.3000000119209290,
+            "desc" : "The strength of the primary reflection non-uniformity. Induces more focused reflection, which is randomly perturbed along the strand. More pronounced with hard lightning produced by small or collimated light sources",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 2.0,
+                "min" : 0.0,
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "glitter_size",
+            "default" : 1.0,
+            "desc" : "The size of the glitter perturbation pattern. Increasing the value will prolong the pattern",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100000.0,
+                "min" : 0.001000000047497451,
+                "soft_max" : 10.0,
+                "soft_min" : 0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "glint_scale",
+            "default" : 1.0,
+            "desc" : "The units scale factor of the distance along the strand. Internally the variation along the strand is set in real world units. This parameter allows to correct the appearance for hair not modeled in real world scale. Values below 1.0 will shrink the variation pattern, while values above 1.0 will elongate it",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05,
+                "soft_max" : 100.0,
+                "soft_min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "random_melanin",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the melanin content of the hair",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : "Randomization"
+            }
+        },
+        
+        {
+            "attr" : "random_dye_hue",
+            "default" : 0.0,
+            "desc" : "Adds a random offest to the hue of the Dye color",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_dye_saturation",
+            "default" : 0.0,
+            "desc" : "Adds a random offest to the saturation of the Dye color",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_dye_value",
+            "default" : 0.0,
+            "desc" : "Adds a random offest to the value of the Dye color",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gray_hair_density",
+            "default" : 0.0,
+            "desc" : "The frequency at which gray hairs appear",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_glossiness",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the glossiness of the hair",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_softness",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the softness of the hair",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_highlight_shift",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the Highlight shift",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 40.0,
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_ior",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the Index of refration",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10.0,
+                "min" : 0.0,
+                "soft_max" : 5.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_tangent",
+            "default" : 0.0,
+            "desc" : "Adds a random offset to the hair tangent. Note that this value is scene scale dependent",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0,
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_tint",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color tint to apply to the primary specular component",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Tint"
+            }
+        },
+        
+        {
+            "attr" : "secondary_tint",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color tint to apply to the secondary specular component",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transmission_tint",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color tint to apply to the transmission component",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trace_depth",
+            "default" : 10,
+            "desc" : "The number of indirect bounces used to compute the effect of the multiple scattering. It can significantly affect the hair appearance, especially for light colored hairs. The number of bounces necessary can vary from 5 for dark colored hairs, to 30 and more for light colored ones",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "Advanced",
+                "soft_max" : 30,
+                "soft_min" : 1
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "compensate_energy",
+            "default" : false,
+            "desc" : "When enabled, V-Ray will try to compensate energy loss due to insufficient ray bounces",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,105 @@
+
+{
+    "Desciption" : "TexBezierCurve",
+    "ID" : "TexBezierCurve",
+    "Name" : "Bezier Curve",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input_float",
+            "default" : 0.0,
+            "desc" : "The input texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "points",
+            "default" : 0.0,
+            "desc" : "The control points; 6 floats for each point: 2D coords of the point itself, and 2D coords of the left and right tangent",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "types",
+            "default" : "0",
+            "desc" : "The type of the control points: 0 - free, 1 - bezier, 2- bezier smooth",
+            "items" : 
+            [
+                [ "0", "Free", "Free" ],
+                [ "1", "Bezier", "Bezier" ],
+                [ "2", "Bezier smooth", "Bezier smooth" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "num_bezier_points",
+            "default" : 256,
+            "desc" : "The number of precisely calculated points from bezier curves: default 256",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "use_end_tangents",
+            "default" : true,
+            "desc" : "true to extrapolate beyound the control points",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "out_of_range_type",
+            "default" : "0",
+            "desc" : "The type of extrapolation for points out of the control range: 0 - end tangnts, 1 - linear, 2 - constant. Used when use_end_tangents is true",
+            "items" : 
+            [
+                [ "0", "End tangent", "End tangent" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Constant", "Constant" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "gpu_curve_mode",
+            "default" : "0",
+            "desc" : "The GPU curve mode: 0 - Intensity; 1: Red component; 2: Green component; 3: Blue component; 4: Alpha component",
+            "items" : 
+            [
+                [ "0", "Intensity", "Intensity" ],
+                [ "1", "Red", "Red" ],
+                [ "2", "Green", "Green" ],
+                [ "3", "Blue", "Blue" ],
+                [ "4", "Alpha", "Alpha" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "clamp",
+            "default" : false,
+            "desc" : "Clamp output",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "clamp_value_min",
+            "default" : 0.0,
+            "desc" : "Clamp min value",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clamp_value_max",
+            "default" : 1.0,
+            "desc" : "Clamp max value",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

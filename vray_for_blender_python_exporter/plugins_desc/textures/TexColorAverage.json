@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexColorAverage",
+    "ID" : "TexColorAverage",
+    "Name" : "Color Average",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Input texture used to compute an intensity level",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "factor",
+            "default" : 1.0,
+            "desc" : "The intensity of the output",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

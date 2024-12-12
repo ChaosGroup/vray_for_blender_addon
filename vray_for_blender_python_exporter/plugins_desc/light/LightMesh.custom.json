@@ -1,0 +1,416 @@
+{
+    "ID": "LightMesh",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "ui": {
+                "display_name": "Color"
+            },
+            "desc": "The color of the light.",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "update": "onUpdateAttribute"
+        },
+        {
+            "attr": "intensity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "shadowColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "shadowColor",
+            "tex_prop": "shadowColor_tex",
+            "ui": {
+                "display_name": "Shadow color"
+            },
+            "desc": "The shadow color. Anything but black is not physically accurate",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "attr": "decay_near_start",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_near_end",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_start",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "decay_far_end",
+            "ui": {
+                "spin_step": 0.01,
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "intensity",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 500.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "color_mode",
+            "default": "0",
+            "desc": "Choose between RGB color and color temperature",
+            "items": [
+                [
+                    "0",
+                    "Color",
+                    "Color"
+                ],
+                [
+                    "1",
+                    "Temperature",
+                    "Temperature"
+                ]
+            ],
+            "type": "ENUM",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "temperature",
+            "default": 6500.0,
+            "desc": "Color temperature in K",
+            "type": "FLOAT",
+            "update": "onUpdateAttribute",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bumped_below_surface_check",
+            "default": true
+        },
+        {
+            "attr": "geometry",
+            "type": "OBJECT",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "object_selector",
+            "type": "TEMPLATE",
+            "desc": "List of mesh objects to convert to mesh lights",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "args": {
+                        "collection": "objects",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "shadowBias",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "basic",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "color_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_colortex",
+                        "label": "Color",
+                        "active": {
+                            "cond": "::color_mode=0"
+                        }
+                    },
+                    {
+                        "name": "temperature",
+                        "active": {
+                            "cond": "::color_mode=1"
+                        }
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "object_selector",
+                        "label": "Mesh light objects",
+                        "list_label": "Objects",
+                        "draw_container": "ROLLOUT"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "attrs": [
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "occludeLights",
+                        "active": {
+                            "cond": "::invisible!=0"
+                        }
+                    },
+                    {
+                        "name": "doubleSided"
+                    },
+                    {
+                        "name": "affectDiffuse"
+                    },
+                    {
+                        "name": "affectSpecular"
+                    },
+                    {
+                        "name": "affectReflections"
+                    },
+                    {
+                        "name": "affectAtmospherics"
+                    },
+                    {
+                        "name": "diffuse_contribution",
+                        "active": {
+                            "cond": "::affectDiffuse!=0"
+                        }
+                    },
+                    {
+                        "name": "specular_contribution",
+                        "active": {
+                            "cond": "::affectSpecular!=0;::affectReflections!=0"
+                        }
+                    },
+                    {
+                        "name": "atmospherics_contribution",
+                        "active": {
+                            "cond": "::affectAtmospherics!=0"
+                        }
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "shadows",
+                "label": "Shadows",
+                "attrs": [
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "shadowBias"
+                            },
+                            {
+                                "name": "shadowColor_colortex"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "photon emission",
+                "label": "Photon emission",
+                "attrs": [
+                    {
+                        "name": "causticSubdivs"
+                    },
+                    {
+                        "name": "causticMult"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "sampling",
+                "label": "Sampling",
+                "attrs": [
+                    {
+                        "name": "cutoffThreshold"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "decay",
+                "label": "Decay",
+                "attrs": [
+                    {
+                        "name": "decay_near_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_near_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_near_start"
+                            },
+                            {
+                                "name": "decay_near_end"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "decay_far_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_far_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_far_start"
+                            },
+                            {
+                                "name": "decay_far_end"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "texture",
+                "label": "Texture",
+                "attrs": [
+                    {
+                        "name": "cache_tex"
+                    },
+                    {
+                        "name": "tex_resolution",
+                        "active": {
+                            "cond": "::cache_tex!=0"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "transform"
+            },
+            {
+                "name": "pivot_offset"
+            },
+            {
+                "name": "geometry"
+            },
+            {
+                "name": "color_colortex"
+            },
+            {
+                "name": "shadowColor_colortex"
+            },
+            {
+                "name": "intensity_tex"
+            },
+            {
+                "name": "texture"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "channels_diffuse",
+            "channels_full",
+            "channels_raw",
+            "channels_specular",
+            "use_global_light_level",
+            "photonSubdivs",
+            "diffuseMult",
+            "subdivs",
+            "storeWithIrradianceMap",
+            "lightPortal",
+            "objectID",
+            "useMIS",
+            "user_attributes_bin",
+            "noDecay",
+            "map_channels",
+            "ignoreLightNormals"
+        ],
+        "animatable": true
+    }
+}

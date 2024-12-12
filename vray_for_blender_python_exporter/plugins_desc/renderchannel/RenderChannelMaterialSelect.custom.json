@@ -1,0 +1,81 @@
+{
+    "ID": "RenderChannelMaterialSelect",
+    "Subtype": "MATTE",
+    "Name": "Material Select", 
+    "BASE": "RenderChannelColor",
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        },
+        {
+            "attr": "alias",
+            "default": 6003
+        },
+        {
+            "attr": "selected",
+            "type": "TEMPLATE",
+            "desc": "List of materials to which to apply matte effect",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "args": {
+                        "collection": "materials",
+                        "filter_function": "filters.filterMaterials"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "name",
+            "default": "Material Select"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label" : "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_mapping"
+                    },
+                    {
+                        "name": "consider_for_aa"
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "derive_raw_channels"
+                    },
+                    {
+                        "name": "vfb_color_corrections"
+                    },
+                    {
+                        "name": "denoise"
+                    },
+                    {
+                        "name": "selected",
+                        "label": "Materials",
+                        "list_label": "Material List",
+                        "draw_container": "ROLLOUT"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false
+    }
+}

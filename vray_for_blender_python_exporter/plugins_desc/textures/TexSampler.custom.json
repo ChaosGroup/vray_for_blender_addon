@@ -1,0 +1,35 @@
+{
+    "Name": "V-Ray Sampler",
+    "Subtype": "UTILITY",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "uv_set_name"
+                    },
+                    {
+                        "name": "uv_index"
+                    },
+                    {
+                        "name": "refraction_ior"
+                    },
+                    {
+                        "name": "transform"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node":{
+        "input_sockets":[]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "gpu_adaptive_lights_voxels"
+        ]
+    }
+}

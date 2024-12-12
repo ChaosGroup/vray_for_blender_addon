@@ -1,0 +1,43 @@
+{
+    "ID": "PhxShaderSim",
+    "Type": "EFFECT",
+    "Parameters": [
+        {
+            "attr": "absorption_color",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "absorption_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "absorption_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "absorption_color",
+            "tex_prop": "absorption_tex",
+            "ui": {
+                "display_name": "Absorption Color"
+            },
+            "desc": "Absorption Color",
+            "default": [
+                0.375,
+                0.375,
+                0.375
+            ]
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "absorption_color",
+            "absorption_tex"
+        ]
+    },
+    "excluded_parameters": [
+        "absorption_color",
+        "absorption_tex"
+    ]
+}

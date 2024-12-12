@@ -1,0 +1,15 @@
+{
+    "ID": "FilterArea",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "FilterLanczos",
+    "ID" : "FilterLanczos",
+    "Name" : "Filter Lanczos",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 1.50,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

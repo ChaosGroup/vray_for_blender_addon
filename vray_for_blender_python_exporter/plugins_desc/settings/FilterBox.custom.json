@@ -1,0 +1,15 @@
+{
+    "ID": "FilterBox",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

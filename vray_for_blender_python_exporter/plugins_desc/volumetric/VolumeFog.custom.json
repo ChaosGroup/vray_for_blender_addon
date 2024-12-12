@@ -1,0 +1,68 @@
+{
+    "ID": "VolumeFog",
+    "Name": "V-Ray Volume Fog",
+    "Type": "EFFECT",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "desc": "Defines the color of the fog when it is illuminated by light sources.",
+            "default": [
+                0.5,
+                0.5,
+                0.5
+            ]
+        }
+    ],
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "emission",
+                "label": "Emission"
+            },
+            {
+                "name": "color_colortex",
+                "label": "Color"
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "closed_volume"
+                    },
+                    {
+                        "name": "emission",
+                        "label": "Emission"
+                    },
+                    {
+                        "name": "color_colortex",
+                        "label": "Color"
+                    },
+                    {
+                        "name": "color_mult",
+                        "label": "Color multiplier"
+                    },
+                    {
+                        "name": "ior",
+                        "label": "IOR"
+                    },
+                    {
+                        "name": "bias"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "color",
+            "color_tex"
+        ]
+    }
+}

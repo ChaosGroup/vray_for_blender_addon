@@ -1,0 +1,27 @@
+
+{
+    "ID" : "SettingsEnvironment",
+    "Parameters" : 
+    [
+        {
+            "attr" : "bg_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ]
+        },
+        {
+            "attr" : "gi_tex",
+            "default" : [ 0.8, 0.9, 1.0, 1.0 ]
+        },
+        {
+            "attr" : "reflect_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ]
+        },
+        {
+            "attr" : "refract_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ]
+        },
+        {
+            "attr" : "secondary_matte_tex",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ]
+        }
+    ]
+}

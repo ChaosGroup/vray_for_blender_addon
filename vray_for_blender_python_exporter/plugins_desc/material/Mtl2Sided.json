@@ -1,0 +1,102 @@
+
+{
+    "Desciption" : "Mtl2Sided",
+    "ID" : "Mtl2Sided",
+    "Name" : "Mtl 2 Sided",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "front",
+            "default" : null,
+            "desc" : "The material for the surface on the same side as the normal",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "Parameters",
+                "tab" : "V-Ray 2-Sided Material"
+            }
+        },
+        
+        {
+            "attr" : "back",
+            "default" : null,
+            "desc" : "The material for the side that is opposite the surface normal",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "translucency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Translucency between front and back",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "translucency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Translucency texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Translucency texture"
+            }
+        },
+        
+        {
+            "attr" : "translucency_tex_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the translucency texture",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Translucency texture multiplier",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "force_1sided",
+            "default" : true,
+            "desc" : "True to make the sub-materials one-sided",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Force single-sided sub-materials"
+            }
+        },
+        
+        {
+            "attr" : "mult_by_front_diffuse",
+            "default" : false,
+            "desc" : "True to multiply the back side color by the cached diffuse color of the front BRDF",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Multiply by front diffuse"
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

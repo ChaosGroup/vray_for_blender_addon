@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "MayaMtlMatte",
+    "ID" : "MayaMtlMatte",
+    "Name" : "Maya Mtl Matte",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "mode",
+            "default" : "2",
+            "desc" : "The matte mode (0 - black hole; 1 - solid matte; 2 - opacity gain; 3 - solid alpha)",
+            "items" : 
+            [
+                [ "0", "Black hole", "Black hole" ],
+                [ "1", "Solid matte", "Solid matte" ],
+                [ "2", "Opacity gain", "Opacity gain" ],
+                [ "3", "Solid alpha", "Solid alpha" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "base_mtl",
+            "default" : null,
+            "desc" : "Base material",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "matte_opacity",
+            "default" : 0.0,
+            "desc" : "Matte opacity (0 is transparent; 1 is opaque or normal)",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "alpha_transparency",
+            "default" : 0.0,
+            "desc" : "Alpha transparency (used only in mode 3)",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

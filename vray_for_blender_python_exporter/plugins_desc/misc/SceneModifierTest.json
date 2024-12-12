@@ -1,0 +1,53 @@
+
+{
+    "Desciption" : "SceneModifierTest",
+    "ID" : "SceneModifierTest",
+    "Name" : "Scene Modifier Test",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "particle_scene",
+            "default" : "",
+            "desc" : "The particle .vrscene",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrscene" ],
+                "file_names" : [ "V-Ray scene" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "proxy_scene",
+            "default" : "",
+            "desc" : "The proxy .vrscene",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrscene" ],
+                "file_names" : [ "V-Ray scene" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "material_scene",
+            "default" : "",
+            "desc" : "The material .vrscene",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrscene" ],
+                "file_names" : [ "V-Ray scene" ],
+                "file_op" : "load"
+            }
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

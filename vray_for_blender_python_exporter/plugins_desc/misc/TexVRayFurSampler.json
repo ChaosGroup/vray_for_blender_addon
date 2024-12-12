@@ -1,0 +1,54 @@
+
+{
+    "Desciption" : "TexVRayFurSampler",
+    "ID" : "TexVRayFurSampler",
+    "Name" : "V Ray Fur Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "distance_along_strand",
+            "default" : 0.0,
+            "desc" : "Distance along the hair strand where the intersection occurred, in the [0,1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distance_along_strand_absolute",
+            "default" : 0.0,
+            "desc" : "Distance along the hair strand where the intersection occurred, in scene units, normalized to an absolute distance value",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "position_across_strand",
+            "default" : 0.0,
+            "desc" : "The relative position of the intersection across the hair strand width, in [0 1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "random_by_strand",
+            "default" : 0.0,
+            "desc" : "Random by the hair strand where the intersection occurred, in the [0,1] range",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fur_max_distance",
+            "default" : 1.0,
+            "desc" : "The maximum distance of strands, when using \"distance_along_strand_absolute\" (denominator)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

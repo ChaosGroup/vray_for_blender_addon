@@ -1,0 +1,21 @@
+
+{
+    "Desciption" : "FilterCookVariable",
+    "ID" : "FilterCookVariable",
+    "Name" : "Filter Cook Variable",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 3.0,
+            "desc" : "Filter width in pixels",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

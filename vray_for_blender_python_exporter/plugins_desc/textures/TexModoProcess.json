@@ -1,0 +1,63 @@
+
+{
+    "Desciption" : "TexModoProcess",
+    "ID" : "TexModoProcess",
+    "Name" : "Modo Process",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_texture",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "gain",
+            "default" : 0.50,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "hue",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "hueShift",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "sat",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "val",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

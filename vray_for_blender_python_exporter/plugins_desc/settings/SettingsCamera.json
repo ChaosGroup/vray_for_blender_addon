@@ -1,0 +1,222 @@
+
+{
+    "Desciption" : "SettingsCamera",
+    "ID" : "SettingsCamera",
+    "Name" : "Settings Camera",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "type",
+            "default" : "0",
+            "desc" : "Camera type: 0 - default, 1 - spherical, 2 - cylindrical point, 3 - cylindrical ortho, 4 - box, 5 - fish-eye, 6 - warped spherical, 7 - orthogonal, 8 - pinhole, 9 - spherical panorama, 10 - cube 6x1",
+            "items" : 
+            [
+                [ "0", "Standard", "Standard" ],
+                [ "1", "Spherical", "Spherical" ],
+                [ "2", "Cylindrical (point)", "Cylindrical (point)" ],
+                [ "3", "Cylindrical (ortho)", "Cylindrical (ortho)" ],
+                [ "4", "Box", "Box" ],
+                [ "5", "Fish eye", "Fish eye" ],
+                [ "6", "Warped spherical", "Warped spherical" ],
+                [ "7", "Orthogonal", "Orthogonal" ],
+                [ "8", "Pinhole", "Pinhole" ],
+                [ "9", "Spherical panorama", "Spherical panorama" ],
+                [ "10", "Cube 6x1", "Cube 6x1" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Camera type"
+            }
+        },
+        
+        {
+            "attr" : "height",
+            "default" : 400.0,
+            "desc" : "Height of the cylindrical (ortho) camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Height",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dist",
+            "default" : 2.0,
+            "desc" : "Applies only to fish-eye camera. Controls distance to the sphere center",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Distance",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fov",
+            "default" : 0.7853981852531433,
+            "desc" : "Field of view; if negative, the field of view will not be modified",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "FOV",
+                "max" : 6.283185482025146,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "auto_fit",
+            "default" : true,
+            "desc" : "The auto-fit option of the fish-eye camera",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto-fit"
+            }
+        },
+        
+        {
+            "attr" : "curve",
+            "default" : 1.0,
+            "desc" : "Controls the way the rendered images is warped. Applies only to fish-eye camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Curve",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a SettingsCamera node from affecting the main VRayRenderer sequence and frame data",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Don't affect settings"
+            }
+        },
+        
+        {
+            "attr" : "image_planes",
+            "default" : null,
+            "desc" : "Used only to force a re-export of the image plane geometry in RT rendering",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_corrections_mode",
+            "default" : "0",
+            "desc" : "Determine when to apply auto-exposure and auto-white balance (0 - only if the camera has no exposure; 1 - all cameras)",
+            "items" : 
+            [
+                [ "0", "Cameras without exposure only", "Cameras without exposure only" ],
+                [ "1", "All cameras", "All cameras" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_exposure",
+            "default" : "0",
+            "desc" : "Auto exposure mode (0 - disabled; 1 - center-weighted average (original V-Ray algorithm); 2 - histogram). This feature requires light cache GI",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Center-weighted average", "Center-weighted average" ],
+                [ "2", "Histogram", "Histogram" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_white_balance",
+            "default" : "0",
+            "desc" : "Auto-white balance mode (0 - disabled; 1 - temperature; 2 - RGB). This feature requires light cache GI",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Temperature", "Temperature" ],
+                [ "2", "RGB", "RGB" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_exposure_compensation",
+            "default" : 0.0,
+            "desc" : "Additional compensation for the auto-exposure value, in f-stops. A value of 1.0 makes the result twice as bright, and -1.0 makes it twice as dark",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_white_balance_sample_accumulation_mode",
+            "default" : "0",
+            "desc" : "The type of auto white balance sample accumulation heuristic. (0 - Weighted average (original VRay algorithm); 1 - Simple average; 2 - All RGB components greater than 1). This feature requires light cache GI and enabled auto white balance",
+            "items" : 
+            [
+                [ "0", "Weighted average", "Weighted average" ],
+                [ "1", "Simple average", "Simple average" ],
+                
+                [
+                    "2",
+                    "All RGB components greater than 1",
+                    "All RGB components greater than 1"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "The original scene name of the camera associated with the plugin",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Scene name"
+            }
+        },
+        
+        {
+            "attr" : "override_resolution",
+            "default" : false,
+            "desc" : "Controls resolution override",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "override_width",
+            "default" : 640,
+            "desc" : "Resolution override widthgpuSupport=(full)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "override_height",
+            "default" : 480,
+            "desc" : "Resolution override heightgpuSupport=(full)",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

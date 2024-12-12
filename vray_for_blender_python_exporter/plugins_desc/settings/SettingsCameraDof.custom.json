@@ -1,0 +1,40 @@
+{
+    "ID": "SettingsCameraDof",
+    "Parameters": [
+        {
+            "attr": "focus_from_camera",
+            "type": "BOOL",
+            "default": false,
+            "desc": "Get Focus Distance From Camera",
+            "name": "Get Focus Distance From Camera",
+            "available": [
+                "HOUDINI"
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "subdivs",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "focal_dist",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Type": "CAMERA",
+    "Options": {
+        "excluded_parameters": [
+            "subdivs"
+        ],
+        "animatable": false
+    },
+    "excluded_parameters": [
+        "subdivs"
+    ]
+}

@@ -1,0 +1,45 @@
+
+{
+    "Desciption" : "BSDFPointParticle",
+    "ID" : "BSDFPointParticle",
+    "Name" : "Point Particle",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "diffuse_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Diffuse color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "V-Ray Point Particle Material",
+                "tab" : "V-Ray Point Particle Material"
+            }
+        },
+        
+        {
+            "attr" : "use_particle_color",
+            "default" : false,
+            "desc" : "true to render the particle colors instead of using the diffuse color",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "phase_function",
+            "default" : 0.0,
+            "desc" : "Parameter used to determine the phase function of the brdf",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

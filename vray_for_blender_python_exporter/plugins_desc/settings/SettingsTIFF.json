@@ -1,0 +1,38 @@
+
+{
+    "Desciption" : "SettingsTIFF",
+    "ID" : "SettingsTIFF",
+    "Name" : "Settings TIFF",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bits_per_channel",
+            "default" : "32",
+            "desc" : "Bits per channel (8, 16 bit fixed or 32-bit floating point)",
+            "items" : 
+            [
+                [ "8", "8 bits", "8 bits" ],
+                [ "16", "16 bits", "16 bits" ],
+                [ "32", "32 bits", "32 bits" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "interleaved",
+            "default" : false,
+            "desc" : "If true, the TIFF color channels will be written interleaved (RGBRGB instead of RRGGBB)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Interleaved Color Channels"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

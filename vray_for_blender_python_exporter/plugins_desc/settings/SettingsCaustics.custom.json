@@ -1,0 +1,145 @@
+{
+    "ID": "SettingsCaustics",
+    "Parameters": [
+        {
+            "attr": "on",
+            "update": "onCausticsEnabled"
+        },
+        {
+            "attr": "mode",
+            "desc": "Specifies the way the caustics photon map is calculated (0 - New map, 1 - From file, 2 - Progressive). Forced to 'Progressive' during IPR"
+        },
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "auto_save_file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "search_distance_units",
+            "default": "0"
+        },
+        {
+            "attr": "search_distance",
+            "default": 0.05
+        },
+        {
+            "attr": "search_distance_pixels",
+            "default": 1
+        },
+        {
+            "attr": "max_photons",
+            "default": 60
+        },
+        {
+            "attr": "show_calc_phase",
+            "default": false
+        },
+        {
+            "attr": "search_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "max_density",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "mode"
+                    }
+                ],
+                "layout": "ROW"
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "layout": "COLUMN",
+                "align": true,
+                "attrs": [
+                    {
+                        "name": "search_distance_units"
+                    },
+                    {
+                        "name": "search_distance",
+                        "visible": {
+                            "cond": "::search_distance_units=1"
+                        }
+                    },
+                    {
+                        "name": "search_distance_pixels",
+                        "visible": {
+                            "cond": "::search_distance_units=0"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "active": {
+                    "cond": "::mode=0"
+                },
+                "layout": "COLUMN",
+                "align": true,
+                "attrs": [
+                    {
+                        "name": "multiplier"
+                    },
+                    {
+                        "name": "max_photons"
+                    },
+                    {
+                        "name": "max_density"
+                    }
+                ]
+            },
+            {
+                "layout": "SEPARATOR"
+            },
+            {
+                "attrs": [
+                    {
+                        "active": {
+                            "cond": "::mode=1"
+                        },
+                        "name": "file"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "auto_save",
+                        "active": {
+                            "cond": "::mode!=2"
+                        }
+                    },
+                    {
+                        "active": {
+                            "cond": "::auto_save=1"
+                        },
+                        "name": "auto_save_file"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

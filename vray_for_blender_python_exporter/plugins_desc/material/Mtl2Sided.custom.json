@@ -1,0 +1,78 @@
+{
+    "ID": "Mtl2Sided",
+    "Name": "V-Ray Mtl 2Sided",
+    "Parameters": [
+        {
+            "attr": "translucency",
+            "options": {
+                "visible": false
+            },
+            "default": [
+                0.5,
+                0.5,
+                0.5
+            ]
+        },
+        {
+            "attr": "translucency_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "translucency_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "translucency",
+            "tex_prop": "translucency_tex",
+            "ui": {
+                "attributes": [],
+                "display_name": "Translucency"
+            },
+            "desc": "Translucency between front and back",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "channels"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "translucency_colortex",
+                        "label": "Translucency"
+                    },
+                    {
+                        "name": "translucency_tex_mult",
+                        "label": "Translucency strength"
+                    },
+                    {
+                        "name": "force_1sided"
+                    },
+                    {
+                        "name": "mult_by_front_diffuse"
+                    },
+                    {
+                        "name": "channels"
+                    }
+                ]
+            }
+        ]
+    },
+    "excluded_parameters": [
+        "translucency_tex",
+        "translucency"
+    ]
+}

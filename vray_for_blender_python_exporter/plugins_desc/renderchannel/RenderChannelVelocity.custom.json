@@ -1,0 +1,42 @@
+{
+    "ID": "RenderChannelVelocity",
+    "Name" : "Velocity",
+    "Subtype" : "GEOMETRY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "clamp_velocity"
+                    },
+                    {
+                        "name": "max_velocity"
+                    },
+                    {
+                        "name": "max_velocity_last_frame"
+                    },
+                    {
+                        "name": "ignore_z"
+                    },
+                    {
+                        "name": "filtering"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

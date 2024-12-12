@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexScalarExponential",
+    "ID" : "TexScalarExponential",
+    "Name" : "Scalar Exponential",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0.0,
+            "desc" : "The value used in the operation",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "factor",
+            "default" : 0.0,
+            "desc" : "The factor to be used in the operation",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "operation",
+            "default" : "0",
+            "desc" : "The operation: 0=Exponential, 1=Logarithm, 2=Bias, 3=Gain",
+            "items" : 
+            [
+                [ "0", "Exponential", "Exponential" ],
+                [ "1", "Logarithm", "Logarithm" ],
+                [ "2", "Bias", "Bias" ],
+                [ "3", "Gain", "Gain" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

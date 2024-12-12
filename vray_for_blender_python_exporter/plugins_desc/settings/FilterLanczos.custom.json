@@ -1,0 +1,23 @@
+{
+    "ID": "FilterLanczos",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "size",
+            "default" : 2.0
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

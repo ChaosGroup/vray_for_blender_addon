@@ -1,0 +1,185 @@
+{
+    "ID": "MtlWrapper",
+    "Name": "V-Ray Mtl Wrapper",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Use Wrapper material",
+            "name": "Use",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_generate_gi",
+            "name": "Generate GI",
+            "desc": "Enable GI generation",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_receive_gi",
+            "name": "Receive GI",
+            "desc": "Enable receiving GI",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_generate_caustics",
+            "name": "Generate Caustics",
+            "desc": "Enable caustics generation",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_receive_caustics",
+            "name": "Receive Caustics",
+            "desc": "Enable receiving caustics",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Node": {
+        "input_sockets" : [
+            {"name": "base_material"}
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "matte_properties",
+                "label": "Matte properties",
+                "attrs": [
+                    {
+                        "name": "matte_surface"
+                    },
+                    {
+                        "name": "alpha_contribution"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {"cond": "::matte_surface!=0"},
+                        "attrs": [
+                            {
+                                "name": "shadows"
+                            },
+                            {
+                                "name": "affect_alpha"
+                            },
+                            {
+                                "name": "shadow_tint_color"
+                            },
+                            {
+                                "name": "shadow_brightness"
+                            },
+                            {
+                                "name": "reflection_amount"
+                            },
+                            {
+                                "name": "refraction_amount"
+                            },
+                            {
+                                "name": "gi_amount"
+                            },
+                            {
+                                "name": "no_gi_on_other_mattes"
+                            },
+                            {
+                                "name": "matte_for_secondary_rays"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "additional_surface_properties",
+                "label": "Additional surface properties",
+                "attrs": [
+                    {
+                        "name": "use_irrad_map"
+                    },
+                    {
+                        "name": "use_generate_gi"
+                    },
+                    {
+                        "name": "generate_gi",
+                        "active": {"cond": "::use_generate_gi!=0"}
+                    },
+                    {
+                        "name": "use_receive_gi"
+                    },
+                    {
+                        "name": "receive_gi",
+                        "active": {"cond": "::use_receive_gi!=0"}
+                    },
+                    {
+                        "name": "use_generate_caustics"
+                    },
+                    {
+                        "name": "generate_caustics",
+                        "active": {"cond": "::use_generate_caustics!=0"}
+                    },
+                    {
+                        "name": "use_receive_caustics"
+                    },
+                    {
+                        "name": "receive_caustics",
+                        "active": {"cond": "::use_receive_caustics!=0"}
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "miscellaneous",
+                "label": "Miscellaneous",
+                "attrs": [
+                    {
+                        "name": "gi_surface_id"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "base_material",
+                "type": "BRDF",
+                "label": "Base material"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "gi_quality_multiplier",
+            "maya_background_shader_compatibility",
+            "alpha_contribution_tex",
+            "shadow_brightness_tex",
+            "reflection_filter_tex",
+            "trace_depth",
+            "channels",
+            "generate_render_elements",
+            "reflection_exclude",
+            "reflection_list_is_inclusive",
+            "refraction_exclude",
+            "refraction_list_is_inclusive"
+        ],
+        "animatable": true
+    }
+}

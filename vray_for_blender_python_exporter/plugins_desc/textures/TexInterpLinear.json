@@ -1,0 +1,49 @@
+
+{
+    "Desciption" : "TexInterpLinear",
+    "ID" : "TexInterpLinear",
+    "Name" : "Interp Linear",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input",
+            "default" : 0.0,
+            "desc" : "scalar value to be remapped",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "oldrange_min",
+            "default" : 0.0,
+            "desc" : "start of the current range of values",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "oldrange_max",
+            "default" : 0.0,
+            "desc" : "end of the current range of values",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "newrange_min",
+            "default" : 0.0,
+            "desc" : "start of the new range of values",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "newrange_max",
+            "default" : 0.0,
+            "desc" : "end of the new range of values",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

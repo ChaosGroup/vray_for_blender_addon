@@ -1,0 +1,13 @@
+{
+    "ID": "SphericalHarmonicsExporter",
+    "Parameters": [
+        {
+            "attr": "file_name",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

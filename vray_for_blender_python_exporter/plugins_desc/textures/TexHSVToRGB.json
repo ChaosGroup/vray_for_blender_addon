@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexHSVToRGB",
+    "ID" : "TexHSVToRGB",
+    "Name" : "HSV To RGB",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "inHsv",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

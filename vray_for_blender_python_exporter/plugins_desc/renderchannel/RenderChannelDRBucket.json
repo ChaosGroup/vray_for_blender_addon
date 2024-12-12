@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "RenderChannelDRBucket",
+    "ID" : "RenderChannelDRBucket",
+    "Name" : "Render Channel DR Bucket",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "DR",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "text_alignment",
+            "default" : "1",
+            "desc" : "Alignment for the text inside the buckets (1 - Right, 2 - Left, 3 - Wrap)",
+            "items" : 
+            [
+                [ "1", "Right", "Right" ],
+                [ "2", "Left", "Left" ],
+                [ "3", "Wrap", "Wrap" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

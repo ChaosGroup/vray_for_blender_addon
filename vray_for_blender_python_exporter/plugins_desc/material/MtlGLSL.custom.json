@@ -1,0 +1,62 @@
+{
+    "ID": "MtlGLSL",
+    "Name": "V-Ray Mtl GLSL",
+    "Parameters": [
+        {
+            "attr" : "shader_file",
+            "subtype" : "FILE_PATH"
+        },
+        {
+            "attr": "transparency_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "transparency",
+            "tex_prop": "transparency_tex",
+            "ui": {
+                "attributes": []
+            },
+            "desc": "",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": true
+    },
+    "Node": {
+        "input_sockets": [
+            {"name": "shader_file"}
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "shader_file"
+                    },
+                    {
+                        "name": "max_ray_depth"
+                    },
+                    {
+                        "name": "clamp_result"
+                    },
+                    {
+                        "name": "clamp_value",
+                        "active": {"cond": "::clamp_result!=0"}
+                    },
+                    {
+                        "name": "use_shader_alpha"
+                    },
+                    {
+                        "name": "transparency_colortex"
+                    }
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,30 @@
+
+{
+    "Desciption" : "PhxShaderSimMesh",
+    "ID" : "PhxShaderSimMesh",
+    "Name" : "Phx Shader Sim Mesh",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "phoenix_sim",
+            "default" : null,
+            "desc" : "A plugin that supports PhoenixSimInterface and can be used to load a Phoenix frame",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "static_mesh",
+            "default" : null,
+            "desc" : "The geometry used by the mesher",
+            "type" : "PLUGIN",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

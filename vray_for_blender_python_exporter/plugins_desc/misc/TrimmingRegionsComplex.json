@@ -1,0 +1,38 @@
+
+{
+    "Desciption" : "TrimmingRegionsComplex",
+    "ID" : "TrimmingRegionsComplex",
+    "Name" : "Trimming Regions Complex",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "count",
+            "default" : 0,
+            "desc" : "List containing information about the number of regions, number of boundaries within them, number of curves for a boundary, the curves' number of cvs, knots and degree:\n<count_parameter> := numRegions <region_0> <region_1> ... <region_(numRegions - 1)>\n<region_n> := <boundary_0> <boundary_1> ... <boundary_last> -1\n<boundary_n> := { 0 | 1 } numEdges <edge_0> <edge_1> ... <edge_(numEdges - 1)> // 0 - inner boundary (i.e. hole), 1 - outer boundary (i.e. island)\n<edge_n> := <curve_0> <curve_1> ... <curve_last> -1\n<curve_n> := numCVs numKnots degree",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "cvs",
+            "default" : 0.0,
+            "desc" : "List containg pairs of (u, v) coordinates of control vertices for all the curves",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "knots",
+            "default" : 0.0,
+            "desc" : "List containing the knot values for all the curves",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,173 @@
+{
+    "ID": "SettingsLightCache",
+    "Parameters": [
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "auto_save_file",
+            "default": "//auto_save_cache.vrlamp",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr" : "auto_save",
+            "default" : false
+        },
+        {
+            "attr": "subdivs",
+            "default": 1000
+        },
+        {
+            "attr": "num_passes_auto",
+            "default": true,
+            "desc": "Set number of passes to threads number",
+            "name": "Auto Num. Passes",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "filter",
+            "default": true,
+            "desc": "",
+            "name": "Filter",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "use_for_glossy_rays",
+            "default": true,
+            "desc": "True if the light cache should be used to estimate GI for glossy rays, instead of the primary GI engine",
+            "type": "BOOL",
+            "ui": {
+                "display_name": "Use for glossy rays"
+            }
+        },
+        {
+            "attr": "premultiplied",
+            "default": true,
+            "desc": "true to use premultiplied light cache when possible",
+            "type": "BOOL",
+            "ui": {
+                "display_name": "Premultiplied"
+            }
+        },
+        {
+            "attr": "mode",
+            "default": "0",
+            "desc": "Specifies the way the light cache is calculated (Single Frame, From File)",
+            "items": [
+                [
+                    "0",
+                    "Single Frame",
+                    "Single Frame"
+                ],
+                [
+                    "2",
+                    "From File",
+                    "From File"
+                ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Mode"
+            }
+        },
+        {
+            "attr": "retrace_enabled",
+            "default": true,
+            "ui": {
+                "display_name": "Use Retrace Threshold"
+            }
+        },
+        {
+            "attr": "retrace_threshold",
+            "default": 2.0
+        },
+        {
+            "attr": "sample_size",
+            "ui": {
+                "display_name": "Sample Size",
+                "max": 1000000000.0,
+                "min": 0.0
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "auto_save"
+                    },
+                    {
+                        "name": "auto_save_file"
+                    },
+                    {
+                        "name": "depth"
+                    },
+                    {
+                        "name": "dont_delete"
+                    },
+                    {
+                        "name": "file"
+                    },
+                    {
+                        "name": "filter"
+                    },
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "name": "multiple_views"
+                    },
+                    {
+                        "name": "num_passes"
+                    },
+                    {
+                        "name": "num_passes_auto"
+                    },
+                    {
+                        "name": "retrace_enabled"
+                    },
+                    {
+                        "name": "retrace_threshold"
+                    },
+                    {
+                        "name": "sample_size"
+                    },
+                    {
+                        "name": "show_calc_phase"
+                    },
+                    {
+                        "name": "store_direct_light"
+                    },
+                    {
+                        "name": "subdivs"
+                    },
+                    {
+                        "name": "use_for_glossy_rays"
+                    },
+                    {
+                        "name": "world_scale"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "filter_type",
+            "filter_samples",
+            "filter_size",
+            "prefilter",
+            "prefilter_samples"
+        ],
+        "animatable": false
+    }
+}

@@ -1,0 +1,568 @@
+
+{
+    "Desciption" : "GeomHair",
+    "ID" : "GeomHair",
+    "Name" : "Geom Hair",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "mesh",
+            "default" : null,
+            "desc" : "The triangle mesh that will have hairs generated on it",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "length_base",
+            "default" : 100.0,
+            "desc" : "The base hair length",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Length",
+                "min" : 0.0,
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "thickness_base",
+            "default" : 0.009999999776482582,
+            "desc" : "The base hair thickness",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Thickness",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gravity_base",
+            "default" : 10.0,
+            "desc" : "The base gravity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gravity"
+            }
+        },
+        
+        {
+            "attr" : "gravity_vector",
+            "default" : [ 0.0, 1.0, 0.0 ],
+            "desc" : "The gravity force direction vector",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "display_name" : "Gravity vector"
+            }
+        },
+        
+        {
+            "attr" : "bend",
+            "default" : 0.0,
+            "desc" : "The amount of hair bending",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Bend",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "taper",
+            "default" : 0.0,
+            "desc" : "The amount of taper applied to hairs",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Taper",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "Fur scaling factor",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fur scale",
+                "min" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "dir_var",
+            "default" : 0.0,
+            "desc" : "The direction variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Direction var.",
+                "min" : 0.0,
+                "rollout" : "Variation"
+            }
+        },
+        
+        {
+            "attr" : "length_var",
+            "default" : 0.0,
+            "desc" : "The hair length variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Length var.",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "thickness_var",
+            "default" : 0.0,
+            "desc" : "The hair thickness variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Thickness var.",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gravity_var",
+            "default" : 0.0,
+            "desc" : "The gravity variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Gravity var.",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "curl_radius_var",
+            "default" : 0.0,
+            "desc" : "The curl radius variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Curl radius var.",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "curl_enabled",
+            "default" : false,
+            "desc" : "True if curl should be applied to the hair",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Curl",
+                "rollout" : "Curl"
+            }
+        },
+        
+        {
+            "attr" : "curl_radius",
+            "default" : 0.0,
+            "desc" : "The radius of the curls",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Curl radius",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "curl_angle",
+            "default" : 0.0,
+            "desc" : "The angle of the curl applied at each knot",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Number of curls",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "hair_sides",
+            "default" : 3,
+            "desc" : "Number of segments along the circumference of a single hair",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "hair_knots",
+            "default" : 8,
+            "desc" : "Number of segments along the length of a single hair",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Knots",
+                "max" : 128,
+                "min" : 2,
+                "rollout" : "Geometric Detail"
+            }
+        },
+        
+        {
+            "attr" : "lod_enabled",
+            "default" : false,
+            "desc" : "Level of detail toggle. Enables detail decrease along distance form the camera",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Level of detail"
+            }
+        },
+        
+        {
+            "attr" : "lod_startDistance",
+            "default" : 1000.0,
+            "desc" : "Level of detail starting distance. The distance from wich the effect is applied",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "LOD start distance",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lod_rate",
+            "default" : 1000.0,
+            "desc" : "Level of detail rate. Rate of decrease. The distance to reach half the hairs count with twice the thickness",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "LOD rate",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "tessellation_on",
+            "default" : false,
+            "desc" : "Tessellate hair with respect to the camera position",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tessellation_edge_length",
+            "default" : 4.0,
+            "desc" : "Hair tessellation edge length in pixels",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "faceList",
+            "default" : 0,
+            "desc" : "A list of face indices that will have hair generated on them. If NULL all faces will have hair on them",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distribution",
+            "default" : "0",
+            "desc" : "0 : per face; 1 : per area",
+            "items" : 
+            [
+                [ "0", "Per face", "Per face" ],
+                [ "1", "Per area", "Per area" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Distribution"
+            }
+        },
+        
+        {
+            "attr" : "perFace",
+            "default" : 10,
+            "desc" : "Number of hairs per face if distribution==0",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Hairs per face",
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "perArea",
+            "default" : 10.0,
+            "desc" : "Number of hairs per unit area if distribution==1",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Hairs per unit area",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fixed_areas",
+            "default" : 0,
+            "desc" : "True if areaList should be used to determine the number of hairs when distribution is 'per area'",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Fixed areas"
+            }
+        },
+        
+        {
+            "attr" : "areaList",
+            "default" : 0.0,
+            "desc" : "A list of triangle surface areas. An element here corresponds to an element in faceList, if faceList is not NULL",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flat_normals",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Flat Normals",
+                "rollout" : "Misc"
+            }
+        },
+        
+        {
+            "attr" : "override_mtlID_on",
+            "default" : false,
+            "desc" : "Material ID will be overriden",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Override material ID"
+            }
+        },
+        
+        {
+            "attr" : "override_mtlID",
+            "default" : 0,
+            "desc" : "The override material ID",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Material ID"
+            }
+        },
+        
+        {
+            "attr" : "ignore_base_mesh_displacement",
+            "default" : false,
+            "desc" : "If false, fur will be displaced via using the parent mesh displacement map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "placement",
+            "default" : "0",
+            "desc" : "The type of placement of the fur on the mesh. The possible values are 0 : Entire Object, 1 : Selected Faces, 2 : Material ID",
+            "items" : 
+            [
+                [ "0", "Entire Object", "Entire Object" ],
+                [ "1", "Selected Faces", "Selected Faces" ],
+                [ "2", "Material ID", "Material ID" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtlID",
+            "default" : 0,
+            "desc" : "Material ID of the faces of the mesh. This is only valid if the placement is by material ID",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mtlIDList",
+            "default" : 0,
+            "desc" : "A list of material IDs, if not empty will be used in place of the 'mtlID' parameter",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "generate_w_coord",
+            "default" : true,
+            "desc" : "If true, V-Ray will generate a W mapping coordinate that represents the position of the shaded point along the hair strands",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "map_channel",
+            "default" : 0,
+            "desc" : "Map channel to derive the uv space from",
+            "type" : "INT",
+            "ui" : 
+            {
+                "rollout" : "Textures"
+            }
+        },
+        
+        {
+            "attr" : "bend_direction_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A texture for the bend direction of hair strands",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Bend direction texture"
+            }
+        },
+        
+        {
+            "attr" : "initial_direction_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A texture for the initial direction of hair strands",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Initial direction texture"
+            }
+        },
+        
+        {
+            "attr" : "length_tex",
+            "default" : 0.0,
+            "desc" : "A texture for the length",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Length texture"
+            }
+        },
+        
+        {
+            "attr" : "thickness_tex",
+            "default" : 0.0,
+            "desc" : "A texture for the thickness",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Thickness texture"
+            }
+        },
+        
+        {
+            "attr" : "gravity_tex",
+            "default" : 0.0,
+            "desc" : "A texture for the gravity",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Gravity texture"
+            }
+        },
+        
+        {
+            "attr" : "bend_tex",
+            "default" : 0.0,
+            "desc" : "A texture for the bend",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Bend texture"
+            }
+        },
+        
+        {
+            "attr" : "density_tex",
+            "default" : 0.0,
+            "desc" : "A texture for the density",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Density texture"
+            }
+        },
+        
+        {
+            "attr" : "curl_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Curl texture"
+            }
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,52 @@
+
+{
+    "ID" : "SettingsDefaultDisplacement",
+    "Parameters" : [
+        {
+            "attr": "maxSubdivs",
+            "default": 128
+        },
+        {
+            "attr" : "external_min_hair_width",
+            "default" : 0.0,
+            "desc": "This is a property of SettingsHair which needs to show in the same UI section as the displacement settings",
+            "type" : "FLOAT",
+            "options": {
+                "derived": true
+            }
+        }
+
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : [
+            {
+                "layout": "ROLLOUT",
+                "name": "geometry",
+                "label": "Geometry",
+                "attrs": [
+                    {
+                        "name": "edgeLength"
+                    },
+                    {
+                        "name": "maxSubdivs"
+                    },
+                    {
+                        "name": "viewDependent"
+                    },
+                    {
+                        "name": "tightBounds"
+                    },
+                    {
+                        "name": "relative"
+                    },
+                    {
+                        "name": "external_min_hair_width",
+                        "custom_draw": "widgetDrawMinHairWidth"
+                    }
+                ]
+            }
+        ]
+    }
+}

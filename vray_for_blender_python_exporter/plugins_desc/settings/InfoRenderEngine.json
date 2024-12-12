@@ -1,0 +1,77 @@
+
+{
+    "Desciption" : "InfoRenderEngine",
+    "ID" : "InfoRenderEngine",
+    "Name" : "Info Render Engine",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "engine_type",
+            "default" : "",
+            "desc" : "Rendering platform identifier: cpu/cuda/rtx",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "version",
+            "default" : "",
+            "desc" : "Automatically set! Do not set from the integration yourself! V-Ray core version currently formatted as <Major>.<Minor>0.<Branch><Hotfix>",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "build",
+            "default" : "",
+            "desc" : "Automatically set! Do not set from the integration yourself! Source control revision (git hash)",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "build_number",
+            "default" : "",
+            "desc" : "Automatically set! Do not set from the integration yourself! 5-digit build number, e.g. 31234",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "build_date",
+            "default" : "",
+            "desc" : "Automatically set! Do not set from the integration yourself! Format: YYYY-MM-DD HH:MM GMT",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "exporter_version",
+            "default" : "",
+            "desc" : "The version of the V-Ray integration, formatted as <Major>.<Minor>0.<Branch><Hotfix>",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "build_mod",
+            "default" : "",
+            "desc" : "The build modification string: ADV/EDU/PLE. ADV is assumed if blank/missing",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "host",
+            "default" : "",
+            "desc" : "Host application like \"3ds Max\", \"Maya\"",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "host_version",
+            "default" : "",
+            "desc" : "Host application version as string",
+            "type" : "STRING"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

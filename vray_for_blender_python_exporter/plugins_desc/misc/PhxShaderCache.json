@@ -1,0 +1,343 @@
+
+{
+    "Desciption" : "PhxShaderCache",
+    "ID" : "PhxShaderCache",
+    "Name" : "Phx Shader Cache",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "cache_path",
+            "default" : "",
+            "desc" : "Input Cache Path",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Input Cache File",
+                "file_extensions" : [ "vdb", "f3d", "aur" ],
+                "file_names" : [ "OpenVDB", "Field3D", "Phoenix FD" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "cache_load",
+            "default" : true,
+            "desc" : "deprecated",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocities_from_uvw",
+            "default" : false,
+            "desc" : "Create velocity channel from the uvw movement channel",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "isMayaFluid",
+            "default" : false,
+            "desc" : "True if this node represents Maya Fluid cache",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "empty_grid_up_axis",
+            "default" : 2,
+            "desc" : "Specifies which axis should be used as up when constructing empty grids. Y is 1, Z is 2",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "grid_size_x",
+            "default" : 1.0,
+            "desc" : "Number of cells in x dimension if no cache file is specified; internally truncated to the nearest integer",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "grid_size_y",
+            "default" : 1.0,
+            "desc" : "Number of cells in y dimension if no cache file is specified; internally truncated to the nearest integer",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "grid_size_z",
+            "default" : 1.0,
+            "desc" : "Number of cells in z dimension if no cache file is specified; internally truncated to the nearest integer",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cell_size",
+            "default" : 1.0,
+            "desc" : "The size of a single voxel, in scene units",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "dynamic_offset_x",
+            "default" : 0.0,
+            "desc" : "The x dynamic offset of the fluid container",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dynamic_offset_y",
+            "default" : 0.0,
+            "desc" : "The y dynamic offset of the fluid container",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dynamic_offset_z",
+            "default" : 0.0,
+            "desc" : "The z dynamic offset of the fluid container",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "anim_mode",
+            "default" : "0",
+            "desc" : "Playback Mode, 0 - Linear, 1 - Frame Index, 2 - Loop",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Frame Index", "Frame Index" ],
+                [ "2", "Loop", "Loop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Playback Mode"
+            }
+        },
+        
+        {
+            "attr" : "t2f",
+            "default" : 0.0,
+            "desc" : "Direct time to frame transformation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Direct Cache Index",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "play_at",
+            "default" : 0,
+            "desc" : "Play Start",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Timeline Origin",
+                "max" : 10000,
+                "min" : -10000
+            }
+        },
+        
+        {
+            "attr" : "read_offset",
+            "default" : 0,
+            "desc" : "Cache Start",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Cache Origin",
+                "max" : 10000,
+                "min" : -10000
+            }
+        },
+        
+        {
+            "attr" : "play_speed",
+            "default" : 1.0,
+            "desc" : "Play Speed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Play Speed",
+                "max" : 10.0,
+                "min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "max_length",
+            "default" : 0,
+            "desc" : "Play Length",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Play Length",
+                "max" : 10000,
+                "min" : -10000
+            }
+        },
+        
+        {
+            "attr" : "loop_overlap",
+            "default" : 0,
+            "desc" : "Number of overlapped frames in the looped animation mode",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Loop Overlap",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "blend_method",
+            "default" : "0",
+            "desc" : "Frame Blending method for grid data",
+            "items" : 
+            [
+                [ "0", "Interpolation", "Interpolation" ],
+                [ "1", "Velocity", "Velocity" ],
+                [ "2", "Precise Tracing", "Precise Tracing" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Grid Blend"
+            }
+        },
+        
+        {
+            "attr" : "load_nearest",
+            "default" : false,
+            "desc" : "If there is no cache file with the desired frame number, the nearest cache is found and loaded",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Load Nearest if Missing"
+            }
+        },
+        
+        {
+            "attr" : "flip_yz",
+            "default" : false,
+            "desc" : "If true, the yz axis of the cache will be flipped",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Flip Up Axis"
+            }
+        },
+        
+        {
+            "attr" : "mirror_z",
+            "default" : false,
+            "desc" : "If true, the caches will be mirrored along the Z axis",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Mirror Z Axis"
+            }
+        },
+        
+        {
+            "attr" : "TPF",
+            "default" : 1000,
+            "desc" : "ticks per frame",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "load_flags",
+            "default" : 0,
+            "desc" : "Deprecated parameter",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "time_tform",
+            "default" : true,
+            "desc" : "If true, Time Bend options would be applied to the animation sequence",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_mask",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_threshold",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 32,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_similarity",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 32,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_randomize",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 32,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "free_mem_detect",
+            "default" : 0,
+            "desc" : "internally used",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "usrchmap",
+            "default" : "",
+            "desc" : "3rd party caches channels mappings",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "raw_vdb_stream",
+            "default" : null,
+            "desc" : "A list of two items representing several VDB grids. First item is number of bytes, second item is VDB grid serialized represented as ListInt",
+            "type" : "LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

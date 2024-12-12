@@ -1,0 +1,642 @@
+
+{
+    "Desciption" : "LightDome",
+    "ID" : "LightDome",
+    "Name" : "Light Dome",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "true if the light is casting light (turned on) and false otherwise; it only makes sense to use this parameter if it is animated, or if another object depends on this node but it must not be rendered",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the light",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pivot_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Pivot point offset relative to center of local coordinate space. Does NOT affect rendering",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color of the light",
+            "type" : "ACOLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the color parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affectDiffuse",
+            "default" : true,
+            "desc" : "True if the light produces diffuse lighting and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect diffuse",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "affectSpecular",
+            "default" : true,
+            "desc" : "True if the light produces specular hilights and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect specular"
+            }
+        },
+        
+        {
+            "attr" : "affectAtmospherics",
+            "default" : true,
+            "desc" : "True if the light affects atmospheric effects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect atmospherics"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_contribution",
+            "default" : 1.0,
+            "desc" : "Diffuse contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "specular_contribution",
+            "default" : 1.0,
+            "desc" : "Specular contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "atmospherics_contribution",
+            "default" : 1.0,
+            "desc" : "Contribution of the light to atmospheric effects",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "use_global_light_level",
+            "default" : true,
+            "desc" : "true if the light should use the global light level setting",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of strings identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumped_below_surface_check",
+            "default" : false,
+            "desc" : "True if the bumped normal should be used to check if the light direction is below the surface",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Bumped normal check"
+            }
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of parameter samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows",
+            "default" : true,
+            "desc" : "true if the light casts shadows and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Shadows"
+            }
+        },
+        
+        {
+            "attr" : "shadowColor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shadow color. Anything but black is not physically accurate",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowColor_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the shadowColor parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowBias",
+            "default" : 0.0,
+            "desc" : "Shadow offset from the surface. Higher values move the shadow toward the object while lower values move it away. Extreme values can cause undesired results like shadow leaking or detached shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Shadow bias",
+                "soft_max" : 0.1000000014901161,
+                "soft_min" : -0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "photonSubdivs",
+            "default" : 500,
+            "desc" : "Determines the number of photons emitted by this light when calculating the Global Photon Map. 1000 subdivs equal 1 million photons",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Photon subdivs",
+                "min" : 0,
+                "rollout" : "Photon emission",
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "causticSubdivs",
+            "default" : 1000,
+            "desc" : "Determines the number of photons emitted by this light when calculating the Caustics Photon Map. 1000 subdivs equal 1 million photons",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Caustics subdivs",
+                "min" : 0,
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "diffuseMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the diffuse photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Diffuse multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "causticMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the caustics photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Caustics multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "cutoffThreshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Light cut-off threshold (speed optimization). If the light intensity for a point is below this threshold, the light will not be computed. Larger values cut away more of the light, while lower values make the light range larger. When this value is 0.0, the light is calculated for all surfaces",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Cut-off threshold",
+                "min" : 0.0,
+                "rollout" : "Sampling",
+                "soft_max" : 0.50,
+                "spin_step" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "is_instance_prototype",
+            "default" : 0,
+            "desc" : "If light is an instance prototype its \"enabled\" parameter value is ignored (light is treated as disabled when processing the plugin instance itself), but is taken into account when generating instances of this light",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "Channels"
+            }
+        },
+        
+        {
+            "attr" : "channels_raw",
+            "default" : null,
+            "desc" : "Render channels the raw diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_diffuse",
+            "default" : null,
+            "desc" : "Render channels the diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_specular",
+            "default" : null,
+            "desc" : "Render channels the specular result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_full",
+            "default" : null,
+            "desc" : "Render channels the full (direct+indirect) result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "lpe_label",
+            "default" : "",
+            "desc" : "Light path expressions light label which can be used to identify the light",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "units",
+            "default" : "0",
+            "desc" : "Units for the intensity (0 - default, 1 - lumens, 2 - lm/m/m/sr, 3 - watts, 4 - w/m/m/sr)",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "Lumens", "Lumens" ],
+                [ "2", "lm/m/m/sr", "lm/m/m/sr" ],
+                [ "3", "Watts", "Watts" ],
+                [ "4", "w/m/m/sr", "w/m/m/sr" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "intensity",
+            "default" : 1.0,
+            "desc" : "Light intensity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "intensity_tex",
+            "default" : 0.0,
+            "desc" : "A float texture that if present will override the intensity parameter",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "Controls the number of samples for sampling the light's shadows. Higher values produce smoother results but take more time to render. This parameter is controlled by the Min Shading Rate in the image sampler (SettingsImageSampler::min_shade_rate), when SettingsDMCSampler::use_local_subdivs=0",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "Sampling"
+            }
+        },
+        
+        {
+            "attr" : "invisible",
+            "default" : false,
+            "desc" : "True if the light is NOT directly visible from the camera and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "storeWithIrradianceMap",
+            "default" : false,
+            "desc" : "When this option is on and GI calculation is set to Irradiance map V-Ray will calculate the effects of this light and store them in the irradiance map. The result is that the irradiance map is computed more slowly but the rendering takes less time. You can also save the irradiance map and reuse it later",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Store with irradiance map"
+            }
+        },
+        
+        {
+            "attr" : "affectReflections",
+            "default" : true,
+            "desc" : "True if the light appears in reflections and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect reflections"
+            }
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for use by shaders, render elements, etc",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useMIS",
+            "default" : true,
+            "desc" : "This parameter is for debugging only. It should always be set to true in user scenes. When set to false, rendering quality is not optimal",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use multiple importance sampling",
+                "rollout" : "Advanced"
+            }
+        },
+        
+        {
+            "attr" : "dome_spherical",
+            "default" : false,
+            "desc" : "When enabled, the dome light covers the entire sphere around the scene. When off, the light covers a hemisphere only",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "use_dome_tex",
+            "default" : false,
+            "desc" : "True if the texture should be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use texture",
+                "rollout" : "Texture"
+            }
+        },
+        
+        {
+            "attr" : "dome_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Specify the texture to use. You have to set use_dome_tex=1 as well",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tex_resolution",
+            "default" : 512,
+            "desc" : "The texture presampling resolution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Texture resolution",
+                "max" : 8192,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "tex_adaptive",
+            "default" : 1.0,
+            "desc" : "The adaptivity of the sampling to the texture brightness (0.0 - no adaptivity; 1.0 - full adaptivity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Texture adaptivity",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "dome_targetRadius",
+            "default" : 100.0,
+            "desc" : "Defines a sphere around the center of the dome light TOWARD which photons are fired. This radius should encompass all glass and metal surfaces that you want to create caustics",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Photon target radius",
+                "min" : 0.0,
+                "rollout" : "Photon emission"
+            }
+        },
+        
+        {
+            "attr" : "dome_emitRadius",
+            "default" : 150.0,
+            "desc" : "Defines a sphere around the center of the dome light FROM which photons are fired. This radius should encompass all geometry in the scene",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Photon emit radius",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : true,
+            "desc" : "Determines whether or not the Dome light is visible in the Alpha channel of the render. When enabled, you will have a white alpha where the background is visible. When disabled, you will have black alpha where the background is visible",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "dome_rayDistanceMode",
+            "default" : "0",
+            "desc" : "Specifies the method of determining the maximum distance to which shadow rays are going to be traced",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "From GI Settings", "From GI Settings" ],
+                [ "2", "Explicit", "Explicit" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Advanced"
+            }
+        },
+        
+        {
+            "attr" : "dome_rayDistance",
+            "default" : 100000.0,
+            "desc" : "The maximum distance to which shadow rays are going to be traced, when the ray distance mode is set to explicit",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "dome_adaptive",
+            "default" : false,
+            "desc" : "Speeds up the rendering by optimising the sampling algorithm for the Dome light. No light portals are needed with this setup. Light Cache must be set as the GI engine for this feature. Adaptive lights must be enabled",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "dome_grid_res",
+            "default" : 50,
+            "desc" : "This is a debug parameter, which is not expected to be modified by users. The resolution of the dome light grid",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dome_u_tiles",
+            "default" : 16,
+            "desc" : "This is a debug parameter, which is not expected to be modified by users. Number of tiles in u direction of the dome light",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "dome_finite_on",
+            "default" : 0,
+            "desc" : "If enabled, the dome light becomes a finite half dome with ground. Intersections are still infinitely far away, but illumination is computed like for a finite light",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "finite_radius",
+            "default" : 100.0,
+            "desc" : "The radius of the finite dome",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "finite_cameraHeight",
+            "default" : 50.0,
+            "desc" : "The height of the camera center from the ground. This is the point of projection of the infinite dome to the finite",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Projection height"
+            }
+        },
+        
+        {
+            "attr" : "finite_groundBlend",
+            "default" : 0.2000000029802322,
+            "desc" : "Determines the blending amount between the finite ground and upper hemisphere",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        }
+    ],
+    "Type" : "LIGHT",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

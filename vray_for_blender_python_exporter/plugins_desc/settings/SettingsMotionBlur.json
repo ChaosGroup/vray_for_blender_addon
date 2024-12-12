@@ -1,0 +1,142 @@
+
+{
+    "Desciption" : "SettingsMotionBlur",
+    "ID" : "SettingsMotionBlur",
+    "Name" : "Settings Motion Blur",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "on",
+            "default" : false,
+            "desc" : "Enable motion blur",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable motion blur"
+            }
+        },
+        
+        {
+            "attr" : "geom_samples",
+            "default" : 2,
+            "desc" : "Geometry motion blur samples to take. Moving along non-linear trajectories may require more samples",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Geometry samples",
+                "max" : 1000,
+                "min" : 2
+            }
+        },
+        
+        {
+            "attr" : "low_samples",
+            "default" : 1,
+            "desc" : "Motion blur samples to take when calculating Irradiance Map",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Prepass samples",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "duration",
+            "default" : 1.0,
+            "desc" : "Motion blur duration in frames",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Duration (frames)",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 1,
+            "desc" : "Deprecated. Unused",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs",
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "bias",
+            "default" : 0.0,
+            "desc" : "Bias for the time value of motion blur samples",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Bias"
+            }
+        },
+        
+        {
+            "attr" : "shutter_efficiency",
+            "default" : 1.0,
+            "desc" : "When <1 simulates real world shutter efficiency due to its finite speed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Shutter Efficiency",
+                "max" : 1.0,
+                "min" : 0.50
+            }
+        },
+        
+        {
+            "attr" : "interval_center",
+            "default" : 0.50,
+            "desc" : "Relative center of the motion blur interval (typically between -1 and 1). The value is expressed as fraction of a frame",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Interval center",
+                "soft_max" : 1.0,
+                "soft_min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "camera_motion_blur",
+            "default" : true,
+            "desc" : "Enable camera motion blur",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Camera motion blur"
+            }
+        },
+        
+        {
+            "attr" : "sampling_type",
+            "default" : "0",
+            "desc" : "Type of sampling: 0 - normal, 1 - sample only shutter open, 2 - sample only shutter middle",
+            "items" : 
+            [
+                [ "0", "Normal", "Normal" ],
+                [ "1", "Sample only shutter open", "Sample only shutter open" ],
+                [ "2", "Sample only shutter middle", "Sample only shutter middle" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Sampling type"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

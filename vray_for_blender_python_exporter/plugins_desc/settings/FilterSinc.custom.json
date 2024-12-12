@@ -1,0 +1,15 @@
+{
+    "ID": "FilterSinc",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "size"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

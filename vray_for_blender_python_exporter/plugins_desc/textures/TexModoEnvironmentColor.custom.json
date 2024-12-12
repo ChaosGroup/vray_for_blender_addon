@@ -1,0 +1,38 @@
+{
+    "Parameters": [
+        {
+            "attr": "sky_color",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "sky_tex",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "sky_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "sky_color",
+            "tex_prop": "sky_tex",
+            "desc": "",
+            "default": [
+                0.3400000035762787,
+                0.3400000035762787,
+                0.3400000035762787
+            ]
+        }
+    ],
+    "Options": {
+        "excluded_parameters": [
+            "sky_color",
+            "sky_tex"
+        ]
+    },
+    "excluded_parameters": [
+        "sky_color",
+        "sky_tex"
+    ]
+}

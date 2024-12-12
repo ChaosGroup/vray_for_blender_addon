@@ -1,0 +1,341 @@
+
+{
+    "Desciption" : "SettingsLightCache",
+    "ID" : "SettingsLightCache",
+    "Name" : "Settings Light Cache",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "subdivs",
+            "default" : 500,
+            "desc" : "Subdivisions for the light cache",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivs",
+                "max" : 65000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "sample_size",
+            "default" : 0.01999999955296516,
+            "desc" : "Sample size when calculating the light cache",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Sample size",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "filter_type",
+            "default" : "1",
+            "desc" : "Filter type when reconstructing the illumination from the cache. 0 - no filter; 1 - nearest; 2 - fixed",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Nearest", "Nearest" ],
+                [ "2", "Fixed", "Fixed" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Filter type"
+            }
+        },
+        
+        {
+            "attr" : "filter_samples",
+            "default" : 5,
+            "desc" : "Number of samples to look for with the 'nearest' filter type",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Filter samples",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "filter_size",
+            "default" : 0.05999999865889549,
+            "desc" : "Filter size for the 'fixed' filter type",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Filter size",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "prefilter",
+            "default" : false,
+            "desc" : "True if the light cache should be prefiltered to smooth the illumination in it",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Prefilter"
+            }
+        },
+        
+        {
+            "attr" : "prefilter_samples",
+            "default" : 10,
+            "desc" : "Number of samples to look for when prefiltering the light cache",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Prefilter samples",
+                "max" : 1000,
+                "min" : 2
+            }
+        },
+        
+        {
+            "attr" : "depth",
+            "default" : 100,
+            "desc" : "Maximum bounces for the light cache. Leave this to the default value of 100. Note that, because of the way the light cache is calculated, the solution always converges to that of infinite light bounces, regardless of this value",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Depth",
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "show_calc_phase",
+            "default" : true,
+            "desc" : "Shows a preview of the scene while the light cache is calculated",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Show calc. phase"
+            }
+        },
+        
+        {
+            "attr" : "store_direct_light",
+            "default" : true,
+            "desc" : "Stores direct lighting with the light cache",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Store direct light"
+            }
+        },
+        
+        {
+            "attr" : "world_scale",
+            "default" : false,
+            "desc" : "Whether sample and filter sizes are in world space (true) or screen space (false)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "World scale"
+            }
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Specifies the way the light cache is calculated (0 - Single frame, 1 - Fly-through, 2 - From file)",
+            "items" : 
+            [
+                [ "0", "Single frame", "Single frame" ],
+                [ "1", "Fly-through", "Fly-through" ],
+                [ "2", "From File", "From File" ],
+                [ "3", "Progressive path tracing", "Progressive path tracing" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode"
+            }
+        },
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "vrlmap file to load a previously calculated light cache from",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Light Cache File",
+                "file_extensions" : [ "vrlmap" ],
+                "file_names" : [ "V-Ray Light Cache map" ]
+            }
+        },
+        
+        {
+            "attr" : "dont_delete",
+            "default" : true,
+            "desc" : "True if the light cache should not be deleted at the end of the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Don't delete"
+            }
+        },
+        
+        {
+            "attr" : "auto_save",
+            "default" : true,
+            "desc" : "True if the light cache should be saved at the end of the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Auto save"
+            }
+        },
+        
+        {
+            "attr" : "auto_save_file",
+            "default" : "",
+            "desc" : "File name to save to if auto_save=1",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Auto save file",
+                "file_extensions" : [ "vrlmap" ],
+                "file_names" : [ "V-Ray Light Cache map" ],
+                "file_op" : "save"
+            }
+        },
+        
+        {
+            "attr" : "num_passes",
+            "default" : 64,
+            "desc" : "Number of passes for the light cache. Each pass is rendered in a single thread, therefore it is best to set this to the number of processors",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Number of passes",
+                "max" : 64,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "use_for_glossy_rays",
+            "default" : false,
+            "desc" : "True if the light cache should be used to estimate GI for glossy rays, instead of the primary GI engine",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use for glossy rays"
+            }
+        },
+        
+        {
+            "attr" : "adaptive_sampling",
+            "default" : false,
+            "desc" : "True if adaptive hemispheric sampling should be used. This requires more memory than the non-adaptive light cache",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Adaptive sampling"
+            }
+        },
+        
+        {
+            "attr" : "premultiplied",
+            "default" : false,
+            "desc" : "true to use premultiplied light cache when possible",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Premultiplied"
+            }
+        },
+        
+        {
+            "attr" : "multiple_views",
+            "default" : false,
+            "desc" : "This causes the light cache to be calculated for the entire camera path, even when in single frame mode",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use camera path"
+            }
+        },
+        
+        {
+            "attr" : "retrace_enabled",
+            "default" : false,
+            "desc" : "True to enable retrace of the light cache",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use retrace threshold"
+            }
+        },
+        
+        {
+            "attr" : "retrace_threshold",
+            "default" : 1.0,
+            "desc" : "Retrace threshold, relative to the light cache sample size",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Retrace threshold",
+                "max" : 1000000000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "retrace_leak_prevention",
+            "default" : 0.0,
+            "desc" : "Enables additional checks to mimize light leaks; 0.0 means no checks",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Leak prevention",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "type",
+            "default" : "1",
+            "desc" : "Light cache type to be used (0 - KD tree; 1 - hash map)",
+            "items" : 
+            [
+                [ "0", "KD tree", "KD tree" ],
+                [ "1", "Hash map", "Hash map" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Type"
+            }
+        },
+        
+        {
+            "attr" : "path_guiding",
+            "default" : false,
+            "desc" : "True to enable path guiding",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Path guiding"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

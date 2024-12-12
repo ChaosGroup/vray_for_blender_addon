@@ -1,0 +1,41 @@
+{
+    "ID": "RenderChannelDRBucket",
+    "Name" : "DR Bucket",
+    "Subtype" : "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "text_alignment",
+                                "expand": true
+                            }
+                        ]
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "DR Bucket"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

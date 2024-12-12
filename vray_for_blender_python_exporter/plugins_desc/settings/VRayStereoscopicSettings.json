@@ -1,0 +1,303 @@
+
+{
+    "Desciption" : "VRayStereoscopicSettings",
+    "ID" : "VRayStereoscopicSettings",
+    "Name" : "V Ray Stereoscopic Settings",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "eye_distance",
+            "default" : 6.50,
+            "desc" : "The eye distance for which the stereoscopic image will be rendered",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "specify_focus",
+            "default" : false,
+            "desc" : "If on then the focus is determined by focus_method and focus_distance. Otherwise it is determined from the camera target distance",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "focus_distance",
+            "default" : 200.0,
+            "desc" : "The focus distance when specify_focus is enabled",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "focus_method",
+            "default" : "0",
+            "desc" : "Specifies the focus method for the two views (0 - none/parallel; 1 - rotation; 2 - shear)",
+            "items" : 
+            [
+                [ "0", "None/parallel", "None/parallel" ],
+                [ "1", "Rotation", "Rotation" ],
+                [ "2", "Shear", "Shear" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "interocular_method",
+            "default" : "0",
+            "desc" : "Specifies how the two virtual cameras will be placed in relation to the real camera in the scene (0 - symmetric/shift both; 1 - shift left; 2 - shift right)",
+            "items" : 
+            [
+                [ "0", "Symmetric/shift both", "Symmetric/shift both" ],
+                [ "1", "Shift left", "Shift left" ],
+                [ "2", "Shift right", "Shift right" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "top_merge_angle",
+            "default" : 1.047197580337524,
+            "desc" : "Panoramic pole merging: from what angle near the top does the stereo effect start to fade when rendering with a spherical panorama camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.570796251296997,
+                "min" : 0.0,
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "bottom_merge_angle",
+            "default" : 1.047197580337524,
+            "desc" : "Panoramic pole merging: from what angle near the bottom does the stereo effect start to fade when rendering with a spherical panorama camera",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.570796251296997,
+                "min" : 0.0,
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "pole_merge_method",
+            "default" : 0,
+            "desc" : "The method for pole merging (0 - the original V-Ray method; 1 - cosine method that matches other renderers)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "view",
+            "default" : "0",
+            "desc" : "Specifies which of the stereoscopic views will be rendered (0 - both; 1 - left; 2 - right)",
+            "items" : 
+            [
+                [ "0", "Both", "Both" ],
+                [ "1", "Left", "Left" ],
+                [ "2", "Right", "Right" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "output_layout",
+            "default" : "0",
+            "desc" : "Layout of the output image (0 - side-by-side; 1 - top-bottom)",
+            "items" : 
+            [
+                [ "0", "Side-by-Side", "Side-by-Side" ],
+                [ "1", "Top-Bottom", "Top-Bottom" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "adjust_resolution",
+            "default" : false,
+            "desc" : "Unused parameter",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sm_mode",
+            "default" : "0",
+            "desc" : "Specifies the mode of operation for the shade map (0 - disabled; 1 - render shade map; 2 - use shade map)",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Render shade map", "Render shade map" ],
+                [ "2", "Use shade map", "Use shade map" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Shade Map Mode",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "reuse_threshold",
+            "default" : 1.0,
+            "desc" : "Lower values will make V-Ray use less of the shade map and more real shading",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "shademap_file",
+            "default" : "",
+            "desc" : "The name of the file in which the shade map information is stored",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "vrst", "exr" ],
+                "file_names" : 
+                [
+                    "V-Ray shade map file",
+                    "V-Ray deep image file",
+                    "OpenEXR deep image file"
+                ]
+            }
+        },
+        
+        {
+            "attr" : "float_colors_mode",
+            "default" : false,
+            "desc" : "Store 32 bit (single precision) color channels in the shade map. When off 16 bit (half precision) values are stored",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "32 Bit Colors"
+            }
+        },
+        
+        {
+            "attr" : "vrst_compression",
+            "default" : "1",
+            "desc" : "Compression type for the .vrst files (0 - no compression, 1 - ZLIB compression)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "ZLIB", "ZLIB" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "VRST Compression"
+            }
+        },
+        
+        {
+            "attr" : "exr_compression",
+            "default" : "2",
+            "desc" : "Compression type for the .exr files (0 - no compression, 1 - RLE compression, 2 - ZIPS compression)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "RLE", "RLE" ],
+                [ "2", "ZIPS", "ZIPS" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "EXR Compression"
+            }
+        },
+        
+        {
+            "attr" : "exclude_list",
+            "default" : null,
+            "desc" : "A list of plugins for which the shade map won't be used",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "exclude_list_inclusive",
+            "default" : false,
+            "desc" : "When on, the exclude_list is considered an 'Include list'",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "left_camera",
+            "default" : null,
+            "desc" : "A camera plugin for the left eye; if not specified, the left camera is computed based on the scene camera",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "right_camera",
+            "default" : null,
+            "desc" : "A camera plugin for the right eye; if not specified, the right camera is computed based on the scene camera",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_offset_x_left",
+            "default" : 0.0,
+            "desc" : "Horizontal film offset for the left camera",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_offset_x_right",
+            "default" : 0.0,
+            "desc" : "Horizontal film offset for the right camera",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_offset_y_left",
+            "default" : 0.0,
+            "desc" : "Vertical film offset for the left camera",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "film_offset_y_right",
+            "default" : 0.0,
+            "desc" : "Vertical film offset for the right camera",
+            "type" : "FLOAT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,32 @@
+{
+    "Name": "V-Ray Surface Luminance",
+    "Subtype": "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "luminance_mode"
+                    },
+                    {
+                        "name": "samples"
+                    },
+                    {
+                        "name": "contribute_to_gi"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "color"
+            },
+            {
+                "name": "luminance"
+            }
+        ]
+    }
+}

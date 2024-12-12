@@ -1,0 +1,113 @@
+
+{
+    "Desciption" : "VolumeAerialPerspective",
+    "ID" : "VolumeAerialPerspective",
+    "Name" : "Volume Aerial Perspective",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "sun",
+            "default" : null,
+            "desc" : "If specified, all parameters are taken from the specified sun. Otherwise, default values are used. Make sure to specify this",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "rollout" : "V-Ray Aerial Perspective",
+                "tab" : "V-Ray Aerial Perspective"
+            }
+        },
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "If 'false', disable the rendering of the aerial perspective effect",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "distance",
+            "default" : 600000.0,
+            "desc" : "View distance inside the fog (until it becomes less than 10% see through)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Visibility Range",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "atm_height",
+            "default" : 600000.0,
+            "desc" : "Height of the atmospheric layer",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Atmosphere Height",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "inscat_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the \"inscattered light\" component of the aerial persective",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Inscattered Light Mult.",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "affect_env",
+            "default" : false,
+            "desc" : "Specify whether aerial perspective is applied to environment rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect Environment"
+            }
+        },
+        
+        {
+            "attr" : "affect_bg",
+            "default" : true,
+            "desc" : "Specify whether aerial perspective is applied to the background",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect Background"
+            }
+        },
+        
+        {
+            "attr" : "filter_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Filter color for the fog. Note that fog color depends on the color of the sky",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "Specifies wheather the effect is aplied to camera rays (doesn't affect secondary rays)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : true,
+            "desc" : "Whether the alpha channel is affected",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

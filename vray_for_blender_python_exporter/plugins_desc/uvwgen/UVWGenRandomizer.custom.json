@@ -1,0 +1,323 @@
+{
+    "ID": "UVWGenRandomizer",
+    "Name" : "V-Ray UWV Randomizer",
+    "Parameters": [
+        {
+            "attr": "input",
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "mode",
+            "default": 0,
+            "type": "INT"
+        },
+        {
+            "attr": "random_by_face",
+            "type": "BOOL",
+            "desc": "Random by face",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_render_id",
+            "type": "BOOL",
+            "desc": "Random by render ID",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_particle",
+            "type": "BOOL",
+            "desc": "Random by particle",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_instance",
+            "type": "BOOL",
+            "desc": "Random by instance",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_object_id",
+            "type": "BOOL",
+            "desc": "Random by object ID",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_node_handle",
+            "type": "BOOL",
+            "desc": "Random by node handle",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_node_name",
+            "type": "BOOL",
+            "desc": "Random by node name",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_mesh_element",
+            "type": "BOOL",
+            "desc": "Random by mesh element",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "random_by_uv_tile",
+            "type": "BOOL",
+            "desc": "Random by UV tile",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "variance_u_max",
+            "default": 1.0
+        },
+        {
+            "attr": "variance_v_max",
+            "default": 1.0
+        },
+        {
+            "attr": "variance_rot_max",
+            "default": 360
+        },
+        {
+            "attr": "variance_u_flip",
+            "default": false
+        },
+        {
+            "attr": "variance_v_flip",
+            "default": false
+        },
+        {
+            "attr" : "variance_vscale_unlocked",
+            "default" : false,
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "wrap_u",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror", "Mirror Tile" ]
+            ]
+        },
+        {
+            "attr" : "wrap_v",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Tile", "Tile" ],
+                [ "2", "Mirror", "Mirror Tile" ]
+            ]
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "random_by_face"
+                    },
+                    {
+                        "name": "random_by_render_id"
+                    },
+                    {
+                        "name": "random_by_particle"
+                    },
+                    {
+                        "name": "random_by_instance"
+                    },
+                    {
+                        "name": "random_by_object_id"
+                    },
+                    {
+                        "name": "random_by_node_handle"
+                    },
+                    {
+                        "name": "random_by_node_name"
+                    },
+                    {
+                        "name": "random_by_mesh_element"
+                    },
+                    {
+                        "name": "random_by_uv_tile",
+                        "label": "Stochastic Tiling"
+                    },
+                    {
+                        "name": "tile_blend",
+                        "active": {"cond": "::random_by_uv_tile=1"}
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "attrs": [
+                    {
+                        "name": "seed"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "offset_variance",
+                "label": "Offset Variance",
+                "attrs": [
+                    {
+                        "name": "variance_u_min",
+                        "label": "U Range Min"
+                    },
+                    {
+                        "name": "variance_u_max",
+                        "label": "U Range Max"
+                    },
+                    {
+                        "name": "variance_u_steps",
+                        "label": "U Steps"
+                    },
+                    {
+                        "name": "variance_v_min",
+                        "label": "V Range Min"
+                    },
+                    {
+                        "name": "variance_v_max",
+                        "label": "V Range Max"
+                    },
+                    {
+                        "name": "variance_v_steps",
+                        "label": "V Steps"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "rotation_variance",
+                "label": "Rotation Variance",
+                "attrs": [
+                    {
+                        "name": "variance_rot_min",
+                        "label": "Rotation Range Min"
+                    },
+                    {
+                        "name": "variance_rot_max",
+                        "label": "Rotation Range Max"
+                    },
+                    {
+                        "name": "variance_rot_steps",
+                        "label": "Rotation Steps"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "scale_variance",
+                "label": "Scale Variance",
+                "attrs": [
+                    {
+                        "name": "variance_uscale_min",
+                        "label": "U Scale Range Min"
+                    },
+                    {
+                        "name": "variance_uscale_max",
+                        "label": "U Scale Range Max"
+                    },
+                    {
+                        "name": "variance_uscale_steps",
+                        "label": "U Scale Steps"
+                    },
+                    {
+                        "name": "variance_vscale_min",
+                        "label": "V Scale Range Min",
+                        "active": {"cond": "::variance_vscale_unlocked!=0"}
+                    },
+                    {
+                        "name": "variance_vscale_max",
+                        "label": "V Scale Range Max",
+                        "active": {"cond": "::variance_vscale_unlocked!=0"}
+                    },
+                    {
+                        "name": "variance_vscale_steps",
+                        "label": "V Scale Steps",
+                        "active": {"cond": "::variance_vscale_unlocked!=0"}
+                    },
+                    {
+                        "name": "variance_vscale_unlocked"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "mapping",
+                "label": "Mapping",
+                "attrs": [
+                    {
+                        "layout": "ROW",
+                        "attrs":[
+                            {
+                                "name": "wrap_u",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs":[
+                            {
+                                "name": "wrap_v",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs":[
+                            {
+                                "name": "crop_u",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs":[
+                            {
+                                "name": "crop_v",
+                                "expand": true
+                            }
+                        ]
+                    },
+                    {
+                        "name": "wrap_mode"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": []
+    }
+}

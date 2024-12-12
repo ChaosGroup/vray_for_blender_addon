@@ -1,0 +1,19 @@
+{
+    "ID": "CameraDome",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "Use Dome Camera",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Type": "CAMERA",
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
+    }
+}

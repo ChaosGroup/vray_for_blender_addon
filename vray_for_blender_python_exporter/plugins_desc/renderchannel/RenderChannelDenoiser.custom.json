@@ -1,0 +1,83 @@
+{
+    "ID": "RenderChannelDenoiser",
+    "Name" : "Denoiser",
+    "Subtype" : "SPECIAL",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Render Channel Name"
+                    },
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "engine"
+                    },
+                    {
+                        "name": "preset"
+                    },
+                    {
+                        "name": "strength"
+                    },
+                    {
+                        "name": "radius"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "advanced",
+                "label": "Advanced",
+                "attrs": [
+                    {
+                        "name": "use_gpu"
+                    },
+                    {
+                        "name": "temporal_mode",
+                        "label": "Use NVIDIA Temporal Mode",
+                        "active": {
+                            "cond": "::enabled=1,::engine=1,::optix_use_upscale=0"
+                        }
+                    },
+                    {
+                        "name": "optix_use_upscale"
+                    },
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "name": "denoise_alpha"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "enabled",
+            "default": true
+        },
+        {
+            "attr": "use_gpu",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Denoiser"
+        }
+    ],
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "enableDeepOutput",
+            "type",
+            "progressive_update",
+            "generate_render_elements",
+            "silence_optix_init_error"
+        ]
+    }
+}

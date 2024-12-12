@@ -1,0 +1,27 @@
+{
+	"SettingsRTEngine":
+	{
+		"cpu_bundle_size": 4,
+		"cpu_samples_per_pixel": 4,
+		"gpu_samples_per_pixel": 1,
+		"gpu_bundle_size ": 128,
+		"progressive_samples_per_pixel": 1,
+		"noise_threshold": 0.05
+	},
+
+	"SettingsImageSampler":
+	{
+		"dmc_adaptive_method": 1,
+		"min_shade_rate": 3
+	},
+
+    "SettingsIrradianceMap": 
+    {
+        "show_direct_light": true
+    },
+    
+    "TexDirt":
+    {
+        "subdivs_as_samples" : true
+    }
+}

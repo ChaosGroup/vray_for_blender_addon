@@ -1,0 +1,37 @@
+
+{
+    "Desciption" : "TexSwitchInt",
+    "ID" : "TexSwitchInt",
+    "Name" : "Switch Int",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "nodes",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "values",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "default",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

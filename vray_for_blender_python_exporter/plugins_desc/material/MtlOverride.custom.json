@@ -1,0 +1,90 @@
+{
+    "ID": "MtlOverride",
+    "Name": "V-Ray Mtl Override",
+    "Parameters": [
+        {
+            "attr": "gi_mtl_enabler",
+            "type": "PLUGIN_USE",
+            "target_prop": "gi_mtl",
+            "use_prop": "enable_gi_mtl",
+            "ui": { "display_name": "GI Material" },
+            "desc": "Overriding GI material.",
+            "default": true
+        },
+        {
+            "attr": "reflect_mtl_enabler",
+            "type": "PLUGIN_USE",
+            "target_prop": "reflect_mtl",
+            "use_prop": "enable_reflect_mtl",
+            "ui": { "display_name": "Reflect Material" },
+            "desc": "Overriding Reflect material.",
+            "default": true
+        },
+        {
+            "attr": "refract_mtl_enabler",
+            "type": "PLUGIN_USE",
+            "target_prop": "refract_mtl",
+            "use_prop": "enable_refract_mtl",
+            "ui": { "display_name": "Refract Material" },
+            "desc": "Overriding Refract material.",
+            "default": true
+        },
+        {
+            "attr": "shadow_mtl_enabler",
+            "type": "PLUGIN_USE",
+            "target_prop": "shadow_mtl",
+            "use_prop": "enable_shadow_mtl",
+            "ui": { "display_name": "Shadow Material" },
+            "desc": "Overriding Shadow material.",
+            "default": true
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "gi_mtl_enabler"
+                    },
+                    {
+                        "name": "reflect_mtl_enabler"
+                    },
+                    {
+                        "name": "refract_mtl_enabler"
+                    },
+                    {
+                        "name": "shadow_mtl_enabler"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node":{
+        "input_sockets":[
+            {
+                "name": "base_mtl"
+            },
+            {
+                "name": "gi_mtl_enabler"
+            },
+            {
+                "name": "reflect_mtl_enabler"
+            },
+            {
+                "name": "refract_mtl_enabler"
+            },
+            {
+                "name": "shadow_mtl_enabler"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "use_environment_override",
+            "environment_override",
+            "environment_priority"
+        ]
+    }
+}

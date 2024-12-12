@@ -1,0 +1,93 @@
+
+{
+    "Desciption" : "TexModoChanModLogic",
+    "ID" : "TexModoChanModLogic",
+    "Name" : "Modo Chan Mod Logic",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "op",
+            "default" : "0",
+            "desc" : "",
+            "items" : 
+            [
+                [ "0", "Equal", "Equal" ],
+                [ "1", "Not equal", "Not equal" ],
+                [ "2", "Greater than", "Greater than" ],
+                [ "3", "Less than", "Less than" ],
+                [ "4", "Greater than or equal", "Greater than or equal" ],
+                [ "5", "Less than or equal", "Less than or equal" ],
+                [ "6", "And", "And" ],
+                [ "7", "Or", "Or" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "option_true",
+            "default" : "0",
+            "desc" : "Determines what value to return when the result of the operation is 'true'",
+            "items" : 
+            [
+                [ "0", "input1", "input1" ],
+                [ "1", "intpu2", "intpu2" ],
+                [ "2", "value_true", "value_true" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "option_false",
+            "default" : "0",
+            "desc" : "Determines what value to return when the result of the operation is 'false'",
+            "items" : 
+            [
+                [ "0", "input1", "input1" ],
+                [ "1", "intpu2", "intpu2" ],
+                [ "2", "value_false", "value_false" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "input1",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "input2",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "value_true",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "value_false",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "result",
+            "default" : 0.0,
+            "desc" : "The result of the logical operation as a float, either 0.0 or 1.0",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

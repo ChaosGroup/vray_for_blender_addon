@@ -1,0 +1,757 @@
+
+{
+    "Desciption" : "GeomMeshFile",
+    "ID" : "GeomMeshFile",
+    "Name" : "Geom Mesh File",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "A .vrmesh or .abc geometry cache to load on demand",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Mesh File",
+                "file_extensions" : [ "vrmesh", "abc" ],
+                "file_names" : [ "V-Ray Mesh", "Alembic" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "alembic_layers",
+            "default" : "",
+            "desc" : "List of Alembic files for layering",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "anim_speed",
+            "default" : 1.0,
+            "desc" : "Animated proxy playback speed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Playback speed"
+            }
+        },
+        
+        {
+            "attr" : "anim_type",
+            "default" : "0",
+            "desc" : "Animated proxy playback type (0 - loop; 1 - once; 2 - ping-pong; 3 - still)",
+            "items" : 
+            [
+                [ "0", "Loop", "Loop" ],
+                [ "1", "Once", "Once" ],
+                [ "2", "Ping-pong", "Ping-pong" ],
+                [ "3", "Still", "Still" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Playback type"
+            }
+        },
+        
+        {
+            "attr" : "anim_offset",
+            "default" : 0.0,
+            "desc" : "Animated proxy initial frame offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Start offset"
+            }
+        },
+        
+        {
+            "attr" : "anim_override",
+            "default" : 0,
+            "desc" : "If set to 1 controls if 'Sequence start'(anim_start) and 'Sequence length'(anim_length) are taken in consideration. Useful only, when the file name contains frame filter. If set to 2 'Override Frame'(anim_frame) is used",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Sequence override"
+            }
+        },
+        
+        {
+            "attr" : "anim_frame",
+            "default" : 0.0,
+            "desc" : "Animated proxy override frame to render",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Override Frame"
+            }
+        },
+        
+        {
+            "attr" : "anim_abc_time",
+            "default" : 0.0,
+            "desc" : "Animated Alembic override time to render",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "anim_start",
+            "default" : 0,
+            "desc" : "Specifies the first frame of the animation sequence",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Sequence start"
+            }
+        },
+        
+        {
+            "attr" : "anim_length",
+            "default" : 0,
+            "desc" : "Specifies the length of the animation sequence",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Sequence length"
+            }
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "Whether this geometry is visible to primary camera rays",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "Size scaling factor",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "0",
+            "desc" : "0 do not rotate the coordinate system;1 to transform the proxy from Maya to Max coordinate system;2 to transform from Max to Maya",
+            "items" : 
+            [
+                [ "0", "As Is", "As Is" ],
+                [ "1", "Y-Up To Z-Up", "Y-Up To Z-Up" ],
+                [ "2", "Z-Up To Y-Up", "Z-Up To Y-Up" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Flip Axis Mode"
+            }
+        },
+        
+        {
+            "attr" : "smooth_uv_borders",
+            "default" : true,
+            "desc" : "True to smooth UVs at mesh borders when rendering this mesh as a subdivision surface",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_uv",
+            "default" : true,
+            "desc" : "True to smooth UVs when rendering this mesh as a subdivision surface",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "compute_normals",
+            "default" : "1",
+            "desc" : "True to calculate smooth normals",
+            "items" : 
+            [
+                [ "0", "Off", "Off" ],
+                [ "1", "On", "On" ],
+                [ "2", "Auto", "Auto" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Compute normals"
+            }
+        },
+        
+        {
+            "attr" : "smooth_angle",
+            "default" : 30.0,
+            "desc" : "Smooth angle in degrees",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Smooth angle",
+                "max" : 180.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "flip_normals",
+            "default" : false,
+            "desc" : "True to flip the vertex normals",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Flip normals"
+            }
+        },
+        
+        {
+            "attr" : "compute_bbox",
+            "default" : false,
+            "desc" : "True to compute the bounding box, false to read it from the file",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Recompute bounding box"
+            }
+        },
+        
+        {
+            "attr" : "num_preview_faces",
+            "default" : 10000,
+            "desc" : "number of faces in preview",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Preview faces"
+            }
+        },
+        
+        {
+            "attr" : "use_face_sets",
+            "default" : "1",
+            "desc" : "Turn on/off face sets. 0 - off, 1 - append to name, 2- append to name with slash",
+            "items" : 
+            [
+                [ "0", "Off", "Off" ],
+                [ "1", "Append", "Append" ],
+                [ "2", "Append with slash", "Append with slash" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_full_names",
+            "default" : false,
+            "desc" : "Read the full path instead of only the name",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use full names"
+            }
+        },
+        
+        {
+            "attr" : "object_path",
+            "default" : "",
+            "desc" : "Starting object path in Alembic hierarchy",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Starting object path"
+            }
+        },
+        
+        {
+            "attr" : "hair_width_multiplier",
+            "default" : 1.0,
+            "desc" : "Hair width multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Hair width multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "particle_width_multiplier",
+            "default" : 1.0,
+            "desc" : "Particle width multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Particle width multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "velocity_multiplier",
+            "default" : 1.0,
+            "desc" : "Alembic velocity multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Velocity multiplier"
+            }
+        },
+        
+        {
+            "attr" : "visibility_lists_type",
+            "default" : 0,
+            "desc" : "Specifies the type of both names and ids lists. 0 - exclude; 1 - include",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visibility_list_names",
+            "default" : "",
+            "desc" : "Visibility list of mesh names. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visibility_list_ids",
+            "default" : 0,
+            "desc" : "Visibility list of mesh ids. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_visibility_lists_type",
+            "default" : "0",
+            "desc" : "Specifies the type of both names and ids lists. 0 - exclude; 1 - include",
+            "items" : 
+            [
+                [ "0", "Exclude", "Exclude" ],
+                [ "1", "Include", "Include" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_visibility_list_names",
+            "default" : "",
+            "desc" : "Visibility list of hair names. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_visibility_list_ids",
+            "default" : 0,
+            "desc" : "Visibility list of hair ids. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_visibility_lists_type",
+            "default" : "0",
+            "desc" : "Specifies the type of both names and ids lists. 0 - exclude; 1 - include",
+            "items" : 
+            [
+                [ "0", "Exclude", "Exclude" ],
+                [ "1", "Include", "Include" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_visibility_list_names",
+            "default" : "",
+            "desc" : "Visibility list of particle system names. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_visibility_list_ids",
+            "default" : 0,
+            "desc" : "Visibility list of particle system ids. Either include or exclude",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visibility_overrides_rules",
+            "default" : "",
+            "desc" : "Wildcard rules used to override visibility",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "visibility_overrides_values",
+            "default" : false,
+            "desc" : "Visibility override values, used together with visibility_overrides_rules",
+            "elements_count" : 0,
+            "type" : "BOOL_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sort_voxels",
+            "default" : 0,
+            "desc" : "Sort Alembic voxels after reading by their names. 0 - skip sorting; 1 - sort",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "first_map_channel",
+            "default" : -1,
+            "desc" : "Specifies how to remap the mapping channels: -1 - no remapping; 0 - channel 0, 1 - channel 1",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_render_mode",
+            "default" : "0",
+            "desc" : "Set to 0 to render particles as spheres. Set it to 1 to render them as points",
+            "items" : 
+            [
+                [ "0", "Spheres", "Spheres" ],
+                [ "1", "Points", "Points" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Particle render mode"
+            }
+        },
+        
+        {
+            "attr" : "particle_use_normals",
+            "default" : false,
+            "desc" : "Use particle normals from Alembic",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use Particle Normals"
+            }
+        },
+        
+        {
+            "attr" : "use_alembic_offset",
+            "default" : false,
+            "desc" : "True to use Alembic animation frame offset",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_alembic_transform",
+            "default" : true,
+            "desc" : "Set to 1 to use Alembic object transform (this is the default behavior). If set to 0 all object transformations inside the Alembic file are ignored and user must to provide correct transformation on Node level",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_alembic_visibility",
+            "default" : true,
+            "desc" : "True to use Alembic visibility (default). False value is useful when host application provides custom Alembic visibility handling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocity_color_set",
+            "default" : "",
+            "desc" : "Optional name for the color set where the velocity is written",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "instancing",
+            "default" : "1",
+            "desc" : "Handle Alembic instances",
+            "items" : 
+            [
+                [ "0", "Disable instancing", "Disable instancing" ],
+                
+                [
+                    "1",
+                    "Instantiate duplicated objects",
+                    "Instantiate duplicated objects"
+                ],
+                
+                [
+                    "2",
+                    "Instantiate duplicates and assign unique material IDs",
+                    "Instantiate duplicates and assign unique material IDs"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Instancing"
+            }
+        },
+        
+        {
+            "attr" : "tessellate_hair",
+            "default" : false,
+            "desc" : "Tessellate hair with respect to the camera position",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hair_tessellation_length",
+            "default" : 4.0,
+            "desc" : "Hair tessellation edge length in pixels",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "subdiv_all_meshes",
+            "default" : false,
+            "desc" : "True to subdivide Alembic PolyMesh and SubD objects; false to subdivide only SubD objects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Subdivide all meshes"
+            }
+        },
+        
+        {
+            "attr" : "subdiv_type",
+            "default" : 0,
+            "desc" : "0 for Catmull-Clark subdivision and 1 for Loop subdivision",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "subdiv_level",
+            "default" : 1,
+            "desc" : "The subdivision level",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Subdivision level",
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "subdiv_uvs",
+            "default" : true,
+            "desc" : "Subdivide or skip mapping channels",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Subdivide UVs"
+            }
+        },
+        
+        {
+            "attr" : "subdiv_preserve_geom_borders",
+            "default" : false,
+            "desc" : "If true, the borders won't be subdivided",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Preserve geometry borders"
+            }
+        },
+        
+        {
+            "attr" : "subdiv_preserve_map_borders",
+            "default" : "1",
+            "desc" : "Determines the smoothing mode of the mapping channels' borders. 0-None, 1-Internal and 2-All",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Internal", "Internal" ],
+                [ "2", "All", "All" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Preserve map borders"
+            }
+        },
+        
+        {
+            "attr" : "use_point_cloud",
+            "default" : false,
+            "desc" : "If true, use the point cloud inside the vrmesh if available",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "point_cloud_mult",
+            "default" : 1.0,
+            "desc" : "A LOD multiplier. A value smaller than 1.0 means that the level will be of greater detail than required by distance to the object",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pixel_scale",
+            "default" : 1.0,
+            "desc" : "Modifies the loaded level of detail; larger values reduce the detail level",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_assignments_file",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Material assignments file",
+                "file_extensions" : [ "xml" ],
+                "file_names" : [ "XML" ],
+                "file_op" : "load"
+            }
+        },
+        
+        {
+            "attr" : "alembic_mode",
+            "default" : 0,
+            "desc" : "Alembic Channels Mode (0 - Default; 1 - Houdini). Default: will try to re-construct color channel from channels containing individual color components. This may alter channel names. Houdini: will construct color channels from scalar channels setting all colors components to the same scalar value. This mode uses channel names as is",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "load_mesh",
+            "default" : 1,
+            "desc" : "Load mesh data from the proxy file",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "load_hair",
+            "default" : 1,
+            "desc" : "Load hair data from the proxy file",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "load_particles",
+            "default" : 1,
+            "desc" : "Load particles data from the proxy file",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_velocity",
+            "default" : 0,
+            "desc" : "If file name contains the frame pattern don't try to load multiple files - use file for the current frame and velocity. In case of a file with multiple frames and velocity channel - only velocity channel will be used; if velocity channel is missing - no motion blur will be generated at all.Affects only when \"alembic_mode\" is set to 1 (Houdini)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reference_mesh",
+            "default" : null,
+            "desc" : "The reference mesh which is used to calculate the uvw coordinates when a 3d placement is used",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "reference_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transform of the reference mesh",
+            "type" : "TRANSFORM"
+        },
+        
+        {
+            "attr" : "reference_vertex_channel",
+            "default" : "",
+            "desc" : "Map channel name to use as reference mesh vertices. ",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reference_normal_channel",
+            "default" : "",
+            "desc" : "Map channel name to use as reference mesh normals",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "merge_equal_vertices",
+            "default" : true,
+            "desc" : "If false, the vertices with equal coordinates won't be merged",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reorder_channels_by_name_indices",
+            "default" : false,
+            "desc" : "If true - reorder the loaded Alembic channels according the number suffix in their names, if false - leave channels in the order they are in the mesh file",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "custom_reorder_mesh_set_names",
+            "default" : "",
+            "desc" : "Names of custom/user-guided proxy mesh sets reordering",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "custom_reorder_mesh_set_types",
+            "default" : -1,
+            "desc" : "Types of custom/user-guided proxy mesh sets reordering (0-uv/uvw set, 1-color set, 2-shader set)",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "custom_reorder_mesh_set_indices",
+            "default" : -1,
+            "desc" : "Indices of custom/user-guided proxy mesh sets reordering",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

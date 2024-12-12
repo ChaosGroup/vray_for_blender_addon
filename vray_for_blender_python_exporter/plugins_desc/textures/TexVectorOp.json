@@ -1,0 +1,105 @@
+
+{
+    "Desciption" : "TexVectorOp",
+    "ID" : "TexVectorOp",
+    "Name" : "Vector Op",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "vector_a",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The first vector",
+            "type" : "VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "vector_b",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The second vector",
+            "type" : "VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "mult_a",
+            "default" : 1.0,
+            "desc" : "Multiplier for the first vector",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "mult_b",
+            "default" : 1.0,
+            "desc" : "Multiplier for the second vector",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "dot_product",
+            "default" : 0.0,
+            "desc" : "The dot product",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "cross_product",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The cross product",
+            "type" : "OUTPUT_VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "sum",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The sum",
+            "type" : "OUTPUT_VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "difference",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The difference",
+            "type" : "OUTPUT_VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "result_a",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The first vector times the first multiplier",
+            "type" : "OUTPUT_VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "result_b",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The second vector times the second multiplier",
+            "type" : "OUTPUT_VECTOR_TEXTURE"
+        },
+        
+        {
+            "attr" : "x",
+            "default" : 0.0,
+            "desc" : "The x-component of the first vector",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "y",
+            "default" : 0.0,
+            "desc" : "The y-component of the first vector",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "z",
+            "default" : 0.0,
+            "desc" : "The z-component of the first vector",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

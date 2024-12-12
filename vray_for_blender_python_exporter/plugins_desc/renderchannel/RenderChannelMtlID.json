@@ -1,0 +1,29 @@
+
+{
+    "Desciption" : "RenderChannelMtlID",
+    "ID" : "RenderChannelMtlID",
+    "Name" : "Render Channel Mtl ID",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "MaterialID",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

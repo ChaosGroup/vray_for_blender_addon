@@ -1,0 +1,28 @@
+
+{
+    "Desciption" : "TexMeshVertexColorWithDefault",
+    "ID" : "TexMeshVertexColorWithDefault",
+    "Name" : "Mesh Vertex Color With Default",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "vertex_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "default_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,384 @@
+{
+    "ID": "TexSoftbox",
+    "Name": "V-Ray Softbox",
+    "Parameters": [
+        {
+            "attr": "base_mult",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "base_gamma",
+            "ui": {
+                "soft_max": 2.2,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "spots_mult",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "u_offset",
+            "ui": {
+                "soft_min": -1.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "v_offset",
+            "ui": {
+                "soft_min": -1.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "base parameters",
+                "label": "Base Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "base_color"
+                    },
+                    {
+                        "name": "base_tex_on"
+                    },
+                    {
+                        "name": "base_tex"
+                    },
+                    {
+                        "name": "base_tint_on",
+                        "label": "Tint On"
+                    },
+                    {
+                        "name": "base_tint",
+                        "label": "Tint Color"
+                    },
+                    {
+                        "name": "base_tint_strength",
+                        "label": "Strength"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "base_mult",
+                        "label": "Multiplier"
+                    },
+                    {
+                        "name": "base_gamma",
+                        "label": "Gamma"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "hot spot / dark spot",
+                "label": "Hot Spot / Dark Spot",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "spots_on"
+                    },
+                    {
+                        "name": "spots_mult",
+                        "label": "Multiplier"
+                    },
+                    {
+                        "name": "spots_mode"
+                    },
+                    {
+                        "name": "spots_tint_on",
+                        "label": "Tint On"
+                    },
+                    {
+                        "name": "spots_tint",
+                        "label": "Tint Color"
+                    },
+                    {
+                        "name": "spots_tint_strength",
+                        "label": "Strength"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "tiling options",
+                        "label": "Tiling Options",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "u_offset",
+                                "label": "Offset U"
+                            },
+                            {
+                                "name": "v_offset",
+                                "label": "Offset V"
+                            },
+                            {
+                                "name": "u_tiling_on",
+                                "label": "Tile U"
+                            },
+                            {
+                                "name": "v_tiling_on",
+                                "label": "Tile V"
+                            },
+                            {
+                                "name": "u_tiling",
+                                "label": "Tiles U"
+                            },
+                            {
+                                "name": "v_tiling",
+                                "label": "Tiles V"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "fading options",
+                        "label": "Fading Options",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "spots_oradius"
+                            },
+                            {
+                                "name": "spots_iradius"
+                            },
+                            {
+                                "name": "spots_exp"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "gradients",
+                "label": "Gradients",
+                "attrs": [
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "radial vignette",
+                        "label": "Radial Vignette",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "layout": "ROW",
+                                        "attrs": [
+                                            {
+                                                "name": "grad_rad_on",
+                                                "label": "On"
+                                            },
+                                            {
+                                                "name": "grad_rad_flip",
+                                                "label": "Flip",
+                                                "active": {
+                                                    "cond": "::grad_rad_on=1"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "name": "ramp_grad_rad",
+                                        "custom_draw": "widgetDrawGradientRamp",
+                                        "active": {
+                                            "cond": "::grad_rad_on=1"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "v vignette",
+                        "label": "V Vignette",
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "layout": "ROW",
+                                        "attrs": [
+                                            {
+                                                "name": "grad_vert_on",
+                                                "label": "On"
+                                            },
+                                            {
+                                                "name": "grad_vert_flip",
+                                                "label": "Flip",
+                                                "active": {
+                                                    "cond": "::grad_vert_on=1"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "name": "ramp_grad_vert",
+                                        "custom_draw": "widgetDrawGradientRamp",
+                                        "active": {
+                                            "cond": "::grad_vert_on=1"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "u vignette",
+                        "label": "U Vignette",
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "layout": "ROW",
+                                        "attrs": [
+                                            {
+                                                "name": "grad_horiz_on",
+                                                "label": "On"
+                                            },
+                                            {
+                                                "name": "grad_horiz_flip",
+                                                "label": "Flip",
+                                                "active": {
+                                                    "cond": "::grad_horiz_on=1"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "name": "ramp_grad_horiz",
+                                        "custom_draw": "widgetDrawGradientRamp",
+                                        "active": {
+                                            "cond": "::grad_horiz_on=1"
+                                        }
+                                    }
+                                    
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "frame",
+                        "label": "Frame",
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "layout": "ROW",
+                                        "attrs": [
+                                            {
+                                                "name": "frame_on",
+                                                "label": "On"
+                                            },
+                                            {
+                                                "name": "frame_flip",
+                                                "label": "Flip",
+                                                "active": {
+                                                    "cond": "::frame_on=1"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "name": "ramp_frame",
+                                        "custom_draw": "widgetDrawGradientRamp",
+                                        "active": {
+                                            "cond": "::frame_on=1"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "frame_tint_on"
+                            },
+                            {
+                                "name": "frame_tint"
+                            },
+                            {
+                                "name": "frame_tint_strength"
+                            },
+                            {
+                                "name": "noise_amount"
+                            },
+                            {
+                                "name": "noise_size"
+                            },
+                            {
+                                "name": "noise_phase"
+                            },
+                            {
+                                "name": "noise_fractal"
+                            },
+                            {
+                                "name": "noise_levels"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "color",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size",
+            "un_noise_phase",
+
+            "grad_vert",
+            "grad_horiz",
+            "grad_rad",
+            "grad_frame"
+        ],
+        "animatable": true
+    }
+}

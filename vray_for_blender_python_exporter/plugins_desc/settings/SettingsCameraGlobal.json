@@ -1,0 +1,71 @@
+
+{
+    "Desciption" : "Virtual plugin for the shared SettingsCamera properties",
+    "ID" : "SettingsCameraGlobal",
+    "Name" : "Settings Camera Global",
+    "Parameters" : 
+    [
+        
+        
+        {
+            "attr" : "auto_corrections_mode",
+            "default" : "0",
+            "desc" : "Determine when to apply auto-exposure and auto-white balance (0 - only if the camera has no exposure; 1 - all cameras)",
+            "items" : 
+            [
+                [ "0", "Cameras without exposure only", "Cameras without exposure only" ],
+                [ "1", "All cameras", "All cameras" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "auto_exposure",
+            "default" : "0",
+            "desc" : "Auto exposure mode (0 - disabled; 1 - center-weighted average (original V-Ray algorithm); 2 - histogram). This feature requires light cache GI",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Center-weighted average", "Center-weighted average" ],
+                [ "2", "Histogram", "Histogram" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        {
+            "attr": "auto_white_balance",
+            "default": false,
+            "desc": "Enable/Disable auto-white balance",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+         "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "camera",
+                "label": "Camera",
+                "attrs": [
+                    {
+                        "name": "auto_white_balance",
+                        "label": "Auto White Balance"
+                    },
+                    {
+                        "name": "auto_exposure",
+                        "label": "Auto Exposure"
+                    },
+                    {
+                        "name": "auto_corrections_mode",
+                        "label": "Auto Corrections Mode"
+                    }
+                ]
+            }
+        ]
+    }
+}

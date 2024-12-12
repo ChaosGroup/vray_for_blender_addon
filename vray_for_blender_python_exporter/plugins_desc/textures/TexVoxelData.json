@@ -1,0 +1,80 @@
+
+{
+    "Desciption" : "TexVoxelData",
+    "ID" : "TexVoxelData",
+    "Name" : "Voxel Data",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "interpolation",
+            "default" : 0,
+            "desc" : "Interpolation type: 0 - Linear, 1 - Quadratic",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "resolution",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Resolution",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "density",
+            "default" : 0.0,
+            "desc" : "Fluid density",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "flame",
+            "default" : 0.0,
+            "desc" : "Fluid flame",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "fuel",
+            "default" : 0.0,
+            "desc" : "Fluid fuel",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "The UVW generator for the texture",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "out_density",
+            "default" : 0.0,
+            "desc" : "Density",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "out_flame",
+            "default" : 0.0,
+            "desc" : "Flame",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "out_fuel",
+            "default" : 0.0,
+            "desc" : "Fuel",
+            "type" : "OUTPUT_FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

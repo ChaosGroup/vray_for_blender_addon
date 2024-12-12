@@ -1,0 +1,84 @@
+
+{
+    "Desciption" : "TexModoBlendLayersScalar",
+    "ID" : "TexModoBlendLayersScalar",
+    "Name" : "Modo Blend Layers Scalar",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "The opacity for the foreground layer",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "mask",
+            "default" : 1.0,
+            "desc" : "Opacity mask for the foreground layer. This is multiplied by the opacity parameter but can be a texture",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "blend_mode",
+            "default" : "0",
+            "desc" : "0:Normal, 1:Average, 2:Add, 3:Subtract, 4:Darken, 5:Multiply, 6:Color burn, 7:Linear burn, 8:Lighten, 9:Screen, 10:Color Dodge, 11:Linear Dodge, 12:Spotlight, 13:Spotlight blend, 14:Overlay, 15:Softlight, 16:Hardlight, 17:Pinlight, 18:Hardmix, 19:Difference, 20:Exclusion, 21:Hue, 22:Saturation, 23:Color, 24:Value",
+            "items" : 
+            [
+                [ "0", "Normal", "Normal" ],
+                [ "1", "Average", "Average" ],
+                [ "2", "Add", "Add" ],
+                [ "3", "Subtract", "Subtract" ],
+                [ "4", "Darken", "Darken" ],
+                [ "5", "Multiply", "Multiply" ],
+                [ "6", "Color burn", "Color burn" ],
+                [ "7", "Linear burn", "Linear burn" ],
+                [ "8", "Lighten", "Lighten" ],
+                [ "9", "Screen", "Screen" ],
+                [ "10", "Color Dodge", "Color Dodge" ],
+                [ "11", "Linear Dodge", "Linear Dodge" ],
+                [ "12", "Spotlight", "Spotlight" ],
+                [ "13", "Spotlight blend", "Spotlight blend" ],
+                [ "14", "Overlay", "Overlay" ],
+                [ "15", "Softlight", "Softlight" ],
+                [ "16", "Hardlight", "Hardlight" ],
+                [ "17", "Pinlight", "Pinlight" ],
+                [ "18", "Hardmix", "Hardmix" ],
+                [ "19", "Difference", "Difference" ],
+                [ "20", "Exclusion", "Exclusion" ],
+                [ "21", "Hue", "Hue" ],
+                [ "22", "Saturation", "Saturation" ],
+                [ "23", "Color", "Color" ],
+                [ "24", "Value", "Value" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "background",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "foreground",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "foreground_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "If this parameter is not NULL it will be used instead of the 'foreground' parameter.The luminance of the returned color will be used, together with the alpha as a mask",
+            "type" : "TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

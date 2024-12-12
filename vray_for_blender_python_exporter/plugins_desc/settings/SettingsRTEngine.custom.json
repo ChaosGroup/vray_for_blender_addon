@@ -1,0 +1,63 @@
+{
+    "ID": "SettingsRTEngine",
+    "Parameters": [
+        {
+            "attr" : "opencl_resizeTextures",
+            "items" : 
+            [
+                [ "0", "Full size textures", "Full size textures" ],
+                [ "1", "Resize textures", "Resize textures" ],
+                [ "3", "Compressed", "Compressed" ]
+            ],
+            "default" : "0",
+            "ui" : { "display_name" : "Texture Mode" }
+        },
+        {
+            "attr" : "opencl_texsize",
+            "ui" : { "display_name" : "Texture Size" }
+        },
+        {
+            "attr" : "opencl_textureFormat",
+            "ui" : { "display_name" : "Texture Format" }
+        },
+        {
+            "attr" : "out_of_core_textures",
+            "desc" : "When true, V-Ray GPU will allocate textures in CPU memory while making them accessible to all rendering devices.",
+            "type" : "BOOL",
+            "ui" : { "display_name" : "Use System Memory for Textures" }
+        },
+        {
+            "attr" : "enable_bucket_sampler",
+            "default" : 1
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "label": "Ray Settings",
+                "layout": "SEPARATOR" 
+            },
+            {
+                "layout": "COLUMN",
+                "align": true,
+                "attrs": [
+                    { "name": "gpu_bundle_size" },
+                    { "name": "gpu_samples_per_pixel" }
+                ]
+            },
+            { 
+                "label": "Termination Settings",
+                "layout": "SEPARATOR" 
+            },
+            {
+                "layout": "COLUMN",
+                "align": true,
+                "attrs": [
+                    { "name": "max_render_time" },
+                    { "name": "max_sample_level" },
+                    { "name": "noise_threshold" }
+                ]
+            }
+        ]
+    }
+}

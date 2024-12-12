@@ -1,0 +1,12 @@
+{
+    "ID": "TexPtex",
+    "Parameters": [
+        {
+            "attr": "ptex_file",
+            "subtype": "FILE_PATH"
+        }
+    ],
+    "Options": {
+        "excluded_parameters": []
+    }
+}

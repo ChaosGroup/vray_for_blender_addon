@@ -1,0 +1,430 @@
+
+{
+    "Desciption" : "LightDirect",
+    "ID" : "LightDirect",
+    "Name" : "Light Direct",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "true if the light is casting light (turned on) and false otherwise; it only makes sense to use this parameter if it is animated, or if another object depends on this node but it must not be rendered",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transformation of the light",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pivot_offset",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Pivot point offset relative to center of local coordinate space. Does NOT affect rendering",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Color of the light",
+            "type" : "ACOLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the color parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affectDiffuse",
+            "default" : true,
+            "desc" : "True if the light produces diffuse lighting and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect diffuse",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "affectSpecular",
+            "default" : true,
+            "desc" : "True if the light produces specular hilights and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect specular"
+            }
+        },
+        
+        {
+            "attr" : "affectAtmospherics",
+            "default" : true,
+            "desc" : "True if the light affects atmospheric effects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect atmospherics"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_contribution",
+            "default" : 1.0,
+            "desc" : "Diffuse contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "specular_contribution",
+            "default" : 1.0,
+            "desc" : "Specular contribution for the light",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "atmospherics_contribution",
+            "default" : 1.0,
+            "desc" : "Contribution of the light to atmospheric effects",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "use_global_light_level",
+            "default" : true,
+            "desc" : "true if the light should use the global light level setting",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of strings identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bumped_below_surface_check",
+            "default" : false,
+            "desc" : "True if the bumped normal should be used to check if the light direction is below the surface",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Bumped normal check"
+            }
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of parameter samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows",
+            "default" : true,
+            "desc" : "true if the light casts shadows and false otherwise",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Shadows"
+            }
+        },
+        
+        {
+            "attr" : "shadowColor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The shadow color. Anything but black is not physically accurate",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowColor_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "A color texture that if present will override the shadowColor parameter",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadowBias",
+            "default" : 0.0,
+            "desc" : "Shadow offset from the surface. Higher values move the shadow toward the object while lower values move it away. Extreme values can cause undesired results like shadow leaking or detached shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Shadow bias",
+                "soft_max" : 0.1000000014901161,
+                "soft_min" : -0.1000000014901161
+            }
+        },
+        
+        {
+            "attr" : "photonSubdivs",
+            "default" : 500,
+            "desc" : "Determines the number of photons emitted by this light when calculating the Global Photon Map. 1000 subdivs equal 1 million photons",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Photon subdivs",
+                "min" : 0,
+                "rollout" : "Photon emission",
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "causticSubdivs",
+            "default" : 1000,
+            "desc" : "Determines the number of photons emitted by this light when calculating the Caustics Photon Map. 1000 subdivs equal 1 million photons",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Caustics subdivs",
+                "min" : 0,
+                "soft_max" : 4000
+            }
+        },
+        
+        {
+            "attr" : "diffuseMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the diffuse photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Diffuse multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "causticMult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the brightness of the caustics photons",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Caustics multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0,
+                "spin_step" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "cutoffThreshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Light cut-off threshold (speed optimization). If the light intensity for a point is below this threshold, the light will not be computed. Larger values cut away more of the light, while lower values make the light range larger. When this value is 0.0, the light is calculated for all surfaces",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Cut-off threshold",
+                "min" : 0.0,
+                "rollout" : "Sampling",
+                "soft_max" : 0.50,
+                "spin_step" : 0.001000000047497451
+            }
+        },
+        
+        {
+            "attr" : "is_instance_prototype",
+            "default" : 0,
+            "desc" : "If light is an instance prototype its \"enabled\" parameter value is ignored (light is treated as disabled when processing the plugin instance itself), but is taken into account when generating instances of this light",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels the result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "Channels"
+            }
+        },
+        
+        {
+            "attr" : "channels_raw",
+            "default" : null,
+            "desc" : "Render channels the raw diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_diffuse",
+            "default" : null,
+            "desc" : "Render channels the diffuse result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_specular",
+            "default" : null,
+            "desc" : "Render channels the specular result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "channels_full",
+            "default" : null,
+            "desc" : "Render channels the full (direct+indirect) result of this light will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "lpe_label",
+            "default" : "",
+            "desc" : "Light path expressions light label which can be used to identify the light",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "units",
+            "default" : "0",
+            "desc" : "Units for the intensity (0 - default, 1 - lumens, 2 - lm/m/m/sr, 3 - watts, 4 - w/m/m/sr)",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "Lumens", "Lumens" ],
+                [ "2", "lm/m/m/sr", "lm/m/m/sr" ],
+                [ "3", "Watts", "Watts" ],
+                [ "4", "w/m/m/sr", "w/m/m/sr" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "intensity",
+            "default" : 1.0,
+            "desc" : "Light intensity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "intensity_tex",
+            "default" : 0.0,
+            "desc" : "A float texture that if present will override the intensity parameter",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "<EndRollout>"
+            }
+        },
+        
+        {
+            "attr" : "storeWithIrradianceMap",
+            "default" : false,
+            "desc" : "When this option is on and GI calculation is set to Irradiance map V-Ray will calculate the effects of this light and store them in the irradiance map. The result is that the irradiance map is computed more slowly but the rendering takes less time. You can also save the irradiance map and reuse it later",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Store with irradiance map",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "shadowSubdivs",
+            "default" : 8,
+            "desc" : "Controls the number of samples used to compute lighting",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "Shadows"
+            }
+        },
+        
+        {
+            "attr" : "beamRadius",
+            "default" : 0.0,
+            "desc" : "Radius of the beam around the light. This only determines where photons for caustics are shot from. Set to 0.0 if you want to disable the beam",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "rollout" : "Basic"
+            }
+        },
+        
+        {
+            "attr" : "spreadAngle",
+            "default" : 0.0,
+            "desc" : "A value larger than 0.0 makes the light cast soft shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "units" : "radians"
+            }
+        }
+    ],
+    "Type" : "LIGHT",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

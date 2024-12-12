@@ -1,0 +1,243 @@
+
+{
+    "Desciption" : "BRDFStochasticFlakes",
+    "ID" : "BRDFStochasticFlakes",
+    "Name" : "Stochastic Flakes",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enable_flakes",
+            "default" : true,
+            "desc" : "Turn on the stochastic flakes. If this option is off, the underlying smooth distribution is used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic parameters",
+                "tab" : "V-Ray Stochastic Flakes"
+            }
+        },
+        
+        {
+            "attr" : "num_flakes",
+            "default" : 3000,
+            "desc" : "The square root of the number of flakes per unit area in the texture space",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Number of Flakes",
+                "max" : 46340,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "hilight_glossiness",
+            "default" : 0.8999999761581421,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "blur_angle",
+            "default" : 3.0,
+            "desc" : "The angle of the cone, in which flakes transfer light. The more narrow the angle the sharper the flakes",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 20.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "reflect_filter",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Flakes reflection filter color",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mapping_type",
+            "default" : "0",
+            "desc" : "The mapping method for the flakes (0 - explicit mapping channel, 1 - triplanar projection in object space)",
+            "items" : 
+            [
+                [ "0", "Mapping channel", "Mapping channel" ],
+                [ "1", "Triplanar", "Triplanar" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "If specified and mapping type is Explicit mapping channel, will be used instead of map_channel",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "map_channel",
+            "default" : 0,
+            "desc" : "The mapping channel when the mapping_type is 0",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flake_scale",
+            "default" : 1.0,
+            "desc" : "Locally scale the flakes pattern",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "brdf_type",
+            "default" : "1",
+            "desc" : "BRDF type (0 - Beckmann, 1 - GGX)",
+            "items" : 
+            [
+                [ "0", "Beckmann", "Beckmann" ],
+                [ "1", "GGX", "GGX" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "BRDF Type"
+            }
+        },
+        
+        {
+            "attr" : "seed",
+            "default" : 0,
+            "desc" : "Seed generating completely different random pattern",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000000000,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "colored_flakes_option",
+            "default" : "0",
+            "desc" : "Colored flakes option (0 - Off, 1 - Random hue, 2 - Random from map)",
+            "items" : 
+            [
+                [ "0", "Off", "Off" ],
+                [ "1", "Random hue", "Random hue" ],
+                [ "2", "Random from map", "Random from map" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Colored flakes",
+                "rollout" : "Colored flakes parameters"
+            }
+        },
+        
+        {
+            "attr" : "saturation",
+            "default" : 1.0,
+            "desc" : "Flake color saturation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lightness",
+            "default" : 0.50,
+            "desc" : "Flake color lightness",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "random_color_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture to sample random flake colors. The u coordinate is sampled in uv space",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "white_average",
+            "default" : false,
+            "desc" : "Normalize flakes colors to be white (1, 1, 1) on avarage",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tex_subdivs",
+            "default" : 12,
+            "desc" : "The subdivisions of a unit square in texture space. Increase only if you observe square-like artefacts in zoomed regions",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 24,
+                "min" : 10
+            }
+        },
+        
+        {
+            "attr" : "blend_min",
+            "default" : 500.0,
+            "desc" : "Number of flakes per pixel, below which the smooth distribution is not computed and blended",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0,
+                "rollout" : "Advanced parameters"
+            }
+        },
+        
+        {
+            "attr" : "blend_max",
+            "default" : 2000.0,
+            "desc" : "Number of flakes per pixel, above which only the smooth distribution is computed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 10000.0,
+                "min" : 0.0
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

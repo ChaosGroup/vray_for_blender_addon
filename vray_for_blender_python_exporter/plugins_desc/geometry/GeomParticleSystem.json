@@ -1,0 +1,384 @@
+
+{
+    "Desciption" : "GeomParticleSystem",
+    "ID" : "GeomParticleSystem",
+    "Name" : "Geom Particle System",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "acceleration_pp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle acceleration",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "colors",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Per-particle diffuse color",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "emission_pp",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle emission color",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_1",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector1PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_2",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector2PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_3",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector3PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_4",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector4PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_color_pp_5",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Corresponds to Maya's userVector5PP",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "age_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle age",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lifespan_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle lifespan",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "opacity_pp",
+            "default" : 0.0,
+            "desc" : "Per-particle opacity",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_1",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar1PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_2",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar2PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_3",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar3PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_4",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar4PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_float_pp_5",
+            "default" : 0.0,
+            "desc" : "Corresponds to Maya's userScalar5PP",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mesh",
+            "default" : null,
+            "desc" : "The triangle mesh that will be instanced.This is used only for some of the particle render types",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "render_type",
+            "default" : "7",
+            "desc" : "3 - multipoints; 4 - multistreak; 6 - points; 7 - Spheres; 8 - Sprites; 9 - Streak.Everything else gives a warning and renders as spheres",
+            "items" : 
+            [
+                [ "3", "Multi-Points", "Multi-Points" ],
+                [ "4", "Multi-Streak", "Multi-Streak" ],
+                [ "6", "Points", "Points" ],
+                [ "7", "Spheres", "Spheres" ],
+                [ "8", "Sprites", "Sprites" ],
+                [ "9", "Streak", "Streak" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "positions",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The positions of the particles",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocities",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The velocities of the particles. This is in world units per frame",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ids",
+            "default" : 0,
+            "desc" : "The particle IDs. Some particles may disappear within the motion blur interval so we need these when storing moving primitives in MovingParticleGeomGen. This parameter is required to render motion blur",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "radii",
+            "default" : 1.0,
+            "desc" : "The particle radii when the particles are spheres",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_num_pp",
+            "default" : 1,
+            "desc" : "Per-Particle sprite number",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normals",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Per-particle normals for point particles",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "radius",
+            "default" : 1.0,
+            "desc" : "The constant particle radius when radii is empty",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_size_x",
+            "default" : 1.0,
+            "desc" : "The width of sprite particles in world units",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_size_y",
+            "default" : 1.0,
+            "desc" : "The height of sprite particles in world units",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_twist",
+            "default" : 0.0,
+            "desc" : "The twist of sprite particles in degrees",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_scale_x",
+            "default" : 1.0,
+            "desc" : "Parameter for per particle scale on the X-axis",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_scale_y",
+            "default" : 1.0,
+            "desc" : "Parameter for per particle scale on the Y-axis",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_rotate",
+            "default" : 1.0,
+            "desc" : "Parameter for per particle twist (z-axis rotation)",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sprite_orientation",
+            "default" : 0,
+            "desc" : "0 - orient sprites towards the camera center, 1 - orient sprites parallel to the camera plane",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "point_size",
+            "default" : 1.0,
+            "desc" : "The size of point and multipoint particles, in pixels",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "point_radii",
+            "default" : false,
+            "desc" : "If true, the point size will be taken form radii parameter",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "point_world_size",
+            "default" : false,
+            "desc" : "If true, the point size is in world space, not screen space",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "point_size_from_ortho_width",
+            "default" : false,
+            "desc" : "If true and the camera is orthographic, the size is calculated from the camera's width",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "multi_count",
+            "default" : 1,
+            "desc" : "The number of particles generated for each input particle, when the render type is multipoints or multistreaks",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "multi_radius",
+            "default" : 0.0,
+            "desc" : "The maximum distance between the original and a generated particle when the render type is multipoints or multistreaks",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "line_width",
+            "default" : 1.0,
+            "desc" : "The width of streak particles, in pixels",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "tail_length",
+            "default" : 1.0,
+            "desc" : "The length of streak particles, in world units, the actual length depends on the particle velocity as well",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "primary_visibility",
+            "default" : true,
+            "desc" : "If off, shading an intersection with this mesh will not generate a gbuffer",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "data_source",
+            "default" : null,
+            "desc" : "External data source to be used instead of positions, velocities, ids and radii",
+            "type" : "PLUGIN",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

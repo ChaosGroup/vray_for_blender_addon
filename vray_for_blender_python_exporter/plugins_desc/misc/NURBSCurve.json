@@ -1,0 +1,45 @@
+
+{
+    "Desciption" : "NURBSCurve",
+    "ID" : "NURBSCurve",
+    "Name" : "NURBS Curve",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "degree",
+            "default" : 3,
+            "desc" : "Degree of the curve",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "cvs",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The control vertices of the curve",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "knotVector",
+            "default" : 0.0,
+            "desc" : "The knots vector for the curve",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "boundary",
+            "default" : true,
+            "desc" : "Mark curve as island or hole",
+            "elements_count" : 0,
+            "type" : "BOOL_LIST"
+        }
+    ],
+    "Type" : "MISC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

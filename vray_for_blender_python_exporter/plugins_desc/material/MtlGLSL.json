@@ -1,0 +1,138 @@
+
+{
+    "Desciption" : "MtlGLSL",
+    "ID" : "MtlGLSL",
+    "Name" : "Mtl GLSL",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "shader_file",
+            "default" : "",
+            "desc" : "The path to the GLSL shader to execute (*.glsl, *.frag, *.pfrag)",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "file_extensions" : [ "glsl", "frag", "pfrag" ]
+            }
+        },
+        
+        {
+            "attr" : "uvw_generators",
+            "default" : null,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex_mult",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "use_shader_alpha",
+            "default" : false,
+            "desc" : "Switch for using either the transparency parameters or the shader alpha result",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "uniforms",
+            "default" : null,
+            "desc" : "Non-varying state variables referenced by the shader",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "max_ray_depth",
+            "default" : -1,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "clamp_result",
+            "default" : true,
+            "desc" : "Determines whether to clamp the final result",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "clamp_value",
+            "default" : 1.0,
+            "desc" : "The upper clamp limit for the result color should the clamp_result flag is true",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "use_inline_shader",
+            "default" : false,
+            "desc" : "True to load the embedded shader instead of an external shader file",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "inline_shader",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "vertex_channels",
+            "default" : null,
+            "desc" : "Specifies additional mapping channels accessible through vr_VertexData[]",
+            "type" : "LIST"
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this BRDF will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bump_replaces_normal",
+            "default" : false,
+            "desc" : "True to replace the normal on the GPU when this plugin is attached as a bump map",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

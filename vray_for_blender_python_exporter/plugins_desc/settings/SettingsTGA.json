@@ -1,0 +1,26 @@
+
+{
+    "Desciption" : "SettingsTGA",
+    "ID" : "SettingsTGA",
+    "Name" : "Settings TGA",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "compression",
+            "default" : "2",
+            "desc" : "Compression type for TGA output",
+            "items" : 
+            [
+                [ "2", "No Compression", "No Compression" ],
+                [ "10", "Run-length", "Run-length" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

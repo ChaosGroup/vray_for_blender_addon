@@ -1,0 +1,539 @@
+
+{
+    "Desciption" : "EnvironmentFog",
+    "ID" : "EnvironmentFog",
+    "Name" : "Environment Fog",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "If false, disable the rendering",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Basic Parameters",
+                "tab" : "V-Ray Environment Fog"
+            }
+        },
+        
+        {
+            "attr" : "gizmos",
+            "default" : null,
+            "desc" : "List of gizmos",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Defines the color of the fog, when it is illuminated by light sources",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Fog Color"
+            }
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Defines the color of the fog, when it is illuminated by light sources. You can also use a texture map to drive the fog color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fog Color (map)"
+            }
+        },
+        
+        {
+            "attr" : "color_mult",
+            "default" : 1.0,
+            "desc" : "Fog color multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fog Color Multiplier",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "emission",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Fog emission color. Controls the fog emission (self-illumination). You can use this parameter to substitute the ambient illumination inside the fog, instead of using GI",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Emission Color"
+            }
+        },
+        
+        {
+            "attr" : "emission_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Fog emission texture. Controls the fog emission (self-illumination). You can use this parameter to substitute the ambient illumination inside the fog, instead of using GI",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Emission Color (map)"
+            }
+        },
+        
+        {
+            "attr" : "emission_mult",
+            "default" : 1.0,
+            "desc" : "Fog emission multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Emission Multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "emission_mult_tex",
+            "default" : 0.0,
+            "desc" : "Fog emission multiplier texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Emission Multiplier (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "distance",
+            "default" : 10.0,
+            "desc" : "Distance between fog particles. Controls the fog density. Larger values make the fog more transparent, while smaller values make it more dense",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fog Distance",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "density",
+            "default" : 1.0,
+            "desc" : "Fog density. A multiplier for the Fog distance parameter",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fog Density",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "density_tex",
+            "default" : 0.0,
+            "desc" : "Texture for fog density. A multiplier for the Fog distance parameter that allows a texture to be used for the density of the fog",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fog Density (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity_mode",
+            "default" : false,
+            "desc" : "If true, density will be treated as opacity",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.3750, 0.3750, 0.3750 ],
+            "desc" : "The transparency of the Fog volume at thickness given by the Fog distance parameteri.e. the color of a white ray after traveling the specified distance inside the fog volume.Non-gray colors will result in colored attenuation of the light passing through the fog. This parameter changes the extinction coefficient of the fog while the 'Fog Color' parameter sets the single scattering albedo",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Fog Transparency"
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Texture for Fog transparency. The transparency of the Fog volume at thickness given by the Fog distance parameteri.e. the color of a white ray after traveling the specified distance inside the fog volume.Non-gray colors will result in colored attenuation of the light passing through the fog. This parameter changes the extinction coefficient of the fog while the 'Fog Color' parameter sets the single scattering albedo",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fog Transparency (map)"
+            }
+        },
+        
+        {
+            "attr" : "phase_function",
+            "default" : 0.0,
+            "desc" : "Controls the phase function used for the anisotropic volumetric scattering computation. Accepts values in the interval [-1 1]. Negative values correspond to backward scattering, positive values to forward scattering and a value of zero to isotropic ('diffuse'). ",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Phase Function",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "This parameter determines the number of points inside the fog at which volumetric lighting is evaluated. Smaller values for this parameter render faster, but may produce noise in the image. Higher values render longer, but with less noise. It is only used when there are no texture maps specified, in which case the volume properties are the same everywhere",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "use_height",
+            "default" : true,
+            "desc" : "Whether or not the height should be taken into account",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "height",
+            "default" : 100.0,
+            "desc" : "Fog starting point along the up-axis. By default the up axis is Z",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "yup",
+            "default" : false,
+            "desc" : "If true, y is the up axis, not z",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Y is up"
+            }
+        },
+        
+        {
+            "attr" : "solid_mode",
+            "default" : false,
+            "desc" : "If true, this will cause to disable randomization when sampling and take 1 sample at 0.5 density",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Advanced Parameters"
+            }
+        },
+        
+        {
+            "attr" : "solid_threshold",
+            "default" : 0.50,
+            "desc" : "Solid mode transparency threshold",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "jitter",
+            "default" : false,
+            "desc" : "If true, add a random offset when starting sampling",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadow_opacity",
+            "default" : 1.0,
+            "desc" : "Volume opacity scale for shadow rays",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "stretch aspect for the 3 axis, when the fog container must grow/shrink preserving its original density",
+            "elements_count" : 3,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "deep_output",
+            "default" : false,
+            "desc" : "Toggle the deep image output. Note that enabling this option will force ray marching even for simple volumetrics, which can cause slower rendering",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.0,
+            "desc" : "Index of refraction for the volume, which describes the way light bends when crossing the material surface. A value of 1.0 means the light will not change direction",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "IOR",
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fade_out_mode",
+            "default" : "0",
+            "desc" : "fade out mode 0: Multiply by density, 1: Add density to falloff",
+            "items" : 
+            [
+                [ "0", "Multiply by density", "Multiply by density" ],
+                [ "1", "Add density to falloff", "Add density to falloff" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Fade Out"
+            }
+        },
+        
+        {
+            "attr" : "fade_out_radius",
+            "default" : 0.0,
+            "desc" : "fade out effect for the edges",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "per_object_fade_out_radius",
+            "default" : false,
+            "desc" : "fade out effect for the edges per object",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scatter_gi",
+            "default" : false,
+            "desc" : "When on, the fog will also scatter global illumination. Note that this can be quite slow. In many cases, global illumination within the fog can be substituted with a simple emission term. When this option is on, the currently selected global illumination algorithm in the V-Ray settings will be used to accelerate GI inside the volume (e.g. the irradiance map, light cache, photon map or brute-force)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Scatter GI",
+                "rollout" : "GI"
+            }
+        },
+        
+        {
+            "attr" : "scatter_bounces",
+            "default" : 8,
+            "desc" : "Number of GI bounces calculated inside the fog",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "simplify_gi",
+            "default" : false,
+            "desc" : "Simplify global illumination. When this option is checked V-Ray will use a simplified method for calculating the GI when rendering parts of the fog that are textured or are being faded out",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Simplify Textures for GI",
+                "rollout" : "Raymarching"
+            }
+        },
+        
+        {
+            "attr" : "step_size",
+            "default" : 1.0,
+            "desc" : "Determines the size of one step through the volume. Smaller steps produce more accurate results but are slower to render. In general, dense volumes require smaller step sizes than more transparent volumes. In practice, step sizes that are two to three times smaller than the Fog distance parameter work well",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_steps",
+            "default" : 1000,
+            "desc" : "Maximum number of steps through the volume",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "tex_samples",
+            "default" : 4,
+            "desc" : "Number of texture samples for each step through the volume. This allows to sample textures more accurately than the volumetric lighting. It is useful in cases where the textures vary much faster than the lighting itself (e.g. for detailed fractal textures)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Texture Samples",
+                "max" : 10000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "cutoff_threshold",
+            "default" : 0.001000000047497451,
+            "desc" : "Controls when the raymarcher will stop traversing the volume. If the accumulated volume transparency falls below this threshold, the volume will be considered opaque and tracing will be aborted. Higher values make the rendering faster but may introduce artifacts",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "light_mode",
+            "default" : "1",
+            "desc" : "light mode 0: no lights, 1: Use per-gizmo lights, 2: Override per-gizmo lights, 3: Intersect with per-gizmo lights, 4: Add to per-gizmo lights",
+            "items" : 
+            [
+                [ "0", "No lights", "No lights" ],
+                [ "1", "Use per-gizmo lights", "Use per-gizmo lights" ],
+                [ "2", "Override per-gizmo lights", "Override per-gizmo lights" ],
+                
+                [
+                    "3",
+                    "Intersect with per-gizmo lights",
+                    "Intersect with per-gizmo lights"
+                ],
+                [ "4", "Add to per-gizmo lights", "Add to per-gizmo lights" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Lights"
+            }
+        },
+        
+        {
+            "attr" : "lights",
+            "default" : null,
+            "desc" : "A list with lights. How they affect the fog depends on the 'Light mode' parameter as well",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "lightSet", 4 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "use_shade_instance",
+            "default" : false,
+            "desc" : "True if the shade instance should be used when sampling textures",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "use_shade_data",
+            "default" : true,
+            "desc" : "True if the shade data should be used when sampling textures. The light mode will be ignored if this is true and the shader is not global!",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_background",
+            "default" : false,
+            "desc" : "When this option is off, the background will not be obscured by the fog",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Ray Filter"
+            }
+        },
+        
+        {
+            "attr" : "affect_reflections",
+            "default" : true,
+            "desc" : "Specifies whether the fog will be rendered in reflections",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_refractions",
+            "default" : true,
+            "desc" : "Specifies whether the fog will be rendered in refractions",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_shadows",
+            "default" : true,
+            "desc" : "Specifies if the fog should affect shadow rays",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_gi",
+            "default" : true,
+            "desc" : "Specifies if the fog should affect GI rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect GI"
+            }
+        },
+        
+        {
+            "attr" : "affect_camera",
+            "default" : true,
+            "desc" : "Specifies if the fog will be visible to camera rays",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : true,
+            "desc" : "Whether the alpha channel is affected",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "VOLUMETRIC",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

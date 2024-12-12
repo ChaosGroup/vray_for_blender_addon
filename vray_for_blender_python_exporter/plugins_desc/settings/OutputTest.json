@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "OutputTest",
+    "ID" : "OutputTest",
+    "Name" : "Output Test",
+    "Parameters" : [],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

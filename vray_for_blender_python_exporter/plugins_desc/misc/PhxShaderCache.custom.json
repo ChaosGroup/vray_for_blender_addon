@@ -1,0 +1,16 @@
+{
+    "ID": "PhxShaderCache",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "cache_path"
+                    }
+                ]
+            }
+        ]
+    },
+    "Type": "EFFECT"
+}

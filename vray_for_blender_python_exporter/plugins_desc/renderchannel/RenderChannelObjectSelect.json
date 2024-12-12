@@ -1,0 +1,85 @@
+
+{
+    "Desciption" : "RenderChannelObjectSelect",
+    "ID" : "RenderChannelObjectSelect",
+    "Name" : "Render Channel Object Select",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "ObjectSelect",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "id",
+            "default" : 0,
+            "desc" : "The object/material ID that will be extracted",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "ids",
+            "default" : 0,
+            "desc" : "The object/material IDs (more than one) that will be extracted",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "use_mtl_id",
+            "default" : false,
+            "desc" : "true to use the material IDs instead of the object IDs",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_matte_objects",
+            "default" : true,
+            "desc" : "false to not affect Matte Objects",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "consider_for_aa",
+            "default" : false,
+            "desc" : "true to consider this render element for antialiasing (may slow down rendering)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "invert_selection",
+            "default" : false,
+            "desc" : "true to use object/material IDs different from the specified by id",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "denoise",
+            "default" : false,
+            "desc" : "true to denoise the channel; false otherwise",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "color_mapping",
+            "default" : false,
+            "desc" : "true to apply color mapping to the channel; false otherwise",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,169 @@
+{
+    "ID": "TexWood",
+    "Name": "V-Ray Wood",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "common",
+                "label": "Common",
+                "attrs": [
+                    {
+                        "name": "compatibility_with"
+                    },
+                    {
+                        "name": "alpha_from_intensity"
+                    },
+                    {
+                        "name": "invert"
+                    },
+                    {
+                        "name": "invert_alpha"
+                    },
+                    {
+                        "name": "color_mult"
+                    },
+                    {
+                        "name": "color_offset"
+                    },
+                    {
+                        "name": "alpha_mult"
+                    },
+                    {
+                        "name": "alpha_offset"
+                    },
+                    {
+                        "name": "nouvw_color"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "mapped",
+                "label": "Mapped",
+                "attrs": [
+                    {
+                        "name": "wrap"
+                    },
+                    {
+                        "name": "placement_type"
+                    },
+                    {
+                        "name": "u"
+                    },
+                    {
+                        "name": "v"
+                    },
+                    {
+                        "name": "w"
+                    },
+                    {
+                        "name": "h"
+                    },
+                    {
+                        "name": "jitter"
+                    },
+                    {
+                        "name": "tile_u"
+                    },
+                    {
+                        "name": "tile_v"
+                    },
+                    {
+                        "name": "uv_noise_on"
+                    },
+                    {
+                        "name": "uv_noise_animate"
+                    },
+                    {
+                        "name": "uv_noise_amount"
+                    },
+                    {
+                        "name": "uv_noise_levels"
+                    },
+                    {
+                        "name": "uv_noise_size"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs":[
+                    {
+                        "name": "un_noise_phase"
+                    },
+                    {
+                        "name": "filler_color_tex"
+                    },
+                    {
+                        "name": "vein_color_tex"
+                    },
+                    {
+                        "name": "vein_spread"
+                    },
+                    {
+                        "name": "layer_size"
+                    },
+                    {
+                        "name": "randomness"
+                    },
+                    {
+                        "name": "age"
+                    },
+                    {
+                        "name": "grain_color_tex"
+                    },
+                    {
+                        "name": "grain_contr"
+                    },
+                    {
+                        "name": "grain_spacing"
+                    },
+                    {
+                        "name": "center_u"
+                    },
+                    {
+                        "name": "center_v"
+                    },
+                    {
+                        "name": "amplitude_x"
+                    },
+                    {
+                        "name": "amplitude_y"
+                    },
+                    {
+                        "name": "ratio"
+                    },
+                    {
+                        "name": "ripples_x"
+                    },
+                    {
+                        "name": "ripples_y"
+                    },
+                    {
+                        "name": "ripples_z"
+                    },
+                    {
+                        "name": "depth_min"
+                    },
+                    {
+                        "name": "depth_max"
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

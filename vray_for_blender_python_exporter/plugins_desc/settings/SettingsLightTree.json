@@ -1,0 +1,59 @@
+
+{
+    "Desciption" : "SettingsLightTree",
+    "ID" : "SettingsLightTree",
+    "Name" : "Settings Light Tree",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "On"
+            }
+        },
+        
+        {
+            "attr" : "solids_enabled",
+            "default" : "1",
+            "desc" : "",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Auto", "Auto" ],
+                [ "2", "Enabled", "Enabled" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Use solids"
+            }
+        },
+        
+        {
+            "attr" : "build_quality",
+            "default" : "0",
+            "desc" : "",
+            "items" : 
+            [
+                [ "0", "Auto", "Auto" ],
+                [ "1", "Optimal", "Optimal" ],
+                [ "2", "Fast", "Fast" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Tree quality"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

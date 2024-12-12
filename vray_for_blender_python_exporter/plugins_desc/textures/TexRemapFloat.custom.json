@@ -1,0 +1,37 @@
+{
+    "ID": "TexRemapFloat",
+    "Name": "V-Ray Remap Float",
+    "Subtype": "UTILITY",
+    "Category": "FLOAT_TEXTURE",
+    "Node":{
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "low"
+                    },
+                    {
+                        "name": "high"
+                    }
+                ]
+            }
+        ]
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "align": true,
+                "attrs": [
+                    {
+                        "name": "low"
+                    },
+                    {
+                        "name": "high"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

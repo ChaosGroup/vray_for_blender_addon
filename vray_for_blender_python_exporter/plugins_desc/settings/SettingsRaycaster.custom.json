@@ -1,0 +1,46 @@
+{
+    "ID": "SettingsRaycaster",
+    "Parameters": [
+        {
+            "attr": "dynMemLimit",
+            "default": 0,
+            "ui": {
+                "display_name": "Dynamic Memory Limit",
+                "min": 0,
+                "soft_max": 64000
+            }
+        },
+        {
+            "attr": "minLeafSize",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "name": "raycaster",
+                "attrs": [
+                    {
+                        "name": "dynMemLimit"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "maxLevels",
+            "faceLevelCoef",
+            "minLeafSize",
+            "embreeUse",
+            "embreeUseMB",
+            "embreeHair",
+            "embreeLowMemory",
+            "embreeRayPackets"
+        ],
+        "animatable": false
+    }
+}

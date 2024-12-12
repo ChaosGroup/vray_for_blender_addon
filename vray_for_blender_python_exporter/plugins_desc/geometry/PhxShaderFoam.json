@@ -1,0 +1,806 @@
+
+{
+    "Desciption" : "PhxShaderFoam",
+    "ID" : "PhxShaderFoam",
+    "Name" : "Phx Shader Foam",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "renderAsVolumetric",
+            "default" : false,
+            "desc" : "Set to true if the plugin should be rendered as a volumetric",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "enable rendering",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "geommode",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_source",
+            "default" : null,
+            "desc" : "A list of particles source",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "particle_tm",
+            "default" : null,
+            "desc" : "A list of transformations per particles source",
+            "type" : "LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gpuMaterial",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.9499999880790710, 0.9499999880790710, 0.9499999880790710 ],
+            "desc" : "Specifies the particle color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "colfrompartchan",
+            "default" : false,
+            "desc" : "Use a particle channel for coloring the particles",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "usecolormap",
+            "default" : false,
+            "desc" : "enable the color map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "colormap",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "color map",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "bounces",
+            "default" : 1,
+            "desc" : "max bounces",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "minw",
+            "default" : 0.009999999776482582,
+            "desc" : "reflection cut off",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ri",
+            "default" : 2.0,
+            "desc" : "refraction index",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "difmul",
+            "default" : 1.0,
+            "desc" : "diffuse multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Diffuse Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "hlwidth",
+            "default" : 0.50,
+            "desc" : "highlights width",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Highlights Width"
+            }
+        },
+        
+        {
+            "attr" : "hlmult",
+            "default" : 1.0,
+            "desc" : "highlights multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Highlights Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "reduction",
+            "default" : 1.0,
+            "desc" : "Particle Count Multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Particle Count Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "cntmul_inc_meth",
+            "default" : 1,
+            "desc" : "Method for increasing the number of particles when using Count Multiplier",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cntmul_inc_nbrs",
+            "default" : 6,
+            "desc" : "Maximum number of neighbors to use for increasing the number of particles when using Count Multipliers",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displ_fade_from_liq",
+            "default" : false,
+            "desc" : "Measure distance to the actual liquid mesh for suppressing the displacement",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displ_fade_from_liq_dist",
+            "default" : 10.0,
+            "desc" : "The displacement will be reduced with increasing distance from the liquid surface, and will be completely zeroed when it reaches this distance",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pvar",
+            "default" : 5.0,
+            "desc" : "pressure variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Pressure Variation"
+            }
+        },
+        
+        {
+            "attr" : "szmul",
+            "default" : 1.0,
+            "desc" : "size multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size Multiplier"
+            }
+        },
+        
+        {
+            "attr" : "szmul_pa",
+            "default" : false,
+            "desc" : "size multiplier by particle age",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Size Multiplier by Age"
+            }
+        },
+        
+        {
+            "attr" : "szmul_anim",
+            "default" : null,
+            "desc" : "A list of particle size multipliers per particle age",
+            "type" : "LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "szadd",
+            "default" : 0.0,
+            "desc" : "size addend",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size Addend"
+            }
+        },
+        
+        {
+            "attr" : "szvar",
+            "default" : 0.0,
+            "desc" : "size variation",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size Variation"
+            }
+        },
+        
+        {
+            "attr" : "szdist",
+            "default" : 1.0,
+            "desc" : "size distribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Size Distribution"
+            }
+        },
+        
+        {
+            "attr" : "scattering",
+            "default" : "3",
+            "desc" : "scattering method - 0:Ray-traced (GI only), 1:Disabled, 2:Approximate, 3:Approximate+Shadows",
+            "items" : 
+            [
+                [ "0", "Ray-traced", "Ray-traced" ],
+                [ "1", "Disabled", "Disabled" ],
+                [ "2", "Approximate", "Approximate" ],
+                [ "3", "Approximate+Shadows", "Approximate+Shadows" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Scattering Method"
+            }
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "3",
+            "desc" : "rendering mode - 0:Bubbles, 1:Cellular, 2:Splashes, 3:Points, 4:Fog",
+            "items" : 
+            [
+                [ "0", "Bubbles", "Bubbles" ],
+                [ "1", "Cellular", "Cellular" ],
+                [ "2", "Splashes", "Splashes" ],
+                [ "3", "Points", "Points" ],
+                [ "4", "Fog", "Fog" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "optimize",
+            "default" : true,
+            "desc" : "optimize bad systems",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moblur",
+            "default" : "0",
+            "desc" : "motion blur - 0:From Renderer, 1:Force On, 2:Force Off",
+            "items" : 
+            [
+                [ "0", "From Renderer", "From Renderer" ],
+                [ "1", "Force On", "Force On" ],
+                [ "2", "Force Off", "Force Off" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Motion Blur"
+            }
+        },
+        
+        {
+            "attr" : "mbstep",
+            "default" : 1.0,
+            "desc" : "motion blur step",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mblimit",
+            "default" : 100,
+            "desc" : "maximum point expansion with motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ptAlpha",
+            "default" : 0.1110000014305115,
+            "desc" : "point opacity in point mode",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ptSize",
+            "default" : 1.0,
+            "desc" : "Point radius in Point mode",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ptShadStren",
+            "default" : 1.0,
+            "desc" : "Point shadow strength in Point mode",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ptSizeExtra",
+            "default" : 0.0,
+            "desc" : "Radius of particles in Point mode in world space, used to prevent grid artifacts from occurring",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velmult",
+            "default" : 1.0,
+            "desc" : "particle velocity multiplier",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "subgroup",
+            "default" : 0,
+            "desc" : "render subgroup - 0:All, 1:Under Water, 2:Above Water, 3:Above Size Threshold, 4:Below Size Threshold",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nolqshadows",
+            "default" : false,
+            "desc" : "disable liquid shadows",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "flatatoceanbord",
+            "default" : false,
+            "desc" : "Near the borders of a container in Ocean Mesh mode, particles will gradually fade towards the height of the ocean level, like the ocean mesh vertices do",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ignoresize",
+            "default" : false,
+            "desc" : "ignores the particle size",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Ignore Particle Size"
+            }
+        },
+        
+        {
+            "attr" : "szlimit",
+            "default" : 1.0,
+            "desc" : "size threshold, used in conjunction with the subgroup parameter",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "vertoffs",
+            "default" : 0.0,
+            "desc" : "Shift the particles along the up axis. Can be used in fishtank simulations for custom alignment of the particles floating on the liquid surface",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fogres",
+            "default" : 1.0,
+            "desc" : "fog resolution",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fogmult",
+            "default" : 0.1110000014305115,
+            "desc" : "fog multiplier",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fogmult_legacy",
+            "default" : 1.0,
+            "desc" : "Additional fog multiplier for compatibility with old scenes",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rendstep",
+            "default" : 90,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rendshadstep",
+            "default" : 200,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "absorption_color",
+            "default" : [ 0.3750, 0.3750, 0.3750 ],
+            "desc" : "Specifies the fog absorption color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "phase_function",
+            "default" : 0.0,
+            "desc" : "Controls the phase function used for the anisotropic volumetric scattering computation. Accepts values in the interval [-1 1]. Negative values correspond to backward scattering, positive values to forward scattering and a value of zero to isotropic ('diffuse'). This parameter is ignored by the 'Approximate' and 'Approximate+Shadows' scattering modes",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Phase Function",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "usereflmap",
+            "default" : false,
+            "desc" : "enable the reflection map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useenvmap",
+            "default" : false,
+            "desc" : "enable the environment map",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflmap",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "reflection texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "envmap",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "environment texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "usegizmo",
+            "default" : 0,
+            "desc" : "enable using of render cutter",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "invgizmo",
+            "default" : 0,
+            "desc" : "invert the volume of the render cutter",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gizmo",
+            "default" : null,
+            "desc" : "geometry to define the rendering volume",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gizmo_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "world transformation of the Render Cutter",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useliquid",
+            "default" : 0,
+            "desc" : "enable the liquid_sim",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "liquid_sim",
+            "default" : null,
+            "desc" : "liquid Phoenix simulator used to determine above/under water flag",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "useglass",
+            "default" : 0,
+            "desc" : "enable using of glass geometry",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "glass",
+            "default" : null,
+            "desc" : "glass geometry",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "glass_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "world transformation of the glass",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lightlinks",
+            "default" : null,
+            "desc" : "light linking list used in volumetric mode",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lightcache",
+            "default" : 1,
+            "desc" : "if true, a light cache will be used for diffuse lighting",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lightcachesr",
+            "default" : 0.8999999761581421,
+            "desc" : "speedup of the light cache",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "pmprimary",
+            "default" : false,
+            "desc" : "enable/disable particle mode of primary rays",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "oceanlevel",
+            "default" : 50.0,
+            "desc" : "",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "generate_gi",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "receive_gi",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gen_gi_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "rec_gi_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "generate_caust",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "receive_caust",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "caust_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "camera_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflections_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refractions_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gi_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "shadows_visibility",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "probabilistic",
+            "default" : 1,
+            "desc" : "Use probabilistic sampling {0: Disabled; 1:V-Ray GPU Only; 2:Always}",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material_id",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Material ID",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "volzdepth",
+            "default" : 0,
+            "desc" : "if true, write to the z-depth render element",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "part_age",
+            "default" : 0,
+            "desc" : "if true, write to the particle age render element",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "volumetric_mode_geometry_RE",
+            "default" : true,
+            "desc" : "If true, the shader will write to the geometric render elements (f.e. velocity) even if rendered as volumetric",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "elements_count" : 0,
+            "type" : "STRING_LIST"
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for the rendering. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "user_attributes",
+            "default" : "",
+            "desc" : "A list of user defined attributes in the form \"attrName1=value1;attrName2=value2\" where values are usually numbers, strings or R,G,B triplets. The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "user_attributes_bin",
+            "default" : 0,
+            "desc" : "Serialized user attributes (refer to BinUserAttributesWriter). The parameter is only relevant/used when the plugin is set to be rendered as volumetric (i.e. renderAsVolumetric is set to true). In this case the plugin is instantiated directly and not through the scene Node plugin, which normally provides this information for the geometric object instances",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

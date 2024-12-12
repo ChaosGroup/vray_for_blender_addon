@@ -1,0 +1,229 @@
+{
+    "ID": "SettingsOptions",
+    "Parameters": [
+        {
+            "attr": "mtl_override",
+            "default": "",
+            "desc": "Override material",
+            "type": "STRING",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "geom_backfaceCull",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "misc_consistentLightingElements",
+            "default": true
+        },
+        {
+            "attr": "probabilistic_lights_on",
+            "default": "2",
+            "ui": {}
+        },
+        {
+            "attr": "probabilistic_vol_on",
+            "default": true
+        },
+        {
+            "attr": "probabilistic_vol_samples",
+            "default": 20
+        },
+        {
+            "attr": "probabilistic_vol_gi_samples",
+            "default": 1
+        },
+        {
+            "attr": "ray_max_intensity_on",
+            "default": true
+        },
+        {
+            "attr": "gi_texFilteringMultiplier",
+            "default": 5
+        },
+        {
+            "attr": "mtl_transpMaxLevels",
+            "default": 50,
+            "ui": {
+                "display_name": "Max Transparency Levels",
+                "min": 1,
+                "max": 100000,
+                "soft_min": 1,
+                "soft_max": 100
+            }
+        },
+        {
+            "attr": "mtl_transpCutoff",
+            "default": 0.001
+        },
+        {
+            "attr": "external_max_mipmap_resolution",
+            "default": 0,
+            "desc": "External from SettingsTextureCache",
+            "type": "INT",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "ray_bias",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "label": "Lighting",
+                "name": "lighting",
+                "align": true,
+                "attrs": [
+                    {
+                        "name": "light_doLights",
+                        "label": "Lights"
+                    },
+                    {
+                        "name": "light_doShadows"
+                    },
+                    {
+                        "name": "light_disableSelfIllumination"
+                    },
+                    {
+                        "name": "probabilistic_lights_on",
+                        "label": "Light Evaluation"
+                    },
+                    {
+                        "name": "num_probabilistic_lights",
+                        "visible": {
+                            "cond": "::probabilistic_lights_on=2"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label": "Materials",
+                "name": "materials",
+                "attrs": [
+                    {
+                        "name": "mtl_reflectionRefraction"
+                    },
+                    {
+                        "name": "mtl_glossy",
+                        "label": "Glossy Effects"
+                    },
+                    {
+                        "name": "mtl_SSSEnabled",
+                        "label": "SSS"
+                    },
+                    {
+                        "name": "mtl_limitDepth",
+                        "active": {
+                            "cond": "::mtl_reflectionRefraction>0"
+                        }
+                    },
+                    {
+                        "name": "mtl_maxDepth",
+                        "label": "Global Max Depth",
+                        "active": {
+                            "cond": "::mtl_reflectionRefraction>0,::mtl_limitDepth>0"
+                        }
+                    },
+                    {
+                        "name": "mtl_transpMaxLevels"
+                    },
+                    {
+                        "name": "mtl_transpCutoff",
+                        "label": "Transparency Cutoff"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "textures",
+                "label": "Textures",
+                "attrs": [
+                    {
+                        "name": "mtl_doMaps"
+                    },
+                    {
+                        "name": "mtl_filterMaps",
+                        "label": "Filter Maps",
+                        "active": {
+                            "cond": "::mtl_doMaps>0"
+                        }
+                    },
+                    {
+                        "name": "mtl_uninvertedNormalBump",
+                        "label": "Uninverted Normal Bump"
+                    },
+                    {
+                        "name": "external_max_mipmap_resolution",
+                        "label": "Max Mipmap resolution",
+                        "custom_draw": "widgetDrawMaxMipmapResolution"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "rendering",
+                "label": "Rendering",
+                "attrs": [
+                    {
+                        "name": "ray_bias",
+                        "label": "Secondary Ray Bias"
+                    },
+                    {
+                        "name": "ray_max_intensity_on",
+                        "label": "Clamp Max Ray Intensity"
+                    },
+                    {
+                        "name": "ray_max_intensity",
+                        "label": "Max Ray Intensity",
+                        "active": {
+                            "cond": "::ray_max_intensity_on>0"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "volumetrics",
+                "label": "Volumetrics",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "probabilistic_vol_on"
+                            },
+                            {
+                                "name": "probabilistic_vol_samples",
+                                "active": {
+                                    "cond": "::probabilistic_vol_on=1"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "geom_backfaceCull",
+            "light_doDefaultLights",
+            "light_doHiddenLights",
+            "light_onlyGI",
+            "mtl_filterMapsForSecondaryRays"
+        ],
+        "animatable": false
+    }
+}

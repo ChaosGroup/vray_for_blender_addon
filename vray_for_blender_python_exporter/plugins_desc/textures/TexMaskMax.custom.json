@@ -1,0 +1,15 @@
+{
+    "ID": "TexMaskMax",
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "invert_mask"
+                    }
+                ],
+                "layout": "ROW"
+            }
+        ]
+    }
+}

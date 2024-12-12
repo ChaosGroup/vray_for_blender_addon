@@ -1,0 +1,52 @@
+{
+    "ID": "MtlMaterialID",
+    "Name": "V-Ray Mtl Material ID",
+    "Parameters": [
+        {
+            "attr": "use",
+            "default": false,
+            "desc": "",
+            "type": "BOOL",
+            "ui": {},
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "material_id_color",
+                        "label": "Material ID"
+                    },
+                    {
+                        "name": "material_id_number",
+                        "label": "Multimatte ID"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+        {
+            "name": "material_id_color"
+        },    
+        {
+            "name": "base_mtl",
+            "type": "BRDF",
+            "label": "Base material"
+        }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "lpe_label"
+        ]
+    }
+}

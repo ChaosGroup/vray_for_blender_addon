@@ -1,0 +1,62 @@
+
+{
+    "Desciption" : "SettingsRenderChannels",
+    "ID" : "SettingsRenderChannels",
+    "Name" : "Settings Render Channels",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "unfiltered_fragment_method",
+            "default" : "0",
+            "desc" : "Determines which fragment to use for unfiltered render elements (0 - best coverage; 1 - closest to camera)",
+            "items" : 
+            [
+                [ "0", "Best coverage", "Best coverage" ],
+                [ "1", "Closest to camera", "Closest to camera" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "deep_merge_mode",
+            "default" : "0",
+            "desc" : "Determines how to blend fragments within a pixel (0 - by render ID; 1 - by Z-Depth, 2 - none)",
+            "items" : 
+            [
+                [ "0", "By render ID", "By render ID" ],
+                [ "1", "By z-depth", "By z-depth" ],
+                [ "2", "None", "None" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "deep_merge_coeff",
+            "default" : 1.0,
+            "desc" : "Determines the z-depth blending sensitivity when deep_merge_mode is 1",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Deep merge z-depth threshold",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "deep_exclude_RGB",
+            "default" : false,
+            "desc" : "Exclude the RGB color channel from deep files",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Exclude RGB from deep files"
+            }
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

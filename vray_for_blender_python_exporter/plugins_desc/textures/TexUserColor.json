@@ -1,0 +1,61 @@
+
+{
+    "Desciption" : "TexUserColor",
+    "ID" : "TexUserColor",
+    "Name" : "User Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "attribute_priority",
+            "default" : "0",
+            "desc" : "User attribute lookup priority - 0 for map channel, 1 for user attribute",
+            "items" : 
+            [
+                [ "0", "Map Channel", "Map Channel" ],
+                [ "1", "User Attribute", "User Attribute" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Attribute Look-Up Priority"
+            }
+        },
+        
+        {
+            "attr" : "compatibility_with",
+            "default" : 0,
+            "desc" : "Compatibility mode (0 - Default (Maya); 1 - Houdini).Currently affects the shading of some application specific attributes (P, N for Houdini)",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "default_color",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "Default color when the attribute is not found",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attribute",
+            "default" : "",
+            "desc" : "User attribute name of type color or float; OR name of mapping channel",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,0 +1,33 @@
+{
+    "ID": "TexMayaFluid",
+    "Parameters": [
+        {
+            "attr": "domain",
+            "name": "Domain",
+            "desc": "Simulation domain",
+            "type": "GEOMETRY",
+            "default": "",
+            "options": {
+                "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "interpolation_type"
+                    },
+                    {
+                        "name": "mb_type"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": []
+    }
+}
