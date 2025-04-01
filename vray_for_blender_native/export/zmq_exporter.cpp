@@ -194,7 +194,7 @@ ZmqExporter::ZmqExporter(const ExporterSettings & settings)
 	m_client = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateRoutingId(), settings.getExporterType(), true);
 
 	m_client->setMsgCallback([this](zmq::message_t&& payload) {
-		SAFE_CALL(handleMsg(VRayMessage::fromZmqMessage(payload)))
+		SAFE_CALL(handleMsg(payload))
 	});
 
 	m_client->setErrorCallback([this, clientPtr = m_client.get()](const std::string& err) {
@@ -251,113 +251,48 @@ RenderImage ZmqExporter::getRenderChannelImage(RenderChannelType channelType) {
 }
 
 
-void ZmqExporter::handleMsg(const VRayMessage & message) {
-	const auto msgType = message.getType();
+void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 	
+	DeserializerStream stream(reinterpret_cast<const char*>(msg.data()), msg.size());
+
+	MsgType msgType = MsgType::None;
+	stream >> msgType;
+
 	switch(msgType) {
-	case VRayMessage::Type::VRayLog: {
+	case MsgType::ControlOnLogMessage:
 		if (callback_on_message_update) {
-			std::string msg = *message.getValue<AttrString>();
-
-			// Leave only the first row of the message as it will be printed in a status line.
-			const auto firstNewLinePos = msg.find_first_of("\n\r");
-			if (firstNewLinePos != std::string::npos) {
-				msg.resize(firstNewLinePos);
-			}
-
-			callback_on_message_update(msg);
+			const auto& message = deserializeMessage<MsgControlOnLogMessage>(stream);
+			processControlOnLogMessage(message);
 		}
+		break;
+	case MsgType::RendererOnImage: {
+		const auto& message = deserializeMessage<MsgRendererOnImage>(stream);
+		processRendererOnImage(message);
+		break;
 	}
-	break;
-
-	case VRayMessage::Type::Image: {
-		auto * set = message.getValue<VRayBaseTypes::AttrImageSet>();
-		bool ready = set->sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
-		bool updateHostImage = false;
-
-		if (m_settings.getExporterType() == ExporterType::IPR_VIEWPORT) {
-			if (readViewportImage()) {
-				updateHostImage = true;
-			}	
-		}
-		else
-		{
-			{
-				std::unique_lock<std::mutex> lock(m_imgMutex);
-
-				for (const auto &img : set->images) {
-					m_layerImages[img.first].update(
-						img.second,
-						this,
-						(m_settings.getExporterType() != ExporterType::IPR_VIEWPORT));
-				}
-			}
-
-			for (const auto &img : set->images) {
-				// for result buckets use on bucket ready, otherwise rt image updated callback
-				if (img.first == RenderChannelType::RenderChannelTypeNone && img.second.isBucket() && this->callback_on_bucket_ready) {
-					this->callback_on_bucket_ready(img.second);
-				}
-				else {
-					updateHostImage = true;
-				}
-			}
-		}
-
-		if (updateHostImage && this->callback_on_rt_image_updated) {
-			// Update viewport image or render result image depending on the current rendering mode.
-			this->callback_on_rt_image_updated();
-		}
-
-		if (ready && this->callback_on_image_ready) {
-			this->callback_on_image_ready();
-		}
+	case MsgType::RendererOnVRayLog: {
+		const auto& message = deserializeMessage<MsgRendererOnVRayLog>(stream);
+		processRendererOnVRayLog(message);
+		break;
 	}
-	break;
-
-	case VRayMessage::Type::ChangeRenderer: {
-		if (message.getRendererAction() == VRayMessage::RendererAction::SetRendererState) {
-			switch (message.getRendererState()) {
-			case VRayMessage::RendererState::Abort:
-				Logger::warning("ABORT");
-				m_isAborted = true;
-				break;
-			case VRayMessage::RendererState::Stopped:
-				Logger::warning("STOP");
-				// 'Stopped' state is entered instead of 'Done' when a preview job is rendered 
-				// using an accelerator device. 
-				// TODO: Figure out why 
-				m_isAborted = (m_settings.getExporterType() != ExporterType::PREVIEW);
-				break;
-			case VRayMessage::RendererState::Progress:
-				renderProgress = *message.getValue<VRayBaseTypes::AttrSimpleType<float>>();
-				break;
-			case VRayMessage::RendererState::ProgressMessage:
-				progressMessage = *message.getValue<VRayBaseTypes::AttrSimpleType<std::string>>();
-				break;
-			case VRayMessage::RendererState::Continue:
-				this->m_lastRenderedFrame = *message.getValue<VRayBaseTypes::AttrSimpleType<int>>();
-				break;
-			case VRayMessage::RendererState::Done:
-				// This is called when the whole rendering job is done
-				break;
-
-			default:
-				VRAY_ASSERT(!"Receieved unexpected RendererState message from renderer.");
-			}
-		}
+	case MsgType::RendererOnChangeState: {
+		const auto& message = deserializeMessage<MsgRendererOnChangeState>(stream);
+		processRendererOnChangeState(message);
+		break;
 	}
-	break;
-
-
-	case VRayMessage::Type::VfbLayers: {
+	case MsgType::RendererOnAsyncOpComplete: {
+		const auto& message = deserializeMessage<MsgRendererOnAsyncOpComplete>(stream);
+		processRendererOnAsyncOpComplete(message);
+		break;
+	}
+	case MsgType::ControlOnUpdateVfbLayers:
 		if (callback_on_vfb_layers_updated) {
-			std::string layersJson = *message.getValue<AttrString>();
-			callback_on_vfb_layers_updated(layersJson);
+			const auto& message = deserializeMessage<MsgControlOnUpdateVfbLayers>(stream);
+			callback_on_vfb_layers_updated(message.vfbLayersJson);
 		}
-	} break;
-
+		break;
 	default:
+		Logger::error("Invalid message type: {}", static_cast<int>(msgType));
 		VRAY_ASSERT(!"Invalid message type");
 	}
 
@@ -371,6 +306,119 @@ void ZmqExporter::handleError(const std::string& err) {
 	Logger::error("Blender: {}", err);
 }
 
+
+void ZmqExporter::processControlOnLogMessage(const MsgControlOnLogMessage& message) {
+	assert (callback_on_message_update);
+	
+	std::string logMsg = message.logMessage;
+
+	// Leave only the first row of the message as it will be printed in a status line.
+	const auto firstNewLinePos = logMsg.find_first_of("\n\r");
+	if (firstNewLinePos != std::string::npos) {
+		logMsg.resize(firstNewLinePos);
+	}
+
+	callback_on_message_update(logMsg);
+}
+
+
+void ZmqExporter::processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& message) {
+	if (callback_on_message_update) {
+		std::string msg = message.log;
+
+		// Leave only the first row of the message as it will be printed in a status line.
+		const auto firstNewLinePos = msg.find_first_of("\n\r");
+		if (firstNewLinePos != std::string::npos) {
+			msg.resize(firstNewLinePos);
+		}
+
+		callback_on_message_update(msg);
+	}
+
+}
+
+
+void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& message) {
+	bool ready = message.imageSet.sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
+	bool updateHostImage = false;
+
+	if (m_settings.getExporterType() == ExporterType::IPR_VIEWPORT) {
+		if (readViewportImage()) {
+			updateHostImage = true;
+		}	
+	}
+	else
+	{
+		{
+			std::unique_lock<std::mutex> lock(m_imgMutex);
+
+			for (const auto &img : message.imageSet.images) {
+				m_layerImages[img.first].update(
+					img.second,
+					this,
+					(m_settings.getExporterType() != ExporterType::IPR_VIEWPORT));
+			}
+		}
+
+		for (const auto &img : message.imageSet.images) {
+			// for result buckets use on bucket ready, otherwise rt image updated callback
+			if (img.first == RenderChannelType::RenderChannelTypeNone && img.second.isBucket() && this->callback_on_bucket_ready) {
+				this->callback_on_bucket_ready(img.second);
+			}
+			else {
+				updateHostImage = true;
+			}
+		}
+	}
+
+	if (updateHostImage && this->callback_on_rt_image_updated) {
+		// Update viewport image or render result image depending on the current rendering mode.
+		this->callback_on_rt_image_updated();
+	}
+
+	if (ready && this->callback_on_image_ready) {
+		this->callback_on_image_ready();
+	}
+}
+
+
+void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeState& message) {
+	switch (message.state) {
+	case RendererState::Abort:
+		Logger::warning("ABORT");
+		m_isAborted = true;
+		break;
+	case RendererState::Stopped:
+		Logger::warning("STOP");
+		// 'Stopped' state is entered instead of 'Done' when a preview job is rendered 
+		// using an accelerator device. 
+		// TODO: Figure out why 
+		m_isAborted = (m_settings.getExporterType() != ExporterType::PREVIEW);
+		break;
+	case RendererState::Progress:
+		renderProgress = message.renderProgress;
+		break;
+	case RendererState::ProgressMessage:
+		progressMessage = message.progressMessage;
+		break;
+	case RendererState::Continue:
+		this->m_lastRenderedFrame = message.lastRenderedFrame;
+		break;
+	case RendererState::Done:
+		// This is called when the whole rendering job is done
+		break;
+
+	default:
+		VRAY_ASSERT(!"Receieved unexpected RendererState message from renderer.");
+	}
+}
+
+
+void ZmqExporter::processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message) {
+	if (this->callback_on_async_op_complete) {
+		this->callback_on_async_op_complete(message.operation, message.success, message.message);
+	}
+}
 
 /// Read an image published by ZmqServer in a shared memory region.
 /// @return true if the image was read successfully
@@ -471,45 +519,51 @@ RenderImage ZmqExporter::getPass(const std::string& name)
 
 void ZmqExporter::free()
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::Free));
+	m_client->send(serializeMessage(MsgRendererFree{}));
 }
 
 
 void ZmqExporter::clearFrameData(float upTo)
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::ClearFrameValues, upTo));
+	m_client->send(serializeMessage(MsgRendererClearFrameValues{upTo}));
 	m_dirty = true;
 }
 
 
 void ZmqExporter::clearScene()
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::Reset));
+	m_client->send(serializeMessage(MsgRendererReset{}));
 }
 
 void VRayForBlender::ZmqExporter::abortRender()
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::Abort));
+	m_client->send(serializeMessage(MsgRendererAbort{}));
 }
 
 void ZmqExporter::pluginCreate(const std::string& pluginName, const std::string& pluginType)
 {
-	m_client->send(VRayMessage::msgPluginCreate(pluginName, pluginType));
-	
+	m_client->send(serializeMessage(MsgPluginCreate{pluginName, pluginType}));
 	m_dirty = true;
 }
 
 
 void ZmqExporter::pluginRemove(const std::string& pluginName)
 {
-	m_client->send(VRayMessage::msgPluginRemove(pluginName));
+	m_client->send(serializeMessage(MsgPluginRemove{pluginName}));
 	m_dirty = true;
 }
 
 
 void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool forceUpdate /*=false*/)
 {
-	sendPluginMsg(pluginName, VRayMessage::msgPluginSetProperty(pluginName, attrName, value, forceUpdate));
+	sendPluginMsg(pluginName, serializeMessage(MsgPluginUpdate{
+		pluginName, 
+		attrName, 
+		value, 
+		false,
+		forceUpdate
+	}));
+
 	m_dirty = true;
 }
 
@@ -538,10 +592,10 @@ void ZmqExporter::syncView(const ViewSettings& viewSettings)
 		m_cachedValues.viewSettings.name = viewSettings.name;\
 	}
 
-	CHECK_UPDATE(vfbFlags, m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetVfbOptions, viewSettings.vfbFlags)));
-	CHECK_UPDATE(viewportImageQuality, m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetQuality, viewSettings.viewportImageQuality)));
-	CHECK_UPDATE(viewportImageType, m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetViewportImageFormat, viewSettings.viewportImageType)));
-	CHECK_UPDATE(renderMode, m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetRenderMode, viewSettings.renderMode)));
+	CHECK_UPDATE(vfbFlags, m_client->send(serializeMessage(MsgRendererSetVfbOptions{viewSettings.vfbFlags})));
+	CHECK_UPDATE(viewportImageQuality, m_client->send(serializeMessage(MsgRendererSetQuality{viewSettings.viewportImageQuality})));
+	CHECK_UPDATE(viewportImageType, m_client->send(serializeMessage(MsgRendererSetViewportImageFormat{static_cast<AttrImage::ImageType>(viewSettings.viewportImageType)})));
+	CHECK_UPDATE(renderMode, m_client->send(serializeMessage(MsgRendererSetRenderMode{viewSettings.renderMode})));
 #undef CHECK_UPDATE
 
 	m_cachedValues.viewSettings = viewSettings;
@@ -550,14 +604,14 @@ void ZmqExporter::syncView(const ViewSettings& viewSettings)
 
 void ZmqExporter::showVFB()
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetVfbOptions, static_cast<int>(VfbFlags::Show)));
+	m_client->send(serializeMessage(MsgRendererSetVfbOptions{static_cast<int>(VfbFlags::Show)}));
 }
 
 
 void ZmqExporter::setVfbAlwaysOnTop(bool alwaysOnTop)
 {
 	int vfbFlags = static_cast<int>((alwaysOnTop ? VfbFlags::AlwaysOnTop : VfbFlags::None));
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetVfbOptions, vfbFlags));
+	m_client->send(serializeMessage(MsgRendererSetVfbOptions{vfbFlags}));
 }
 
 
@@ -570,7 +624,7 @@ float ZmqExporter::getRenderProgress() const
 void ZmqExporter::setCurrentFrame(float frame)
 {
 	m_currentSceneFrame = frame;
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetCurrentFrame, frame));
+	m_client->send(serializeMessage(MsgRendererSetCurrentFrame{frame}));
 	m_dirty = true;
 }
 
@@ -581,12 +635,12 @@ float ZmqExporter::getCurrentFrame() const
 }
 
 
-void ZmqExporter::setRenderSize(const VRayMessage::RenderSizes& renderSizes)
+void ZmqExporter::setRenderSize(const RenderSizes& renderSizes)
 {
 	std::unique_lock<std::mutex> lock(m_imgMutex);
 	if (renderSizes != m_cachedValues.renderSizes) {
 		m_cachedValues.renderSizes = renderSizes;
-		m_client->send(VRayMessage::msgRendererResize(renderSizes));
+		m_client->send(serializeMessage(MsgRendererResize{renderSizes}));
 		m_dirty = true;
 	}
 }
@@ -596,7 +650,7 @@ void ZmqExporter::setCameraPlugin(const std::string &pluginName)
 {
 	if (m_cachedValues.activeCamera != pluginName) {
 		m_cachedValues.activeCamera = pluginName;
-		m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetCurrentCamera, pluginName));
+		m_client->send(serializeMessage(MsgRendererSetCurrentCamera{pluginName}));
 		m_dirty = true;
 	}
 }
@@ -605,10 +659,7 @@ void ZmqExporter::setCameraPlugin(const std::string &pluginName)
 void ZmqExporter::commitChanges()     
 {
 	if (m_dirty){
-		m_client->send(VRayMessage::msgRendererAction(
-							VRayMessage::RendererAction::SetCommitAction, 
-							static_cast<int>(CommitAction::CommitNow)
-						));
+		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitNow}));
 
 		if ( m_exportedAttributes > 0 ){
 			Logger::info("ZMQ Exporter: Total exported attributes: {}, Size: {} bytes", m_exportedAttributes, m_exportedSize);
@@ -625,7 +676,6 @@ void ZmqExporter::commitChanges()
 		m_exportedAttributes = 0;
 		m_exportedSize = 0;
 		m_exportStats.clear();
-
 	}
 }
 
@@ -634,33 +684,33 @@ void ZmqExporter::commitChanges()
 void ZmqExporter::init()
 {
 	try {
-		VRayMessage::RendererType type = VRayMessage::RendererType::None;
+		RendererType type = RendererType::None;
 		switch(m_settings.getExporterType()){
 		case ExporterType::PREVIEW:
-			type = VRayMessage::RendererType::Preview;
+			type = RendererType::Preview;
 			break;
 		case ExporterType::IPR_VIEWPORT:
 		case ExporterType::IPR_VFB:
-			type = VRayMessage::RendererType::RT;
+			type = RendererType::RT;
 			break;
 		case ExporterType::ANIMATION:
-			type = VRayMessage::RendererType::Animation;
+			type = RendererType::Animation;
 			break;
 		default:
-			type = VRayMessage::RendererType::SingleFrame;
+			type = RendererType::SingleFrame;
 		}
 
-		VRayMessage::DRFlags drflags = VRayMessage::DRFlags::None;
+		DRFlags drflags = DRFlags::None;
 		if (m_settings.drUse) {
-			drflags = VRayMessage::DRFlags::EnableDr;
+			drflags = DRFlags::EnableDr;
 			if (m_settings.drRenderOnlyOnHosts) {
-				drflags = static_cast<VRayMessage::DRFlags>(static_cast<int>(VRayMessage::DRFlags::RenderOnlyOnHosts) | static_cast<int>(drflags));
+				drflags = static_cast<DRFlags>(static_cast<int>(DRFlags::RenderOnlyOnHosts) | static_cast<int>(drflags));
 			}
 		}
 
-		m_client->send(VRayMessage::msgRendererActionInit(type, drflags));
-		m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetCommitAction, static_cast<int>(CommitAction::CommitAutoOff)));
-		m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::GetImage, static_cast<int>(RenderChannelType::RenderChannelTypeNone)));
+		m_client->send(serializeMessage(MsgRendererInit{type, drflags}));
+		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitAutoOff}));
+		m_client->send(serializeMessage(MsgRendererGetImage{static_cast<int>(RenderChannelType::RenderChannelTypeNone)}));
 		
 		if (m_settings.drUse) {
 			const std::vector<std::string>& hostItems = m_settings.drHosts;
@@ -671,10 +721,10 @@ void ZmqExporter::init()
 				hostsStr.push_back(';');
 			}
 			hostsStr.pop_back(); // remove last delimiter - ;
-			m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::ResetsHosts, hostsStr));
+			m_client->send(serializeMessage(MsgRendererResetHosts{hostsStr}));
 		}
 
-		m_cachedValues.renderSizes = VRayMessage::RenderSizes();
+		m_cachedValues.renderSizes = RenderSizes();
 	}
 	catch (zmq::error_t& e) {
 		Logger::error("Failed to initialize ZMQ client\n{}", e.what());
@@ -694,12 +744,12 @@ void ZmqExporter::start()
 	// In that case init() isn't called, but the viewsettings could have been changed from Blender's UI.
 	// The view settings are exported here
 	const ViewSettings& viewSettings = m_cachedValues.viewSettings;
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetVfbOptions, viewSettings.vfbFlags));
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetQuality, viewSettings.viewportImageQuality));
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetViewportImageFormat, viewSettings.viewportImageType));
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::SetRenderMode, viewSettings.renderMode));
+	m_client->send(serializeMessage(MsgRendererSetVfbOptions{viewSettings.vfbFlags}));
+	m_client->send(serializeMessage(MsgRendererSetQuality{viewSettings.viewportImageQuality}));
+	m_client->send(serializeMessage(MsgRendererSetViewportImageFormat{static_cast<AttrImage::ImageType>(viewSettings.viewportImageType)}));
+	m_client->send(serializeMessage(MsgRendererSetRenderMode{viewSettings.renderMode}));
 
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::Start));
+	m_client->send(serializeMessage(MsgRendererStart{}));
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
@@ -709,7 +759,7 @@ void ZmqExporter::start()
 void ZmqExporter::renderSequence(int start, int end, int step)
 {
 	m_layerImages.clear();
-	m_client->send(VRayMessage::msgRendererActionRenderSequence(start, end, step));
+	m_client->send(serializeMessage(MsgRendererRenderSequence{start, end, step}));
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
@@ -719,7 +769,7 @@ void ZmqExporter::renderSequence(int start, int end, int step)
 
 void ZmqExporter::stop()
 {
-	m_client->send(VRayMessage::msgRendererAction(VRayMessage::RendererAction::Stop));
+	m_client->send(serializeMessage(MsgRendererStop{}));
 }
 
 
@@ -738,7 +788,7 @@ void ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 		return;
 	} 
 	
-	VRayMessage::ExportSettings exportSettings;
+	ExportSettings exportSettings;
 
 	exportSettings.compressed = settings.compressed;
 	exportSettings.hexArrays = settings.hexArrays;
@@ -758,7 +808,7 @@ void ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 		}
 	}
 
-	m_client->send(VRayMessage::msgRendererActionExportScene(exportSettings));
+	m_client->send(serializeMessage(MsgRendererExportScene{exportSettings}));
 }
 
 
@@ -776,12 +826,12 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 	AttrPlugin plugin(name);
 
 	
-	m_client->send(VRayMessage::msgPluginCreate(name, pluginDesc.pluginID));
+	m_client->send(serializeMessage(MsgPluginCreate{name, pluginDesc.pluginID}));
 
 	for (auto & attributePairs : pluginDesc.pluginAttrs) {
 		const PluginAttr & attr = attributePairs.second;
 		if (attr.attrValue.getType() != ValueTypeUnknown) {
-			auto msg = VRayMessage::msgPluginSetProperty(name, attr.attrName, attr.attrValue, attr.forceUpdate);
+			auto msg = serializeMessage(MsgPluginUpdate{name, attr.attrName, attr.attrValue, false, attr.forceUpdate});
 			m_exportedSize += msg.size();
 			++m_exportedAttributes;
 			sendPluginMsg(pluginDesc.pluginName, std::move(msg));

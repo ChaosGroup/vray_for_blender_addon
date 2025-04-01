@@ -4,13 +4,14 @@ from vray_blender.exporting.tools import *
 from vray_blender.exporting.plugin_tracker import getObjTrackId, getNodeTrackId, TrackObj, log as trackerLog
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget 
 from vray_blender.exporting.node_export import exportNodeTree
-from vray_blender.lib.lib_utils import  LightVrayTypeToBlender
+from vray_blender.lib.lib_utils import  LightVrayTypeToBlender, getLightPropGroup, getLightPluginType
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.lib.settings_defs import LightSelectMode
 from vray_blender.lib import export_utils, plugin_utils
-from vray_blender.nodes.utils import getNodeByType, getInputSocketByVRayAttr
-from vray_blender.plugins.light.LightMesh import getLightPluginName
+from vray_blender.nodes.tools import isVrayNodeTree
+from vray_blender.nodes.utils import getInputSocketByVRayAttr, getLightOutputNode, areNodesInterconnected, getOutputNode
+from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
 
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -18,26 +19,6 @@ from vray_blender import debug
 
 # Epsilon for light cone angle comparison
 ANGLE_EPSILON = 0.000001
-
-def _getLightPropGroup(light: bpy.types.Light, lightType: str):
-    """ Get the active propGroup of a light, as lights have separate propGroup objects
-        for legacy and node modes.
-
-    Args:
-        light (bpy.types.Light): the light
-        lightType (str): the name of the V-Ray plugin, e.g. LightSpot
-    """
-    # Lights have two different propgroups for legacy and node lights, get the correct one
-    propGroup = None
-    
-    if light.node_tree:
-        if node := getNodeByType(light.node_tree, f'VRayNode{lightType}'):
-            propGroup = getattr(node, lightType)
-    else:
-        propGroup = getattr(light.vray, lightType)
-
-    return propGroup
-
 
 def fixBlenderLights():
     """ For stock Blender lights, translate the Blender properties used for displaying the light gizmos 
@@ -55,7 +36,7 @@ def fixBlenderLights():
                 _fixBlenderSpotLight(l.data)
                 
 
-def syncMeshLightInfo(exporterCtx: ExporterContext):
+def syncLightMeshInfo(exporterCtx: ExporterContext):
     """ Collect info about the visible and updated objects associated with LightMesh exports. """
     from vray_blender.plugins.light.LightMesh import collectLightMeshInfo
     
@@ -65,11 +46,36 @@ def syncMeshLightInfo(exporterCtx: ExporterContext):
     exporterCtx.updatedMeshLightsInfo = updatedPairs
 
 
-def syncMeshLightInfoPostExport(exporterCtx: ExporterContext):
+def syncLightMeshInfoPostExport(exporterCtx: ExporterContext):
     # Save a snapshot of the currently active mesh light gizmos to be used during the next update
     # cachedMeshLightsInfo is not owned by ExporterContext, so make sure to not redirect the reference.
     exporterCtx.cachedMeshLightsInfo.clear()
     exporterCtx.cachedMeshLightsInfo.update(exporterCtx.activeMeshLightsInfo)
+
+
+def collectLightMixInfo(exporterCtx: ExporterContext):
+    """ At the start of an export, collect information required to correctly export LightMix """
+    
+    if (world := exporterCtx.dg.scene.world) and isVrayNodeTree(world.node_tree, 'WORLD'):
+        if not (outputNode := getOutputNode(world.node_tree, 'WORLD')):
+            return
+        
+        for node in [n for n in world.node_tree.nodes if n.bl_idname == 'VRayNodeRenderChannelLightMix']:
+            if areNodesInterconnected(node, outputNode):
+                exporterCtx.activeLightMixNode = node
+                break 
+
+    if exporterCtx.activeLightMixNode:
+        # Store list of lights by collection
+        registeredLights = []
+        for coll in bpy.data.collections:
+            if lights := ([o for o in coll.objects if o.type == 'LIGHT']):
+                exporterCtx.lightCollections[coll] = lights
+                registeredLights.extend(lights)
+        
+        # Store a special list of all lights not part of any collection
+        freeLights = [o for o in exporterCtx.sceneObjects if (o.type == 'LIGHT') and (o not in registeredLights)]
+        exporterCtx.lightCollections[""] = freeLights
 
 
 def _fixBlenderRectLight(areaLight: bpy.types.Light):
@@ -83,10 +89,8 @@ def _fixBlenderRectLight(areaLight: bpy.types.Light):
 
 
 def _fixBlenderSpotLight(spotLight: bpy.types.Light):
-    propGroup = None
-
     # Lights have two different propgroups for legacy and node lights, get the correct one
-    propGroup = _getLightPropGroup(spotLight, 'LightSpot')
+    propGroup = getLightPropGroup(spotLight, 'LightSpot')
     
     if propGroup.coneAngle != spotLight.spot_size:
         propGroup.coneAngle = spotLight.spot_size
@@ -156,7 +160,8 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
             
 
 def _getPluginName(obj: bpy.types.Object):
-    return Names.objectData(obj)
+    assert type(obj) is bpy.types.Object
+    return Names.object(obj)
 
 
 def _getLightsOfTextures(textureNames: list[str]):
@@ -179,8 +184,13 @@ class LightExporter(ExporterBase):
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
         self.exported = set()
-        self.objTracker = ctx.objTrackers['LIGHT_OBJ']
+        
+        # Track plugins associated with parent objects of lights
+        self.objTracker = ctx.objTrackers['LIGHT']
+
+        # Track plugins associated with a node tree
         self.nodeTracker = ctx.nodeTrackers['LIGHT']
+
         self.updatedMeshLights = {}
         
 
@@ -221,11 +231,7 @@ class LightExporter(ExporterBase):
                 self._exportLight(obj)
 
         self._fixLightVisibility(sceneLightObjs)
-
-        if checkIfSceneHasLightMix(self.ctx, self.viewport):
-            # Environment and Self-Illumination LightSelect plugins are needed for the Light Mix
-            self._exportLightSelect("Environment", LightSelectMode.Environment)
-            self._exportLightSelect("Self_Illumination", LightSelectMode.SelfIllumination)
+        self._exportLightMix()
 
 
     # Exports LightSelect Plugin
@@ -244,13 +250,13 @@ class LightExporter(ExporterBase):
     
     # Creates light plugin, exports it and puts it in ObjTracker
     def _exportLight(self, obj: bpy.types.Object):
-        objLight = obj.data
-        vrayLight = objLight.vray
+        light = obj.data
+        vrayLight = light.vray
 
         if not vrayLight.is_vray_class:
             return
         
-        pluginType = getLightPluginType(objLight, vrayLight)
+        pluginType = getLightPluginType(light)
         if pluginType == "":
             debug.printError(f"Can't find vray Light type for blender object with id:{obj.name}")
             return AttrPlugin()
@@ -260,32 +266,29 @@ class LightExporter(ExporterBase):
             # Changing the type here will trigger a scene update. To avoid going into an 
             # infinite update loop, set the type only once
             blenderType = LightVrayTypeToBlender[vrayLight.light_type]
-            if objLight.type != blenderType:
-                objLight.type = blenderType
+            if light.type != blenderType:
+                light.type = blenderType
 
         
-        lightPluginName = Names.object(objLight)
+        lightPluginName = _getPluginName(obj)
 
         # The lights may be defined either through the property pages, or as node trees.
-        # When a node tree is active, all values set through the property pages are disregarded.
+        # When a V-Ray node tree is active, all values set through the property pages are disregarded.
         # Any node trees for lights in the preview scenes are not VRay trees, so do not try 
         # to export them. Export the light property group instead. 
-        if (not self.preview) and (lightNtree := objLight.node_tree):
-            lightNode =  getNodeByType(lightNtree, f"VRayNode{pluginType}")
-            
-            nodeCtx = NodeContext(self, objLight, self.ctx.scene, self.renderer)
+        if (not self.preview) and (lightNtree := light.node_tree) and (lightNode := getLightOutputNode(lightNtree)):
+            nodeCtx = NodeContext(self, light, self.ctx.scene, self.renderer)
             nodeCtx.nodeTracker   = self.nodeTracker
             nodeCtx.ntree         = lightNtree
             nodeCtx.sceneObj      = obj
             nodeCtx.customHandler = _customExportLightNode
 
-            pluginDesc = PluginDesc(lightPluginName, pluginType)
-            pluginDesc.node = lightNode
-            
-            with nodeCtx.push(lightNode):
-                lightObjTrackId = getObjTrackId(objLight)
+            with nodeCtx, nodeCtx.push(lightNode):
+                pluginDesc = PluginDesc(lightPluginName, pluginType)
+                pluginDesc.node = lightNode
+                lightTrackId = getObjTrackId(light)
 
-                with TrackObj(self.nodeTracker, lightObjTrackId):
+                with TrackObj(self.nodeTracker, lightTrackId):
                     if lightNode:
                         exportNodeTree(nodeCtx, pluginDesc)
 
@@ -300,12 +303,12 @@ class LightExporter(ExporterBase):
 
     def _exportLightPlugin(self, obj: bpy.types.Object, pluginDesc: PluginDesc, lightNode):
         """ Export an 'output' light plugin. """  
-        objLight = obj.data
+        light = obj.data
 
         # Set attributes that do not depend on the usage of nodetree for the light
         match pluginDesc.type:
             case "LightRectangle":
-                _setLightRectLightAttrs(objLight, pluginDesc)
+                _setLightRectLightAttrs(light, pluginDesc)
                 pluginDesc.setAttribute("objectID", obj.pass_index)
             case "LightSphere" | "LightDome":
                 pluginDesc.setAttribute("objectID", obj.pass_index)
@@ -334,21 +337,15 @@ class LightExporter(ExporterBase):
         else:
             pluginDesc.setAttribute("transform", obj.matrix_world)
 
-        pluginDesc.setAttribute("scene_name", [objLight.name, getSceneNameOfObject(obj, self.dg.scene)])
+        pluginDesc.setAttribute("scene_name", [light.name, getSceneNameOfObject(obj, self.dg.scene)])
 
-        # If lightMix is present in the scene ( it is in the Scene nodetree, not in the Light nodetree )
-        # during production rendering, 
-        # export a LightSelect channel for this light plugin.
-        if checkIfSceneHasLightMix(self.ctx, self.viewport):
-            lsPlugin = self._exportLightSelect(pluginDesc.name, LightSelectMode.Full)
-            self._trackPlugin(objLight, lightNode, lsPlugin.name)
-            
-            pluginDesc.appendToListAttribute("channels", lsPlugin)
+        # For production renders, export a LightSelect render channel for this light 
+        # which will be shown in the active LightMix, if any.
+        self._exportInLightMix(obj, pluginDesc)
 
         # Depending on whether the light has a nodetree, the plugin properties are stored in different locations.  
-        propHolder = lightNode if lightNode else objLight.vray
+        propHolder = lightNode if lightNode else light.vray
         pluginDesc.vrayPropGroup = getattr(propHolder, pluginDesc.type)
-        
 
         if self.commonSettings.useMotionBlur:
             overrideMb = obj.vray.VRayObjectProperties.override_motion_blur_samples
@@ -358,12 +355,12 @@ class LightExporter(ExporterBase):
         plugin = export_utils.exportPlugin(self, pluginDesc)
         
         if type(plugin) is AttrPlugin:
-            self._trackPlugin(objLight, lightNode, plugin.name)
+            self._trackPlugin(obj, lightNode, plugin.name)
         elif type(plugin) is list:
             # LightMesh will export several instances of the light plugin if more than 1 object is connected to the
             # same LightMesh. This is why its export procedure will return a list of exported plugins 
             for pl in plugin:
-                self._trackPlugin(objLight, lightNode, pl.name)
+                self._trackPlugin(obj, lightNode, pl.name)
 
 
     def _fixLightVisibility(self, sceneLights: list[bpy.types.Object]):
@@ -374,18 +371,13 @@ class LightExporter(ExporterBase):
             return
         
         for obj in sceneLights:
-            vrayLight = obj.data.vray
             pluginName = _getPluginName(obj)  
-            pluginType = getLightPluginType(obj.data, vrayLight)
+            pluginType = getLightPluginType(obj.data)
 
             # Get the current 'enabled' flag from the correct property source depending
-            # on whether the light has a nodetree attached.
-            if lightNtree := obj.data.node_tree:
-                # The node might have been deleted (the tree is empty)
-                if lightNode :=  getNodeByType(lightNtree, f"VRayNode{pluginType}"):
-                    propGroup = getattr(lightNode, pluginType)
-                else:
-                    debug.printError(f"The node tree of light '{obj.name}' has no output light node, disabling light.") 
+            # on whether the light has a V-Ray nodetree attached.
+            if (lightNtree := obj.data.node_tree) and (lightNode := getLightOutputNode(lightNtree)):
+                propGroup = getattr(lightNode, pluginType)
                 isEnabled = (lightNode is not None) and propGroup.enabled
             else:
                 propGroup = getattr(obj.data.vray, pluginType)
@@ -396,15 +388,24 @@ class LightExporter(ExporterBase):
             plugin_utils.updateValue(self.renderer, pluginName, "enabled",  isEnabled and isVisibleLight)
 
 
-    # Use the correct change tracker depending on whether the light uses a nodetree or not
-    def _trackPlugin(self, objLight: bpy.types.Light, lightNode, pluginName):
-        assert isinstance(objLight, bpy.types.Light)
-        objTrackId = getObjTrackId(objLight)
+    def _getLightMix(self):
+        if self.viewport or not (lightMixNode := self.activeLightMixNode):
+            return None
+        
+        return lightMixNode.RenderChannelLightMix
+        
+        
+    def _trackPlugin(self, obj: bpy.types.Object, lightNode: bpy.types.Node, pluginName):
+        assert isinstance(obj, bpy.types.Object)
+        
+        objTrackId = getObjTrackId(obj)
+        lightTrackId = getObjTrackId(obj.data)
+        
+        self.objTracker.trackPlugin(objTrackId, pluginName)
 
+        # If the light has node tree, track the current node as well
         if lightNode:
-            self.nodeTracker.trackNodePlugin(objTrackId, getNodeTrackId(lightNode), pluginName)
-        else:
-            self.objTracker.trackPlugin(objTrackId, pluginName)
+            self.nodeTracker.trackNodePlugin(lightTrackId, getNodeTrackId(lightNode), pluginName)
         
         
     def prunePlugins(self):
@@ -412,6 +413,7 @@ class LightExporter(ExporterBase):
         
         # Find all lights that are to be shown in the scene
         activeLights = [l for l in bpy.data.lights if l.vray and (not isObjectOrphaned(l))]
+        activeObjects = [o for o in self.sceneObjects if o.type == 'LIGHT' and (not isObjectOrphaned(o))]
         
         # Remove from VRay the lights with node trees whose topology has been updated. 
         # They will be fully re-exported during the current update cycle 
@@ -422,10 +424,10 @@ class LightExporter(ExporterBase):
         self._pruneNodeTreePlugins(updatedLightIds)
 
         activeLightIds = [getObjTrackId(l) for l in activeLights]
+        activeObjectIds = [getObjTrackId(o) for o in activeObjects]
 
-        # Remove from VRay the light objects that have been removed from the scene or orphaned
-        removedLightObjIds = self.objTracker.diff(activeLightIds)
-        self._pruneObjectPlugins(removedLightObjIds)
+        removedObjectIds = self.objTracker.diff(activeObjectIds)
+        self._pruneObjectPlugins(removedObjectIds)
 
         # Remove from VRay the light trees for objects that have been removed from the scene or orphaned
         removedLightNodeIds = self.nodeTracker.diffObjs(activeLightIds)
@@ -477,5 +479,52 @@ class LightExporter(ExporterBase):
         disconnectedMeshLights = [p for p in self.cachedMeshLightsInfo.difference(self.activeMeshLightsInfo)]
 
         for l in disconnectedMeshLights:
-            lightPluginName = getLightPluginName(l.lightName, l.gizmoObjTrackId)
+            lightPluginName = getLightMeshPluginName(l.lightName, l.gizmoObjTrackId)
             vray.pluginRemove(self.renderer, lightPluginName)
+
+    
+    def _exportLightMix(self):
+        if not (lightMix := self._getLightMix()):
+            return
+
+        # Environment and Self-Illumination LightSelect plugins are needed for the Light Mix
+        self._exportLightSelect("Environment", LightSelectMode.Environment)
+        self._exportLightSelect("Self_Illumination", LightSelectMode.SelfIllumination)
+
+        if lightMix.separate_emissive_material:
+            # Create LightSelect channels for each emissive material
+            for pluginName, attrName, nodeName in self.emissiveMaterials:
+                lightSelectEmissive = self._exportLightSelect(nodeName, LightSelectMode.Full)
+                self.linkPluginToRenderChannel(pluginName, attrName, lightSelectEmissive)
+
+        if lightMix.mode != 'grouped':
+            return
+        
+        for coll in bpy.data.collections:
+            
+            if not (lightObjects := ([o for o in coll.objects if o.type == 'LIGHT'])):
+                continue
+
+            lightSelectPlugin = self._exportLightSelect(coll.name, LightSelectMode.Full)
+            # No need to track light selects as they are only exported for production renders
+
+            for objLight in lightObjects:
+                pluginName = _getPluginName(objLight)
+                self.linkPluginToRenderChannel(pluginName, 'channels_full', lightSelectPlugin)
+
+
+    def _exportInLightMix(self, objLight: bpy.types.Object, lightPlugin: PluginDesc):
+        """ Export the light as a separate LightSelect render channel """
+        if not(lightMix := self._getLightMix()):
+            return 
+        
+        process = (lightMix.mode == 'individual') or ((lightMix.mode == 'grouped') and (objLight in self.lightCollections[""]))
+        
+        if not process:
+            return
+        
+        lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
+        self.linkPluginToRenderChannel(lightPlugin.name, 'channels', lsPlugin)
+
+
+        

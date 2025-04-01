@@ -43,7 +43,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         vray.clearScene(self.renderer)
         
         # Common settings don't change during the animation, collect up front
-        commonSettings = CommonSettings(bpy.context.scene, engine, isInteractive = False)
+        commonSettings = CommonSettings(dg.scene, engine, isInteractive = False)
         commonSettings.updateFromScene()
 
         exporterCtx = self._getExporterContext(self.renderer, dg, commonSettings)

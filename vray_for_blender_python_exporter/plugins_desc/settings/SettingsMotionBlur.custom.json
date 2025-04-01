@@ -1,21 +1,78 @@
 {
     "ID": "SettingsMotionBlur",
-    "Type": "CAMERA",
+    "Type": "SETTINGS",
     "Parameters": [
         {
             "attr": "subdivs",
             "options": {
                 "visible": false
             }
+        },
+        {
+            "attr": "duration",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "interval_center",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "bias",
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "geom_samples",
+            "ui": {
+                "soft_max": 10
+            }
         }
     ],
     "Options": {
         "excluded_parameters": [
-            "subdivs",
-            "low_samples"
-        ]
+            "subdivs"
+        ],
+        "animatable": false
     },
     "excluded_parameters": [
         "subdivs"
-    ]
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "Motion Blur",
+                "label": "Motion Blur",
+                "use_prop": "on",
+                "attrs": [
+                    {
+                        "name": "camera_motion_blur"
+                    },
+                    {
+                        "name": "duration"
+                    },
+                    {
+                        "name": "interval_center"
+                    },
+                    {
+                        "name": "bias"
+                    },
+                    {
+                        "name": "shutter_efficiency"
+                    },
+                    {
+                        "name": "geom_samples"
+                    }
+                ]
+            }
+        ]
+    }
 }

@@ -181,3 +181,8 @@ TypeToProp = {
     # TOOD: There is no bpy.props.TransformProperty type. Replace with valid one. 
     'OUTPUT_TRANSFORM_TEXTURE' : bpy.props.TransformProperty,
 }
+
+
+CompatibleNonVrayNodes = {
+    'NodeReroute',
+}

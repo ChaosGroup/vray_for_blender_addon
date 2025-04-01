@@ -21,15 +21,15 @@ class VRAY_MT_help(bpy.types.Menu):
         self.layout.operator(VRAY_OT_show_about_dialog.bl_idname, icon_value=getUIIcon(VRAY_OT_show_about_dialog))
         
         opDocSite = self.layout.operator('wm.url_open', text='Online Documentation', icon_value=getIcon("VRAY_LOGO"))
-        opDocSite.url = 'https://docs.chaos.com/display/VFBlender/V-Ray+for+Blender+Help'
-        
+        opDocSite.url = 'https://docs.chaos.com/display/VBLD'
+
         opHelpSite = self.layout.operator('wm.url_open', text='Online Help Center', icon='URL')
         opHelpSite.url = 'https://support.chaos.com'
 
 
-class VRAY_MT_cameras(bpy.types.Menu):
-    bl_label = 'Cameras'
-    bl_idname = 'VRAY_MT_cameras'
+class VRAY_MT_camera(bpy.types.Menu):
+    bl_label = 'Camera'
+    bl_idname = 'VRAY_MT_camera'
 
     @classmethod
     def poll(cls, context):
@@ -38,10 +38,7 @@ class VRAY_MT_cameras(bpy.types.Menu):
     def draw(self, context):
         from vray_blender.ui import menus
         physCamera = menus.VRAY_OT_add_physical_camera
-        domeCamera = menus.VRAY_OT_add_dome_camera
-
         self.layout.operator(physCamera.bl_idname, text="V-Ray Physical Camera", icon_value=getUIIcon(physCamera))
-        self.layout.operator(domeCamera.bl_idname, text="V-Ray Dome Camera", icon_value=getUIIcon(domeCamera))
 
 
 class VRAY_MT_lights(bpy.types.Menu):
@@ -67,10 +64,12 @@ class VRAY_MT_geometry(bpy.types.Menu):
     
     def draw(self, context):
         from vray_blender.ui import menus
-        vraySceneOp = menus.VRAY_OT_add_object_vrayscene
         vrayProxyOp = menus.VRAY_OT_add_object_proxy
 
-        self.layout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
+        # To be enabled when V-Ray Scene import is re-implemented
+        # vraySceneOp = menus.VRAY_OT_add_object_vrayscene
+        # self.layout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
+        
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
 
 class VRAY_MT_main(bpy.types.Menu):
@@ -96,7 +95,7 @@ class VRAY_MT_main(bpy.types.Menu):
         layout.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
         layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
         layout.separator()
-        layout.menu(VRAY_MT_cameras.bl_idname)
+        layout.menu(VRAY_MT_camera.bl_idname)
         layout.menu(VRAY_MT_lights.bl_idname)
         layout.menu(VRAY_MT_geometry.bl_idname)
         layout.separator()
@@ -173,8 +172,8 @@ class VRAY_OT_show_about_dialog(bpy.types.Operator):
 
 class VRAY_OT_show_account_status(bpy.types.Operator):
     bl_idname       = "vray.show_account_status"
-    bl_label        = "Chaos account"
-    bl_description  = "Chaos account"
+    bl_label        = "Chaos Account"
+    bl_description  = "Show Chaos Account management dialog"
 
     def execute(self, context):
         from vray_blender.version import getBuildVersionString
@@ -210,7 +209,7 @@ def _getRegClasses():
         VRAY_OT_show_account_status,
 
         VRAY_MT_help,
-        VRAY_MT_cameras,
+        VRAY_MT_camera,
         VRAY_MT_lights,
         VRAY_MT_geometry,
         VRAY_MT_main

@@ -25,6 +25,10 @@ def unregister():
 
 
 
+def templateSingleObjectSelect():
+    from vray_blender.plugins.templates import single_select
+    return single_select.TemplateSingleObjectSelect
+
 def templateMultiObjectSelect():
     from vray_blender.plugins.templates import multi_select
     return multi_select.TemplateMultiObjectSelect

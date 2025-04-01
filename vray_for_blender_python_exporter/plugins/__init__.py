@@ -193,6 +193,15 @@ def _toggleCameraUpdate(self, context, isPhysical: bool):
             vrayCamera['use_physical'] = False
 
 
+
+# Getter for VRayCamera.focus_distance
+def _getFocusDistanceValue(propGroup):
+    from vray_blender.lib import camera_utils as ct
+    if cameraObj := next((obj for obj in bpy.data.objects if obj.data == propGroup.id_data), None):
+        return ct.getCameraDofDistance(cameraObj)
+    return 0
+
+
 class VRayCamera(VRayEntity, bpy.types.PropertyGroup):
     use_camera_loop: bpy.props.BoolProperty(
         name = "Use In \"Camera loop\"",
@@ -200,28 +209,20 @@ class VRayCamera(VRayEntity, bpy.types.PropertyGroup):
         default = False
     )
 
-    override_fov: bpy.props.BoolProperty(
-        name = "Override FOV",
-        description = "Override FOV (if you need FOV > 180)",
-        default = False
-    )
-
-    fov: bpy.props.FloatProperty(
-        name = "FOV",
-        description = "Field of vision",
-        min = 0.0,
-        max = math.pi * 2,
-        soft_min = 0.0,
-        soft_max = math.pi * 2,
-        subtype = 'ANGLE',
-        precision = 2,
-        default = math.pi / 4
-    )
-
     in_update: bpy.props.BoolProperty(
         name = "Updating a property",
         description = "Updating a proeprty",
         default = False
+    )
+
+    # Fake focus distance property that shows the distance
+    # from the camera to bpy.types.Camera.dof.focus_object.
+    focus_distance: bpy.props.FloatProperty(
+        name = "Focus Distance",
+        description = "Distance to the focus point for depth of field",
+        default = 0.0,
+        subtype = "DISTANCE",
+        get = _getFocusDistanceValue
     )
 
     # Physical camera
@@ -331,6 +332,30 @@ for key in {'all', 'camera', 'gi', 'reflect', 'refract', 'shadows'}:
 ##     ## ##     ## ##    ## ##       ##    ##    ##
  #######  ########   ######  ########  ######     ##
 
+# Getter for VRayAsset.filePath
+def getFilePathValue(propGroup):
+    if "filePath" not in propGroup:
+        return ""
+
+    if propGroup.useRelativePath:
+        # Converting relative paths to absolute paths, so they could be exported.  
+        # Replacing "\\" with "//" helps avoid errors caused by  
+        # Windows remote paths being confused with Blender's relative paths.
+        return bpy.path.abspath(propGroup["filePath"].replace("\\\\", "//"))
+    
+    return propGroup["filePath"]
+
+# Setter for VRayAsset.filePath.
+# This is necessary because, without a setter, the property becomes read-only if only a getter is defined.
+def setFilePathValue(propGroup, path):
+    # If bpy.path.abspath("//") returns an empty string, the scene is new and unsaved.  
+    # In this case, an absolute path is assigned to ensure the path is valid  
+    # and can be properly converted to a relative path when the scene is saved.
+    if propGroup.useRelativePath and bpy.path.abspath("//"):
+        propGroup["filePath"] = bpy.path.relpath(path)
+    else:
+        propGroup["filePath"] = path
+
 class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
     assetType: bpy.props.EnumProperty(
         name        = "Type",
@@ -351,7 +376,15 @@ class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
     filePath: bpy.props.StringProperty(
         name        = "File Path",
         subtype     = 'FILE_PATH',
-        description = "Path to a *.vrscene or *.vrmat file"
+        description = "Path to a *.vrscene or *.vrmat file",
+        get = getFilePathValue,
+        set = setFilePathValue
+    )
+
+    useRelativePath: bpy.props.BoolProperty(
+        name        = "Use Relative Path",
+        description = "filePath is relative",
+        default     = True
     )
 
     dirPath: bpy.props.StringProperty(
@@ -455,6 +488,12 @@ class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
         name        = "Hidden Objects",
         description = "Semicolon separated list of plugin names to hide",
         default     = ""
+    )
+
+    scale: bpy.props.FloatProperty(
+        name        = "Scale",
+        description = "scale of the asset's geometry",
+        default = 1.0
     )
 
 
@@ -1097,3 +1136,8 @@ def unregister():
 
     for plug in PLUGIN_MODULES:
         del plug
+
+    plugin_utils.PLUGINS_DESC.clear()
+
+    from vray_blender.plugins import templates
+    templates.unregister()

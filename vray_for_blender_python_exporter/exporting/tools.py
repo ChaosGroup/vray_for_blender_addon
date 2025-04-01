@@ -11,6 +11,7 @@ from xml.dom import NotFoundErr
 from vray_blender import debug
 from vray_blender.lib.lib_utils import LightTypeToPlugin, LightBlenderToVrayPlugin
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
+from vray_blender.nodes.tools import isVrayNode
 
 
 
@@ -46,31 +47,6 @@ IGNORED_PLUGINS = {
     "SettingsPhotonMap",
     "RTEngine",
     "EffectLens",
-}
-
-# Maps image format(as represented in bpy.types.Image.file_format) to its file extension
-IMAGE_FILE_FORMAT_TO_EXT = {
-    'BMP': '.bmp',
-    'IRIS': '.sgi',
-    'PNG': '.png',
-    'JPEG': '.jpg',
-    'JPEG2000': '.jp2',
-    'TARGA': '.tga',
-    'CINEON': '.cin',
-    'DPX': '.dpx',
-    'OPEN_EXR': '.exr',
-    'HDR': '.hdr',
-    'TIFF': '.tiff',
-    'AVI_JPEG': '.avi',
-    'AVI_RAW': '.avi',
-    'FRAMESERVER': '',
-    'H264': '.mp4',
-    'THEORA': '.ogg',
-    'XVID': '.avi',
-    'FFMPEG': '.avi',
-    'QUICKTIME': '.mov',
-    'DDS': '.dds',
-    'WEBP': '.webp'
 }
 
 
@@ -147,14 +123,6 @@ def saveShaderScript(script):
 
     return filepath
 
-
-def checkIfSceneHasLightMix(context: bpy.types.Context, isViewport=False):
-    """ Checks if There is a LightMix node created in the scene vray node tree and the render mode is not viewport"""
-    if (not isViewport) and (world := getattr(context.scene, 'world')) and world.node_tree:
-        return any(node.bl_idname == "VRayNodeRenderChannelLightMix" for node in world.node_tree.nodes)
-
-    return False
-
 def isObjectVrayScene(obj: bpy.types.Object):
     return obj.vray.VRayAsset.assetType == VRAY_ASSET_TYPE["Scene"]
 
@@ -198,14 +166,25 @@ def getInputSocketByAttr(node, attrName):
         debug.printExceptionInfo(ex)
 
 
-def linkedNode(sock):
+def getFromNode(sock):
     if len(sock.links) > 0:
         return sock.links[0].from_node
     return None
 
+
 def getNodeLink(sock) ->bpy.types.NodeLink | None:
     if len(sock.links) > 0:
-        return sock.links[0]
+
+        # If the linked node is 'Reroute', return its link to the input socket to skip the export.
+        if fromNode := getFromNode(sock):
+            if fromNode.bl_idname == "NodeReroute":
+                return getNodeLink(fromNode.inputs[0])
+            elif not isVrayNode(fromNode):
+                from vray_blender.lib.defs import NodeContext
+                NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
+                return None
+            else:
+                return sock.links[0]
     return None
 
 
@@ -225,16 +204,6 @@ def removeInputSocketLinks(sock: bpy.types.NodeSocket):
 
 def nodePluginType(node):
     return node.vray_plugin if hasattr(node, "vray_plugin") else None
-
-
-def getLightPluginType(bpyLight: bpy.types.Light, vrayLight):
-    """ Returns plugin type of blender light object """
-    if vrayLight.light_type == "BLENDER":
-        return LightBlenderToVrayPlugin[bpyLight.type]
-    elif vrayLight.light_type in LightTypeToPlugin:
-        return LightTypeToPlugin[vrayLight.light_type]
-
-    return ""
 
 
 def getSceneNameOfObject(obj: bpy.types.Object, scene: bpy.types.Scene):
@@ -263,6 +232,7 @@ def getSceneNameOfObject(obj: bpy.types.Object, scene: bpy.types.Scene):
 
 def isNodeConnected(node):
     return any(len(o.links) > 0 for o in node.outputs)
+
 
 def isFloatSocket(sockType):
     return sockType in FLOAT_SOCK_TYPES

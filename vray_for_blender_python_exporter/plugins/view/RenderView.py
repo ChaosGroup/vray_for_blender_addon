@@ -13,11 +13,14 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     camera = blender_utils.getSceneCamera(ctx)
     
-    # The scene might not have a camera, or the scene camera might be a non-camera object
-    # (the so-called 'look through selected' feature). 
-    if camera and (camera.type == 'CAMERA'):
-        vrayCamera = camera.data.vray
-        pluginDesc.setAttribute('aperture', vrayCamera.SettingsCameraDof.aperture)
+    if ctx.viewport and blender_utils.getRegion3D(ctx.ctx).view_perspective != 'CAMERA':
+        # Don't show DoF in viewport mode without camera view
+        pluginDesc.setAttribute("aperture", 0)
+    elif camera and (camera.type == 'CAMERA'):
+        # The scene might not have a camera, or the scene camera might be a non-camera object
+        # (the so-called 'look through selected' feature).
+        vrayScene = ctx.ctx.scene.vray
+        pluginDesc.setAttribute('aperture', vrayScene.SettingsCameraDof.aperture)
 
     # NOTE We are currently using VRayStereoscopicSettings for stereo exports. 
     # It is an alternative to exporting through RenderView ( which does

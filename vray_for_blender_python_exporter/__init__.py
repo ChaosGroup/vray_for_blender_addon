@@ -8,8 +8,17 @@ bl_info = {
     "doc_url"     : "https://docs.chaos.com/display/VBLD/",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "00", "10") # Versions are strings since we can have versions like "6.00.00"
+    "version"     : ("7", "00", "23") # Versions are strings since we can have versions like "6.00.00"
 }
+
+# A monotonically increasing number used to identify points at which an upgrade to the scene data 
+# should be made. Every time a new upgrade script is added, this number should be increased by 1 
+# and included in the upgrade script's name. The number is saved to the scene, so we can compare
+# the current value with the value in a loaded scene and determine which upgrade scripts should
+# be run.
+# Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
+UPGRADE_NUMBER = 4
+
 
 from vray_blender import debug
 from vray_blender import plugins
@@ -69,6 +78,19 @@ def initVRay():
     vray.init(logFile)
 
 
+def _getModules():
+    """ Modules requiring registration/unregistration """
+    return (
+        plugins,
+        operators,
+        ui,
+        menu,
+        nodes,
+        proxy,
+        keymap,
+        utils
+    )
+
 def register():
     from vray_blender.lib.sys_utils import StartupConfig
 
@@ -80,37 +102,51 @@ def register():
     # Parse command line
     StartupConfig.init()
 
-    plugins.register()
-    operators.register()
-    ui.register()
-    menu.register()
-    nodes.register()
-    proxy.register()
-    keymap.register()
+    for mod in _getModules():
+        mod.register()
+
     events.register()
-    utils.register()
 
     # NOTE: Register engine at the end,
     # to be sure all used data is registered.
     engine.register()
     engine.ensureRunning()
 
+
+
+def _switchViewportsToSolid():
+    """ Switching all 'VIEW_3D' spaces to 'SOLID' shading mode """
+    import bpy
+ 
+    for screen in bpy.data.screens:
+        if hasattr(screen, "areas"):
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    for space in area.spaces:
+                        if space.type == 'VIEW_3D':
+                            space.shading.type = 'SOLID'
+
+
 def unregister():
+
+    # Switching all 3D viewports to SOLID mode  
+    # to ensure no updates are triggered during unregistration.  
+    _switchViewportsToSolid()
+
     from vray_blender.engine.vfb_event_handler import VfbEventHandler
+    from vray_blender.engine.render_engine import VRayRenderEngine
+
+    VRayRenderEngine.resetAll()
     VfbEventHandler.stop()
 
-    # Remove events first
-    events.unregister()
-    engine.unregister()
-
-    plugins.unregister()
-    operators.unregister()
-    nodes.unregister()
-    menu.unregister()
-    proxy.unregister()
-    ui.unregister()
-    keymap.unregister()
-    utils.unregister()
-
-    engine.shutdown()
     debug.unregister()
+    events.unregister()
+
+    for mod in reversed(_getModules()):
+        mod.unregister()
+
+    # The order is important, the engine must be shuted down before unregistration!!!
+    engine.shutdown()
+    engine.unregister()
+    vray.exit()
+    

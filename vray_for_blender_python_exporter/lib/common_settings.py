@@ -190,12 +190,12 @@ class CommonSettings:
             physCamera = vrayCamera.CameraPhysical
 
             self.useHideFromView = vrayCamera.hide_from_view
-            mbSettings = vrayCamera.SettingsMotionBlur
+            mbSettings = self.scene.vray.SettingsMotionBlur
             self.mbSamples = mbSettings.geom_samples
 
             self.usePhysicalCamera = physCamera.use
+            self.useMotionBlur = mbSettings.on
             if self.usePhysicalCamera:
-                self.useMotionBlur = physCamera.use_moblur
 
                 cameraType = int(physCamera.type)
                 
@@ -214,7 +214,6 @@ class CommonSettings:
                     case _:
                         self.useMotionBlur = False
             else:
-                self.useMotionBlur = mbSettings.on
                 self.mbDuration = mbSettings.duration
 
         # Disable motion blur for bake render
@@ -257,12 +256,11 @@ class CommonSettings:
             case 'CPU':
                 renderMode = defs.RenderMode.RtCpu if self._interactive else defs.RenderMode.Production
             case 'GPU':
-                deviceGpuType = self.vrayExporter.device_gpu_type
-
-                match deviceGpuType:
-                    case 'CUDA':
-                        renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
-                    case 'OPTIX':
-                        renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
+                if self.vrayExporter.use_gpu_rtx:
+                    # OPTIX
+                    renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
+                else:
+                    # CUDA
+                    renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
 
         return renderMode

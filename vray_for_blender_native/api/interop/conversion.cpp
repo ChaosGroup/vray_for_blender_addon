@@ -2,7 +2,6 @@
 
 #include "conversion.hpp"
 
-
 namespace VRayForBlender
 {
 
@@ -50,9 +49,9 @@ void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& list
 }
 
 
-VrayZmqWrapper::VRayMessage::RenderSizes fromRenderSizes(const py::object& obj)
+proto::RenderSizes fromRenderSizes(const py::object& obj)
 {
-	VrayZmqWrapper::VRayMessage::RenderSizes sz;
+	proto::RenderSizes sz;
 
 	sz.bitmask = py::extract<int>(obj.attr("bitmask"));
 

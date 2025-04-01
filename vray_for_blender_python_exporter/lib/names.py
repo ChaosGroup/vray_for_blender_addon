@@ -53,7 +53,7 @@ from vray_blender import debug
    Object 'Cube'
        |-- mesh 'CubeMesh'
    Object 'Circle'
-   Instancer object for 'Cube' -> Circle ( e.g. cubes positioned at the vertices os a circle )
+   Instancer object for 'Cube' -> Circle ( e.g. cubes positioned at the vertices of a circle )
  Object type       | Naming template              | Example plugin name
  -------------------------------------------------------------------------
  Object            | objectName                            | Cube@15, Circle@17  

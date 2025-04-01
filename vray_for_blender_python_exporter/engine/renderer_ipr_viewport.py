@@ -1,12 +1,14 @@
 import bpy 
 import time
+import queue
+import threading
 
 from numpy import ndarray
 
 from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase, exportViewportView
 
 from vray_blender import debug
-from vray_blender.lib import gl_draw, blender_utils
+from vray_blender.lib import gl_draw, blender_utils, plugin_utils, image_utils
 from vray_blender.lib.camera_utils import Size
 from vray_blender.lib.defs import RendererMode, ExporterType
 from vray_blender.exporting.update_tracker import UpdateTracker

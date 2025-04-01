@@ -213,7 +213,7 @@ class VRayObjectSelector(VRayUITemplate):
         selected = set()
 
         for i in self.selectedItems:
-            obj = i.objectPtr
+            obj = i.objectPtr.original
             if isCollection(obj):
                 selected.update([o for o in obj.all_objects if o in dataProvider.values() and self._filterObject(o)])
             elif obj in dataProvider.values():
@@ -223,10 +223,10 @@ class VRayObjectSelector(VRayUITemplate):
         return list(selected)
     
 
-    def copy(src: VRayObjectSelector, dest: VRayObjectSelector):
-        dest.activeItem = src.activeItem
+    def copy(self, dest: VRayObjectSelector):
+        dest.activeItem = self.activeItem
 
-        for item in src.selectedItems:
+        for item in self.selectedItems:
             dest._onAddListItem(bpy.context, item.objectPtr)
 
 

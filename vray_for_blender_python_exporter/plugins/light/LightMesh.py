@@ -1,15 +1,14 @@
 from dataclasses import dataclass
-from collections import namedtuple
 import bpy
 
 from vray_blender import debug
-from vray_blender.exporting import tools
+from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
-from vray_blender.nodes.utils import getNodeOfPropGroup, getNodeByType, getObjectsFromSelector
-from vray_blender.plugins.light.light_tools import onUpdateColor
+from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
+from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -37,7 +36,7 @@ class UpdatedMeshLightInfo:
 
 
 def onUpdateAttribute(src, context, attrName):
-    onUpdateColor(src, 'LightMesh', attrName)
+    onUpdateColorTemperature(src, 'LightMesh', attrName)
 
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
@@ -47,19 +46,29 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     meshObjects: list[bpy.types.Mesh] = []  # A list of mesh objects attached to the same LightMesh
     exportedLights: list[AttrPlugin]   = []  # A list of the expored LightMesh plugins 
 
-    exportedNode = False
+    exportedObjectSelectorNode = False
+
     if node := pluginDesc.node:
-        if node.inputs['Geometry'].is_linked:
-            if attrPlugin := pluginDesc.getAttribute('geometry'): 
-                if type(attrPlugin) is list:
-                    # The node has an group selector connected to its 'geometry' socket
-                    meshObjects = [pl.auxData['object'] for pl in attrPlugin]
-                elif not attrPlugin.isEmpty():
-                    # The node has an object selector connected to its 'geometry' socket
-                    meshObjects = [attrPlugin.auxData['object']]
-                exportedNode = True
+        geometrySocket = node.inputs['Geometry']
+        if geometrySocket.is_linked:
+            # Even if an empty selector or a wrong node is attached to the 'geometry' socket, we
+            # want to suppress the usage of internal objects list because it will be confusing
+            # to the users (as list is hidden in the UI).
+            exportedObjectSelectorNode = True
     
-    if not exportedNode:
+            linkedNode = getLinkedFromSocket(geometrySocket).node
+            
+            if linkedNode.bl_idname not in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
+                debug.printError(f"A non-selector node attached to 'Geometry' socket of {node.name}.")
+            elif linkedItem := pluginDesc.getAttribute('geometry'): 
+                if type(linkedItem) is list:
+                    # The node has an group selector connected to its 'geometry' socket
+                    meshObjects = [pl.auxData['object'] for pl in linkedItem]
+                elif (type(linkedItem) is AttrPlugin) and (not linkedItem.isEmpty()):
+                    # The node has an object selector connected to its 'geometry' socket
+                    meshObjects = [linkedItem.auxData['object']]
+
+    if not exportedObjectSelectorNode:
         # The 'geometry' socket is not linked, use the value from the property page if any
         meshObjects = pluginDesc.vrayPropGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
         
@@ -69,7 +78,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         # LightMesh plugin can only have one target geometry, so export one LightMesh plugin for each geometry
         for meshObj in meshObjects:
             meshName = Names.objectData(meshObj)
-            pluginDesc.name = getLightPluginName(baseName, getObjTrackId(meshObj))
+            pluginDesc.name = getLightMeshPluginName(baseName, getObjTrackId(meshObj))
 
             pluginDesc.setAttributes({
                 'geometry': AttrPlugin(meshName),
@@ -126,16 +135,15 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
 
 
     for lightObj in meshLightObjects:
-        propGroup = None
         usesSelectorNode = False
+        propGroup = lightObj.data.vray.LightMesh
 
         if ntree := lightObj.data.node_tree:
             # If the mesh light has a node tree, we need to obtain the names of the 
             # target objects from an object selector node attached to its 'Geometry' socket
             if outputNode := getNodeByType(ntree, "VRayNodeLightMesh"):
                 propGroup = outputNode.LightMesh
-                if fromSock := tools.getLinkedFromSocket(outputNode.inputs['Geometry']):
-                    usesSelectorNode = True
+                if fromSock := getLinkedFromSocket(outputNode.inputs['Geometry']):
                     targetObjects = getObjectsFromSelector(fromSock.node, exporterCtx.ctx)
 
                     for o in targetObjects:
@@ -143,16 +151,15 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
                     
                     usesSelectorNode = True
 
-        if (not usesSelectorNode) and (not propGroup):
-            # The mesh light has a node tree, but nothing is attached to its 'Geometry' socket.
-            # Add the target object set in the property pages if it still exists in the scene.
-            propGroup = lightObj.data.vray.LightMesh
-        
-        for targetObject in propGroup.object_selector.getSelectedItems(exporterCtx.ctx, 'objects'):
-            registerPair(lightObj, targetObject)
+        if not usesSelectorNode:
+            # If a selector node is not connected to the 'geometry' socket, take the list from the
+            # template in the property page. Note that the property group will be different depending
+            # on whether the light uses nodes or not.
+            for targetObject in propGroup.object_selector.getSelectedItems(exporterCtx.ctx, 'objects'):
+                registerPair(lightObj, targetObject)
 
     return activeMeshLights, updatedMeshLights
 
 
-def getLightPluginName(lightName: str, gizmoObjTrackId):
+def getLightMeshPluginName(lightName: str, gizmoObjTrackId):
      return f"{lightName}_{gizmoObjTrackId}"

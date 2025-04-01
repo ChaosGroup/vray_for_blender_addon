@@ -1,19 +1,30 @@
 
 import bpy
 
-from vray_blender.lib import blender_utils
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQ
+from vray_blender.lib import blender_utils, image_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
+from vray_blender.lib.sys_utils import getVfbDefaultLayersPath
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps
 from vray_blender.version import getBuildVersionString
-from vray_blender.lib.sys_utils import getVfbDefaultLayersPath
+
+IS_DEFAULT_SCENE = False # Indicates that current loaded scene is newly created
+
+def isDefaultScene() :
+    global IS_DEFAULT_SCENE
+    return IS_DEFAULT_SCENE
+
 
 @bpy.app.handlers.persistent
 def _onSavePost(e):
+    global IS_DEFAULT_SCENE
+
     bpy.ops.vray.dr_nodes_save()
+
+    IS_DEFAULT_SCENE = False
 
 
 @bpy.app.handlers.persistent
@@ -32,7 +43,10 @@ def _onLoadPre(e):
 
 @bpy.app.handlers.persistent
 def _onLoadPost(e):
-    from vray_blender import engine
+    global IS_DEFAULT_SCENE
+    IS_DEFAULT_SCENE = not bpy.data.filepath
+    
+    from vray_blender import engine, debug
     engine.ensureRunning()
 
     # Reset the global unique ID generator. This will keep the generated IDs to a 
@@ -45,11 +59,9 @@ def _onLoadPost(e):
 
     # Register all color ramp controls that need to receive update notifications
     registerColorRamps()
-
-    isDefaultScene = not bpy.data.filepath
-    if (not isDefaultScene):
-        # Run upgrade for the loaded scene, if necessary
-        bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
+    
+    # Run upgrade for the loaded scene, if necessary
+    bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
     
     # If SettingsVFB.vfb2_layers is empty, it will be reset to the default layer configuration
     # to override any VFB layer settings from previously opened scenes.
@@ -58,9 +70,16 @@ def _onLoadPost(e):
         with open(getVfbDefaultLayersPath() , 'r') as vfbDefaultLayers:
             settingsVFB.vfb2_layers = vfbDefaultLayers.read()
 
-    # Setting VFB Layers if new scene is being loaded
+    # Set VFB Layers if new scene is being loaded
     VfbEventHandler.updateVfbLayers(settingsVFB.vfb2_layers)
     vray.setVfbLayers(settingsVFB.vfb2_layers)
+
+    # Set the log level to the one saved in the scene
+    debug.setLogLevel(int(bpy.context.scene.vray.Exporter.verbose_level))
+
+    # Remove any images from the previous scene explicitly saved by the plugin.
+    image_utils.clearSavedImages()
+
 
 @bpy.app.handlers.persistent
 def _onUndoPost(e):
@@ -76,10 +95,15 @@ def _onRedoPost(e):
 def _onUpdatePre(e):
     from vray_blender.exporting.light_export import fixBlenderLights
     from vray_blender.plugins.templates.common import cleanupObjectSelectorLists
+    from vray_blender.nodes.nodes import removeInvalidNodeLinks
+    
     fixBlenderLights()
     cleanupObjectSelectorLists()
     syncColorRamps()
+    removeInvalidNodeLinks()
 
+    image_utils.checkPackedImageForUpdates()
+    
 
 def register():
     blender_utils.addEvent(bpy.app.handlers.save_pre, _onSavePre)

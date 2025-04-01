@@ -4,6 +4,8 @@ import bpy
 from vray_blender.lib import lib_utils
 from vray_blender.lib import draw_utils
 from vray_blender     import plugins, debug
+from vray_blender.ui  import icons
+from vray_blender.nodes.utils import getVrayPropGroup
 
 
 ########  ######## ######## #### ##    ## ########  ######
@@ -145,8 +147,7 @@ def drawNodePanel(context, layout, node, PLUGINS):
     layout.label(text=f"Node:  {node.name}")
     layout.separator()
     
-    if show and pluginModule:
-        propGroup = getattr(node, node.vray_plugin)
+    if show and pluginModule and (propGroup := getVrayPropGroup(node)):
         drawPluginUI(context, layout, propGroup, pluginModule, node)
     else:
         layout.label(text="Selected node has no properties to show.")
@@ -206,10 +207,20 @@ def drawListWidget(layout, propGroupPath, listType, defItemName, itemAddOp='DEFA
 
 class VRayPanel(bpy.types.Panel):
     COMPAT_ENGINES = VRayEngines
+    bl_icon = "" # Icon from "vray_blender.ui.icons" to be drawn in front of V-Ray rollouts.
 
     # A list of V-Ray plugin type names to be shown on the panel. 
     # The order in the UI is the same as in the list.
     vrayPlugins = [] 
+
+    def drawPanelCheckBox(self, context):
+        """ Override this function to draw a rollout checkbox. """
+        pass
+
+    def draw_header(self, context):
+        if self.bl_icon:
+            self.layout.label(icon_value=icons.getIcon(self.bl_icon), text="")
+        self.drawPanelCheckBox(context)
 
     @classmethod
     def poll(cls, context):
@@ -241,9 +252,11 @@ class VRayPanel(bpy.types.Panel):
         
         if widget := next((w for w in pluginModule.Widget['widgets'] if w.get('name') == widgetName), None):
             painter = draw_utils.UIPainter(context, pluginModule, propGroup)
-            painter.renderWidgets(layout, [widget])
+            return painter.renderWidget(layout, widget)
         else:
             debug.printError(f"Plugin {pluginType} has no widget with name '{widgetName}'")
+        
+        return None
 
 
 class VRayDataPanel(VRayPanel):
@@ -253,6 +266,7 @@ class VRayDataPanel(VRayPanel):
 
 
 class VRayGeomPanel(VRayDataPanel):
+    bl_icon = "VRAY_PLACEHOLDER"
     incompatTypes  = {'LIGHT', 'CAMERA', 'SPEAKER', 'ARMATURE', 'EMPTY', 'META'}
 
     @classmethod
@@ -261,6 +275,8 @@ class VRayGeomPanel(VRayDataPanel):
 
 
 class VRayCameraPanel(VRayDataPanel):
+    bl_icon = "VRAY_PLACEHOLDER"
+
     @classmethod
     def poll(cls, context):
         return context.camera and pollBase(cls, context)
@@ -286,6 +302,7 @@ class VRayObjectPanel(VRayPanel):
     bl_space_type  = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context     = 'object'
+    bl_icon        = "VRAY_PLACEHOLDER"
 
     incompatTypes  = {'LIGHT', 'CAMERA', 'SPEAKER', 'ARMATURE'}
 

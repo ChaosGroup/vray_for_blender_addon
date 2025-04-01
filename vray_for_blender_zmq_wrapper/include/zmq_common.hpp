@@ -10,7 +10,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2011;
+static const int ZMQ_PROTOCOL_VERSION = 2014;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -80,7 +80,7 @@ inline const char * getServerReturnCodeStr(int code) {
 	int i=(int)code;
 	if(i>=0 && i<(int)ServerReturnCode::LAST)
 		return msg[(int)code];
-	return "Uknown error";
+	return "Unknown error";
 }
 
 

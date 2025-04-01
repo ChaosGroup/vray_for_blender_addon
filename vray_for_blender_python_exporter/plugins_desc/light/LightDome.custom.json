@@ -16,8 +16,7 @@
                 1.0,
                 1.0,
                 1.0
-            ],
-            "update": "onUpdateAttribute"
+            ]
         },
         {
             "attr": "color_mode",
@@ -36,6 +35,7 @@
                 ]
             ],
             "type": "ENUM",
+            "update": "onUpdateAttribute",
             "options": {
                 "derived": true
             }
@@ -46,6 +46,11 @@
             "desc": "Color temperature in K",
             "type": "FLOAT",
             "update": "onUpdateAttribute",
+            "ui": {
+                "spin_step": 100,
+                "min": 800,
+                "max": 12000
+            },
             "options": {
                 "derived": true
             }
@@ -91,7 +96,7 @@
         },
         {
             "attr": "shadowBias",
-            "default": 0.02,
+            "default" : 0.005,
             "ui": {
                 "soft_min": -0.1,
                 "soft_max": 0.1,

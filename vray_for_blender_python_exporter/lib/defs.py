@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import Mapping, TypeVar
 import bpy
 from numpy import ndarray
+
+from vray_blender import debug
 from vray_blender.exporting.tools import isObjectVisible, TimeStats, FakeTimeStats
 from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
 from vray_blender.lib.blender_utils import getGeomAnimationRange, geometryObjectIt
@@ -72,6 +74,10 @@ class ExporterContext:
         # For all other modes, the value should always be True
         self.fullExport: bool = True 
 
+        # The number of the frame being currently exported. This may be outside the animation 
+        # range if motion blur is active.
+        self.currentFrame: float = 0.0
+
         # Settings values collected from the user interface
         self.commonSettings: CommonSettings = None
 
@@ -82,7 +88,7 @@ class ExporterContext:
         # Track VRay plugins assosiated with nodes in a nodetree.
         self.nodeTrackers: Mapping[str, ScopedNodeTracker|FakeScopedNodeTracker]  = {}
         
-        # A snapshot of scene objects' visibility. Blender does not provide updates when a visibility
+        # A snapshot of scene objects' visibility. Blender does not provide updates when the visibility
         # of an object changes, so we need to track it ourselves.  
         self.visibleObjects = set() # set of objTrackId
 
@@ -124,14 +130,31 @@ class ExporterContext:
         # of the animation to export values. The format is {object: mathutils.Vector(X, Y)}
         self.geomAnimationRanges = {} # {Object(not ID!): Vector(start, end)
 
-          # A list of all temp objects that have been craeted to support edit mode exports
+        # A list of all temp objects that have been craeted to support edit mode exports
         self.tempObjects = []
+
+        # A dictionary of (pluginName, attrName) => list of render channels. It will be filled up during the export
+        # procedure. When all other plugins have already been exported, the render channel names will be
+        # exported for each plugin that is on the list.
+        self.pluginRenderChannels = {}
+
+        # A dictionary of collection => list of lights. For lights outside a collection, the collection
+        # name is an empty string. This info is used for exporting LightSelect and LightMix render channels.
+        self.lightCollections = {}
+
+        # A list of the emissive materials in the scene. Used to create LightSelects for the emissive materials
+        # when 'Separate emissive materials' is active in the LighMix options.
+        # The data type is tuple(emissivePluginName, attrName, nodeName)
+        self.emissiveMaterials = [] 
 
         # A stack of the objects that are being currently exported.
         self.objectContext = __class__._CurrentObjectContext() 
 
         
         self.motionBlurBuilder = MotionBlurBuilder()
+
+        # The active LightMix node in the scene or None
+        self.activeLightMixNode = None
 
 
     def _copyConstuct(self, other: ExporterContext):
@@ -150,13 +173,18 @@ class ExporterContext:
         self.activeMeshLightsInfo = other.activeMeshLightsInfo
         self.activeGizmos       = other.activeGizmos
         self.fullExport         = other.fullExport
+        self.currentFrame       = other.currentFrame
         self.stats              = other.stats
         self.exportedMtls       = other.exportedMtls
         self.defaultPlugins     = other.defaultPlugins
         self.geomAnimationRanges = other.geomAnimationRanges
         self.tempObjects        = other.tempObjects
-        self.objectContext     = other.objectContext
-        self.motionBlurBuilder = other.motionBlurBuilder
+        self.pluginRenderChannels = other.pluginRenderChannels
+        self.lightCollections   = other.lightCollections
+        self.emissiveMaterials  = other.emissiveMaterials
+        self.objectContext      = other.objectContext
+        self.motionBlurBuilder  = other.motionBlurBuilder
+        self.activeLightMixNode = other.activeLightMixNode
 
     @property
     def interactive(self):
@@ -183,10 +211,6 @@ class ExporterContext:
         return self.commonSettings.animation.use
 
     @property
-    def currentFrame(self):
-        return self.commonSettings.animation.frameCurrent
-    
-    @property
     def sceneObjects(self):
         return self.ctx.scene.objects
     
@@ -198,8 +222,11 @@ class ExporterContext:
             self.visibleObjects = set([getObjTrackId(o) for o in self.dg.scene.objects if isObjectVisible(self, o)])
             
         if self.interactive:
-            self.activeInstancers = set([getObjTrackId(o) for o in self.dg.scene.objects if o.is_instancer and o.visible_get()])
+            # In interactive, instancers are shown and hidden by manipulating the visibility flag on the corresponding
+            # plugins. Include all in the activeInstancers collection.
+            self.activeInstancers = set([getObjTrackId(o) for o in self.dg.scene.objects if o.is_instancer])
         else:
+            # In production, the instancers that are hidden should not be exported at all.
             self.activeInstancers = set([getObjTrackId(o) for o in self.dg.scene.objects if o.is_instancer and not o.hide_render])
 
 
@@ -211,6 +238,19 @@ class ExporterContext:
         self.geomAnimationRanges = {o.data.session_uid: getGeomAnimationRange(o) for o in geometryObjectIt(self.dg.scene.objects)}
 
    
+    def linkPluginToRenderChannel(self, pluginName: str, channelLinkAttr: str, renderChannelPlugin: AttrPlugin):
+        """ Store information about a link from a plugin to a render channel, i.e. that the plugin
+            output should be visible in a render channel.
+
+        Args:
+            pluginName (str): The name of the plugin to show in the render channel
+            channelLinkAttr (str): Attribute of type PLUGIN_LIST to which the render channel name should be added.
+            renderChannelPlugin (AttrPlugin): the render channel plugin
+        """
+        channelKey = (pluginName, channelLinkAttr)
+        self.pluginRenderChannels.setdefault(channelKey, []).append(renderChannelPlugin)
+
+
 class ExporterBase(ExporterContext):
     """ This class serves only to skip copying ExporterContext's members in each 
         exporter's constructor. The alternative is to have ExporterContext as a member,
@@ -442,8 +482,29 @@ class SceneStats:
 
 
 class NodeContext:
-    """ Context for node tree traversal
-    """
+    """ Context for a single node tree export """
+
+    class _NodeItem:
+        """ Context manager for the export of a single node """
+        def __init__(self, ctx: NodeContext, node: bpy.types.Node):
+            self.ctx = ctx
+            self.node = node
+
+        def __enter__(self):
+            self.ctx._pushNode(self.node)
+
+        def __exit__(self, *args):
+            self.ctx._popNode()
+
+    # A list of errors that have occurred during the export of the node tree.
+    # It is inconvenient to pass the context to all utility functions that might need it just to 
+    # be able to log errors. This facility provides a globally accessible place to store error messages.
+    # The implementation relies on the fact that all export actions will be carried out sequentiallu.
+    # NOTE:The list should be updated through the registerError() function. This is a 
+    # provision for a possible future need to store the information per-thread if the export procedure
+    # gets parallelized when Python 3.12+ is adopted.
+    _errorList = set()
+
     def __init__(self, exporterCtx: ExporterContext, dataObj = None, scene = None, renderer = None):
         self.exporterCtx    = exporterCtx
         self.rootObj        = dataObj # bpy.types.ID to which the node tree is attached
@@ -480,6 +541,9 @@ class NodeContext:
         # The signature of the handler is customHandler(nodeCtx: NodeContext, plDesc: PluginDesc)
         self.customHandler = None
         
+        # Reset the error list for each node tree that is to be exported
+        __class__._errorList = set()
+
 
     @property
     def node(self):
@@ -494,20 +558,39 @@ class NodeContext:
         self.nodes.pop()
 
     def push(self, node: bpy.types.Node):
-        self._pushNode(node)
-        return self
+        return __class__._NodeItem(self, node)
     
     def __enter__(self):
-        # Node has already been pushed in the push() method
         pass
 
     def __exit__(self, *args):
-        self._popNode()
-
+        assert len(self.nodes) == 0, "Incorrectly unwound nodes stack"
+        self._reportErrors()
 
     def getTreeType(self):
         return self.ntree.vray.tree_type
 
+
+    @staticmethod
+    def registerError(msg: str):
+        __class__._errorList.add(msg)
+
+
+    def _reportErrors(self):
+        for msg in __class__._errorList:
+            errMsg = f"{msg} [{self.rootObj.id_type} {self.rootObj.name}]"
+            if self.sceneObj is not None:
+                errMsg += f" Object: {self.sceneObj.name}"
+
+            if self.exporterCtx.fullExport and self.exporterCtx.interactive:
+                # To avoid pestering the user with status messages on each scene change, only
+                # report as status during the first export after switching to viewport/IPR.
+                debug.reportAsync('WARNING', errMsg)
+            elif not self.exporterCtx.preview:
+                # In production or subsequnt changes to the scene while viewport render is runoing,
+                # only log the issues to the console. In preview mode, we don't want to print anything
+                # at all as it could easily flood the console with messages.
+                debug.printWarning(errMsg)
 
 @dataclass
 class LinkInfo:

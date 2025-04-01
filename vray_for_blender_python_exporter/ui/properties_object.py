@@ -29,7 +29,7 @@ class VRAY_PT_VRayPattern(classes.VRayObjectPanel):
     def poll_custom(cls, context):
         return context.scene.vray.Exporter.experimental
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         ob = context.object
         VRayObject = ob.vray
         GeomVRayPattern = VRayObject.GeomVRayPattern
@@ -103,7 +103,7 @@ class VRAY_PT_VRayPattern(classes.VRayObjectPanel):
 
 
 class VRAY_PT_object_properties(classes.VRayObjectPanel):
-    bl_label = "V-Ray Object Properties"
+    bl_label = "Object Properties"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
@@ -132,7 +132,7 @@ class VRAY_PT_object_properties(classes.VRayObjectPanel):
         uiPainter.renderWidgetsSection(col, 'sidebar')
 
 class VRAY_PT_object_motion_blur(classes.VRayObjectPanel):
-    bl_label = "V-Ray Motion Blur"
+    bl_label = "Motion Blur"
     bl_options = {'DEFAULT_CLOSED'}
     incompatTypes  = {'CAMERA', 'SPEAKER', 'ARMATURE'}
 
@@ -148,10 +148,10 @@ class VRAY_PT_object_motion_blur(classes.VRayObjectPanel):
 
 
 class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
-    bl_label = "V-Ray Clipper"
+    bl_label = "Clipper"
     bl_options = {'DEFAULT_CLOSED'}
     
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         vrayClipper = context.object.vray.VRayClipper
         self.layout.prop(vrayClipper, 'clipper_enabled', text="")
 
@@ -196,10 +196,10 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
 
 
 class VRAY_PT_VRayScene(classes.VRayObjectPanel):
-    bl_label   = "V-Ray Scene"
+    bl_label   = "Scene"
     bl_options = {'DEFAULT_CLOSED'}
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         self.layout.prop(context.object.vray, 'overrideWithScene', text="")
 
     def draw(self, context):
@@ -255,7 +255,7 @@ class VRAY_PT_VRayScene(classes.VRayObjectPanel):
 
 
 class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
-    bl_label = "V-Ray User Attributes"
+    bl_label = "User Attributes"
     bl_options = {'DEFAULT_CLOSED'}
 
     incompatTypes  = {'CAMERA', 'SPEAKER', 'ARMATURE'}
@@ -314,7 +314,7 @@ class VRAY_PT_Advanced(classes.VRayObjectPanel):
     bl_label   = "Advanced"
     bl_options = {'DEFAULT_CLOSED'}
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         self.layout.label(text="")
 
     def draw(self, context):
@@ -337,7 +337,6 @@ def getRegClasses():
 
         VRAY_PT_object_properties,
         VRAY_PT_object_motion_blur,
-        VRAY_PT_VRayScene,
         VRAY_PT_VRayClipper,
 
         VRAY_PT_UserAttributes,

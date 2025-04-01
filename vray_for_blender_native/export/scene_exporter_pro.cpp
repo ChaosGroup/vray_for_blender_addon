@@ -141,6 +141,13 @@ bool VRayForBlender::ProductionExporter::renderSequenceRunning()
 	return !m_renderFinished && !m_exporter->isAborted();
 }
 
+bool VRayForBlender::ProductionExporter::vrsceneExportRunning()
+{
+	WithNoGIL noGIL;
+
+	return m_vrsceneExportInProgress;
+}
+
 int VRayForBlender::ProductionExporter::lastRenderedFrame()
 {
 	WithNoGIL noGIL;
@@ -174,17 +181,27 @@ void ProductionExporter::updateImage()
 			return;
 		}
 
+
+		// Occasionally, there is a slight rounding difference between the layerImg sizes  
+		// calculated in the 'vray_blender.exporting.view_export._fillViewFromProdCamera' function  
+		// of the Python module and the 'm_renderPass' rect size calculated in Blender.  
+		// If the difference is smaller than 'ALLOWED_SIZE_DIFF', it can be ignored.
+		const int ALLOWED_SIZE_DIFF = 1;
+
 		if (layerImg.w * layerImg.h == 0 || 
-			layerImg.w != m_renderPass->rectx ||
-			layerImg.h != m_renderPass->recty )
+			(std::abs(layerImg.w - m_renderPass->rectx) > ALLOWED_SIZE_DIFF) ||
+			(std::abs(layerImg.h - m_renderPass->recty) > ALLOWED_SIZE_DIFF) )
 		{
 			Logger::error("Rendered image: invalid image size {} x {}, expected {} {}",	
 				layerImg.w, layerImg.h, m_renderPass->rectx, m_renderPass->recty);
 			return;
 		}
+		
+		int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
+		int destSizeY = std::min(layerImg.h, m_renderPass->recty);
 
 		auto dest = m_renderPass->ibuf->float_buffer.data;
-		::memcpy(dest, layerImg.pixels, m_renderPass->rectx * m_renderPass->recty * sizeof(float[4]));
+		::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
 
 		// Notify Python add-on that the image is written to the render pass buffer and can be 
 		// updated on the screen

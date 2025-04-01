@@ -151,9 +151,8 @@ bool ZmqServer::licenseAcquired() const
 void ZmqServer::runServer() {
 
 	m_processRunner = std::jthread([this](std::stop_token stopToken) {
-		
-		while(!stopToken.stop_requested()) {
 
+		while(!stopToken.stop_requested()) {
 			bp::child zmqServer = startServerProcess();
 			bool started = false;
 
@@ -161,7 +160,7 @@ void ZmqServer::runServer() {
 				if (obtainServerEndpointInfo()) {
 					m_zmqServerPID = zmqServer.id();
 					Logger::info("ZmqServer started. Process ID: {}. Port: {}", m_zmqServerPID.load(), m_zmqServerPort.load());
-			
+
 					startControlConn();
 					started = true;
 				}
@@ -173,16 +172,17 @@ void ZmqServer::runServer() {
 			else {
 				Logger::error("ZmqServer process failed to start, relaunching.");
 			}
-			
+
 			if (!started) {
 				std::this_thread::sleep_for(ZMQ_SERVER_RESTART_TIMEOUT);
 			}
 
 			while(zmqServer.running() && !stopToken.stop_requested()) {
+
 				// Server process is running. Check periodically whether the control connection
 				// is still alive.
 				std::this_thread::sleep_for(100ms);
-				
+
 				std::scoped_lock lock(m_lockConn);
 				if (!!m_conn && m_conn->isStopped() && zmqServer.running()) {
 					// An error has occurred on the connection and it has been stopped. 
@@ -192,22 +192,31 @@ void ZmqServer::runServer() {
 			}
 
 			// Server has stopped
-			m_zmqServerPID  = 0;
+			m_zmqServerPID = 0;
 			m_zmqServerPort = 0;
 
 			if (!stopToken.stop_requested()) {
 				// The ZMQ Server process stopped unexpectedly.
 				int exitCode = zmqServer.exit_code();
-				Logger::error("ZmqServer process exited with code {}: {}", exitCode, VrayZmqWrapper::getServerReturnCodeStr(exitCode));
-				if(exitCode==(int)VrayZmqWrapper::ServerReturnCode::NO_LICENSE) {
+				std::string retCodeStr = VrayZmqWrapper::getServerReturnCodeStr(exitCode);
+
+				Logger::error("ZmqServer process exited with code {}: {}", exitCode, retCodeStr);
+				if (exitCode == (int)VrayZmqWrapper::ServerReturnCode::NO_LICENSE) {
 					break;
 				}
-				invokePythonCallback("renderAbortCallback", getPythonCallback("renderAbort"));
+
+				invokePythonCallback("zmqServerAbortCallback", getPythonCallback("zmqServerAbort"), retCodeStr);
 				startControlConn();
 				if (zmqServer.exit_code() == EXIT_CODE_IRRECOVERABLE_ERROR) {
 					stop();
 					return;
 				}
+			}
+			else
+			{
+				// Terminating the ZMQ server if a stop is requested.  
+				// Otherwise, it will continue running with no way to stop it while Blender is running.  
+				zmqServer.terminate();
 			}
 		}
 	});
@@ -280,7 +289,7 @@ void ZmqServer::startControlConn() {
 	auto newConn = std::make_unique<ZmqAgent>(m_ctx, ID_CONTROL_CONN, ExporterType::FIRST_TYPE, ZmqAgent::Client);
 
 	newConn->setMsgCallback([this](zmq::message_t&& payload) {
-			SAFE_CALL(handleMsg(VRayMessage::fromZmqMessage(payload)))
+			SAFE_CALL(handleMsg(payload))
 		});
 
 	newConn->setErrorCallback([this, connPtr = newConn.get()](const std::string& err) {
@@ -309,95 +318,106 @@ void ZmqServer::startControlConn() {
 }
 
 
-void ZmqServer::importCosmosAsset(const VrayZmqWrapper::VRayMessage &message)
+void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& message)
 {
 	WithGIL gil;//This is needed for safe python dictionary creation
 
-	py::dict locationMap;
-	const auto &assetNames = *message.getAssetMetaData().assetNames.getData();
-	const auto &assetLocations = *message.getAssetMetaData().assetLocations.getData();
+	CosmosAssetSettings cosmosSettings;
+	cosmosSettings.matFile = message.materialFile;
+	cosmosSettings.objFile = message.objectFile;
+	cosmosSettings.lightFile = message.lightFile;
+	cosmosSettings.isAnimated = message.isAnimated;
+
+	const auto& assetNames = *message.assetNames.getData();
+	const auto& assetLocations = *message.assetLocations.getData();
 
 	assert(assetNames.size() == assetLocations.size());
 
 	for (size_t i = 0; i < assetNames.size(); i++) {
-		locationMap[assetNames[i]] = assetLocations[i];
+		cosmosSettings.locationsMap[assetNames[i]] = assetLocations[i];
 	}
 
-	std::string type;
-	switch (message.getAssetMetaData().type) {
-		case VRayMessage::ImportedAssetType::Material:
-			type = "Material";
+	switch (message.assetType) {
+		case ImportedAssetType::Material:
+			cosmosSettings.assetType = "Material";
 			break;
-		case VRayMessage::ImportedAssetType::VRMesh:
-			type = "VRMesh";
+		case ImportedAssetType::VRMesh:
+			cosmosSettings.assetType = "VRMesh";
 			break;
-		case VRayMessage::ImportedAssetType::HDRI:
-			type = "HDRI";
+		case ImportedAssetType::HDRI:
+			cosmosSettings.assetType = "HDRI";
 			break;
 	}
 
-	invokePythonCallback("importCosmosAsset",
-	                     getPythonCallback("assetImport"),
-	                     type,
-	                     message.getAssetMetaData().materialFile,
-	                     message.getAssetMetaData().objectFile,
-	                     message.getAssetMetaData().lightFile,
-	                     locationMap);
+	invokePythonCallback("importCosmosAsset", getPythonCallback("assetImport"), cosmosSettings);
 }
 
-void ZmqServer::handleStatusMsg(const VrayZmqWrapper::VRayMessage& message)
+
+void ZmqServer::processControlOnRendererStatus(const MsgControlOnRendererStatus& message)
 {
-	switch (message.getVrayStatus()) {
-		case VRayMessage::VRayStatusType::MainRendererAvailable:
-			m_mainRendererCreated = true;
-			break;
-		case VRayMessage::VRayStatusType::MainRendererUnavailable:
-			m_mainRendererCreated = false;
-			break;
-		case VRayMessage::VRayStatusType::LicenseAcquired:
-			m_licenseAcquired = true;
-			break;
-		case VRayMessage::VRayStatusType::LicenseDropped:
-			m_licenseAcquired = false;
-			break;
+	switch (message.status) {
+	case VRayStatusType::MainRendererAvailable:
+		m_mainRendererCreated = true;
+		break;
+	case VRayStatusType::MainRendererUnavailable:
+		m_mainRendererCreated = false;
+		break;
+	case VRayStatusType::LicenseAcquired:
+		m_licenseAcquired = true;
+		break;
+	case VRayStatusType::LicenseDropped:
+		m_licenseAcquired = false;
+		break;
 	}
 }
 
 
-void ZmqServer::handleMsg(const VrayZmqWrapper::VRayMessage &message)
+void ZmqServer::handleMsg(const zmq::message_t& msg) 
 {
-	const auto msgType = message.getType();
+	DeserializerStream stream(reinterpret_cast<const char*>(msg.data()), msg.size());
+
+	MsgType msgType = MsgType::None;
+	stream >> msgType;
+
 	switch (msgType) {
-		case VRayMessage::Type::ImportAsset:
-			importCosmosAsset(message);
+		case MsgType::ControlOnImportAsset: {
+			const auto& message = deserializeMessage<MsgControlOnImportAsset>(stream);
+			processControlOnImportAsset(message);
+			break;
+		}
+		case MsgType::ControlOnStartViewportRender:
+			invokePythonCallback("startRendering", getPythonCallback("renderStart"), true);
 			break;
 
-		case VRayMessage::Type::Control:
-			switch (message.getControlAction()) {
-				case VRayMessage::ControlAction::StartViewportRender:
-					invokePythonCallback("startRendering", getPythonCallback("renderStart"), true);
-					break;
-				case VRayMessage::ControlAction::StartProductionRender:
-					invokePythonCallback("startRendering", getPythonCallback("renderStart"), false);
-					break;
-				case VRayMessage::ControlAction::UpdateVfbSettings:
-					invokePythonCallback("updateVfbSettings", getPythonCallback("vfbSettingsUpdate"), message.getVfbSettings());
-					break;
-				case VRayMessage::ControlAction::UpdateVfbLayers:
-					invokePythonCallback("updateVfbLayers", getPythonCallback("vfbLayersUpdate"), message.getVfbLayers());
-					break;
-				case VRayMessage::ControlAction::LogMessage:
-					Logger::get().log(static_cast<Logger::LogLevel>(message.getLogLevel()), true, message.getLogMessage(), 0);					
-					break;
-				case VRayMessage::ControlAction::VRayStatus:
-					handleStatusMsg(message);
-					break;
-			}
+		case MsgType::ControlOnStartProductionRender:
+			invokePythonCallback("startRendering", getPythonCallback("renderStart"), false);
 			break;
 
-		// The switch is used because in the future there 
-		// might be more message types for handling
+		case MsgType::ControlOnUpdateVfbSettings: {
+			const auto& message = deserializeMessage<MsgControlOnUpdateVfbSettings>(stream);
+			invokePythonCallback("updateVfbSettings", getPythonCallback("vfbSettingsUpdate"), message.vfbSettings);
+			break;
+		}
+		case MsgType::ControlOnUpdateVfbLayers: {
+			const auto& message = deserializeMessage<MsgControlOnUpdateVfbLayers>(stream);
+			invokePythonCallback("updateVfbLayers", getPythonCallback("vfbLayersUpdate"), message.vfbLayersJson);
+			break;
+		}
+		case MsgType::ControlOnLogMessage: {
+			const auto& message = deserializeMessage<MsgControlOnLogMessage>(stream);
+			Logger::get().log(static_cast<Logger::LogLevel>(message.logLevel), true, message.logMessage, 0);					
+			break;
+		}
+		case MsgType::ControlOnRendererStatus: {
+			const auto& message = deserializeMessage<MsgControlOnRendererStatus>(stream);
+			processControlOnRendererStatus(message);
+			break;
+		}
+		default:
+			break;
 	}
 }
+
+
 
 

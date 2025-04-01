@@ -123,6 +123,7 @@
             },
             {
                 "layout": "ROLLOUT",
+                "name": "Mapping",
                 "label": "Mapping",
                 "default_closed": false,
                 "attrs": [

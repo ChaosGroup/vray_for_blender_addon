@@ -20,8 +20,8 @@ else()
 endif()
 
 
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(macros)
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+include(vfb_macros)
 
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -126,7 +126,7 @@ if(WIN32)
 endif()
 
 
-link_with_zmq(${PROJECT_NAME})
+link_with_zmq(${PROJECT_NAME} PRIVATE)
 
 if(WIN32)
 	target_sources(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/VRayBlenderLib.manifest)

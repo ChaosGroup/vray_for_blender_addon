@@ -60,15 +60,34 @@ def getUUID():
     return str(uuid.uuid1()).split("-")[0]
 
 
-def getLightPluginName(light):
+def getLightPluginType(light: bpy.types.Light):
+    """ Returns the type of the V-Ray plugin corrextponding to the type of the light. """
+
     if light.vray.light_type == 'BLENDER':
         return LightBlenderToVrayPlugin[light.type]
     
     return LightTypeToPlugin[light.vray.light_type]
 
 
-def getLightPropGroup(light):
-    return getattr(light.vray, getLightPluginName(light))
+def getLightPropGroup(light: bpy.types.Light, lightType: str):
+    """ Get the active propGroup of a light, as lights have separate propGroup objects
+        for legacy and node modes.
+
+    Args:
+        light (bpy.types.Light): the light
+        lightType (str): the name of the V-Ray plugin, e.g. LightSpot
+    """
+    from vray_blender.nodes.utils import getNodeByType
+    
+    # Lights have two different propgroups for legacy and node lights, get the correct one
+    propGroup = None
+    
+    if light.node_tree and (node := getNodeByType(light.node_tree, f'VRayNode{lightType}')):
+        propGroup = getattr(node, lightType)
+    else:
+        propGroup = getattr(light.vray, lightType)
+
+    return propGroup
 
 
 

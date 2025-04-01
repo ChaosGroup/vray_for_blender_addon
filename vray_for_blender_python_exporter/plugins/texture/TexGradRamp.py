@@ -97,6 +97,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     for sock in node.inputs:
         if sock.shouldExportLink():
             nodeLink = getNodeLink(sock)
+            assert nodeLink is not None
+            
             linkedPlugin = commonNodesExport.exportVRayNode(nodeCtx, nodeLink)
             
             if _isRampTextureSocket(sock):

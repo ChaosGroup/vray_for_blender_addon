@@ -1,12 +1,13 @@
 
 import bpy
 
-# The following list will be used to keep track of the keymaps registered
-# by the addon so that they could be unregistered when the add-on is unregistered
-_addonKeymaps = []
-
 
 def register():
+    """ Register a hotkey for the V-Ray's Render operator. The hotkey is set to the same value as the one
+        currently registered for the built-in Blender render operator. If no hotkey is registered for Blender,
+        do not register any for V-Ray.
+    """
+
     if bpy.app.background:
         # In headless mode, no keymaps can be used
         return
@@ -17,26 +18,46 @@ def register():
     # TODO: If the user deletes the keymap, the next add-on activation will re-create it.
     # Find a way to identify the first-ever activation of the add-on.
     wm = bpy.context.window_manager
-    kmActive = wm.keyconfigs.active.keymaps
-    kmiActive = kmActive['Screen'].keymap_items
-    kmAddon = wm.keyconfigs.addon.keymaps
+    
+    # The currently active keyconfig (the one selected in the UI). Its contents is merged with the
+    # Blender's default keyconfig in runtime.
+    kconfActive = wm.keyconfigs.active.keymaps
 
-    if ('vray.render' not in kmiActive) and ('render.render' in kmiActive):
-        # If no keymap is registered for the Blender's command, do not register
-        # one for V-Ray, as it might clash with another user-defined keymap.
-        if blenderKeymap := kmiActive['render.render']:
-            if 'Screen' not in kmAddon:
-                kmAddon.new(name='Screen')
-            
-            vrayKeymap = kmAddon['Screen'].keymap_items.new_from_item(blenderKeymap)
-            vrayKeymap.idname='vray.render'
-            _addonKeymaps.append(kmAddon['Screen'])
-                    
+    # The currently active 'Screen' keymap (computed below)
+    kmActive = None
+
+    if kmScreen := kconfActive.get('Screen'):
+        # The active keymap collection has a 'Screen' section, we can use it.
+        kmActive = kmScreen.keymap_items
+    elif kmBlender := wm.keyconfigs['Blender']:
+        # The active keymap collection does not have a Screen section. Use the default Blender keymap.
+        # It is guaranteed to be present, at least it cannot be deleted through the UI, but
+        # handle the case where its missing just to stay on the safe side.
+        if kmBlender.keymaps.get('Screen'):
+            kmActive = wm.keyconfigs['Blender'].keymaps['Screen'].keymap_items
+
+    if kmActive is None:
+        # No keymap has been found that defines the 'Render' shortcut. Do not register a shortcut for V-Ray.
+        return
+    
+    # Get the addon's 'private' keyconfig - the one that is active only when the addon is active.
+    kconfVray = wm.keyconfigs.addon.keymaps
+    
+    # Make sure there is a 'Screen' keymap in the addon's keyconfig. This is where we will register
+    # V-Ray's 'Render' shortcut
+    kmVray = kconfVray.get('Screen', kconfVray.new(name='Screen')).keymap_items
+
+    # For rendering with V-Ray, register the same shortcut key which is registered for the built-in Blender 
+    # 'render' operartor. If no key is registered, do not register any key for V-Ray.
+    if ('vray.render' not in kmVray) and ('render.render' in kmActive):
+        if blenderKeymap := kmActive['render.render']:
+            vrayKeymap = kmVray.new_from_item(blenderKeymap)
+            vrayKeymap.idname = 'vray.render'
+
 
 def unregister():
-    wm = bpy.context.window_manager
-    for km in _addonKeymaps:
-        wm.keyconfigs.addon.keymaps.remove(km)
-
-    _addonKeymaps.clear()
-   
+    # The keymap will be automatically removed when Blender is restarted 
+    # after the add-on is unregistered. Until then, it will live under different name
+    # (idname vs name) regardless of whether we remove it here or not.
+    pass
+            

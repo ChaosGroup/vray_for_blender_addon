@@ -2,6 +2,31 @@ import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
 
+
+
+class ColorManagementSettings:
+    """ A class that stores the Color Management settings visible  
+        in the Render property panel of Cycles and EEVEE.
+    """
+
+    def __init__(self, scene: bpy.types.Scene):
+        self._fillViewSettings(self, scene.view_settings)
+        self.display_device = scene.display_settings.display_device
+
+    # Replaces the scene color settings with those saved in this class.
+    def restore(self, scene: bpy.types.Scene):
+        self._fillViewSettings(scene.view_settings, self)
+        scene.display_settings.display_device = self.display_device
+
+    @staticmethod
+    def _fillViewSettings(dest, src):
+        dest.view_transform = src.view_transform
+        dest.exposure = src.exposure
+        dest.gamma = src.gamma
+        dest.look = src.look
+    
+
+
 class VRay_OT_draw_viewport_timer(bpy.types.Operator):
     """ A modal operator which will periodically check for new rendered images and
         trigger a viewport redraw operation.
@@ -14,13 +39,23 @@ class VRay_OT_draw_viewport_timer(bpy.types.Operator):
     _fps = 20
 
     def switchViewTransformToStandard(self):
-        if not hasattr(self, "previousViewTransform"):
-            self.previousViewTransform = bpy.context.scene.view_settings.view_transform
-            bpy.context.scene.view_settings.view_transform = 'Standard'
+        if not hasattr(self, "previousColorManagementSettings"):
+            scene = bpy.context.scene
+            
+            self.previousColorManagementSettings = ColorManagementSettings(scene) # Saving current settings
+            
+            # Resetting the color management settings to prevent them from interfering  
+            # with V-Ray viewport rendering.
+            scene.display_settings.display_device = "sRGB"
+            scene.view_settings.view_transform = 'Standard'
+            scene.view_settings.exposure = 0.5
+            scene.view_settings.gamma = 1.0
+            scene.view_settings.look = "None"
     
     def clearViewTransform(self):
-        if hasattr(self, "previousViewTransform"):
-            bpy.context.scene.view_settings.view_transform = self.previousViewTransform
+        if hasattr(self, "previousColorManagementSettings"):
+            # Restore any saved settings to ensure they are available when switching the rendering engine.
+            self.previousColorManagementSettings.restore(bpy.context.scene)
 
 
     def modal(self, context, event):

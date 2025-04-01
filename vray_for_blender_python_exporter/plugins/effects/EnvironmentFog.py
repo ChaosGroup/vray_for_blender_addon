@@ -37,7 +37,6 @@ def _exportEnvFogMeshGizmoFromObject(nodeCtx: NodeContext, objectName: str):
             
             # A 'Node' plugin should not be exported for gizmo objects. Track the gizmo object so that we could 
             # remove the Node plugin exported for it.
-            gizmoNodeName = Names.vrayNode(Names.object(domainObj))
             nodeCtx.exporterCtx.objTrackers['GIZMO'].trackPlugin(getObjTrackId(domainObj), fogMeshPluginName)
             
             return commonNodesExport.exportPluginWithStats(nodeCtx, fogMesh)

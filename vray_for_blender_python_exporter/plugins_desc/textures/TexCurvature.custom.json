@@ -4,13 +4,20 @@
     "Parameters": [
         {
             "attr": "mode",
-            "desc": "Legacy - Generates a grayscale output for the overall curvature of the mesh, which combines convex and concave curvature.\n\nConvex - Generates a grayscale output, based on the mesh's outward curve.\n\nConcave - Generates a grayscale output, based on the mesh's inward curve.\n\nBoth - Generates a red output for the convex curvature, and a green output for the concave curvature."
+            "default": "0",
+            "items" : 
+            [
+                [ "0", "Legacy", "Grayscale output for the overall curvature." ],
+                [ "1", "Convex", "Grayscale output for the convex curvature." ],
+                [ "2", "Concave", "Grayscale output for the concave curvature." ],
+                [ "3", "Both", "Red output for convex and green output for concave curvature." ]
+            ]
         },
         {
             "attr": "subdivs",
             "//Comment": "Recommended default of 4 samples for optimal performance. subdivs_as_samples=1 is used (as forced global override), which changes the meaning of this value from subdivs to samples.",
             "default": 4,
-            "desc": "Controls the number of samples around each shaded point.",
+            "desc": "Number of samples around each shaded point (subdivs*subdivs).",
             "ui": {
                 "soft_min": 1,
                 "soft_max": 16
@@ -102,15 +109,13 @@
     "Widget": {
         "widgets": [
             {
+                "layout": "COLUMN",
                 "attrs": [
                     {
                         "name": "mode"
                     },
                     {
-                        "name": "scale"
-                    },
-                    {
-                        "name": "threshold"
+                        "layout": "SEPARATOR"
                     },
                     {
                         "name": "subdivs"
@@ -141,9 +146,14 @@
                     },
                     {
                         "name": "out_color_clamp"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "threshold"
                     }
-                ],
-                "layout": "COLUMN"
+                ]
             }
         ]
     },

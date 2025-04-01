@@ -29,7 +29,7 @@ class SettingsExporter(ExporterBase):
     def exportPlugin(self, pluginType: str):
         scene = self.dg.scene
         vrayScene = scene.vray
-        
+
         if pluginType.startswith('Filter') and vrayScene.SettingsImageSampler.filter_type != pluginType:
             return
         

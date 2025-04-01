@@ -16,7 +16,7 @@ NODE_TRACKERS = (
 OBJ_TRACKERS = (
     'OBJ',
     'OBJ_MTL',      # For material options (e.g. MtlRenderStats) attached to objects
-    'LIGHT_OBJ',
+    'LIGHT',
     'CAMERA',
     'INSTANCER',
     'GIZMO'
@@ -53,7 +53,14 @@ def _getRegClasses():
         VRayRenderEngine,
         VRay_OT_draw_viewport_timer,
     )
+
+def resetActiveIprRendering():
+    from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+    from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
     
+    for iprRenderer in (VRayRendererIprViewport, VRayRendererIprVfb):
+        iprRenderer.reset()
+
 
 def register():
     import atexit

@@ -1,7 +1,7 @@
 from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
 from vray_blender.lib import  export_utils, plugin_utils
+from vray_blender.lib.lib_utils import  getLightPluginType
 from vray_blender.bin import VRayBlenderLib as vray
-from vray_blender.exporting.tools import getLightPluginType
 import bpy
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -13,7 +13,7 @@ def sunFilter(self, obj):
     return False
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
-    sunAttr = plugin_utils.objDataToAttrPlugin(pluginDesc.vrayPropGroup.sun)
+    sunAttr = plugin_utils.objectToAttrPlugin(pluginDesc.vrayPropGroup.sun)
 
     # Only the attributes 'sun' and 'invisible' should be exported 
     # if the sun is set and 'sun_dir_only' disabled

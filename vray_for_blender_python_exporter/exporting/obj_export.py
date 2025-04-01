@@ -90,7 +90,10 @@ class GeometryExporter(ExporterBase):
 
         # A list of gizmo objects for mesh lights which need to be exported
         self.updatedMeshLightGizmos = set()
-        self.objectsWithUpdatedVisibility = set()
+        
+        # A list of all objects for which the visibility has changed since the last export.
+        # {objectTrackId: is_visible}
+        self.objectsWithUpdatedVisibility = {} 
         
         # Gizmos for the Environment fog effect
         self.addedGizmos  = set()  # Added from the previous update
@@ -238,7 +241,7 @@ class GeometryExporter(ExporterBase):
                 meshData.subdiv.use_creases = lastMod.use_creases
         
 
-    def _applyNonMeshModifiers(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool):
+    def _exportNonMeshModifiers(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool):
         """ Apply modifiers that do not change object's proper geometry. """
         for modifier in obj.modifiers:
             match modifier.type:
@@ -246,6 +249,23 @@ class GeometryExporter(ExporterBase):
                     SmokeExporter(self).exportFluidModifier(obj, exportGeometry, isVisible)
                 case _:
                     pass
+
+    def _exportParticleSystems(self, obj: bpy.types.Object, exportGeometry: bool):
+        ####  Export modifiers  ###
+        objTrackId = getObjTrackId(obj)
+
+        for pmod in [m for m in obj.modifiers if m.type == 'PARTICLE_SYSTEM']:
+            psys = pmod.particle_system
+            if psys.settings.type == "HAIR":
+                modVisible = isModifierVisible(self, pmod)
+                # Export modifier if the parent object's geometry has changed or the parent object was made visible
+                exportModifier = exportGeometry or self.objectsWithUpdatedVisibility.get(objTrackId, False)
+                
+                if modVisible and exportModifier:
+                    fnExportParticles = lambda pmod = pmod: self.hairExporter.exportFromParticles(obj, pmod)
+                    geomPlugin = self.ts.timeThis("collect_hair_particles_data", fnExportParticles )
+                    nodePlugin = self._exportNodePlugin(obj, geomPlugin, geomPlugin.name, isInstancer=False, visible=modVisible)
+                    self.objTracker.trackPlugin(objTrackId, nodePlugin.name)
 
 
     def _setMeshAttrOfGeom(self, mainGeomPlugin, geomPlugin):
@@ -365,57 +385,53 @@ class GeometryExporter(ExporterBase):
         
         objTrackId = getObjTrackId(obj)
 
-        with TrackObj(self.nodeTracker, objTrackId):
-            
-            geomPlugin = self._exportGeometrySockets(nodeCtx, nodeOutput, geomPlugin, objTrackId)
-            nodePlugin = self._exportNodePlugin(obj, geomPlugin, Names.object(obj), visible=isVisible)
-            self._exportObjProperties(obj, nodeCtx, nodeOutput, nodePlugin.name)
-            
+        with nodeCtx:
+            with TrackObj(self.nodeTracker, objTrackId):
+                
+                geomPlugin = self._exportGeometrySockets(nodeCtx, nodeOutput, geomPlugin, objTrackId)
+                nodePlugin = self._exportNodePlugin(obj, geomPlugin, Names.object(obj), visible=isVisible)
+                self._exportObjProperties(obj, nodeCtx, nodeOutput, nodePlugin.name)
+        
         return nodePlugin
 
 
-
     def _exportMeshObject(self, obj: bpy.types.Object, exportGeometry: bool, isInstanced: bool, isVisible: bool):
+        obj = obj.evaluated_get(self.dg)
+        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+        
         # Export main object
         exported = (not exportGeometry) or self.ts.timeThis("export_mesh", lambda: self._exportMesh(obj, isInstanced))
         
         # Non-mesh modifiers show geometry, but don't need a Node plugin to be exported for them.
         # The geometry associated with them may also not need exporting, so apply them regardless
         # of the return value of exportMesh()
-        self._applyNonMeshModifiers(obj, exportGeometry, isVisible)
+        self._exportNonMeshModifiers(obj, exportGeometry, isVisible)
         
         if not exported:
             return
 
         objTrackId = getObjTrackId(obj)
         
-        ####  Export dependent objects  ###
-
-        # Perform object evaluation BEFORE accessing the particle system
-        evaluatedObj = obj.evaluated_get(self.dg)
-        for pmod in [m for m in evaluatedObj.modifiers if m.type == 'PARTICLE_SYSTEM']:
-            psys = pmod.particle_system
-            if psys.settings.type == "HAIR":
-                fnExportParticles = lambda pmod = pmod: self.hairExporter.exportFromParticles(evaluatedObj, pmod, exportGeometry)
-                geomPlugin = self.ts.timeThis("collect_hair_particles_data", fnExportParticles )
-                modVisible = isModifierVisible(self, pmod)
-                nodePlugin = self._exportNodePlugin(obj, geomPlugin, geomPlugin.name, isInstancer=False, visible=modVisible)
-                self.objTracker.trackPlugin(objTrackId, nodePlugin.name)
-
+        if isVisible:
+            ####  Export modifiers  ###
+            self._exportParticleSystems(obj, exportGeometry)
 
         isMeshLightGizmo = objTrackId in [p.gizmoObjTrackId for p in self.activeMeshLightsInfo]
         isEnvFogGizmo = objTrackId in self.activeGizmos
         isGizmo = isMeshLightGizmo or isEnvFogGizmo
 
-        if not isGizmo:
+        nodePlugin = None
+
+        if (not isGizmo) and (not self._isInstancerVisibilityDisabled(obj)):
             baseGeomPlugin = AttrPlugin(Names.objectData(obj)) # Empty plugin attribute representing the object's geometry
             if obj.vray.ntree and NodesUtils.getOutputNode(obj.vray.ntree, 'OBJECT'):
                 nodePlugin = self._exportObjNodeTree(obj, baseGeomPlugin, isVisible)
             else:
                 nodePlugin = self._exportNodePlugin(obj, baseGeomPlugin, Names.object(obj), visible=isVisible)
 
-            plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", obj.vray.VRayObjectProperties.objectID)
-            self.objTracker.trackPlugin(objTrackId, nodePlugin.name)
+            if nodePlugin is not None:
+                plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", obj.vray.VRayObjectProperties.objectID)
+                self.objTracker.trackPlugin(objTrackId, nodePlugin.name)
 
         else:
             # 'Node' plugin should not be exported for gizmos
@@ -433,12 +449,13 @@ class GeometryExporter(ExporterBase):
         if uniqueName in self.exported:
             # The mesh is shared between multiple objects and has already been exported
             return True
-
+        
         # TODO: Check if we could have FLUID modifier along with mesh modifiers    
         if "FLUID" not in [m.type for m in obj.modifiers]:
             meshData = self._fillMeshData(mesh, uniqueName, isInstanced, isEditMode = (obj.mode == 'EDIT'))
             self._applyMeshModifiers(obj, meshData)
             
+            vray.pluginCreate(self.renderer, uniqueName, 'GeomStaticMesh')
             vray.exportGeometry(self.renderer, meshData)
             self.objTracker.trackPlugin(getObjTrackId(obj), uniqueName)
             self.exported.add(uniqueName)
@@ -454,7 +471,7 @@ class GeometryExporter(ExporterBase):
         pluginDesc = PluginDesc(pluginName, "VRayScene")
         pluginDesc.vrayPropGroup = vrayScene
 
-        pluginDesc.setAttribute("filepath", bpy.path.abspath(vrayScene.filePath).replace("\\", "/"))
+        pluginDesc.setAttribute("filepath", vrayScene.filePath)
         pluginDesc.setAttribute("transform", obj.matrix_world)
         pluginDesc.setAttribute("mrs_visibility", isVisible)
 
@@ -466,11 +483,9 @@ class GeometryExporter(ExporterBase):
     def _exportVrayProxy(self, obj, exportGeometry, isVisible):
         pluginName = Names.pluginObject("vrayproxy", Names.object(obj))
         if exportGeometry:
+            geomMeshFile = obj.data.vray.GeomMeshFile
             pluginDesc = PluginDesc(pluginName, "GeomMeshFile")
-
-            vrayProxy = obj.vray.VRayAsset
-            pluginDesc.setAttribute("file", bpy.path.abspath(vrayProxy.filePath).replace("\\", "/"))
-            pluginDesc.setAttribute("reference_transform", obj.matrix_world)
+            pluginDesc.vrayPropGroup = geomMeshFile
 
             export_utils.exportPlugin(self, pluginDesc)
             self.objTracker.trackPlugin(getObjTrackId(obj), pluginName)
@@ -480,14 +495,19 @@ class GeometryExporter(ExporterBase):
 
 
     def _exportCurves(self, obj: bpy.types.Object, exportGeometry: bool, isVisible):
-        objEvalCurves = obj.evaluated_get(self.dg)      
-        geomPlugin = self.ts.timeThis("collect_hair_curves_data", lambda: self.hairExporter.exportFromCurves(objEvalCurves, exportGeometry))
-        nodePlugin = self._exportNodePlugin(objEvalCurves, geomPlugin, Names.object(objEvalCurves), isInstancer=False, visible=isVisible)
-        self.objTracker.trackPlugin(getObjTrackId(objEvalCurves), nodePlugin.name)
+        obj = obj.evaluated_get(self.dg)
+        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+
+        geomPlugin = self.ts.timeThis("collect_hair_curves_data", lambda: self.hairExporter.exportFromCurves(obj, exportGeometry))
+        nodePlugin = self._exportNodePlugin(obj, geomPlugin, Names.object(obj), isInstancer=False, visible=isVisible)
+        self.objTracker.trackPlugin(getObjTrackId(obj), nodePlugin.name)
 
 
     # Export a POINTCLOUD object to a GeomParticleSystem VRay plugin
     def _exportPointCloud(self, obj: bpy.types.Object, exportGeometry: bool, isVisible):
+        obj = obj.evaluated_get(self.dg)
+        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+
         pluginName = self._getPointCloudName(obj)
 
         if (not exportGeometry) or (pluginName in self.exported):
@@ -552,7 +572,7 @@ class GeometryExporter(ExporterBase):
             return True
 
         if animRange := self.geomAnimationRanges.get(obj.data.session_uid, None):
-            return  frameInRange(animInfo.frameCurrent, animRange)
+            return  frameInRange(self.currentFrame, animRange)
 
 
     def _exportScene(self):
@@ -600,29 +620,39 @@ class GeometryExporter(ExporterBase):
 
     def _exportObject(self, 
                       obj: bpy.types.Object, 
-                      geometryUpdates: dict[bpy.types.Object, bool], 
+                      geometryUpdates: dict[int, bool], 
                       isInstanced: bool,
                       isVisible: bool):
         
         assert isinstance(obj, bpy.types.Object), "Only Blender 'Object' type accepted"
         
+
         objTrackId = getObjTrackId(obj)
 
+        
         if (not self.fullExport) \
-                and (obj.session_uid not in geometryUpdates) \
-                and (obj not in self.objectsWithUpdatedVisibility) \
+                and (objTrackId not in geometryUpdates) \
+                and (objTrackId not in self.objectsWithUpdatedVisibility) \
                 and (objTrackId not in self.updatedMeshLightGizmos) \
                 and (UpdateFlags.NONE == UpdateTracker.getObjUpdate(UpdateTarget.OBJECT_MTL_OPTIONS, obj))\
                 and (objTrackId not in self.addedGizmos) \
                 and (objTrackId not in self.removedGizmos):
             return
 
+        isFirstMotionBlureFrame = (self.commonSettings.useMotionBlur and self.motionBlurBuilder.isFirstFrame(self.currentFrame))
+        
         # If exportGeometry is False, no geometry data will be exported. The other properties of the objects will
         # still be exported. 
         exportGeometry = (self.interactive and self.fullExport) \
                             or self.preview \
-                            or bool(geometryUpdates.get(obj.original.session_uid))
+                            or (objTrackId in geometryUpdates) \
+                            or isFirstMotionBlureFrame
         
+        if not obj.evaluated_get(self.dg).is_evaluated:
+            # Objects that are in the depsgraph but are not evaluated are not visible in the scene.
+            # This is true e.g. for certain objects that are marked as 'Disabled in renders'.
+            return
+
         match obj.type:
             case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
                 if tools.isObjectVrayScene(obj):
@@ -650,10 +680,32 @@ class GeometryExporter(ExporterBase):
         
     
     def _exportInstances(self, geometryUpdates: dict[int, bool]):
+        instancerChanges = {}
+
+        def hasInstanceChanged(obj, instancer):
+            """ Returns True if the instance has to be exported because either the instanced object or the 
+                instancer have changed.
+            """
+            if (result := instancerChanges.get((instancer, obj), None)) is not None:
+                return result
+            
+            objTrackId = getObjTrackId(obj)
+            instancerTrackId = getObjTrackId(instancer)
+            
+            # Blender does not create instanced objects when the scene is rendered for the first time if
+            # the instancer is invisible. This is why we need to check if the instancer has become visible
+            # since the last export and process the instances if this is so.
+            changed = self.objectsWithUpdatedVisibility.get(instancerTrackId, False) or \
+                (objTrackId in geometryUpdates) or (instancerTrackId in geometryUpdates)
+            instancerChanges[(obj, instancer)] = changed
+            return changed
+                
         instancerExporter = InstancerExporter(self)
 
+        # NOTE: If the instanced object is invisible, the interactive depsgraph will include have the instances
+        # but the prod depsgraph will not. This leads to differences between the interactive and production renders.
         for inst in self.dg.object_instances:
-            if inst.is_instance:
+            if inst.is_instance and (self.fullExport or hasInstanceChanged(inst.instance_object, inst.parent)):
                 self._collectInstanceData(instancerExporter, inst, geometryUpdates)
 
         # Export the collected instancer data
@@ -675,11 +727,17 @@ class GeometryExporter(ExporterBase):
             
             clipMeshPlugin = AttrPlugin()
             if vrayClipper.use_obj_mesh:
-                clipMeshPlugin = AttrPlugin(Names.vrayNode(Names.object(clipperObj)))
+                clipMeshNodeName = Names.vrayNode(Names.object(clipperObj))
+                vray.pluginCreate(self.renderer, clipMeshNodeName, 'Node')
+                clipMeshPlugin = AttrPlugin(clipMeshNodeName)
             
             excluded = []
             if collExcluded := vrayClipper.exclusion_nodes_ptr:
                 excluded =  [AttrPlugin(Names.vrayNode(Names.object(o))) for o in collExcluded.objects]
+                
+                for nodePlugin in excluded:
+                    vray.pluginCreate(self.renderer, nodePlugin.name, 'Node')
+
             
             plDesc.setAttributes({
                 "clip_mesh"         : clipMeshPlugin,
@@ -772,14 +830,26 @@ class GeometryExporter(ExporterBase):
     def syncObjVisibility(self):
         assert(self.interactive)
 
+        from vray_blender.lib.blender_utils import getFirstAvailableView3D
+
+        def isVisibleInLocalView(obj, dg, view3d):
+            if obj.type not in GEOMETRY_OBJECT_TYPES:
+                return True
+            
+            evalObj = obj.evaluated_get(dg)
+            return evalObj.local_view_get(view3d)
+        
+        view3d = getFirstAvailableView3D()
+        localView = view3d if (view3d and view3d.local_view) else None
+
         showObjects = {}
         for o in [obj for obj in self.sceneObjects if obj.type in tools.EXPORTED_OBJECT_TYPES]:
             objTrackId = getObjTrackId(o)
             wasShown   = objTrackId in self.visibleObjects
-            isShown    = o.visible_get()
+            isShown    = o.visible_get() and ((not localView) or isVisibleInLocalView(o, self.dg, view3d))
             
-            if wasShown != isShown:
-                self.objectsWithUpdatedVisibility.add(o)
+            if (wasShown != isShown) or (self.fullExport):
+                self.objectsWithUpdatedVisibility[objTrackId] = isShown
 
                 showObjects[objTrackId] = isShown
                 for pluginName in self.objTracker.getPlugins(objTrackId):
@@ -799,7 +869,7 @@ class GeometryExporter(ExporterBase):
         for objTrackId, isShown in showObjects.items():
             if isShown:
                 self.visibleObjects.add(objTrackId)
-            else:
+            elif objTrackId in (self.visibleObjects):
                 self.visibleObjects.remove(objTrackId)
 
 
@@ -819,7 +889,7 @@ class GeometryExporter(ExporterBase):
         
         activeGizmos = set()
 
-        for node in [n for n in worldNodeTree.nodes if n.vray_plugin == 'EnvironmentFog']:
+        for node in [n for n in worldNodeTree.nodes if hasattr(n, "vray_plugin") and n.vray_plugin == 'EnvironmentFog']:
             gizmoSock = getInputSocketByAttr(node, 'gizmos')
             if selectorSocket := getLinkedFromSocket(gizmoSock):
                 activeGizmos.update({getObjTrackId(o) for o in getObjectsFromSelector(selectorSocket.node, self.ctx)})
@@ -849,6 +919,27 @@ class GeometryExporter(ExporterBase):
                                         else Names.objectData(obj)
 
 
+    def _isInstancerVisibilityDisabled(self, obj: bpy.types.Object):
+        """ Return whether the object is an instancer that is explicitly hidden as instancer.
+
+            The notion of instancer visibility is different from the object visibility. Object visibility
+            determines whether the object and all of its dependent objects will be visible in the scene. 
+            Instancer visibility determines whether the instancer object itself will be rendered in the scene.
+            
+            Args:
+                obj (bpy.types.Object): any object
+
+            Returns:
+                bool :  True if the object is an instancer with its instancer visibility disabled.
+                        False is the object is not an instancer or is an instancer with instancer visibility
+                            enabled.
+        """
+        hasParticleSystemModifier = any([m for m in obj.modifiers if m.type == 'PARTICLE_SYSTEM'])
+        
+        if obj.is_instancer or hasParticleSystemModifier:
+            return not (obj.show_instancer_for_viewport if self.interactive else obj.show_instancer_for_render)
+        
+        return False
 
 
 # TODO: This function is just glue for the POC. Remove in final code

@@ -8,8 +8,41 @@
             "default": true
         },
         {
+            "attr" : "light_select_mode",
+            "default" : "4"
+        },
+        {
             "attr" : "name",
             "default" : "Light Select"
+        },
+        {
+            "attr": "lights",
+            "type": "PLUGIN_LIST",
+            "desc": "List of lights to include in the LightSelect render channel",
+            "default": [],
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterLights"
+                },
+                "derived": true
+            }
+        },
+        {
+            "attr": "light_selector",
+            "type": "TEMPLATE",
+            "desc": "List of lights to include in the LightSelect render channel",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "lights",
+                        "filter_function": "filters.filterLights"
+                    }
+                }
+            }
         }
     ],
     "Options": {
@@ -21,8 +54,12 @@
             {
                 "attrs": [
                     {
+                        "name": "channelType",
+                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                    },
+                    {
                         "name": "name",
-                        "label": "Render Channel Name"
+                        "label": "Channel Name"
                     },
                     {
                         "name": "enableDeepOutput",
@@ -55,6 +92,11 @@
                     },
                     {
                         "name": "light_select_matte"
+                    },
+                    {
+                        "name": "light_selector",
+                        "label": "Lights list",
+                        "list_label": "Lights"
                     }
                 ],
                 "layout": "COLUMN"

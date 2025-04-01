@@ -4,14 +4,6 @@
     "Subtype": "UTILITY",
     "Parameters": [
         {
-            "attr": "mix_amount",
-            "default": 0.5,
-            "ui": {
-                "soft_min": 0.0,
-                "soft_max": 1.0
-            }
-        },
-        {
             "attr": "transition_upper",
             "ui": {
                 "soft_min": 0.0,
@@ -27,9 +19,12 @@
         },
         {
             "attr": "mix_map",
-            "options": {
-                "linked_only": true
-            }
+            "default": [0.5, 0.5, 0.5, 1.0]
+        },
+        {
+            "attr": "use_curve",
+            "type": "BOOL",
+            "default": false
         }
     ],
     "Node": {
@@ -52,19 +47,21 @@
                         "layout": "SEPARATOR"
                     },
                     {
-                        "name": "mix_amount"
+                        "name": "mix_map"
                     },
                     {
                         "layout": "SEPARATOR"
                     },
                     {
-                        "name": "transition_upper"
-                    },
-                    {
-                        "name": "transition_lower"
-                    },
-                    {
                         "name": "use_curve"
+                    },
+                    {
+                        "name": "transition_upper",
+                        "active": {"cond": "::use_curve!=0"}
+                    },
+                    {
+                        "name": "transition_lower",
+                        "active": {"cond": "::use_curve!=0"}
                     }
                 ]
             }
@@ -73,7 +70,7 @@
     "Options": {
         "excluded_parameters": [
             "compatibility_with",
-            "color",
+            "mix_amount",
             "out_transparency",
             "out_intensity"
         ],

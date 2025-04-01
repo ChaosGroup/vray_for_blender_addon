@@ -37,6 +37,34 @@ def gatherPoints(obj, start, end, pointsPerStrand, fnCoHair, data):
                             for step in range(pointsPerStrand)
                             for elem in fnCoHair(object=obj, particle_no=pindex, step=step)),
                         dtype=np.float32).reshape((end-start) * pointsPerStrand, 3)
+    
+def gatherRadii(pointsPerStrand: int, totalParticles: int, pset: bpy.types.ParticleSettings, data: HairData):
+    """ Returns array with radiuses of hair points """
+
+    # Get the root and tip radius scaling
+    rootRadius = (pset.root_radius * pset.radius_scale) / 2
+    tipRadius = (pset.tip_radius * pset.radius_scale) / 2
+
+    shape = pset.shape  # Shape parameter controls the radius curve
+    if shape == 0: # No changes in the radius
+        data.pointRadii = np.tile(np.linspace(rootRadius, tipRadius, pointsPerStrand, dtype=np.float32), totalParticles)
+    else:
+        # Implementation of the function of Cycles, responsible for interpolating the hair strand radius
+        # from root to tip, based on the shape parameter.
+        # Link to the implementation in Blender's source code:
+        # https://projects.blender.org/blender/blender/src/commit/5ba668135aaf7cb79081482cb7839a64bbb47457/intern/cycles/blender/curves.cpp#L32
+        shapeExp = 0
+        if shape < 0:
+            shapeExp = (1 + shape)
+        elif shape > 0 and shape != 1:
+            shapeExp = (1 / (1 - shape))
+        elif shape == 1:
+            # Avoiding division by zero (1/(1-1)).
+            # 10000 is equal to 1/(1-0.9999)
+            shapeExp = 10000
+
+        t = np.linspace(1, 0, pointsPerStrand, dtype=np.float32)
+        data.pointRadii = np.tile((t ** shapeExp) * (rootRadius - tipRadius) + tipRadius,  totalParticles)
 
 
 def gatherUVs(mod, start, end, psys, uvIndex, fnUvOnEmitter, parents, data):
@@ -106,6 +134,7 @@ class HairExporter(ExporterBase):
         data.pointRadii     = np.empty(shape=0, dtype=np.float32) if sameRadius else pointRadiuses
         data.uvs            = uvs
    
+        vray.pluginCreate(self.renderer, uniqueName, 'GeomMayaHair')
         vray.exportHair(self.renderer, data)
         
         self.objTracker.trackPlugin(getObjTrackId(evaluatedObjCurves), data.name)
@@ -114,15 +143,15 @@ class HairExporter(ExporterBase):
         return AttrPlugin(data.name)
 
 
-    def exportFromParticles(self, evaluatedObj: bpy.types.Object, pmod: bpy.types.ParticleSystemModifier, exportGeometry: bool):
-        assert evaluatedObj.is_evaluated, "Object should have been evaluated"
+    def exportFromParticles(self, evaluatedObj: bpy.types.Object, pmod: bpy.types.ParticleSystemModifier):
+        assert evaluatedObj.is_evaluated, f"Particle hair exporter: Object should have been evaluated: {evaluatedObj.name}"
         
         viewportRender = self.interactive
         psys = pmod.particle_system
         pset = psys.settings
         uniqueName = self.getParticleHairName(evaluatedObj.original, psys)
 
-        if (not exportGeometry) or (uniqueName in self.exported):
+        if (uniqueName in self.exported) or (not tools.isModifierVisible(self, pmod)):
             return AttrPlugin(uniqueName)
         
         parents = len(psys.particles)
@@ -151,20 +180,20 @@ class HairExporter(ExporterBase):
         data.fadeWidth      = vrayFur.make_thinner
         data.widthsInPixels = vrayFur.widths_in_pixels
         data.useHairBSpline = pset.use_hair_bspline
+        
+        gatherRadii(pointsPerStrand, totalParticles, pset, data)
 
         fnCoHair = psys.co_hair
 
         self.ts.timeThis('collect_data_hair_verts', lambda: gatherPoints(evaluatedObj, firstExported, totalParticles, pointsPerStrand, fnCoHair, data))
         
-        if tools.isModifierVisible(self, pmod):
-            # Hidden modifiers will not be applied to the mesh. Trying to export
-            # one will result in an 'Object not yet evaluated' exception 
-            objMesh = evaluatedObj.to_mesh(preserve_all_data_layers=True, depsgraph=self.dg)
-            self.exportUVs(objMesh, pmod, firstExported, totalParticles, psys, parents, data)
-        
-            # TODO: Colors are currently not rendered by VRay although they are being expotred
-            self.exportColors(objMesh, pmod, firstExported, totalParticles, psys, parents, data)
+        objMesh = evaluatedObj.to_mesh(preserve_all_data_layers=True, depsgraph=self.dg)
+        self.exportUVs(objMesh, pmod, firstExported, totalParticles, psys, parents, data)
+    
+        # TODO: Colors are currently not rendered by VRay although they are being expotred
+        self.exportColors(objMesh, pmod, firstExported, totalParticles, psys, parents, data)
 
+        vray.pluginCreate(self.renderer, uniqueName, 'GeomMayaHair')
         vray.exportHair(self.renderer, data)
         self.objTracker.trackPlugin(getObjTrackId(evaluatedObj), data.name)
 

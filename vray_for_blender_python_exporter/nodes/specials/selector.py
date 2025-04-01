@@ -1,10 +1,11 @@
 
 import bpy
 
+from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.nodes.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput, addOutput
-from vray_blender.nodes.tools import getLinkInfo
+from vray_blender.nodes.tools import getLinkInfo, isVrayNode
 from vray_blender.plugins.templates import common
 
 
@@ -60,14 +61,15 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
 
         # Recursively collect the items from connected object selector nodes
         for link in self.inputs[0].links:
-            sockFrom = link.from_socket
-
-            match sockFrom.node.bl_idname:
-                case 'VRayNodeMultiSelect':
-                    result = sockFrom.node.getSelected(context)
-                case 'VRayNodeSelectObject':
-                    if selected := sockFrom.node.getSelected(context):
-                        result.add(selected)
+            
+            # Using getLinkedFromSocket to handle any connected Reroute nodes
+            if sockFrom := getLinkedFromSocket(link.from_socket):
+                match sockFrom.node.bl_idname:
+                    case 'VRayNodeMultiSelect':
+                        result = sockFrom.node.getSelected(context)
+                    case 'VRayNodeSelectObject':
+                        if selected := sockFrom.node.getSelected(context):
+                            result.add(selected)
         
         collectionName = getattr(self, 'collection', '')
 
@@ -83,13 +85,18 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         
         # Mark the nodetree as updated because we cannot mark the node itself
         self.id_data.update_tag()
+        
+        if obj := getattr(context, 'active_object', None):
+            obj.update_tag()
 
 
     # Node.update() override
     def update(self):
         # Mark as disabled the items that are not compatible with the socket(s) the output of 
         # this node is linked to.
-        filters = [getLinkInfo(link.to_socket.node.vray_plugin, link.to_socket.vray_attr).fnFilter for link in self.outputs[0].links]
+        filters = [getLinkInfo(link.to_socket.node.vray_plugin, link.to_socket.vray_attr).fnFilter \
+                    for link in self.outputs[0].links \
+                    if hasattr(link.to_socket.node, "vray_plugin")]
 
         selectedObjects = [item for item in self.selectedItems if item.objectPtr and (not isCollection(item.objectPtr))]
 
@@ -117,6 +124,22 @@ class VRayNodeSelectObject(VRayNodeBase):
         else:
             self.objectName = ""
 
+    def onFilterObject(self: bpy.types.Node, obj):
+        # Return the poll (filter) function for the Object Select field
+        sockOut = self.outputs[0]
+        
+        if not sockOut.is_linked:
+            return True
+        
+        sockTo = sockOut.links[0].to_socket
+        if not isVrayNode(sockTo.node):
+            return True
+        
+        if linkInfo := getLinkInfo(sockTo.node.vray_plugin, sockTo.vray_attr):
+            return linkInfo.fnFilter(obj)
+        
+        return True
+    
     objectName: bpy.props.StringProperty(
         name        = "Object name",
         description = "Object name",
@@ -128,9 +151,11 @@ class VRayNodeSelectObject(VRayNodeBase):
         type = bpy.types.Object,
         name = "Object",
         description = "Selected object",
-        update = onUpdateName
+        update = onUpdateName,
+        poll = onFilterObject
     )
 
+    
     def init(self, context):
         addOutput(self, 'VRaySocketObject', "Object")
 

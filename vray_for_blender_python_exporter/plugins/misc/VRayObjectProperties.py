@@ -1,6 +1,10 @@
-from vray_blender.lib import plugin_utils
-from vray_blender.nodes import utils as NodesUtils
+import bpy
+from vray_blender.lib import plugin_utils, export_utils
+from vray_blender.lib.defs import PluginDesc
+from vray_blender.nodes import utils as NodesUtils, filters
 from vray_blender.nodes import tree_defaults
+
+from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -32,3 +36,21 @@ def onSurfacePropsUpdate(src, context, attrName):
 
 def onVisibilityPropsUpdate(src, context, attrName):
     _updatePropPlugins(src, context, "Visibility", attrName, 220)
+
+
+def exportCustom(exporterCtx, pluginDesc: PluginDesc):
+    propGroup = pluginDesc.vrayPropGroup
+
+    # Forward-create all referenced node objects
+    # NOTE: This is not an ideal solution and it will not work for types that are not exported as 
+    # Node (e.g. lights).
+    if propGroup.reflection_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
+        for attrPlugin in pluginDesc.getAttribute('reflection_exclude'):
+            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+
+    if propGroup.refraction_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
+        for attrPlugin in pluginDesc.getAttribute('refraction_exclude'):
+            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+
+    return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
+

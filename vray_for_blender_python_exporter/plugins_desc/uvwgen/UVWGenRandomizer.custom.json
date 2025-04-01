@@ -1,6 +1,6 @@
 {
     "ID": "UVWGenRandomizer",
-    "Name" : "V-Ray UWV Randomizer",
+    "Name" : "V-Ray UVW Randomizer",
     "Parameters": [
         {
             "attr": "input",

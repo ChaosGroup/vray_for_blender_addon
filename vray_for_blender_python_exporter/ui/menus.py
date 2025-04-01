@@ -3,14 +3,15 @@ import bpy
 import os
 from pathlib import PurePath
 
-from vray_blender import proxy as ProxyUtils
+from vray_blender.events import isDefaultScene
 from vray_blender.lib import blender_utils, lib_utils
-from vray_blender.nodes.operators.import_file import importVRMesh
+from vray_blender.nodes.operators.import_file import importProxyFromMeshFile
 from vray_blender.nodes import tree_defaults
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive
 from vray_blender.ui import classes, icons
 from vray_blender.menu import VRAY_OT_open_vfb
+from vray_blender.vray_tools import vray_proxy
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -332,27 +333,6 @@ class VRAY_OT_add_physical_camera(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_add_dome_camera(bpy.types.Operator):
-    bl_idname = "vray.add_dome_camera"
-    bl_label = "Add V-Ray Dome Camera"
-
-    def execute(self, context):
-        import math
-
-        camera = bpy.data.cameras.new(name='Dome Camera')
-        camera.vray['use_dome'] = True
-        camera.vray.CameraDome['use'] = True
-        
-        cameraObj = bpy.data.objects.new(name='Dome Camera', object_data=camera)
-        cameraObj.location = context.scene.cursor.location
-        bpy.context.collection.objects.link(cameraObj)
-
-        # Deselect all objects and select only the newly created as it is with the default blender objects
-        blender_utils.selectObject(cameraObj)
-
-        return {'FINISHED'}
-
-
 ####### OPERATORS FOR PROXY CREATION ##########
 ###############################################
 
@@ -360,17 +340,28 @@ class VRAY_OT_add_object_proxy(bpy.types.Operator):
     bl_idname = "vray.add_object_proxy"
     bl_label = "Add V-Ray Proxy"
 
-    filepath: bpy.props.StringProperty(name="Filepath (*.vrmesh)", subtype="FILE_PATH")
-    relpath: bpy.props.BoolProperty(name="Use Relative Path", default=True)
+    filepath: bpy.props.StringProperty(name="Filepath (*.vrmesh, *abc)", subtype="FILE_PATH")
+    relpath: bpy.props.BoolProperty(name="Use Relative Path", default=False)
+
+    def draw(self, context):
+        # If the scene has not been saved yet, we cannot use relative paths
+        if not isDefaultScene():
+            self.layout.prop(self, 'relpath')       
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        meshPath = self.filepath
-        matPath =  PurePath(self.filepath).with_suffix(".vrmat").as_posix()
-        return importVRMesh(context, matPath, meshPath, operator=self, useRelPath=self.relpath)
+        matPath =  "" if vray_proxy.isAlembicFile(self.filepath) else PurePath(self.filepath).with_suffix(".vrmat").as_posix()
+
+        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=self.relpath)
+        if err:
+            self.report({'ERROR'}, err)
+            return {'CANCELLED'} 
+        
+        return {'FINISHED'}
+
 
 class VRAY_OT_add_object_vrayscene(bpy.types.Operator):
     bl_idname = "vray.add_object_vrayscene"
@@ -393,7 +384,7 @@ class VRAY_OT_add_object_vrayscene(bpy.types.Operator):
             return {'CANCELLED'}
 
         # Add new mesh object
-        name = 'VRayScene@%s' % os.path.splitext(os.path.basename(filepath))[0]
+        name = f'VRayScene@{os.path.splitext(os.path.basename(filepath))[0]}'
 
         mesh = bpy.data.meshes.new(name)
         ob = bpy.data.objects.new(name, mesh)
@@ -409,15 +400,17 @@ class VRAY_OT_add_object_vrayscene(bpy.types.Operator):
         VRayAsset = VRayObject.VRayAsset
         VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
         VRayAsset.filePath = sceneFilepath
+        VRayAsset.useRelativePath = self.relpath
 
         sceneFilenameNoExt = os.path.splitext(os.path.basename(sceneFilepath))[0]
         previewFilepath = os.path.join(os.path.dirname(sceneFilepath), "%s.vrmesh" % sceneFilenameNoExt)
 
         if not os.path.exists(previewFilepath):
-            ProxyUtils.launchPly2Vrmesh(sceneFilepath, previewOnly=True, previewFaces=ob.vray.VRayAsset.maxPreviewFaces)
+            vray_proxy.launchPly2Vrmesh(sceneFilepath, previewFilepath, previewOnly=True, 
+                                        previewFaces=ob.vray.VRayAsset.maxPreviewFaces)
 
         if os.path.exists(previewFilepath):
-            ProxyUtils.loadVRayScenePreviewMesh(sceneFilepath, context.scene, ob)
+            vray_proxy.loadVRayScenePreviewMesh(sceneFilepath, context.scene, ob)
 
         blender_utils.selectObject(ob)
 
@@ -429,12 +422,13 @@ class VRAY_MT_Mesh(bpy.types.Menu):
     bl_label = "V-Ray"
 
     def draw(self, context):
-        self.layout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
+        # To be enabled when V-Ray Scene import is re-oimplemented
+        # self.layout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
         self.layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
 
 
 def addVRayMeshesToMenu(self, context):
-    self.layout.menu(VRAY_MT_Mesh.bl_idname)
+    self.layout.menu(VRAY_MT_Mesh.bl_idname, icon_value=icons.getIcon("VRAY_PLACEHOLDER"))
 
 
 original_topbar_render_draw = None
@@ -477,13 +471,13 @@ def getRegClasses():
     return (
         VRAY_OT_set_camera,
         VRAY_OT_set_view,
-        VRAY_OT_add_object_vrayscene,
+        # To be re-implemented
+        # VRAY_OT_add_object_vrayscene,
         VRAY_OT_add_object_proxy,
         VRAY_OT_select_camera,
         VRAY_OT_camera_lock_unlock_view,
         VRAY_MT_Mesh,
-        VRAY_OT_add_physical_camera,
-        VRAY_OT_add_dome_camera,
+        VRAY_OT_add_physical_camera
     ) + getLightAddOperators()
 
 

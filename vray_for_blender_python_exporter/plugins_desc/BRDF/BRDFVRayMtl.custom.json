@@ -110,8 +110,8 @@
             "desc": "Depth for the absorption",
             "ui": {
                 "display_name": "Depth (cm)",
-                "min": 0.01,
-                "soft_min": 0.01,
+                "min": 0.0,
+                "soft_min": 0.0,
                 "soft_max": 10.0,
                 "spin_step": 0.01
             }
@@ -232,6 +232,38 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr" : "reflect_glossiness",
+            "ui" : 
+            {
+                "spin_step" : 0.01
+            }
+        },
+        {
+            "attr" : "refract_glossiness",
+            "ui" : 
+            {
+                "spin_step" : 0.01
+            }
+        },
+        {
+            "attr" : "sheen_glossiness",
+            "ui" : 
+            {
+                "spin_step" : 0.01
+            }
+        },
+        {
+            "attr" : "coat_glossiness",
+            "ui" : 
+            {
+                "spin_step" : 0.01
+            }
+        },
+        {
+            "attr" : "option_use_roughness",
+            "update": "onUseRoughnessUpdate"
         }
     ],
     "Widget": {
@@ -244,7 +276,7 @@
                 "attrs": [
                     {
                         "name": "diffuse",
-                        "label": "Color"
+                        "label": "Diffuse Color"
                     },
                     {
                         "name": "roughness"
@@ -257,14 +289,14 @@
                     },
                     {
                         "name": "opacity_color",
-                        "label": "Opacity"
+                        "label": "Opacity Color"
                     },
                     {
                         "layout": "SEPARATOR"
                     },
                     {
                         "name": "self_illumination",
-                        "label": "Self-Illumination"
+                        "label": "Self-Illumination Color"
                     },
                     {
                         "name": "self_illumination_gi"
@@ -284,7 +316,7 @@
                     },
                     {
                         "name": "reflect",
-                        "label": "Color"
+                        "label": "Reflection Color"
                     },
                     {
                         "name": "reflect_glossiness",
@@ -312,7 +344,8 @@
                                 "name": "fresnel_ior_lock"
                             },
                             {
-                                "name": "fresnel_ior"
+                                "name": "fresnel_ior",
+                                "active": {"cond": "::fresnel_ior_lock=0"}
                             }
                         ]
                     },
@@ -344,18 +377,24 @@
                                 "name": "thin_film_on"
                             },
                             {
-                                "name": "thin_film_thickness_min",
-                                "label": "Thickness Min (nm)"
-                            },
-                            {
-                                "name": "thin_film_thickness_max",
-                                "label": "Thickness Max (nm)"
-                            },
-                            {
-                                "name": "thin_film_thickness"
-                            },
-                            {
-                                "name": "thin_film_ior"
+                                "layout": "COLUMN",
+                                "active": {"cond": "::thin_film_on!=0"},
+                                "attrs": [
+                                    {
+                                        "name": "thin_film_thickness_min",
+                                        "label": "Thickness Min (nm)"
+                                    },
+                                    {
+                                        "name": "thin_film_thickness_max",
+                                        "label": "Thickness Max (nm)"
+                                    },
+                                    {
+                                        "name": "thin_film_thickness"
+                                    },
+                                    {
+                                        "name": "thin_film_ior"
+                                    }
+                                ]
                             }
                         ]
                     },
@@ -371,13 +410,21 @@
                                 "name": "reflect_depth"
                             },
                             {
+                                "layout": "SEPARATOR"
+                            },
+                            {
                                 "name": "reflect_dim_distance_on"
                             },
                             {
-                                "name": "reflect_dim_distance"
+                                "name": "reflect_dim_distance",
+                                "active": {"cond": "::reflect_dim_distance_on!=0"}
                             },
                             {
-                                "name": "reflect_dim_distance_falloff"
+                                "name": "reflect_dim_distance_falloff",
+                                "active": {"cond": "::reflect_dim_distance_on!=0"}
+                            },
+                            {
+                                "layout": "SEPARATOR"
                             },
                             {
                                 "name": "option_reflect_on_back"
@@ -437,7 +484,7 @@
                 "attrs": [
                     {
                         "name": "refract",
-                        "label": "Color"
+                        "label": "Refraction Color"
                     },
                     {
                         "name": "refract_glossiness"
@@ -639,7 +686,8 @@
             "refract_exit_color",
             "channels",
             "volume",
-            "option_fix_dark_edges"
+            "option_fix_dark_edges",
+            "opacity"
         ],
         "animatable": true
     }

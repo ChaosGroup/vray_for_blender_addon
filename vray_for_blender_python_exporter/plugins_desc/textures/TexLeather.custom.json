@@ -93,22 +93,12 @@
                         "name": "un_noise_phase"
                     },
                     {
-                        "name": "cell_color_tex"
+                        "name": "cell_color_tex",
+                        "label": "Cell Color"
                     },
                     {
-                        "name": "crease_color_tex"
-                    },
-                    {
-                        "name": "cell_color"
-                    },
-                    {
-                        "name": "crease_color"
-                    },
-                    {
-                        "name": "cell_color_tex_mult"
-                    },
-                    {
-                        "name": "crease_color_tex_mult"
+                        "name": "crease_color_tex",
+                        "label": "Crease Color"
                     },
                     {
                         "name": "size"
@@ -140,46 +130,10 @@
             }
         },
         {
-            "attr": "cell_color_tex",
-            "options": {
-                "visible": false
-            }
-        },
-        {
-            "attr": "cell_color_colortex",
-            "type": "COLOR_TEXTURE",
-            "color_prop": "cell_color",
-            "tex_prop": "cell_color_tex",
-            "desc": "",
-            "default": [
-                1.0,
-                1.0,
-                1.0
-            ]
-        },
-        {
             "attr": "crease_color",
             "options": {
                 "visible": false
             }
-        },
-        {
-            "attr": "crease_color_tex",
-            "options": {
-                "visible": false
-            }
-        },
-        {
-            "attr": "crease_color_colortex",
-            "type": "COLOR_TEXTURE",
-            "color_prop": "crease_color",
-            "tex_prop": "crease_color_tex",
-            "desc": "",
-            "default": [
-                0.0,
-                0.0,
-                0.0
-            ]
         },
         {
             "attr": "uvwgen",
@@ -195,8 +149,8 @@
     },
     "excluded_parameters": [
         "cell_color",
+        "cell_color_tex_mult",
         "crease_color",
-        "cell_color_tex",
-        "crease_color_tex"
+        "crease_color_tex_mult"
     ]
 }

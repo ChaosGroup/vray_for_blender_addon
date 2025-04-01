@@ -3,8 +3,6 @@ from vray_blender.exporting.tools import *
 from vray_blender.exporting.node_export import *
 from vray_blender.lib import export_utils
 from vray_blender.lib.defs import *
-from vray_blender.lib.export_utils import removePlugin
-from vray_blender.lib.sys_utils import isGPUEngine
 from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes import utils as NodesUtils
 
@@ -29,7 +27,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
     environmentVolume = []
 
     if effectsSock and effectsSock.is_linked:
-        if not (effectsNode := linkedNode(effectsSock)):
+        if not (effectsNode := getFromNode(effectsSock)):
             return []
         
         if effectsNode.bl_idname != "VRayNodeEffectsHolder":
@@ -39,7 +37,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
         with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(effectsNode)):
             with nodeCtx.push(effectsNode):
                 for inSock in effectsNode.inputs:
-                    if inSock.is_linked:
+                    if inSock.shouldExportLink():
                         effect = exportSocket(nodeCtx, inSock)
                         if type(effect) is AttrPlugin:
                             environmentVolume.append(effect)
@@ -50,7 +48,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
 def _sockConnectedToDenoiser(sock):
     node = getNodeLink(sock).from_node
-    return node.bl_idname == "VRayNodeRenderChannelDenoiser"
+    return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelDenoiser")
 
 def _exportRenderChannels(nodeCtx: NodeContext):
         """ Export the SettingsRenderChannels and RenderChannelXXX plugins along 
@@ -114,16 +112,21 @@ class WorldExporter(ExporterBase):
         nodeCtx.ntree = world.node_tree
         nodeCtx.rootObj = world
         
-        with TrackObj(self.nodeTracker, getObjTrackId(world)):
-            with TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput)):
-                with nodeCtx.push(nodeOutput):
-                    self._exportEnvironmentSettings(nodeCtx)
+        with (  nodeCtx,
+                nodeCtx.push(nodeOutput),
+                TrackObj(self.nodeTracker, getObjTrackId(world)),
+                TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput))):
+            
+            self._exportEnvironmentSettings(nodeCtx)
 
-                    if self.fullExport:
-                        # We are not currently exporting render elements other than the Color image and denoiser in the viewport.
-                        _exportRenderChannels(nodeCtx)
+        # Render channel export is kept outside the 'Tracking' scope,  
+        # as they should be exported only once and remain unchanged.  
+        # Removing them during interactive rendering could cause V-Ray to crash.
+        if self.fullExport:
+            # We are not currently exporting render elements other than the Color image and denoiser in the viewport.
+            _exportRenderChannels(nodeCtx)
 
-
+        
     def _exportEnvironmentSettings(self, nodeCtx: NodeContext):
         """ Gets settings from 'Environment' node and applies them to SettingsEnvironment plugin """
         pluginDesc = PluginDesc(Names.singletonPlugin("SettingsEnvironment"), "SettingsEnvironment")
@@ -139,7 +142,7 @@ class WorldExporter(ExporterBase):
         envSock = getInputSocketByName(worldOutputNode, "Environment")
 
         if envSock and envSock.is_linked:
-            envNode = linkedNode(envSock)
+            envNode = getFromNode(envSock)
             if not envNode:
                 return
             

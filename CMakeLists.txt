@@ -45,6 +45,13 @@ else()
 	message(STATUS "Skipping project generation for VRayZmqServer")
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vray_for_blender_tools")
+	set (VRAY_TOOLS_INSTALL_PREFIX "${ADDON_PATH}/bin")
+	add_subdirectory(vray_for_blender_tools)
+else()
+	message(STATUS "Skipping project generation for VRayTools")
+endif()
+
 if(INSTALL_LOCAL)
 	install(DIRECTORY "vray_for_blender_python_exporter/" DESTINATION "${ADDON_PATH}")
 endif()

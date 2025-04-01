@@ -1,8 +1,6 @@
 import bpy
-from pathlib import Path
 
 from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
-from vray_blender.engine.vfb_event_handler import VfbEventHandler
 
 from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
 from vray_blender.exporting.tools import FakeTimeStats
@@ -13,8 +11,8 @@ from vray_blender.lib import path_utils
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.defs import ExporterContext, ExporterContext, RendererMode
+from vray_blender.lib.plugin_utils import updateValue
 
-from vray_blender.engine.zmq_process import ZMQ
 from vray_blender.bin import VRayBlenderLib as vray
 
 
@@ -55,13 +53,6 @@ def _exportCameras(ctx: ExporterContext, prevViewParams = dict[str, ViewParams])
 def _exportBakeView(ctx: ExporterContext):
     return view_export.ViewExporter(ctx).exportBakeView()
 
-
-def _collectLightMeshInfo(exporterCtx: ExporterContext):
-    """ Collect info about the visible and updated objects associated with LightMesh exports. """
-    from vray_blender.plugins.light.LightMesh import collectLightMeshInfo
-    active, updated = collectLightMeshInfo(exporterCtx)
-    exporterCtx.activeMeshLightsInfo = active
-    exporterCtx.updatedMeshLightsInfo = updated
 
 
 #############################
@@ -153,8 +144,11 @@ class VRayRendererProdBase:
         try:
             exporterCtx.calculateObjectVisibility()
             
-            _collectLightMeshInfo(exporterCtx)
+            light_export.syncLightMeshInfo(exporterCtx)
+            light_export.collectLightMixInfo(exporterCtx)
+            
             _exportObjects(exporterCtx)
+            _exportMaterials(exporterCtx)
             _exportLights(exporterCtx)
 
             if not exporterCtx.bake:
@@ -166,8 +160,9 @@ class VRayRendererProdBase:
                 _exportBakeView(exporterCtx)
 
             _exportSettings(exporterCtx)
-            _exportMaterials(exporterCtx)
             _exportWorld(exporterCtx)
+            
+            self._linkRenderChannels(exporterCtx)
 
             # Call descendant's interface
             self._exportSceneAdjustments(exporterCtx)
@@ -231,4 +226,14 @@ class VRayRendererProdBase:
             settings.previewDir = path_utils.getPreviewDir()
         
         return vray.createRenderer(settings)
+    
+
+    def _linkRenderChannels(self, exporterCtx: ExporterContext):
+        """ In order for certain plugins to affect the render channels, those render channels
+            must be explicitly listed in a parameter of the plugin. This function updates
+            the relevant plugin properties.
+        """
+        for pluginData, channelsList in exporterCtx.pluginRenderChannels.items():
+            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList) 
+
 

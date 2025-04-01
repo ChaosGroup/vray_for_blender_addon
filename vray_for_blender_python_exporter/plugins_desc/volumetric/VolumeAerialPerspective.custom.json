@@ -5,9 +5,27 @@
         {
             "attr": "sun",
             "type": "OBJECT",
-            "filter_type": "light",
-            "filter_vray_type": "SUN",
-            "desc": "Specifies which sun will be affected by the effect"
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterSuns"
+                }
+            }
+        },
+        {
+            "attr": "sun_select",
+            "type": "TEMPLATE",
+            "desc": "Specifies which sun will be affected by the effect",
+            "options": {
+                "template": {
+                    "type": "templateSingleObjectSelect",
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "sun",
+                        "filter_function": "filters.filterSuns"
+                    }
+                }
+            }
         },
         {
             "attr": "distance",
@@ -30,9 +48,8 @@
                 "layout": "COLUMN",
                 "attrs": [
                     {
-                        "name": "sun",
-                        "label": "Sun",
-                        "search_bar_for": "objects"
+                        "name": "sun_select",
+                        "label": "Sun"
                     }
                 ]
             }
@@ -68,7 +85,7 @@
                         "name": "affect_alpha"
                     },
                     {
-                        "name": "sun",
+                        "name": "sun_select",
                         "label": "Sun"
                     }
                 ]

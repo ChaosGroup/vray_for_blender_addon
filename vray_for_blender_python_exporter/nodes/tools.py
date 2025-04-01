@@ -1,5 +1,6 @@
 import bpy
 
+from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
 from vray_blender.nodes.mixin import VRayNodeBase
 
 
@@ -68,8 +69,27 @@ def addVRayNodeTreeSettings(ntree: bpy.types.NodeTree, treeType: str):
     ntree.vray.tree_type = treeType
 
 
+def isVrayNode(node: bpy.types.Node):
+    return hasattr(node, 'vray_type')
+
+
 def isVrayNodeTree(ntree: bpy.types.NodeTree, treeType: str):
     return hasattr(ntree, 'vray') and (ntree.vray.tree_type == treeType)
+
+
+def isVraySocket(sock: bpy.types.NodeSocket):
+    """ Return True if the socket has an associated V-Ray plugin attribute.
+
+        NOTE: If a plugin description has been changed between V4B versions, 
+        the newly added sockets might not have a 'vray_attr' field in the data
+        loaded from an old scene.
+    """
+    return hasattr(sock, 'vray_attr')
+
+
+def isCompatibleNode(node: bpy.types.Node):
+    """ Return True if node is of type that can be exported by V-Ray """
+    return isVrayNode(node) or (node.bl_idname in CompatibleNonVrayNodes)
 
 
 def getFilterFunction(pluginType: str, filterFnName: str):

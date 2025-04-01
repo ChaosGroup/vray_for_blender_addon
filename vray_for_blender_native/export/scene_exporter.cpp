@@ -47,6 +47,21 @@ void SceneExporter::init() {
 				engineUpdateMessage = info;
 			});
 
+	m_exporter->set_callback_on_async_op_complete([this](proto::RendererAsyncOp op, bool success, const std::string& message){
+			switch (op) {
+			case proto::RendererAsyncOp::ExportVrscene:
+				m_vrsceneExportInProgress = false;
+				break;
+
+			default:
+				VRAY_ASSERT("Invalid async operation type."); 
+			}
+
+			if (!success) {
+				Logger::error("Asyncronous operation {} failed: {}", static_cast<char>(op), message);
+			}
+		});
+
 	setupCallbacks();
 
 	m_threadManager = ThreadManager::make(2);
@@ -100,7 +115,7 @@ void SceneExporter::free()
 }
 
 
-void SceneExporter::setRenderSizes(const VRayMessage::RenderSizes& sizeData)
+void SceneExporter::setRenderSizes(const RenderSizes& sizeData)
 {
 	m_exporter->setRenderSize(sizeData);
 }
@@ -308,7 +323,11 @@ void SceneExporter::finishExport(bool interactive)
 
 void SceneExporter::writeVrscene(const ExportSceneSettings& exportSettings)
 {
-	m_exporter->exportVrscene(exportSettings);
+	bool inProgress = false;
+
+	if (m_vrsceneExportInProgress.compare_exchange_strong(inProgress, true)) {
+		m_exporter->exportVrscene(exportSettings);
+	}
 }
 
 

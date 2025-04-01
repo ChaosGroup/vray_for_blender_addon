@@ -23,9 +23,7 @@ def lightIsSun(lamp):
 
 
 def lightIsAmbient(lamp):
-    if lib_utils.getLightPluginName(lamp) in {'LightAmbient'}:
-        return True
-    return False
+    return lib_utils.getLightPluginType(lamp) == 'LightAmbient'
 
 
 
@@ -46,31 +44,23 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
 
         light  = context.light
         vrayLight = light.vray
-        lightPluginName = lib_utils.getLightPluginName(light)
+        lightPluginType = lib_utils.getLightPluginType(light)
 
-        layout.label(text=f"V-Ray Type:  {lightPluginName}", icon='LIGHT_DATA')
+        layout.label(text=f"V-Ray Type:  {lightPluginType}", icon='LIGHT_DATA')
         layout.separator()
 
-        # We support adding both Blender and VRay lights to the scene. Both are eventually exported
-        # as VRay lights, but they are shown as separate types in the UI. For a Blender lights, allow 
-        # changing the type of the light only if it doesn't have a node tree.
-        if vrayLight.light_type == "BLENDER" and (not light.node_tree):
-            layout.prop(light, 'type', expand=True)
-        
         # The property values are stored in different places for light with node trees and such without
         outputNode = None
         lightPropGroup = None
 
-        if NodesUtils.treeHasNodes(light.node_tree):
-            if outputNode := NodesUtils.getLightOutputNode(light.node_tree):
-                # The output node might have been deleted
-                lightPropGroup = getattr(outputNode, outputNode.vray_plugin)
+        if NodesUtils.treeHasNodes(light.node_tree) and (outputNode := NodesUtils.getLightOutputNode(light.node_tree)):
+            lightPropGroup = getattr(outputNode, outputNode.vray_plugin)
         else:
-            lightPropGroup = getattr(vrayLight, lightPluginName)
+            lightPropGroup = getattr(vrayLight, lightPluginType)
             
         if lightPropGroup:
             layout.separator()
-            classes.drawPluginUI(context, layout, lightPropGroup, PLUGINS['LIGHT'][lightPluginName], outputNode)
+            classes.drawPluginUI(context, layout, lightPropGroup, PLUGINS['LIGHT'][lightPluginType], outputNode)
 
 
 

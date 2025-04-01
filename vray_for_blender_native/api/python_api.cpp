@@ -19,7 +19,7 @@
 namespace py = boost::python;
 namespace np = boost::python::numpy;
 using ndarray = boost::python::numpy::ndarray;
-using namespace VrayZmqWrapper;
+namespace proto = VrayZmqWrapper;
 
 
 namespace VRayForBlender
@@ -85,8 +85,8 @@ bool hasLicense()
 
 size_t createRenderer(const ExporterSettings& settings)
 {
-	return settings.getExporterType() == ExporterType::IPR_VIEWPORT ||
-	               settings.getExporterType() == ExporterType::IPR_VFB ? 
+	return settings.getExporterType() == proto::ExporterType::IPR_VIEWPORT ||
+	               settings.getExporterType() == proto::ExporterType::IPR_VFB ? 
 		reinterpret_cast<size_t>(new InteractiveExporter(settings)) : 
 		reinterpret_cast<size_t>(new ProductionExporter(settings));
 }
@@ -125,39 +125,40 @@ void setLogLevel(int level)
 
 void openCollaboration(const HostInfo& hi)
 {
-	VRayMessage::HostInfo hostInfo = {hi.vrayVersion, hi.buildVersion, hi.blenderVersion};
-	ZmqServer::get().sendMessage(VRayMessage::msgControlOpenCollaboration(hostInfo), true);
+	proto::MsgControlOpenCollaboration msg;
+	msg.hostInfo = {hi.vrayVersion, hi.buildVersion, hi.blenderVersion};
+	ZmqServer::get().sendMessage(serializeMessage(msg), true);
 }
 
 /// Opens Cosmos Asset Browser
 void openCosmos()
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlOpenCosmos(), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOpenCosmos{}), true);
 }
 
 // Opens VFB through control connection
 void openVFB()
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlShowVFB(), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowVfb{}), true);
 }
 
 // Sets VFB alwaysOnTop state
 void setVfbOnTop(bool alwaysOnTop)
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlSetVfbOnTop(alwaysOnTop));
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlSetVfbOnTop{alwaysOnTop}));
 }
 
 // Show a dialog to the user. 
 // @param json - the type and configuration of the dilaog
 void showUserDialog(const std::string& json)
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlShowUserDialog(json), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowUserDialog{json}), true);
 }
 
 // Sets telemetry state
 void setTelemetryState(bool anonymousState, bool personalyzedState)
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlSetTelemetryState(anonymousState, personalyzedState), false);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlSetTelemetryState{anonymousState, personalyzedState}), false);
 }
 
 // Function for opening VFB through RendererController connection
@@ -572,9 +573,9 @@ void setRenderStartCallback(py::object renderStartCallback)
 
 /// Sets callback executed when rendering is aborted because the connection to ZmqServer
 /// has been lost.
-void setRenderAbortCallback(py::object renderAbortCallback)
+void setZmqServerAbortCallback(py::object zmqServerAbortCallback)
 {
-	ZmqServer::get().setPythonCallback("renderAbort", weakRefFromObj(renderAbortCallback));
+	ZmqServer::get().setPythonCallback("zmqServerAbort", weakRefFromObj(zmqServerAbortCallback));
 }
 
 /// Sets callback executed when rendering procedure is reporting progress
@@ -598,7 +599,7 @@ void setVfbLayersUpdateCallback(py::object vfbLayersUpdateCallback)
 /// Updating VFB layers
 void setVfbLayers(std::string vfbLayers)
 {
-	ZmqServer::get().sendMessage(VRayMessage::msgControlUpdateVfbLayers(vfbLayers));
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlUpdateVfbLayers{vfbLayers}));
 }
 
 
@@ -651,6 +652,13 @@ bool renderJobIsRunning(py::object renderer)
 	return getExporter(renderer)->renderSequenceRunning();
 }
 
+
+// Checks if there is an active vrscene export job
+bool exportJobIsRunning(py::object renderer)
+{
+	return getExporter(renderer)->vrsceneExportRunning();
+}
+
 // Returns the number of the last rendered frame
 int getLastRenderedFrame(py::object renderer)
 {
@@ -692,7 +700,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(setCosmosImportCallback),	(py::args("assetImportCallback")));
 	py::def(FUN(setRenderStoppedCallback),  (py::args("renderer", "renderStoppedCallback")));
 	py::def(FUN(setRenderStartCallback),	(py::args("startRenderCallback")));
-	py::def(FUN(setRenderAbortCallback),	(py::args("abortRenderCallback")));
+	py::def(FUN(setZmqServerAbortCallback),	(py::args("zmqServerAbortCallback")));
 	py::def(FUN(getRenderProgress),			(py::args("renderer")));
 	py::def(FUN(setVfbSettingsUpdateCallback), (py::args("vfbSettingsUpdateCallback")));
 
@@ -749,6 +757,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(setRenderFrame),			(py::args("renderer", "frame")));
 	py::def(FUN(renderSequenceStart),		(py::args("renderer", "start", "end")));
 	py::def(FUN(renderJobIsRunning),		(py::args("renderer")));
+	py::def(FUN(exportJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(getLastRenderedFrame),		(py::args("renderer")));
 	py::def(FUN(abortRender),				(py::args("renderer")));
 
@@ -828,6 +837,14 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 
 	py::class_<vray::AttrPlugin>("AttrPlugin")
 		.def(py::init<std::string, std::string>());
+
+	py::class_<CosmosAssetSettings>("CosmosAssetSettings")
+		.ADD_RW_PROPERTY(CosmosAssetSettings, assetType)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, matFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, objFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, lightFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap);
 }
 
 

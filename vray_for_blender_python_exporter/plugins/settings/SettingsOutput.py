@@ -12,7 +12,7 @@ from vray_blender.lib import export_utils
 from vray_blender.lib import plugin_utils
 from vray_blender.lib import path_utils
 from vray_blender.lib.common_settings import CommonSettings
-from vray_blender.lib.camera_utils import ViewParams
+from vray_blender.lib.camera_utils import ViewParams, CameraParams
 from vray_blender.lib.names import Names
 
 
@@ -41,6 +41,15 @@ class SettingsOutputExporter(ExporterBase):
         
         pluginDesc = PluginDesc(Names.singletonPlugin("SettingsOutput"), "SettingsOutput")
         pluginDesc.vrayPropGroup = self.scene.vray.SettingsOutput
+
+        if self.viewParams.cameraObject:
+            cameraParams = self.viewParams.cameraParams
+            renderSizes = self.viewParams.renderSizes
+
+            pixelShift = renderSizes.rgnHeight if cameraParams.sensorFit == 'VERTICAL' else renderSizes.rgnWidth
+
+            pluginDesc.setAttribute("film_offset_x", cameraParams.shiftx * pixelShift)
+            pluginDesc.setAttribute("film_offset_y", cameraParams.shifty * pixelShift * -1)
 
         # Order is important
         self._fillRenderSizes(pluginDesc)
@@ -99,7 +108,7 @@ class SettingsOutputExporter(ExporterBase):
 
 
     def _fillOutputPaths(self, propGroup, pluginDesc, noOutput: bool):
-        # In case of an error or early return, make sure the plugin has valid valued
+        # In case of an error or early return, make sure the plugin has valid values
         pluginDesc.setAttribute('img_file', "")
         pluginDesc.setAttribute('img_dir', "")
         
@@ -139,11 +148,15 @@ class SettingsOutputExporter(ExporterBase):
         if imgFmt == IMAGE_FORMAT_EXR and not propGroup.relements_separateFiles:
             pluginDesc.setAttribute("img_rawFile", True)
 
+        if not imgDir:
+            debug.report('WARNING', "Invalid output path. No image will be saved.")
+            return 
+        
         # Try to create the missing folders on the output path
         try:
             os.makedirs(imgDir, exist_ok=True)
         except Exception as exc:
-            debug.reportError(f"Failed to create output folder ['{imgDir}']. No output image will be saved.", self.commonSettings.renderEngine, exc)
+            debug.report('WARNING', f"Failed to create output folder ['{imgDir}']: {exc}. No image will be saved.")
             return                
 
         lastChar = imgDir[-1:]

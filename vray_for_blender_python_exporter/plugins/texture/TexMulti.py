@@ -155,6 +155,8 @@ def exportTreeNode(nodeCtx: NodeContext):
 
         if sock.shouldExportLink():
             nodeLink = getNodeLink(sock)
+            assert nodeLink is not None
+            
             texPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, nodeLink.to_socket)
             textures.append(texPlugin)
         else:

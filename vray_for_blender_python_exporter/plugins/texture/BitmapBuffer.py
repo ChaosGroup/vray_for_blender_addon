@@ -41,5 +41,8 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
                 # will automatically be added by Blender to the UI drawn by the call to template_ID() . 
                 op = row.operator("vray.pack_image", text='', icon='UGLYPACKAGE')
                 op.nodeID = node.unique_id
+                
+                parentNodeTree = node.id_data
+                op.nodeTreeType = parentNodeTree.vray.tree_type
         else:
             row.template_ID(node.texture, 'image', open='image.open')

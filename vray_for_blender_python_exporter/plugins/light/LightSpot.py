@@ -1,18 +1,18 @@
-from vray_blender.lib import plugin_utils, export_utils
-from vray_blender.lib.defs import PluginDesc, ExporterContext
-from vray_blender.plugins.light.light_tools import onUpdateColor
+import bpy
+from vray_blender.lib import plugin_utils
+from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext
 from vray_blender.exporting.light_export import ANGLE_EPSILON
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
-def onUpdateAttribute(src, context, attrName):
+def onUpdateAttribute(src, context: bpy.types.Context, attrName: str):
 
     if (lamp := context.active_object) and ((lamp.type != 'LIGHT') or (lamp.data.type != 'SPOT')):
         return
     
-    if attrName in ('color', 'temperature'):
-        onUpdateColor(src, 'LightSpot', attrName)
+    if attrName in ('color_mode', 'temperature'):
+        onUpdateColorTemperature(src, 'LightSpot', attrName)
         return
     
     propContext = getUpdateCallbackPropertyContext(src, 'LightSpot')

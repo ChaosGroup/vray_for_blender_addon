@@ -1,13 +1,11 @@
 
 import getpass
-import json
 import os
 import socket
 import sys
-import shutil
-import platform
 import winreg
 from contextlib import suppress
+from pathlib import PurePath
 
 import bpy
 from vray_blender import debug
@@ -24,165 +22,16 @@ def getHostname():
     return socket.gethostname()
 
 
-def getArch():
-    bitness = platform.architecture()[0]
-    if bitness == '32':
-        return 'x86'
-    return 'x86_64'
-
-
-def getVRayStandalones():
-    VRayPreferences = bpy.context.preferences.addons['vray_blender'].preferences
-
-    vrayExe   = "vray.exe" if sys.platform == 'win32' else "vray"
-    splitChar = ';'        if sys.platform == 'win32' else ':'
-
-    vrayPaths = {}
-
-    def getPaths(pathStr):
-        if pathStr:
-            return pathStr.strip().replace('\"','').split(splitChar)
-        return []
-
-    for var in reversed(sorted(os.environ.keys())):
-        envVar = os.getenv(var)
-        if not envVar:
-            continue
-
-        if var.startswith('VRAY_PATH') or var == 'PATH':
-            for path in getPaths(envVar):
-                vrayExePath = os.path.join(path, vrayExe)
-                if os.path.exists(vrayExePath):
-                    vrayPaths[var] = vrayExePath
-
-        elif '_MAIN_' in var:
-            if var.startswith('VRAY_FOR_MAYA'):
-                for path in getPaths(envVar):
-                    vrayExePath = os.path.join(path, "bin", vrayExe)
-                    if os.path.exists(vrayExePath):
-                        vrayPaths[var] = vrayExePath
-
-            elif var.startswith('VRAY30_RT_FOR_3DSMAX'):
-                for path in getPaths(envVar):
-                    vrayExePath = os.path.join(path, vrayExe)
-                    if os.path.exists(vrayExePath):
-                        vrayPaths[var] = vrayExePath
-
-    if sys.platform in {'darwin'}:
-        import glob
-
-        instLogFilepath = "/var/log/chaos_installs"
-        if os.path.exists(instLogFilepath):
-            instLog = open(instLogFilepath, 'r').readlines()
-            for l in instLog:
-                if 'V-Ray Standalone' in l and '[UN]' not in l:
-                    installName, path = l.strip().split('=')
-
-                    path = os.path.normpath(os.path.join(path.strip(), '..', '..', '..', "bin"))
-
-                    possiblePaths = glob.glob('%s/*/*/vray' % path)
-                    if len(possiblePaths):
-                        vrayPaths[installName] = possiblePaths[0]
-
-    return vrayPaths
-
-
-def getVRayStandalonePath():
-    VRayPreferences = bpy.context.preferences.addons['vray_blender'].preferences
-
-    vray_bin = "vray"
-    if sys.platform == 'win32':
-        vray_bin += ".exe"
-
-    def get_env_paths(var):
-        split_char= ';' if sys.platform == 'win32' else ":"
-        env_var= os.getenv(var)
-        if env_var:
-            return env_var.replace('\"','').split(split_char)
-        return []
-
-    def find_vray_std_osx_official():
-        vrayPath = "/Applications/ChaosGroup/V-Ray/Standalone_for_snow_leopard_x86/bin/snow_leopard_x86/gcc-4.2/vray"
-        if os.path.exists(vrayPath):
-            return vrayPath
-        return None
-
-    def find_vray_std_osx():
-        import glob
-        instLogFilepath = "/var/log/chaos_installs"
-        if not os.path.exists(instLogFilepath):
-            return None
-        instLog = open(instLogFilepath, 'r').readlines()
-        for l in instLog:
-            # Example path:
-            #  /Applications/ChaosGroup/V-Ray/Standalone_for_snow_leopard_x86/uninstall/linuxinstaller.app/Contents
-            #
-            if 'V-Ray Standalone' in l and '[UN]' not in l:
-                _tmp_, path = l.strip().split('=')
-
-                # Going up to /Applications/ChaosGroup/V-Ray/Standalone_for_snow_leopard_x86/bin
-                path = os.path.normpath(os.path.join(path.strip(), '..', '..', '..', "bin"))
-
-                possiblePaths = glob.glob('%s/*/*/vray' % path)
-                if len(possiblePaths):
-                    return possiblePaths[0]
-                return None
-        return None
-
-    def find_vray_binary(paths):
-        if paths:
-            for p in paths:
-                if p:
-                    vray_path= os.path.join(p,vray_bin)
-                    if os.path.exists(vray_path):
-                        return vray_path
-        return None
-
-    if not VRayPreferences.detect_vray and VRayPreferences.vray_binary:
-        manualVRayPath = bpy.path.abspath(VRayPreferences.vray_binary)
-        if os.path.exists(manualVRayPath):
-            return manualVRayPath
-
-    # Check 'VRAY_PATH' environment variable
-    #
-    vray_standalone_paths= get_env_paths('VRAY_PATH')
-    if vray_standalone_paths:
-        vray_standalone= find_vray_binary(vray_standalone_paths)
-        if vray_standalone:
-            return vray_standalone
-
-    # On OS X check default path and install log
-    #
-    if sys.platform in {'darwin'}:
-        path = find_vray_std_osx_official()
-        if path is not None:
-            return path
-        path = find_vray_std_osx()
-        if path is not None:
-            return path
-
-    # Try to find Standalone in V-Ray For Maya
-    #
-    for var in reversed(sorted(os.environ.keys())):
-        if var.startswith('VRAY_FOR_MAYA'):
-            if var.find('MAIN') != -1:
-                debug.printInfo("Searching in: %s" % var)
-                vray_maya = find_vray_binary([os.path.join(path, 'bin') for path in get_env_paths(var)])
-                if vray_maya:
-                    debug.printInfo("V-Ray found in: %s" % vray_maya)
-                    return vray_maya
-
-    # Try to find vray binary in %PATH%
-    debug.printError("V-Ray not found! Trying to start \"%s\" command from $PATH..." % vray_bin)
-
-    return shutil.which(vray_bin)
-
-
-def getCyclesShaderPath():
-    for path in bpy.utils.script_paths(subdir=os.path.join('addons_core','cycles','shader')):
-        if path:
-            return path
-    return None
+def getPlatformName(executableBaseName: str):
+    """ Return the executable name with the correct platform suffix. """
+    match sys.platform:
+        case 'win32': suffix = ".exe"
+        case 'linux': suffix = ".bin"
+        case 'darwin': suffix = ".mach"
+        case _:
+            raise Exception(f"Unsupported platform: {sys.platform}")
+                            
+    return str(PurePath(executableBaseName).with_suffix(suffix))
 
 
 def getExporterPath():
@@ -216,6 +65,7 @@ def getWinRegistry(path: str, key_name: str, registry_root=winreg.HKEY_CURRENT_U
         return value
     return None
 
+
 def setWinRegistry(path: str, key_name: str, value: str, registry_root=winreg.HKEY_CURRENT_USER) -> bool:
     """
     Sets a string value in the Windows registry.
@@ -233,6 +83,7 @@ def setWinRegistry(path: str, key_name: str, value: str, registry_root=winreg.HK
         winreg.SetValueEx(key, key_name, 0, winreg.REG_SZ, value)
         return True
     return False
+
 
 # Return the contents of a file in one of the add-on's folders which 
 # can be overridden per user 
@@ -303,6 +154,9 @@ def getVfbDefaultLayersPath():
 
 def getVfbDefaultSettingsPath():
     return os.path.join(_getResourcesPath(), "vfbDefaultSettings.json")
+
+def getDefaultTexturePath():
+    return os.path.join(_getResourcesPath(), "defaultTexture.png")
 
 def copyToClipboard(text):
     if 'WINDIR' in os.environ:

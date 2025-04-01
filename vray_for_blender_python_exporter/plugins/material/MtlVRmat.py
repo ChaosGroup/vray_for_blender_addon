@@ -118,7 +118,7 @@ def onFileNameAttributeUpdate(src, context, attrName):
     src.mtlname = "" if not mtlList else mtlList[0]
 
 def nodeDraw(context, layout, node):
-    propGroup = node.MtlVRMat
+    propGroup = node.MtlVRmat
     split = layout.split(factor=0.2, align=True)
     split.column().label(text="File:")
     split.column().prop(propGroup, 'filename', text="")

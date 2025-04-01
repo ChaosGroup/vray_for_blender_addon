@@ -37,7 +37,7 @@ class VRAY_PT_Output(classes.VRayOutputPanel):
     """ PROPERTIES->Output->Dimensions panel """
     bl_label = "Output"
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         VRayExporter= context.scene.vray.Exporter
         self.layout.prop(VRayExporter, 'auto_save_render', text="")
 
@@ -91,7 +91,7 @@ class VRAY_PT_VRayStereoscopicSettings(classes.VRayOutputPanel):
     bl_label = "Stereoscopy"
     bl_options = {'DEFAULT_CLOSED'}
     
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         vrayExporter= context.scene.vray.Exporter
         self.layout.prop(vrayExporter, 'use_stereo', text="")
 

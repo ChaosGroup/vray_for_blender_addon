@@ -1,5 +1,4 @@
-#ifndef _SERIALIZER_HPP_
-#define _SERIALIZER_HPP_
+#pragma once
 
 #include <vector>
 #include <string>
@@ -172,4 +171,3 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 
 };  // end VrayZmqWrapper namespace 
 
-#endif // _SERIALIZER_HPP_

@@ -136,6 +136,11 @@ void Logger::stopLogging()
 
 	flush();
 
+	// When the plugin is disabled and then enabled again,  
+	// a new writer will be added, causing the log to be published twice.
+	std::scoped_lock lock(m_writersLock);
+	m_writers.clear();
+
 	if (m_logThread.joinable()) {
 		m_logThread.join();
 	}

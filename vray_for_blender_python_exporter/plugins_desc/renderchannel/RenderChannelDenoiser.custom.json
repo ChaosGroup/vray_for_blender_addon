@@ -7,8 +7,12 @@
             {
                 "attrs": [
                     {
+                        "name": "channelType",
+                        "custom_draw": "widgetDrawChannelType"
+                    },
+                    {
                         "name": "name",
-                        "label": "Render Channel Name"
+                        "label": "Channel Name"
                     },
                     {
                         "name": "enabled"
@@ -68,6 +72,10 @@
         {
             "attr" : "name",
             "default" : "Denoiser"
+        },
+        {
+            "attr": "engine",
+            "update": "onUpdateEngine"
         }
     ],
     "Options": {

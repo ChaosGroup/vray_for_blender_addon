@@ -6,25 +6,27 @@ from vray_blender.lib import lib_utils
 
 
 class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
-    bl_label = "Render Channels"
+    bl_label    = "Render Channels"
+    bl_icon     = "VRAY_PLACEHOLDER"
 
     def draw(self, context):
         from vray_blender.nodes.nodes import VRayNodeTypes # circular import protection
         from vray_blender.plugins.channel.RenderChannelsPanel import VRayChannelNodeSubtypes # circular import protection
 
-        if not context.scene.world:
-            # If for some reasno there is no world in the scene, show
-            # the UI for creating one as the render channels that will
-            # be shown are a property of the world.
-            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree")
-            return
-        
-        vrayRenderChannels = context.scene.world.vray.VRayRenderChannels
         hasWorldNodeTree = context.scene.world is not None and context.scene.world.node_tree is not None
 
         # Indication that there isn't a node tree created
         if not hasWorldNodeTree:
-            self.layout.column().label(text="World node tree required")
+            self.layout.column().label(icon="ERROR", text="World node tree required.")
+
+        if not context.scene.world:
+            # If for some reason there is no world in the scene, show
+            # the UI for creating one as the render channels that will
+            # be shown are a property of the world.
+            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree.")
+            return
+        
+        vrayRenderChannels = context.scene.world.vray.VRayRenderChannels
         
         # LightMix and Denoiser channels are displayed separately
         # until a better solution for their representation is found.
@@ -144,17 +146,13 @@ class VRAY_PT_LightLister(classes.VRayRenderLayersPanel):
 
         if bpy.data.lights:
             for lamp in bpy.data.lights:
-                VRayLight = lamp.vray
-                VRayScene = context.scene.vray
-
-                lightPluginName = lib_utils.getLightPluginName(lamp)
-
-                lightPropGroup = getattr(VRayLight, lightPluginName)
+                lightPluginType = lib_utils.getLightPluginType(lamp)
+                lightPropGroup = getattr(lamp.vray, lightPluginType)
 
                 sub_t = col.row()
                 sub_t.label(text=" %s" % lamp.name, icon='LIGHT_%s' % lamp.type)
 
-                if lightPluginName == 'SunLight':
+                if lightPluginType == 'SunLight':
                     sub = col.row()
                     sub.prop(lightPropGroup, 'enabled', text="")
 
@@ -186,7 +184,7 @@ class VRAY_PT_Includer(classes.VRayRenderLayersPanel):
     bl_label   = "Include *.vrscene"
     bl_options = {'DEFAULT_CLOSED'}
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         VRayScene = context.scene.vray
         Includer  = VRayScene.Includer
         self.layout.prop(Includer, 'use', text="")

@@ -2,314 +2,310 @@
     "ID": "GeomMeshFile",
     "Parameters": [
         {
+            "attr" : "previewType",
+            "default" : "Preview",
+            "desc" : "The type of the generated preview",
+            "items" : 
+            [
+                [ "None", "None", "" ],
+                [ "Full", "Full", "" ],
+                [ "Preview", "Preview", "" ]
+            ],
+            "type" : "ENUM",
+            "options": {
+                "derived": true
+            },
+            "update": "onUpdatePreview"
+        },
+        {
+            "attr": "isAlembic",
+            "type": "BOOL",
+            "desc": "True if the plugin references an Alembic file",
+            "default": false,
+            "options": {
+               "derived": true
+            },
+            "get": "isAlembicGet"
+
+        },
+        {
+            "attr": "scale",
+            "default": 1.0,
+            "ui": {
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr" : "alembic_layers",
+            "default" : "",
+            "desc" : "Semicolon-separated list of Alembic files for layering",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        {
+            "attr": "num_preview_faces",
+            "desc": "The number of faces in the currently visible preview. Cannot be changed for .vrmesh files"
+        },
+        {
             "attr": "file",
-            "subtype": "FILE_PATH"
-        },
-        {
-            "attr": "proxy_attach_mode",
-            "default": "NONE",
-            "desc": "Proxy attach mode",
-            "items": [
-                [
-                    "NONE",
-                    "None",
-                    "Don't attach proxy"
-                ],
-                [
-                    "NEW",
-                    "New object",
-                    "Attach proxy to new object"
-                ],
-                [
-                    "THIS",
-                    "This object",
-                    "Attach proxy to this object"
-                ],
-                [
-                    "REPLACE",
-                    "Replace",
-                    "Replace this object with proxy"
-                ]
-            ],
-            "available": [
-                "BLENDER"
-            ],
-            "type": "ENUM",
+            "update": "onUpdatePreviewFile",
             "options": {
-                "derived": true
+                "shadowed": true
             }
         },
         {
-            "attr": "apply_transforms",
-            "default": false,
-            "desc": "Apply rotation, location and scale",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "BOOL",
-            "options": {
-                "derived": true
-            }
+            "attr": "num_preview_faces",
+            "update": "onUpdatePreview"
         },
         {
-            "attr": "add_suffix",
-            "default": true,
-            "desc": "Add \"_proxy\" suffix to object and mesh names",
-            "name": "Add suffix",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "BOOL",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "animation",
-            "default": "NONE",
-            "desc": "Animated proxy",
-            "name": "Animation",
-            "items": [
-                [
-                    "NONE",
-                    "None",
-                    "No animation"
-                ],
-                [
-                    "MANUAL",
-                    "Manual",
-                    "Set manually"
-                ],
-                [
-                    "SCENE",
-                    "Scene",
-                    "Get from scene"
-                ]
-            ],
-            "available": [
-                "BLENDER"
-            ],
-            "type": "ENUM",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "dirpath",
-            "default": "//proxy",
-            "desc": "Proxy generation directory",
-            "name": "Path",
-            "subtype": "DIR_PATH",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "STRING",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "add_velocity",
-            "default": false,
-            "desc": "This makes it possible to add motion blur to the final animation. However exporting this extra information takes longer. If you are not going to need motion blur it makes sense to disable this option",
-            "name": "Add velocity",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "BOOL",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "filename",
-            "default": "",
-            "desc": "Proxy file name. If empty object's name is used",
-            "name": "Name",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "STRING",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "animation_range",
-            "default": "SCENE",
-            "desc": "Animation range type",
-            "items": [
-                [
-                    "MANUAL",
-                    "Manual",
-                    "Set manually"
-                ],
-                [
-                    "SCENE",
-                    "Scene",
-                    "Get from scene"
-                ]
-            ],
-            "name": "Animation range",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "ENUM",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "frame_start",
-            "default": 1,
-            "desc": "Proxy generation start frame",
-            "name": "Start Frame",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "INT",
-            "ui": {
-                "min": 1,
-                "soft_min": 1
-            },
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "frame_end",
-            "default": 250,
-            "desc": "Proxy generation end frame",
-            "name": "End Frame",
-            "available": [
-                "BLENDER"
-            ],
-            "type": "INT",
-            "ui": {
-                "min": 1,
-                "soft_min": 1
-            },
-            "options": {
-                "derived": true
-            }
+            "attr": "flip_axis",
+            "update": "onUpdatePreview"
         }
     ],
     "Widget": {
         "widgets": [
             {
+                "layout": "ROLLOUT",
+                "name": "file",
+                "label": "File",
+                "default_closed": false,
                 "attrs": [
                     {
                         "name": "file"
-                    }
-                ],
-                "layout": "ROW"
-            },
-            {
-                "layout": "SEPARATOR"
-            },
-            {
-                "attrs": [
-                    {
-                        "name": "scale"
-                    }
-                ],
-                "layout": "ROW"
-            },
-            {
-                "layout": "SEPARATOR"
-            },
-            {
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "attrs": [
-                            {
-                                "label": "Type",
-                                "name": "anim_type"
-                            },
-                            {
-                                "label": "Override",
-                                "name": "anim_override"
-                            }
-                        ],
-                        "layout": "COLUMN"
                     },
                     {
-                        "active": {
-                            "cond": "::anim_override=1"
-                        },
-                        "align": true,
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "previewType"
+                    },
+                    {
+                        "name": "num_preview_faces",
+                        "active": {"cond": "::isAlembic!=0"},
+                        "visible": {"cond": "::previewType=Preview"}
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "name": "",
+                        "label": "",
+                        "attrs": []
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "animation",
+                        "label": "Animation",
+                        "default_closed": false,
                         "attrs": [
                             {
-                                "label": "Speed",
-                                "name": "anim_speed"
+                                "layout": "COLUMN",
+                                "name": "",
+                                "label": "",
+                                "attrs": [
+                                    {
+                                        "name": "anim_type"
+                                    },
+                                    {
+                                        "name": "use_alembic_offset"
+                                    },
+                                    {
+                                        "name": "anim_speed"
+                                    },
+                                    {
+                                        "name": "anim_offset"
+                                    }
+                                ]
                             },
                             {
-                                "label": "Offset",
-                                "name": "anim_offset"
+                                "layout": "SEPARATOR"
                             },
                             {
-                                "label": "Start",
+                                "name": "anim_override"
+                            },
+                            {
+                                "name": "anim_frame"
+                            },
+                            {
                                 "name": "anim_start"
                             },
                             {
-                                "label": "Length",
                                 "name": "anim_length"
                             }
-                        ],
-                        "layout": "COLUMN"
+                        ]
                     }
                 ]
             },
             {
-                "layout": "COLUMN",
+                "layout": "ROLLOUT",
+                "name": "advanced",
+                "label": "Advanced",
                 "attrs": [
                     {
+                        "layout": "COLUMN",
+                        "name": "",
+                        "label": "",
                         "attrs": [
-                            {
-                                "name": "flip_axis"
-                            },
-                            {
-                                "name": "compute_bbox"
-                            },
                             {
                                 "name": "smooth_uv"
                             },
                             {
                                 "name": "smooth_uv_borders"
                             }
-                        ],
-                        "layout": "COLUMN"
+                        ]
                     },
                     {
-                        "align": true,
-                        "attrs": [
-                            {
-                                "name": "compute_normals"
-                            },
-                            {
-                                "active": {
-                                    "cond": "::compute_normals=1"
-                                },
-                                "label": "Angle",
-                                "name": "smooth_angle"
-                            }
-                        ],
-                        "layout": "COLUMN"
+                        "name": "first_map_channel"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "tessellate_hair"
+                    },
+                    {
+                        "name": "hair_tessellation_length"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "particle_render_mode"
+                    },
+                    {
+                        "name": "use_point_cloud"
+                    },
+                    {
+                        "name": "point_cloud_mult"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "material_assignments_file"
                     }
                 ]
             },
             {
+                "layout": "ROLLOUT",
+                "name": "alembic",
+                "label": "Alembic",
+                "visible": {"cond": "::isAlembic!=0"},
                 "attrs": [
                     {
-                        "name": "primary_visibility"
+                        "layout": "ROLLOUT",
+                        "name": "general",
+                        "label": "General",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "object_path"
+                            },
+                            {
+                                "name": "instancing"
+                            },
+                            {
+                                "name": "compute_bbox"
+                            },
+                            {
+                                "name": "compute_normals"
+                            },
+                            {
+                                "name": "smooth_angle"
+                            },
+                            {
+                                "name": "flip_normals"
+                            },
+                            {
+                                "name": "hair_width_multiplier"
+                            },
+                            {
+                                "name": "particle_width_multiplier"
+                            },
+                            {
+                                "name": "velocity_multiplier"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "geometry",
+                        "label": "Geometry",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "subdiv_all_meshes"
+                            },
+                            {
+                                "name": "subdiv_type"
+                            },
+                            {
+                                "name": "subdiv_level"
+                            },
+                            {
+                                "name": "subdiv_uvs"
+                            },
+                            {
+                                "name": "subdiv_preserve_geom_borders"
+                            },
+                            {
+                                "name": "subdiv_preserve_map_borders"
+                            },
+                            {
+                                "name": "use_alembic_transform"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "layers",
+                        "label": "Layers",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "alembic_layers"
+                            }
+                        ]
                     }
-                ],
-                "layout": "ROW"
+                ]
             }
         ]
     },
     "Options": {
-        "excluded_parameters": []
+        "animatable": false,
+        "excluded_parameters": [
+            "reference_mesh",
+            "reference_transform",
+            "visibility_overrides_rules",
+            "visibility_overrides_values",
+            "visibility_lists_type",
+            "visibility_list_names",
+            "visibility_list_ids",
+            "hair_visibility_lists_type",
+            "hair_visibility_list_names",
+            "hair_visibility_list_ids",
+            "particle_visibilibty_lists_type",
+            "particle_visibility_list_names",
+            "particle_visibility_list_ids",
+            "primary_visibility",
+            "use_face_sets",
+            "sort_voxels",
+            "velocity_color_set",
+            "pixel_scale",
+            "alembic_mode",
+            "load_mesh",
+            "load_hair",
+            "load_particles",
+            "use_velocity",
+            "merge_equal_vertices",
+            "use_alembic_visibility",
+            "use_full_names"
+        ]
     }
 }

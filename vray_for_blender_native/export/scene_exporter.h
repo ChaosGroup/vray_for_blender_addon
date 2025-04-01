@@ -16,6 +16,7 @@
 #include "utils/thread_manager.h"
 
 
+namespace proto = VrayZmqWrapper;
 
 namespace VRayForBlender {
 
@@ -28,7 +29,7 @@ public:
 	using ZmqExporterPtr = std::unique_ptr<ZmqExporter>;
 
 public:
-	explicit SceneExporter(const ExporterSettings& settings);
+	explicit SceneExporter(const Interop::ExporterSettings& settings);
 	virtual ~SceneExporter();
 
 public:
@@ -40,6 +41,7 @@ public:
 	virtual bool     renderFrame(bool /*waitForCompletion*/) {return true;}
 	virtual void     renderSequence(int /*start*/, int /*end*/, int /*step*/){}
 	virtual bool     renderSequenceRunning() { return false; }
+	virtual bool     vrsceneExportRunning() { return false; }
 	virtual int      lastRenderedFrame() { return false; }
 	virtual void     setRenderFrame(float /*frame*/) {}
 	virtual void     setupCallbacks()              {}
@@ -57,7 +59,7 @@ public:
 	void             writeVrscene(const ExportSceneSettings& exportSettings);
 	void             startStatsCollection();
 	void             endStatsCollection(bool printStats, const std::string& title);
-	void             setRenderSizes(const VrayZmqWrapper::VRayMessage::RenderSizes& sizeData);
+	void             setRenderSizes(const proto::RenderSizes& sizeData);
 	void             setCameraName(const std::string& cameraName);
 	void			 syncView(const ViewSettings& viewSettings);
 	void			 openVFB();
@@ -94,6 +96,7 @@ protected:
 
 	std::atomic_bool	imageUpdated = false;		// An image update was receved from VRay
 	std::atomic_bool	imageReadyReceived = false; // The last frame of the currently rendered frame has been received 
+	std::atomic_bool	m_vrsceneExportInProgress = false; // Waiting for response to a requested .vrscene export operation
 };
 
 }

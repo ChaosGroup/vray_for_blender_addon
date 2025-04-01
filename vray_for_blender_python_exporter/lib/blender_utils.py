@@ -1,5 +1,6 @@
 
 import bpy
+import bmesh
 import math
 import mathutils
 import os
@@ -198,21 +199,6 @@ def getDistanceObOb(ob1, ob2):
     return d.length
 
 
-def getCameraFOV(scene, camera):
-    VRayCamera = camera.data.vray
-
-    fov = VRayCamera.fov if VRayCamera.override_fov else camera.data.angle
-
-    orthoWidth = camera.data.ortho_scale
-    aspect     = scene.render.resolution_x / scene.render.resolution_y
-
-    if aspect < 1.0:
-        fov = 2 * math.atan(math.tan(fov/2.0) * aspect)
-        orthoWidth *= aspect
-
-    return fov, orthoWidth
-
-
 def getLensShift(ob: bpy.types.Object):
     shift = 0.0
     constraint = None
@@ -340,6 +326,11 @@ def getFirstAvailableView3D():
     """ Returns SpaceView3D of the first available VIEW_3D area"""
     if area := next((a for a in bpy.context.screen.areas if a and a.type == 'VIEW_3D'), None):
         return next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
+
+    # Check other screens
+    if area := next((a for screen in bpy.data.screens for a in screen.areas if a.type == 'VIEW_3D'), None):
+        return next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
+
     return None
 
 def getSpaceView3D(context : bpy.types.Context):
@@ -445,6 +436,45 @@ def getUIMousePos():
     return {"x":VRAY_OT_get_ui_mouse_position.pos_x, "y":VRAY_OT_get_ui_mouse_position.pos_y}
 
 
+def replaceObjectMesh(ob: bpy.types.Object, newMesh: bpy.types.Mesh):
+    """ Replace mesh geometry of an object without changing any other properties """
+    bm = bmesh.new()
+    bm.from_mesh(newMesh)
+    bm.to_mesh(ob.data)
+    ob.data.update()
+
+    # Remove temp object
+    bm.free()
 
 
+
+# Shadowing is used to determine whether the value of an attribute has changed between
+# successive exports. The so called 'shadow' attribute is a dupicate of the original attribute
+# with a different (well-known) name which is used to store the original value from before
+# the change. Shadow attributes are automatically created if options.shadowed is set to 'true'
+# in the custom plugin description of the attribute.
+
+def getShadowAttrName(attrName: str):
+    """ REturn the name of an attribute's shadow attribute.
+
+    Args:
+        attrName (str): The name of the main attribute.
+
+    Returns:
+        str : The name of the shadow attribute.
+    """
+    return f"{attrName}_shadow_"
+
+def getShadowAttr(data, attrName: str):
+    """ Get the value of a shadow attribute given the main attribute's name """
+    return getattr(data, getShadowAttrName(attrName))
+
+
+def setShadowAttr(data, attrName: str, value):
+    """ Set the value of a shadow attribute given the main attribute's name """
+    setattr(data, getShadowAttrName(attrName), value)
     
+    
+def hasShadowedAttrChanged(data, attrName):
+    """ Return True if the value of the attribute is not the same as the value of its shadow """
+    return getShadowAttr(data, attrName) != getattr(data, attrName)

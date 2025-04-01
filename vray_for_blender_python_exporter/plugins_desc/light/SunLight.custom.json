@@ -31,7 +31,8 @@
         },
         {
             "attr": "sky_model",
-            "default": "4",
+            "default": "5",
+            "desc" : "Selects the procedural model used to simulate the TexSky texture (Preetham, CIE Clear, Overcast, Hosek and PRG Clear Sky)",
             "items": [
                 [
                     "0",
@@ -54,7 +55,7 @@
                     "Hosek et al"
                 ],
                 [
-                    "4",
+                    "5",
                     "PRG Clear Sky",
                     "PRG Clear Sky"
                 ]
@@ -213,7 +214,7 @@
         },
         {
             "attr": "shadowBias",
-            "default": 0.01,
+            "default" : 0.005,
             "ui": {
                 "soft_max": 100.0,
                 "spin_step": 0.1,
@@ -234,8 +235,7 @@
             }
         },
         {
-            "attr": "filter_color",
-            "update": "onUpdateAttribute"
+            "attr": "filter_color"
         },
         {
             "attr": "color_temp_mode",
@@ -254,6 +254,7 @@
                 ]
             ],
             "type": "ENUM",
+            "update": "onUpdateAttribute",
             "options": {
                 "derived": true
             }
@@ -264,6 +265,11 @@
             "desc": "Color temperature in K",
             "type": "FLOAT",
             "update": "onUpdateAttribute",
+            "ui": {
+                "spin_step": 100,
+                "min": 800,
+                "max": 12000
+            },
             "options": {
                 "derived": true
             }
@@ -400,15 +406,18 @@
                         "name": "horizon_offset"
                     },
                     {
-                        "name": "turbidity",
-                        "active": {
-                            "cond": "::sky_model!=4"
-                        }
+                        "name": "turbidity"
                     },
                     {
                         "name": "ozone",
                         "active": {
-                            "cond": "::sky_model!=4"
+                            "cond": "::sky_model!=5"
+                        }
+                    },
+                    {
+                        "name": "altitude",
+                        "active": {
+                            "cond": "::sky_model=5"
                         }
                     }
                 ]

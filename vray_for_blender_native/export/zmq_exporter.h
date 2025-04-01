@@ -5,10 +5,10 @@
 #include "render_image.h"
 #include "utils/platform.h"
 
-#include "ipc.h"
-#include "zmq_common.hpp"
-#include "zmq_message.hpp"
-#include "zmq_agent.h"
+#include <ipc.h>
+#include <zmq_common.hpp>
+#include <zmq_message.hpp>
+#include <zmq_agent.h>
 
 #include <functional>
 #include <map>
@@ -23,6 +23,7 @@ struct PluginDesc;
 namespace VRayForBlender {
 
 using namespace Interop;
+namespace proto = VrayZmqWrapper;
 
 /// ZmqExporter acts as a proxy between the VRayForBlender addon and ZmqServer. 
 /// It implements the ZmqServer protocol defined in the ZmqWrapper project.
@@ -41,6 +42,7 @@ class ZmqExporter{
 	using UpdateMessageCb  = std::function<void(const std::string&)>;
 	using BucketReadyCb    = std::function<void(const VRayBaseTypes::AttrImage&)>;
 	using ExporterCallback = std::function<void(void)>;
+	using AsyncOpCompleteCb = std::function<void(proto::RendererAsyncOp, bool, const std::string&)>;
 
 	struct AttrStats {
 		int64_t num  = 0;
@@ -58,7 +60,7 @@ class ZmqExporter{
 	// (not through the plugin system), so that we could skip updates
 	// if the value has not changed
 	struct ValueCache {
-		VrayZmqWrapper::VRayMessage::RenderSizes renderSizes;
+		proto::RenderSizes renderSizes;
 		std::string      activeCamera;
 		ViewSettings	 viewSettings;
 	};
@@ -96,7 +98,7 @@ public:
 	RenderImage getImage        ();
 	RenderImage getPass         (const std::string& name);
 	RenderImage getRenderChannelImage(RenderChannelType channelType);
-	void        setRenderSize   (const VrayZmqWrapper::VRayMessage::RenderSizes &sizes);
+	void        setRenderSize   (const proto::RenderSizes &sizes);
 	void        setCameraPlugin (const std::string &pluginName);
 	void        commitChanges   ();
 
@@ -114,23 +116,31 @@ public:
 	void        set_callback_on_bucket_ready(BucketReadyCb cb)        { callback_on_bucket_ready = cb; }
 	void		set_callback_on_vfb_layers_updated(UpdateMessageCb cb){ callback_on_vfb_layers_updated = cb; }
 	void		set_callback_on_render_stopped(ExporterCallback cb)	  { callback_on_render_stopped = cb; }
+	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { callback_on_async_op_complete = cb; }
 
 private:
 	bool readViewportImage  ();
 
-	void handleMsg(const VrayZmqWrapper::VRayMessage &message);
+	void handleMsg(const zmq::message_t& msg);
 	void handleError(const std::string& err);
+
+	void processControlOnLogMessage(const proto::MsgControlOnLogMessage& message);
+	void processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& message);
+	void processRendererOnImage(const proto::MsgRendererOnImage& message);
+	void processRendererOnChangeState(const proto::MsgRendererOnChangeState& message);
+	void processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message);
 
 private:
 	ExporterSettings m_settings;
 	ZmqAgentPtr      m_client;
 
-	ExporterCallback     callback_on_image_ready;
-	ExporterCallback     callback_on_rt_image_updated;
-	UpdateMessageCb      callback_on_message_update;
-	BucketReadyCb        callback_on_bucket_ready;
-	UpdateMessageCb		 callback_on_vfb_layers_updated;
-	ExporterCallback	 callback_on_render_stopped;
+	ExporterCallback	callback_on_image_ready;
+	ExporterCallback	callback_on_rt_image_updated;
+	UpdateMessageCb		callback_on_message_update;
+	BucketReadyCb		callback_on_bucket_ready;
+	UpdateMessageCb		callback_on_vfb_layers_updated;
+	ExporterCallback	callback_on_render_stopped;
+	AsyncOpCompleteCb	callback_on_async_op_complete;
 
 	bool              m_dirty = true;  // Set to true if scene has to be re-rendered
 	std::atomic<bool> m_isAborted = false;

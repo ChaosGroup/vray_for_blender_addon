@@ -1,7 +1,7 @@
 import bpy
 import mathutils
 
-from vray_blender.lib import export_utils
+from vray_blender.lib import export_utils, lib_utils
 from vray_blender.lib.names import Names
 from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId 
@@ -9,13 +9,12 @@ from vray_blender.exporting.node_exporters.material_node_export import exportVRa
 from vray_blender.exporting.node_exporters.texture_node_export import exportVRayNodeMetaImageTexture, exportVRayNodeTexLayered
 from vray_blender.exporting.node_exporters.uvw_node_export import exportVRayNodeUVWGenRandomizer, exportVRayNodeUVWMapping
 from vray_blender.nodes import utils as NodesUtils
-from vray_blender.nodes.tools import getLinkInfo
+from vray_blender.nodes.tools import getLinkInfo, isVraySocket
 
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
 from vray_blender import debug
 
-from vray_blender.exporting.view_export import getActiveCamera
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -80,10 +79,9 @@ def exportSocketByName(nodeCtx: NodeContext, inSocketName: str):
 def exportVRayNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
     """ Export a VRay node, calling a specialized export function if one exists for the node type. """
     node = nodeLink.from_node
-    ntree = nodeCtx.ntree
 
-    if not hasattr(node, "vray_type"):
-        debug.printError(f"Non-VRay node '{node.name}' in VRay nodetree '{ntree.name}'")
+    if not isVrayNode(node):
+        NodeContext.registerError(f"Skipped export of non V-Ray node: '{node.name}'")
         return AttrPlugin()
     
     # Change the current context
@@ -132,14 +130,15 @@ def exportVRayNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
                     else:
                         result = _exportArbitraryNode(nodeCtx, nodeLink)
             
-            # Meta nodes, e.g. object selectors, may export as values other than AttrPlugin. It is responsibility
-            # of their custom export code to set the correct output selector.
-            if type(result) is AttrPlugin and (not result.isOutputSet()):
+            # Meta nodes, e.g. object selectors, may export values other than AttrPlugin. It is responsibility
+            # of their custom export code to set the correct output selector. For the rest, set the correct 
+            # output selector here
+            if (type(result) is AttrPlugin) and (not result.isEmpty()) and (not result.isOutputSet()):
                 result.output = getOutSocketSelector(nodeLink.from_socket)
     
             return result
-    
-    
+
+
 # Some nodes require special handling and we have dedicated export methods for them.
 # For the rest, use this method   
 def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
@@ -184,13 +183,18 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
     """
     node = nodeCtx.node
 
-    if not hasattr(node, "vray_type"):
-        debug.printError(f"Non-VRay node '{node.name_full}' in VRay nodetree '{nodeCtx.ntree.name}'")
-        return
+    if not isVrayNode(node):
+        NodeContext.registerError(f"Non V-Ray node can not be exported: '{node.name}'")
+        return AttrPlugin()
     
     pluginAttrs = PLUGIN_MODULES[plDesc.type].Parameters
     
     for sock in node.inputs:
+        if not isVraySocket(sock):
+            debug.printError(f"Socket '{sock.name}' of node {node.name}[ {nodeCtx.rootObj.name} ] is not a V-Ray socket. "
+                                "Try to recreate the node to obtain the full functionality.")
+            continue
+
         if sock.vray_attr in skippedSockets:
             continue
         
@@ -204,10 +208,8 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
             continue
 
         if sock.shouldExportLink():
-            sockValue = exportLinkedSocket(nodeCtx, sock)
-            assert(sockValue is not None)
-           
-            sock.exportLinked(plDesc, pluginParam, sockValue)
+            if sockValue := exportLinkedSocket(nodeCtx, sock):
+                sock.exportLinked(plDesc, pluginParam, sockValue)
         else:
             sock.exportUnlinked(nodeCtx, plDesc, pluginParam)
         
@@ -322,13 +324,6 @@ def exportNodePlugin(exporterCtx: ExporterContext,
         """ Exports a V-Ray Node plugin for the specified geometry """
         tm = mathutils.Matrix() if isInstancer else obj.matrix_world
         
-        if exporterCtx.preview:
-            # This is an ugly hack to handle material previews. For some reason, matrix_world
-            # does not return the correct position of the object in the scene, and the offset
-            # seems to be exactly matrix_basis. TODO: Need to investigate further whether there 
-            # are any dependencies in the preview scene which we do not export correctly
-            tm = obj.matrix_basis @ tm
-
         pluginName = Names.vrayNode(objectName)
         nodeDesc = PluginDesc(pluginName, "Node")
         nodeDesc.setAttribute("geometry", geomPlugin)
@@ -443,7 +438,7 @@ def _forwardExportSceneObject(nodeCtx: NodeContext, obj: bpy.types.Object, isGeo
         isGeometry (bool): if True, the plugin will be exported for the object data, otherwise - for the object itself
 
     Returns:
-        AttrPlugin: refetence to the exported plugin
+        AttrPlugin: reference to the exported plugin
     """
     pluginName = ""
     pluginType = ""
@@ -459,15 +454,16 @@ def _forwardExportSceneObject(nodeCtx: NodeContext, obj: bpy.types.Object, isGeo
             # If the object is light it won't be represented by a node,
             # so the name of the light plugin is given
             bpyLight = bpy.types.Light(obj.data)
-            if vrayLight := bpyLight.vray:
-                pluginType = getLightPluginType(bpyLight, vrayLight)
-                pluginName = Names.objectData(obj)
+            if bpyLight.vray:
+                pluginType = lib_utils.getLightPluginType(bpyLight)
+                pluginName = Names.object(obj)
 
     if pluginName:
-        # Export empty plugin because the plugin could be created later
+        # Export empty plugin because it might have not been created yet
         vray.pluginCreate(nodeCtx.renderer, pluginName, pluginType)
         result = AttrPlugin(pluginName)
         result.auxData['object'] = obj
+        result.useDefaultOutput()
         return result
     
     return AttrPlugin()
@@ -485,6 +481,7 @@ def _exportVRayNodeSelectObjectGeometry(nodeCtx: NodeContext):
             vray.pluginCreate(nodeCtx.renderer, geomName, "GeomStaticMesh")
             attrPlugin = AttrPlugin(geomName)
             attrPlugin.auxData['object'] = ob.name
+            attrPlugin.useDefaultOutput()
             return attrPlugin
     return AttrPlugin()
 
@@ -515,7 +512,7 @@ def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAt
     """ Export conversions between color and float sockets"""
     assert(type(fromAttrPlugin) is AttrPlugin)
 
-    fromSock        = toSock.links[0].from_socket
+    fromSock        = getLinkedFromSocket(toSock)
     mult            = 0.0
     needMult        = False
     fromSockType    = getVRayBaseSockType(fromSock)

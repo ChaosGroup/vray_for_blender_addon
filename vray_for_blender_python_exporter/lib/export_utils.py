@@ -138,6 +138,11 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
 
 def _exportTemplates(ctx: ExporterContext, pluginDesc: PluginDesc):
+    if not pluginDesc.vrayPropGroup:
+        # Some template are meant to be exported manually and they are not tied
+        # to a specific plugin instance
+        return 
+    
     pluginModule = getPluginModule(pluginDesc.type)
 
     for attrDesc in [p for p in pluginModule.Parameters if p['type'] == 'TEMPLATE']:
@@ -168,9 +173,10 @@ def exportPlugin(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
     try:
         if hasattr(pluginModule, 'exportCustom'):
             # Plugins may override part or all of the export procedure
-            return pluginModule.exportCustom(ctx, pluginDesc)
-
-        result = exportPluginCommon(ctx, pluginDesc)
+            result = pluginModule.exportCustom(ctx, pluginDesc)
+            assert result is not None, f"{pluginDesc.type}::exportCustom must return a non-null AttrPlugin object"
+        else:
+            result = exportPluginCommon(ctx, pluginDesc)
     except Exception as ex:
         debug.printError(f"{type(ex).__name__} while exporting plugin {pluginDesc.name}::{pluginDesc.type}: {ex}")
         # Rethrow the original exception

@@ -2,15 +2,48 @@
     "ID": "SettingsCamera",
     "Parameters": [
         {
-            "attr": "fov"
+            "attr": "fov",
+            "ui": {
+                "spin_step": 1.0
+            }
         },
         {
-            "attr": "override_fov",
+            "attr": "type",
+            "update": "onUpdateCamType"
+        },
+        {
+            "attr": "override_camera_settings",
             "default": false,
-            "desc": "Override FOV",
+            "desc": "Use V-Ray camera type and settings",
             "type": "BOOL",
             "options": {
                 "derived": true
+            }
+        },
+        {
+            "attr": "auto_corrections_mode",
+            "default": "1"
+        },
+        {
+            "attr": "height",
+            "ui": {
+                "soft_max": 5000.0,
+                "spin_step": 100.0
+            }
+        },
+        {
+            "attr": "dist",
+            "default": 1.25,
+            "ui": {
+                "soft_max": 2.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "curve",
+            "ui": {
+                "soft_max": 4.0,
+                "spin_step": 0.01
             }
         }
     ],
@@ -19,16 +52,31 @@
             {
                 "attrs": [
                     {
-                        "name": "auto_exposure",
-                        "label": "Auto Exposure"
+                        "name": "type"
                     },
                     {
-                        "name": "auto_white_balance",
-                        "label": "Auto White Balance"
+                        "name": "height",
+                        "active": {
+                            "cond": "::type=3,"
+                        }
                     },
                     {
-                        "name": "auto_corrections_mode",
-                        "label": "Auto Corrections Mode"
+                        "name": "auto_fit",
+                        "active": {
+                            "cond": "::type=5"
+                        }
+                    },
+                    {
+                        "name": "dist",
+                        "active": {
+                            "cond": "::type=5"
+                        }
+                    },
+                    {
+                        "name": "curve",
+                        "active": {
+                            "cond": "::type=5"
+                        }
                     }
                 ],
                 "layout": "COLUMN"
@@ -37,7 +85,11 @@
     },
     "Type": "CAMERA",
     "Options": {
-        "excluded_parameters": [],
+        "excluded_parameters": [
+            "dont_affect_settings",
+            "image_planes",
+            "auto_exposure_compensation"
+        ],
         "animatable": false
     }
 }

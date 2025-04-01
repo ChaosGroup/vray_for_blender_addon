@@ -10,7 +10,6 @@ def _getUIIcons():
     from vray_blender import menu, operators as ops
 
     return  {
-        ui.VRAY_OT_add_dome_camera                : 'DOME_CAMERA',
         ui.VRAY_OT_add_physical_camera            : 'PHYSICAL_CAMERA',
         ui.VRAY_OT_add_object_vray_light_ambient  : 'LIGHT_AMBIENT',
         ui.VRAY_OT_add_object_vray_light_direct   : 'LIGHT_DIRECT',
@@ -32,42 +31,41 @@ def _getUIIcons():
         menu.VRAY_OT_open_vfb                     : 'VFB',
         ops.VRAY_OT_cloud_submit                  : 'CLOUD',
 
-        menu.VRAY_OT_render                       : 'RENDER',
-        ops.VRAY_OT_render_interactive            : 'RENDER_INTERACTIVE',
-        ops.VRAY_OT_render_interactive_stop       : 'RENDER_INTERACTIVE_STOP',
+        menu.VRAY_OT_render                       : 'RENDER_PROD',
+        ops.VRAY_OT_render_interactive            : 'RENDER_IPR'
     }
 
 _ICON_FILES = [
-        #(ICON_KEY,     FILE_NAME),
-        ("VRAY_LOGO",      "vray_logo.png"),
+        #(ICON_KEY,             FILE_NAME),
+        ("VRAY_LOGO",           "vray_logo.svg"),
+        ("VRAY_PLACEHOLDER",    "VRayPlaceholder.svg"),
         
-        ("LIGHT_AMBIENT",  "VRayLightAmbient.png"),
-        ("LIGHT_DIRECT",   "VRayLightDirect.png"),
-        ("LIGHT_DOME",     "VRayLightDome.png"),
-        ("LIGHT_IES",      "VRayLightIES.png"),
-        ('LIGHT_MESH',     "VRayLightMesh.png"),
-        ('LIGHT_OMNI',     "VRayLightOmni.png"),
-        ('LIGHT_RECT',     "VRayLightRectangle.png"),
-        ('LIGHT_SPHERE',   "VRayLightSphere.png"),
-        ('LIGHT_SPOT',     "VRayLightSpot.png"),
-        ('LIGHT_SUN',      "VRayLightSun.png"),
-        ('SUN_SKY',        "VRaySunSky.png"),
-        
-        ('DOME_CAMERA',     "VRayDomeCamera.png"),
-        ('PHYSICAL_CAMERA', "VRayPhysicalCamera.png"),
+        ("LIGHT_AMBIENT",       "VRayLightAmbient.svg"),
+        ("LIGHT_DIRECT",        "VRayLightDirect.svg"),
+        ("LIGHT_DOME",          "VRayLightDome.svg"),
+        ("LIGHT_IES",           "VRayLightIES.svg"),
+        ('LIGHT_MESH',          "VRayLightMesh.svg"),
+        ('LIGHT_OMNI',          "VRayLightOmni.svg"),
+        ('LIGHT_RECT',          "VRayLightRectangle.svg"),
+        ('LIGHT_SPHERE',        "VRayLightSphere.svg"),
+        ('LIGHT_SPOT',          "VRayLightSpot.svg"),
+        ('LIGHT_SUN',           "VRayLightSun.svg"),
+        ('SUN_SKY',             "VRaySunSky.svg"),
 
-        ('VRAY_SCENE',      "VRayScene.png"),
-        ('VRAY_PROXY',      "VRayProxy.png"),
+        ('PHYSICAL_CAMERA',     "VRayPhysicalCamera.svg"),
+
+        ('VRAY_SCENE',          "VRayScene.svg"),
+        ('VRAY_PROXY',          "VRayProxy.svg"),
         
-        ('COSMOS',          "CosmosBrowser.png"),
-        ('INFO_ABOUT',      "VRayAbout.png"),
+        ('COSMOS',              "CosmosBrowser.svg"),
+        ('INFO_ABOUT',          "VRayAbout.svg"),
         
-        ("CLOUD",           "CloudRendering.png"),
-        ('VFB',                "VRayVFB.png"),
-        ('RENDER',             "VRayProductionRender.png"),
-        ("RENDER_INTERACTIVE", "vray_ipr.png"),
-        ("RENDER_INTERACTIVE_STOP", "vray_ipr_stop.png"),
-        ('RENDER_VIEWPORT',    "VRayInteractiveRender.png"),
+        ("CLOUD",               "CloudRendering.svg"),
+        ('VFB',                 "VRayVFB.svg"),
+        ('RENDER_PROD',         "VRayProductionRender.svg"),
+        ("RENDER_IPR_START",    "vray_ipr.svg"),
+        ("RENDER_IPR_STOP",     "vray_ipr_stop.svg"),
+        ('RENDER_IPR',          "VRayInteractiveRender.svg"),
     ]
 
 

@@ -15,8 +15,7 @@
                 1.0,
                 1.0,
                 1.0
-            ],
-            "update": "onUpdateAttribute"
+            ]
         },
         {
             "attr": "color_mode",
@@ -35,6 +34,7 @@
                 ]
             ],
             "type": "ENUM",
+            "update": "onUpdateAttribute",
             "options": {
                 "derived": true
             }
@@ -45,6 +45,11 @@
             "desc": "Color temperature in K",
             "type": "FLOAT",
             "update": "onUpdateAttribute",
+            "ui": {
+                "spin_step": 100,
+                "min": 800,
+                "max": 12000
+            },
             "options": {
                 "derived": true
             }
@@ -87,6 +92,7 @@
         },
         {
             "attr": "shadowBias",
+            "default" : 0.005,
             "ui": {
                 "spin_step": 0.001,
                 "quantityType": "distance"
@@ -143,10 +149,6 @@
             "ui": {
                 "spin_step": 0.1
             }
-        },
-        {
-            "attr": "color",
-            "update": "onUpdateAttribute"
         },
         {
             "attr": "show_cone",
@@ -346,7 +348,7 @@
                                 "name": "shadowBias"
                             },
                             {
-                                "name": "shadowColor"
+                                "name": "shadowColor_colortex"
                             },
                             {
                                 "name": "shadowRadius"

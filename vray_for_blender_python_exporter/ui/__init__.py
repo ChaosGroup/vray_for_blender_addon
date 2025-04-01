@@ -14,34 +14,6 @@ def _get_physics_panels():
     return panels
 
 
-def drawVRayInteractiveRenderMenu(self, context):
-    """ Draws buttons for V-Ray settings in the 3d viewport bar """
-
-    from vray_blender.ui.classes import pollEngine
-    if pollEngine(context):
-
-        # TODO This is temporary look of this layout. It will be redesigned in near future
-        from vray_blender.engine.render_engine import VRayRenderEngine
-        from vray_blender.ui.icons import getUIIcon
-        from vray_blender import operators as ops
-        from vray_blender.bin import VRayBlenderLib as vray
-
-        iprRow = self.layout.row()
-        iprRow.enabled = vray.isInitialized()
-        if not VRayRenderEngine.iprRenderer:
-            op = ops.VRAY_OT_render_interactive
-            iprRow.operator(op.bl_idname, text='', icon_value=getUIIcon(op))
-        else:
-            op = ops.VRAY_OT_render_interactive_stop
-            iprRow.operator(op.bl_idname, text='', icon_value=getUIIcon(op))
-
-        if not vray.isInitialized():
-            message = "V-Ray initializing..." if vray.hasLicense() else "Obtaining V-Ray license..."
-            self.layout.label(text=message, icon="INFO")
-
-
-
-
 
 def _getRegPackages():
     from vray_blender.ui import classes
@@ -58,11 +30,12 @@ def _getRegPackages():
     from vray_blender.ui import properties_render_layers
     from vray_blender.ui import properties_texture
     from vray_blender.ui import properties_world
+    from vray_blender.ui import properties_view_3d
     from vray_blender.ui import menus
 
     return (
-        classes,
         icons,
+        classes,
         properties_data_geometry,
         properties_data_camera,
         properties_data_lamp,
@@ -75,6 +48,7 @@ def _getRegPackages():
         properties_render_layers,
         properties_texture,
         properties_world,
+        properties_view_3d,
         menus
     )
 
@@ -95,8 +69,6 @@ def register():
         for vrayEngine in classes.VRayEngines:
             panel.COMPAT_ENGINES.add(vrayEngine)
 
-    bpy.types.VIEW3D_HT_header.append(drawVRayInteractiveRenderMenu)
-
 
 def unregister():
     
@@ -116,6 +88,4 @@ def unregister():
         for vrayEngine in classes.VRayEngines:
             if vrayEngine in panel.COMPAT_ENGINES:
                 panel.COMPAT_ENGINES.remove(vrayEngine)
-    
-    bpy.types.VIEW3D_HT_header.remove(drawVRayInteractiveRenderMenu)
   

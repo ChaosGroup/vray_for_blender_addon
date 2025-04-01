@@ -12,7 +12,7 @@ class VRAY_PT_hair(classes.VRayParticlePanel):
     def poll(cls, context):
         return super().poll(context) and context.particle_system.settings.type == 'HAIR'
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         self.layout.label(text="")
 
     def draw(self, context):

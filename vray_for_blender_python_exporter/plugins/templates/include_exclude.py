@@ -75,11 +75,13 @@ class TemplateIncludeExclude(multi_select.TemplateMultiObjectSelect):
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):
         if super().exportToPluginDesc(exporterCtx, pluginDesc):
             pluginDesc.setAttribute(self.getTemplateAttr('mode_bound_property'), self.getInclude())
-    
+            return True
+        return False
 
-    def copy(src: TemplateIncludeExclude, dest: TemplateIncludeExclude):
-        VRayObjectSelector(src).copy(dest)
-        dest.activeItem = src.activeItem
+    def copy(self, dest: TemplateIncludeExclude):
+        VRayObjectSelector(self).copy(dest)
+        dest.activeItem = self.activeItem
+        dest.inclusionMode = self.inclusionMode
 
 
 def getRegClasses():

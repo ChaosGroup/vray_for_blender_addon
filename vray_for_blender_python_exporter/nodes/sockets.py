@@ -11,6 +11,7 @@ from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getPluginInputNo
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.lib.attribute_utils import toAColor
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
+from vray_blender.nodes.tools import isVrayNode
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 
 
@@ -272,8 +273,22 @@ class VRaySocket(bpy.types.NodeSocket):
         default = ""
     )
 
+    # Checks if a node is linked to a valid V-Ray node, even through a 'NodeReroute' chain.
+    def _isNodeChainLinked(self, node):
+        if (node.bl_idname != "NodeReroute"):
+            if not isVrayNode(node):
+                NodeContext.registerError(f"Skipped export of non V-Ray node: '{node.name}'.")
+                return False
+            return True
+        elif node.inputs[0].links:
+            return self._isNodeChainLinked(node.inputs[0].links[0].from_node)
+        return False
+
     def shouldExportLink(self):
-        return self.is_linked
+        if self.is_linked:
+            return self._isNodeChainLinked(self.links[0].from_node)
+
+        return False
 
     def exportLinked(self, pluginDesc, attrDesc, linkValue):
         pluginDesc.setAttribute(attrDesc['attr'], linkValue)
@@ -367,7 +382,7 @@ class VRaySocketUse(VRayValueSocket):
 
 
     def shouldExportLink(self):
-        return self.is_linked and self.use
+        return VRaySocket.shouldExportLink(self) and self.use
     
 
     def copy(self, dest):
@@ -435,7 +450,7 @@ class VRaySocketObject(VRayValueSocket):
         pluginDesc.setAttribute(attrDesc['attr'], attrValue)
         
 
-class VRaySocketObjectList(VRayValueSocket):
+class VRaySocketObjectList(VRaySocket):
     """ A list of plugins.
 
         Accepts either a single plugin or a list of plugins which are exported as
@@ -454,7 +469,8 @@ class VRaySocketObjectList(VRayValueSocket):
     def exportLinked(self, pluginDesc, attrDesc, linkValue):
         # Allow plugging in sockets with single-plugin output
         if not isinstance(linkValue, list):
-            linkValue = [linkValue]
+            assert type(linkValue) is AttrPlugin
+            linkValue = [] if linkValue.isEmpty() else [linkValue]
 
         # Export the object list
         super().exportLinked(pluginDesc, attrDesc, linkValue)
@@ -1441,8 +1457,14 @@ def register():
 
 
 def unregister():
+    global DYNAMIC_SOCKET_CLASSES
+    global DYNAMIC_SOCKET_CLASS_NAMES
+
     for regClass in getRegClasses():
         bpy.utils.unregister_class(regClass)
 
     for regClass in DYNAMIC_SOCKET_CLASSES:
         bpy.utils.unregister_class(regClass)
+
+    DYNAMIC_SOCKET_CLASSES.clear()
+    DYNAMIC_SOCKET_CLASS_NAMES.clear()

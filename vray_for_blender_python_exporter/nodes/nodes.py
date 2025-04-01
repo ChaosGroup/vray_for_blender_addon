@@ -1,8 +1,5 @@
-
-
 import bpy
 import nodeitems_utils
-
 
 from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
@@ -39,6 +36,9 @@ VRayNodeTypeIcon = {
     'RENDERCHANNEL' : 'SCENE_DATA',
 }
 
+
+# A list of tuple(node_tree, link) for links that are deemed invalid and need to be deleted.
+InvalidLinks = []
 
 
 ##     ## ######## ##    ## ##     ##
@@ -212,8 +212,10 @@ def getMaterialItemsList():
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Render Stats"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Round Edges"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Wrapper"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl GLSL"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl OSL"),
+        # TBD 
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl GLSL"),
+        # TBD 
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl OSL"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray VRmat Mtl")
     )
 
@@ -379,7 +381,7 @@ def vrayNodeDrawSide(self, context, layout):
     )
 
 
-def _updateRenderChannelsState(node, enabled):
+def updateRenderChannelsState(node, enabled):
     """ Update render channels indicators in the property panel"""
     VRayRenderChannels = bpy.context.scene.world.vray.VRayRenderChannels
     if renderChannels := getattr(VRayRenderChannels, node.bl_idname):
@@ -418,7 +420,7 @@ def vrayNodeInit(self, context):
         NodeUtils.addInputsOutputs(self, pluginModule)
 
         if self.vray_type == 'RENDERCHANNEL':
-            _updateRenderChannelsState(self, True)
+            updateRenderChannelsState(self, True)
         
         if hasattr(pluginModule, "nodeInit"):
             # Give the node a chance to initialize plugin-specific state
@@ -452,7 +454,7 @@ def vrayNodeCopy(self, node):
 
 def vrayNodeFree(self: bpy.types.Node):
     if self.vray_type == 'RENDERCHANNEL':
-        _updateRenderChannelsState(self, False)
+        updateRenderChannelsState(self, False)
 
     pluginModule = PLUGINS[self.vray_type][self.vray_plugin]
     if hasattr(pluginModule, "nodeFree"):
@@ -497,8 +499,35 @@ def vrayNodeUpdate(node: bpy.types.Node):
     parentNodeTree.update_tag()
 
 
+def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink):
+    """ Handler for node link creation callback.
+
+        This insert_link callback is registered in VRayNodeBase and calls this 
+        function to process the event.
+    """
+    from vray_blender.nodes.tools import isCompatibleNode
+    
+    incompatibleNode = None
+    if (node == link.to_node) and  (not isCompatibleNode(link.from_node)):
+        incompatibleNode = link.from_node
+        
+    if (node == link.from_node) and  (not isCompatibleNode(link.to_node)):
+        incompatibleNode = link.to_node
+
+    if incompatibleNode:
+        global InvalidLinks
+        InvalidLinks.append((node.id_data, link))
+        debug.report('WARNING', f"Cannot link non V-Ray node '{incompatibleNode.name}'")
 
 
+def removeInvalidNodeLinks():
+    """ Delete invalid links from the scene """
+    global InvalidLinks
+    for l in InvalidLinks:
+        l[0].links.remove(l[1])
+
+    InvalidLinks = []
+    
 
 ########  ##    ## ##    ##    ###    ##     ## ####  ######     ##    ##  #######  ########  ########  ######
 ##     ##  ##  ##  ###   ##   ## ##   ###   ###  ##  ##    ##    ###   ## ##     ## ##     ## ##       ##    ##
@@ -509,7 +538,7 @@ def vrayNodeUpdate(node: bpy.types.Node):
 ########     ##    ##    ## ##     ## ##     ## ####  ######     ##    ##  #######  ########  ########  ######
 
 # This list is used for registration/unregistration of the dynamic classes
-DynamicClasses = []
+_dynamicClasses = []
 
 
 def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, menuType = None, nodeLabel = "", pluginSubtype = ""):
@@ -569,6 +598,8 @@ def _createAdditionalRenderChannelNodes():
         created from the respective plugin descriptions, registered and added to the
         VRayNodeTypes["RENDERCHANNEL"] list.
     """
+    global _dynamicClasses
+
     import copy
     channels = VRayNodeTypes["RENDERCHANNEL"]
 
@@ -601,6 +632,8 @@ def _createAdditionalRenderChannelNodes():
         bpy.utils.register_class(nodeClass)
 
         channels.append(nodeClass)
+
+        _dynamicClasses.append(nodeClass)
     
 
 
@@ -609,10 +642,10 @@ def _loadDynamicNodes():
         In contrast, there are a number of custom nodes for which node classes are defined explicitly
         in the ./nodes/specials/*.py files
     """
-    global DynamicClasses
+    global _dynamicClasses
     global VRayNodeTypes
 
-    DynamicClasses = []
+    _dynamicClasses = []
 
     # Runtime Node classes generation
     #
@@ -654,7 +687,7 @@ def _loadDynamicNodes():
             bpy.utils.register_class(DynNodeClass)
             VRayNodeTypes[pluginCategory].append(DynNodeClass)
 
-            DynamicClasses.append(DynNodeClass)
+            _dynamicClasses.append(DynNodeClass)
 
     # Add manually defined classes
     VRayNodeTypes['BRDF'].append(specials.brdf.VRayNodeBRDFLayered)
@@ -728,5 +761,5 @@ def unregister():
     NodeSidePropertiesDraw.unhook()
     nodeitems_utils.unregister_node_categories('VRAY_NODES')
 
-    for regClass in DynamicClasses:
+    for regClass in _dynamicClasses:
         bpy.utils.unregister_class(regClass)

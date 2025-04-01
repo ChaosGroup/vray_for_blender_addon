@@ -1,6 +1,5 @@
 import bpy
 
-
 ############################################################################
 #  Mix-ins for adding base functionality to custom registered classes.
 #  This is the preferred approach because using registered base classes
@@ -82,3 +81,7 @@ class VRayDirtyState:
 class VRayNodeBase(VRayEntity, bpy.types.Node):
     """ Base class for all V-Ray nodes """
     bl_width_default = 230
+
+    def insert_link(node: bpy.types.Node, link: bpy.types.NodeLink):
+        from vray_blender.nodes.nodes import vrayNodeInsertLink
+        vrayNodeInsertLink(node, link)

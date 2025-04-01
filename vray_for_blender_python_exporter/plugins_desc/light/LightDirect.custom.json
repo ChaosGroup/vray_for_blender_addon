@@ -35,6 +35,7 @@
         },
         {
             "attr": "shadowBias",
+            "default" : 0.005,
             "ui": {
                 "quantityType": "distance"
             }

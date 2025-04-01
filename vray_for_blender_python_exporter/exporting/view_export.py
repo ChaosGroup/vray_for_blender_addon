@@ -1,11 +1,11 @@
 from __future__ import annotations
 import bpy
+import math
 from mathutils import Matrix
-
 
 from vray_blender import debug
 from vray_blender.lib import export_utils, blender_utils
-from vray_blender.lib.camera_utils import CameraParams, ViewParams, Rect, Size
+from vray_blender.lib.camera_utils import ViewParams, Rect, Size
 from vray_blender.lib import camera_utils as ct
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc
 from vray_blender.lib.names import Names
@@ -21,7 +21,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 # camera switch is to export a dedicated camera which is enabled for rendering and whose parameters
 # are taken from the active camera for each frame. This camera is also used for interactive jobs
 # as we cannot have more than one camera in IPR.
-_RENDER_CAMERA_BASE_NAME = 'renderCamera'
+RENDER_CAMERA_BASE_NAME = 'renderCamera'
 
 def getActiveCamera(ctx: ExporterContext):
     """ Return the view-local camera, if active. Otherwise return the scene camera. 
@@ -164,35 +164,36 @@ class ViewExporter(ExporterBase):
             elif viewParams.useDomeCamera:
                 self._exportCameraDome(viewParams, isRenderCamera)
             else:
-                if not viewParams.renderView.ortho:
-                    self._exportCameraDof(cameraObj, isRenderCamera)
-                
                 # The CameraDefault plugin cannot be set per-camera, so use the settings of the active camera
                 if self._isActiveCamera(viewParams.cameraObject):
                     self._exportCameraDefault(viewParams)
 
-            # The below plugins are valid for any camera type
-            self._exportSettingsCamera(cameraObj, isRenderCamera)
-            self._exportSettingsMotionBlur(cameraObj)
+            self._exportSettingsCamera(cameraObj, isRenderCamera, viewParams)
 
-        self._exportRenderView(viewParams, isRenderCamera)
+        self._exportRenderView(viewParams, isRenderCamera, cameraObj)
 
 
     # Export RenderView plugin
-    def _exportRenderView(self, viewParams: ViewParams, isRenderCamera: bool):
+    def _exportRenderView(self, viewParams: ViewParams, isRenderCamera: bool, cameraObj):
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, "RenderView", isRenderCamera)
         viewDesc = PluginDesc(pluginName, "RenderView")
 
+        vrayCamera = cameraObj.data.vray
+        cameraOverridesEnabled = vrayCamera.SettingsCamera.override_camera_settings
+        
         viewDesc.setAttribute("transform", viewParams.renderView.tm)
         viewDesc.setAttribute("fov", viewParams.renderView.fov)
-        viewDesc.setAttribute("clipping", viewParams.renderView.use_clip_start or viewParams.renderView.use_clip_end)
+        viewDesc.setAttribute("clipping", viewParams.renderView.clipping if cameraOverridesEnabled else False)
         viewDesc.setAttribute("clipping_near", viewParams.renderView.clip_start)
         viewDesc.setAttribute("clipping_far", viewParams.renderView.clip_end)
         viewDesc.setAttribute("orthographic", viewParams.renderView.ortho)
         viewDesc.setAttribute("orthographicWidth", viewParams.renderView.ortho_width)
 
         if blender_utils.isCamera(viewParams.cameraObject):
-            viewDesc.setAttribute("focalDistance", ct.getCameraDofDistance(viewParams.cameraObject))
+            settingsDof = self.ctx.scene.vray.SettingsCameraDof
+            focalDistance = ct.getCameraDofDistance(viewParams.cameraObject) if settingsDof.use_camera_focus else settingsDof.focal_dist
+            viewDesc.setAttribute("focalDistance", focalDistance)
+
             viewDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject, isRenderCamera))
         else:
             viewDesc.setAttribute("scene_name", None)
@@ -209,26 +210,32 @@ class ViewExporter(ExporterBase):
                 self._exportCameraStereoscopic(viewParams)
             
 
-    def _exportSettingsCamera(self, cameraObj: bpy.types.Camera, isRenderCamera: bool):
+    def _exportSettingsCamera(self, cameraObj: bpy.types.Camera, isRenderCamera: bool, viewParams):
         assert (cameraObj is not None) and (cameraObj.type == 'CAMERA'), "Invalid camera object"
 
         vrayCamera = cameraObj.data.vray
         pluginName = self._getCameraPluginUniqueName(cameraObj, "SettingsCamera", isRenderCamera)
 
-        cameraType = vrayCamera.SettingsCamera.type
-        if cameraObj.data.type == 'ORTHO':
-            cameraType = 7
-
         settingsCameraGlobal = self.scene.vray.SettingsCameraGlobal
         plDesc = PluginDesc(pluginName, "SettingsCamera")
         plDesc.vrayPropGroup = vrayCamera.SettingsCamera
 
+        overrideSettings = vrayCamera.SettingsCamera.override_camera_settings
+
+        if ((not overrideSettings) or viewParams.useViewPerspective or (cameraObj.data.type == 'ORTHO')) and \
+                    (not viewParams.usePhysicalCamera):
+            # In addition to the case where no override settings are specified (hence the default camera type is 
+            # used), the "type" attribute should also be reset when the camera type is orthographic.  
+            # If it is set to "Orthogonal" (the SettingsCamera plugin equivalent of  
+            # cameraObj.data.type == 'ORTHO'), it cannot be switched back to standard mode afterward.  
+            # To address this, RenderView is used to switch the view to orthographic.
+            plDesc.resetAttribute('type')
+
+        
         plDesc.setAttributes({
             'scene_name': self._getCameraBaseName(cameraObj, isRenderCamera),
             'dont_affect_settings': not isRenderCamera,
             'fov'    : -1,
-            'type'   : cameraType,
-            'height' : cameraObj.data.ortho_scale,
             "auto_exposure": settingsCameraGlobal.auto_exposure,
             "auto_corrections_mode": settingsCameraGlobal.auto_corrections_mode,
             "auto_white_balance": "2" if settingsCameraGlobal.auto_white_balance else "0"
@@ -271,7 +278,6 @@ class ViewExporter(ExporterBase):
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, pluginType, isRenderCamera)
         
         plDesc = PluginDesc(pluginName, pluginType)
-        plDesc.setAttribute("fov", viewParams.cameraObject.data.vray.fov)
         plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject, isRenderCamera))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.vrayPropGroup = viewParams.cameraObject.data.vray.CameraDome
@@ -279,27 +285,6 @@ class ViewExporter(ExporterBase):
         export_utils.exportPlugin(self, plDesc)
         self.cameraTracker.trackPlugin(getObjTrackId(viewParams.cameraObject), pluginName)
 
-
-    def _exportCameraDof(self, cameraObj: bpy.types.Camera, isRenderCamera: bool):
-        """ SettingsCameraDof plugin is only used with the default camera. Physical 
-            cameras define their own DoF flag.
-        """
-        assert (cameraObj is not None) and (cameraObj.type == 'CAMERA'), "Invalid camera object"
-
-        pluginName = self._getCameraPluginUniqueName(cameraObj, "SettingsCameraDof", isRenderCamera)
-        
-        plDesc = PluginDesc(pluginName, "SettingsCameraDof")
-        plDesc.setAttributes({
-            'scene_name': self._getCameraBaseName(cameraObj, isRenderCamera),
-            'dont_affect_settings' : not isRenderCamera,
-            'focal_dist': ct.getCameraDofDistance(cameraObj)
-        })
-
-        plDesc.vrayPropGroup = cameraObj.data.vray.SettingsCameraDof
-        
-        export_utils.exportPlugin(self, plDesc)
-        self.cameraTracker.trackPlugin(getObjTrackId(cameraObj), pluginName)
-    
 
     def _exportSettingsMotionBlur(self, cameraObj: bpy.types.Camera):
         """ SettingsMotionBlur plugin is exported for all camera types. 
@@ -309,7 +294,7 @@ class ViewExporter(ExporterBase):
         assert (cameraObj is not None) and (cameraObj.type == 'CAMERA'), "Invalid camera object"
         
         plDesc = PluginDesc(Names.singletonPlugin("SettingsMotionBlur"), "SettingsMotionBlur")
-        plDesc.vrayPropGroup = cameraObj.data.vray.SettingsMotionBlur
+        plDesc.vrayPropGroup = self.scene.vray.SettingsMotionBlur
 
         export_utils.exportPlugin(self, plDesc)
         
@@ -358,19 +343,13 @@ class ViewExporter(ExporterBase):
             # No change from the current state, nothing more to do
             return
         
-        # - CameraDefault, CameraPhysical and CameraDome are mutially exclusive
-        # - DOF is not compatible with CameraPhysical
-        if viewParams.usePhysicalCamera:
-            vray.pluginRemove(self.renderer, Names.singletonPlugin("CameraDefault"))
-            vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "SettingsCameraDof", isRenderCamera))
-            vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraDome", isRenderCamera))
-        elif viewParams.useDomeCamera:
-            vray.pluginRemove(self.renderer, Names.singletonPlugin("CameraDefault"))
-            vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraPhysical", isRenderCamera))
-        else:
-            vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraPhysical", isRenderCamera))
-            vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraDome", isRenderCamera))
-
+        # Generally, the enabling/disabling of cameras cannot be animated and are not applied correctly
+        # to the IPR unless the plugins associated with them are recreated.
+        vray.pluginRemove(self.renderer, Names.singletonPlugin("CameraDefault"))
+        vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraDome", isRenderCamera))
+        vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraPhysical", isRenderCamera))
+        vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "SettingsCameraDof", isRenderCamera))
+        
         # When the type of camera has changed (specifically when a dome camera is removed from the scene), 
         # VRay does not always apply the correct view settings until either SettingsOutput of RenderView plugins 
         # are re-exported. We are exporting SettingsOutput before everything else because the order of export for it
@@ -444,6 +423,7 @@ class ViewExporter(ExporterBase):
             self._fillViewFromProdCamera(cameraObj, viewParams)
             viewParams.usePhysicalCamera = ct.isPhysicalCamera(cameraObj)
             viewParams.useDomeCamera = ct.isDomeCamera(cameraObj)
+            viewParams.cameraParams.setFromObject(cameraObj)
         else:
             self._fillViewFromObject(cameraObj, viewParams)
             viewParams.calcRenderSizes()
@@ -509,13 +489,14 @@ class ViewExporter(ExporterBase):
             viewParams.crop = True
 
         viewParams.renderView.ortho = isOrtho
-        viewParams.renderView.use_clip_start = not isOrtho
-        viewParams.renderView.use_clip_end   = not isOrtho
+        viewParams.renderView.clipping = not isOrtho
 
         viewParams.renderView.tm = Matrix(region3d.view_matrix).inverted()
         
         # This param is only needed for checking if the view3d has valid camera
         viewParams.cameraObject =  view3d.camera
+        viewParams.useViewPerspective = True
+
 
     def _fillViewFromObject(self, obj: bpy.types.Object, viewParams: ViewParams):
         """ Fill ViewParams from a look-through non-camera object
@@ -533,8 +514,7 @@ class ViewExporter(ExporterBase):
 
         viewParams.crop = False    
         viewParams.renderView.ortho = False
-        viewParams.renderView.use_clip_start = False
-        viewParams.renderView.use_clip_end   = False
+        viewParams.renderView.clipping = False
 
         # This param is only needed for checking if the view3d has valid camera
         viewParams.cameraObject =  obj
@@ -546,9 +526,8 @@ class ViewExporter(ExporterBase):
         # Compute the camera view rectangle inside the view area. The calculated coordinates
         # will be used later by the drawing procedure to crop 
         r = renderSettings
-        camParams = CameraParams()
-        camParams.setFromObject(v3d.camera)
-        rectCamera = camParams.computeViewplane(r.resolution_x, r.resolution_y, r.pixel_aspect_x, r.pixel_aspect_y)
+        viewParams.cameraParams.setFromObject(v3d.camera)
+        rectCamera = viewParams.cameraParams.computeViewplane(r.resolution_x, r.resolution_y, r.pixel_aspect_x, r.pixel_aspect_y)
         
         viewBorder = Rect()
 
@@ -572,6 +551,11 @@ class ViewExporter(ExporterBase):
         viewParams.renderSize.w = viewParams.viewportW
         viewParams.renderSize.h = viewParams.viewportH
 
+        # The fov needs to be adjusted renderSize.h > renderSize.w 
+        aspect = viewParams.renderSize.w / viewParams.renderSize.h
+        if aspect < 1.0:
+            viewParams.renderView.fov = 2 * math.atan(math.tan(viewParams.renderView.fov/2.0) * aspect)
+
 
     def _fillCameraViewportRenderRegion(self, viewParams: ViewParams, v3dParams, rectView, rv3d, region):
         """ Fills render region ViewParams for 'Camera' viewport view
@@ -591,6 +575,10 @@ class ViewExporter(ExporterBase):
             # RenderViewParams.ortho_width is a scale factor and is populated from
             # and equal to CameraParams.ortho_scale
             viewParams.renderView.ortho_width *= v3dParams.zoom
+
+            if viewParams.cameraObject:
+                # Multiplying WHOLE_VIEW_SIZE_FACTOR in Camera View in order to compensate for the different field of view
+                viewParams.renderView.ortho_width *= WHOLE_VIEW_SIZE_FACTOR
 
         # region size
         viewParams.regionSize.w = region.width
@@ -661,8 +649,8 @@ class ViewExporter(ExporterBase):
         # to the camera view rectangle
         
         # Compute the camera params for rendering the whole viewport area
-        v3dParams = CameraParams()
-        v3dParams.setFromView3d(self.dg, v3d, rv3d)
+        viewParams.cameraParams.setFromView3d(self.dg, v3d, rv3d)
+        v3dParams = viewParams.cameraParams
         rectView = v3dParams.computeViewplane(region.width, region.height, 1.0, 1.0)
 
         # Set calculated view parameters to the camera
@@ -676,7 +664,6 @@ class ViewExporter(ExporterBase):
             # at the object position and looks down object's local z-axis
             ViewExporter._fillCameraDataFromObject(cameraObject, viewParams)
 
-        #viewParams.crop = self.scene.render.use_crop_to_border
         if scene.render.use_border:
             self._fillCroppedCameraViewportRenderRegion(scene.render, viewParams, rectView, v3d, region)
         else:
@@ -690,14 +677,14 @@ class ViewExporter(ExporterBase):
         camera: bpy.types.Camera = cameraObject.data
         if not camera:
             return
-        
+
         renderSettings: bpy.types.RenderSettings = self.scene.render
 
         viewParams.renderSize.w = renderSettings.resolution_x * renderSettings.resolution_percentage / 100
         viewParams.renderSize.h = renderSettings.resolution_y * renderSettings.resolution_percentage / 100
 
         if renderSettings.use_border:
-            viewParams.crop = renderSettings.use_crop_to_border
+            viewParams.crop = True
 
             viewParams.regionStart.w = renderSettings.border_min_x * viewParams.renderSize.w
             viewParams.regionStart.h = viewParams.renderSize.h - renderSettings.border_max_y * viewParams.renderSize.h
@@ -742,20 +729,7 @@ class ViewExporter(ExporterBase):
         vrayCamera = camera.vray
         physicalCamera = vrayCamera.CameraPhysical
 
-        aspect = float(viewParams.renderSize.w) / float(viewParams.renderSize.h)
-
-        horizontalOffset = -camera.shift_x
-        verticalOffset   = -camera.shift_y
-        if aspect < 1.0:
-            offsetFix   = 1.0 / aspect
-            horizontalOffset *= offsetFix
-            verticalOffset *= offsetFix
-
         lensShift = blender_utils.getLensShift(viewParams.cameraObject) if physicalCamera.auto_lens_shift else physicalCamera.lens_shift
-
-        focusDistance = ct.getCameraDofDistance(viewParams.cameraObject)
-        if focusDistance < 0.001:
-            focusDistance = 5.0
 
         plDesc.setAttributes({
             # Always use the FOV setting for interactive renders, so that the calculations 
@@ -764,15 +738,12 @@ class ViewExporter(ExporterBase):
             
             # FOV may have been recomputed for viewport camera view, don't take it verbatim from the UI.
             # In contrast, focal_length is never recomputed
-            "fov"                : physicalCamera.fov if physicalCamera.specify_fov else viewParams.renderView.fov,
+            "fov"                : viewParams.renderView.fov,
             
-            # Focus distance only makes sense when using DOF
-            "specify_focus"      : physicalCamera.use_dof,
-            "focus_distance"     : focusDistance,
+            "lens_shift"         : lensShift,
 
-            "horizontal_offset"  : horizontalOffset,
-            "vertical_offset"    : verticalOffset,
-            "lens_shift"         : lensShift
+            # Orthographic view doesn't work with DoF and for that "focus_distance" doesn't need to be set
+            "focus_distance": 1 if viewParams.renderView.ortho else ct.getCameraDofDistance(viewParams.cameraObject)
         })
 
 
@@ -781,14 +752,17 @@ class ViewExporter(ExporterBase):
 
         vrayCamera = cameraData.vray
         renderView = vrayCamera.RenderView
+        settingsCamera = vrayCamera.SettingsCamera
 
-        viewParams.renderView.fov = vrayCamera.fov if vrayCamera.override_fov else cameraData.angle 
+        viewParams.renderView.fov = cameraData.angle 
 
-        viewParams.renderView.ortho = (cameraData.type == 'ORTHO')
+        viewParams.renderView.ortho = cameraData.type == 'ORTHO' or \
+                                       ( settingsCamera.override_camera_settings and \
+                                         settingsCamera.type == "7" )
+
         viewParams.renderView.ortho_width = cameraData.ortho_scale
 
-        viewParams.renderView.use_clip_start = renderView.clip_near
-        viewParams.renderView.use_clip_end   = renderView.clip_far
+        viewParams.renderView.clipping = renderView.clipping
 
         viewParams.renderView.clip_start = cameraData.clip_start
         viewParams.renderView.clip_end   = cameraData.clip_end
@@ -803,10 +777,9 @@ class ViewExporter(ExporterBase):
     def _fillCameraDataFromObject(obj, viewParams: ViewParams):
         """ Fill parameters for an object that is not a camera but has some camera-like settings ( e.g. cone light )
         """
-        cameraParams = CameraParams()
 
-        cameraParams.setFromObject(obj)
-        viewParams.renderView.fov = ct.fov(cameraParams.sensorX, cameraParams.lens)
+        viewParams.cameraParams.setFromObject(obj)
+        viewParams.renderView.fov = ct.fov(viewParams.cameraParams.sensorX, viewParams.cameraParams.lens)
         
         tm = obj.matrix_world.copy()
         
@@ -837,7 +810,8 @@ class ViewExporter(ExporterBase):
 
 
     def _getCameraBaseName(self, cameraObj, isRenderCamera: bool):
-        return _RENDER_CAMERA_BASE_NAME if isRenderCamera else Names.object(cameraObj)
+        return RENDER_CAMERA_BASE_NAME if isRenderCamera else Names.object(cameraObj)
+        
 
 def run(ctx: ExporterContext):
     return ViewExporter(ctx).export()

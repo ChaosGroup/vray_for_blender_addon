@@ -1,6 +1,9 @@
 
 import bpy
 
+from vray_blender.lib import blender_utils
+from vray_blender.lib.draw_utils import UIPainter
+from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
 
 
@@ -10,12 +13,15 @@ def getContextData(context):
     return context.curve
 
 
-class VRAY_PT_tools(classes.VRayGeomPanel):
-    bl_label   = "Tools"
+class VRAY_PT_VRayProxy(classes.VRayGeomPanel):
+    bl_label   = "Proxy"
     bl_options = {'DEFAULT_CLOSED'}
 
-    def draw_header(self, context):
-        self.layout.label(text="")
+
+    @classmethod
+    def poll(cls, context):
+        return classes.VRayGeomPanel.poll(context) and \
+                    (context.active_object.vray.VRayAsset.assetType == blender_utils.VRAY_ASSET_TYPE["Proxy"])
 
     def draw(self, context):
         layout= self.layout
@@ -25,35 +31,16 @@ class VRAY_PT_tools(classes.VRayGeomPanel):
         if obj.type != "MESH":
             return
         
-        vrayMesh = obj.data.vray
-        geomMeshFile= vrayMesh.GeomMeshFile
+        geomMeshFile = obj.data.vray.GeomMeshFile
 
-        layout.label(text="Generate VRayProxy:")
-        layout.prop(geomMeshFile, 'dirpath')
-        layout.prop(geomMeshFile, 'filename')
-        layout.prop(geomMeshFile, 'animation')
-        if geomMeshFile.animation == 'MANUAL':
-            row = layout.row(align=True)
-            row.prop(geomMeshFile, 'frame_start')
-            row.prop(geomMeshFile, 'frame_end')
-        if geomMeshFile.animation not in {'NONE'}:
-            layout.prop(geomMeshFile, 'add_velocity')
-        layout.prop(geomMeshFile, 'apply_transforms')
-        layout.separator()
-
-        split= layout.split()
-        col= split.column()
-        col.operator('vray.create_proxy', icon='OUTLINER_OB_MESH')
-
-        layout.separator()
-        layout.prop(geomMeshFile, 'proxy_attach_mode', text="Attach Mode")
-        layout.prop(geomMeshFile, 'add_suffix')
+        gemMeshFileModule = getPluginModule('GeomMeshFile')
+        painter = UIPainter(context, gemMeshFileModule, geomMeshFile)
+        painter.renderPluginUI(layout)
 
 
 def getRegClasses():
     return (
-        # TODO: Enable when proxy creation is working
-        # VRAY_PT_tools,
+        VRAY_PT_VRayProxy,
     )
 
 

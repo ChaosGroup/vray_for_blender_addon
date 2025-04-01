@@ -28,9 +28,6 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
         key = attrDesc['attr']
         if key in propGroup and attrDesc['default'] != getattr(propGroup, key):
             pluginDesc.setAttribute(key, getattr(propGroup, key))
-
-    if VRayRendererIprViewport.isActive():
-        pluginDesc.setAttribute('misc_lowThreadPriority', 1)
         
     pluginDesc.removeAttribute('mtl_override')
     pluginDesc.vrayPropGroup = propGroup

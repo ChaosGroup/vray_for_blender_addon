@@ -16,7 +16,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         NOTE: This template should have a corresponding a widget description and is normally
         created for plugin properties of type TEMPLATE.
 
-        Tempalate arguments:
+        Template arguments:
            filter_function (optional): the name of the filter function for the object search field
            bound_property (optional): the name of the property to receive the resulting list of objects
     """     
@@ -32,8 +32,9 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
     def onSelectionChanged(self, context: bpy.types.Context):
         if node := getattr(context, 'active_node', None):
             node.id_data.update_tag()
-        elif obj := getattr(context, 'active_object', None):
-            obj.update_tag()
+        
+        if obj := getattr(context, 'active_object', None):
+           obj.update_tag()
 
 
     def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context, 
@@ -93,6 +94,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         pluginDesc.setAttribute(boundProperty, pluginList)
         return True
 
+
     @staticmethod
     def _getSearchCollectionProvider(context: bpy.types.Context, collName=''):
         if collName in ('', 'objects'):
@@ -114,7 +116,8 @@ class TemplateSelectGeometries(common.VRayObjectSelector):
     def onSelectionChanged(self, context: bpy.types.Context):
         if node := getattr(context, 'active_node', None):
             node.update()
-        elif obj := getattr(context, 'active_object', None):
+        
+        if obj := getattr(context, 'active_object', None):
             context.active_object.update_tag()
 
 

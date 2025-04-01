@@ -14,14 +14,15 @@
         },
         {
             "attr" : "sky_model",
-            "default" : "4",
+            "default" : "5",
+            "desc" : "Selects the procedural model used to simulate the TexSky texture (Preetham, CIE Clear, Overcast, Hosek and PRG Clear Sky)",
             "items" : 
             [
                 [ "0", "Preetham et al", "Preetham et al" ],
                 [ "1", "CIE Clear", "CIE Clear" ],
                 [ "2", "CIE Overcast", "CIE Overcast" ],
                 [ "3", "Hosek et al", "Hosek et al" ],
-                [ "4", "PRG Clear Sky", "PRG Clear Sky" ]
+                [ "5", "PRG Clear Sky", "PRG Clear Sky" ]
             ]
         },
         {
@@ -56,15 +57,18 @@
                         "name": "intensity_multiplier"
                     },
                     {
-                        "name": "turbidity",
-                        "active": {
-                            "cond": "::sky_model!=4"
-                        }
+                        "name": "turbidity"
                     },
                     {
                         "name": "ozone",
                         "active": {
-                            "cond": "::sky_model!=4"
+                            "cond": "::sky_model!=5"
+                        }
+                    },
+                    {
+                        "name": "altitude",
+                        "active": {
+                            "cond": "::sky_model=5"
                         }
                     },
                     {

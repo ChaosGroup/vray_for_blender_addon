@@ -1,491 +1,308 @@
 
 import struct
+from pathlib import PurePath
 import os
-import sys
-import zlib
+from io import BufferedReader
 
-from math import fmod
+import bpy
+from mathutils import Vector
 
-
-# Debug stuff
-#
-USE_DEBUG = False
-
-# VRayProxy constants
-#
-MVF_GEOMETRY_VOXEL = 1
-MVF_PREVIEW_VOXEL  = 2
-
-VoxelFlags = {
-    MVF_GEOMETRY_VOXEL : 'MVF_GEOMETRY_VOXEL',
-    MVF_PREVIEW_VOXEL  : 'MVF_PREVIEW_VOXEL',
-}
-
-#
-# CHANNELS
-#
-VERT_GEOM_CHANNEL        = 0
-FACE_TOPO_CHANNEL        = 1
-VOXEL_INFO_CHANNEL       = 3
-VERT_NORMAL_CHANNEL      = 4
-VERT_NORMAL_TOPO_CHANNEL = 5
-FACE_INFO_CHANNEL        = 6
-VERT_VELOCITY_CHANNEL    = 7
-MAYA_INFO_CHANNEL        = 8
-POINTCLOUD_INFO_CHANNEL  = 10
-POINTCLOUD_GEOM_CHANNEL  = 100
-VERT_TEX_CHANNEL0        = 1000
-VERT_TEX_TOPO_CHANNEL0   = 2000
-
-ChannelID = {
-    VERT_GEOM_CHANNEL        : 'VERT_GEOM_CHANNEL',
-    FACE_TOPO_CHANNEL        : 'FACE_TOPO_CHANNEL',
-    VOXEL_INFO_CHANNEL       : 'VOXEL_INFO_CHANNEL',
-    VERT_NORMAL_CHANNEL      : 'VERT_NORMAL_CHANNEL',
-    VERT_NORMAL_TOPO_CHANNEL : 'VERT_NORMAL_TOPO_CHANNEL',
-    FACE_INFO_CHANNEL        : 'FACE_INFO_CHANNEL',
-    VERT_VELOCITY_CHANNEL    : 'VERT_VELOCITY_CHANNEL',
-    MAYA_INFO_CHANNEL        : 'MAYA_INFO_CHANNEL',
-    POINTCLOUD_INFO_CHANNEL  : 'POINTCLOUD_INFO_CHANNEL',
-    POINTCLOUD_GEOM_CHANNEL  : 'POINTCLOUD_GEOM_CHANNEL',
-    VERT_TEX_CHANNEL0        : 'VERT_TEX_CHANNEL0',
-    VERT_TEX_TOPO_CHANNEL0   : 'VERT_TEX_TOPO_CHANNEL0',
-}
+from vray_blender import debug
+from vray_blender.lib import blender_utils, sys_utils, path_utils
+from vray_blender.vray_tools import vray_proxy
 
 
-MF_VERT_CHANNEL            =  1
-MF_TOPO_CHANNEL            =  2
-MF_INFO_CHANNEL            =  4
-MF_FACE_CHANNEL            =  8
-MF_COMPRESSED              = 16
-MF_MAYA_INFO_CHANNEL       = 32
-MF_POINTCLOUD_CHANNEL      = 64
-MF_POINTCLOUD_INFO_CHANNEL = 28
-
-ChannelFlags = {
-    MF_VERT_CHANNEL            : 'MF_VERT_CHANNEL',
-    MF_TOPO_CHANNEL            : 'MF_TOPO_CHANNEL',
-    MF_INFO_CHANNEL            : 'MF_INFO_CHANNEL',
-    MF_FACE_CHANNEL            : 'MF_FACE_CHANNEL',
-    MF_COMPRESSED              : 'MF_COMPRESSED',
-    MF_MAYA_INFO_CHANNEL       : 'MF_MAYA_INFO_CHANNEL',
-    MF_POINTCLOUD_CHANNEL      : 'MF_POINTCLOUD_CHANNEL',
-    MF_POINTCLOUD_INFO_CHANNEL : 'MF_POINTCLOUD_INFO_CHANNEL',
-}
+# Channels that can be read from a mesh file
+_MESH_CHANNEL_FULL = 1      # Mesh channel with full geometry
+_MESH_CHANNEL_PREVIEW = 2   # Mesh channel with preview (simplified) geometry
 
 
+def launchPly2Vrmesh(vrsceneFilepath, 
+                     vrmeshFilepath=None, 
+                     nodeName=None, 
+                     frames=None,
+                     applyTm=False, 
+                     useVelocity=False, 
+                     previewOnly=False, 
+                     previewFaces=None):
 
-class MeshFileReader(object):
-    meshFile = None
+    ply2vrmesh = path_utils.getBinTool(sys_utils.getPlatformName('ply2vrmesh'))
 
-    def report(self, *args):
-        if USE_DEBUG:
-            print(*args)
+    if not os.path.exists(ply2vrmesh):
+        return "ply2vrmesh binary not found!"
 
-    def binRead(self, format, length):
-        rawData = self.meshFile.read(length)
-        data    = struct.unpack(format, rawData)
-        return data
-
-
-
-class VoxelChannel(MeshFileReader):
-    elementSize  = None
-    numElements  = None
-    channelID    = None
-    depChannelID = None
-    flags        = None
-
-    data         = None
-
-    def __init__(self, meshFile):
-        self.meshFile = meshFile
-
-    def loadInfo(self):
-        self.elementSize  = self.binRead("I", 4)[0]
-        self.numElements  = self.binRead("I", 4)[0]
-        self.channelID    = self.binRead("H", 2)[0]
-        self.depChannelID = self.binRead("H", 2)[0]
-        self.flags        = self.binRead("I", 4)[0]
-
-    def printInfo(self):
-        self.report("Channel")
-        self.report("  elementSize  = %i" % (self.elementSize))
-        self.report("  numElements  = %i" % (self.numElements))
-        self.report("  channelID    = %s" % (ChannelID[self.channelID] if self.channelID in ChannelID else str(self.channelID)))
-        self.report("  depChannelID = %i" % (self.depChannelID))
-
-        flagsList = []
-        for key in sorted(ChannelFlags.keys()):
-            if key & self.flags:
-                flagsList.append(ChannelFlags[key])
-        self.report("  flags        = %s" % (", ".join(flagsList)))
-
-    def loadData(self):
-        def _readChannelData(size):
-            channelRawData = self.meshFile.read(size)
-            if self.flags & MF_COMPRESSED:
-                data = zlib.decompressobj().decompress(channelRawData)
-                # self.report("  Compressed data:", channelRawData)
-                # self.report("  Uncompressed data:", self.data)
-                self.report("  Expected / uncompressed size:", elementsSize, len(data))
-            else:
-                data = channelRawData
-            return data
-
-        self.report("Channel Data")
-
-        elementsSize = self.elementSize * self.numElements
-
-        dataSize = elementsSize
-        if self.flags & MF_COMPRESSED:
-            self.report("  Data is compressed")
-            dataSize = self.binRead("I", 4)[0]
-
-        self.report("  Data size = %i" % (dataSize))
-
-        if self.channelID in {VERT_GEOM_CHANNEL, FACE_TOPO_CHANNEL, MAYA_INFO_CHANNEL}:
-            self.data = _readChannelData(dataSize)
-        else:
-            self.meshFile.seek(dataSize, os.SEEK_CUR)
-
-    def loadChechsum(self):
-        self.report("Channel Checksums")
-
-        for i in range(self.numElements):
-            channelCRC  = self.binRead("I", 4)[0]
-
-            self.report("  %i: checksum = %i" % (i, channelCRC))
-
-
-
-class VoxelChannels(MeshFileReader):
-    channels = None
-
-    def __init__(self, meshFile):
-        self.meshFile = meshFile
-        self.channels = []
+    cmd = [ply2vrmesh]
+    cmd.append(vrsceneFilepath) # input file
+    cmd.append(vrmeshFilepath)  # output file
     
-    def loadInfo(self, voxelOffset=None):
-        self.channelCount = self.binRead("I", 4)[0]
-
-        for i in range(self.channelCount):
-            voxelChannel = VoxelChannel(self.meshFile)
-            voxelChannel.loadInfo()
-
-            self.channels.append(voxelChannel)
-
-    def printInfo(self):
-        self.report("Voxel")
-        self.report("  Channels count = %i" % (len(self.channels)))
+    if previewOnly:
+        cmd.append('-previewType')
+        cmd.append('combined')
         
-        for channel in self.channels:
-            channel.printInfo()
-
-    def loadData(self):
-        for channel in self.channels:
-            channel.loadData()
-
-    def getChannelByType(self, channelType=VERT_GEOM_CHANNEL):
-        for channel in self.channels:
-            if channel.channelID == channelType:
-                return channel
-        return None
-
-    def getFaceTopoChannel(self):
-        return self.getChannelByType(FACE_TOPO_CHANNEL)
+        if previewFaces:
+            cmd.append('-previewFaces')
+            cmd.append(f"{previewFaces}")
     
-    def getVertGeomChannel(self):
-        return self.getChannelByType(VERT_GEOM_CHANNEL)
+    if nodeName:
+        cmd.append('-vrsceneNodeName')
+        cmd.append(nodeName)
+    else:
+        cmd.append('-vrsceneWholeScene')
+
+    if useVelocity:
+        cmd.append('-vrsceneVelocity')
+    
+    if applyTm:
+        cmd.append('-vrsceneApplyTm')
+    
+    if frames is not None:
+        cmd.append('-vrsceneFrames')
+        cmd.append(f"{frames[0]}-{frames[1]}")
+
+    debug.printInfo(f"Calling: {' '.join(cmd)}")
+
+    from subprocess import PIPE, run
+
+    result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+
+    # err = subprocess.call(cmd)
+    if result.returncode != 0:
+        debug.printError(result.stdout)
+        debug.printError(result.stderr)
+        return "Error generating vrmesh file!"
+
+    return None
 
 
+def _dumpMeshFile(meshChannelType: int, vrmeshFile: str, binFile: str):
+    """ Run vraytools utility to dump the requested data from a mesh file (.vrmesh, .abc etc) into a simplified 
+        binary format which can that be easily loaded by the Python code.
 
-class MeshVoxel(MeshFileReader):
-    fileOffset = None
-    bbox       = None
-    flags      = None
+    Args:
+        meshChannelType (int): one of MVF_PREVIEW_VOXEL or MVF_GEOMETRY_VOXEL
+        vrmeshFile (str): path to the mesh file to dump
+        binFile (str): path to the resulting binary file
 
-    channels = None
+    Returns:
+        string | None: Error message on failure, None on success
+    """
+    from subprocess import PIPE, run
 
-    def __init__(self, meshFile):
-        self.meshFile = meshFile
-        self.channels = VoxelChannels(self.meshFile)
+    vrayToolsApp = path_utils.getBinTool(sys_utils.getPlatformName("vraytools"))
 
-    def printInfo(self):
-        self.report("Voxel")
-        self.report("  fileOffset = %i" % (self.fileOffset))
-        self.report("  bbox       = %s" % ("%.2f,%.2f,%.2f; %.2f,%.2f,%.2f" % (self.bbox)))
-        self.report("  flags      = %s" % (VoxelFlags[self.flags]))
+    cmd = [vrayToolsApp]
+    cmd.extend(['-action', '2' if meshChannelType == _MESH_CHANNEL_PREVIEW else '1'])
+    cmd.extend(['-input', vrmeshFile])
+    cmd.extend(['-output', binFile])
+    result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
 
-    def loadData(self):
-        self.meshFile.seek(self.fileOffset)
+    debug.printDebug(f"Running vrmesh tool: {' '.join(cmd)}")
+    
+    if result.returncode != 0:
+        debug.printError(result.stdout)
+        debug.printError(result.stderr)
+        return "Error generating vrmesh file!"
+    
+    return None
 
-        self.channels.loadInfo()
-        self.channels.printInfo()
-        self.channels.loadData()
 
-    def chunk(self, input, size):
-        return tuple(zip(*([iter(input)]*size)))
+def _readProxyMesh(filePath: str, meshChannelType: int):
+    """ Reads data from a mesh file, which involves dumping the relevant contents of the file into a simplified binary format
+        and reading the binary data into structures compatible with Blender.
 
-    def getFaces(self):
-        faceTopoChannel = self.channels.getFaceTopoChannel()
+    Args:
+        filePath (str): the input file in one of the formats supported by the vraytools utlity
+        voxelType (int): the type of data to read - preview or full
+
+    Returns:
+        _type_: _description_
+    """
+    try:
+        binMeshFile = str(PurePath(path_utils.getV4BTempDir(), PurePath(filePath).stem).with_suffix('.vrbin'))
+        err = _dumpMeshFile(meshChannelType, filePath, binMeshFile)
         
-        if faceTopoChannel is None:
-            return ()
+        if (not err) and os.path.isfile(binMeshFile):
+            meshData = vray_proxy.readBinMeshFile(binMeshFile)
         
-        intArray   = struct.unpack("%ii"%(len(faceTopoChannel.data) / 4), faceTopoChannel.data)
-        facesArray = self.chunk(intArray, 3)
-        
-        return facesArray
+            if len(meshData['vertices']) == 0:
+                debug.printDebug(f"Mesh contains no {'preview' if meshChannelType == _MESH_CHANNEL_PREVIEW else 'geometry'} data")
 
-    def getVertices(self):
-        vertexChannel = self.channels.getVertGeomChannel()
-        
-        if vertexChannel is None:
-            return ()
-
-        floatArray  = struct.unpack("%if"%(len(vertexChannel.data) / 4), vertexChannel.data)
-        vertexArray = self.chunk(floatArray, 3)
-        
-        return vertexArray
-
-    def getUvChannels(self):
-        uvChannles = []
-        for chan in self.channels.channels:
-            if chan.channelID >= VERT_TEX_CHANNEL0:
-                uvChannles.append(VERT_TEX_CHANNEL0 - chan.channelID)
-        return uvChannles
-
-    def getUvChannelNames(self):
-        mayaInfoChannel = self.channels.getChannelByType(MAYA_INFO_CHANNEL)
-        if mayaInfoChannel is None:
-            return ()
-
-        uvChannels = []
-
-        def _getBytes(data, size):
-            value = data[0:size]
-            data = data[size:]
-            return value, data
-
-        number_of_uv_sets, mayaInfoChannel.data = _getBytes(mayaInfoChannel.data, 4)
-        number_of_uv_sets = struct.unpack("I", number_of_uv_sets)[0]
-
-        for i in range(number_of_uv_sets):
-            name_len, mayaInfoChannel.data = _getBytes(mayaInfoChannel.data, 4)
-            name_len = struct.unpack("I", name_len)[0]
-
-            name, mayaInfoChannel.data = _getBytes(mayaInfoChannel.data, name_len)
-            name = name.decode(encoding='ascii')
-
-            uvChannels.append(name)
-
-        return uvChannels
+            return meshData, None
+    except Exception as ex:
+        debug.printExceptionInfo(ex, f"Reading .vrmesh file: {filePath}")
+    
+    return None, f"Failed to read .vrmesh file: {filePath}"
 
 
-class VoxelInfo:
-    fileOffset = None
-    bbox       = None
-    flags      = None
+def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffset, animSpeed, animFrame):
+    """ Load the preview voxel from a .vrmesh file, if any.
+    
+        Returns: None on success, error message on error.
+    """
+    assert ob is not None, "Proxy object must have been created"
+    
+    geomMeshFile = ob.data.vray.GeomMeshFile
+
+    if geomMeshFile.previewType == 'None':
+        # Replace with empty mesh
+        mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
+        blender_utils.replaceObjectMesh(ob, mesh)
+        bpy.data.meshes.remove(mesh)
+        geomMeshFile['num_preview_faces'] = 0
+        return
+
+    PREVIEW_VOXELS = {'Preview' : _MESH_CHANNEL_PREVIEW, 'Full': _MESH_CHANNEL_FULL}
+    voxelType = PREVIEW_VOXELS[geomMeshFile.previewType]
+    
+    meshData, err = _readProxyMesh(filePath, voxelType)
+
+    if err:
+        return err
+    
+    assert meshData is not None
+    mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
+    mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
+    mesh.update()
+    
+    if (voxelType == _MESH_CHANNEL_PREVIEW):
+        geomMeshFile['num_preview_faces'] = len(meshData['faces'])
+
+    # File might or might not contain uv info
+    if meshData['uv_sets']:
+        for uvName in meshData['uv_sets']:
+            mesh.uv_layers.new(name=uvName)
+
+    blender_utils.replaceObjectMesh(ob, mesh)
+    bpy.data.meshes.remove(mesh)
+    
+    blender_utils.selectObject(ob)
+
+    # Depending on the source of the model, scaling may be necessary. E.g. Cosmos assets are in 
+    # cm. Scale the model gometry without affecting any currently set scale value for the object.
+    if geomMeshFile.scale != 1.0:
+        oldScale = ob.scale
+        ob.scale = Vector((1.0, 1.0, 1.0))
+        ob.scale *= geomMeshFile.scale
+        # Apply the selected object's scale. This will apply the transform to the mesh and 
+        # reset the 'scale' field to 1.0.
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True) 
+        ob.scale = oldScale
 
 
-class FrameInfo:
-    numVoxels = None
-    voxels    = None
+def loadVRayScenePreviewMesh(vrsceneFilepath, scene, ob: bpy.types.Object):
+    sceneFilepath = bpy.path.abspath(vrsceneFilepath)
+    if not os.path.exists(sceneFilepath):
+        return "Scene file doesn't exists!"
 
-    def __init__(self):
-        self.voxels = []
+    proxyFilepath = str(PurePath(sceneFilepath).with_suffix('.vrmesh'))
 
+    if not os.path.exists(proxyFilepath):
+        return "Preview proxy file doesn't exist!"
 
-class MeshFile(MeshFileReader):
-    vrayID       = None
-    fileVersion  = None
-    lookupOffset = None
+    err = loadVRayProxyPreviewMesh(
+        ob,
+        proxyFilepath,
+        '0', # TODO
+        0,   # TODO
+        1.0, # TODO
+        scene.frame_current-1
+    )
 
-    frames = None
-
-    def __init__(self, filepath):
-        self.meshFile = open(os.path.expanduser(filepath), "rb")
-        self.frames = {}
-
-    def __del__(self):
-        if self.meshFile:
-            self.meshFile.close()
-
-    def readHeader(self):
-        self.vrayID = self.binRead("7s", 7)[0][:-1]
-
-        if self.vrayID == b'vrmesh':
-            # New format
-            self.fileVersion = self.binRead("I", 4)[0]
-        else:
-            # Old format
-            self.meshFile.seek(0)
-            self.vrayID = self.binRead("4s", 4)[0][:-1]
-            self.fileVersion = 0
-
-        self.lookupOffset = self.binRead("Q", 8)[0]
-
-        self.report("MeshFile:", self.meshFile.name)
-        self.report("  fileID       = %s" % self.vrayID)
-        self.report("  fileVersion  = 0x%X" % self.fileVersion)
-        self.report("  lookupOffset = %i" % self.lookupOffset)
+    return err
 
 
-    def readLookUpTable(self):
-        def readVoxelInfo():
-            vi = VoxelInfo()
-
-            vi.fileOffset = self.binRead("Q", 8)[0]
-            vi.bbox       = self.binRead("6f", 24)
-            vi.flags      = self.binRead("I", 4)[0]
-
-            return vi
-
-        def readFrameInfo():
-            numVoxels  = self.binRead("I", 4)[0]
-            if numVoxels == 0:
-                return None
-
-            frameInfo = FrameInfo()
-            frameInfo.numVoxels = numVoxels
-
-            for v in range(numVoxels):
-                frameInfo.voxels.append(readVoxelInfo())
-
-            return frameInfo
-
-        self.meshFile.seek(self.lookupOffset)
-
-        frameCount = 0
-        while True:
-            fi = readFrameInfo()
-            if not fi:
-                break
-            self.frames[frameCount] = fi
-            frameCount += 1
-
-        for frameNumber in self.frames:
-            fi = self.frames[frameNumber]
-
-            self.report("Frame %i:" % frameNumber)
-            self.report("  numVoxels = %s" % fi.numVoxels)
-
-            for v,vi in enumerate(fi.voxels):
-                self.report("  Voxel %i" % v)
-                self.report("    fileOffset = %i" % vi.fileOffset)
-                self.report("    bbox       = %s" % ("%.2f,%.2f,%.2f; %.2f,%.2f,%.2f" % (vi.bbox)))
-                self.report("    flags      = %s" % VoxelFlags[vi.flags])
+def isAlembicFile(filePath: str):
+    # Cannot use functions from pathlib here because the path may be in Blender relative format.
+    return filePath.endswith('.abc')
 
 
-    def readFile(self):
-        self.readHeader()
-        self.readLookUpTable()
+def generateAlembicPreview(abcFilePath: str, geomMeshFile):
+    """ Generate preview geometry for an alembic file as .vrmesh.
+
+    Args:
+        context (bpy.types.Context)
+        abcFilePath (str): Path to an alembic file.
+        geomMeshFile (GeomMeshFile): the GeomMeshFile attached to an object's data
+
+    Returns:
+        str | None: The path to the generated .vrmesh file or None if the conversion has failed. 
+    """
+    assert geomMeshFile.previewType != 'None', "Preview for this object is not required"
+    
+    filename = PurePath(abcFilePath).stem
+    previewFilePath = str(PurePath(path_utils.getV4BTempDir(), filename).with_suffix('.vrmesh'))
+    
+    isPreview = geomMeshFile.previewType == 'Preview'
+    launchPly2Vrmesh(abcFilePath, previewFilePath, 
+                        previewOnly=isPreview, 
+                        previewFaces=geomMeshFile.num_preview_faces)
+    return previewFilePath if os.path.exists(previewFilePath) else None
 
 
-    def getFrameByType(self, animType, animOffset, speed, frame):
-        def clamp(value, value_min, value_max):
-            return max(min(value, value_max), value_min)
 
-        animLength = len(self.frames)
-        animStart  = 0
+def _binRead(file: BufferedReader, dataType: str, numItems: int):
+    """ Read typed data items from a binary file.
 
-        if animType in {'0', 'LOOP'}:
-            frame = fmod(animOffset+(frame-animStart)*speed, animLength)
-            if frame < 0:
-                frame += animLength
-            frame += animStart
+    Args:
+        file (BufferedReader): input file object
+        dataType (str): the type of the data item, one of the format specifiers defined for struct.unpack()
+        numItems (int): the number of items to read
 
-        elif animType in {'1', 'ONCE'}:
-            frame = clamp(animOffset+(frame-animStart)*speed, 0.0, animLength-1)+animStart
+    Returns:
+        The requested data in a compatible format.
+    """
 
-        elif animType in {'2', 'PINGPONG'}:
-            frame = fmod(animOffset+(frame-animStart)*speed, animLength*2-2) # subtract 2 to remove the duplicate frames
-            if frame < 0:
-                frame += 2*animLength-2
-            if frame >= animLength:
-                frame = 2*animLength-2-frame
-            frame += animStart*speed
+    DATA_SIZES = {
+        'I': 4,
+        'Q': 8,
+        'c': 1,
+        'f': 4
+    }
+    rawData = file.read(numItems * DATA_SIZES[dataType])
+    format = f"{numItems}{dataType}"
+    buffer = struct.unpack(format, rawData)
 
-        elif animType in {'3', 'STILL'}:
-            frame = clamp(animOffset+animStart, 0.0, animLength-1.0)
-
-        return int(frame)
-
-
-    def getPreviewVoxel(self, frameInfo):
-        for voxel in frameInfo.voxels:
-            if voxel.flags == MVF_PREVIEW_VOXEL:
-                return voxel
-        return None
+    data = buffer[0] if len(buffer) == 1 else buffer
+    if (dataType == 'c') and (len(buffer) == 1) :
+        return data.decode()
+    
+    return data
 
 
-    def getGeometryVoxel(self, frameInfo):
-        for voxel in frameInfo.voxels:
-            if voxel.flags == MVF_GEOMETRY_VOXEL:
-                return voxel
-        return None
+def readBinMeshFile(filePath: str):
+    """ Read a .vrbin file produced by vraytools utility into Blender-compatible fomat """
+    
+    # Reshape an array of items by splitting it into subarrays each containing 'size' items
+    def _reshapeArray(input, size: int):
+        return tuple(zip(*([iter(input)] * size)))
+    
+    assert os.path.isfile(filePath)
 
+    with open(os.path.expanduser(filePath), "rb") as file:
+        chunks = []
+        tocSize = _binRead(file, "I", 1)         # uint32
 
-    def getPreviewMesh(self, animType=0, animOffset=0.0, speed=1.0, frame=0.0):
-        frameIndex = self.getFrameByType(animType, animOffset, speed, frame)
-        if frameIndex not in self.frames:
-            return None
+        for _ in range(tocSize):
+            itemType  = _binRead(file, 'c', 1)   # char
+            itemCount = _binRead(file, 'Q', 1)   # uint64
+            offset    = _binRead(file, 'Q', 1)   # uint64
+            chunks.append((itemType, offset, itemCount))
 
-        voxelInfo = self.getPreviewVoxel(self.frames[frameIndex])
-        if not voxelInfo:
-            return None
+        vertices = []
+        faces = []
 
-        voxel = MeshVoxel(self.meshFile)
-        voxel.fileOffset = voxelInfo.fileOffset
-        voxel.bbox       = voxelInfo.bbox
-        voxel.flags      = voxelInfo.flags
-
-        voxel.loadData()
-
-        faces    = voxel.getFaces()
-        vertices = voxel.getVertices()
-        uvChannels = voxel.getUvChannelNames()
-
-        if not uvChannels:
-            # There are no UV channels in the preview voxel, try to load them from 
-            # the regular voxel
-            geomVoxelInfo = self.getGeometryVoxel(self.frames[frameIndex])
-            if geomVoxelInfo:
-                voxel = MeshVoxel(self.meshFile)
-                voxel.fileOffset = voxelInfo.fileOffset
-                voxel.bbox       = voxelInfo.bbox
-                voxel.flags      = voxelInfo.flags
-                voxel.loadData()
-                uvChannels = voxel.getUvChannelNames()
-        
-        if uvChannels:
-            self.report("Number of UV Set: %i" % len(uvChannels))
-            for i,chanName in enumerate(uvChannels):
-                self.report("  UV Set %i: %s" % (i, chanName))
+        for itemType, offset, itemCount in chunks:    
+            file.seek(offset)
+            match itemType:
+                case 'v':
+                    floatArray  = _binRead(file, 'f', itemCount * 3) # 3 float coords per vertex
+                    vertices = _reshapeArray(floatArray, 3)
+                case 'f':
+                    intArray  = _binRead(file, 'I', itemCount * 3) # 3 int indices per face
+                    faces = _reshapeArray(intArray, 3)
 
         return {
             'vertices' : vertices,
             'faces'    : faces,
-            'uv_sets'  : uvChannels,
+            'uv_sets'  : []
         }
-
-
-def main():
-    global USE_DEBUG
-
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("file", help="*.vrmesh filepath")
-    args = parser.parse_args()
-
-    USE_DEBUG = True
-
-    meshFile = MeshFile(args.file)
-    meshFile.readFile()
-
-    mesh = meshFile.getPreviewMesh(0)
-
-
-if __name__ == '__main__':
-    main()

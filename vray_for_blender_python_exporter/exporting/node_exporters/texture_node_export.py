@@ -2,7 +2,7 @@ import mathutils
 
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel, exportDefaultUVWGenEnvironment
-from vray_blender.lib import export_utils
+from vray_blender.lib import export_utils, image_utils, sys_utils
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.exporting.tools import *
@@ -26,7 +26,8 @@ def exportVRayNodeMetaImageTexture(nodeCtx: NodeContext, nodeLink: bpy.types.Nod
     bitmapBufferPluginDesc.vrayPropGroup = node.BitmapBuffer
 
     commonNodesExport.exportNodeTree(nodeCtx, bitmapBufferPluginDesc)
-    _fillBitmapBufferPluginFromNode(node.texture, bitmapBufferPluginDesc)
+
+    _fillBitmapBufferPluginFromNode(nodeCtx, node.texture, bitmapBufferPluginDesc)
 
     pluginBitmapBuffer = commonNodesExport.exportPluginWithStats(nodeCtx, bitmapBufferPluginDesc)
 
@@ -53,41 +54,33 @@ def exportVRayNodeMetaImageTexture(nodeCtx: NodeContext, nodeLink: bpy.types.Nod
 def _shouldExportEnvironmentUVW(node: bpy.types.Node):
     # Return True if all links of the otput socket are to a LightDome or Environment nodes
     outSock = node.outputs[0]
-    envLinks = len([l for l in outSock.links if l.to_socket.node.bl_idname in ('VRayNodeLightDome', 'VRayNodeEnvironment')])
+    for link in outSock.links:
+        toNode = link.to_socket.node
+        if (toNode.bl_idname in ('VRayNodeLightDome', 'VRayNodeEnvironment')) or \
+            (toNode.bl_idname == "NodeReroute" and _shouldExportEnvironmentUVW(toNode)): # Handling Reroute nodes
+            return True
+       
+    return False
 
-    return outSock.links and (len(outSock.links) == envLinks)
 
+def _fillBitmapBufferPluginFromNode(nodeCtx: NodeContext, texture, pluginDesc):
+    filePath = sys_utils.getDefaultTexturePath()
 
-def _fillBitmapBufferPluginFromNode(texture, pluginDesc):
-    if not texture:
-        return
-
-    imageTexture = bpy.types.ImageTexture(texture)
-    if not imageTexture:
-        return
-
-    image = imageTexture.image
-
-    if image:
+    if texture and (image := texture.image):
         if (image.source == 'FILE' and image.packed_file) or image.source == "GENERATED":
-            fileName = image.name
-            fileExt = IMAGE_FILE_FORMAT_TO_EXT[image.file_format]
+            if savedPath := image_utils.packedImageSavedPath(image): # Checking if the packed image is already saved
+                filePath = savedPath
+            else:
+                image_utils.saveAndTrackImage(image)
+                filePath = image_utils.packedImageSavedPath(image)
+        else:
+            filePath = image.filepath
 
-            if not (fileName.endswith(fileExt) or fileName.endswith(fileExt.upper())):
-                fileName += fileExt
-
-            # this is needed because sometimes when the filepath gets changed
-            # blender triggers engine.view_update(), then the path is changed again and the plugin enters an endless loop
-            newFilePath = bpy.app.tempdir + fileName
-            if newFilePath != image.filepath:
-                image.filepath = newFilePath
-
-            image.save()
-
-        pluginDesc.setAttribute("file", bpy.path.abspath(image.filepath))
+    pluginDesc.setAttribute("file", bpy.path.abspath(filePath))
 
 
-def exportVRayNodeTexLayered(nodeCtx: NodeContext):
+
+def exportVRayNodeTexLayered(nodeCtx: NodeContext):#
     node = nodeCtx.node
 
     textures    = []

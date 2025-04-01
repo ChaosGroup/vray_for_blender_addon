@@ -32,47 +32,62 @@ class MtlExporter(ExporterBase):
         super().__init__(ctx)
         # Materials can be shared between objects
         self.nodeTracker = ctx.nodeTrackers['MTL']
+        
+        # Default material to use for non-vray node trees
+        self.defaultMaterial = None
 
 
     def exportMtl(self, mtl: bpy.types.Material):
-        if not mtl.vray.is_vray_class:
-            # Skip non-vray materials
-            return None, None
+        """ Export material.
+
+        Args:
+            mtl (bpy.types.Material): material to export
+
+        Returns:
+            tuple(AttrPlugin, SceneStats): the exported plugin and the update to the export statistics
+        """
+        assert mtl.vray.is_vray_class, "Cannot export non-vray materials"
         
         if mtl in self.exportedMtls:
             return self.exportedMtls[mtl], SceneStats()
         
-        assert mtl.node_tree, f"Trying to export a material without a node tree: {mtl.name}"
-        
-        if not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL')):
-            debug.printError(f"Output node not found in material tree '{mtl.name}'")
-            return 
-
-        if not (sock := getInputSocketByName(nodeOutput, "Material")):
-            # The output node of the tree is not connected to anything
-            return None
+        assert mtl.node_tree, f"Material has no node tree: {mtl.name}"
         
         nodeCtx = NodeContext(self, bpy.context.scene, bpy.data, self.renderer)
         nodeCtx.rootObj     = mtl
         nodeCtx.nodeTracker = self.nodeTracker
         nodeCtx.ntree       = mtl.node_tree
         
-        nodeLink = getNodeLink(sock)
+        with nodeCtx:
+            if not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL')):
+                NodeContext.registerError(f"Output node not found in material tree")
+                return  None, SceneStats()
+            
+            sock = getInputSocketByName(nodeOutput, "Material")
+            assert sock, "Material output node has no input socket"
+            
+            if not (nodeLink := getNodeLink(sock)):
+                # The output node has nothing connected to it. This is a normal situation when the BRDF
+                # is changed, so don't report it to the status field.
+                debug.printWarning(f"No tree connected to output node in material '{mtl.name}'")
+                defaultMtlPlugin = self._exportDefaultMaterial()
+                self.exportedMtls[mtl] = defaultMtlPlugin
+                return defaultMtlPlugin, SceneStats()
+            
+            with nodeCtx.push(nodeOutput):
+                # Track the plugins exported for each node of the tree
+                with TrackObj(self.nodeTracker, getObjTrackId(mtl)):
+                    brdfPlugin = exportVRayNode(nodeCtx, nodeLink) if nodeLink else AttrPlugin()
+
+                    with TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput)):
+                        singleBRDFMtl = self._exportMtlSingleBRDF(nodeCtx, brdfPlugin)
+
+                    nodeCtx.stats.uniqueMtls.add(mtl.name)
+                    nodeCtx.stats.mtls += 1
+
+                self.exportedMtls[mtl] = singleBRDFMtl
         
-        with nodeCtx.push(nodeOutput):
-            # Track the plugins exported for each node of the tree
-            with TrackObj(self.nodeTracker, getObjTrackId(mtl)):
-                brdfPlugin = exportVRayNode(nodeCtx, nodeLink) if nodeLink else AttrPlugin()
-
-                with TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput)):
-                    singleBRDFMtl = self._exportMtlSingleBRDF(nodeCtx, brdfPlugin)
-
-                nodeCtx.stats.uniqueMtls.add(mtl.name)
-                nodeCtx.stats.mtls += 1
-
-            self.exportedMtls[mtl] = singleBRDFMtl
-
-            return singleBRDFMtl, nodeCtx.stats
+        return singleBRDFMtl, nodeCtx.stats
 
 
     def export(self):
@@ -83,11 +98,13 @@ class MtlExporter(ExporterBase):
 
 
     def _exportPreviewMaterials(self):
+        """ Export materials in the material preview scene """
         stats = SceneStats()
         
         for obj in self.dg.objects:
-            for slot in obj.material_slots:
-                _, mtlStats = self.exportMtl(slot.material)
+            # Only export V-Ray materials
+            for mtl in [s.material for s in obj.material_slots if s.material.vray.is_vray_class]:
+                _, mtlStats = self.exportMtl(mtl)
                 if mtlStats:
                     stats += mtlStats
 
@@ -98,7 +115,7 @@ class MtlExporter(ExporterBase):
             referencing object with updated transform
         """
         transformUpdates = (u.id.original.session_uid for u in self.dg.updates if u.is_updated_transform)
-        for mtl in bpy.data.materials:
+        for mtl in [m for m in bpy.data.materials if m.vray.is_vray_class and m.node_tree]:
             if not mtl.node_tree:
                 continue
 
@@ -118,14 +135,19 @@ class MtlExporter(ExporterBase):
         # TODO: replace with materials list collected from the visible objects
 
         if self.fullExport:
-            updatedVrayMtls = [m for m in bpy.data.materials if getattr(m, 'vray', None) and (m.vray.is_vray_class)]
+            def mtlIsExportable(mtl: bpy.types.Material):
+                usersOfMtl = mtl.users - int(mtl.use_fake_user)
+                return getattr(mtl, 'vray', None) and (mtl.vray.is_vray_class) and (usersOfMtl > 0)
+
+            updatedVrayMtls = [m for m in bpy.data.materials if mtlIsExportable(m)]
         else:
             self._tagForUpdateMtlWithSelectorNode()
             mtlUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.ALL)
-            updatedVrayMtlSIDs = {m[0] for m in mtlUpdates}
-            updatedVrayMtls = {m for m in bpy.data.materials if getObjTrackId(m) in updatedVrayMtlSIDs}
-        
             updates = [u.id.original for u in self.dg.updates]
+            
+            updatedVrayMtlSIDs = {m[0] for m in mtlUpdates}
+            updatedVrayMtls = {m for m in bpy.data.materials if (getObjTrackId(m) in updatedVrayMtlSIDs) or (m.vray.is_vray_class and (m.node_tree in updates))}
+        
             updatedTextures = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
             updatedVrayMtls = updatedVrayMtls.union(_getMtlsOfTextures(updatedTextures))
 
@@ -139,17 +161,19 @@ class MtlExporter(ExporterBase):
 
 
     def _exportDefaultMaterial(self):
-        """ A material to use for all objects that do not have 
-            an explicitly assigned material
+        """ A BRDF material to use for all objects that do not have 
+            an explicitly assigned material.
         """
-        defaultBrdfDesc = PluginDesc("defaultBRDF", "BRDFVRayMtl")
-        defaultBrdfDesc.setAttribute("diffuse", AColor((0.5, 0.5, 0.5)))
-        defaultBrdf = export_utils.exportPlugin(self, defaultBrdfDesc)
+        if not self.defaultMaterial:
+            defaultBrdfDesc = PluginDesc("defaultBRDF", "BRDFVRayMtl")
+            defaultBrdfDesc.setAttribute("diffuse", AColor((0.5, 0.5, 0.5)))
+            defaultBrdf = export_utils.exportPlugin(self, defaultBrdfDesc)
 
-        defaultMtlDesc = PluginDesc("defaultMtl", "MtlSingleBRDF")
-        defaultMtlDesc.setAttribute("brdf", defaultBrdf)
-        defaultMtlDesc.setAttribute("sceneName", ["DEFAULT_MATERIAL"])
-        self.defaultMaterial = export_utils.exportPlugin(self, defaultMtlDesc)
+            defaultMtlDesc = PluginDesc("defaultMtl", "MtlSingleBRDF")
+            defaultMtlDesc.setAttribute("brdf", defaultBrdf)
+            defaultMtlDesc.setAttribute("sceneName", ["DEFAULT_MATERIAL"])
+            self.defaultMaterial = export_utils.exportPlugin(self, defaultMtlDesc)
+        
         return self.defaultMaterial
 
 

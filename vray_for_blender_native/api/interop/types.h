@@ -11,6 +11,7 @@
 #include "utils.hpp"
 
 #include "zmq_common.hpp"
+#include <zmq_message.hpp>
 
 namespace VRayForBlender::Interop
 {
@@ -21,11 +22,7 @@ struct ExporterSettings
 {
 	using StrList = std::vector<std::string>;
 
-
-
-
 	VrayZmqWrapper::ExporterType getExporterType() const;
-
 	
 	PROPERTY(int,  exporterType       , static_cast<int>(VrayZmqWrapper::ExporterType::PROD))  // Render type
 	PROPERTY(bool, closeVfbOnStop     , false)
@@ -241,6 +238,16 @@ struct HostInfo {
 	PROPERTY(std::string, vrayVersion, "")
 	PROPERTY(std::string, buildVersion, "")
 	PROPERTY(std::string, blenderVersion, "")
+};
+
+struct CosmosAssetSettings
+{
+	PROPERTY(std::string, assetType, "")
+	PROPERTY(std::string, matFile, "")
+	PROPERTY(std::string, objFile, "")
+	PROPERTY(std::string, lightFile, "")
+	PROPERTY(py::dict, locationsMap, py::dict())
+	PROPERTY(bool, isAnimated, false)
 };
 
 } // VRayForBlender::Interop

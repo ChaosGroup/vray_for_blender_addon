@@ -32,31 +32,349 @@
         {
             "attr": "focal_length",
             "default": 50.0,
-            "get": "propertyGet",
-            "set": "propertySet",
-            "precision": 3
+            "precision": 3,
+            "subtype": "DISTANCE_CAMERA",
+            "get": "focalLengthGet",
+            "set": "focalLengthSet"
         },
         {
             "attr": "focus_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
+            "default": 1.0
         },
         {
             "attr": "target_distance",
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr": "fov",
+            "get": "fovGet",
+            "set": "fovSet",
+            "subtype": "ANGLE",
+            "ui": {
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "shutter_angle",
+            "ui": {
+                "spin_step": 5.0
+            }
+        },
+        {
+            "attr": "shutter_offset",
+            "ui": {
+                "spin_step": 5.0
+            }
+        },
+        {
+            "attr": "latency",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "exposure_value",
+            "default": 12.0,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 20.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "vignetting",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 5.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr" : "specify_focus",
+            "default" : true
+        },
+        {
+            "attr": "use_dof",
+            "options": {
+                "shadowed": true
+            }
         }
     ],
     "Type": "CAMERA",
     "Options": {
         "excluded_parameters": [
-            "subdivs"
+            "dont_affect_settings",
+            "enable_thin_lens_equation",
+            "subdivs",
+            "dof_display_threshold",
+            
+            "targeted",
+            "target_distance"
         ],
-        "animatable": false
+        "animatable": true
     },
     "excluded_parameters": [
         "subdivs"
-    ]
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "camera",
+                        "label": "Camera",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "type",
+                                "label": "Camera Type"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "sensor and lens",
+                        "label": "Sensor and Lens",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "attrs": [
+                                    {
+                                        "name": "specify_fov",
+                                        "label": "Specify Field of View"
+                                    },
+                                    {
+                                        "name": "fov",
+                                        "label": "Field of View",
+                                        "active": {
+                                            "cond": "::specify_fov=1"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "film_width",
+                                "label": "Film Gate (mm)"
+                            },
+                            {
+                                "name": "focal_length",
+                                "label": "Focal Length (mm)",
+                                "active": {
+                                    "cond": "::specify_fov=0"
+                                }
+                            },
+                            {
+                                "name": "zoom_factor",
+                                "active": {
+                                    "cond": "::specify_fov=0"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "aperture",
+                        "label": "Aperture",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "ISO",
+                                "label": "Film Speed (ISO)"
+                            },
+                            {
+                                "name": "f_number",
+                                "label": "F-Number"
+                            },
+                            {
+                                "name": "shutter_speed",
+                                "label": "Shutter Speed (s^-1)",
+                                "active": {
+                                    "cond": "::type!=1,::type!=2"
+                                }
+                            },
+                            {
+                                "name": "shutter_angle",
+                                "active": {
+                                    "cond": "::type!=0,::type!=2"
+                                }
+                            },
+                            {
+                                "name": "shutter_offset",
+                                "active": {
+                                    "cond": "::type!=0,::type!=2"
+                                }
+                            },
+                            {
+                                "name": "latency",
+                                "label": "Latency (s)",
+                                "active": {
+                                    "cond": "::type!=0,::type!=1"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "color and exposure",
+                        "label": "Color and Exposure",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "exposure"
+                            },
+                            {
+                                "name": "exposure_value",
+                                "active": {
+                                    "cond": "::exposure=2"
+                                }
+                            },
+                            {
+                                "name": "vignetting"
+                            },
+                            {
+                                "name": "white_balance"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "tilt and shift",
+                        "label": "Tilt and Shift",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "layout": "COLUMN",
+                                "name": "",
+                                "label": "",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "name": "lens_shift"
+                                    },
+                                    {
+                                        "name": "horizontal_shift"
+                                    },
+                                    {
+                                        "name": "vertical_offset"
+                                    },
+                                    {
+                                        "name": "horizontal_offset"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "dof and motion blur",
+                "label": "DoF and Motion Blur",
+                "attrs": [
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "Depth of Field",
+                        "label": "Depth of Field",
+                        "use_prop": "use_dof",
+                        "attrs": [
+                            {
+                                "name": "blades_enable",
+                                "label": "Aperture Shape"
+                            },
+                            {
+                                "name": "blades_num",
+                                "label": "Blades Number"
+                            },
+                            {
+                                "name": "blades_rotation",
+                                "label": "Rotation"
+                            },
+                            {
+                                "name": "center_bias"
+                            },
+                            {
+                                "name": "anisotropy"
+                            },
+                            {
+                                "name": "optical_vignetting"
+                            },
+                            {
+                                "layout": "ROLLOUT",
+                                "name": "bitmap aperture",
+                                "label": "Bitmap Aperture",
+                                "use_prop": "bmpaperture_enable",
+                                "default_closed": false,
+                                "attrs": [
+                                    {
+                                        "name": "bmpaperture_tex",
+                                        "label": "File"
+                                    },
+                                    {
+                                        "name": "bmpaperture_resolution"
+                                    },
+                                    {
+                                        "name": "bmpaperture_affects_exposure",
+                                        "label": "Affect Exposure"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "motion blur",
+                        "label": "Motion Blur",
+                        "use_prop": "use_moblur",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "rolling_shutter_mode",
+                                "label": "Mode"
+                            },
+                            {
+                                "name": "rolling_shutter_duration",
+                                "label": "Duration (s^-1)"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "distortion",
+                "label": "Distortion",
+                "attrs": [
+                    {
+                        "layout": "COLUMN",
+                        "name": "",
+                        "label": "",
+                        "attrs": [
+                            {
+                                "name": "distortion_type",
+                                "label": "Type"
+                            },
+                            {
+                                "name": "distortion",
+                                "label": "Amount"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "distortion_tex"
+                    },
+                    {
+                        "name": "lens_file"
+                    }
+                ]
+            }
+        ]
+    }
 }

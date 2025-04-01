@@ -1,11 +1,47 @@
+import os
 
-from vray_blender.lib import plugin_utils
+import bpy 
+from vray_blender.lib.blender_utils import getShadowAttr, setShadowAttr
+from vray_blender import debug
+from vray_blender.lib import plugin_utils, export_utils
+from vray_blender.lib.defs import PluginDesc
+from vray_blender.vray_tools.vray_proxy import isAlembicFile
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-# NOTE: Here because of the operator 'vray.proxy_load_preview'
-#
-def nodeDraw(context, layout, node):
-    layout.prop(node.GeomMeshFile, 'file')
-    layout.operator('vray.proxy_load_preview', icon='OUTLINER_OB_MESH', text="Load Preview Mesh")
+
+def onUpdatePreviewFile(src, context, attrName):
+    assert attrName == 'file'
+    
+    geomMeshFile = context.active_object.data.vray.GeomMeshFile
+    
+    filePrevValue = getShadowAttr(geomMeshFile, 'file')
+    
+    if filePrevValue == geomMeshFile.file:
+        return
+    
+    if not os.path.exists(bpy.path.abspath(geomMeshFile.file)):
+        debug.reportError(f"File not found: {geomMeshFile.file}")
+        geomMeshFile['file'] = filePrevValue
+        return
+
+    # Reset the scale of the model as we can't tell the correct scale from the mesh file itself.
+    geomMeshFile['scale'] = 1.0
+    setShadowAttr(geomMeshFile, 'file', geomMeshFile.file)
+
+    bpy.ops.vray.proxy_generate_preview('EXEC_DEFAULT', regenerate=False)
+
+
+def onUpdatePreview(src, context, attrName):
+    bpy.ops.vray.proxy_generate_preview('EXEC_DEFAULT', regenerate=True)
+
+
+def exportCustom(exporterCtx, pluginDesc: PluginDesc):
+    geomMeshFile = pluginDesc.vrayPropGroup
+    pluginDesc.setAttribute('file', bpy.path.abspath(geomMeshFile.file))
+    return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
+
+
+def isAlembicGet(propGroup, attrName):
+    return isAlembicFile(propGroup.file)

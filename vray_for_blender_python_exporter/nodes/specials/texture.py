@@ -233,6 +233,7 @@ class VRAY_OT_pack_image(bpy.types.Operator):
     bl_options     = {'INTERNAL'}
     
     nodeID : bpy.props.StringProperty()
+    nodeTreeType : bpy.props.StringProperty()
 
     def execute(self, context: bpy.types.Context):
         if hasattr(context, 'active_node'):
@@ -240,8 +241,21 @@ class VRAY_OT_pack_image(bpy.types.Operator):
             node = context.active_node
         else:
             # Operator is called from material property panel
+
+            nodes = None
+            match self.nodeTreeType:
+                case 'MATERIAL':
+                    nodes = context.material.node_tree.nodes
+                case 'WORLD':
+                    nodes = context.world.node_tree.nodes
+                case _:
+                    # Properties of nodes from Object and Light trees are not visible in the property panel,
+                    # so there is no need to handle the case where "self.nodeTreeType in ('OBJECT', 'LIGHT')"
+                    assert False, f"Calling the operator 'vray.pack_image' from the property panel is unsupported for '{self.nodeTreeType}' nodes"
+
+
             # The check for 'unique_id' ensures we only process V-Ray nodes.
-            node = next((n for n in context.material.node_tree.nodes if getattr(n, "unique_id", None) == self.nodeID), None)
+            node = next((n for n in nodes if getattr(n, "unique_id", None) == self.nodeID), None)
         
         if node and (image := node.texture.image):
             if not image.packed_file:

@@ -69,7 +69,16 @@ def getV4BTempDir():
 def getIconsDir():
     return os.path.join(getRootFolder(), "resources/icons")
                         
-                        
+
+def getUpgradeScriptsDir():
+    return os.path.join(getRootFolder(), "resources/upgrade_scripts")
+
+
+def getBinTool(executableName: str):
+    """ Get the full path to a tool located in the 'bin' folder """
+    return os.path.join(sys_utils.getExporterPath(), "bin", executableName)
+
+
 def copyTree(src, dst, symlinks=False, ignore=None):
     if sys.platform == 'win32':
         os.system('robocopy /E "%s" "%s"' % (src, dst))

@@ -2,24 +2,6 @@
     "ID": "RenderView",
     "Parameters": [
         {
-            "attr": "clip_near",
-            "default": false,
-            "desc": "Clip near",
-            "type": "BOOL",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "clip_far",
-            "default": false,
-            "desc": "Clip far",
-            "type": "BOOL",
-            "options": {
-                "derived": true
-            }
-        },
-        {
             "attr": "focalDistance",
             "ui": {
                 "quantityType": "distance"
@@ -42,6 +24,10 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr" : "clipping",
+            "default" : true
         }
     ],
     "Type": "CAMERA",

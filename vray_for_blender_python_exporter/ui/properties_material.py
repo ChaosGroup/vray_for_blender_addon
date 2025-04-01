@@ -119,7 +119,7 @@ class VRAY_PT_mtl_material_render_stats(classes.VRayMaterialPanel):
             return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
         return False
     
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         mtl = context.material
         self.layout.label(text="")
         self.layout.prop(mtl.vray.MtlRenderStats, 'use', text="")
@@ -147,7 +147,7 @@ class VRAY_PT_mtl_material_wrapper(classes.VRayMaterialPanel):
         sel = [n for n in context.material.node_tree.nodes if n.select]
         return context.material and sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         mtl = context.material
         self.layout.label(text="")
         self.layout.prop(mtl.vray.MtlWrapper, 'use', text="")
@@ -176,7 +176,7 @@ class VRAY_PT_material_id(classes.VRayMaterialPanel):
         return context.material and sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         mtl = context.material
         self.layout.label(text="")
         self.layout.prop(mtl.vray.MtlMaterialID, 'use', text="")
@@ -204,7 +204,7 @@ class VRAY_PT_mtl_material_round_edges(classes.VRayMaterialPanel):
         sel = [n for n in context.material.node_tree.nodes if n.select]
         return context.material and sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         mtl = context.material
         self.layout.label(text="")
         self.layout.prop(mtl.vray.MtlRoundEdges, 'use', text="")

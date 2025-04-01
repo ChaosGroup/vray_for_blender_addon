@@ -2,14 +2,10 @@
     "ID": "SettingsCameraDof",
     "Parameters": [
         {
-            "attr": "focus_from_camera",
+            "attr": "use_camera_focus",
             "type": "BOOL",
             "default": false,
-            "desc": "Get Focus Distance From Camera",
-            "name": "Get Focus Distance From Camera",
-            "available": [
-                "HOUDINI"
-            ],
+            "desc": "Use the camera's focus distance instead of the one from the global DoF settings.",
             "options": {
                 "derived": true
             }
@@ -23,18 +19,79 @@
         {
             "attr": "focal_dist",
             "ui": {
-                "quantityType": "distance"
+                "quantityType": "distance",
+                "soft_max": 1000.0,
+                "spin_step": 0.5
             }
+        },
+        {
+            "attr": "aperture",
+            "ui": {
+                "soft_max": 20.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "rotation",
+            "ui": {
+                "soft_max": 360.0,
+                "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "scene_name",
+            "get": "sceneNameGet"
         }
     ],
-    "Type": "CAMERA",
+    "Type": "SETTINGS",
     "Options": {
         "excluded_parameters": [
-            "subdivs"
+            "dont_affect_settings",
+            "focal_dist"
         ],
         "animatable": false
     },
     "excluded_parameters": [
         "subdivs"
-    ]
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "Depth of Field",
+                "label": "Depth of Field",
+                "use_prop": "on",
+                "attrs": [
+                    {
+                        "name": "aperture"
+                    },
+                    {
+                        "name": "center_bias"
+                    },
+                    {
+                        "name": "use_camera_focus",
+                        "label": "Use Camera Focus Distance"
+                    },
+                    {
+                        "name": "focal_dist",
+                        "active": {"cond": "::use_camera_focus!=1"}
+                    },
+                    {
+                        "name": "sides_on",
+                        "label": "Aperture Shape"
+                    },
+                    {
+                        "name": "sides_num",
+                        "label": "Number of Blades"
+                    },
+                    {
+                        "name": "rotation"
+                    },
+                    {
+                        "name": "anisotropy"
+                    }
+                ]
+            }
+        ]
+    }
 }

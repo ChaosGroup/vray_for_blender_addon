@@ -69,7 +69,10 @@
         },
         {
             "attr": "consider_same_object_only",
-            "desc": "When enabled, the dirt affects only the objects themselves, without including contact surfaces and edges. Same object is considered by: 1 - same Shadable instance, 2 - by render ID; 3 - by object ID; 4 - by user attribute. When disabled, the entire scene geometry is participating in the final result."
+            "type": "BOOL",
+            "default": 0,
+            "//Comment": "BOOL is exported as 0/1, which are acidentally the correct values in the enum, therefore no specialized export code is necessary.",
+            "desc": "When enabled, the dirt affects only the objects themselves, without including contact surfaces and edges. When disabled, the entire scene geometry is participating in the final result."
         },
         {
             "attr": "user_attribute",

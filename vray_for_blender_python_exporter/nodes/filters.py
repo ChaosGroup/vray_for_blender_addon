@@ -15,3 +15,7 @@ def filterGeometries(obj):
 
 def filterMaterials(mtl):
     return mtl.vray.is_vray_class    
+
+
+def filterSuns(obj):
+    return filterLights(obj) and (obj.data.vray.light_type == 'SUN')

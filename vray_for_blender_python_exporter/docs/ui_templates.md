@@ -1,3 +1,4 @@
+
 # UI Templates framework
 
 UI Templates ( aka controls ) encapsulate the UI representation and export mechanics for a set of plugin properties. A template could be used with different plugins to provide the same functionality.
@@ -14,13 +15,13 @@ Templates are instantiated and registered at add-on load time. For each template
 
 ```json
 {
-    Parameters: {
+    "Parameters": {
         "attr": "some_property",
         "type": "TEMPLATE",
         "options": {
             "template": {
                 "type": "templateAccessFunction",
-                "custom_exporter": False,
+                "custom_exporter": false,
                 "args": {
                     "bound_property": "exclude_list",
                     "another_bound_property": "use_exclude_list", 
@@ -33,7 +34,7 @@ Templates are instantiated and registered at add-on load time. For each template
 ```
 
 * `type` is always "TEMPLATE"
-* `custom_exporter` set to true to skip the default export procedure and rely on custom export code. This is necessary in order to prevent the default export procedure from overwriting any data exported by the custom export.  
+* `custom_exporter` set to true to skip the default export procedure and rely on custom export code. This is necessary in order to prevent the default export procedure from overwriting any data exported by the custom export. 
 * `template.type` is the name of the access function in templates/__init__.py
 * `template.args` is a dictionary of arbitrary values
 
@@ -53,6 +54,12 @@ The registration procedure will always register two properties for each template
 Selection of multiple scene objects or materials. Both objects and collections can be shown to select from. The list can be filtered to show only the relevant item types. 
 
 **Exports:** a list of objects.
+
+![SingleSelect](images/TemplateSingleObjectSelect.png)
+
+Select a single scene objects or material. The list can be filtered to show only the relevant item types. 
+
+**Exports:** an object.
 
 ### TemplateIncludeExcludeList 
 

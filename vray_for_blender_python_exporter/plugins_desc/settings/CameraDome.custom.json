@@ -9,11 +9,31 @@
             "options": {
                 "derived": true
             }
+        },
+        {
+            "attr": "fov",
+            "ui": {
+                "spin_step": 1.0
+            }
         }
     ],
     "Type": "CAMERA",
     "Options": {
-        "excluded_parameters": [],
-        "animatable": false
+        "excluded_parameters": [
+            "dont_affect_settings"
+        ],
+        "animatable": true
+    },
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "fov"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
     }
 }

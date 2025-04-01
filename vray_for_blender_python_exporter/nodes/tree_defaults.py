@@ -79,7 +79,7 @@ def createNodeTreeForLightObject(light: bpy.types.Light):
 def addLightNodeTree(light: bpy.types.Light):
     ntree = createNodeTreeForLightObject(light)
 
-    lightPluginType = lib_utils.getLightPluginName(light)
+    lightPluginType = lib_utils.getLightPluginType(light)
     lightNode = ntree.nodes.new(f"VRayNode{lightPluginType}")
     
     # Copy property values from light property group to the node property group 

@@ -42,11 +42,24 @@ def _drawRendererSelector(self, context):
         layoutDevice.active = enabled
 
         layoutDevice.prop(vrayExporter, "device_type", text="V-Ray Engine", )
-        
+
         if vrayExporter.device_type == 'GPU':
             layoutDevice.separator()
-            layoutDevice.prop(vrayExporter, "device_gpu_type", text="GPU Device")
+            gpuDeviceRow = layoutDevice.row()
+            gpuDeviceRow.alignment = 'CENTER'
+            gpuDeviceRow.label(text=f"GPU Device:")
 
+            gpuDeviceBox = gpuDeviceRow.box()
+            gpuDeviceBox.alignment = 'CENTER'
+            gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
+            gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
+
+            # Adding the use_gpu_rtx prop into new centered row,
+            # so it can be aligned with the "GPU Device" label.
+            rtxRow = layoutDevice.row()
+            rtxRow.alignment = 'CENTER'
+            rtxRow.scale_x = 2
+            rtxRow.prop(vrayExporter, "use_gpu_rtx")
 
 class VRAY_PT_Context(classes.VRayRenderPanel):
     """ PROPERTIES->Render panel header"""
@@ -123,7 +136,11 @@ class VRAY_PT_Globals(classes.VRayRenderPanel):
         cameraLayout = self.layout.column()
         cameraLayout.active = settingsGI.on and (settingsGI.secondary_engine == _GI_ENGINE_LIGHT_CACHE)
 
-        self.drawSection(context, cameraLayout, "SettingsCameraGlobal", "camera")
+        cameraLayoutContainer  = self.drawSection(context, cameraLayout, "SettingsCameraGlobal", "camera")
+        if cameraLayoutContainer:
+            cameraLayoutContainer.use_property_split = False
+            self.drawPlugin(context, cameraLayoutContainer, "SettingsMotionBlur")
+            self.drawPlugin(context, cameraLayoutContainer, "SettingsCameraDof")
         
         self.drawPlugin(context, self.layout, "SettingsDefaultDisplacement")
         self.drawPlugin(context, self.layout, "SettingsOptions")
@@ -300,7 +317,7 @@ class VRAY_PT_GI(classes.VRayRenderPanel):
     bl_label = "Global Illumination"
     bl_panel_groups = RenderPanelGroups
 
-    def draw_header(self, context: Context):
+    def drawPanelCheckBox(self, context: Context):
         settingsGI = context.scene.vray.SettingsGI
         self.layout.prop(settingsGI, 'on', text="")
 
@@ -410,7 +427,7 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
 
-    def draw_header(self, context: Context):
+    def drawPanelCheckBox(self, context: Context):
         vrayDR = context.scene.vray.VRayDR
         self.layout.prop(vrayDR, "on", text="")
     
@@ -508,7 +525,7 @@ class VRAY_PT_SettingsCaustics(classes.VRayRenderPanel):
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
 
-    def draw_header(self, context):
+    def drawPanelCheckBox(self, context):
         self.layout.prop(context.scene.vray.SettingsCaustics, 'on', text="")
 
     def draw(self, context):

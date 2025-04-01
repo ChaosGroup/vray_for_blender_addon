@@ -11,12 +11,11 @@ from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.defs import ExporterContext, RendererMode
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames
+from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.exporting.instancer_export import InstancerExporter
-from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker, getObjTrackId
+from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker
 from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export
-from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
-from vray_blender.engine.vfb_event_handler import VfbEventHandler
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -53,16 +52,13 @@ def _exportWorld(ctx: ExporterContext):
     world_export.WorldExporter(ctx).export()
 
 
-def _syncPlugins(self, exporterCtx: ExporterContext):
-    """ Perform synchronization of plugin data before starting an export """
-    def impl(context):
-        # Obj exporter
-        geom = obj_export.GeometryExporter(context)
-        geom.prunePlugins()
-        geom.syncObjVisibility()
-        
-        light_export.syncMeshLightInfo(exporterCtx)
 
+
+def _prunePlugins(self, exporterCtx: ExporterContext):
+    """ Remove plugins that are no longer referenced from V-Ray """    
+    
+    def impl(context):
+        obj_export.GeometryExporter(context).prunePlugins()
         mtl_export.MtlExporter(context).prunePlugins()
         light_export.LightExporter(context).prunePlugins()
         view_export.ViewExporter(context).prunePlugins()
@@ -72,13 +68,28 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
         # Persist the new snaphot
         self.activeInstancers = exporterCtx.activeInstancers
 
-    exporterCtx.ts.timeThis("sync_plugins", lambda: impl(exporterCtx))
+    exporterCtx.ts.timeThis("prune_plugins", lambda: impl(exporterCtx))
+
+
+def _syncPlugins(self, exporterCtx: ExporterContext):
+    """ Perform synchronization of plugin data before starting an export """
+    
+    # NOTE: Sync object visibility first because the rest of the operations
+    # depend on it
+    obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
+    
+    light_export.syncLightMeshInfo(exporterCtx)
+
+    if exporterCtx.rendererMode == RendererMode.Interactive:
+        # Only collect light mix info in VFB IPR mode. In viewport mode render channels
+        # are not exported.
+        light_export.collectLightMixInfo(exporterCtx)
 
 
 def _syncPluginsPostExport(self, exporterCtx: ExporterContext):
     """ Perform synchronization of plugin data after an export has completed """
-    light_export.syncMeshLightInfoPostExport(exporterCtx)
-    
+    light_export.syncLightMeshInfoPostExport(exporterCtx)
+
 
 def _syncView(ctx: ExporterContext):
     commonSettings = ctx.commonSettings
@@ -172,12 +183,14 @@ class VRayRendererIprBase:
             commonSettings = CommonSettings(exporterCtx.dg.scene, engine, isInteractive = True)
             commonSettings.updateFromScene()
             exporterCtx.commonSettings = commonSettings
+            exporterCtx.currentFrame = commonSettings.animation.frameCurrent
 
             _syncView(exporterCtx)
             
             if exporterCtx.fullExport or exporterCtx.dg.updates:
                 _syncPlugins(self, exporterCtx)
-                
+                _prunePlugins(self, exporterCtx)
+
                 _exportObjects(exporterCtx)
                 _exportLights(exporterCtx)
                 
@@ -188,6 +201,9 @@ class VRayRendererIprBase:
                 _exportSettings(exporterCtx)
                 _exportMaterials(exporterCtx)
                 _exportWorld(exporterCtx)
+
+                if exporterCtx.rendererMode == RendererMode.Interactive:
+                    self._linkRenderChannels(exporterCtx)
 
                 _syncPluginsPostExport(self, exporterCtx)
 
@@ -247,3 +263,12 @@ class VRayRendererIprBase:
     def _clearTempState(exporterCtx: ExporterContext):
         for tеmpObj in exporterCtx.tempObjects:
             bpy.data.objects.remove(tеmpObj)
+
+
+    def _linkRenderChannels(self, exporterCtx: ExporterContext):
+        """ In order for certain plugins to affect the render channels, those render channels
+            must be explicitly listed in a parameter of the plugin. This function updates
+            the relevant plugin properties.
+        """
+        for pluginData, channelsList in exporterCtx.pluginRenderChannels.items():
+            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList) 

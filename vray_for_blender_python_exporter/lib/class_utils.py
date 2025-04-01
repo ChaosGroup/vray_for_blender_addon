@@ -69,7 +69,7 @@ def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.Property
 
 
 def setVRayCompatibility(uiClass, makeVRayCompatible: bool):
-    """ Add/Remove V-.bay renderer to the list of compatible renderers of a Blender class 
+    """ Add/Remove V-Ray renderer to the list of compatible renderers of a Blender class 
 
         @param uiClass - a Blender UI class that has a COMPAT_ENGINES member
     """
@@ -89,7 +89,9 @@ def registerClass(regClass):
     from vray_blender.lib.sys_utils import StartupConfig
     
     if StartupConfig.debugUI and issubclass(regClass, VRayPanel) and hasattr(regClass, 'bl_label'):
-        regClass.bl_label += "(*)"
+        # If the plugin is disabled and then re-enabled, the debug suffix will already be set
+        if not regClass.bl_label.endswith("(*)"):
+            regClass.bl_label += "(*)"
 
     bpy.utils.register_class(regClass)
 

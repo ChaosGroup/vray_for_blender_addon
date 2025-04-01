@@ -28,7 +28,9 @@ class SmokeExporter(ExporterBase):
 
 
     def exportVolume(self, obj: bpy.types.Object, exportGeometry: bool, isVisible, domainRes=[32,32,32]):
-
+        obj = obj.evaluated_get(self.dg)
+        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+        
         data = SmokeData(Names.object(obj))
         data.cacheDir = bpy.path.abspath(obj.data.filepath)
         data.transform = tools.mat4x4ToTuple(obj.matrix_world)
@@ -66,7 +68,7 @@ class SmokeExporter(ExporterBase):
         return self._exportSmoke(obj, data, exportGeometry, isVisible)
 
 
-    def _exportSmoke(self, obj: bpy.types.ID, data: SmokeData, exportGeometry: bool, isVisible):
+    def _exportSmoke(self, obj: bpy.types.ID, data: SmokeData, exportGeometry: bool, isVisible: bool):
         
         # NOTE: !!! These names should be the same as the ones used by the C++ exporter implementation
         pluginName = f'{data.name}@PhxShaderSim'

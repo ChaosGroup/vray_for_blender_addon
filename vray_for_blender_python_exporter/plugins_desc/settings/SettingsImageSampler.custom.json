@@ -137,9 +137,11 @@
         },
         {
             "attr": "dmc_fireflyRemoval",
-            "desc" : "Enable firefly removal for the bucket samplers",
-            "default": false,
-            "type": "BOOL"
+            "default" : 0.05,
+            "ui": {
+                "max" : 1,
+                "min" : 0
+            }
         },
         {
             "attr" : "progressive_maxSubdivs",

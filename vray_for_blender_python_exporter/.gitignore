@@ -17,6 +17,7 @@ bin/VRayZmqServer
 
 # From installation
 bin/setvrlservice.exe
+bin/vraytools.exe
 uninstall
 
 external/pyparsing/INSTALLER

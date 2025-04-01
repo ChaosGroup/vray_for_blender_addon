@@ -107,10 +107,8 @@ class InstancerExporter(ExporterBase):
         if instancerObj.instance_type == 'COLLECTION':
             instancerObj = instancerObj.instance_collection
 
-        # TODO: implement lazy defaultdict
-        instancer = Instancer(inst)
         idInstancer = mmh3.hash(f"{id(instancerObj.original)}{id(instancedObj.original)}")
-        instancer = self.instancers.setdefault(idInstancer, instancer)
+        instancer = self.instancers.setdefault(idInstancer, Instancer(inst))
         instancer.append(instance)
         
         self.instanceIndex += 1
@@ -119,6 +117,7 @@ class InstancerExporter(ExporterBase):
     def export(self):
         # Export an Instancer2 plugin + a wrapper node for it
         for instancer in self.instancers.values():
+            vray.pluginCreate(self.renderer, instancer.name, 'Instancer2')
             vray.exportInstancer(self.renderer, instancer.toData())
             
             # Track the Instancer2 plugin in both the instancer and the instanced_object

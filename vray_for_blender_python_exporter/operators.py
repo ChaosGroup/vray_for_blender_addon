@@ -1,12 +1,10 @@
-
 import os
 import re
 
 import bpy
 from bpy.props import *
-
 from vray_blender.engine  import vfb_event_handler
-from vray_blender.lib     import blender_utils, color_utils, sys_utils, common_settings, path_utils
+from vray_blender.lib     import blender_utils, color_utils, sys_utils, common_settings
 from vray_blender.lib.defs import ProdRenderMode
 from vray_blender         import debug
 
@@ -14,7 +12,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
-from vray_blender.version import getSceneVersionString
+from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber
 
 
 
@@ -304,6 +302,51 @@ class VRAY_OT_add_sky(bpy.types.Operator):
 ##     ##  ##  ##    ## ##    ##
 ##     ## ####  ######   ######
 
+class VRAY_OT_message_box_base(bpy.types.Operator):
+    """ Base class for an OK/Cancel message box. It will position the dialog
+        in the center of the screen.
+
+        Usage:
+        ------
+        class MyMsgBox(VRAY_OT_message_box_base):
+            ...
+            def invoke(self, context, event):
+                self._centerDialog(context, event)
+                return context.window_manager.invoke_props_dialog(self)
+    """
+    originalMouseX : bpy.props.IntProperty(default = 0)
+    originalMouseY: bpy.props.IntProperty(default = 0)
+    mouseMoved: bpy.props.BoolProperty(default=False)
+
+    def _centerDialog(self, context, event):
+        # Move the cursor to the center of the screen, as Blender will show the dialog somwhere around the 
+        # cursor position. First however save the current cursor position so that we could move it back 
+        # once the dialog has been shown, or the user may be confused by the jumping cursor.
+        self.originalMouseX = event.mouse_x
+        self.originalMouseY = event.mouse_y
+        context.window.cursor_warp(int(context.window.width / 2), int(context.window.height / 2))
+
+    
+    def modal(self, context, event):
+        match event.type:
+            case 'RET':
+                # User has confirmed the operation. The execute() will be invoked by Blender
+                # when this method returns.
+                return {'FINISHED'}
+            case 'ESC':
+                return {'CANCELLED'}
+            case _:
+                return {"PASS_THROUGH"}
+    
+
+    def _cursorWrap(self, context: bpy.types.Context):
+        if not self.mouseMoved:
+            # Move the cursor back to where the user expects it to be
+            self.mouseMoved = True
+            context.window.cursor_warp(self.originalMouseX, self.originalMouseY)
+
+
+
 class VRAY_OT_add_new_material(bpy.types.Operator):
     bl_idname      = "vray.new_material"
     bl_label       = "Add New Material"
@@ -408,10 +451,19 @@ class VRAY_OT_select_vrscene_export_file(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_render(bpy.types.Operator):
+class VRAY_OT_render(VRAY_OT_message_box_base):
     bl_idname = "vray.render"
     bl_label = "Start Production Render"
     bl_description = "Render scene using the V-Ray renderer"
+
+    class _ErrorType:
+        NoError = 0
+        FileExists = 1
+        InvalidFileName = 2
+        InvalidFolderName = 3
+
+    errorType: bpy.props.IntProperty(default=_ErrorType.NoError)
+    errorMsg:  bpy.props.StringProperty() # Additional error info in case of a failed check
 
     @classmethod
     def description(cls, context, properties):
@@ -419,33 +471,66 @@ class VRAY_OT_render(bpy.types.Operator):
             return cls.bl_description
         return f"{cls.bl_description}. Unavailable until V-Ray is initialized"
 
-
+    @classmethod
+    def poll(cls, context):
+        # This function is essential for the 'Render' keyboard shortcut to work
+        # corrrectly. The shortcut is the same as the one registered by Blender
+        # for its renderers. By returning False from this function, we tell Blender 
+        # to disregard the V-Ray shortcut and go on executing the Blender one.
+        from vray_blender.ui.classes import pollEngine
+        return pollEngine(context)
+    
     def execute(self, context):
         if vray.isInitialized():
             debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
             vfb_event_handler.VfbEventHandler.startProdRender()
         else:
-            debug.report('WARNING', 'Can\'t start render job. V-Ray is not initialized')
+            debug.report('WARNING', "Can't start render job. V-Ray is not initialized")
         return {'FINISHED'}
 
-    def _outputResultExists(self, context):
+    def _checkOutputInfo(self, context):
         """ Checks if there is rendered result with the same name """
+
+        from vray_blender.external.pathvalidate import is_valid_filename
+        from vray_blender.lib.path_utils import expandPathVariables, getOutputFileName
+
+        # Reset any previously set values
+        self.errorType = __class__._ErrorType.NoError
+        self.errorMsg = ''
 
         if not context.scene.vray.Exporter.auto_save_render:
             # The Output rollout is disabled, no images will be written to disk
-            return 
+            return True
         
         settingsOutput = context.scene.vray.SettingsOutput
 
-        if not (imgDir := path_utils.expandPathVariables(context, settingsOutput.img_dir)):
+        # Validate the output folder and try to create it
+        if not (imgDir := expandPathVariables(context, settingsOutput.img_dir)):
+            self.errorType = __class__._ErrorType.InvalidFolderName
+            return False
+                
+        if not settingsOutput.img_file or \
+            not is_valid_filename(expandPathVariables(context, settingsOutput.img_file)):
+            self.errorType = __class__._ErrorType.InvalidFileName
             return False
 
+
+        try:
+            os.makedirs(imgDir, exist_ok=True)
+        except Exception as exc:
+            self.errorType = __class__._ErrorType.InvalidFolderName
+            self.errorMsg = str(exc)
+            return False   
+
+        if not settingsOutput.output_overwrite_warn:
+            return True
+        
         imgFiles = [] # When rendering multiple view layers and animations the output images will be more than one
         imgFmt = int(settingsOutput.img_format)
         viewLayers = [layer for layer in context.scene.view_layers if layer.use]
         for layer in viewLayers:
             layerName = layer.name if len(viewLayers) > 1 else ""
-            imgFile = path_utils.getOutputFileName(context,  settingsOutput.img_file, imgFmt, layerName)
+            imgFile = getOutputFileName(context,  settingsOutput.img_file, imgFmt, layerName)
 
             if context.scene.vray.Exporter.animation_mode == 'ANIMATION':
                 # Rendered results of the animation have digits representing their frame numbers.
@@ -461,23 +546,43 @@ class VRAY_OT_render(bpy.types.Operator):
                 imgFiles.append(imgFile)
 
 
-        return any( any(re.match(imgFile, file) for imgFile in imgFiles) for file in os.listdir(imgDir))
+        if any( any(re.match(imgFile, file) for imgFile in imgFiles) for file in os.listdir(imgDir)):
+            self.errorType = __class__._ErrorType.FileExists
+            
+        return not self.errorType
 
+        
     def invoke(self, context, event):
-        settingsOutput = context.scene.vray.SettingsOutput
-        if settingsOutput.output_overwrite_warn and self._outputResultExists(context):
+        if not self._checkOutputInfo(context):
             # Invoking props dialog that warns the user that the new render job will 
             # overwrite the render result
-            return context.window_manager.invoke_props_dialog(self, width=300)
-
+            self._centerDialog(context, event)
+            return context.window_manager.invoke_props_dialog(self, width=400)
+        
         return self.execute(context)
+
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="An output image with the same name already exists.")
-        layout.label(text="Overwrite it?")
-        layout.prop(context.scene.vray.SettingsOutput, "output_overwrite_warn", text="Always ask me.")
 
+        match self.errorType:
+            case __class__._ErrorType.InvalidFolderName | __class__._ErrorType.InvalidFileName:
+                alias = 'folder' if self.errorType == __class__._ErrorType.InvalidFolderName else 'file'
+                layout.label(text=f"The output {alias} name for the rendered image(s) is empty or invalid.")
+                
+                if self.errorMsg:
+                    layout.label(text=f"    {self.errorMsg}.")
+                
+                layout.label(text="Render output will not be saved.")
+                layout.label(text="Do you still want to render?")
+            
+            case __class__._ErrorType.FileExists:
+                layout.label(text="An output image with the same name already exists.")
+                layout.label(text="Overwrite it?")
+                layout.prop(context.scene.vray.SettingsOutput, "output_overwrite_warn", text="Always ask me.")
+            
+            case _:
+                assert not f'Invalid message selector: {self.errorType}'
 
 
 class VRAY_OT_render_viewport(bpy.types.Operator):
@@ -522,43 +627,12 @@ class VRAY_OT_render_interactive_stop(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_render_dialog(bpy.types.Operator):
- 
-    originalMouseX : bpy.props.IntProperty(default = 0)
-    originalMouseY: bpy.props.IntProperty(default = 0)
-    mouseMoved: bpy.props.BoolProperty(default=False)
-
-    def _invokeDialog(self, context, event):
-        # Move the cursor to the center of the screen, as Blender will show the dialog somwhere around the 
-        # cursor position. First however save the current cursor position so that we could move it back 
-        # once the dialog has been shown, or the user may be confused by the jumping cursor.
-        self.originalMouseX = event.mouse_x
-        self.originalMouseY = event.mouse_y
-        context.window.cursor_warp(int(context.window.width / 2), int(context.window.height / 2))
-
-    
-    def modal(self, context, event):
-        if event.type == 'RET':
-            # User has confirmed the operation. The execute() will be invoked by Blender
-            # when this method returns.
-            return {'FINISHED'}
-        
-        if event.type == 'ESC':
-            return {'CANCELLED'}
-
-        return {"PASS_THROUGH"}
-    
-    def _cursorWrap(self, context: bpy.types.Context):
-        if not self.mouseMoved:
-            # Move the cursor back to where the user expects it to be
-            self.mouseMoved = True
-            context.window.cursor_warp(self.originalMouseX, self.originalMouseY)
 
 
-class VRAY_OT_export_vrscene(VRAY_OT_render_dialog):
+class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
     bl_idname = "vray.export_vrscene"
     bl_label = "Save as V-Ray"
-    bl_description = "Export scene to .vrscene file using V-Ray production renderer"
+    bl_description = "Export scene to .vrscene file using V-Ray production renderer.\nV-Ray must be the active renderer for this command to be enabled."
 
     exportView: bpy.props.BoolProperty(
         name='View',
@@ -605,6 +679,11 @@ class VRAY_OT_export_vrscene(VRAY_OT_render_dialog):
         description="If True, run the export operator directly, not through VfbEventHandler" 
     )
 
+    @classmethod
+    def poll(cls, context):
+        from vray_blender.ui.classes import pollEngine
+        return pollEngine(context) 
+    
     def execute(self, context):
         debug.report('INFO', 'Started .vrscene export. Blender UI will be unresponsive until the operation is complete.')
         fileTypes = []
@@ -644,7 +723,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_render_dialog):
             if category == 'bitmaps':           self.exportBitmaps = True
             if category == 'render_elements':   self.exportRenderChannels = True
 
-        self._invokeDialog(context, event)
+        self._centerDialog(context, event)
         
         return context.window_manager.invoke_props_dialog(self, width=400, title="Export V-Ray .vrscene file", confirm_text="Export")
     
@@ -691,7 +770,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_render_dialog):
 
 
 
-class VRAY_OT_cloud_submit(VRAY_OT_render_dialog):
+class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
     bl_idname = "vray.cloud_submit"
     bl_label = "Submit to Cloud"
     bl_description = "Submit scene for Cloud rendering using V-Ray production renderer"
@@ -706,7 +785,7 @@ class VRAY_OT_cloud_submit(VRAY_OT_render_dialog):
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        self._invokeDialog(context, event)
+        self._centerDialog(context, event)
         return context.window_manager.invoke_props_dialog(self, width=400, title="Submit to Cloud", confirm_text="Submit")
     
     def draw(self, context: bpy.types.Context):
@@ -731,71 +810,42 @@ class VRAY_OT_copy_plugin_version(bpy.types.Operator):
         debug.report('INFO', 'Plugin version copied to clipboard.')
         return {'FINISHED'}
 
-class VRAY_OT_upgrade_scene(VRAY_OT_render_dialog):
+class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
     bl_idname       = "vray.upgrade_scene"
     bl_label        = "Upgrade Blender scene to the current version of the V-Ray plugin"
     bl_description  = "If the opened scene has been created with a previous version of the V-Ray plugin, upgrade it to the current version."
     
     def execute(self, context):
-        import importlib
-        from vray_blender.version import getBuildVersionString, getSceneVersionString, getUpgradeScriptModule
+        from vray_blender.version import getSceneUpgradeNumber, getAddonUpgradeNumber, upgradeScene
 
-        sceneVersion = getSceneVersionString()
-        addonVersion = getBuildVersionString()
-        
-        upgradeModule = None
-        upgradeScriptModule = getUpgradeScriptModule(sceneVersion, addonVersion)
+        sceneUpgradeNum = getSceneUpgradeNumber()
+        addonUpgradeNum = getAddonUpgradeNumber()
 
-        try:
-            upgradeModule = importlib.import_module(upgradeScriptModule)
-        except ImportError as e:
-            pass
-            
-        if (sceneVersion == addonVersion) or (upgradeModule is None):
-            return {'CANCELLED'}
-        
-        debug.printAlways(f"Upgrading scene to VRay for Blender version [{addonVersion}]")
-        debug.printAlways(f"Running upgrade script {upgradeScriptModule}")
-        
-        try:
-            upgradeModule.run()
-        except  Exception as e:
-            debug.printError(f"Scene upgrade failed with exception: {e}")
-            debug.report('INFO', f'Scene upgrade failed. See console log for details.')
-            return {'CANCELLED'}
-            
-        debug.report('INFO', f'Scene upgraded to VRay for Blender version [{addonVersion}].')
-        return {'FINISHED'}
+        assert sceneUpgradeNum != addonUpgradeNum
+        return {'FINISHED'} if upgradeScene(sceneUpgradeNum, addonUpgradeNum) else {'CANCELLED'}
 
 
     def invoke(self, context, event):
-        from vray_blender.version import getBuildVersionString, getSceneVersionString, getNumericVersion
+        sceneUpgradeNum = getSceneUpgradeNumber()
+        addonUpgradeNum = getAddonUpgradeNumber()
 
-        sceneVersion = getNumericVersion(getSceneVersionString())
-        addonVersion = getNumericVersion(getBuildVersionString())
-
-        if sceneVersion != addonVersion:
-            self._invokeDialog(context, event)
+        if sceneUpgradeNum != addonUpgradeNum:
+            self._centerDialog(context, event)
             return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Upgrade", confirm_text="OK")
         
         return {'CANCELLED'}
     
 
     def draw(self, context: bpy.types.Context):
-        from vray_blender.version import getBuildVersionString, getSceneVersionString, getNumericVersion
+        from vray_blender.events import isDefaultScene
+        
+        sceneAlias = "default scene" if isDefaultScene() else "scene"
 
-        sceneVersion = getNumericVersion(getSceneVersionString())
-        addonVersion = getNumericVersion(getBuildVersionString())
-
-        if sceneVersion:
-            self.layout.label(text = f"Upgrade scene from {sceneVersion} to {addonVersion}")
-        else:
-            # The scene has no version recorded
-            self.layout.label(text = f"Upgrade scene to {addonVersion}")
-
+        self.layout.label(text = f"The {sceneAlias} was created with an older version of V-Ray for Blender.")
+        
         self.layout.separator()
         self.layout.label(text="Click OK to run the upgrade procedure.")
-        self.layout.label(text="If everything went well, save the .blend file")
+        self.layout.label(text="If everything goes well, save the .blend file.")
         self.layout.label(text="If you encounter any problems, look in the console for error messages.")
         self._cursorWrap(context)
 

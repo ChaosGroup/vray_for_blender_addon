@@ -25,6 +25,7 @@ public:
 	virtual bool      renderFrame(bool waitForCompletion) override;
 	virtual void      renderSequence(int start, int end, int step) override;
 	virtual bool	  renderSequenceRunning() override;
+	virtual bool	  vrsceneExportRunning() override;
 	virtual int 	  lastRenderedFrame() override;
 	virtual void      setRenderFrame(float frame) override;
 	virtual void	  abortRender()  override;

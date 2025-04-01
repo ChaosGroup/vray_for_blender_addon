@@ -211,9 +211,12 @@ SKIPPED_PLUGINS = (
     "TexParticleSampler",
     "TexVRayFurSampler",
     "TrimmingRegion",
-    "TrimmingRegionsComplex"
+    "TrimmingRegionsComplex",
 
-
+    # To be re-implemented
+    "TexOpenVDB",
+    "MtlGLSL",
+    "MtlOSL"
 )
 
 
@@ -223,5 +226,6 @@ MANUALLY_CREATED_PLUGINS = (
     'TexOSL', 
     'MtlOSL', 
     'MtlMulti',
-    'RenderChannelColor'
+    'RenderChannelColor',
+    'RenderChannelDenoiser'
 )

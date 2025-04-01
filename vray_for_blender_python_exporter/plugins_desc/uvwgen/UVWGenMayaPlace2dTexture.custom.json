@@ -15,13 +15,13 @@
             "attr": "coverage_v",
             "default": 1.0,
             "desc": "V values are remapped to 1.0/coverage_v",
-            "ui": { 
+            "ui": {
                 "spin_step": 0.01,
                 "display_name": "Coverage V"
             }
         },
         {
-            "attr": "repeat_u_tex",
+            "attr": "repeat_u",
             "default": 1.0,
             "desc": "Multiplier for U values",
             "ui": {
@@ -30,7 +30,7 @@
             }
         },
         {
-            "attr": "repeat_v_tex",
+            "attr": "repeat_v",
             "default": 1.0,
             "desc": "Multiplier for V values",
             "ui": {
@@ -62,14 +62,14 @@
             }
         },
         {
-            "attr": "offset_u_tex",
+            "attr": "offset_u",
             "ui": {
                 "spin_step": 0.01,
                 "display_name": "Offset U"
             }
         },
         {
-            "attr": "offset_v_tex",
+            "attr": "offset_v",
             "ui": {
                 "spin_step": 0.01,
                 "display_name": "Offset V"
@@ -94,7 +94,7 @@
             "ui": { "display_name": "Rotate Frame"}
         },
         {
-            "attr": "rotate_uv_tex",
+            "attr": "rotate_uv",
             "ui": { "display_name": "Rotate UV"}
         }
     ],
@@ -102,26 +102,8 @@
         "widgets": [
             {
                 "layout": "COLUMN",
+                "comment": "WARNING: The code in uvw_mapping.py will prepend the contents of Node::widgets section here. Watch out for duplicate fields!",
                 "attrs": [
-                    {
-                        "name": "repeat_u_tex"
-                    },
-                    {
-                        "name": "repeat_v_tex"
-                    },
-                    {
-                        "name": "offset_u_tex"
-                    },
-                    {
-                        "name": "offset_v_tex"
-                    },
-                    {
-                        "name": "rotate_uv_tex",
-                        "label": "Rotate UV"
-                    },
-                    {
-                        "layout": "SEPARATOR"
-                    },
                     {
                         "name": "coverage_u"
                     },
@@ -164,6 +146,21 @@
                 "layout": "COLUMN",
                 "attrs": [
                     {
+                        "name": "repeat_u"
+                    },
+                    {
+                        "name": "repeat_v"
+                    },
+                    {
+                        "name": "offset_u"
+                    },
+                    {
+                        "name": "offset_v"
+                    },
+                    {
+                        "name": "rotate_uv"
+                    },
+                    {
                         "name": "mirror_u"
                     },
                     {
@@ -178,23 +175,7 @@
                 ]
             }
         ],
-        "input_sockets": [
-            {
-                "name": "repeat_u_tex"
-            },
-            {
-                "name": "repeat_v_tex"
-            },
-            {
-                "name": "offset_u_tex"
-            },
-            {
-                "name": "offset_v_tex"
-            },
-            {
-                "name": "rotate_uv_tex"
-            }
-       ]
+        "input_sockets": [ ]
     },
     "Options": {
         "excluded_parameters": [
@@ -205,13 +186,14 @@
             "translate_frame_u_tex",
             "translate_frame_v_tex",
             "rotate_frame_tex",
-            "repeat_u",
-            "repeat_v",
-            "offset_u",
-            "offset_v",
-            "rotate_uv",
+            "repeat_u_tex",
+            "repeat_v_tex",
+            "offset_u_tex",
+            "offset_v_tex",
+            "rotate_uv_tex",
             "noise_u_tex",
-            "noise_v_tex"
+            "noise_v_tex",
+            "uvwgen"
         ],
         "animatable": true
     }

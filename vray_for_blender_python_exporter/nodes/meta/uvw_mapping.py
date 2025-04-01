@@ -8,7 +8,7 @@ from vray_blender.nodes.mixin import VRayNodeBase
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.nodes import sockets as SocketUtils
 
-def _getMappingPluginType(self):
+def _getMappingPluginType(self: bpy.types.Node):
     match self.mapping_node_type:
         case 'UV':
             return 'UVWGenMayaPlace2dTexture'
@@ -22,7 +22,7 @@ def _getMappingPluginType(self):
     assert False, f"Invalid UVW mapping type: {self.mapping_node_type}"
     
 
-def _addMappingInputSockets(self):
+def _addMappingInputSockets(self: bpy.types.Node):
     
     mappingPluginType = _getMappingPluginType(self)
     if mappingPluginType:
@@ -31,7 +31,7 @@ def _addMappingInputSockets(self):
         SocketUtils.addInput(self, 'VRaySocketCoords', "Mapping")
 
 
-def _mappingTypeUpdate(self: bpy.types.Node, context):
+def _mappingTypeUpdate(self: bpy.types.Node, context: bpy.types.Context):
     
     for sock in self.inputs:
         self.inputs.remove(sock)
@@ -53,7 +53,7 @@ def _mappingTypeUpdate(self: bpy.types.Node, context):
 
 class VRayNodeUVWMapping(VRayNodeBase):
     bl_idname = 'VRayNodeUVWMapping'
-    bl_label  = 'V-Ray UWV Mapping'
+    bl_label  = 'V-Ray UVW Mapping'
 
     vray_type  : bpy.props.StringProperty(default='UVWGEN')
     vray_plugin: bpy.props.StringProperty(default='UVWGenMayaPlace2dTexture')

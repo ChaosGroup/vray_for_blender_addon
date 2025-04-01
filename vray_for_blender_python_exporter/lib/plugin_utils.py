@@ -373,25 +373,24 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None):
 
     return 1
 
-# Gets AttrPlugin that represents blender object
-# Lights aren't represented by VRayNode
-def objectToAttrPlugin(obj):
-    if isinstance(obj, bpy.types.Object):
-        match obj.type:
-            case 'LIGHT':
-                return AttrPlugin(Names.objectData(obj))
-            case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
-                return AttrPlugin(Names.vrayNode(Names.object(obj)))   
-    return AttrPlugin()
-
-# Converts the data of object to AttrPlugin
-def objDataToAttrPlugin(obj):
-    if isinstance(obj, bpy.types.Object):
-        return AttrPlugin(Names.objectData(obj))
-    elif isinstance(obj, bpy.types.ID):
-        return AttrPlugin(Names.object(obj))
-        
-    return AttrPlugin()
+def objectToAttrPlugin(obj: bpy.types.Object):
+    """ Constructs an AttrPlugin for a scene object. """
+    
+    if obj is None:
+        return AttrPlugin()
+    
+    assert isinstance(obj, bpy.types.Object)
+    
+    match obj.type:
+        case 'LIGHT':
+            # Lights are represented by a LightXXX plugin in the V-Ray scenes
+            return AttrPlugin(Names.object(obj))
+        case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
+            # Geometry objects are represented by a Node plugin in the V-Ray scene
+            return AttrPlugin(Names.vrayNode(Names.object(obj)))   
+        case _:
+            debug.printWarning(f"Creating AttrPlugin struct for an unknown object type: {obj.type} [{obj.name}]")
+            return AttrPlugin()
 
 
 # Gets list of AttrPlugins from Blender collection of objects
@@ -475,7 +474,7 @@ class UIConditionConverter:
             paramCode = ( ""
                 f"{tab}result = None\n"
                 f"{tab}if node:\n"
-                f"{tab}{tab}sock = next((s for s in node.inputs if s.vray_attr=='{p}'), None)\n"
+                f"{tab}{tab}sock = next((s for s in node.inputs if hasattr(s, 'vray_attr') and (s.vray_attr=='{p}')), None)\n"
                 f"{tab}{tab}if sock:\n"
                 f"{tab}{tab}{tab}result = sock.value\n"
                 f"{tab}if not result:\n"
@@ -500,6 +499,8 @@ class UIConditionConverter:
         # All tokens are strings, we need to convert to the actual type for proper evaluation.
         if prop['type'] in ('INT'):
             value = int(value)
+        if prop['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
+            value = float(value)
         elif prop['type'] == 'BOOL':
             value = bool(int(value))
         else:

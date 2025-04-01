@@ -53,10 +53,9 @@ class RenderViewParams:
         self.fov            = 0.785398
         self.ortho          = False
         self.ortho_width    = 1.0
-        self.use_clip_start = False
         self.clip_start     = 0.0
-        self.use_clip_end   = False
         self.clip_end       = 1.0
+        self.clipping       = True
         self.tm             = Matrix()
 
 
@@ -77,7 +76,9 @@ class ViewParams:
 
         self.usePhysicalCamera = False
         self.useDomeCamera = False
+        self.useViewPerspective = False # If True the viewport camera is being used
         self.cameraObject: bpy.types.Object = None
+        self.cameraParams = CameraParams()
         self.renderSizes = RenderSizes()
         self.isActiveCamera = False     # Set to true if this is the active scene camera which should be rendered
 
@@ -180,6 +181,9 @@ class RenderSizes:
 class CameraParams:
     """ Generic camera params"""
     def __init__(self):
+        self._setDefaultParams()
+
+    def _setDefaultParams(self):
         self.is_ortho   = False
         self.lens       = 0.0
         self.orthoScale = 0.0
@@ -200,6 +204,7 @@ class CameraParams:
 
     def setFromObject(self, cameraObj: bpy.types.Object):
         """ Set params from a camera-like object in the scene """
+        self._setDefaultParams()
         if not cameraObj:
             return
         
@@ -244,6 +249,7 @@ class CameraParams:
 
     def setFromView3d(self, dg: bpy.types.Depsgraph, v3d: bpy.types.SpaceView3D, rv3d: bpy.types.RegionView3D):
         """ Set params from a viewport's settings """
+        self._setDefaultParams()
         self.lens = v3d.lens
         self.clip_start = v3d.clip_start
         self.clip_end = v3d.clip_end

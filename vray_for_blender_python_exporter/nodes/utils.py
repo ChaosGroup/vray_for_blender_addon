@@ -3,11 +3,12 @@ import bpy
 
 
 from vray_blender import debug
+from vray_blender.exporting.tools import getInputSocketByName, getNodeLink
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
 from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, TypeToSocket, TypeToSocketNoValue
 from vray_blender.lib.attribute_utils import getAttrDisplayName
-from vray_blender.exporting.tools import getInputSocketByName, getNodeLink
+from vray_blender.nodes.tools import isVrayNode, isVraySocket
 
 
 class PropertyContext:
@@ -89,30 +90,35 @@ def getNodeByType(ntree, nodeType):
             return n
     return None
 
-def nodesAreConnected(startNode: bpy.types.Node, endNode: bpy.types.Node, visited=None):
+def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, visited=None):
     """
-    Check if two nodes are linked directly or indirectly (through other nodes).
+    Check if two nodes are linked directly or indirectly (through other nodes). The check is
+    done for any connection starting at an output socket of fromNode and ending at an input
+    socket of toNode that is enabled for export.
 
-    @param startNode - The starting node (bpy.types.Node)
-    @param endNode - The target node (bpy.types.Node)
-    @param visited - A set of visited nodes to avoid revisiting (set of bpy.types.Node)
+    @param fromNode (bpy.types.Node) - The node from whose output sockets to start the search
+    @param toNode (bpy.types.Node) - The end node for the search.
+    @param visited (set of bpy.types.Node) - A set of visited nodes, used to avoid revisiting 
     """
-    if (startNode is None) or (endNode is None):
+    if (fromNode is None) or (toNode is None):
         return False
 
     if visited is None:
         visited = set()
 
-    visited.add(startNode)
+    visited.add(fromNode)
 
-    for output in startNode.outputs:
+    for output in fromNode.outputs:
         for link in output.links:
             nextNode = link.to_node
 
-            if nextNode == endNode:
+            if not link.to_socket.shouldExportLink():
+                return False
+
+            if nextNode == toNode:
                 return True
 
-            if (nextNode not in visited) and nodesAreConnected(nextNode, endNode, visited):
+            if (nextNode not in visited) and areNodesInterconnected(nextNode, toNode, visited):
                 return True
 
     return False
@@ -431,7 +437,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                     if ob.vray and ob.vray.ntree:
                         node = getNodeOfPropGroup(self)
                         objTreeOutput = getOutputNode(ob.vray.ntree, 'OBJECT')
-                        if nodesAreConnected(node, objTreeOutput):
+                        if areNodesInterconnected(node, objTreeOutput):
                             ob.update_tag()
 
                 elif (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
@@ -506,10 +512,10 @@ def tagObjectsForMaterial(mtl: bpy.types.Material):
 
 def getInputSocketByVRayAttr(node: bpy.types.Node, attrName):
     try:
-        return next((i for i in node.inputs if i.vray_attr == attrName), None)
+        return next((i for i in node.inputs if isVraySocket(i) and (i.vray_attr == attrName)), None)
     except AttributeError as ex:
         debug.printError(f"{node.bl_idname}::{attrName} has no 'vray_attr' field")
-        raise ex
+        return None
         
 
 def tagRedrawArea(areaType):
@@ -598,12 +604,7 @@ def getLightOutputNode(lightNtree: bpy.types.NodeTree):
         those of other types in that there is no single output node type but each light type
         has its own output node type.
     """
-
-    for node in lightNtree.nodes:
-        if node.vray_type == 'LIGHT':
-            return node
-
-    return None
+    return next((n for n in lightNtree.nodes if isVrayNode(n) and (n.vray_type == 'LIGHT')), None)
 
 
 def getActiveTreeNode(ntree: bpy.types.NodeTree, treeType: str):

@@ -2,5 +2,71 @@
 {
     "ID" : "RenderChannelLightMix",
     "Name" : "Light Mix",
-    "Subtype" : "SPECIAL"
+    "Subtype" : "SPECIAL",
+    "Parameters": [
+        {
+            "attr": "mode",
+            "type": "ENUM",
+            "desc": "The working mode of the light mix",
+            "default": "",
+            "items": [
+                [
+                    "individual",
+                    "Individual lights",
+                    "The lighting information of each light is stored in a separate channel"
+                ],
+                [
+                    "grouped",
+                    "Grouped lights",
+                    "The lighting information of each scene collection containing lights is placed in a separate channel. All lights that are not in any collection are stored in their individual render channels"
+                ],
+                [
+                    "manual",
+                    "Manual light selects",
+                    "Render channels are created based on the existing Light Select render elements in the scene. Lights that are not specified there are collected in a single render channel called Rest."
+                ]
+            ],
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "separate_emissive_material",
+            "type": "BOOL",
+            "desc": "When enabled, illuminating materials are also included in the VFB Light Mix controls together with scene lights. The materials that V-Ray respects are: V-Ray Material with non-black self-illumination and V-Ray Light Material.",
+            "default":false,
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "denoise",
+            "desc": "Enables the render element's denoising, provided the Denoiser render element is present."
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "channelType",
+                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                    },
+                    {
+                        "name": "mode",
+                        "label": "Group By"
+                    },
+                    {
+                        "name": "separate_emissive_material"
+                    },
+                    {
+                        "name": "denoise"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options" : {
+        "animatable": false
+    }
 }

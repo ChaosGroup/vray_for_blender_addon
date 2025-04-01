@@ -15,8 +15,7 @@
                 1.0,
                 1.0,
                 1.0
-            ],
-            "update": "onUpdateAttribute"
+            ]
         },
         {
             "attr": "intensity_tex",
@@ -98,6 +97,7 @@
                 ]
             ],
             "type": "ENUM",
+            "update": "onUpdateAttribute",
             "options": {
                 "derived": true
             }
@@ -108,6 +108,11 @@
             "desc": "Color temperature in K",
             "type": "FLOAT",
             "update": "onUpdateAttribute",
+            "ui": {
+                "spin_step": 100,
+                "min": 800,
+                "max": 12000
+            },
             "options": {
                 "derived": true
             }
@@ -139,8 +144,10 @@
             "options": {
                 "template": {
                     "type": "templateMultiObjectSelect",
+                    "custom_exporter": true,
                     "args": {
                         "collection": "objects",
+                        "bound_property": "geometry",
                         "filter_function": "filters.filterGeometries"
                     }
                 }
@@ -148,6 +155,7 @@
         },
         {
             "attr": "shadowBias",
+            "default" : 0.005,
             "ui": {
                 "quantityType": "distance"
             }

@@ -148,7 +148,9 @@ def vrayDrawShape(batch, mult, color, tm=Matrix.Identity(4)):
 
 
 def vrayDrawLightSphere(ob, col):
-    r = ob.data.vray.LightSphere.radius
+    light = ob.data
+    propGroup = lib_utils.getLightPropGroup(light, 'LightSphere')
+    r = propGroup.radius
 
     tm = ob.matrix_world
     vrayDrawShape(circleBatch, r, col, tm)
@@ -221,7 +223,7 @@ def vrayDrawLightShape():
             continue
 
         light = ob.data
-        vrayLight = lib_utils.getLightPropGroup(light)
+        vrayLight = lib_utils.getLightPropGroup(light, lib_utils.getLightPluginType(light))
 
         if vrayLight.enabled:
             color = colorActive if ob == bpy.context.active_object else colorInactive

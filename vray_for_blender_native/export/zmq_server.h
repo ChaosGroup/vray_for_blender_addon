@@ -17,6 +17,7 @@
 // Forward declarations
 struct PluginDesc;
 
+namespace proto = VrayZmqWrapper;
 
 namespace VRayForBlender {
 
@@ -81,12 +82,11 @@ private:
 
 	void startControlConn();
 
-	// Forwards data from ImportAsset message to python function for vray file fimporting
-	void importCosmosAsset(const VrayZmqWrapper::VRayMessage &message);
-
-	void handleMsg(const VrayZmqWrapper::VRayMessage &message);
-
-	void handleStatusMsg(const VrayZmqWrapper::VRayMessage& message);
+	/// Process a message from ZmqServer
+	void handleMsg(const zmq::message_t& msg);
+	
+	void processControlOnImportAsset(const proto::MsgControlOnImportAsset& message);
+	void processControlOnRendererStatus(const proto::MsgControlOnRendererStatus& message);
 
 	/// Gets callback from m_pyCallbacks
 	py::object getPythonCallback(const std::string &name);

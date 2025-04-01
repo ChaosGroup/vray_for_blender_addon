@@ -19,6 +19,15 @@ class _Event:
     RenderInteractiveStop   = 7     # Stop IPR(Interactive) Rendering
     ExportVrscene           = 8     # Export the current scene to a .vrscene files
     CloudSubmit             = 9     # Submit scene for V-Ray Cloud rendering
+    ReportStatus            = 10    # Report to Bleder status area
+   
+
+class _EventInfo:
+    """ Encapsulates the event type and any parameters to the evennt handler procedure """
+    def __init__(self, eventType, *args, **kwargs):
+        self.eventType = eventType
+        self.args = args
+        self.kwargs = kwargs
 
 class _VfbEventHandler:
     """ Processor for VFB events received in arbitrary thread / context.
@@ -28,24 +37,21 @@ class _VfbEventHandler:
     def __init__(self):
         self._lock = threading.Lock()
         
-        self._eventQueue: list[int] = []   # FIFO queue of events.
+        self._eventQueue: list[_EventInfo] = []   # FIFO queue of events
         self._vfbLayersJson      = ""      # Last layer settings received fom VFB
         self._vfbSettingsJson    = ""      # Last received VFB settings
         self._fps                = 5       # Timer activation rate
         self._redrawViewport     = False   # Flag to request viewport redraw on the next timer activation
 
 
-    def addEvent(self, eventType, priority=False):
+    def addEvent(self, eventType, *args, **kwargs):
         """ Add an event to the event queue. The event will be processed in a valid Blender context.
             This nethod is thread-safe.
         """
         with self._lock:
             # Only add the event if it is not a duplicate of the last one received.
             if (not self._eventQueue) or (self._eventQueue[-1] != eventType):
-                if priority:
-                    self._eventQueue.insert(0, eventType)
-                else:
-                    self._eventQueue.append(eventType)
+                self._eventQueue.append(_EventInfo(eventType, *args,  **kwargs))
 
 
     def ensureRunning(self, reset=False):
@@ -106,7 +112,11 @@ class _VfbEventHandler:
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.CloudSubmit)
-      
+
+    def reportStatus(self, severity: set, msg: str):
+        """ Report to Belnder's status field """
+        self.addEvent(_Event.ReportStatus, severity, msg)
+
 
     def updateVfbLayers(self, vfbLayersJson: str):
         """ Update VFB layer settings """
@@ -138,7 +148,7 @@ class _VfbEventHandler:
         # the timer works fine).
         self = VfbEventHandler
         try:
-            ev = _Event.Undefined
+            ev = None
 
             with self._lock:
                 if self._eventQueue:
@@ -161,15 +171,18 @@ class _VfbEventHandler:
         
     
 
-    def _handleQueuedEvent(self, event: int):
+    def _handleQueuedEvent(self, event: tuple):
         processed = True
 
         try:
             # Change the render mode
-            match event:
-                case _Event.RenderSolid | _Event.RenderViewport:
-                    renderType = 'SOLID' if event == _Event.RenderSolid else 'RENDERED'
-                    self.changeViewportModeSync(renderType)
+            
+            match event.eventType:
+                case _Event.RenderSolid:
+                    self.changeViewportModeSync('SOLID')
+                
+                case _Event.RenderViewport:
+                    self.changeViewportModeSync('RENDERED')
 
                 case _Event.RenderProd:
                     processed = self.startProdRenderSync(renderMode=ProdRenderMode.RENDER)
@@ -185,6 +198,9 @@ class _VfbEventHandler:
                 
                 case _Event.RenderInteractiveStop:
                     self._stopInteractiveRender()
+
+                case _Event.ReportStatus:
+                    debug.report(*event.args, **event.kwargs)
 
 
         except Exception as ex:
@@ -224,7 +240,7 @@ class _VfbEventHandler:
             uiSettings = json.loads(self._vfbSettingsJson)
             # resize_on_res_change can't be gotten from the VFB API and for that is set explicitly
             uiSettings["RenderViewProps"]["resize_on_res_change"] = False
-            vfbConf.write(json.dumps(uiSettings, indent=4))    
+            vfbConf.write(json.dumps(uiSettings, indent=4))
 
     
     def startProdRenderSync(self, renderMode: bool):

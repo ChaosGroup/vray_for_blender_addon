@@ -40,15 +40,23 @@ class ZMQProcess:
         
         return ""
 
+    @staticmethod
+    def _zmqServerAbortCallback(msg):
+        from vray_blender.engine.render_engine import VRayRenderEngine
+        VRayRenderEngine.resetAll()
+
+        # Check if ZMQ server has crashed or exited normally
+        if msg in ("General error", "STD exception", "V-Ray exception", "Unknown error"):
+            debug.reportAsync('WARNING', "Restart is required! V-Ray internal error occurred.")
+
     def _start(self):
         from vray_blender.nodes.operators. import_file import assetImportCallback
-        from vray_blender.engine.render_engine import VRayRenderEngine
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
 
         self._startServerProcess()
 
         # Cosmos Browser download notifications callback
-        self.assetImportCallback = lambda type, matPath, objPath, lightPath, locationMap: assetImportCallback(type, matPath, objPath, lightPath, locationMap)
+        self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
         vray.setCosmosImportCallback(self.assetImportCallback)
 
          # VFB start button callback
@@ -56,8 +64,7 @@ class ZMQProcess:
         vray.setRenderStartCallback(self.renderStartCallback)
         
         # Abort-all-renders callback (e.g. if ZmqServer crashes)
-        self.renderAbortCallback = lambda: VRayRenderEngine.resetAll()
-        vray.setRenderAbortCallback(self.renderAbortCallback)
+        vray.setZmqServerAbortCallback(ZMQProcess._zmqServerAbortCallback)
 
         self._updateVFBSettings = lambda vfbSettings: VfbEventHandler.updateVfbSettings(vfbSettings)
         vray.setVfbSettingsUpdateCallback( self._updateVFBSettings)
@@ -72,7 +79,7 @@ class ZMQProcess:
             debug.printDebug('Stopping VRayZmqServer control connection. VRayZmqServer may not stop ' +
                                 'immediately if there are pending production jobs.' )
             vray.ZmqControlConn.stop()
-            # Do not allow restart after stop() has been called
+            ZMQProcess._started = False
     
 
     @staticmethod
@@ -131,6 +138,7 @@ class ZMQProcess:
         args.vrayLibPath    = vrayLibPath
         args.appSDKPath     = appSdkPath
         args.pluginVersion  = "".join(bl_info['version'])
+        args.blenderVersion = ".".join([str(i) for i in bl_info['blender'][:2]])
 
         debug.printInfo("Starting ZmqServer process ...")
         

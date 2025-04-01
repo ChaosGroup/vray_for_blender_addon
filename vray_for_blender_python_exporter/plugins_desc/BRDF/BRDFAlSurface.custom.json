@@ -149,6 +149,46 @@
             },
             {
                 "layout": "ROLLOUT",
+                "name": "reflection",
+                "label": "Reflection 2",
+                "attrs": [
+                    {
+                        "name": "reflect2_strength"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {"cond": "::reflect2_strength!=0"},
+                        "attrs": [
+                            {
+                                "name": "reflect2"
+                            },
+                            {
+                                "name": "reflect2_roughness"
+                            },
+                            {
+                                "name": "reflect2_ior"
+                            },
+                            {
+                                "layout": "ROW",
+                                "attrs": [
+                                    {
+                                        "name": "reflect2_distribution",
+                                        "expand": true
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "reflect2_bump_amount"
+                            },
+                            {
+                                "name": "reflect2_bump_type"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
                 "name": "sss",
                 "label": "SSS",
                 "attrs": [

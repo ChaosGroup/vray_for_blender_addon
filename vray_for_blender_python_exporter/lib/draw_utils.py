@@ -1,5 +1,6 @@
 
 import bpy
+import importlib
 import json
 
 from vray_blender import debug
@@ -101,9 +102,8 @@ class UIPainter:
         attrName = widgetAttr['name']
 
         # TODO Delete the 'custom_draw' attribute if it is unused
-        if (drawFnName := widgetAttr.get('custom_draw')) and hasattr(self.pluginModule, drawFnName):
+        if fnDraw := self.getCustomDrawFunction(widgetAttr):
             # Use a custom draw function for the attribute
-            fnDraw = getattr(self.pluginModule, drawFnName)
             fnDraw(self.context, layout, self.propGroup, widgetAttr)
         else:
             expand = widgetAttr.get('expand', False)
@@ -192,6 +192,31 @@ class UIPainter:
         raise Exception(errMsg)
 
 
+    def getCustomDrawFunction(self, widgetAttr):
+        if not (drawFnName := widgetAttr.get('custom_draw')):
+            return None
+
+        fnDraw = None
+        pythonModule = self.pluginModule
+
+        if ':' in drawFnName:
+            moduleName, fnName = drawFnName.split(':')
+            modulePath = f"vray_blender.{moduleName}"
+
+            try:
+                pythonModule = importlib.import_module(modulePath)
+            except ImportError as e:
+                debug.printError(f"Failed to load python module: {modulePath}")
+                raise e
+
+            if hasattr(pythonModule, fnName):
+                fnDraw = getattr(pythonModule, fnName)
+        else:
+            fnDraw = getattr(self.pluginModule, drawFnName)
+
+        return fnDraw
+        
+        
     def _setActive(self, layout, active):
         if active is not None:
             isActive = self._evaluateCondition(active)
@@ -268,6 +293,7 @@ class UIPainter:
                 container.label(text=f"{label}:")
 
             if useProp := widget.get('use_prop', ""):
+                # Container is enabled by a checkbox tied to the 'use_prop' property
                 container.active = getattr(self.propGroup, useProp)
                 container.enabled = getattr(self.propGroup, useProp)
             else:
@@ -288,27 +314,28 @@ class UIPainter:
                 # resetting parent container flags which should not be active in the child container. 
                 subContainer = container.column()
                 subContainer.use_property_split = False
-                self._renderWidget(subContainer, widgetAttr)
+                self.renderWidget(subContainer, widgetAttr)
             else:
                 # Render a simple (non-widget) attribute
                 if ('visible' not in widgetAttr) or self._evaluateCondition(widgetAttr['visible']):
                     self._renderItem(container, widgetAttr)
 
 
-    def _renderWidget(self, layout: bpy.types.UILayout, widget: dict):
+    def renderWidget(self, layout: bpy.types.UILayout, widget: dict):
         """ Render a single widget onto the supplied layout """
         # If the widget has a 'visible' condition, check it first
         
         if (showCond := widget.get('visible')) and not self._evaluateCondition(showCond):
-            return
+            return None
 
         # Create a container to put widget's attributes in
-        container = self._renderContainer(layout, widget)
+        if ('visible' not in widget) or self._evaluateCondition(widget['visible']):
+            container = self._renderContainer(layout, widget)
 
         if not container:
             # The rest of the widget is hidden ( e.g. a closed rollout ). 
             # Do not render its attributes.
-            return
+            return None
         
         container.use_property_split = widget.get('use_property_split', True)
         # Show animation dots for animatable properties
@@ -321,6 +348,8 @@ class UIPainter:
             # sometings difficult to separate its contents visually from 
             # the contents that follow.
             container.separator()
+        
+        return container
 
 
 
@@ -366,7 +395,7 @@ class UIPainter:
             list for a plugin, so this function allows for drawing the UI in pieces.
         """
         for widget in widgets:
-            self._renderWidget(layout, widget)
+            self.renderWidget(layout, widget)
 
     
     def renderWidgetsSection(self, layout: bpy.types.UILayout, sectionName: str):

@@ -129,7 +129,7 @@ bool ZmqControlConn::check()
 void ZmqControlConn::setLogLevel(int level)
 {
 	using namespace VrayZmqWrapper;
-	return VRayForBlender::ZmqServer::get().sendMessage(VRayMessage::msgControlSetLogLevel(level));
+	return VRayForBlender::ZmqServer::get().sendMessage(serializeMessage(MsgControlSetLogLevel{level}));
 }
 
 

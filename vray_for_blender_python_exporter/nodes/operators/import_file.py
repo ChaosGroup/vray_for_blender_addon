@@ -1,6 +1,7 @@
 import os
 import bpy
 import queue
+from pathlib import PurePath
 
 from vray_blender.nodes import importing as NodesImport
 from vray_blender.nodes import tools     as NodesTools
@@ -11,22 +12,19 @@ from vray_blender.vray_tools.vrmat_parser     import parseVrmat
 
 
 from vray_blender import debug
-from vray_blender import proxy as ProxyUtils
+from vray_blender.vray_tools import vray_proxy
 from vray_blender.lib import blender_utils
 from vray_blender.lib.lib_utils import getUUID, LightTypeToPlugin, LightBlenderToVrayPlugin
+from vray_blender.lib.path_utils import getV4BTempDir
 
-from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier
 from pathlib import Path
 
-def _createMaterial(mtlName, use_fake_user=True):
+def _createMaterial(mtlName):
     mtl = bpy.data.materials.new(mtlName)
     addMaterialNodeTree(mtl, addDefaultTree=False)
 
     # removing default Blender nodes 
     removeNonVRayNodes(mtl.node_tree)
-
-    mtl.use_fake_user = use_fake_user
-    mtl.node_tree.use_fake_user = use_fake_user
     
     return mtl
 
@@ -62,8 +60,8 @@ def _assignMaterialsToSlots(vrsceneDict, obj, mtlNameOverrides:dict[str, str]):
             break
 
 
-def _importMaterials(context, filePath, baseMaterial, use_fake_user=True, objectForMatAssign = None, locationsMap = None):
-    debug.printInfo('Importing materials from "%s"' % filePath)
+def _importMaterials(context, filePath, baseMaterial, objectForMatAssign = None, locationsMap = None):
+    debug.printInfo(f'Importing materials from "{filePath}"')
 
     vrsceneDict = {}
 
@@ -130,7 +128,7 @@ def _importMaterials(context, filePath, baseMaterial, use_fake_user=True, object
             mtlName = mtlNewName
             debug.printInfo(f"Material name already exists, changing to {mtlName}")
         
-        mtl = _createMaterial(mtlName, use_fake_user)
+        mtl = _createMaterial(mtlName)
         ntree = mtl.node_tree
         
         outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
@@ -179,7 +177,7 @@ def _importLights(context, parentObj, lightPath, locationsMap):
             lightData = bpy.data.lights.new(name=plgName , type=blType)
             lightData.vray.light_type = vrayType
 
-            # Setting the size of area light
+            # Scale area light
             if lightData.type == 'AREA':
                 for vrAttr, blAttr in (("u_size", "size"), ("v_size", "size_y")):
                     if vrAttr in plgAttrs:
@@ -187,16 +185,15 @@ def _importLights(context, parentObj, lightPath, locationsMap):
 
             lightObj = bpy.data.objects.new(name=plgName, object_data=lightData)
             lightObj.location = context.scene.cursor.location
+            
             context.collection.objects.link(lightObj)
+
+            # Applying the transformation from the .vrmat file
+            lightObj.matrix_world = lightObj.matrix_world @ attribute_utils.attrValueToMatrix(plgAttrs['transform'], True)
 
             # Assigning parent to the light object.
             # During cosmos import the parent will be the object from the package's .vrmesh file.
             lightObj.parent = parentObj
-
-            # Applying the transformation from the .vrmat file should happen after the assigning of parent,
-            # because it will overwrite 'matrix_world'.
-            lightObj.matrix_world = lightObj.matrix_world @ attribute_utils.attrValueToMatrix(plgAttrs['transform'], True)
-            lightObj.hide_select = True
 
             lightNtree = createNodeTreeForLightObject(lightData)
 
@@ -278,52 +275,79 @@ def _fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
             del attrs['opacity']
 
 
-
-def importVRMesh(context, matPath, meshPath, lightPath="", operator=None, locationsMap=None, useRelPath=False):
-    if not meshPath:
-        return {'CANCELLED'}
-
-    meshPath = os.path.normpath(meshPath)
-    if not os.path.exists(meshPath):
-        if operator:
-            operator.report({'ERROR'}, "File not found!")
-        return {'CANCELLED'}
+def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
+    if not os.path.exists(filePath):
+        return None, f"File not found: {filePath}"
+    
+    purePath = PurePath(filePath)
 
     # Add new mesh object
-    name = f'VRayProxy@{os.path.splitext(os.path.basename(meshPath))[0]}'
+    name = f'VRayProxy@{purePath.stem}'
 
-    mesh = bpy.data.meshes.new(name)
-    ob = bpy.data.objects.new(name, mesh)
+    # Create a new mesh object for the object preview
+    previewMesh = bpy.data.meshes.new(name)
+    ob = bpy.data.objects.new(name, previewMesh)
     ob.location = context.scene.cursor.location
     
+    geomMeshFile = previewMesh.vray.GeomMeshFile
+
+    # Store the scale at which the model was imported. If it's  preview has to be regenerated, this value will be used to scale it.
+    # The scale will be reset to 1 if the path to the mesh file is changed by the user and the new model will always be imported
+    # with scale 1.0 due to the fact that there is no scale information in the mesh file itself.
+    geomMeshFile['scale'] = scaleUnit / context.scene.unit_settings.scale_length
+    
     context.collection.objects.link(ob)
-
-
-    # Add proxy
-    if err := ProxyUtils.loadProxyPreviewMesh(ob, meshPath, 0, 0.0, 1.0, 0.0):
-        if operator:
-            operator.report({'ERROR'}, f"Error loading VRayProxy: {err}!")
-        return {'CANCELLED'}
-
-    # Rescaling the object based on length unit of the scene
-    # In V-Ray the default unit is centimeters
-    ob.scale *= getCmToSceneUnitsMultiplier(context)
-
     vrayAsset = ob.vray.VRayAsset
+    
+    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, filePath, 0, 0.0, 1.0, 0.0):
+        return None, err
+    
     vrayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Proxy"]
-    vrayAsset.filePath = bpy.path.relpath(meshPath) if useRelPath else meshPath
+    geomMeshFile['file'] = bpy.path.relpath(filePath) if useRelativePath else filePath
+    blender_utils.setShadowAttr(geomMeshFile, 'file', geomMeshFile.file)
+
+    return ob, None
     
 
+def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: str,
+                 lightPath="", locationsMap=None, useRelPath=False, scaleUnit=1.0):
+    """ Import a VRayProxy object from a .vrmesh or .abc file.
+        This function will create a new scene object and load the preview mesh for it.
+
+    Args:
+        context (bpy.types.Context): 
+        matPath (str): Path to a .vrmat file with the materials for the object
+        meshPath (str): Absolute path to the .vrmesh file
+        lightPath (str, optional): Path to a .vrmat file with the light propeties. Defaults to "".
+        locationsMap (dict(str, str), optional): A map of the resources used by the proxy (textures, materials etc) to 
+                                                fully resolved file paths for each resource. Defaults to None.
+        useRelPath (bool, optional): The file paths are in Blender's relative notation. Defaults to False.
+        scaleUnit (float, optional): Scale unit for the model in meters. Defaults to 1.0.
+
+    Returns:
+        tuple[object, str]: A tuple containing the created object (or None on failure) and an error message (empty string on success).
+    """
+    assert not blender_utils.isPathRelative(meshPath)
+    
+    objProxy, err = _importVRayProxy(context, meshPath, useRelPath, scaleUnit)
+
+    if err:
+        return None, err
+        
+    assert objProxy is not None
 
     if os.path.exists(matPath):
-        _importMaterials(context, matPath, 'STANDARD', objectForMatAssign = ob, locationsMap=locationsMap)
+        _importMaterials(context, matPath, 'STANDARD', objectForMatAssign = objProxy, locationsMap=locationsMap)
 
-    blender_utils.selectObject(ob)
-    
     if lightPath and os.path.exists(lightPath):
-        _importLights(context, ob, lightPath, locationsMap)
+        _importLights(context, objProxy, lightPath, locationsMap)
 
-    return {'FINISHED'}
+    # Make sure the main proxy object is selected. The selection might have been changed
+    # if operators were executed during import which only work with the active object.
+    blender_utils.selectObject(objProxy)
+
+    return objProxy, ""
+
 
 # bpy datastructures modifying from another thread could crash Blender.
 # This means that vrmat and vrmesh file importing can be done only from the main thread.
@@ -337,20 +361,37 @@ def assetImportTimerFunction():
     global assetImportQueue
 
     while not assetImportQueue.empty():
-        assetType, matFile, objFile, lightFile, locationsMap = assetImportQueue.get()
-        if assetType == "Material":
-            _importMaterials(bpy.context, matFile, 'STANDARD', locationsMap=locationsMap)
-        elif assetType == "VRMesh":
-            importVRMesh(bpy.context, matFile, objFile, lightFile, locationsMap=locationsMap)
-        elif assetType == "HDRI":
-            _importHDRI(matFile, lightFile, locationsMap=locationsMap)
+        settings = assetImportQueue.get()
+        match(settings.assetType):
+            case "Material":
+                _importMaterials(bpy.context, settings.matFile, 'STANDARD', locationsMap=settings.locationsMap)
+            case "VRMesh":
+                COSMOS_SCALE_UNIT = 0.01   # centimeters
+                ob, err = importProxyFromMeshFile(bpy.context,
+                                        settings.matFile, settings.objFile, settings.lightFile,
+                                        locationsMap=settings.locationsMap,
+                                        scaleUnit=COSMOS_SCALE_UNIT)
+
+                # Animated cosmos models need the attribute below  
+                # to function properly when the scene containing them is exported and rendered through Vantage.  
+                if ob and settings.isAnimated:
+                    userAttrs = ob.vray.UserAttributes
+                    userAttrs.user_attributes.add()
+
+                    animAttr = userAttrs.user_attributes[-1]
+                    animAttr.name = "lavina_fast_morph_mesh"
+                    animAttr.value_type = "0"
+                    animAttr.value_int = 2
+
+            case "HDRI":
+                _importHDRI(settings.matFile, settings.lightFile, locationsMap=settings.locationsMap)
 
     
     return 1.0 # Timeout before the next invocation
 
-def assetImportCallback(assetType, matFile, objFile, lightFile, locationsMap):
+def assetImportCallback(assetSettings):
     global assetImportQueue
-    assetImportQueue.put((assetType, matFile, objFile, lightFile, locationsMap))
+    assetImportQueue.put(assetSettings)
 
 
 def registerAssetImportTimerFunction():

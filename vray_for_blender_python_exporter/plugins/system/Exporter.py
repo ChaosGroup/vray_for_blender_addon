@@ -138,14 +138,22 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
     )
 
     def draw(self, context):
+        from vray_blender.menu import VRAY_OT_show_account_status
+
         layout = self.layout
-        row = layout.row()
-        row.label(text=f"Version: {version.getBuildVersionString()}")
-        row = layout.row()
+        
+        rowVersion = layout.row()
+        rowVersion.label(text=f"Version: {version.getBuildVersionString()}")
+
+        rowAccount = layout.row()
+        rowAccount.label(text="Chaos Account settings")
+        rowAccount.operator(VRAY_OT_show_account_status.bl_idname, text="Open")
+
+        rowCloudBinary = layout.row()
         if self.detect_vray_cloud:
-            row.label(text="Chaos Cloud binary: {0}".format(self.vray_cloud_binary))    
+            rowCloudBinary.label(text="Chaos Cloud binary: {0}".format(self.vray_cloud_binary))    
         else:
-            row.label(text="Chaos Cloud binary is not detected on your system!")
+            rowCloudBinary.label(text="Chaos Cloud binary is not detected on your system!")
 
         box = layout.box()
         header, subLayout = box.panel(idname="Usage statistics sharing", default_closed=True)
@@ -206,8 +214,14 @@ class VRayExporter(bpy.types.PropertyGroup):
 
     vrayAddonVersion: bpy.props.StringProperty(
         name = "V-Ray addon version",
-        description = "the version of the V-Ray addon used to create the scene",
+        description = "The version of the V-Ray addon used to create the scene",
         default = ""
+    )
+
+    vrayAddonUpgradeNumber: bpy.props.IntProperty(
+        name = "V-Ray addon upgrade version",
+        description = "The upgrade version of the V-Ray addon used to create the scene",
+        default = 0
     )
 
     ######## ##     ## ########   #######  ########  ########
@@ -519,20 +533,15 @@ class VRayExporter(bpy.types.PropertyGroup):
         name = "Device Type",
         description = "Rendering device",
         items = (
-            ('CPU', "CPU", ""),
-            ('GPU', "GPU", ""),
+            ('CPU', "V-Ray", ""),
+            ('GPU', "V-Ray GPU", ""),
         ),
         default = 'CPU'
     )
 
-    device_gpu_type: bpy.props.EnumProperty(
-        name = "GPU Device Type",
-        description = "GPU device type",
-        items = (
-            ('CUDA', "CUDA", ""),
-            ('OPTIX', "RTX", ""),
-        ),
-        default = 'CUDA'
+    use_gpu_rtx: bpy.props.BoolProperty(
+        name = "Use RTX (no CPU, Slower start)",
+        default = False
     )
   
 

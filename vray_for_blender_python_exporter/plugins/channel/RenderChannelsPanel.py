@@ -5,6 +5,8 @@ from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.exporting.tools import getNodeLink, getLinkedFromSocket
 from vray_blender.nodes import tree_defaults
+from vray_blender.lib import class_utils
+
 
 TYPE = 'SYSTEM'
 ID   = 'VRayRenderChannels'
@@ -178,6 +180,8 @@ def register():
         description = ""
     )
 
+    class_utils.registerPluginPropertyGroup(plugins.VRayWorld, plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser'])
+
 
 def unregister():
     global _vrayRenderChannelsType
@@ -185,3 +189,6 @@ def unregister():
 
     for regClass in [_vrayRenderChannelsType] + _renderChannelIndicatorTypesList:
         bpy.utils.unregister_class(regClass)
+
+    _vrayRenderChannelsType = None
+    _renderChannelIndicatorTypesList.clear()

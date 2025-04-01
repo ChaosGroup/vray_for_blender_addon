@@ -74,6 +74,10 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr" : "misc_lowThreadPriority",
+            "default" : "1"
         }
     ],
     "Widget": {

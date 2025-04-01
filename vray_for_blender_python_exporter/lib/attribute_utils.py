@@ -7,7 +7,8 @@ import mathutils
 from vray_blender import debug
 from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, tupleTo4x4MatrixLayout, matrixLayoutToMatrix
-from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMetersToSceneUnitsMultiplier
+from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMetersToSceneUnitsMultiplier, getShadowAttrName
+from vray_blender.nodes.tools import getLinkInfo
 
 # Create an additional pointer property to be used for property search UI.
 # It updates the original string property with the object name when changed.
@@ -133,7 +134,7 @@ def attrValueToMatrix(value, applyScale: bool):
     else:
         import struct, binascii
         
-        tmArray = struct.unpack("fffffffffddd", binascii.unhexlify(bytes(attrValue, 'ascii')))
+        tmArray = struct.unpack("fffffffffddd", binascii.unhexlify(bytes(value, 'ascii')))
         
         i = 0
         for c in range(3):
@@ -193,6 +194,10 @@ def generateAttribute(classMembers, pluginModule, attrDesc):
         attrArgs['items'] = (tuple(item) for item in attrDesc['items'])
 
     _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
+   
+    if attrDesc.get('options', {}).get('shadowed', False):
+        # Add a 'shadow' for the current attribute
+        _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
     
     if attrName in {'render_mask_objects', 'exclusion_nodes'}:
         # Attribute has a collection prop search UI - add an additional pointer property
@@ -436,14 +441,15 @@ def _setAttrValueCallbacks(attrArgs, attrDesc, pluginModule):
         attrArgs['get'] = getFunc
 
 
-def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc):
+def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc, pluginType):
     if attrType == "OBJECT":
         attrArgs["type"] = bpy.types.Object
         if ("object_type" in attrDesc) and hasattr( bpy.types, attrDesc["object_type"]):
             attrArgs["type"] = getattr( bpy.types, attrDesc["object_type"] )
+        
 
-        if ("filter_type" in attrDesc):
-            match attrDesc["filter_type"]:
+        if filterType := attrDesc.get("filter_type"):
+            match filterType:
                 case "geometry":
                     attrArgs["poll"] = lambda self, obj: obj.type in GEOMETRY_OBJECT_TYPES
                 case "light":
@@ -451,7 +457,10 @@ def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc):
                         attrArgs["poll"] = lambda self, obj: (obj.type == 'LIGHT') and (obj.data.vray.light_type == vrayType)
                     else:
                         attrArgs["poll"] = lambda self, obj: obj.type == 'LIGHT'
-            
+        else:
+            linkInfo = getLinkInfo (pluginType, attrDesc['attr'])
+            attrArgs['poll'] = lambda self, obj: linkInfo.fnFilter(obj)
+         
         if "default" in attrArgs:
             # Pointer properties don't have default argument
             del attrArgs["default"]
@@ -461,7 +470,7 @@ def _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
     attrType = attrDesc['type']
     attrName = attrDesc['attr']
 
-    _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc)
+    _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc, pluginType)
 
     try:
         attrFunc = TypeToProp[attrType]
@@ -469,10 +478,38 @@ def _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
         debug.printExceptionInfo(ex, f"Failed to register property {pluginType}::{attrName} of unsupported type {attrType}")
         raise ex
 
-    if attrDesc['type'] in  ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
+    if attrType in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
         classMembers[attrName] = attrFunc(attrArgs["default"])
     else:
         classMembers[attrName] = attrFunc(**attrArgs)
+
+
+def _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
+    """ Add a 'shadow' for an attribute - an attribute of the same type that can be used to 
+        store the previous value of the original attribute when the original attribute's value
+        changes.
+    """
+    assert attrDesc['type'] != "OBJECT", "Adding shadow properties of type OBJECT is not currently supported"
+
+    attrType = attrDesc['type']
+    attrName = getShadowAttrName(attrDesc['attr'])
+
+    shadowAttrArgs = {
+        'name': attrName,
+        'description': attrName,
+        'default': attrArgs['default']
+    }
+
+    try:
+        attrFunc = TypeToProp[attrType]
+    except Exception as ex:
+        debug.printExceptionInfo(ex, f"Failed to register property {pluginType}::{attrName} of unsupported type {attrType}")
+        raise ex
+
+    if attrType in  ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
+        classMembers[attrName] = attrFunc(shadowAttrArgs["default"])
+    else:
+        classMembers[attrName] = attrFunc(**shadowAttrArgs)
     
 
 

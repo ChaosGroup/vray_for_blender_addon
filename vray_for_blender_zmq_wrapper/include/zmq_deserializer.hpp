@@ -1,5 +1,4 @@
-#ifndef _DESERIALIZER_HPP_
-#define _DESERIALIZER_HPP_
+#pragma once
 
 #include "base_types.h"
 
@@ -174,9 +173,10 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrImageSet & set) {
 	int count;
 	stream >> set.sourceType >> count;
-	VRayBaseTypes::AttrImage img;
 	VRayBaseTypes::RenderChannelType type;
+
 	for (int c = 0; c < count; c++) {
+		VRayBaseTypes::AttrImage img;
 		stream >> type >> img;
 		set.images.emplace(type, std::move(img));
 	}
@@ -219,4 +219,3 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 
 };  // end VrayZmqWrapper namespace 
 
-#endif // _DESERIALIZER_HPP_

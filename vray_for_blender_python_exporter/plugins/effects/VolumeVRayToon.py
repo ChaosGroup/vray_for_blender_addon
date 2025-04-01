@@ -5,7 +5,7 @@ from vray_blender.exporting.tools import getInputSocketByAttr, removeInputSocket
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
-from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup
+from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -89,7 +89,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     for curveType in _CURVE_TYPES:
         _addCurvesUpdateCallback(node, curveType)
 
-        propGroup = getattr(node, node.vray_plugin)
+        propGroup = getVrayPropGroup(node)
         pluginName = Names.treeNode(nodeCtx)
         pluginDesc = PluginDesc(pluginName, node.vray_plugin)
         pluginDesc.vrayPropGroup = propGroup

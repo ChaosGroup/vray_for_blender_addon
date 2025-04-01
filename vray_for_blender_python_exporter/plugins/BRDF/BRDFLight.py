@@ -4,14 +4,14 @@ from vray_blender.lib.color_utils import opacityToTransparency
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib import plugin_utils
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.nodes.utils import getInputSocketByVRayAttr
+from vray_blender.nodes.utils import getInputSocketByVRayAttr, getVrayPropGroup
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
-    propGroup = getattr(node, node.vray_plugin)
+    propGroup = getVrayPropGroup(node)
 
     pluginName = Names.treeNode(nodeCtx)
     pluginDesc = PluginDesc(pluginName, 'BRDFLight')
@@ -32,6 +32,9 @@ def exportTreeNode(nodeCtx: NodeContext):
     else:
         opacityRGBA = propGroup.transparency[:] + (1.0,)
         pluginDesc.setAttribute("transparency", opacityToTransparency(opacityRGBA))
+
+    # Register the material as emissive. This information will be used by the LightMix
+    nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name))
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=(sockOpacity.vray_attr,))
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)

@@ -17,8 +17,28 @@ class LogLevel:
     Debug   = 4
 
 
+# Blender to V-Ray log level map
+_LOG_LEVEL_MAP = {
+    'ERROR'   : LogLevel.Error,
+    'WARNING' : LogLevel.Warning,
+    'INFO'    : LogLevel.Info,
+    'DEBUG'   : LogLevel.Debug,
+}
+
 # Log message
 #
+def printMsg(message, level=LogLevel.Always, raw=False):
+    """ Log message through VRay logging channel. 
+
+    Args:
+        message (str): The message 
+        level(LogLevel): Verbosity level
+        raw (bool, optional): Do not prepend attributes (e.g. time/level) to the message. Defaults to False
+    """
+    vray.log(message, level, raw)
+
+
+# Shortcuts for the different verbosity levels
 def printAlways(message, raw=False):
     """ Unconditionally log the message. 
 
@@ -26,19 +46,19 @@ def printAlways(message, raw=False):
         message (str)
         raw (bool, optional): Do not prepend attributes (e.g. time/level) to the message. Defaults to False.
     """
-    vray.log(message, level=LogLevel.Always, raw=raw)
+    printMsg(message, level=LogLevel.Always, raw=raw)
 
 def printError(message, raw=False):
-    vray.log(message, level=LogLevel.Error, raw=raw)
+    printMsg(message, level=LogLevel.Error, raw=raw)
 
 def printWarning(message, raw=False):
-    vray.log(message, level=LogLevel.Warning, raw=raw)
+    printMsg(message, level=LogLevel.Warning, raw=raw)
 
 def printInfo(message, raw=False):
-    vray.log(message, level=LogLevel.Info, raw=raw)
+    printMsg(message, level=LogLevel.Info, raw=raw)
 
 def printDebug(message, raw=False):
-    vray.log(message, level=LogLevel.Debug, raw=raw)
+    printMsg(message, level=LogLevel.Debug, raw=raw)
 
 
 def reportError(message, engine: bpy.types.RenderEngine = None, exc: Exception = None):
@@ -58,6 +78,7 @@ def reportError(message, engine: bpy.types.RenderEngine = None, exc: Exception =
 
 
 def setLogLevel(level: int):
+    """ Change the log verbosity level of VRayBlenderLib and ZmqServer """
     vray.setLogLevel(level)
     vray.ZmqControlConn.setLogLevel(level)
 
@@ -159,13 +180,36 @@ def report(severity: str, msg: str):
     """ Report in Blender's status area. This function is a replacement
         for the report() method of blender classes (e.g. operators)
         that can be used in any context.
+        
+        All reported messages will also be printed to the console as logs
+        with the corresponsing severity level.
+        
+        NOTE: depending on the current operation and Blender state, showing the status
+        message may not be possible. No error will be generated. but the function will 
+        have no effect. For these cases, consider using the reportAsync() function
+
+    Args:
+        severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
+        msg (str): The message to show.
+    """
+    bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
+    printMsg(msg, level=_LOG_LEVEL_MAP[severity])
+
+def reportAsync(severity: str, msg: str):
+    """ Report in Blender's status area. This function is a replacement
+        for the report() method of blender classes (e.g. operators)
+        that can be used in any context.
+
+        NOTE: This function will queue a ReportStatus event to VfbEvent handler and it should
+        work instates where report() will not. The status message disaplay however may be 
+        perceptibly delayed.
 
     Args:
         severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
         msg (_type_): The message to show.
     """
-    bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
-
+    from vray_blender.engine.vfb_event_handler import VfbEventHandler
+    VfbEventHandler.reportStatus('WARNING', msg)
 
 
 ############  Registration  ############

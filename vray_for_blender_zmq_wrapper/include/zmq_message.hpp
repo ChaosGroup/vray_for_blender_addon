@@ -2,828 +2,858 @@
 
 #define ZMQ_BUILD_DRAFT_API
 
+#include <string>
+#include <vector>
+
 #include "cppzmq/zmq.hpp"
 #include "base_types.h"
-#include "zmq_serializer.hpp"
-#include "zmq_deserializer.hpp"
+#include "msg_serializer.hpp"
+
+
+/// Protocol serialization
+/// How to define a new message:
+/// 
+///	All helper macros and functions are defined in msg_serializer.hpp.
+/// 
+/// 1. Add a new message type to the appropriate range in MsgType enum. Messages sent
+///    from the client are called 'message', messages sent from the server are called 'event'.
+/// 
+///     enum MsgType {
+///        ...
+///        ControlNewMessage
+///     }
+/// 
+/// 2. Define the new message type. The name of the resulting class will be the message type name 
+///    prefixed by 'Msg', i.e. MsgControlNewMessage.
+/// 
+///	     PROTO_MESSAGE(ControlNewMessage,
+///		    int number;
+///         std::string item;
+///      );
+/// 
+///		NOTE: For empty messages, use the EMPTY_PROTO_MESSAGE macro.
+/// 
+/// 3. Declare the default serialization procedure
+///      SERIALIZE_MESSAGE(ControlNewMessage, 
+///         PARAM(number)
+///         PARAM(item)
+///      );
+/// 
+///		NOTE: For empty messages, use the SERIALIZE_EMPTY_MESSAGE macro.
+/// 
+///   3.a. If default serialization cannot be used, define custom serialization:
+///      static SerializerStream& operator&& (SerializerStream& stream, const MsgControlNewMessage& msg) {
+///         stream  << msg.nubmer << msg.item
+///         return stream;
+///      }
+///      static DeserializerStream& operator&& (DeserializerStream& stream, MsgControlNewMessage& msg) {
+///       	stream  >> msg.number >> msg.item; 
+///       	return stream;
+///      } 
+/// 
+/// 4. To serialize
+///      const auto& zmq::message_t = serializeMessage(MsgControlNewMessage{10, "boxes"});
+/// 
+/// 5. Te deserialize 
+///		 DeserializerStream& stream; // Unpacked from zmq::message_t
+///      const MsgControlNewMessage& message = deserializeMessage<MsgControlNewMessage>(stream);
+///	     std::cout << message.number << message.item;
+/// 
+
+#pragma warning (push)
+#pragma warning (disable: 4505) // Unreferenced function has been removed
 
 namespace VrayZmqWrapper{
 
-class VRayMessage {
-public:
-	enum class Type : char {
-		None,
-		Image,
-		ChangePlugin,
-		ChangeRenderer,
-		VRayLog,
-		VfbLayers,
-		Control,
-		ImportAsset
-	};
+namespace vray = VRayBaseTypes;
 
-	enum class PluginAction : char {
-		None,
-		Create,			// Create a new plugin
-		Remove,			// Remove a plugin 
-		Update,			// Update plugin property
-		ForceUpdate,	// Update plugin property bypassing the property cache
-		Replace			// Replace a plugin with a new instance
-	};
-
-	enum class RendererAction : char {
-		None,
-		Free,
-		Start,
-		Stop,
-		Pause,
-		Resume,
-		Resize,
-		Reset,
-		Abort,
-		_ArgumentRenderAction,
-		Init,
-		ResetsHosts,
-		LoadScene,
-		AppendScene,
-		ExportScene,
-		SetRenderMode,
-		SetAnimationProperties,
-		SetCurrentTime,
-		SetCurrentFrame,
-		ClearFrameValues,
-		SetRendererState,
-		GetImage,
-		SetQuality,
-		SetCurrentCamera,
-		SetCommitAction,
-		SetVfbOptions,
-		SetViewportImageFormat,
-		SetRenderRegion,
-		SetCropRegion,
-		RenderSequence,
-	};
-
-
-	enum class ControlAction : char {
-		None		= 0,
-		SetLogLevel,
-		OpenCollaboration,
-		OpenCosmos,
-		ShowVfb,
-		SetVfbOnTop,
-		StartViewportRender,
-		StartProductionRender,
-		UpdateVfbSettings,
-		UpdateVfbLayers,
-		ShowUserDialog,
-		LogMessage,
-		SetTelemetryState,
-		VRayStatus
-	};
-
-	enum class VRayStatusType : char {
-		None = 0,
-		MainRendererAvailable,
-		MainRendererUnavailable,
-		LicenseAcquired,
-		LicenseDropped
+enum class MsgType : char {
+	None,
 		
-	};
-
-	enum class DRFlags : char {
-		None              = 0,
-		EnableDr          = 1 << 1,
-		RenderOnlyOnHosts = 1 << 2,
-		_SerializationShift = 8,
-	};
-
-	enum class RendererType : char {
-		None				= 0,
-		RT,
-		Animation,
-		SingleFrame,
-		Preview,
-		_SerializationShift = 0,
-	};
-
-	enum class ValueSetter : char {
-		None,
-		Default,
-		AsString
-	};
-
-	enum class RendererState : char {
-		None,
-		Abort,				// Rendering aborted
-		Continue,			// Rendering resumed by user
-		Stopped,			// Rendering stopped by stop() or from UI
-		Done,				// Rendering done
-		Progress,			// [Not a state] Numerical progress message
-		ProgressMessage,	// [Not a state] Textual progress message
-	};
-
-	enum class ImportedAssetType : char {
-		None,
-		Material,
-		VRMesh,
-		HDRI
-	};
-
-	// Structure describing render sequence
-	struct RenderSequenceDesc {
-		int start = 1; // Starting frame
-		int end = 1; // Last frame
-		int step = 1; // Frame step
-	};
-
-	// Impelments the protocol for VRay::RenderSizeParams.
-	struct RenderSizes {
-		enum class Bitmask : int {
-			None      = 0x0,
-			ImgSize   = 0x1,
-			CropRgn   = 0x2,
-			RenderRgn = 0x4
-		};
-
-		RenderSizes() = default;
-				
-		bool operator==(const RenderSizes rhs) const {
-			return 
-				imgWidth      == rhs.imgWidth &&
-				imgHeight     == rhs.imgHeight &&
-				bmpWidth      == rhs.bmpWidth &&
-				bmpHeight     == rhs.bmpHeight &&
-				cropRgnLeft   == rhs.cropRgnLeft &&
-				cropRgnTop    == rhs.cropRgnTop &&
-				cropRgnWidth  == rhs.cropRgnWidth &&
-				cropRgnHeight == rhs.cropRgnHeight &&
-				rgnLeft       == rhs.rgnLeft &&
-				rgnTop        == rhs.rgnTop &&
-				rgnWidth      == rhs.rgnWidth &&
-				rgnHeight     == rhs.rgnHeight;
-		}
-
-
-		int bitmask = 0;	// Same as VRay::RenderSizeParams::RenderSizeBitmask
-
-		// Output image size. This is the size of the image that we get in onImageUpdated.
-		int imgWidth = 0;
-		int imgHeight = 0;
-
-		// Framebuffer size that VRay uses for the actual rendering. The image is scaled
-		// to imgWidth/Height to produce the actual output. If scaling is disproportional, 
-		// the output image will be stretched.
-		// Usually this is the same as imgWidth/Height for mono and double that in one of
-		// the directions for stereo rendering.
-		int bmpWidth = 0;
-		int bmpHeight = 0;
-
-		// Size of the region inside bmpWidth/Height we actually want to render.
-		// This is used when only a portion of the viewport/VBF is selected for rendering.
-		float cropRgnLeft = 0;
-		float cropRgnTop = 0;
-		float cropRgnWidth = 0;
-		float cropRgnHeight = 0;
-
-		// Size of the region inside imgWidth/Height we want to render
-		int rgnLeft = 0;
-		int rgnTop = 0;
-		int rgnWidth = 0;
-		int rgnHeight = 0;
-	};
-
-	struct AssetMetaData {
-		ImportedAssetType type;
-		std::string materialFile;
-		std::string objectFile;
-		std::string lightFile;
-		VRayBaseTypes::AttrListString assetNames;
-		VRayBaseTypes::AttrListString assetLocations;
-	};
-
-	/// Options to pass in VRayExportSettings when exporting a. vrscene
-	struct ExportSettings {
-		struct SubFileInfo {
-			std::string fileNameSuffix;
-			std::string pluginType;
-		};
-
-		bool compressed;
-		bool hexArrays;
-		bool hexTransforms;
-		std::string hostAppString;
-		std::string filePath;
-		std::vector<SubFileInfo> subFileInfo;
-	};
-
-	struct HostInfo {
-		std::string vrayVersion;
-		std::string buildVersion;
-		std::string blenderVersion;
-	};
-
-	
-
-	VRayMessage() = default;
-
-
-	VRayMessage(VRayMessage&& other)
-		: message(0)
-		, type(other.type)
-		, rendererAction(other.rendererAction)
-		, rendererType(other.rendererType)
-		, drFlags(other.drFlags)
-		, rendererState(other.rendererState)
-		, renderSize(other.renderSize)
-		, valueSetter(other.valueSetter)
-		, pluginAction(other.pluginAction)
-		, pluginName(std::move(other.pluginName))
-		, pluginType(std::move(other.pluginType))
-		, pluginProperty(std::move(other.pluginProperty))
-		, dialogJson(std::move(other.dialogJson))
-		, telemetryAnonymousState(other.telemetryAnonymousState)
-		, telemetryPersonalizedState(other.telemetryPersonalizedState)
-		, controlAction(other.controlAction)
-		, logLevel(other.logLevel)
-		, vfbAlwaysOnTop(other.vfbAlwaysOnTop)
-		, vfbSettings(std::move(other.vfbSettings))
-		, vfbLayers(std::move(other.vfbLayers))
-		, renderSequenceDesc(other.renderSequenceDesc)
-		, value(other.value)
-		, assetMetaData(std::move(other.assetMetaData))
-		, hostInfo(std::move(other.hostInfo))
-		, exportSettings(std::move(other.exportSettings))
-		, vrayStatus(std::move(other.vrayStatus))
-	{
-		this->message.move(other.message);
-	}
-
-	/// Create message from data, usually to be sent
-	VRayMessage(const char * data, int size)
-	    : message(data, size)
-	{}
-
-	/// Create VRayMessage from zmq::message_t parsing the data
-	static VRayMessage fromZmqMessage(zmq::message_t & message) {
-		VRayMessage msg;
-		msg.message.move(message);
-		msg.parse();
-		return msg;
-	}
-
-	static zmq::message_t fromData(const char * data, size_t size) {
-		return zmq::message_t(data, size);
-	}
-
-	zmq::message_t & getInternalMessage() {
-		return this->message;
-	}
-
-	const std::string getPluginNew() const {
-		if (pluginAction == PluginAction::Replace && type == Type::ChangePlugin) {
-			return value.as<VRayBaseTypes::AttrSimpleType<std::string>>();
-		} else {
-			assert((pluginAction == PluginAction::Replace && type == Type::ChangePlugin) && "Getting plugin new");
-			return "";
-		}
-	}
-
-	/// Get plugin property
-	const std::string & getProperty() const {
-		return pluginProperty;
-	}
-
-	/// Get the plugin instance id
-	const std::string & getPlugin() const {
-		return pluginName;
-	}
-
-	/// Get the plugin type name
-	const std::string & getPluginType() const {
-		return pluginType;
-	}
-
-	/// Get the message type
-	Type getType() const {
-		return type;
-	}
-
-	/// If type == ChangePlugin then get the plugin action
-	PluginAction getPluginAction() const {
-		return pluginAction;
-	}
-
-	/// If type == ChangeRenderer then get the renderer action
-	RendererAction getRendererAction() const {
-		return rendererAction;
-	}
-
-	/// If PluginAction will update plugin property check if it should be set as string
-	ValueSetter getValueSetter() const {
-		return valueSetter;
-	}
-
-	/// Get renderer type if renderer action is init
-	RendererType getRendererType() const {
-		return rendererType;
-	}
-
-	/// Get renderer statate for renderer action set renderer state
-	RendererState getRendererState() const {
-		return rendererState;
-	}
-
-	/// Get dr flags for renderer init renderer action
-	DRFlags getDrFlags() const {
-		return drFlags;
-	}
-
-	/// If type == Control then get the contol action
-	ControlAction getControlAction() const {
-		return controlAction;
-	}
-
-	/// Get logLevel for VRay log messages
-	int getLogLevel() const {
-		return logLevel;
-	}
-
-	/// Get vfbAlwaysOnTop for VRay log messages
-	int getVfbAlwaysOnTop() const {
-		return vfbAlwaysOnTop;
-	}
-
-	/// Get the JSON settings for showing a user dialog
-	std::string getUserDialogJson() const {
-		return dialogJson;
-	}
-
-	/// Get whether the anonymous telemetry should be enabled for the renderer
-	int getTelemetryAnonymousState() const {
-		return telemetryAnonymousState;
-	}
-
-	/// Get whether the personalized telemetry should be enabled for the renderer
-	int getTelemetryPersonalizedState() const {
-		return telemetryPersonalizedState;
-	}
-
-	/// Get vfbSettings for VRay log messages
-	const std::string getVfbSettings() const {
-		return vfbSettings;
-	}
-
-	const std::string getVfbLayers() const {
-		return vfbLayers;
-	}
-
-
-	const std::string getLogMessage() const {
-		return logMessage;
-	}
-
-	/// Get the renderer size for renderer action resize
-	void getRenderSizes(VRayMessage::RenderSizes& sizes) const {
-		sizes = renderSize;
-	}
-
-	RenderSequenceDesc getRenderSequenceDesc() const {
-		return renderSequenceDesc;
-	}
-
-	const AssetMetaData& getAssetMetaData() const {
-		return assetMetaData;
-	}
-
-	const HostInfo& getHostInfo() const {
-		return hostInfo;
-	}
-
-	const VRayStatusType getVrayStatus() const {
-		return vrayStatus;
-	}
-
-	const ExportSettings& getExportSettings() const {
-		return exportSettings;
-	}
-
-	/// If message is update plugin param, get pointer to the internal param value
-	template <typename T>
-	const T * getValue() const {
-		return value.asPtr<T>();
-	}
-
-	/// If message is update plugin param get the attr value object that stores the param value
-	const VRayBaseTypes::AttrValue & getAttrValue() const {
-		return value;
-	}
-
-	/// If message is update plugin param, get the value type
-	VRayBaseTypes::ValueType getValueType() const {
-		return value.type;
-	}
-
-	/// Static methods for creating messages
-	///
-	static zmq::message_t msgPluginCreate(const std::string & pluginName, const std::string & pluginType) {
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << pluginName << PluginAction::Create << pluginType;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgPluginReplace(const std::string & pluginOld, const std::string & pluginNew) {
-		VRayBaseTypes::AttrSimpleType<std::string> valWrapper(pluginNew);
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << pluginOld << PluginAction::Replace << valWrapper.getType() << valWrapper;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgPluginRemove(const std::string & plugin) {
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << plugin << PluginAction::Remove;
-		return fromStream(strm);
-	}
-
-	/// Create a message to set a plugin property
-	/// @param plugin - plugin ID
-	/// @param property - property name
-	/// @param value - new property value
-	/// @param forceUpdate - force value update (bypass cache)
-	template <typename T>
-	static zmq::message_t msgPluginSetProperty(const std::string & plugin, const std::string & property, const T & value, bool forceUpdate) {
-		using namespace std;
-
-		auto actionType = forceUpdate ? PluginAction::ForceUpdate : PluginAction::Update;
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << plugin << actionType << property << ValueSetter::Default << value.getType() << value;
-		return fromStream(strm);
-	}
-
-	/// Create a message to set a plugin property
-	/// @param plugin - plugin ID
-	/// @param property - property name
-	/// @param value - new property value
-	/// @param forceUpdate - force value update (bypass cache)
-	static zmq::message_t msgPluginSetProperty(const std::string & plugin, const std::string & property, const VRayBaseTypes::AttrValue & value, bool forceUpdate) {
-		using namespace std;
-
-		auto actionType = forceUpdate ? PluginAction::ForceUpdate : PluginAction::Update;
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << plugin << actionType << property << ValueSetter::Default << value;
-		return fromStream(strm);
-	}
-
-	/// Create a message to set a plugin property
-	/// @param plugin - plugin ID
-	/// @param property - property name
-	/// @param value - new property value
-	/// @param forceUpdate - force value update (bypass cache)
-	static zmq::message_t msgPluginSetPropertyString(const std::string & plugin, const std::string & property, const std::string & value, bool forceUpdate) {
-		using namespace std;
-
-		auto actionType = forceUpdate ? PluginAction::ForceUpdate : PluginAction::Update;
-		SerializerStream strm;
-		strm << VRayMessage::Type::ChangePlugin << plugin << actionType << property
-		     << ValueSetter::AsString << VRayBaseTypes::ValueType::ValueTypeString << value;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgImageSet(const VRayBaseTypes::AttrImageSet & value) {
-		SerializerStream strm;
-		strm << VRayMessage::Type::Image << value.getType() << value;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgVRayLog(int level, const std::string & log) {
-		SerializerStream strm;
-		VRayBaseTypes::AttrSimpleType<std::string> val(log);
-		strm << VRayMessage::Type::VRayLog << level << val.getType() << log;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgVfbLayers(const std::string& layers) {
-		SerializerStream strm;
-		VRayBaseTypes::AttrSimpleType<std::string> val(layers);
-		strm << VRayMessage::Type::VfbLayers << val.getType() << layers;
-		return fromStream(strm);
-	}
-
-	/// Create message to control renderer
-	static zmq::message_t msgRendererAction(RendererAction action) {
-		assert(action < RendererAction::_ArgumentRenderAction && "Renderer action provided requires argument!");
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << action;
-		return fromStream(strm);
-	}
-
-	template <typename T>
-	static zmq::message_t msgRendererAction(RendererAction action, const T & value) {
-		assert(action > RendererAction::_ArgumentRenderAction && "Renderer action provided requires NO argument!");
-		SerializerStream strm;
-		VRayBaseTypes::AttrSimpleType<T> valWrapper(value);
-		strm << Type::ChangeRenderer << action << valWrapper.getType() << valWrapper;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgRendererActionInit(RendererType type, DRFlags drFlags) {
-		SerializerStream strm;
-		const int value = static_cast<int>(drFlags) << static_cast<int>(DRFlags::_SerializationShift)
-		                | static_cast<int>(type) << static_cast<int>(RendererType::_SerializationShift);
-		return msgRendererAction(RendererAction::Init, value);
-	}
-
-	static zmq::message_t msgRendererAction(RendererAction action, const VRayBaseTypes::AttrListInt & value) {
-		assert(action > RendererAction::_ArgumentRenderAction && "Renderer action provided requires NO argument!");
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << action << value.getType() << value;
-		return fromStream(strm);
-	}
-
-	// Creates message for starting of sequence rendering
-	static zmq::message_t msgRendererActionRenderSequence(const int start, const int end, const int step) {
-		assert(action > RendererAction::_ArgumentRenderAction && "Renderer action provided requires NO argument!");
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << RendererAction::RenderSequence << start << end << step;
-
-		return fromStream(strm);
-	}
-
-	// Creates message for exporting a .vrscene
-	static zmq::message_t msgRendererActionExportScene(const ExportSettings& exportSettings) {
-		assert(action > RendererAction::_ArgumentRenderAction && "Renderer action provided requires NO argument!");
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << RendererAction::ExportScene 
-				<< exportSettings.compressed
-				<< exportSettings.hexArrays << exportSettings.hexTransforms
-				<< exportSettings.hostAppString
-				<< exportSettings.filePath
-				<< exportSettings.subFileInfo.size();
-
-				for ( const auto item : exportSettings.subFileInfo) {
-					strm << item.fileNameSuffix << item.pluginType;
-				}
-
-		return fromStream(strm);
-	}
-
-	template <typename T>
-	static zmq::message_t msgRendererState(RendererState state, const T & val) {
-		VRayBaseTypes::AttrSimpleType<T> valWrapper(val);
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << RendererAction::SetRendererState << state << valWrapper.getType() << valWrapper;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgRendererResize(const RenderSizes& renderSize) {
-		SerializerStream strm;
-		strm << Type::ChangeRenderer << RendererAction::Resize 
-			 << renderSize.bitmask << renderSize.imgWidth << renderSize.imgHeight
-			 << renderSize.bmpWidth << renderSize.bmpHeight
-			 << renderSize.cropRgnLeft << renderSize.cropRgnTop << renderSize.cropRgnWidth << renderSize.cropRgnHeight
-			 << renderSize.rgnLeft << renderSize.rgnTop << renderSize.rgnWidth << renderSize.rgnHeight;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlSetLogLevel(int level) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::SetLogLevel << level;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlOpenCollaboration(const HostInfo& hostInfo) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::OpenCollaboration 
-				<< hostInfo.vrayVersion << hostInfo.buildVersion << hostInfo.blenderVersion;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlOpenCosmos() {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::OpenCosmos;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlShowVFB() {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::ShowVfb;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlShowUserDialog(const std::string& json) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::ShowUserDialog << json;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlSetTelemetryState(bool anonymousState, bool personalizedState) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::SetTelemetryState << anonymousState << personalizedState;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlSetVfbOnTop(bool alwaysOnTop) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::SetVfbOnTop << alwaysOnTop;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlStartInteractiveRendering() {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::StartViewportRender;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlStartProductionRendering() {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::StartProductionRender;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlUpdateVfbSettings(const std::string &settings) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::UpdateVfbSettings << settings;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlUpdateVfbLayers(const std::string& layers) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::UpdateVfbLayers << layers;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlLogMessage(int logLevel, const std::string& message) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::LogMessage << logLevel << message;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgControlVrayStatus(VRayStatusType status) {
-		SerializerStream strm;
-		strm << Type::Control << ControlAction::VRayStatus << status;
-		return fromStream(strm);
-	}
-
-	static zmq::message_t msgAssetImport(
-		ImportedAssetType assetType,
-		const std::unordered_map<std::string, std::string>& assetLocationsMap,
-		const std::string& materialFile,
-		const std::string& objectFile="",
-		const std::string& lightFile = "") {
+	// Plugin messages
+	FirstPluginMessage,
+	PluginCreate = FirstPluginMessage,
+	PluginRemove,
+	PluginUpdate,
+	PluginReplace,
+	LastPluginMessage = PluginReplace,
+
+	// Renderer messages
+	FirstRendererMessage,
+	RendererFree = FirstRendererMessage,
+	RendererStart,
+	RendererStop,
+	RendererPause,
+	RendererResume,
+	RendererResize,
+	RendererReset,
+	RendererAbort,
+	RendererInit,
+	RendererResetHosts,
+	RendererLoadScene,
+	RendererAppendScene,
+	RendererExportScene,
+	RendererSetRenderMode,
+	RendererSetCurrentTime,
+	RendererSetCurrentFrame,
+	RendererClearFrameValues,
+	RendererGetImage,
+	RendererSetQuality,
+	RendererSetCurrentCamera,
+	RendererSetCommitAction,
+	RendererSetVfbOptions,
+	RendererSetViewportImageFormat,
+	RendererSetRenderRegion,
+	RendererSetCropRegion,
+	RendererRenderSequence,
+	LastRendererMessage = RendererRenderSequence,
 		
-		SerializerStream strm;
+	// Renderer events
+	FirstRendererEvent,
+	RendererOnVRayLog = FirstRendererEvent,
+	RendererOnImage,
+	RendererOnChangeState,
+	RendererOnAsyncOpComplete,
+	LastRendererEvent = RendererOnChangeState,
 
-		VRayBaseTypes::AttrListString assetNames(static_cast<int>(assetLocationsMap.size()));
-		VRayBaseTypes::AttrListString assetLocations(static_cast<int>(assetLocationsMap.size()));
-		for (auto &asset : assetLocationsMap)
-		{
-			assetNames.append(asset.first);
-			assetLocations.append(asset.second);
-		}
-		strm << Type::ImportAsset << assetType << assetNames << assetLocations << materialFile << objectFile << lightFile;
-		return fromStream(strm);
-	}
-
-private:
-	static zmq::message_t fromStream(SerializerStream & strm) {
-		return fromData(strm.getData(), strm.getSize());
-	}
-
-	void parse() {
-		using namespace VRayBaseTypes;
-
-		DeserializerStream stream(reinterpret_cast<char*>(message.data()), message.size());
-		stream >> type;
-
-		if (type == Type::ChangePlugin) {
-			stream >> pluginName >> pluginAction;
-			
-			switch (pluginAction){
-				case PluginAction::Update:
-				case PluginAction::ForceUpdate:
-					stream >> pluginProperty >> valueSetter >> value;
-					break;
-				case PluginAction::Create:
-					if (stream.hasMore()) {
-						stream >> pluginType;
-					}
-					break;
-				case PluginAction::Replace:
-					assert(stream.hasMore() && "Missing new plugin for replace plugin");
-					stream >> value;
-					break;
-				default:
-					assert(!"Invalid message type");
-			}
-		} else if (type == Type::Image) {
-			stream >> value;
-		}
-		else if (type == Type::VfbLayers) {
-			stream >> value;
-			assert(value.type == VRayBaseTypes::ValueTypeString && "Type::VfbLayers must be a string value");
-		} else if (type == Type::VRayLog) {
-			stream >> logLevel >> value;
-			assert(value.type == VRayBaseTypes::ValueTypeString && "Type::VRayLog must be a string value");
-		} else if (type == Type::ChangeRenderer) {
-			stream >> rendererAction;
-			if (rendererAction == RendererAction::Resize) {
-				stream >> renderSize.bitmask >> renderSize.imgWidth >> renderSize.imgHeight
-					>> renderSize.bmpWidth >> renderSize.bmpHeight
-					>> renderSize.cropRgnLeft >> renderSize.cropRgnTop >> renderSize.cropRgnWidth >> renderSize.cropRgnHeight
-					>> renderSize.rgnLeft >> renderSize.rgnTop >> renderSize.rgnWidth >> renderSize.rgnHeight;
-			} else if (rendererAction == RendererAction::Init) {
-				stream >> value;
-				const int val = value.as<AttrSimpleType<int>>().value;
-				drFlags = static_cast<DRFlags>((val >> static_cast<int>(DRFlags::_SerializationShift)) & 0xff);
-				rendererType = static_cast<RendererType>((val >> static_cast<int>(RendererType::_SerializationShift)) & 0xff);
-			} else if (rendererAction == RendererAction::SetRendererState) {
-				stream >> rendererState >> value;
-			} else if (rendererAction == RendererAction::RenderSequence) {
-				stream >> renderSequenceDesc.start >> renderSequenceDesc.end >> renderSequenceDesc.step;
-			} else if (rendererAction == RendererAction::ExportScene) {
-				size_t numSubFiles = 0;
-
-				stream  >> exportSettings.compressed 
-						>> exportSettings.hexArrays >> exportSettings.hexTransforms
-						>> exportSettings.hostAppString 
-						>> exportSettings.filePath 
-						>> numSubFiles;
-						
-				exportSettings.subFileInfo.resize(numSubFiles);
-				for (size_t i = 0; i < numSubFiles; ++i) {
-					stream  >> exportSettings.subFileInfo[i].fileNameSuffix
-							>> exportSettings.subFileInfo[i].pluginType;
-				}
-			} else if (rendererAction > RendererAction::_ArgumentRenderAction) {
-				stream >> value;
-			}
-		} else if (type == Type::Control) {
-			stream >> controlAction;
-			switch (controlAction){
-				case ControlAction::SetLogLevel:      { stream >> logLevel; break; }
-				case ControlAction::SetVfbOnTop:      { stream >> vfbAlwaysOnTop; break; }
-				case ControlAction::ShowUserDialog:   { stream >> dialogJson; break; }
-				case ControlAction::UpdateVfbSettings:{ stream >> vfbSettings; break; }
-				case ControlAction::UpdateVfbLayers:  { stream >> vfbLayers; break;	}
-				case ControlAction::LogMessage:		  { stream >> logLevel >> logMessage; break;	}
-				case ControlAction::SetTelemetryState:{ stream >> telemetryAnonymousState >> telemetryPersonalizedState; break; }
-				case ControlAction::OpenCollaboration:{ stream >> hostInfo.vrayVersion >> hostInfo.buildVersion >> hostInfo.blenderVersion; break; }
-				case ControlAction::VRayStatus:		  { stream >> vrayStatus; break; }
-			}
-		}
-		else if (type == Type::ImportAsset)
-		{
-			stream >> assetMetaData.type;
-			stream >> assetMetaData.assetNames;
-			stream >> assetMetaData.assetLocations;
-			stream >> assetMetaData.materialFile;
-			stream >> assetMetaData.objectFile;
-			stream >> assetMetaData.lightFile;
-		}
-	}
-
-
-	zmq::message_t            message;
-	Type                      type				= Type::None;
-
-	RendererAction            rendererAction	= RendererAction::None;
-	RendererType              rendererType		= RendererType::None;
-	DRFlags                   drFlags			= DRFlags::None;
-	RendererState             rendererState		= RendererState::None;
-	RenderSizes               renderSize;
-
-	ValueSetter               valueSetter		= ValueSetter::None;
-
-	PluginAction              pluginAction		= PluginAction::None;
-	std::string               pluginName;
-	std::string               pluginType;
-	std::string               pluginProperty;
-
-	ControlAction			  controlAction		= ControlAction::None;
-	int                       logLevel			= 0;
-	bool					  vfbAlwaysOnTop	= false;
-	bool                      telemetryAnonymousState	= false;
-	bool                      telemetryPersonalizedState = false;
-	std::string				  dialogJson;	// Settings for showing a user dialog in JSON format
-	std::string				  vfbSettings;
-	std::string				  vfbLayers;
-	std::string				  logMessage;
-
-	RenderSequenceDesc		  renderSequenceDesc;
-
-	VRayBaseTypes::AttrValue  value;
-	AssetMetaData			  assetMetaData;
-	HostInfo				  hostInfo;
-	ExportSettings			  exportSettings;
-	VRayStatusType			  vrayStatus;
-
-
-
-private:
-	VRayMessage(const VRayMessage&) = delete;
-	VRayMessage& operator=(const VRayMessage&) = delete;
+	// Control messages
+	FirstControlMessage,
+	ControlSetLogLevel = FirstControlMessage,
+	ControlOpenCollaboration,
+	ControlOpenCosmos,
+	ControlShowUserDialog,
+	ControlSetTelemetryState,
+	ControlSetVfbOnTop,
+	ControlUpdateVfbSettings,
+	ControlUpdateVfbLayers,
+	ControlShowVfb,
+	LastControlMessage = ControlShowVfb,
+		
+	// Control events
+	FirstControlEvent,
+	ControlOnStartViewportRender = FirstControlEvent,
+	ControlOnStartProductionRender,
+	ControlOnUpdateVfbSettings,
+	ControlOnUpdateVfbLayers,
+	ControlOnLogMessage,
+	ControlOnImportAsset,
+	ControlOnRendererStatus,
+	LastControlEvent = ControlOnLogMessage
 };
 
 
+
+enum class DRFlags : char {
+	None              = 0,
+	EnableDr          = 1 << 1,
+	RenderOnlyOnHosts = 1 << 2,
+	_SerializationShift = 8,
+};
+
+enum class RendererType : char {
+	None				= 0,
+	RT,
+	Animation,
+	SingleFrame,
+	Preview,
+	_SerializationShift = 0,
+};
+
+
+enum class RendererState : char {
+	None,
+	Abort,				// Rendering aborted
+	Continue,			// Rendering resumed by user
+	Stopped,			// Rendering stopped by stop() or from UI
+	Done,				// Rendering done
+	Progress,			// [Not a state] Numerical progress message
+	ProgressMessage,	// [Not a state] Textual progress message
+};
+
+/// Asyncronous operations for which a RendererOnAsyncOpComplete message will be sent to the client
+enum class RendererAsyncOp: char {
+	None,
+	ExportVrscene		// Export .vrscene		
+};
+
+
+enum class ImportedAssetType : char {
+	None,
+	Material,
+	VRMesh,
+	HDRI
+};
+
+
+enum class VRayStatusType : char {
+	None = 0,
+	MainRendererAvailable,
+	MainRendererUnavailable,
+	LicenseAcquired,
+	LicenseDropped
+
+};
+
+
+// Structure describing render sequence
+struct RenderSequenceDesc {
+	int start = 1; // Starting frame
+	int end = 1;   // Last frame
+	int step = 1;  // Frame step
+};
+
+// Impelments the protocol for VRay::RenderSizeParams.
+struct RenderSizes {
+	enum class Bitmask : int {
+		None      = 0x0,
+		ImgSize   = 0x1,
+		CropRgn   = 0x2,
+		RenderRgn = 0x4
+	};
+
+	RenderSizes() = default;
+
+	bool operator==(const RenderSizes rhs) const {
+		return 
+			imgWidth      == rhs.imgWidth &&
+			imgHeight     == rhs.imgHeight &&
+			bmpWidth      == rhs.bmpWidth &&
+			bmpHeight     == rhs.bmpHeight &&
+			cropRgnLeft   == rhs.cropRgnLeft &&
+			cropRgnTop    == rhs.cropRgnTop &&
+			cropRgnWidth  == rhs.cropRgnWidth &&
+			cropRgnHeight == rhs.cropRgnHeight &&
+			rgnLeft       == rhs.rgnLeft &&
+			rgnTop        == rhs.rgnTop &&
+			rgnWidth      == rhs.rgnWidth &&
+			rgnHeight     == rhs.rgnHeight;
+	}
+
+
+	int bitmask = 0;	// Same as VRay::RenderSizeParams::RenderSizeBitmask
+
+	// Output image size. This is the size of the image that we get in onImageUpdated.
+	int imgWidth = 0;
+	int imgHeight = 0;
+
+	// Framebuffer size that VRay uses for the actual rendering. The image is scaled
+	// to imgWidth/Height to produce the actual output. If scaling is disproportional, 
+	// the output image will be stretched.
+	// Usually this is the same as imgWidth/Height for mono and double that in one of
+	// the directions for stereo rendering.
+	int bmpWidth = 0;
+	int bmpHeight = 0;
+
+	// Size of the region inside bmpWidth/Height we actually want to render.
+	// This is used when only a portion of the viewport/VBF is selected for rendering.
+	float cropRgnLeft = 0;
+	float cropRgnTop = 0;
+	float cropRgnWidth = 0;
+	float cropRgnHeight = 0;
+
+	// Size of the region inside imgWidth/Height we want to render
+	int rgnLeft = 0;
+	int rgnTop = 0;
+	int rgnWidth = 0;
+	int rgnHeight = 0;
+};
+
+
+SERIALIZE_STRUCT(RenderSizes,
+	PARAM(bitmask)
+	PARAM(imgWidth)
+	PARAM(imgHeight)
+	PARAM(bmpWidth)
+	PARAM(bmpHeight)
+	PARAM(cropRgnLeft)
+	PARAM(cropRgnTop)
+	PARAM(cropRgnWidth)
+	PARAM(cropRgnHeight)
+	PARAM(rgnLeft)
+	PARAM(rgnTop)
+	PARAM(rgnWidth)
+	PARAM(rgnHeight)
+);
+
+
+struct AssetMetaData {
+	ImportedAssetType type;
+	std::string materialFile;
+	std::string objectFile;
+	VRayBaseTypes::AttrListString assetNames;
+	VRayBaseTypes::AttrListString assetLocations;
+};
+
+
+/// Options to pass in VRayExportSettings when exporting a. vrscene
+struct ExportSettings {
+	struct SubFileInfo {
+		std::string fileNameSuffix;
+		std::string pluginType;
+	};
+
+	bool compressed;
+	bool hexArrays;
+	bool hexTransforms;
+	std::string hostAppString;
+	std::string filePath;
+	std::vector<SubFileInfo> subFileInfo;
+};
+
+
+
+static SerializerStream& operator&& (SerializerStream& stream, const ExportSettings& settings) {
+	stream  << settings.compressed
+			<< settings.hexArrays << settings.hexTransforms
+			<< settings.hostAppString 
+			<< settings.filePath 
+			<< settings.subFileInfo.size();
+
+	for ( const auto item : settings.subFileInfo) {
+		stream << item.fileNameSuffix << item.pluginType;
+	}
+
+	return stream;
+}
+
+static DeserializerStream& operator&& (DeserializerStream& stream, ExportSettings& settings) {
+	size_t numSubFiles = 0;
+
+	stream  >> settings.compressed 
+			>> settings.hexArrays >> settings.hexTransforms
+			>> settings.hostAppString 
+			>> settings.filePath 
+			>> numSubFiles;
+
+	settings.subFileInfo.resize(numSubFiles);
+
+	for (size_t i = 0; i < numSubFiles; ++i) {
+		stream  >> settings.subFileInfo[i].fileNameSuffix
+			>> settings.subFileInfo[i].pluginType;
+	}
+
+	return stream;
+}
+
+
+struct HostInfo {
+	std::string vrayVersion;
+	std::string buildVersion;
+	std::string blenderVersion;
+};
+
+
+SERIALIZE_STRUCT(HostInfo,
+	PARAM(vrayVersion)
+	PARAM(buildVersion)
+	PARAM(blenderVersion)
+);
+
+
+PROTO_MESSAGE( PluginCreate,
+	std::string pluginName;
+	std::string pluginType;
+);
+
+SERIALIZE_MESSAGE(PluginCreate, 
+	PARAM(pluginName)
+	PARAM(pluginType)
+);
+
+
+PROTO_MESSAGE(PluginRemove,
+	std::string pluginName;
+);
+
+SERIALIZE_MESSAGE(PluginRemove, 
+	PARAM(pluginName)
+);
+
+
+/// MsgPluginUpdate 
+PROTO_MESSAGE(PluginUpdate,
+	std::string pluginName;
+	std::string propertyName;
+	vray::AttrValue propertyValue;
+	bool asString;
+	bool forceUpdate = false;
+);
+
+
+SERIALIZE_MESSAGE(PluginUpdate,
+	PARAM(pluginName)
+	PARAM(propertyName)
+	PARAM(propertyValue)
+	PARAM(asString)
+	PARAM(forceUpdate)
+);
+
+
+/// MsgPluginReplace 
+PROTO_MESSAGE(PluginReplace,
+	std::string oldPluginName;
+	std::string newPluginName;
+);
+
+SERIALIZE_MESSAGE(PluginReplace, 
+	PARAM(oldPluginName)
+	PARAM(newPluginName)
+);
+
+/// MsgImage 
+PROTO_MESSAGE(RendererOnImage,
+	vray::AttrImageSet imageSet;
+);
+
+SERIALIZE_MESSAGE(RendererOnImage,
+	PARAM(imageSet);
+);
+
+
+/// MsgVfbLayers 
+PROTO_MESSAGE(ControlOnUpdateVfbLayers,
+	std::string vfbLayersJson;
+);
+
+SERIALIZE_MESSAGE(ControlOnUpdateVfbLayers, 
+	PARAM(vfbLayersJson)
+);
+
+/// MsgVRayLog 
+PROTO_MESSAGE(RendererOnVRayLog,
+	int logLevel;
+	std::string log;
+);
+
+SERIALIZE_MESSAGE(RendererOnVRayLog, 
+	PARAM(logLevel)
+	PARAM(log)
+);
+
+
+/// MsgRendererFree
+EMPTY_PROTO_MESSAGE(RendererFree);
+SERIALIZE_EMPTY_MESSAGE(RendererFree);
+
+
+
+/// MsgRendererStart
+EMPTY_PROTO_MESSAGE(RendererStart);
+SERIALIZE_EMPTY_MESSAGE(RendererStart);
+
+
+/// MsgRendererStop
+EMPTY_PROTO_MESSAGE(RendererStop);
+SERIALIZE_EMPTY_MESSAGE(RendererStop);
+
+
+/// MsgRendererPause
+EMPTY_PROTO_MESSAGE(RendererPause);
+SERIALIZE_EMPTY_MESSAGE(RendererPause);
+
+/// MsgRendererResume
+EMPTY_PROTO_MESSAGE(RendererResume);
+SERIALIZE_EMPTY_MESSAGE(RendererResume);
+
+/// MsgRendererReset
+EMPTY_PROTO_MESSAGE(RendererReset);
+SERIALIZE_EMPTY_MESSAGE(RendererReset);
+
+/// MsgRendererAbort
+EMPTY_PROTO_MESSAGE(RendererAbort);
+SERIALIZE_EMPTY_MESSAGE(RendererAbort);
+
+/// MsgRendererInit
+PROTO_MESSAGE(RendererInit,
+	RendererType rendererType;
+	DRFlags drFlags;
+	vray::AttrValue value;
+);
+
+SERIALIZE_MESSAGE(RendererInit, 
+	PARAM(rendererType)
+	PARAM(drFlags)
+);
+
+
+/// MsgRendererResize
+PROTO_MESSAGE(RendererResize,
+	RenderSizes renderSizes;
+);
+
+SERIALIZE_MESSAGE(RendererResize, 
+	PARAM(renderSizes)
+);
+
+
+/// MsgRendererResetHosts
+PROTO_MESSAGE(RendererResetHosts,
+	std::string hosts;
+);
+
+SERIALIZE_MESSAGE(RendererResetHosts, 
+	PARAM(hosts)
+);
+
+
+/// MsgRendererLoadScene
+PROTO_MESSAGE(RendererLoadScene,
+	std::string fileName;
+);
+
+SERIALIZE_MESSAGE(RendererLoadScene, 
+	PARAM(fileName)
+);
+
+
+/// MsgRendererAppendScene
+PROTO_MESSAGE(RendererAppendScene,
+	std::string fileName;
+);
+
+SERIALIZE_MESSAGE(RendererAppendScene, 
+	PARAM(fileName)
+);
+
+
+/// MsgRendererExportScene
+PROTO_MESSAGE(RendererExportScene,
+	ExportSettings exportSettings;
+);
+
+SERIALIZE_MESSAGE(RendererExportScene, 
+	PARAM(exportSettings)
+);
+
+
+/// MsgRendererSetRenderMode
+PROTO_MESSAGE(RendererSetRenderMode,
+	int renderMode;	// VRay::VRayRenderer::RenderMode
+);
+
+SERIALIZE_MESSAGE(RendererSetRenderMode, 
+	PARAM(renderMode)
+);
+
+
+/// MsgRendererSetCurrentTime
+PROTO_MESSAGE(RendererSetCurrentTime,
+	float frame;
+);
+
+SERIALIZE_MESSAGE(RendererSetCurrentTime, 
+	PARAM(frame)
+);
+
+
+/// MsgRendererSetCurrentFrame
+PROTO_MESSAGE(RendererSetCurrentFrame,
+	float frame;
+);
+
+SERIALIZE_MESSAGE(RendererSetCurrentFrame, 
+	PARAM(frame)
+);
+
+
+/// MsgRendererClearFrameValues
+PROTO_MESSAGE(RendererClearFrameValues,
+	float upToTime;
+);
+
+SERIALIZE_MESSAGE(RendererClearFrameValues, 
+	PARAM(upToTime)
+);
+
+
+/// MsgRendererGetImage
+PROTO_MESSAGE(RendererGetImage,
+	int renderElementType; // VRay::RenderElement::Type
+);
+
+SERIALIZE_MESSAGE(RendererGetImage, 
+	PARAM(renderElementType)
+);
+
+
+/// MsgRendererSetQuality
+PROTO_MESSAGE(RendererSetQuality,
+	int jpegQuality;
+);
+
+SERIALIZE_MESSAGE(RendererSetQuality, 
+	PARAM(jpegQuality)
+);
+
+
+/// MsgRendererSetCurrentCamera
+PROTO_MESSAGE(RendererSetCurrentCamera,
+	std::string cameraName;
+);
+
+SERIALIZE_MESSAGE(RendererSetCurrentCamera, 
+	PARAM(cameraName)
+);
+
+
+/// MsgRendererSetCommitAction
+PROTO_MESSAGE(RendererSetCommitAction,
+	vray::CommitAction commitAction;
+);
+
+SERIALIZE_MESSAGE(RendererSetCommitAction, 
+	PARAM(commitAction)
+);
+
+
+/// MsgRendererSetVfbOptions
+PROTO_MESSAGE(RendererSetVfbOptions,
+	int vfbFlags;
+);
+
+SERIALIZE_MESSAGE(RendererSetVfbOptions, 
+	PARAM(vfbFlags)
+);
+
+
+/// MsgRendererSetViewportImageFormat
+PROTO_MESSAGE(RendererSetViewportImageFormat,
+	vray::AttrImage::ImageType format;
+);
+
+SERIALIZE_MESSAGE(RendererSetViewportImageFormat, 
+	PARAM(format)
+);
+
+
+/// MsgRendererSetRenderRegion
+PROTO_MESSAGE(RendererSetRenderRegion,
+	vray::AttrListInt coords;
+);
+
+SERIALIZE_MESSAGE(RendererSetRenderRegion, 
+	PARAM(coords)
+);
+
+
+/// MsgRendererSetCropRegion
+PROTO_MESSAGE(RendererSetCropRegion,
+	vray::AttrListInt coords;
+);
+
+SERIALIZE_MESSAGE(RendererSetCropRegion, 
+	PARAM(coords)
+);
+
+
+/// MsgRendererRenderSequence
+PROTO_MESSAGE(RendererRenderSequence,
+	RenderSequenceDesc description;
+);
+
+SERIALIZE_MESSAGE(RendererRenderSequence, 
+	PARAM(description)
+);
+
+
+
+/// MsgRendererOnChangeState
+PROTO_MESSAGE(RendererOnChangeState,
+	RendererState state;
+	float renderProgress;
+	std::string progressMessage;
+	int lastRenderedFrame;
+);
+
+static SerializerStream& operator<< (SerializerStream& s, const MsgRendererOnChangeState&  msg) {
+	s << msg.state;
+
+	switch(msg.state){
+		case RendererState::Progress:			s << msg.renderProgress; break;
+		case RendererState::ProgressMessage:	s << msg.progressMessage; break;
+		case RendererState::Continue:			s << msg.lastRenderedFrame; break;
+		default:
+			;
+	}
+
+	return s;
+}
+
+static DeserializerStream& operator>> (DeserializerStream& s, MsgRendererOnChangeState&  msg) {
+	s >> msg.state;
+
+	switch(msg.state){
+	case RendererState::Progress:			s >> msg.renderProgress; break;
+	case RendererState::ProgressMessage:	s >> msg.progressMessage; break;
+	case RendererState::Continue:			s >> msg.lastRenderedFrame; break;
+	default:
+		;
+	}
+
+	return s;
+}
+
+
+/// MsgRendererOnAsyncOpComplete
+PROTO_MESSAGE(RendererOnAsyncOpComplete,
+	RendererAsyncOp operation;
+	bool success;
+	std::string message;
+);
+
+SERIALIZE_MESSAGE(RendererOnAsyncOpComplete, 
+	PARAM(operation)
+	PARAM(success)
+	PARAM(message)
+);
+
+
+/// MsgControlSetLogLevel
+PROTO_MESSAGE(ControlSetLogLevel,
+	int logLevel;
+);
+
+SERIALIZE_MESSAGE(ControlSetLogLevel, 
+	PARAM(logLevel)
+);
+
+
+/// MsgControlOpenCollaboration
+PROTO_MESSAGE(ControlOpenCollaboration,
+	HostInfo hostInfo;
+);
+
+SERIALIZE_MESSAGE(ControlOpenCollaboration,
+	PARAM(hostInfo)
+);
+
+/// MsgControlOpenCosmos
+EMPTY_PROTO_MESSAGE(ControlOpenCosmos);
+SERIALIZE_EMPTY_MESSAGE(ControlOpenCosmos);
+
+/// MsgControlShowProductInfo
+PROTO_MESSAGE(ControlShowUserDialog,
+	std::string json;
+);
+
+SERIALIZE_MESSAGE(ControlShowUserDialog, 
+	PARAM(json)
+);
+
+
+/// MsgControlSetTelemetryState
+PROTO_MESSAGE(ControlSetTelemetryState,
+	bool anonymous;
+	bool personalized;
+);
+
+SERIALIZE_MESSAGE(ControlSetTelemetryState, 
+	PARAM(anonymous)
+	PARAM(personalized)
+);
+
+
+/// MsgControlSetVfbOnTop
+PROTO_MESSAGE(ControlSetVfbOnTop,
+	int onTopFlags;
+);
+
+SERIALIZE_MESSAGE(ControlSetVfbOnTop, 
+	PARAM(onTopFlags)
+);
+
+
+
+/// MsgControlUpdateVfbSettings
+PROTO_MESSAGE(ControlUpdateVfbSettings,
+	std::string vfbSettings;
+);
+
+SERIALIZE_MESSAGE(ControlUpdateVfbSettings, 
+	PARAM(vfbSettings)
+);
+
+
+
+/// MsgControlUpdateVfbLayers
+PROTO_MESSAGE(ControlUpdateVfbLayers,
+	std::string vfbLayersInfo;
+);
+
+SERIALIZE_MESSAGE(ControlUpdateVfbLayers, 
+	PARAM(vfbLayersInfo)
+);
+
+
+
+/// MsgControlOnImportAsset
+PROTO_MESSAGE(ControlOnImportAsset,
+	ImportedAssetType assetType;
+	vray::AttrListString assetNames;
+	vray::AttrListString assetLocations;
+	std::string materialFile;
+	std::string objectFile;
+	std::string lightFile;
+	bool isAnimated;
+);
+
+SERIALIZE_MESSAGE(ControlOnImportAsset,
+	PARAM(assetType)
+	PARAM(assetNames) 
+	PARAM(assetLocations)
+	PARAM(materialFile)
+	PARAM(objectFile)
+	PARAM(lightFile)
+	PARAM(isAnimated)
+);
+
+
+/// MsgControlOnRenderStatus
+PROTO_MESSAGE(ControlOnRendererStatus,
+	VRayStatusType status;
+);
+
+SERIALIZE_MESSAGE(ControlOnRendererStatus,
+	PARAM(status)
+);
+
+
+
+/// MsgControlShowVfb
+EMPTY_PROTO_MESSAGE(ControlShowVfb);
+SERIALIZE_EMPTY_MESSAGE(ControlShowVfb);
+
+/// MsgControlOnStartViewportRender
+EMPTY_PROTO_MESSAGE(ControlOnStartViewportRender);
+SERIALIZE_EMPTY_MESSAGE(ControlOnStartViewportRender);
+
+/// MsgControlOnStartProductionRender
+EMPTY_PROTO_MESSAGE(ControlOnStartProductionRender);
+SERIALIZE_EMPTY_MESSAGE(ControlOnStartProductionRender);
+
+/// MsgControlOnUpdateVfbSettings
+PROTO_MESSAGE(ControlOnUpdateVfbSettings,
+	std::string vfbSettings;
+);
+
+SERIALIZE_MESSAGE(ControlOnUpdateVfbSettings, 
+	PARAM(vfbSettings)
+);
+
+
+/// MsgControlOnLogMessage
+PROTO_MESSAGE(ControlOnLogMessage,
+	int logLevel;
+	std::string logMessage;
+);
+
+SERIALIZE_MESSAGE(ControlOnLogMessage, 
+	PARAM(logLevel)
+	PARAM(logMessage)
+);
+
 };  // end VrayZmqWrapper namespace 
+
+#pragma warning (pop)
+
 

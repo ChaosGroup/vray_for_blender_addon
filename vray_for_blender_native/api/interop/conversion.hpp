@@ -12,13 +12,13 @@
 namespace py = boost::python;
 using ndarray = boost::python::numpy::ndarray;
 namespace vray = VRayBaseTypes;
-
+namespace proto = VrayZmqWrapper;
 
 namespace VRayForBlender
 {
 
 void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& listElemTypes, const py::list& list);
-VrayZmqWrapper::VRayMessage::RenderSizes fromRenderSizes (const py::object& obj);
+proto::RenderSizes fromRenderSizes (const py::object& obj);
 
 
 

@@ -36,6 +36,10 @@
             {
                 "attrs": [
                     {
+                        "name": "channelType",
+                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                    },
+                    {
                         "name": "name",
                         "label" : "Render Channel Name"
                     },

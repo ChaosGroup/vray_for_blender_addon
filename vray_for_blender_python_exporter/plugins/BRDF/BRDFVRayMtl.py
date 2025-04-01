@@ -1,13 +1,18 @@
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getInputSocketByAttr, getLinkedFromSocket, getVRayBaseSockType, isFloatSocket
+from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.names import Names
-from vray_blender.plugins import getPluginAttr, getPluginModule
+from vray_blender.nodes.utils import getNodeOfPropGroup
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
+
+def onUseRoughnessUpdate(brdfVrayMtl, context, attrName):
+    node = getNodeOfPropGroup(brdfVrayMtl)
+    glossSock = getInputSocketByAttr(node, 'reflect_glossiness')
+    glossSock.name = "Roughness" if brdfVrayMtl.option_use_roughness else "Reflection glossiness"
 
 def exportTreeNode(nodeCtx: NodeContext):
     
@@ -30,20 +35,30 @@ def exportTreeNode(nodeCtx: NodeContext):
 
         skippedSockets = ['opacity', 'opacity_color', 'opacity_source']
 
+    # Register the material as emissive if self illumination is active.
+    node = nodeCtx.node
+
+    if node.BRDFVRayMtl.self_illumination != (0.0, 0.0, 0.0):
+        nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name))
+        
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
+
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
 
-    fogMult = 1.0
-
     if propGroup := pluginDesc.vrayPropGroup:
+        fogMult = 0.0
+        
         if (propGroup.fog_mult > 0.0):
             fogMult = 1.0 / propGroup.fog_mult
+        
+        pluginDesc.setAttribute("fog_mult", fogMult)
     else:
-        attrDesc = getPluginAttr(getPluginModule(pluginDesc.type), "fog_mult")
-        fogMult = attrDesc['default']
+        # This case is valid for plugins without an underlying node, e.g. as part of
+        # the default material for which we do not have a node tree. All of their properties
+        # which are significant should have already been set.
+        pass
 
-    pluginDesc.setAttribute("fog_mult", fogMult)
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
 
