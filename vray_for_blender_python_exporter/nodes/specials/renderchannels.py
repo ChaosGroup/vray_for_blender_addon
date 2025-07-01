@@ -26,7 +26,8 @@ class VRAY_OT_node_renderchannels_socket_add(SocketOperators.VRayNodeAddCustomSo
     bl_description = "Adds Render Channel sockets"
     bl_options     = {'INTERNAL'}
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketRenderChannel'
         self.vray_socket_name = "Channel"
 
@@ -37,7 +38,8 @@ class VRAY_OT_node_renderchannels_socket_del(SocketOperators.VRayNodeDelCustomSo
     bl_description = "Removes Render Channel socket (only not linked sockets will be removed)"
     bl_options     = {'INTERNAL'}
     
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketRenderChannel'
         self.vray_socket_name = "Channel"
 

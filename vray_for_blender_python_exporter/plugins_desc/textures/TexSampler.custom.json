@@ -1,30 +1,461 @@
 {
-    "Name": "V-Ray Sampler",
+    "Name": "V-Ray Sampler Info",
     "Subtype": "UTILITY",
-    "Parameters": [],
+    "Parameters": [
+        {
+            "attr": "samplers",
+            "type": "ENUM",
+            "desc": "Available samplers",
+            "default": "0",
+            "items": [
+                ["point", "Point", "Shading point in world space"],
+                ["pointObject", "Point Object", "Shading point in object space"],
+                ["pointCamera", "Point Camera", "Shading point in camera space"],
+                ["pointRelative", "Point Relative", "Shading point in relative space"],
+                ["pointReference", "Point Reference", "Shading point in reference space"],
+                ["gnormal", "Geometric Normal", "Geometric normal in world space"],
+                ["flipped_normal", "Flipped Normal", "0 - facing camera, 1 - away from camera"],
+                ["normal", "Normal", "Smooth normal in world space"],
+                ["normalObject", "Normal Object", "Smooth normal in object space"],
+                ["normalCamera", "Normal Camera", "Smooth normal in camera space"],
+                ["normalRelative", "Normal Relative", "Smooth normal in relative space"],
+                ["normalReference", "Normal Reference", "Smooth normal in reference space"],
+                ["bumpNormal", "Bump Normal", "Bump normal in world space"],
+                ["bumpNormalObject", "Bump Normal Object", "Bump map normal in object space"],
+                ["bumpNormalCamera", "Bump Normal Camera", "Bump map normal in camera space"],
+                ["bumpNormalRelative", "Bump Normal Relative", "Bump map normal in relative space"],
+                ["reflection", "Reflection", "Smooth reflection vector in world space"],
+                ["reflectionObject", "Reflection Object", "Smooth reflection vector in object space"],
+                ["reflectionCamera", "Reflection Camera", "Smooth reflection vector in camera space"],
+                ["reflectionRelative", "Reflection Relative", "Smooth reflection vector in relative space"],
+                ["refraction", "Refraction", "Smooth refraction vector in world space"],
+                ["refractionObject", "Refraction Object", "Smooth refraction vector in object space"],
+                ["refractionCamera", "Refraction Camera", "Smooth refraction vector in camera space"],
+                ["refractionRelative", "Refraction Relative", "Smooth refraction vector in relative space"],
+                ["view_dir", "View direction", "Viewing direction."],
+                ["frame_time", "Frame Time", "Current frame (image) time"],
+                ["ray_time", "Ray Time", "Ray time within the motion blur interval"],
+                ["frame_index_offset", "Frame Index Offset", "Frame offset from current frame for long motion blur intervals"],
+                ["facing_ratio", "Facing Ratio", "Cosine between normal and viewing direction"],
+                ["ray_depth", "Ray Depth", "The ray depth"],
+                ["path_length", "Path Length", "The path length"],
+                ["transparency_level", "Transparency Level", "Transparency intersections along the ray path."],
+                ["pixelCenter", "Pixel Center", "Current sample image coordinates."],
+                ["cameraNearClipPlane", "Camera Near Clip Plane", "Camera near clipping plane."],
+                ["cameraFarClipPlane", "Camera Far Clip Plane", "Camera Far clipping plane."],
+                ["uvCoord", "UV Coord", "UVW coordinates of shaded point (channel 0)"],
+                ["uvCoordClamp", "UV Coord Clamp", "Clamped UVW coordinates of shaded point (channel 0)"],
+                ["uvCoordTile", "UV Coord Tile", "Tiled UVW coordinates of shaded point (channel 0)"],
+                ["tangentUCamera", "Tangent U Camera", "U axis of the shaded point's UVW, transformed in camera space"],
+                ["tangentVCamera", "Tangent V Camera", "V axis of the shaded point's UVW, transformed in camera space"],
+                ["tangentUObject", "Tangent U Object", "U axis of the shaded point's UVW, transformed in object space"],
+                ["tangentVObject", "Tangent V Object", "V axis of the shaded point's UVW, transformed in object space"],
+                ["tangentUWorld", "Tangent U World", "U axis of the shaded point's UVW, transformed in world space"],
+                ["tangentVWorld", "Tangent V World", "V axis of the shaded point's UVW, transformed in world space"],
+                ["random_by_renderID", "Random By Render ID", "Random value based on RenderID of the object"],
+                ["random_by_polyShell", "Random By Poly Shell", "Random by polygon shell of current face"],
+                ["random_by_scene_name", "Random By Scene Name", "Random based on scene name of the object"],
+                ["random_by_instanceID", "Random By Instance ID", "Random based on instance identifiers"],
+                ["material_id", "Material ID", "The surface material id, if the surface supports it"],
+                ["object_id", "Object ID", "The object ID of the hit object"],
+                ["parent_object_id", "Parent Object ID", "The object ID of the parent object"],
+                ["instance_id", "Instance ID", "The instance ID of the hit object"],
+                ["velocity", "Velocity", "Velocity at the intersection point, scene units per frame"],
+                ["speed", "Speed", "Magnitude of velocity, in scene units per frame"],
+                ["face_index", "Face Index", "Index of triangle face hit by ray (-1 if not applicable)"],
+                ["barycentric_coords", "Barycentric Coordinates", "Barycentric coordinates of intersection point (0,0,0 if n/a)"]
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "uvCoord",
+            "desc" : "The uvw coordinates of the point being shaded (channel 0)"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
-                        "name": "uv_set_name"
-                    },
-                    {
-                        "name": "uv_index"
+                        "name": "uv_set_name",
+                        "label": "UV Set Name",
+                        "custom_draw": "plugins.texture.TexSampler:widgetDrawUVSetName"
                     },
                     {
                         "name": "refraction_ior"
-                    },
-                    {
-                        "name": "transform"
                     }
+                    
                 ],
                 "layout": "COLUMN"
             }
         ]
     },
     "Node":{
-        "input_sockets":[]
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "samplers"
+                    }
+                ]
+            }
+        ],
+        "input_sockets":[
+            {
+                "name": "transform"
+            }
+        ],
+        "output_sockets" : [
+            { 
+                "name": "point",
+                "label": "Point",
+                "desc": "Shading point in world space",
+                "visible": false
+            },
+            { 
+                "name": "pointObject",
+                "label": "Point Object",
+                "desc" : "Shading point in object space",
+                "visible": false
+            },
+            { 
+                "name": "pointCamera",
+                "label": "Point Camera",
+                "desc" : "Shading point in camera space",
+                "visible": false
+            },
+            { 
+                "name": "pointRelative",
+                "label": "Point Relative",
+                "desc" : "Shading point in relative space",
+                "visible": false
+            },
+            { 
+                "name": "pointReference",
+                "label": "Point Reference",
+                "desc" : "Shading point in reference space",
+                "visible": false
+            },
+
+            { 
+                "name": "gnormal",
+                "label": "Geometric Normal",
+                "desc" : "Geometric normal in world space",
+                "visible": false
+            },
+            { 
+                "name": "flipped_normal",
+                "label": "Flipped Normal",
+                "desc": "0 - facing camera, 1 - away from camera",
+                "visible": false
+            },
+            { 
+                "name": "normal",
+                "label": "Normal",
+                "desc" : "Smooth normal in world space",
+                "visible": false
+            },
+            { 
+                "name": "normalObject",
+                "label": "Normal Object",
+                "desc" : "Smooth normal in object space",
+                "visible": false
+            },
+            { 
+                "name": "normalCamera",
+                "label": "Normal Camera",
+                "desc" : "Smooth normal in camera space",
+                "visible": false
+            },
+            { 
+                "name": "normalRelative",
+                "label": "Normal Relative",
+                "desc" : "Smooth normal in relative space",
+                "visible": false
+            },
+            { 
+                "name": "normalReference",
+                "label": "Normal Reference",
+                "desc" : "Smooth normal in reference space",
+                "visible": false
+            },
+
+            { 
+                "name": "bumpNormal",
+                "label": "Bump Normal",
+                "desc" : "Bump normal in world space",
+                "visible": false
+            },
+            { 
+                "name": "bumpNormalObject",
+                "label": "Bump Normal Object",
+                "desc" : "Bump map normal in object space",
+                "visible": false
+            },
+            { 
+                "name": "bumpNormalCamera",
+                "label": "Bump Normal Camera",
+                "desc" : "Bump map normal in camera space",
+                "visible": false
+            },
+            { 
+                "name": "bumpNormalRelative",
+                "label": "Bump Normal Relative",
+                "desc" : "Bump map normal in relative space",
+                "visible": false
+            },
+
+            { 
+                "name": "reflection",
+                "label": "Reflection",
+                "desc" : "Smooth reflection vector in world space",
+                "visible": false
+            },
+            { 
+                "name": "reflectionObject",
+                "label": "Reflection Object",
+                "desc" : "Smooth reflection vector in object space",
+                "visible": false
+            },
+            { 
+                "name": "reflectionCamera",
+                "label": "Reflection Camera",
+                "desc" : "Smooth reflection vector in camera space",
+                "visible": false
+            },
+            { 
+                "name": "reflectionRelative",
+                "label": "Reflection Relative",
+                "desc" : "Smooth reflection vector in relative space",
+                "visible": false
+            },
+
+            { 
+                "name": "refraction",
+                "label": "Refraction",
+                "desc" : "Smooth refraction vector in world space",
+                "visible": false
+            },
+            { 
+                "name": "refractionObject",
+                "label": "Refraction Object",
+                "desc" : "Smooth refraction vector in object space",
+                "visible": false
+            },
+            { 
+                "name": "refractionCamera",
+                "label": "Refraction Camera",
+                "desc" : "Smooth refraction vector in camera space",
+                "visible": false
+            },
+            { 
+                "name": "refractionRelative",
+                "label": "Refraction Relative",
+                "desc" : "Smooth refraction vector in relative space",
+                "visible": false
+            },
+            
+            { 
+                "name": "view_dir",
+                "label": "View direction",
+                "desc" : "Viewing direction.",
+                "visible": false
+            },
+            { 
+                "name": "frame_time",
+                "label": "Frame Time",
+                "desc" : "Current frame (image) time",
+                "visible": false
+            },
+            { 
+                "name": "ray_time",
+                "label": "Ray Time",
+                "desc" : "Ray time within the motion blur interval",
+                "visible": false
+            },
+            { 
+                "name": "frame_index_offset",
+                "label": "Frame Index Offset",
+                "desc" : "Frame offset from current frame for long motion blur intervals",
+                "visible": false
+            },
+            { 
+                "name": "facing_ratio",
+                "label": "Facing Ratio",
+                "desc" : "Cosine between normal and viewing direction",
+                "visible": false
+            },
+            { 
+                "name": "ray_depth",
+                "label": "Ray Depth",
+                "desc" : "The ray depth",
+                "visible": false
+            },
+            { 
+                "name": "path_length",
+                "label": "Path Length",
+                "desc" : "The path length",
+                "visible": false
+            },
+            { 
+                "name": "transparency_level",
+                "label": "Transparency Level",
+                "desc" : "Transparency intersections along the ray path.",
+                "visible": false
+            },
+            
+            { 
+                "name": "pixelCenter",
+                "label": "Pixel Center",
+                "desc" : "Current sample image coordinates.",
+                "visible": false
+            },
+            { 
+                "name": "cameraNearClipPlane",
+                "label": "Camera Near Clip Plane",
+                "desc" : "Camera near clipping plane.",
+                "visible": false
+            },
+            { 
+                "name": "cameraFarClipPlane",
+                "label": "Camera Far Clip Plane",
+                "desc" : "Camera Far clipping plane.",
+                "visible": false
+            },
+
+            { 
+                "name": "uvCoord",
+                "label": "UV Coord",
+                "desc" : "UVW coordinates of shaded point (channel 0)",
+                "visible": false
+            },
+            {
+                "name": "uvCoordClamp",
+                "label": "UV Coord Clamp",
+                "desc": "Clamped UVW coordinates of shaded point (channel 0)",
+                "visible": false
+            },
+            {
+                "name": "uvCoordTile",
+                "label": "UV Coord Tile",
+                "desc": "Tiled UVW coordinates of shaded point (channel 0)",
+                "visible": false
+            },
+            
+            {
+                "name": "tangentUCamera",
+                "label": "Tangent U Camera",
+                "desc": "U axis of the shaded point's UVW, transformed in camera space",
+                "visible": false
+            },
+            {
+                "name": "tangentVCamera",
+                "label": "Tangent V Camera",
+                "desc": "V axis of the shaded point's UVW, transformed in camera space",
+                "visible": false
+            },
+            {
+                "name": "tangentUObject",
+                "label": "Tangent U Object",
+                "desc": "U axis of the shaded point's UVW, transformed in object space",
+                "visible": false
+            },
+            {
+                "name": "tangentVObject",
+                "label": "Tangent V Object",
+                "desc": "V axis of the shaded point's UVW, transformed in object space",
+                "visible": false
+            },
+            {
+                "name": "tangentUWorld",
+                "label": "Tangent U World",
+                "desc": "U axis of the shaded point's UVW, transformed in world space",
+                "visible": false
+            },
+            {
+                "name": "tangentVWorld",
+                "label": "Tangent V World",
+                "desc": "V axis of the shaded point's UVW, transformed in world space",
+                "visible": false
+            },
+
+            { 
+                "name": "random_by_renderID",
+                "label": "Random By Render ID",
+                "desc" : "Random value based on RenderID of the object",
+                "visible": false
+            },
+            { 
+                "name": "random_by_polyShell",
+                "label": "Random By Poly Shell",
+                "desc" : "Random by polygon shell of current face",
+                "visible": false
+            },
+            { 
+                "name": "random_by_scene_name",
+                "label": "Random By Scene Name",
+                "desc" : "Random based on scene name of the object",
+                "visible": false
+            },
+            { 
+                "name": "random_by_instanceID",
+                "label": "Random By Instance ID",
+                "desc" : "Random based on instance identifiers",
+                "visible": false
+            },
+
+            {
+                "name": "material_id",
+                "label": "Material ID",
+                "desc" : "The surface material id, if the surface supports it",
+                "visible": false
+            },
+            {
+                "name": "object_id",
+                "label": "Object ID",
+                "desc" : "The object ID of the hit object",
+                "visible": false
+            },
+            {
+                "name": "parent_object_id",
+                "label": "Parent Object ID",
+                "desc" : "The object ID of the parent object",
+                "visible": false
+            },
+            {
+                "name": "instance_id",
+                "label": "Instance ID",
+                "desc" : "The instance ID of the hit object",
+                "visible": false
+            },
+            {
+                "name": "velocity",
+                "label": "Velocity",
+                "desc" : "Velocity at the intersection point, scene units per frame",
+                "visible": false
+            },
+            {
+                "name" : "speed",
+                "label": "Speed",
+                "desc" : "Magnitude of velocity, in scene units per frame",
+                "visible": false
+            },
+            {
+                "name" : "face_index",
+                "label" : "Face Index",
+                "desc" : "Index of triangle face hit by ray (-1 if not applicable)",
+                "visible" : false             
+            },
+            {
+                "name" : "barycentric_coords",
+                "label" : "Barycentric Coordinates",
+                "desc" : "Barycentric coordinates of intersection point (0,0,0 if n/a)",
+                "visible" : false             
+            }
+        ]
     },
     "Options": {
         "animatable": true,

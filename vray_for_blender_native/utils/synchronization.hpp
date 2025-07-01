@@ -3,7 +3,7 @@
 #include <python.h>
 #include <boost/python.hpp>
 
-#include "utils/assert.h"
+#include "vassert.h"
 
 /// Smart GIL lock
 /// To be called from a C++ thread to acquire the GIL 
@@ -37,7 +37,7 @@ public:
 	WithNoGIL()
 		: threadState(PyEval_SaveThread())
 	{
-		VRAY_ASSERT(threadState && "Failed to save thread state");
+		vassert(threadState && "Failed to save thread state");
 	}
 
 

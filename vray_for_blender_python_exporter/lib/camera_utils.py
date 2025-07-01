@@ -74,13 +74,13 @@ class ViewParams:
         self.crop = False
         self.canDrawWithOffset = True # Indicates if the image rendered with these view parameters can be drawn using gl_draw with an offset
 
-        self.usePhysicalCamera = False
-        self.useDomeCamera = False
-        self.useViewPerspective = False # If True the viewport camera is being used
+        self.usePhysicalCamera  = False
+        self.useDomeCamera      = False
+        self.isCameraView       = True          # True if the viewport is in camera view mode
         self.cameraObject: bpy.types.Object = None
-        self.cameraParams = CameraParams()
-        self.renderSizes = RenderSizes()
-        self.isActiveCamera = False     # Set to true if this is the active scene camera which should be rendered
+        self.cameraParams       = CameraParams()
+        self.renderSizes        = RenderSizes()
+        self.isActiveCamera     = False         # Set to true if this is the active scene camera which should be rendered
 
 
     def calcRenderSizes(self):
@@ -184,9 +184,9 @@ class CameraParams:
         self._setDefaultParams()
 
     def _setDefaultParams(self):
-        self.is_ortho   = False
-        self.lens       = 0.0
-        self.orthoScale = 0.0
+        self.isOrtho    = False
+        self.lens       = DEFAULT_LENS_FOCAL_LENGTH
+        self.orthoScale = 1.0
         self.zoom       = 1.0
         
         self.shiftx   = 0.0
@@ -209,23 +209,35 @@ class CameraParams:
             return
         
         if cameraObj.type == "CAMERA":
-            cam: bpy.types.Camera = cameraObj.data
-
-            if cam.type == 'ORTHO':
-                self.is_ortho = True
+            camera: bpy.types.Camera = cameraObj.data
             
-            self.lens = cam.lens
-            self.ortho_scale = cam.ortho_scale
+            self.isOrtho = isOrthographicCamera(camera)
+            self.orthoScale = camera.ortho_scale if self.isOrtho else 1
 
-            self.shiftx = cam.shift_x
-            self.shifty = cam.shift_y
+            self.shiftx = camera.shift_x
+            self.shifty = camera.shift_y
 
-            self.sensorX = cam.sensor_width
-            self.sensorY = cam.sensor_height
-            self.sensorFit = str(cam.sensor_fit)
+            self.sensorX = camera.sensor_width
+            self.sensorY = camera.sensor_height
+            self.sensorFit = str(camera.sensor_fit)
 
-            self.clip_start = cam.clip_start
-            self.clip_end = cam.clip_end
+            self.clip_start = camera.clip_start
+            self.clip_end = camera.clip_end
+            
+            settingsCamera = cameraObj.data.vray.SettingsCamera
+
+            if settingsCamera.override_camera_settings and settingsCamera.override_fov:
+                if settingsCamera.fov >= math.pi:
+                    # Blender does not support camera angles > 180 degrees.
+                    # Set focal distance to a negative value. This will cause the FOV 
+                    # to be negative and to not override the FOV for the render view 
+                    # with a value computed from the focal distance.
+                    self.lens = -1.0
+                else:
+                    self.lens = focalDist(settingsCamera.fov, getCameraSensorSize(self.sensorFit, self.sensorX, self.sensorY))
+            else:          
+                # In case FOV is not overridden, Blender has already computed the focal distance for us
+                self.lens = camera.lens
             return
         
         if (cameraObj.type == "LIGHT") and hasattr(cameraObj.data, "vray"):
@@ -233,8 +245,6 @@ class CameraParams:
                 case 'SPOT':
                     light: bpy.types.SpotLight = cameraObj.data
                     self.lens = 16.0 / math.tan(light.spot_size * 0.5)
-                    if self.lens == 0.0:
-                        self.lens = DEFAULT_LENS_FOCAL_LENGTH
                 # The following adjustments to the focal length have been determined empirically. 
                 # TODO: Find where those values are set in Blender code and add a reference.
                 case 'POINT': 
@@ -274,8 +284,8 @@ class CameraParams:
             self.clip_end *= 0.5
             self.clip_start = self.clip_end
             
-            self.is_ortho = True
-            self.ortho_scale = rv3d.view_distance * sensorSize / v3d.lens
+            self.isOrtho = True
+            self.orthoScale = rv3d.view_distance * sensorSize / v3d.lens
             
             self.zoom = CAMERA_PARAM_ZOOM_INIT_PERSP
             return
@@ -291,10 +301,10 @@ class CameraParams:
         
         ycor = aspY / aspX
 
-        if self.is_ortho:
+        if self.isOrtho:
             # Orthographic camera
             # scale == 1.0 means exact 1 to 1 mapping
-            pixSize = self.ortho_scale
+            pixSize = self.orthoScale
         else:
             # Perspective camera
             sensorSize = getCameraSensorSize(self.sensorFit, self.sensorX, self.sensorY)
@@ -360,8 +370,12 @@ def getCameraSensorFit(sensorFit: str, sizeX: float, sizeY: float):
     return sensorFit
 
 
-def fov(sensorSize, focalDist):
+def fov(sensorSize: float, focalDist: float):
     return 2.0 * math.atan((0.5 * sensorSize) / focalDist)
+
+
+def focalDist(fov: float, sensorSize: float):
+    return sensorSize / (2 * math.tan(fov / 2))
 
 
 # Return render border as Rect
@@ -380,6 +394,7 @@ def isPhysicalCamera(obj):
     
     return False
 
+
 def isDomeCamera(obj):
     if blender_utils.isCamera(obj):
         camera: bpy.types.Camera = obj.data
@@ -387,6 +402,11 @@ def isDomeCamera(obj):
     
     return False
 
+
+def isOrthographicCamera(camera: bpy.types.Camera):
+    settingsCamera = camera.vray.SettingsCamera
+    return  (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == '7' )
+    
 
 def isSameCamera(camera1: bpy.types.Object, camera2: bpy.types.Object):
     return (camera1 is not None) and (camera2 is not None) and (camera1.name_full == camera2.name_full)
@@ -455,3 +475,20 @@ def fixLookThroughObjectCameraZFight(tmObject: Matrix):
     tmObject[2][3] -= forwardVec.z
 
     return tmObject
+
+
+def fixOverrideCameraType():
+    """ This function is called from the onDepsgraphPre event. It keeps in sync 
+        Blender and V-Ray camera type selections.
+    """
+    if (camera := bpy.context.scene.camera) and blender_utils.isCamera(camera):
+        # Orthographic camera mode should always be either ON or OFF for BOTH Blender camera 
+        # and V-Ray Camera Override in order for the object selection outline to be correct.
+        # Keep them in sync.
+        if camera.data.type == 'ORTHO':
+            # Set to Orthogonal
+            camera.data.vray.SettingsCamera.type = '7'
+        elif camera.data.vray.SettingsCamera.type == '7':
+            # Set to Standard
+            camera.data.vray.SettingsCamera.type = '0'
+

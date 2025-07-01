@@ -2,7 +2,9 @@
 
 #include <vector>
 #include <string>
+
 #include "base_types.h"
+#include "vassert.h"
 
 namespace VrayZmqWrapper{
 
@@ -164,7 +166,7 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 	case ValueTypeListValue: stream << value.as<AttrListValue>(); break;
 	case ValueTypeInstancer: stream << value.as<AttrInstancer>(); break;
 	case ValueTypeMapChannels: stream << value.as<AttrMapChannels>(); break;
-	default: assert(!"Missing SerializerStream::operator<< for some ValueType");
+	default: vassert(!"Missing SerializerStream::operator<< for some ValueType");
 	}
 	return stream;
 }

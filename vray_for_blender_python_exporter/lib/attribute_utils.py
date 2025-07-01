@@ -5,9 +5,10 @@ import mathutils
 
 
 from vray_blender import debug
-from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, tupleTo4x4MatrixLayout, matrixLayoutToMatrix
+from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
 from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMetersToSceneUnitsMultiplier, getShadowAttrName
+from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES
 from vray_blender.nodes.tools import getLinkInfo
 
 # Create an additional pointer property to be used for property search UI.
@@ -66,6 +67,10 @@ def isAnimatableAttribute(pluginModule, attrDesc):
         return pluginAnimatable if flag is None else flag
     
     return pluginAnimatable
+
+
+def isOutputAttribute(pluginModule, attrName):
+    return any((o for o in pluginModule.Outputs if o['attr'] == attrName))
 
 
 def convertVRayValueToUI(attrDesc, value):
@@ -282,6 +287,12 @@ def getAttrDisplayName(attrDesc):
 
 
 def setAttrSubtype(attrArgs, attrDesc):
+    
+    # Vray subtypes only have meaning for choosing the socket type and an error will be generated
+    # if we try to set them as a subtype of a property during registration.
+    if attrDesc.get('subtype', '').startswith('VRAY_'):
+        return
+
     attrType = attrDesc['type']
     
     if (attrType == 'STRING') and ('ui' in attrDesc) and ('file_extensions' in attrDesc['ui']):
@@ -320,7 +331,7 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
     if 'default' in attrDesc:
         attrArgs['default'] = convertVRayValueToUI(attrDesc, attrDesc['default'])
 
-    if attrType in ('PLUGIN', 'UVWGEN'):
+    if attrType in ('BRDF', 'PLUGIN', 'UVWGEN'):
         attrArgs['default'] = ""
     elif attrType in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
         # These attribute types are stored as FloatVectorProperty with a subtype of Matrix,
@@ -398,13 +409,21 @@ def setAttrOptions(attrArgs, attrDesc, pluginModule):
     if not attrDescOptions.get('visible', True):
         attrOptions.add('HIDDEN')
 
+    # Cross-dependencies - properties that depend on a scene object. The property
+    # should receive updates when the referenced object changes.
+    if attrDescOptions.get('cross_dependency', False):
+        if pluginModule.ID not in CROSS_DEPENDENCIES:
+            CROSS_DEPENDENCIES[pluginModule.ID] = [attrDesc['attr']]
+        else:
+            CROSS_DEPENDENCIES[pluginModule.ID].append(attrDesc['attr'])
+
+    
     attrArgs['options'] = attrOptions
     
     # Pass-through values
     for optionalKey in {'size'}:
         if optionalKey in attrDesc:
             attrArgs[optionalKey] = attrDesc[optionalKey]
-
 
 def setAttrUpdateCallback(attrArgs, attrDesc, pluginModule):
     from vray_blender.nodes.utils import selectedObjectTagUpdate, selectedObjectTagUpdateWrapper
@@ -499,6 +518,9 @@ def _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
         'description': attrName,
         'default': attrArgs['default']
     }
+
+    if attrType == 'ENUM':
+        shadowAttrArgs['items'] = (tuple(item) for item in attrDesc['items'])
 
     try:
         attrFunc = TypeToProp[attrType]

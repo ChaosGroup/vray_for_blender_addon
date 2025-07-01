@@ -3,7 +3,7 @@ import bpy
 
 from vray_blender.lib.sys_utils import isGPUEngine
 from vray_blender.nodes.mixin import VRayNodeBase
-from vray_blender.nodes.sockets import COLOR_SOCKET_COLOR, addInput, addOutput, VRayValueSocket
+from vray_blender.nodes.sockets import RGBA_SOCKET_COLOR, addInput, addOutput, VRayValueSocket
 from vray_blender.plugins import getPluginModule, getPluginAttr
 
 
@@ -87,8 +87,9 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
         colUse.prop(self, 'use', text="")
 
 
-    def draw_color(self, context, node):
-        return COLOR_SOCKET_COLOR
+    @classmethod
+    def draw_color_simple(cls):
+        return RGBA_SOCKET_COLOR
 
 
 class VRaySocketEnvironment(VRaySocketEnvironmentOverride):

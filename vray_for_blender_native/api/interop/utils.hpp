@@ -143,4 +143,3 @@ bool invokePythonCallback(const std::string& callbackName, const py::object& cbW
 	return false;
 }
 
-

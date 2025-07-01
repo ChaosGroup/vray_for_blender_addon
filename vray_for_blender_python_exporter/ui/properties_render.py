@@ -1,15 +1,12 @@
-
-from re import S
-import sys
-
-import bpy
+import bpy, platform
 from bpy.types import Context
 
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine import ZMQ
+from vray_blender.external import psutil
 from vray_blender.lib import draw_utils
-from vray_blender.lib.sys_utils import StartupConfig
+from vray_blender.lib.sys_utils import StartupConfig, isGPUEngine
 from vray_blender.operators import VRAY_OT_render
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
@@ -71,14 +68,13 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
     def poll_group(cls, context):
         return True
     
-    def draw(self, context):
+    def draw(self, context: bpy.types.Context):
         layout = self.layout
         scene  = context.scene
         rd     = scene.render
 
         vrayScene = scene.vray
         vrayBake     = vrayScene.BakeView
-        vrayExporter = vrayScene.Exporter
 
         if not vray.isInitialized():
             message = "V-Ray initializing..." if vray.hasLicense() else "No V-Ray license..."
@@ -92,7 +88,7 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
             renderCol.separator()
 
         # Render panel group switcher (Globals, GI, Sampler, System) 
-        layout.prop(vrayExporter, 'ui_render_context', expand=True)
+        layout.prop(context.window_manager.vray, 'ui_render_context', expand=True)
         layout.separator()
 
 
@@ -168,11 +164,10 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
                 boxDebug = layout.box()
                 boxDebug.label(text="Debug options")
                 zmqRunning = ZMQ.isRunning()
-                
+
                 stat = 'RUNNING' if zmqRunning else 'STOPPED'
                 boxDebug.label(text=f"ZMQ server status: {stat}")
                 boxDebug.prop(vrayExporter, 'zmq_port')
-                boxDebug.prop(vrayExporter, 'zmq_renderer_threads')
                 boxDebug.prop(vrayExporter, "debug_threads")
                 boxDebug.prop(vrayExporter, "debug_log_times")
                 boxDebug.separator()
@@ -189,9 +184,29 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
         # layout.prop(vrayExporter, 'subsurf_to_osd')
 
         layout.prop(vrayExporter, 'display_vfb_on_top', text="VFB Always On Top")
-     
+
         layout.separator()
-        
+
+class VRAY_PT_Performance(classes.VRayRenderPanel):
+    bl_label   = "Performance"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_panel_groups = RenderPanelGroups
+
+    def draw(self, context):
+        layout = draw_utils.subPanel(self.layout)
+        layout.use_property_decorate = False
+        vrayExporter = context.scene.vray.Exporter
+        layout.prop(vrayExporter, 'use_custom_thread_count', text='Thread Mode')
+        row = layout.row()
+        row.alignment = 'RIGHT'
+        row.label(text=f"The system has {psutil.cpu_count()} CPU threads")
+        row = layout.row()
+        row.enabled = vrayExporter.use_custom_thread_count == 'FIXED'
+        row.prop(vrayExporter, 'custom_thread_count', text='Threads')
+        if platform.system() != "Linux":
+            layout.separator()
+            layout.prop(vrayExporter, 'lower_thread_priority', text='Lower Thread Priority')
+        layout.separator()
 
 
  ######   #######  ##        #######  ########     ##     ##    ###    ##    ##    ###     ######   ######## ##     ## ######## ##    ## ########
@@ -247,44 +262,45 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         vrayScene = context.scene.vray
         settingsImageSampler = vrayScene.SettingsImageSampler
 
-        classes.drawPluginUI(context, self.layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
+        layout = self.layout 
 
-        layout = self.layout
-
-        layout.separator()
-        layout.label(text="Anti-Aliasing Filter:")
-        layout.prop(settingsImageSampler, "filter_type")
-
-        if settingsImageSampler.filter_type not in {'NONE'}:
-            filterPluginType = settingsImageSampler.filter_type
-            filterPropGroup  = getattr(vrayScene, filterPluginType)
-
-            classes.drawPluginUI(context, layout, filterPropGroup, getPluginModule(filterPluginType))
+        classes.drawPluginUI(context, layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
         
-        layout.separator()
-        layout.prop(vrayScene.SettingsDMCSampler, "time_dependent")
+        # Antialiasing rollout
+        panelAntialiasingUniqueId = f'SettingsImageSampler_Antialiasing'
+        if panelAntialiasing := draw_utils.rollout(layout, panelAntialiasingUniqueId, "Anti-Aliasing Filter"):
+            panelAntialiasing.use_property_decorate = False
+            panelAntialiasing.prop(settingsImageSampler, "filter_type")
+
+            if settingsImageSampler.filter_type not in {'NONE'}:
+                filterPluginType = settingsImageSampler.filter_type
+                filterPropGroup  = getattr(vrayScene, filterPluginType)
+
+                classes.drawPluginUI(context, panelAntialiasing, filterPropGroup, getPluginModule(filterPluginType))
+            
+        # Render Mask rollout
+        panelRenderMaskUniqueId = f'SettingsImageSampler_RenderMask'
+        if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "RenderMask"):
+            panelRenderMask.use_property_decorate = False
+            panelRenderMask.prop(settingsImageSampler, 'render_mask_mode', text="Type")
         
-        layout.separator()
-        layout.label(text="Render Mask:")
-        layout.prop(settingsImageSampler, 'render_mask_mode', text="Type")
-        
-        match settingsImageSampler.render_mask_mode:
-            case '1': # Texture
-                # Disable the Texture field when the IPR is active, as changing the texture
-                # in this case does not work correctly in V-Ray.
-                col = layout.column()
-                col.active = not VRayRendererIprViewport.isActive()
-                col.enabled = col.active
-                col.prop(settingsImageSampler, 'render_mask_texture_file')
-            case '2': # Objects
-                layout.prop_search(settingsImageSampler, 'render_mask_object_selector',  context.scene, 'objects', text="Object")
-                layout.prop_search(settingsImageSampler, 'render_mask_collection_selector',  bpy.data, 'collections', text="Collection")
-            case '3': # Object IDs
-                layout.prop(settingsImageSampler, 'render_mask_object_ids_list')
+            match settingsImageSampler.render_mask_mode:
+                case '1': # Texture
+                    # Disable the Texture field when the IPR is active, as changing the texture
+                    # in this case does not work correctly in V-Ray.
+                    col = panelRenderMask.column()
+                    col.active = not VRayRendererIprViewport.isActive()
+                    col.enabled = col.active
+                    col.prop(settingsImageSampler, 'render_mask_texture_file')
+                case '2': # Objects
+                    panelRenderMask.prop_search(settingsImageSampler, 'render_mask_object_selector',  context.scene, 'objects', text="Object")
+                    panelRenderMask.prop_search(settingsImageSampler, 'render_mask_collection_selector',  bpy.data, 'collections', text="Collection")
+                case '3': # Object IDs
+                    panelRenderMask.prop(settingsImageSampler, 'render_mask_object_ids_list')
 
 
 class VRAY_PT_BucketSize(classes.VRayRenderPanel):
-    bl_label = "Bucket Ooptions"
+    bl_label = "Bucket Options"
     bl_panel_groups = RenderPanelGroups
 
     vrayPlugins = ["SettingsRegionsGenerator"]
@@ -585,6 +601,7 @@ def getRegClasses():
         VRAY_PT_ColorManagement,
         # System
         VRAY_PT_Exporter,
+        VRAY_PT_Performance,
         VRAY_PT_SettingsSystem,
         # VRAY_PT_DR,
     )

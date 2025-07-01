@@ -9,7 +9,8 @@
             [
                 [ "None", "None", "" ],
                 [ "Full", "Full", "" ],
-                [ "Preview", "Preview", "" ]
+                [ "Preview", "Preview", "" ],
+                [ "Boxes", "Boxes", "" ]
             ],
             "type" : "ENUM",
             "options": {
@@ -35,7 +36,8 @@
                 "soft_min": -10.0,
                 "soft_max": 10.0,
                 "spin_step": 0.1
-            }
+            },
+            "update": "onUpdatePreview"
         },
         {
             "attr" : "alembic_layers",
@@ -43,10 +45,6 @@
             "desc" : "Semicolon-separated list of Alembic files for layering",
             "type" : "STRING",
             "ui" : {}
-        },
-        {
-            "attr": "num_preview_faces",
-            "desc": "The number of faces in the currently visible preview. Cannot be changed for .vrmesh files"
         },
         {
             "attr": "file",
@@ -57,11 +55,32 @@
         },
         {
             "attr": "num_preview_faces",
+            "desc": "The number of faces in the currently visible preview. Cannot be changed for .vrmesh files",
             "update": "onUpdatePreview"
         },
         {
             "attr": "flip_axis",
             "update": "onUpdatePreview"
+        },
+        {
+            "attr" : "initial_preview_mesh_pos",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Initial position of the preview mesh (in local space)",
+            "type" : "VECTOR",
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "anim_override",
+            "default": 0,
+            "items" :
+            [
+                [ "0", "None", "" ],
+                [ "1", "Start/Length", "" ],
+                [ "2", "Frame", "" ]
+            ],
+            "type" : "ENUM"
         }
     ],
     "Widget": {
@@ -79,21 +98,14 @@
                         "layout": "SEPARATOR"
                     },
                     {
-                        "name": "previewType"
+                        "name": "previewType",
+                        "label": "Preview Type"
                     },
                     {
-                        "name": "num_preview_faces",
-                        "active": {"cond": "::isAlembic!=0"},
-                        "visible": {"cond": "::previewType=Preview"}
+                        "name": "flip_axis"
                     },
                     {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "layout": "COLUMN",
-                        "name": "",
-                        "label": "",
-                        "attrs": []
+                        "name": "scale"
                     },
                     {
                         "layout": "SEPARATOR"
@@ -130,13 +142,16 @@
                                 "name": "anim_override"
                             },
                             {
-                                "name": "anim_frame"
+                                "name": "anim_start",
+                                "active": { "cond": "::anim_override=1" }
                             },
                             {
-                                "name": "anim_start"
+                                "name": "anim_length",
+                                "active": { "cond": "::anim_override=1" }
                             },
                             {
-                                "name": "anim_length"
+                                "name": "anim_frame",
+                                "active": { "cond": "::anim_override=2" }
                             }
                         ]
                     }
@@ -305,7 +320,8 @@
             "use_velocity",
             "merge_equal_vertices",
             "use_alembic_visibility",
-            "use_full_names"
+            "use_full_names",
+            "anim_abc_time"
         ]
     }
 }

@@ -2,27 +2,39 @@
     "ID": "BRDFLayered",
     "Name": "V-Ray Blend Mtl",
     "Parameters": [
-        {
-            "attr": "transparency_colortex",
-            "type": "COLOR_TEXTURE",
-            "color_prop": "transparency",
-            "tex_prop": "transparency_tex",
-            "ui": {
-                "attributes": []
-            },
-            "desc": "",
-            "default": [
-                0.0,
-                0.0,
-                0.0
-            ]
-        }
     ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "additive_mode",
+                                "expand": true
+                            }
+                        ]
+                    },
+                   {
+                       "name": "transparency_tex",
+                       "label": "Transparency"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "transparency_tex",
+                "label": "Transparency"
+            }
+        ]
+    },
     "Options": {
         "excluded_parameters": [],
         "animatable": true
-    },
-    "Widget": {
-        "widgets": []
     }
 }

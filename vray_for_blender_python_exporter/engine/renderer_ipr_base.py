@@ -1,7 +1,6 @@
 import bpy 
 import time
-
-from numpy import ndarray
+from typing import Dict
 
 from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
@@ -9,13 +8,16 @@ from vray_blender import debug
 from vray_blender.lib import gl_draw, defs
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
-from vray_blender.lib.defs import ExporterContext, RendererMode
-from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames
+from vray_blender.lib.defs import ExporterContext, RendererMode, AttrPlugin
+from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.exporting.instancer_export import InstancerExporter
 from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker
-from vray_blender.exporting.update_tracker import UpdateTracker
+from vray_blender.exporting.settings_export import SettingsExporter
+from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene
+from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget
 from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export
+from vray_blender.plugins import VRayWindowManager
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -68,6 +70,12 @@ def _prunePlugins(self, exporterCtx: ExporterContext):
         # Persist the new snaphot
         self.activeInstancers = exporterCtx.activeInstancers
 
+         # Remove plugins that need to be recreated
+        for pluginName in ExporterContext.pluginsToRecreate:
+            vray.pluginRemove(exporterCtx.renderer, pluginName)
+
+        ExporterContext.pluginsToRecreate = set()
+
     exporterCtx.ts.timeThis("prune_plugins", lambda: impl(exporterCtx))
 
 
@@ -78,13 +86,21 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
     # depend on it
     obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
     
-    light_export.syncLightMeshInfo(exporterCtx)
+    # NOTE: Updates should tagged be BEFORE any export structures are calculated
+    # for the current pass. Keep this at the beginnign of the function. 
+    UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.materials, UpdateTarget.MATERIAL)
+    UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.lights, UpdateTarget.LIGHT)
+    UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.worlds, UpdateTarget.WORLD)
 
+    light_export.syncLightMeshInfo(exporterCtx)
+    mtl_export.calculateMatExportCache(exporterCtx)
+    
     if exporterCtx.rendererMode == RendererMode.Interactive:
         # Only collect light mix info in VFB IPR mode. In viewport mode render channels
         # are not exported.
         light_export.collectLightMixInfo(exporterCtx)
 
+       
 
 def _syncPluginsPostExport(self, exporterCtx: ExporterContext):
     """ Perform synchronization of plugin data after an export has completed """
@@ -103,6 +119,30 @@ def _syncView(ctx: ExporterContext):
     vray.syncViewSettings(ctx.renderer, viewSettings)
 
 
+def _syncAnimFrame(self, exporterCtx: ExporterContext):
+        """ Set the current animation frame to all plugins that might require it. """
+        
+        if self.lastExportedFrame == exporterCtx.currentFrame:
+            # Synchronization is only necessary when the frame has changed
+            return
+        
+        self.lastExportedFrame = exporterCtx.currentFrame
+
+        settingsExporter = SettingsExporter(exporterCtx)
+        settingsExporter.exportPlugin("SettingsCurrentFrame")
+
+        for proxy in [o for o in exporterCtx.sceneObjects if isObjectVrayProxy(o)]:
+            pluginName = Names.pluginObject("vrayproxy", Names.object(proxy))
+            
+            # Make a void change to a property of the plugin in order to force a re-export.
+            # Without this, the proxy won't update its internal state to match the animation frame
+            # set through SettingsCurrentCamera.
+            geomMeshFile = proxy.data.vray.GeomMeshFile
+            flipValue = 0 if geomMeshFile.anim_start != 0 else 1
+            vray.pluginUpdateFloat(exporterCtx.renderer, pluginName, 'anim_start', flipValue)
+            vray.pluginUpdateFloat(exporterCtx.renderer, pluginName, 'anim_start', geomMeshFile.anim_start)
+
+
 def _syncNames(exporterCtx: ExporterContext):
     
     def impl(exporterCtx):
@@ -116,7 +156,12 @@ def _syncNames(exporterCtx: ExporterContext):
         exporterCtx.ts.timeThis("syncNames", lambda: impl(exporterCtx) )
 
 
-
+def _showSceneStatus(exporterCtx: ExporterContext):
+    wmgr = exporterCtx.ctx.window_manager.vray
+    if not wmgr.vrayscene_warning_shown:
+        if any([o for o in exporterCtx.sceneObjects if isObjectVrayScene(o)]):
+            debug.report('INFO', 'Changes to V-Ray Scene objects made during interactive rendering will be applied after rendering is restarted.')
+            wmgr.vrayscene_warning_shown = True
 
 
 #############################
@@ -147,6 +192,7 @@ class VRayRendererIprBase:
         self.meshLightInfo      = set()
         self.activeGizmos       = set()
         self.miscCache          = {}
+        self.lastExportedFrame  = None
         
         # Current view settings. Blender does not provide view change notification, so 
         # we have to compare the old state to the new state on each draw operation.
@@ -154,6 +200,10 @@ class VRayRendererIprBase:
 
         # Cache & draw the most recent viewport image.
         self.drawData: gl_draw.DrawData = None
+
+
+        # Used to store ExporterCtx.exportedMtls between update calls.
+        self.exportedMtls: Dict[bpy.types.Material, AttrPlugin] = {}
 
 
     def _clearSceneOnReset(self, isFullExport, renderer):
@@ -179,24 +229,30 @@ class VRayRendererIprBase:
 
         try:
             _syncNames(exporterCtx)
-            
+
             commonSettings = CommonSettings(exporterCtx.dg.scene, engine, isInteractive = True)
             commonSettings.updateFromScene()
             exporterCtx.commonSettings = commonSettings
             exporterCtx.currentFrame = commonSettings.animation.frameCurrent
 
+            # Always export the properties that do not depend on the depsgraph updates.
             _syncView(exporterCtx)
-            
+            _syncAnimFrame(self, exporterCtx)
+
             if exporterCtx.fullExport or exporterCtx.dg.updates:
                 _syncPlugins(self, exporterCtx)
                 _prunePlugins(self, exporterCtx)
+                _showSceneStatus(exporterCtx)
 
                 _exportObjects(exporterCtx)
                 _exportLights(exporterCtx)
-                
+
                 # The order of export of view and settings is important, because
                 # the settings export needs valid ViewParams
-                self.viewParams = exportViewportView(exporterCtx, view3D, self.viewParams)
+                # view3D can be None in reexport - in that case skip exportViewportView calls
+                assert view3D or not exporterCtx.fullExport, "view3D parameter should not be empty"
+                if view3D:
+                    self.viewParams = exportViewportView(exporterCtx, view3D, self.viewParams)
 
                 _exportSettings(exporterCtx)
                 _exportMaterials(exporterCtx)
@@ -248,21 +304,26 @@ class VRayRendererIprBase:
         context.dg               = dg or bpy.context.evaluated_depsgraph_get()
         context.fullExport       = isFullExport
         context.ts               = tools.TimeStats("Python export code")
+        context.exportedMtls     = self.exportedMtls
 
         context.calculateObjectVisibility()
 
         return context
 
     def _createRenderer(self, exporterType):
-        settings = vray.ExporterSettings()
-        settings.exporterType = exporterType
-        self.renderer = vray.createRenderer(settings)
+        exporter = bpy.context.scene.vray.Exporter
 
+        settings = vray.ExporterSettings()
+        settings.exporterType  = exporterType
+        settings.renderThreads = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
+
+        self.renderer = vray.createRenderer(settings)
+    
 
     @staticmethod
     def _clearTempState(exporterCtx: ExporterContext):
-        for tеmpObj in exporterCtx.tempObjects:
-            bpy.data.objects.remove(tеmpObj)
+        for obj in exporterCtx.objectsWithTempMeshes:
+            obj.to_mesh_clear()
 
 
     def _linkRenderChannels(self, exporterCtx: ExporterContext):

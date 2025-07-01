@@ -270,7 +270,7 @@ class UIPainter:
         container = layout
 
         containerType   = widget.get('layout', 'COLUMN')
-        align           = widget.get('align', False)
+        align           = widget.get('align', True)
         label           = widget.get('label', "")
         active          = widget.get('active', None)
         
@@ -338,7 +338,8 @@ class UIPainter:
             return None
         
         container.use_property_split = widget.get('use_property_split', True)
-        # Show animation dots for animatable properties
+        
+        # Show animation dots for animatable properties (the ones which have the 'ANIMATABLE' option set).
         container.use_property_decorate = True
 
         self.renderWidgetAttributes(widget, container)

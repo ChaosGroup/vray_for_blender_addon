@@ -1,20 +1,8 @@
-
 import bpy
 
-from vray_blender.ui import classes
-
+from vray_blender.lib.camera_utils import isOrthographicCamera
 from vray_blender.plugins import getPluginModule
-
-
-from bl_ui import properties_data_camera
-for compatEngine in classes.VRayEngines:
-    properties_data_camera.DATA_PT_context_camera.COMPAT_ENGINES.add(compatEngine)
-    properties_data_camera.DATA_PT_camera_display.COMPAT_ENGINES.add(compatEngine)
-    properties_data_camera.DATA_PT_camera.COMPAT_ENGINES.add(compatEngine)
-    properties_data_camera.DATA_PT_lens.COMPAT_ENGINES.add(compatEngine)
-
-del properties_data_camera
-
+from vray_blender.ui import classes
 
 class VRAY_PT_camera_focus_distance(classes.VRayCameraPanel):
     bl_label    = "Focus Distance"
@@ -76,8 +64,8 @@ class VRAY_PT_physical_camera(classes.VRayCameraPanel):
 
     def draw(self, context):
         vrayCamera = context.camera.vray
-        cameraPhysical = vrayCamera.CameraPhysical
-        classes.drawPluginUI(context, self.layout, cameraPhysical, getPluginModule('CameraPhysical'))
+        self.layout.enabled = vrayCamera.use_physical
+        classes.drawPluginUI(context, self.layout, vrayCamera.CameraPhysical, getPluginModule('CameraPhysical'))
 
 
 class VRAY_PT_dome_camera(classes.VRayCameraPanel):
@@ -86,29 +74,51 @@ class VRAY_PT_dome_camera(classes.VRayCameraPanel):
 
     def drawPanelCheckBox(self, context):
         vrayCamera = context.camera.vray
+        # Disable the option to turn on the dome camera if orthographic camera type 
+        # is currently selected in Blender's camera type field
+        self.layout.enabled = not isOrthographicCamera(context.camera)
         self.layout.prop(vrayCamera, 'use_dome', text='')
 
     def draw(self, context):
         vrayCamera = context.camera.vray
-        CameraDome = vrayCamera.CameraDome
-        classes.drawPluginUI(context, self.layout, CameraDome, getPluginModule('CameraDome'))
+        self.layout.enabled = vrayCamera.use_dome
+        classes.drawPluginUI(context, self.layout, vrayCamera.CameraDome, getPluginModule('CameraDome'))
 
 
 def getRegClasses():
     return (
-    VRAY_PT_camera_focus_distance,
-    VRAY_PT_physical_camera,
-    VRAY_PT_dome_camera,
-    VRAY_PT_camera,
-)
+        VRAY_PT_camera_focus_distance,
+        VRAY_PT_physical_camera,
+        VRAY_PT_dome_camera,
+        VRAY_PT_camera,
+    )
 
+
+# A list of stock Blender panels to show
+def getRegBlenderClasses():
+    from bl_ui import properties_data_camera
+    return (
+        properties_data_camera.DATA_PT_context_camera,
+        properties_data_camera.DATA_PT_camera_display,
+        properties_data_camera.DATA_PT_camera,
+        properties_data_camera.DATA_PT_lens,
+    )
 
 def register():
-    from vray_blender.lib.class_utils import registerClass
+    from vray_blender.lib.class_utils import registerClass, setVRayCompatibility
+    
     for regClass in getRegClasses():
         registerClass(regClass)
 
+    for uiClass in getRegBlenderClasses():
+        setVRayCompatibility(uiClass, makeVRayCompatible=True)
+
 
 def unregister():
+    from vray_blender.lib.class_utils import setVRayCompatibility
+    
+    for uiClass in getRegBlenderClasses():
+        setVRayCompatibility(uiClass, makeVRayCompatible=False)
+    
     for regClass in reversed(getRegClasses()):
         bpy.utils.unregister_class(regClass)

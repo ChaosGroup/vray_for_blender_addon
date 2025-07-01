@@ -200,22 +200,24 @@ customRenderChannelNodesDesc = (
         "base_plugin_type": "RenderChannelColor",
         "Subtype" : "ADVANCED"
     },
-    {
-        "params":{
-            "alias":  180,
-            "name": "Toon Lighting"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "ADVANCED"
-    },
-    {
-        "params":{
-            "alias":  181,
-            "name": "Toon Specular"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "ADVANCED"
-    },
+    # NOTE: The following 2 channels have been disabled because they are intended 
+    #       to work together with BRDFToonMtl which is currently unavailable
+    # {
+    #     "params":{
+    #         "alias":  180,
+    #         "name": "Toon Lighting"
+    #     },
+    #     "base_plugin_type": "RenderChannelColor",
+    #     "Subtype" : "ADVANCED"
+    # },
+    # {
+    #     "params":{
+    #         "alias":  181,
+    #         "name": "Toon Specular"
+    #     },
+    #     "base_plugin_type": "RenderChannelColor",
+    #     "Subtype" : "ADVANCED"
+    # },
 
 
     #MATTE

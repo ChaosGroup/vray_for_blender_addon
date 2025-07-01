@@ -53,7 +53,7 @@ def getVRayCloudPath():
     """
 
     # check whether vcloud JSON file exists
-    vcloudJsonDir = '%APPDATA%/Chaos Group/vcloud/client/' if bpy.app.build_platform == b'Windows' else '$HOME/.ChaosGroup/vcloud/client/'
+    vcloudJsonDir = '%APPDATA%/Chaos/Cloud/client/' if bpy.app.build_platform == b'Windows' else '$HOME/.ChaosGroup/vcloud/client/'
     vcloudJsonDir = os.path.expandvars(vcloudJsonDir)
     vcloudJsonFilename = vcloudJsonDir + 'vcloud.json'
     if not os.path.exists(vcloudJsonFilename):
@@ -166,7 +166,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             panel.separator()
 
             telemetryTextLabelCol = panel.column()
-            telemetryTextLabelCol.label(text="The Improvement Program of Chaos Software GmbH (Chaos) ")
+            telemetryTextLabelCol.label(text="The Improvement Program of Chaos Software (Chaos)")
             telemetryTextLabelCol.label(text="helps improve the Product by tracking general usage statistics")
             telemetryTextLabelCol.label(text="and to automatically collect crash information.")
 
@@ -434,6 +434,30 @@ class VRayExporter(bpy.types.PropertyGroup):
         update=_displayVfbOnTopUpdate
     )
 
+    use_custom_thread_count: bpy.props.EnumProperty(
+        name = "Threads Mode",
+        description = "Allows you to adjust the number of CPU rendering threads.",
+        items = (
+            ('AUTO',  "Auto",  "Use all system threads."),
+            ('FIXED', "Fixed", "Use a fixed number of threads. In some cases it can be beneficial to leave one or more threads for third-party applications.")
+        ),
+        default = 'AUTO'
+    )
+
+    custom_thread_count: bpy.props.IntProperty(
+        name = "Threads",
+        description = "The maximum number of CPU threads V-Ray is allowed to use",
+        default = 1,
+        min = 1,
+        max = 256
+    )
+
+    lower_thread_priority: bpy.props.BoolProperty(
+        name = "Lower Thread Priority",
+        description = "Use lower thread priority for rendering. Helps reduce Windows issues (like freezing) during CPU-intensive tasks.",
+        default = True
+    )
+
     detect_vray: bpy.props.BoolProperty(
         name = "Detect V-Ray",
         description = "Detect V-Ray binary location",
@@ -450,18 +474,6 @@ class VRayExporter(bpy.types.PropertyGroup):
         name = "Save Render",
         description = "Save render automatically",
         default = False
-    )
-
-    ui_render_context: bpy.props.EnumProperty(
-        name = "Render Context Panels",
-        description = "Show render panels group",
-        items = (
-            ('0', "Sampler", ""),
-            ('1', "GI", ""),
-            ('2', "Globals", ""),
-            ('3', "System", ""),
-        ),
-        default = '0'
     )
 
     subsurf_to_osd: bpy.props.BoolProperty(
@@ -507,14 +519,6 @@ class VRayExporter(bpy.types.PropertyGroup):
         min = 1000,
         max = 65535,
         default = -1
-    )
-
-    zmq_renderer_threads: bpy.props.IntProperty(
-        name = "Renderer threads",
-        description = "Renderer threads count",
-        default = -1,
-        min = -32,
-        max = 64
     )
 
     vray_cloud_project_name: bpy.props.StringProperty(

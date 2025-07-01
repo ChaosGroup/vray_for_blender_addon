@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base_types.h"
+#include "vassert.h"
 
 namespace VrayZmqWrapper{
 
@@ -212,7 +213,7 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 	case ValueTypeListValue: stream >> value.as<AttrListValue>(); break;
 	case ValueTypeInstancer: stream >> value.as<AttrInstancer>(); break;
 	case ValueTypeMapChannels: stream >> value.as<AttrMapChannels>(); break;
-	default: assert(!"Missing DeserializerStream::operator>> for some ValueType"); break;
+	default: vassert(!"Missing DeserializerStream::operator>> for some ValueType"); break;
 	}
 	return stream;
 }

@@ -20,6 +20,7 @@ class _Event:
     ExportVrscene           = 8     # Export the current scene to a .vrscene files
     CloudSubmit             = 9     # Submit scene for V-Ray Cloud rendering
     ReportStatus            = 10    # Report to Bleder status area
+    UpgradeScene            = 11    # Run a scene version upgrade
    
 
 class _EventInfo:
@@ -114,8 +115,13 @@ class _VfbEventHandler:
         self.addEvent(_Event.CloudSubmit)
 
     def reportStatus(self, severity: set, msg: str):
-        """ Report to Belnder's status field """
+        """ Report to Blender's status field """
         self.addEvent(_Event.ReportStatus, severity, msg)
+
+    
+    def upgradeScene(self):
+        """ Run a scene upgrade """
+        self.addEvent(_Event.UpgradeScene)
 
 
     def updateVfbLayers(self, vfbLayersJson: str):
@@ -202,6 +208,9 @@ class _VfbEventHandler:
                 case _Event.ReportStatus:
                     debug.report(*event.args, **event.kwargs)
 
+                case _Event.UpgradeScene:
+                    bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
+
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::_handleQueuedEvent()")
@@ -238,14 +247,19 @@ class _VfbEventHandler:
         #Save VFB settings in human-readable format
         with open(sys_utils.getVfbSettingsPath(), "w") as vfbConf:
             uiSettings = json.loads(self._vfbSettingsJson)
-            # resize_on_res_change can't be gotten from the VFB API and for that is set explicitly
-            uiSettings["RenderViewProps"]["resize_on_res_change"] = False
             vfbConf.write(json.dumps(uiSettings, indent=4))
 
     
-    def startProdRenderSync(self, renderMode: bool):
+    def startProdRenderSync(self, renderMode: int):
         """ Synchronously invoke the production render operator """
         from vray_blender.engine.renderer_prod import VRayRendererProd
+
+        # Blender would not let the 'Render' operator run without a camera. Check here in order
+        # to avoid the exception log that would be printed otherwise.
+        if not bpy.context.scene.camera:
+           action = "export" if renderMode == ProdRenderMode.EXPORT_VRSCENE else "render"
+           debug.reportError(f'Cannot {action} scene without an active camera.')
+           return True
 
         if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('COMPOSITE'):
             # Wait for a previously started render job to finish. 

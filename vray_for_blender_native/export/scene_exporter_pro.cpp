@@ -44,7 +44,7 @@ void ProductionExporter::cb_on_image_ready()
 
 void ProductionExporter::cb_on_bucket_ready(const VRayBaseTypes::AttrImage& img)
 {
-	VRAY_ASSERT(img.isBucket() && "Image for cb_on_bucket_ready is not bucket image");
+	vassert(img.isBucket() && "Image for cb_on_bucket_ready is not bucket image");
 	if (!img.isBucket()) {
 		return;
 	}
@@ -102,7 +102,7 @@ void ProductionExporter::renderEnd()
 }
 
 
-bool ProductionExporter::renderFrame(bool waitForCompletion)
+void ProductionExporter::renderFrame()
 {
 	WithNoGIL noGIL;
 		
@@ -110,17 +110,6 @@ bool ProductionExporter::renderFrame(bool waitForCompletion)
 
 	m_exporter->commitChanges();
 	m_exporter->start();
-
-	if (waitForCompletion) {
-		while (!m_renderFinished && !m_exporter->isAborted())
-		{
-			std::this_thread::sleep_for(100ms);
-		}
-
-		return !m_exporter->isAborted();
-	}
-
-	return true;
 }
 
 void ProductionExporter::renderSequence(int start, int end, int step)

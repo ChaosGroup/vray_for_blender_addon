@@ -11,8 +11,17 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 
 def onUseRoughnessUpdate(brdfVrayMtl, context, attrName):
     node = getNodeOfPropGroup(brdfVrayMtl)
-    glossSock = getInputSocketByAttr(node, 'reflect_glossiness')
-    glossSock.name = "Roughness" if brdfVrayMtl.option_use_roughness else "Reflection glossiness"
+    
+    sockConfig = {
+        'reflect_glossiness': ["Roughness", "Reflection Glossiness"],
+        'coat_glossiness': ["Coat Roughness", "Coat Glossiness"],
+        'sheen_glossiness': ["Sheen Roughness", "Sheen Glossiness"],
+    }
+
+    for sockName in sockConfig:
+        sock  = getInputSocketByAttr(node, sockName)
+        sock.name = sockConfig[sockName][0 if brdfVrayMtl.option_use_roughness else 1]
+
 
 def exportTreeNode(nodeCtx: NodeContext):
     

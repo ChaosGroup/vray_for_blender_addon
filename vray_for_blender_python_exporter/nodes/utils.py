@@ -1,12 +1,13 @@
 
 import bpy
-
+import functools
+import operator
 
 from vray_blender import debug
 from vray_blender.exporting.tools import getInputSocketByName, getNodeLink
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
-from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, TypeToSocket, TypeToSocketNoValue
+from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, getSocketType
 from vray_blender.lib.attribute_utils import getAttrDisplayName
 from vray_blender.nodes.tools import isVrayNode, isVraySocket
 
@@ -175,7 +176,6 @@ def getNonExportablePluginProperties(pluginModule):
 
     suppressedByMeta = set([p['color_prop'] for p in pluginModule.Parameters if p['type'] == "COLOR_TEXTURE"])
     suppressedByMeta.update([p['tex_prop'] for p in pluginModule.Parameters if p['type'] == "COLOR_TEXTURE"])
-    suppressedByMeta.update([p['use_prop'] for p in pluginModule.Parameters if (p['type'] == "PLUGIN_USE") and ('use_prop' in p)])
 
     derivedParams = [p['attr'] for p in pluginModule.Parameters if not p.get('options', {}).get('derived', True)]
     templateParams = [p['attr'] for p in pluginModule.Parameters if p['type'] == 'TEMPLATE']
@@ -194,8 +194,14 @@ def getNonExportablePluginProperties(pluginModule):
 def _getPluginInputSockets(pluginModule, nodeType):
     sockets = {}
 
+    # Collect the names of all bound propertes in a flat list
+    metaProperties = [p for p in pluginModule.Parameters if 'bound_props' in p]
+    overriddenByMetaLists = [p['bound_props'].values() for p in metaProperties]
+    overriddenByMeta = functools.reduce(operator.iconcat, overriddenByMetaLists, [])
+
     excludedParams = set(pluginModule.Options.get('excluded_parameters', []))
-    
+    excludedParams = excludedParams.union(overriddenByMeta)
+
     # socketOverrides 
     #   None means that there are no overrides
     #   [] means that no sockets should be shown
@@ -262,35 +268,19 @@ def addInputs(node: bpy.types.Node, pluginModule):
 
 
 def _getInputSocketType(nodeType, attrDesc):
-    """ Return the 'inferred' socket type based on the plugin property type and any additional options.  """
-    attrName = attrDesc['attr']
+    """ Return the V-Ray socket type based on the plugin property type and any additional options.  """
     attrType = attrDesc['type']
     attrOptions = attrDesc.get('options', {})
 
     if attrType in AllNodeInputTypes:
-        typeToSocket = TypeToSocket
-        if attrOptions.get('linked_only'):
-            # The socket cannot have a value other than a link to another node
-            # (the plugin property value can only be the name of another plugin)
-            typeToSocket = TypeToSocketNoValue
-
-        if nodeType == 'TEXTURE':
-            if attrName in {
-                'alpha_mult',
-                'alpha_offset',
-                'color_mult',
-                'color_offset',
-                'nouvw_color'
-            }:
-                return None
-            
-        return 'VRaySocketCoords' if attrDesc['type'] == 'UVWGEN' else typeToSocket[attrType]
-    
+        isLinkedOnly = attrOptions.get('linked_only', False)
+        return getSocketType(attrDesc['type'], attrDesc.get('subtype'), isLinkedOnly)
+        
     return None
 
 
 def _getOutputSocketType(attrType):
-    return TypeToSocket.get(attrType)
+    return getSocketType(attrType)
 
 
 def _addDefaultOutputForPluginCategory(node: bpy.types.Node, pluginModule):
@@ -327,7 +317,8 @@ def addOutputs(node: bpy.types.Node, pluginModule):
         The default output for the plugin category is always added.
     """
     from vray_blender.nodes.sockets import addOutput
-    
+    from vray_blender.lib.defs import AttrPlugin
+
     pluginOutputParams = [a for a in pluginModule.Parameters if a['type'] in NodeOutputTypes]
 
     # Add default output socket at the top. Add if either: 
@@ -335,10 +326,13 @@ def addOutputs(node: bpy.types.Node, pluginModule):
     #  - no output properties are defined for the plugin. 
     if outputSockets := pluginModule.Node.get('output_sockets', []):
         if defaultOutput := next((o for o in outputSockets if o.get('name', '') == '_default_'), None):
+            # There is no parameter defined in the plugin description for this socket,
+            # take all data from the atribute widget entry in Node.output_sockets
             overrideName = defaultOutput.get('label', '')
+            description = defaultOutput.get('desc', overrideName)
 
             if outputType := defaultOutput.get('type', ''):
-                addOutput(node, TypeToSocket[outputType], overrideName)
+                addOutput(node, getSocketType(outputType), socketName=overrideName, attrName=AttrPlugin.OUTPUT_DEFAULT, description=description)
             
             # Some plugins define output properties but still need to show a default output.
             # We just created the default output, remove it from the list of the sockets to be craeted.
@@ -361,6 +355,8 @@ def addOutputs(node: bpy.types.Node, pluginModule):
         attrType = attr['type']
         attrOptions = attr.get('options', {})
         socketName = getAttrDisplayName(attr)
+        description = socketName
+        sockVisible = True
 
         if not (socketType := _getOutputSocketType(attrType)):
             # Some socket types may need to be skipped depending on the attribute type
@@ -369,14 +365,17 @@ def addOutputs(node: bpy.types.Node, pluginModule):
         # If an output socket list is found in the plugin description, use it to determine how and 
         # which sockets to show 
         if overrideDesc := next((s for s in outputSockets if 'name' in s and s['name'] == attrName), None):
-            attrType = overrideDesc.get('type', attrType) 
-            socketName = overrideDesc.get('label', socketName)
+            attrType    = overrideDesc.get('type', attrType) 
+            socketName  = overrideDesc.get('label', socketName)
+            description = overrideDesc.get('desc', socketName)
+            sockVisible = overrideDesc.get('visible', True)
 
         if not attrOptions.get('visible', True) or (outputSockets and (overrideDesc is None)):
             continue
 
-        addOutput(node, socketType, socketName, attrName)
-
+        sock = addOutput(node, socketType, socketName, attrName, description)
+        sock.enabled = sockVisible
+        sock.hide = not sockVisible
 
 
 def addInputsOutputs(node, vrayPlugin):
@@ -410,6 +409,13 @@ MATERIAL_OPTION_PLUGIN_TYPES = (
     "VRayMtlRoundEdges"
 )
 
+def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree):
+    """ Check if the node is connected to the output node of the object node tree. """
+    if objTreeOutput := getOutputNode(objTree, 'OBJECT'):
+        return areNodesInterconnected(node, objTreeOutput)
+    return False
+    
+
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """ Triggers an update of the currently selected object or node tree and a redraw of the 
         property editor. This function is called meant to be set as the 'update' 
@@ -418,8 +424,16 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """
     if isinstance(self, bpy.types.Node):
         # For manually defined nodes (e.g. V-Ray Transform), property updates have 'self' set to the node, not to the node tree.
-        # Tag an update on the node tree. 
-        self.id_data.update_tag()
+        # Tag an update on the node tree.
+
+        # Nodes from object node trees are tagging for update the object otherwise the changes won't be exported.
+        if context.scene.vray.ActiveNodeEditorType == "OBJECT" and \
+            _nodeConnectedToObjOutput(self, self.id_data):
+
+            context.active_object.update_tag()
+        else:
+            self.id_data.update_tag()
+
         return
     
     if hasattr( context, "active_object"):
@@ -435,9 +449,9 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                     # and the node of the property group is linked to output node,
                     # the active object is tagged for geometry updates
                     if ob.vray and ob.vray.ntree:
-                        node = getNodeOfPropGroup(self)
-                        objTreeOutput = getOutputNode(ob.vray.ntree, 'OBJECT')
-                        if areNodesInterconnected(node, objTreeOutput):
+                        node = self.node if isinstance(self, bpy.types.NodeSocket) else getNodeOfPropGroup(self)
+
+                        if _nodeConnectedToObjOutput(node, ob.vray.ntree):
                             ob.update_tag()
 
                 elif (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
@@ -578,6 +592,8 @@ _OUTPUT_NODE_TYPES = {
         'WORLD'     : 'VRayNodeWorldOutput',
         'MATERIAL'  : 'VRayNodeOutputMaterial',
         'OBJECT'    : 'VRayNodeObjectOutput',
+
+        'SHADER'    : 'ShaderNodeOutputMaterial' # Cycles Material Output
     }
 
 def getOutputNode(ntree, treeType = '')-> bpy.types.Node | None:

@@ -5,7 +5,6 @@ def _getModules():
     from vray_blender.nodes.specials import selector
     from vray_blender.nodes.specials import environment
     from vray_blender.nodes.specials import geometry
-    from vray_blender.nodes.specials import brdf
     from vray_blender.nodes.specials import texture
     from vray_blender.nodes.specials import material
     from vray_blender.nodes.specials import effects
@@ -20,7 +19,6 @@ def _getModules():
         selector,
         environment,
         geometry,
-        brdf,
         texture,
         material,
         effects,

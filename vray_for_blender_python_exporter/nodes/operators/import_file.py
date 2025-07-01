@@ -13,10 +13,8 @@ from vray_blender.vray_tools.vrmat_parser     import parseVrmat
 
 from vray_blender import debug
 from vray_blender.vray_tools import vray_proxy
-from vray_blender.lib import blender_utils
+from vray_blender.lib import blender_utils, path_utils
 from vray_blender.lib.lib_utils import getUUID, LightTypeToPlugin, LightBlenderToVrayPlugin
-from vray_blender.lib.path_utils import getV4BTempDir
-
 from pathlib import Path
 
 def _createMaterial(mtlName):
@@ -59,8 +57,25 @@ def _assignMaterialsToSlots(vrsceneDict, obj, mtlNameOverrides:dict[str, str]):
             
             break
 
+def importMaterial(vrsceneDict, rootName: str, ntree: bpy.types.NodeTree):
+    NodesTools.deselectNodes(ntree)
 
-def _importMaterials(context, filePath, baseMaterial, objectForMatAssign = None, locationsMap = None):
+    for d in vrsceneDict:
+        if d['ID']=='MtlSingleBRDF':
+            pluginDesc = d
+
+    brdfName = pluginDesc['Attributes']['brdf']
+    outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
+    matPlugin = NodesImport.getPluginByName(vrsceneDict, brdfName)
+    mtlNode = NodesImport.createNode(ntree, outputNode, vrsceneDict, matPlugin)
+
+    ntree.links.new(mtlNode.outputs['BRDF'], outputNode.inputs['Material'])
+
+    NodesTools.rearrangeTree(ntree, outputNode)
+
+    return {'FINISHED'}
+
+def _importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str, objectForMatAssign: bpy.types.Object = None, locationsMap: dict[str, str] = None):
     debug.printInfo(f'Importing materials from "{filePath}"')
 
     vrsceneDict = {}
@@ -129,6 +144,9 @@ def _importMaterials(context, filePath, baseMaterial, objectForMatAssign = None,
             debug.printInfo(f"Material name already exists, changing to {mtlName}")
         
         mtl = _createMaterial(mtlName)
+        mtl.vray.cosmos_package_id = packageId
+        mtl.vray.cosmos_revision_id = revisionId
+
         ntree = mtl.node_tree
         
         outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
@@ -160,8 +178,7 @@ def _importMaterials(context, filePath, baseMaterial, objectForMatAssign = None,
     return {'FINISHED'}
 
 
-
-def _importLights(context, parentObj, lightPath, locationsMap):
+def _importLights(context: bpy.types.Context, parentObj, lightPath: str, packageId: str, revisionId: int, locationsMap: dict[str, str]):
     from vray_blender.lib import attribute_utils
 
     lightDict = parseVrmat(lightPath)
@@ -176,6 +193,8 @@ def _importLights(context, parentObj, lightPath, locationsMap):
 
             lightData = bpy.data.lights.new(name=plgName , type=blType)
             lightData.vray.light_type = vrayType
+            lightData.vray.cosmos_package_id = packageId
+            lightData.vray.cosmos_revision_id = revisionId
 
             # Scale area light
             if lightData.type == 'AREA':
@@ -206,7 +225,7 @@ def _importLights(context, parentObj, lightPath, locationsMap):
             NodesTools.deselectNodes(lightNtree)
 
 
-def _importHDRI(texturePath, lightPath, locationsMap):
+def _importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str, locationsMap: dict[str, str]):
     # Takes two '.vrmat' files (one for HDR texture and one for dome)
     # and creates dome light object that projects HDR map
     
@@ -216,7 +235,8 @@ def _importHDRI(texturePath, lightPath, locationsMap):
     name = f'VRayDomeLight@{Path(lightPath).stem}'
     domeData = bpy.data.lights.new(name=name , type='POINT')
     domeData.vray.light_type = 'DOME'
-
+    domeData.vray.cosmos_package_id = packageId
+    domeData.vray.cosmos_revision_id = revisionId
     domeObj = bpy.data.objects.new(name=name, object_data=domeData)
 
     bpy.context.collection.objects.link(domeObj)
@@ -262,7 +282,7 @@ def _fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
         if (value := attrs.get('gtr_energy_compensation', None)) is not None:
             if type(value) is bool:
                 # Upgrade from the older version, set to the new default
-                vrayMtl['Attributes']['gtr_energy_compensation'] = '1'
+                vrayMtl['Attributes']['gtr_energy_compensation'] = '2'
 
         if (opacity := attrs.get('opacity', None)) and (type(opacity) is str):
             # The VRayMtl node shows only the 'opacity_color' to which both color and float
@@ -279,6 +299,9 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     if not os.path.exists(filePath):
         return None, f"File not found: {filePath}"
     
+    if (fileExt:= PurePath(filePath).suffix) not in ('.vrmesh', '.abc'):
+        return None, f"File format {fileExt} is not supported by V-Ray Proxy"
+
     purePath = PurePath(filePath)
 
     # Add new mesh object
@@ -309,8 +332,8 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     return ob, None
     
 
-def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: str,
-                 lightPath="", locationsMap=None, useRelPath=False, scaleUnit=1.0):
+def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: str, packageId = '', revisionId = 0,
+                 lightPath="", locationsMap: dict[str, str]=None, useRelPath=False, scaleUnit=1.0):
     """ Import a VRayProxy object from a .vrmesh or .abc file.
         This function will create a new scene object and load the preview mesh for it.
 
@@ -327,7 +350,7 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
     Returns:
         tuple[object, str]: A tuple containing the created object (or None on failure) and an error message (empty string on success).
     """
-    assert not blender_utils.isPathRelative(meshPath)
+    assert not path_utils.isRelativePath(meshPath)
     
     objProxy, err = _importVRayProxy(context, meshPath, useRelPath, scaleUnit)
 
@@ -335,19 +358,20 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
         return None, err
         
     assert objProxy is not None
+    objProxy.data.vray.cosmos_package_id = packageId
+    objProxy.data.vray.cosmos_revision_id = revisionId
 
     if os.path.exists(matPath):
-        _importMaterials(context, matPath, 'STANDARD', objectForMatAssign = objProxy, locationsMap=locationsMap)
+        _importMaterials(matPath, 'STANDARD', packageId, revisionId, objectForMatAssign = objProxy, locationsMap=locationsMap)
 
     if lightPath and os.path.exists(lightPath):
-        _importLights(context, objProxy, lightPath, locationsMap)
+        _importLights(context, objProxy, lightPath, packageId, revisionId, locationsMap)
 
     # Make sure the main proxy object is selected. The selection might have been changed
     # if operators were executed during import which only work with the active object.
     blender_utils.selectObject(objProxy)
 
     return objProxy, ""
-
 
 # bpy datastructures modifying from another thread could crash Blender.
 # This means that vrmat and vrmesh file importing can be done only from the main thread.
@@ -360,39 +384,46 @@ assetImportQueue = queue.Queue()
 def assetImportTimerFunction():
     global assetImportQueue
 
-    while not assetImportQueue.empty():
-        settings = assetImportQueue.get()
-        match(settings.assetType):
-            case "Material":
-                _importMaterials(bpy.context, settings.matFile, 'STANDARD', locationsMap=settings.locationsMap)
-            case "VRMesh":
-                COSMOS_SCALE_UNIT = 0.01   # centimeters
-                ob, err = importProxyFromMeshFile(bpy.context,
-                                        settings.matFile, settings.objFile, settings.lightFile,
-                                        locationsMap=settings.locationsMap,
-                                        scaleUnit=COSMOS_SCALE_UNIT)
+    try:
+        while not assetImportQueue.empty():
+            settings = assetImportQueue.get()
+            match(settings.assetType):
+                case "Material":
+                    if not os.path.exists(settings.matFile):
+                        debug.printError(f"VRmat file {settings.matFile} does not exist")
+                        continue
+                    _importMaterials(settings.matFile, 'STANDARD', settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+                case "VRMesh":
+                    COSMOS_SCALE_UNIT = 0.01   # centimeters
+                    ob, err = importProxyFromMeshFile(bpy.context,
+                                            settings.matFile, settings.objFile, lightPath=settings.lightFile,
+                                            packageId=settings.packageId, revisionId=settings.revisionId,
+                                            locationsMap=settings.locationsMap,
+                                            scaleUnit=COSMOS_SCALE_UNIT)
+                    if err:
+                        debug.printError(err)
 
-                # Animated cosmos models need the attribute below  
-                # to function properly when the scene containing them is exported and rendered through Vantage.  
-                if ob and settings.isAnimated:
-                    userAttrs = ob.vray.UserAttributes
-                    userAttrs.user_attributes.add()
+                    # Animated cosmos models need the attribute below  
+                    # to function properly when the scene containing them is exported and rendered through Vantage.  
+                    if ob and settings.isAnimated:
+                        userAttrs = ob.vray.UserAttributes
+                        userAttrs.user_attributes.add()
 
-                    animAttr = userAttrs.user_attributes[-1]
-                    animAttr.name = "lavina_fast_morph_mesh"
-                    animAttr.value_type = "0"
-                    animAttr.value_int = 2
+                        animAttr = userAttrs.user_attributes[-1]
+                        animAttr.name = "lavina_fast_morph_mesh"
+                        animAttr.value_type = "0"
+                        animAttr.value_int = 2
 
-            case "HDRI":
-                _importHDRI(settings.matFile, settings.lightFile, locationsMap=settings.locationsMap)
+                case "HDRI":
+                    _importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+    except Exception as e:
+        debug.printWarning(str(e))
 
-    
     return 1.0 # Timeout before the next invocation
 
 def assetImportCallback(assetSettings):
     global assetImportQueue
     assetImportQueue.put(assetSettings)
-
 
 def registerAssetImportTimerFunction():
     if not bpy.app.timers.is_registered(assetImportTimerFunction): 

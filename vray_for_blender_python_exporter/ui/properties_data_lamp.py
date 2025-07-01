@@ -46,8 +46,15 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
         vrayLight = light.vray
         lightPluginType = lib_utils.getLightPluginType(light)
 
-        layout.label(text=f"V-Ray Type:  {lightPluginType}", icon='LIGHT_DATA')
+        # Light selector dropdown    
+        if context.object:
+            layout.template_ID(context.object, "data")
+        elif light:
+            # No light is selected, show the pinned light
+            layout.template_ID(context.space_data, "pin_id")
+
         layout.separator()
+        layout.label(text=f"V-Ray Type:  {lightPluginType}")
 
         # The property values are stored in different places for light with node trees and such without
         outputNode = None
@@ -57,7 +64,8 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
             lightPropGroup = getattr(outputNode, outputNode.vray_plugin)
         else:
             lightPropGroup = getattr(vrayLight, lightPluginType)
-            
+
+
         if lightPropGroup:
             layout.separator()
             classes.drawPluginUI(context, layout, lightPropGroup, PLUGINS['LIGHT'][lightPluginType], outputNode)

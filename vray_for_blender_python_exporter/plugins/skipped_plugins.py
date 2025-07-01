@@ -184,7 +184,6 @@ SKIPPED_PLUGINS = (
     "TexOSL",
 
     # Unused UVWGen nodes
-    "UVWGenObjectBBox",
     "UVWGenBercon",
     "UVWGenSwitch",
 
@@ -221,7 +220,6 @@ SKIPPED_PLUGINS = (
 
 
 MANUALLY_CREATED_PLUGINS = (
-    'BRDFLayered', 
     'TexLayeredMax', 
     'TexOSL', 
     'MtlOSL', 

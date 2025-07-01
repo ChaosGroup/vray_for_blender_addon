@@ -3,6 +3,10 @@
     "Name": "V-Ray Mtl Render Stats",
     "Parameters": [
         {
+            "attr" : "base_mtl",
+            "type": "BRDF"
+        },
+        {
             "attr": "use",
             "default": false,
             "desc": "",
@@ -15,7 +19,8 @@
     ],
     "Options": {
         "excluded_parameters": [
-            "channels"
+            "channels",
+            "gi_visibility"
         ],
         "animatable": true
     },
@@ -43,10 +48,6 @@
                     {
                         "name": "shadows_receive",
                         "label": "Receives shadows"
-                    },
-                    {
-                        "name": "gi_visibility",
-                        "label": "Visible to GI"
                     }
                 ]
             }

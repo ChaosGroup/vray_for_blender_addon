@@ -21,40 +21,6 @@ from vray_blender.bin import VRayBlenderLib as vray
 _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
 _fakeObjTrackers = dict([(t, FakeObjTracker()) for t in OBJ_TRACKERS])
 
-_INFO_ANIMATION = "Animation is supported trough Render Image, with Animation set to not None"
-
-#############################
-## Module free functions
-#############################
-def _exportObjects(exporterCtx: ExporterContext):
-    obj_export.run(exporterCtx) 
-
-
-def _exportLights(exporterCtx: ExporterContext):
-    light_export.LightExporter(exporterCtx).export()
-
-
-def _exportMaterials(exporterCtx: ExporterContext):
-    mtl_export.run(exporterCtx)
-
-
-def _exportSettings(exporterCtx: ExporterContext):
-    settings_export.SettingsExporter(exporterCtx).export()
-
-
-def _exportWorld(ctx: ExporterContext):
-    world_export.WorldExporter(ctx).export()
-
-
-def _exportCameras(ctx: ExporterContext, prevViewParams = dict[str, ViewParams]):
-    return view_export.ViewExporter(ctx).exportProdCameras(prevViewParams)
-
-
-def _exportBakeView(ctx: ExporterContext):
-    return view_export.ViewExporter(ctx).exportBakeView()
-
-
-
 #############################
 ## VRayRendererProd
 #############################
@@ -135,7 +101,6 @@ class VRayRendererProdBase:
             vray.deleteRenderer(self.renderer)
             self.renderer = None
             self.renderResult = None
-                            
 
     def _export(self, engine: bpy.types.RenderEngine, exporterCtx: ExporterContext):
         """ Perform a full export of the scene. The depsgraph will be re-evaluated
@@ -147,21 +112,21 @@ class VRayRendererProdBase:
             light_export.syncLightMeshInfo(exporterCtx)
             light_export.collectLightMixInfo(exporterCtx)
             
-            _exportObjects(exporterCtx)
-            _exportMaterials(exporterCtx)
-            _exportLights(exporterCtx)
+            self._exportObjects(exporterCtx)
+            self._exportMaterials(exporterCtx)
+            self._exportLights(exporterCtx)
 
             if not exporterCtx.bake:
-                self.viewParams = _exportCameras(exporterCtx, self.viewParams)
+                self.viewParams = self._exportCameras(exporterCtx, self.viewParams)
                 if not any(p.isActiveCamera for p in self.viewParams.values()):
                     raise Exception("No cameras selected for production rendering. Render aborted.")
             else:
                 # Baking textures does not require a camera setup. Only export basic view configuration.
-                _exportBakeView(exporterCtx)
+                self._exportBakeView(exporterCtx)
 
-            _exportSettings(exporterCtx)
-            _exportWorld(exporterCtx)
-            
+            self._exportSettings(exporterCtx)
+            self._exportWorld(exporterCtx)
+
             self._linkRenderChannels(exporterCtx)
 
             # Call descendant's interface
@@ -215,18 +180,21 @@ class VRayRendererProdBase:
             context.rendererMode = RendererMode.Production
 
         return context
-    
+
 
     def _createRenderer(self, exporterType):
+        exporter = bpy.context.scene.vray.Exporter
+
         settings = vray.ExporterSettings()
         settings.exporterType     = exporterType
         settings.closeVfbOnStop   = True
-        
-        if self.isPreview: 
+        settings.renderThreads    = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
+
+        if self.isPreview:
             settings.previewDir = path_utils.getPreviewDir()
-        
+
         return vray.createRenderer(settings)
-    
+
 
     def _linkRenderChannels(self, exporterCtx: ExporterContext):
         """ In order for certain plugins to affect the render channels, those render channels
@@ -237,3 +205,30 @@ class VRayRendererProdBase:
             updateValue(self.renderer, pluginData[0], pluginData[1], channelsList) 
 
 
+    def _exportObjects(self, exporterCtx: ExporterContext):
+        obj_export.run(exporterCtx) 
+
+
+    def _exportLights(self, exporterCtx: ExporterContext):
+        light_export.LightExporter(exporterCtx).export()
+
+
+    def _exportMaterials(self, exporterCtx: ExporterContext):
+        mtl_export.run(exporterCtx)
+
+
+    def _exportSettings(self, exporterCtx: ExporterContext):
+        settings_export.SettingsExporter(exporterCtx).export()
+
+
+    def _exportCameras(self, exporterCtx: ExporterContext, prevViewParams = dict[str, ViewParams]):
+        return view_export.ViewExporter(exporterCtx).exportProdCameras(prevViewParams)
+
+
+    def _exportBakeView(self, exporterCtx: ExporterContext):
+        return view_export.ViewExporter(exporterCtx).exportBakeView()
+
+
+    def _exportWorld(self, exporterCtx: ExporterContext):
+        world_export.WorldExporter(exporterCtx).export()
+        

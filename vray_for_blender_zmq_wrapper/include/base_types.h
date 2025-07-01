@@ -7,9 +7,9 @@
 #include <cstring>
 #include <unordered_map>
 #include <memory>
-#include <cassert>
 
 #include <initializer_list>
+#include "vassert.h"
 
 // Compile time max(A, B)
 template <size_t A, size_t B>
@@ -790,7 +790,7 @@ struct AttrValue {
 	}
 
 	void defaultInitData() {
-		assert(type != ValueTypeUnknown && "Cannot default init unknown type!");
+		vassert(type != ValueTypeUnknown && "Cannot default init unknown type!");
 		switch(type) {
 		case ValueTypeString:        new(asPtr<AttrSimpleType<std::string>>())AttrSimpleType<std::string>(); break;
 		case ValueTypePlugin:        new(asPtr<AttrPlugin>())AttrPlugin(); break;

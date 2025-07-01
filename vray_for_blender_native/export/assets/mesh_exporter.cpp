@@ -4,7 +4,6 @@
 #include <thread>
 #include <unordered_set>
 #include <unordered_map>
-
 #include <base_types.h>
 
 #include "api/interop/types.h"
@@ -302,7 +301,10 @@ void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& face_mtlID
 		const auto pi = mesh.loopTriPolys[fi];
 
 		// Face material ID
-		(*face_mtlIDs)[fi] = mesh.polyMtlIndices[pi];
+		if( !mesh.polyMtlIndices.empty())
+			(*face_mtlIDs)[fi] = mesh.polyMtlIndices[pi];
+		
+
 	}
 }
 
@@ -362,11 +364,6 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 	AttrListInt     faceNormals(numFaces * 3);			// Normals per face vertex - indices
 	AttrListInt     face_mtlIDs(numFaces);				// Material index per face
 
-	// Edge visibility is 3 bits per face. 10 consecutive faces go into one int32
-	AttrListInt     edge_visibility(numFaces / 10 + ((numFaces % 10 > 0) ? 1 : 0));	
-	::memset((*edge_visibility), 0, edge_visibility.getBytesCount());
-
-	
 	{
 		size_t i = 0;
 		for (const auto& v : mesh.vertices) {
@@ -405,19 +402,14 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 			break;
 
 		default:
-			VRAY_ASSERT(!"Invalid normals domain type");
+			vassert(!"Invalid normals domain type");
 	}
 
-	// Edge visibility ??
-	// (*edge_visibility)[fi/10] |= (7 << ((fi % 10) * 3));
-	
-	
 	pluginDesc.add("vertices", vertices);
 	pluginDesc.add("faces", faces);
 	pluginDesc.add("normals", normals);
 	pluginDesc.add("faceNormals", faceNormals);
 	pluginDesc.add("face_mtlIDs", face_mtlIDs);
-	pluginDesc.add("edge_visibility", edge_visibility);
 }
 
 
@@ -460,7 +452,7 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
 					(*uvData)[channel_vert_index++] = v;
 				}
 			}
-			VRAY_ASSERT(channel_vert_index == uvData.getCount() && "Vertex index of UV layer is out of range");
+			vassert(channel_vert_index == uvData.getCount() && "Vertex index of UV layer is out of range");
 		}
 
 		for (const auto& colorLayer : mesh.colorLayers) {
@@ -475,7 +467,7 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
 					(*colorData)[channel_vert_index++] = v;
 				}
 			}
-			VRAY_ASSERT(channel_vert_index == colorData.getCount() && "Vertex index of color layer is out of range");
+			vassert(channel_vert_index == colorData.getCount() && "Vertex index of color layer is out of range");
 		}
 	}
 

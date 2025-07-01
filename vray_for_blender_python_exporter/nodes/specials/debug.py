@@ -22,8 +22,9 @@ class VRaySocketAny(VRaySocket):
                 text = '%s *' % text
         layout.label(text=text)
 
-    def draw_color(self, context, node):
-        return (0.3, 0.3, 0.3, 1.000)
+    @classmethod
+    def draw_color_simple(cls):
+        return (0.3, 0.3, 0.3, 1.0)
 
 
 class VRayNodeDebugSwitch(VRayNodeBase):

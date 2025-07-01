@@ -8,7 +8,8 @@ import bpy
 import re
 from threading import Lock
 
-from vray_blender import debug 
+from vray_blender import debug
+from vray_blender.nodes.tools import isVrayNode
 
 """
  VRAY EXPORTED PLUGIN NAMING RULES
@@ -73,7 +74,6 @@ from vray_blender import debug
    in a VRay Node
 """
 
-
 class Names:
 
     @staticmethod
@@ -87,8 +87,11 @@ class Names:
     def struct(obj: bpy.types.Struct):
         """ Return the unique name for an object that is not a subclass of bpy.types.ID, e.g. bpy.types.Node. """
         if not hasattr(obj, "unique_id"):
-            raise Exception(f"Attempt to export a non-vray object: {obj.bl_idname}::{obj.name}")
-        return obj.unique_id 
+            if hasattr(obj, "vray"):
+                return obj.vray.unique_id
+            else:
+                raise Exception(f"Attempt to export a non-vray object: {obj.bl_idname}::{obj.name}")
+        return obj.unique_id
     
 
     @staticmethod
@@ -298,7 +301,7 @@ def syncObjectUniqueName(obj: bpy.types.ID | bpy.types.Node, reset: bool):
         # NOTE: The check for the unique_id field is used to filter out obsolete node types
         # which are loaded from .blend scenes but classes for them are not defined in
         # the current implementation.
-        for node in [n for n in  obj.nodes if hasattr(n, 'unique_id')]:
+        for node in [n for n in  obj.nodes if hasattr(n, 'unique_id') or hasattr(n, 'vray')]:
             syncObjectUniqueName(node, reset)
         return
         
@@ -311,21 +314,26 @@ def syncObjectUniqueName(obj: bpy.types.ID | bpy.types.Node, reset: bool):
         return
 
     # VRay nodes do not have a 'vray' field, check 'vray_type' instead
-    if isinstance(obj, bpy.types.Node) and hasattr(obj, 'vray_type'):
-        if reset or obj.isNewlyAdded():
-            uniqueId = _createUniqueName(obj.name)
-            obj.setUniqueId(uniqueId)
+    if isinstance(obj, bpy.types.Node):
+        def setUniqueId(obj):
+            if reset or obj.isNewlyAdded():
+                uniqueId = _createUniqueName(obj.name)
+                obj.setUniqueId(uniqueId)
 
-            # If the property group is attached to a node, set the ID of the parent node 
-            # to it. It will be needed to reach the node from the property group in event
-            # callbacks.
-            if propGroup := getattr(obj, obj.vray_plugin, None):
-                propGroup.parent_node_id = uniqueId 
+                # If the property group is attached to a node, set the ID of the parent node 
+                # to it. It will be needed to reach the node from the property group in event
+                # callbacks.
+                if hasattr(obj, 'vray_plugin') and (propGroup := getattr(obj, obj.vray_plugin, None)):
+                    propGroup.parent_node_id = uniqueId
 
-            # Some nodes may have more than 1 plugin property group
-            for propGroupName in getattr(obj, "vray_plugins_list", []):
-                getattr(obj, propGroupName).parent_node_id = uniqueId 
+                # Some nodes may have more than 1 plugin property group
+                for propGroupName in getattr(obj, "vray_plugins_list", []):
+                    getattr(obj, propGroupName).parent_node_id = uniqueId
 
+        if isVrayNode(obj):
+            setUniqueId(obj)
+        else:
+            setUniqueId(obj.vray)
         return
 
     if isinstance(obj, bpy.types.ID):

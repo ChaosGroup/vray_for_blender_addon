@@ -26,8 +26,6 @@ def onUpdatePreviewFile(src, context, attrName):
         geomMeshFile['file'] = filePrevValue
         return
 
-    # Reset the scale of the model as we can't tell the correct scale from the mesh file itself.
-    geomMeshFile['scale'] = 1.0
     setShadowAttr(geomMeshFile, 'file', geomMeshFile.file)
 
     bpy.ops.vray.proxy_generate_preview('EXEC_DEFAULT', regenerate=False)

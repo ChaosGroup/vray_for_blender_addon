@@ -227,4 +227,8 @@ def run():
     debug.printAlways("Scene conversion complete!\n")
 
 
+def check():
+    # This version has not been made public. It is OK to always try to upgrade because
+    # the upgrade script will only ever be run for development purposes.
+    return True
 

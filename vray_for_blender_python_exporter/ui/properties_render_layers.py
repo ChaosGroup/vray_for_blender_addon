@@ -2,7 +2,7 @@
 import bpy
 
 from vray_blender.ui import classes
-from vray_blender.lib import lib_utils
+from vray_blender.lib import lib_utils, draw_utils
 
 
 class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
@@ -38,26 +38,16 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
 
         for menuType in VRayChannelNodeSubtypes:
             menuName = menuType.title()
-            # Drawing the rollout menu for the current render elements type
-            isOpen      = getattr(vrayRenderChannels, menuName) and hasWorldNodeTree
-            icon        = "DOWNARROW_HLT" if isOpen else "RIGHTARROW"
-            titleRow = self.layout.row()
-            titleRow.alignment = 'LEFT'
-            titleRow.prop(vrayRenderChannels, menuName, icon=icon, emboss=False)
-            titleRow.active = hasWorldNodeTree
-
-            if not isOpen:
-                # Rollout is closed
-                continue
-
-            split = self.layout.split(factor=0.02)
-            split.column()
-            col = split.column()
-            for t in VRayNodeTypes["RENDERCHANNEL"]:
-                if getattr(t, "vray_menu_subtype","") == menuType:
-                    elemType = t.bl_rna.identifier
-                    col.prop(getattr(vrayRenderChannels, elemType), "enabled")
             
+            if panelBody := draw_utils.rollout(self.layout, f"RenderChannel_{menuName}", menuName):
+                panelBody.active = hasWorldNodeTree
+                col = panelBody.column()
+                
+                for t in VRayNodeTypes["RENDERCHANNEL"]:
+                    if getattr(t, "vray_menu_subtype","") == menuType:
+                        elemType = t.bl_rna.identifier
+                        col.prop(getattr(vrayRenderChannels, elemType), "enabled")
+                
 
 
 

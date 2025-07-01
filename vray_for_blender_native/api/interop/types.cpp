@@ -19,8 +19,8 @@ MeshData::MeshData(py::object obj) :
 	vertices        (fromDataArray<float[3]>(obj.attr("vertices"))),
 	loops           (fromDataArray<unsigned int>(obj.attr("loops"))),
 	loopTris        (fromDataArray<unsigned int[3]>(obj.attr("loopTris"))),
-	loopTriPolys    (fromNdArray<unsigned int>(obj.attr("loopTriPolys"))),
-	polyMtlIndices  (fromNdArray<unsigned int>(obj.attr("polyMtlIndices"))),
+	loopTriPolys    (fromDataArray<unsigned int>(obj.attr("loopTriPolys"))),
+	polyMtlIndices  (fromDataArray<unsigned int>(obj.attr("polyMtlIndices"))),
 	normals			(fromDataArray<float[3]>(obj.attr("normals"))),
 	uvLayers        (fromAttrLayersArr<float[2]>(obj.attr("loopUVs"))),
 	colorLayers     (fromAttrLayersArr<MLoopCol>(obj.attr("loopColors"))),
@@ -41,7 +41,6 @@ MeshData::MeshData(py::object obj) :
 	}
 }
 
-
 HairData::HairData(py::object obj) :
 	name			(py::extract<std::string>(obj.attr("name"))),
 	type			(py::extract<std::string>(obj.attr("type"))),
@@ -51,10 +50,10 @@ HairData::HairData(py::object obj) :
 	widthsInPixels	(py::extract<bool>(obj.attr("widthsInPixels"))),
 	useHairBSpline	(py::extract<bool>(obj.attr("useHairBSpline"))),
 	matWorld		(fromMat<4>(obj.attr("matWorld"))),
-	points			(fromNdArray<float[3]>(obj.attr("points"))),
+	points			(fromNdOrDataArray<float[3]>(obj.attr("points"), type == "CURVES")),
 	pointRadii		(fromNdArray<float>(obj.attr("pointRadii"))),
 	strandSegments	(fromNdArray<int>(obj.attr("strandSegments"))),
-	uvs				(fromNdArray<float[2]>(obj.attr("uvs"))),
+	uvs				(fromNdOrDataArray<float[2]>(obj.attr("uvs"), type == "CURVES")),
 	vertColors		(fromNdArray<float[3]>(obj.attr("vertColors"))),
 	ref				(obj)
 {}

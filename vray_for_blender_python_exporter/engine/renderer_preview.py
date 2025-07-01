@@ -1,6 +1,7 @@
 import threading
 import bpy
 import mathutils
+import time
 
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 
@@ -73,9 +74,17 @@ class VRayRendererPreview(VRayRendererProdBase):
         
         vray.setRenderFrame(self.renderer, scene.frame_current)
         self._export(engine, exporterCtx)
-        
-        if not vray.renderFrame(self.renderer, waitForCompletion=True):
-            self._reportInfo(engine, "Material preview render job aborted")
+
+        vray.renderFrame(self.renderer)
+
+        while vray.renderJobIsRunning(self.renderer):
+            if engine.test_break():
+                vray.abortRender(self.renderer)
+                return False
+                
+            # It is usual for previews to be aborted so keep the abort check mechanism 
+            # responsive by sleeping for just a short interval.
+            time.sleep(0.03)
 
 
     def _exportSceneAdjustments(self, exporterCtx: ExporterContext):
@@ -121,3 +130,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         updateValue(exporterCtx.renderer, Names.objectData(squaredLight), "intensity", 20)
         updateValue(exporterCtx.renderer, Names.objectData(circularLight), "intensity", 100)
         
+
+    def _exportWorld(self, exporterCtx: ExporterContext):
+        # World tree should not be exported during Preview rendering.
+        return

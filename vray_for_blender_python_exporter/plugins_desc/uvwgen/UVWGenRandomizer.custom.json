@@ -101,8 +101,31 @@
             "default": 1.0
         },
         {
+            "attr": "variance_rot_min",
+            "subtype": "ANGLE",
+            "precision": 5,
+            "options": {
+                "value_conv_factor": 0.017453292519943295
+            },
+            "ui": {
+                "spin_step": 5.72958,
+                "min": -360,
+                "max": 360
+            }
+        },
+        {
             "attr": "variance_rot_max",
-            "default": 360
+            "precision": 5,
+            "subtype": "ANGLE",
+            "default": 360,
+            "options": {
+                "value_conv_factor": 0.017453292519943295
+            },
+            "ui": {
+                "spin_step": 5.72958,
+                "min": -360,
+                "max": 360
+            }
         },
         {
             "attr": "variance_u_flip",

@@ -27,9 +27,13 @@
         },
         {
             "attr" : "sun",
-            "poll": "sunFilter",
-            "object_type": "Object",
-            "type": "OBJECT"
+            "type": "OBJECT",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "sunFilter"
+                }
+            }
         },
         {
             "attr" : "sun_dir_only",
@@ -42,6 +46,19 @@
             {
                 "min": 0,
                 "spin_step": 1000
+            }
+        },
+        {
+            "attr": "blend_angle",
+            "subtype": "ANGLE",
+            "precision": 7,
+            "options": {
+                "value_conv_factor": 0.017453292519943295
+            },
+            "ui": {
+                "spin_step": 5.72958,
+                "min": 0,
+                "max": 90
             }
         }
     ],
@@ -138,6 +155,9 @@
             },
             {
                 "name": "ground_albedo"
+            },
+            {
+                "name": "sun"
             }
         ]
     },

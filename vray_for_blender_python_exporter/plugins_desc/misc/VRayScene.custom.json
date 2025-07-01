@@ -3,11 +3,117 @@
     "Parameters": [
         {
             "attr": "filepath",
-            "subtype": "FILE_PATH"
+            "subtype": "FILE_PATH",
+            "options" : {
+                "shadowed": true
+            }
+        },
+        {
+            "attr" : "previewType",
+            "default" : "Preview",
+            "desc" : "The type of the generated preview",
+            "items" : 
+            [
+                [ "None", "None", "" ],
+                [ "Full", "Full", "" ],
+                [ "Preview", "Preview", "" ],
+                [ "Boxes", "Boxes", "" ]
+            ],
+            "type" : "ENUM",
+            "options": {
+                "derived": true
+            },
+            "update": "onUpdatePreview"
+        },
+        {
+            "attr": "flip_axis",
+            "items" : 
+            [
+                [ "0", "As Is", "As Is" ],
+                [ "2", "Z-Up To Y-Up", "Z-Up To Y-Up" ],
+                [ "3", "Y-Up To Z-Up", "Y-Up To Z-Up" ]
+            ],
+            "update": "onUpdatePreview"
+        },
+        {
+            "attr": "anim_length",
+            "default": 1
+        },
+        {
+            "attr": "num_preview_faces",
+            "type": "INT",
+            "desc": "Number of faces in the preview",
+            "default": 10000,
+            "options": {
+               "derived": true
+            },
+             "update": "onUpdatePreview"
         }
     ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "filepath"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "previewType"
+                    },
+                    {
+                        "name": "num_preview_faces",
+                        "visible": {"cond": "::previewType=Preview"}
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "flip_axis"
+                    },
+                    {
+                        "name": "add_nodes"
+                    },
+                    {
+                        "name": "add_lights"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "animation",
+                        "label": "Animation Overrides",
+                        "use_prop": "anim_override",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "anim_type"
+                            },
+                            {
+                                "name": "anim_speed"
+                            },
+                            {
+                                "name": "anim_offset"
+                            },
+                            {
+                                "name": "anim_start"
+                            },
+                            {
+                                "name": "anim_length"
+                            }
+                        ]
+                    }
+                ]
+            }
+       ]
+    },
     "Type": "GEOMETRY",
     "Options": {
-        "excluded_parameters": []
+        "excluded_parameters": [],
+        "animatable": false
     }
 }

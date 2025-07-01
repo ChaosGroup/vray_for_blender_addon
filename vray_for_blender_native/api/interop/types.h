@@ -23,11 +23,12 @@ struct ExporterSettings
 	using StrList = std::vector<std::string>;
 
 	VrayZmqWrapper::ExporterType getExporterType() const;
-	
+
 	PROPERTY(int,  exporterType       , static_cast<int>(VrayZmqWrapper::ExporterType::PROD))  // Render type
+	PROPERTY(int,  renderThreads      , -1)
 	PROPERTY(bool, closeVfbOnStop     , false)
 	PROPERTY(bool, drUse              , false)	// Distributed rendering
-	PROPERTY(bool, drRenderOnlyOnHosts , false) // Distributed rendering
+	PROPERTY(bool, drRenderOnlyOnHosts, false)  // Distributed rendering
 	PROPERTY(bool, separateFiles      , false)  // Export to separate files
 	PROPERTY(std::string, previewDir  , "")		// Folder for .exr material preview files
 	PROPERTY_NO_DEFAULT(StrList, drHosts)
@@ -47,18 +48,18 @@ struct ViewSettings
 /// Command-line arguments with which to start the ZMQ Server process.
 struct ZmqServerArgs
 {
-	PROPERTY(std::string, exePath    , "")
-	PROPERTY(int, port				 , -1) // A special value which means 'use ephemeral port'
-	PROPERTY(int, logLevel           , 2)
-	PROPERTY(bool, headlessMode      , false)
-	PROPERTY(bool, noHeartbeat       , true)
-	PROPERTY(int64_t, blenderPID     , 0)
-	PROPERTY(std::string, dumpLogFile, "")
+	PROPERTY(std::string, exePath        , "")
+	PROPERTY(int, port				     , -1) // A special value which means 'use ephemeral port'
+	PROPERTY(int, logLevel               , 2)
+	PROPERTY(bool, headlessMode          , false)
+	PROPERTY(bool, noHeartbeat           , true)
+	PROPERTY(int64_t, blenderPID         , 0)
+	PROPERTY(std::string, dumpLogFile    , "")
 	PROPERTY(std::string, vfbSettingsFile, "")
-	PROPERTY(int, renderThreads      , -1)
-	PROPERTY(std::string, vrayLibPath , "")
-	PROPERTY(std::string, appSDKPath , "")
-	PROPERTY(std::string, pluginVersion,  "00000")
+	PROPERTY(std::string, vrayLibPath    , "")
+	PROPERTY(std::string, appSDKPath     , "")
+	PROPERTY(std::string, pluginVersion  , "00000")
+	PROPERTY(std::string, blenderVersion , "")
 
 	std::string getAddress(int port) const;
 };
@@ -246,6 +247,8 @@ struct CosmosAssetSettings
 	PROPERTY(std::string, matFile, "")
 	PROPERTY(std::string, objFile, "")
 	PROPERTY(std::string, lightFile, "")
+	PROPERTY(std::string, packageId, "")
+	PROPERTY(int, revisionId, 0)
 	PROPERTY(py::dict, locationsMap, py::dict())
 	PROPERTY(bool, isAnimated, false)
 };

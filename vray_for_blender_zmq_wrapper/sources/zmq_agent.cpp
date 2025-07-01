@@ -7,6 +7,8 @@
 #include "cppzmq/zmq.hpp"
 #include "cppzmq/zmq_addon.hpp"	
 
+#include "vassert.h"
+
 using namespace std::chrono_literals;
 
 namespace VrayZmqWrapper{
@@ -36,7 +38,7 @@ ZmqAgent::ZmqAgent(zmq::context_t& ctx, const RoutingId& id, ExporterType worker
 
 ZmqAgent::~ZmqAgent() {
 
-	assert((std::this_thread::get_id() != pollerThread.get_id()) && "Cannot stop the poller thread from a callback");
+	vassert((std::this_thread::get_id() != pollerThread.get_id()) && "Cannot stop the poller thread from a callback");
 
 	try {
 		// Stop and wait for the poller loop thread to exit
@@ -49,31 +51,31 @@ ZmqAgent::~ZmqAgent() {
 	catch (const std::exception& exc) {
 		trace(Msg("Exception in ZmqAgent's destructor: ", exc.what()));
 		// Nothing more we can do
-		assert(!"Exception in ZmqAgent destructor");
+		vassert(!"Exception in ZmqAgent destructor");
 	}
 }
 
 
 void ZmqAgent::setMsgCallback(MessageCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!msgCallback && "Multiple subscriptions for the same event are not supported");
-	assert((state == State::Idle) && "Callbacks should be registered before running the agent");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!msgCallback && "Multiple subscriptions for the same event are not supported");
+	vassert((state == State::Idle) && "Callbacks should be registered before running the agent");
 	msgCallback = cb;
 }
 
 
 void ZmqAgent::setErrorCallback(ErrorCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!errorCallback && "Multiple subscriptions for the same event are not supported");
-	assert((state == State::Idle) && "Callbacks should be registered before running the agent");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!errorCallback && "Multiple subscriptions for the same event are not supported");
+	vassert((state == State::Idle) && "Callbacks should be registered before running the agent");
 	errorCallback = cb;
 }
 
 
 void ZmqAgent::setTraceCallback(TraceCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!traceCallback && "Multiple subscriptions for the same event are not supported");
-	assert((state == State::Idle) && "Callbacks should be registered before running the agent");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!traceCallback && "Multiple subscriptions for the same event are not supported");
+	vassert((state == State::Idle) && "Callbacks should be registered before running the agent");
 
 	traceCallback = cb;
 }
@@ -96,10 +98,10 @@ bool ZmqAgent::isStopped() const {
 
 void ZmqAgent::run(const std::string& endpoint, const ZmqTimeouts& timeoutSettings) {
 
-	assert(state == State::Idle && "Cannot run the same ZmqAgent twice");
+	vassert(state == State::Idle && "Cannot run the same ZmqAgent twice");
 
 	timeouts = timeoutSettings;
-	state = State::Running;
+	state.exchange(State::Running);
 	pollerThread = std::move(std::thread(&ZmqAgent::pollerLoop, this, endpoint));
 }
 
@@ -114,7 +116,7 @@ void ZmqAgent::stop(bool block) {
 
 	if (block){
 		if (state != State::Idle) {
-			assert(std::this_thread::get_id() != pollerThread.get_id() && "Calling blocking stop() from callback thread, deadlocked.");
+			vassert(std::this_thread::get_id() != pollerThread.get_id() && "Calling blocking stop() from callback thread, deadlocked.");
 			trace("Waiting for poller thread to exit");
 
 			while (!isStopped()) {
@@ -130,7 +132,7 @@ void ZmqAgent::stop(bool block) {
 
 void ZmqAgent::send(zmq::message_t&& payload, ControlMessage msgType /*=ControlMessge::DATA*/) {
 
-	assert((state != State::Idle) && "Agent should be started before data can be sent.");
+	vassert((state != State::Idle) && "Agent should be started before data can be sent.");
 
 	if (state == State::Running) {
 		auto msg = createMsg(msgType, std::move(payload));
@@ -145,7 +147,10 @@ void ZmqAgent::send(zmq::message_t&& payload, ControlMessage msgType /*=ControlM
 /// @param endpoint - the endpoint to connect to
 void ZmqAgent::pollerLoop(std::string endpoint) {
 
-	assert(state == State::Running);
+	// stop() may have been called before the thread has managed to start. Short of killing the application,
+	// there is no convenient way to handle stop requests during the connection initialization sequence, so
+	// just wait for it to finish and then immediately exit the message processing loop.
+	vassert((state == State::Running) || (state == State::Stopping));
 
 	trace(Msg("Connecting to", endpoint));
 
@@ -211,7 +216,7 @@ void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
 
 	while ((sent < total) && (1 == pollerSend.wait_all(events, DONT_BLOCK))) {
 
-		assert(zmq::event_flags::pollout == events[0].events);
+		vassert(zmq::event_flags::pollout == events[0].events);
 
 		auto* msg = items[sent];
 		auto& sockOut = events[0].socket;
@@ -219,7 +224,7 @@ void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
 		[[maybe_unused]] auto res = msg->send(sockOut);
 
 		// For blocking sockets, any failure is reported as an exception
-		assert(res && "EAGAIN on a blocking socket");
+		vassert(res && "EAGAIN on a blocking socket");
 
 		++sent;
 	}
@@ -275,7 +280,7 @@ void ZmqAgent::recvPending(zmq::poller_t<>& pollerRecv) {
 		break;
 
 	default:
-		assert(!"Invalid message type");
+		vassert(!"Invalid message type");
 	}
 
 	lastActivity = Clock::now();
@@ -399,7 +404,7 @@ void ZmqAgent::reportError(const std::string& errMsg) {
 		}
 	}
 	catch (...) {
-		assert(!"Exception in error handler");
+		vassert(!"Exception in error handler");
 	}
 }
 
@@ -416,7 +421,7 @@ void ZmqAgent::trace(const std::string& errMsg) {
 		}
 	}
 	catch (...) {
-		assert(!"Exception in trace callback");
+		vassert(!"Exception in trace callback");
 	}
 }
 

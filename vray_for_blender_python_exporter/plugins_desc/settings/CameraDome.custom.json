@@ -12,8 +12,13 @@
         },
         {
             "attr": "fov",
+            "desc": "Field of view",
+            "subtype": "ANGLE",
+            "precision": 7,
             "ui": {
-                "spin_step": 1.0
+                "spin_step": 0.1,
+                "min": 0,
+                "max": 6.283185307179586
             }
         }
     ],

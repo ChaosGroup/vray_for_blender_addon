@@ -1,12 +1,7 @@
 {
-    "Version":"1",
-    "RenderViewProps": {
-        "version":1,
-        "resize_on_res_change": false
-    },
-    "UIPosAndSizes": {
-        "version":1,
-        "window_width":1458,
-        "window_height":786
-    }
+  // Settings override file - add VFB settings that need to be overriden
+  "UIPosAndSizes": {
+    "window_width": 1458,
+    "window_height": 786
+  }
 }

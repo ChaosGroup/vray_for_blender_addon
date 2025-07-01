@@ -62,7 +62,8 @@
         },
         {
             "attr": "shadowRadius",
-            "subtype": "ANGLE"
+            "subtype": "ANGLE",
+            "precision": 7
         },
         {
             "attr": "shadowRadius_tex",
@@ -139,13 +140,18 @@
             "attr": "coneAngle",
             "desc": "Specifies the angle of the light cone formed by the V-Ray Spot Light",
             "update": "onUpdateAttribute",
-            "subtype": "ANGLE"
+            "subtype": "ANGLE",
+            "precision": 7,
+            "ui": {
+                "spin_step": 0.1
+            }
         },
         {
             "attr": "penumbraAngle",
             "desc": "Specifies the angle within the light cone at which the light begins to transition from full strength to no lighting.",
             "update": "onUpdateAttribute",
             "subtype": "ANGLE",
+            "precision": 7,
             "ui": {
                 "spin_step": 0.1
             }

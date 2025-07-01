@@ -1,4 +1,4 @@
-from vray_blender import debug
+from vray_blender.exporting.mtl_export import MtlExporter
 from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
 from vray_blender.lib import  export_utils, plugin_utils
 

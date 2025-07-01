@@ -64,7 +64,7 @@ def deselectNodes(ntree):
         node.select = False
 
 
-def addVRayNodeTreeSettings(ntree: bpy.types.NodeTree, treeType: str):
+def addVRayNodeTreeSettings(ntree: bpy.types.ShaderNodeTree, treeType: str):
     """ Add a 'vray' settings attribute to a node tree  """
     ntree.vray.tree_type = treeType
 

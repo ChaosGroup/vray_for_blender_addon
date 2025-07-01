@@ -77,21 +77,21 @@ public:
 	void        stop();
 	void        free();
 
-	void        exportVrscene(const ExportSceneSettings& exportSettings);
+	int         exportVrscene(const ExportSceneSettings& exportSettings);
 	void        clearFrameData(float upTo);
 	void		clearScene();
 	void		abortRender();
 	void        syncView(const ViewSettings& viewSettings);
-	void		showVFB(); // sends VfbFlags::Show in a SetVfbOptions message 
-	void		setVfbAlwaysOnTop(bool alwaysOnTop); // sends VfbFlags::AlwaysOnTop in a SetVfbOptions message 
+	void		showVFB(); // sends VfbFlags::Show in a SetVfbOptions message
+	void		setVfbAlwaysOnTop(bool alwaysOnTop); // sends VfbFlags::AlwaysOnTop in a SetVfbOptions message
 	float		getRenderProgress() const;
 
 	// Export API
-	void        pluginCreate(const std::string& pluginName, const std::string& pluginType);
+	void        pluginCreate(const std::string& pluginName, const std::string& pluginType, bool allowTypeChanges);
 	void        pluginRemove(const std::string& pluginName);
 	void        pluginUpdate(const std::string& pluginName, const std::string& attrName, const VRayBaseTypes::AttrValue& value, bool forceUpdate = false);
 	void        sendPluginMsg(const std::string& pluginName, zmq::message_t&& message);
-			    
+
 	int         getExportedPluginsCount() const;
 	void        resetExportedPluginsCount();
 
@@ -99,7 +99,7 @@ public:
 	RenderImage getPass         (const std::string& name);
 	RenderImage getRenderChannelImage(RenderChannelType channelType);
 	void        setRenderSize   (const proto::RenderSizes &sizes);
-	void        setCameraPlugin (const std::string &pluginName);
+	void        setCameraName   (const std::string &cameraSceneName);
 	void        commitChanges   ();
 
 	void        setCurrentFrame(float frame);

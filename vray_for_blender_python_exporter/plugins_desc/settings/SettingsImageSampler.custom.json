@@ -158,31 +158,43 @@
         {
             "attr" : "min_shade_rate",
             "default" : 6
+        },
+        {
+            "attr": "device_dependent_properties",
+            "type": "BOOL",
+            "desc": "Dummy attribute for a block of device-dependent properties drawn in code",
+            "default": false,
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "progressive_maxTime",
+            "ui" : {
+                "display_name": "Max Render Time (mins)"
+            }
         }
     ],
     "Widget": {
         "widgets": [
             {
+                "layout": "COLUMN",
                 "attrs": [
                     {
                         "name": "type"
                     }
-                ],
-                "layout": "COLUMN"
+                ]
             },
             {
-                "layout": "SEPARATOR"
-            },
-            {
+                "layout": "COLUMN",
+                "visible": {
+                    "cond": "::type=1"
+                },
                 "attrs": [
                     {
                         "name": "lock_subdivs"
                     }
-                ],
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1"
-                }
+                ]
             },
             {
                 "layout": "COLUMN",
@@ -217,30 +229,14 @@
                 },
                 "attrs": [
                     {
-                        "attrs": [
-                            {
-                                "name": "dmc_threshold",
-                                "label": "Noise Limit"
-                            }
-                        ],
-                        "layout": "COLUMN"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1"
-                },
-                "attrs": [
+                        "name": "dmc_threshold",
+                        "label": "Noise Limit"
+                    },{
+                        "name": "dmc_adaptivity_clamp"
+                    },
                     {
-                        "attrs": [
-                            {
-                                "name": "dmc_fireflyRemoval",
-                                "label": "Firefly Removal"
-                            }
-                        ],
-                        "layout": "COLUMN"
+                        "name": "dmc_fireflyRemoval",
+                        "label": "Firefly Removal"
                     }
                 ]
             },
@@ -260,19 +256,15 @@
                                 "name": "progressive_maxSubdivs"
                             },
                             {
-                                "name": "progressive_threshold"
-                            }
-                        ],
-                        "layout": "COLUMN"
-                    },
-                    {
-                        "align": true,
-                        "attrs": [
+                                "name": "progressive_threshold",
+                                "label": "Noise Limit"
+                            },
                             {
                                 "name": "progressive_maxTime"
                             },
                             {
-                                "name": "progressive_bundleSize"
+                                "name": "device_dependent_properties",
+                                "custom_draw": "widgetDrawDeviceDependentProperties"
                             }
                         ],
                         "layout": "COLUMN"

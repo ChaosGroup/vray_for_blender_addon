@@ -1,6 +1,7 @@
 
 import time
 import os
+from pathlib import PurePath
 import sys
 import bpy
 
@@ -10,6 +11,7 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQProcess
+from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -38,7 +40,9 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     ERR_MSG_PROD_RENDER_RUNNING = "Production rendering is already running. Cannot start viewport rendering." 
     ERR_MSG_QUAD_VIEW = "Cannot render QuadView with V-Ray." 
 
-    def __init__(self):
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         # During initialization, there is no information as to which type the renderer should be.
         # These members will be assigned when a VRay renderer is created ( during the 
         # first invocation of the appropriate 'update' callback )    
@@ -58,11 +62,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         # us to know to never render in the area unless the render engine is recreated.
         self._inactiveViewport = False
         
-        if bpy.app.background:
-            # In headless mode, parse command line.
-            self._parseArguments()
-
-
+        
     def __del__(self):
         # For the viewport, Blender creates (and destroys) multiple rendering engine instances. Some of them
         # are never used or at least their view_update/view_draw methods are not called. Because 'viewportRenderer' is
@@ -132,6 +132,11 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     # Final render callback
     # Called on a non-main thread.
     def update(self, blendData: bpy.types.BlendData, dg: bpy.types.Depsgraph):
+        
+        if bpy.app.background:
+            # In headless mode, parse command line.
+            self._parseHeadlessArguments()
+
         try:
             if self.is_preview:
                 VRayRenderEngine.previewRenderer = VRayRendererPreview()
@@ -230,10 +235,13 @@ class VRayRenderEngine(bpy.types.RenderEngine):
 
 
     # We are in background mode, so override UI settings with supported arugmnets
-    def _parseArguments(self):
+    def _parseHeadlessArguments(self):
+
+        assert bpy.app.background
+
         frameStart    = None
         frameEnd      = None
-        outputDir     = ''
+        output        = ''
         renderAnim    = False
         imgFormat     = None
         lastIdx = len(sys.argv) - 1
@@ -247,7 +255,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             elif arg in {'-e', '--frame-end'} and hasNext:
                 frameEnd = sys.argv[idx + 1]
             elif arg in {'-o', '--render-output'} and hasNext:
-                outputDir = sys.argv[idx + 1]
+                output = sys.argv[idx + 1]
             elif arg in {'-F', '--render-format'} and hasNext:
                 imgFormat = sys.argv[idx + 1]
             elif arg in {'-a', '--render-anim'}:
@@ -279,13 +287,26 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             else:
                 debug.printError('Format "%s" not found, using "%s"' % (imgFormat, savedFormatName))
 
-        if outputDir != '':
-            vrayExporter.auto_save_render = True
-            vrayScene.SettingsOutput.img_dir = outputDir
-            debug.printInfo(f'Changing image output directory to "{outputDir}"')
+        if output != '':
+            outputDir  = output
+            outputFile = ''
+            
+            outPath = PurePath(output)
+            
+            if outPath.suffix != '':
+                outputFile = outPath.stem
+                outputDir  = str(outPath.parent)
 
-            vrayExporter.export_scene_file_path = os.path.join(outputDir, 'scene_prod.vrscene')
-            debug.printInfo(f'Changing .vrscene output directory to "{outputDir}"')
+            if outputFile:
+                vrayScene.SettingsOutput.img_file = outputFile
+            
+            vrayScene.SettingsOutput.img_dir  = outputDir
+            
+            debug.printInfo(f'Changing image output directory to "{output}"')
+            
+            vrayExporter.auto_save_render = True
+
+            debug.printInfo(f'Changing .vrscene output directory to "{output}"')
     
         if renderAnim and vrayExporter.animation_mode == 'FRAME':
             # if we dont have anim mode set, use Full Range
@@ -296,6 +317,12 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             # force single frame
             debug.printInfo('Changing Animation Mode from "%s" to "FRAME"' % vrayExporter.animation_mode)
             vrayExporter.animation_mode = 'FRAME'
+
+        # Deliberately set an invalid name to the output file. Currently, there is no way to
+        # tell Blender to not save the render result in headless mode. Tracking the exact filenames
+        # in order to later delete the files however is not straightforward, so just make sure
+        # that nothing is being written.
+        bpy.context.scene.render.filepath = "*"
 
 
     def _getImageFormats(self):

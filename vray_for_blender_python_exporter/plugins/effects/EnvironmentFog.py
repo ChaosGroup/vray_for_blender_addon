@@ -1,4 +1,4 @@
-from vray_blender.exporting import node_export as commonNodesExport
+from vray_blender.exporting import node_export as commonNodesExport, light_export
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
@@ -63,7 +63,7 @@ def _exportEnvFogMeshLightsList(nodeCtx: NodeContext):
     context = nodeCtx.exporterCtx.ctx
     selectedObjects = _getSelectedObjects(context, node, "lights", "light_selector")
 
-    return [AttrPlugin(Names.objectData(obj)) for obj in selectedObjects]
+    return [AttrPlugin(light_export.getPluginName(obj)) for obj in selectedObjects]
 
 
 def exportTreeNode(nodeCtx: NodeContext):

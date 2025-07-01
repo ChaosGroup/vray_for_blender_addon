@@ -2,7 +2,7 @@
 
 ## 1. Clone Libraries
 1. Clone the repository: [Blender Libraries](https://projects.blender.org/blender/lib-windows_x64.git).
-2. Check out the branch **blender-v4.2-release**.
+2. Check out the branch **blender-v4.4-release** (or v4.3 for Blender 4.2 or 4.3).
 
 ## 2. Build ZMQ
 1. Clone the repository: [ZeroMQ Library](https://github.com/zeromq/libzmq.git).
@@ -23,15 +23,28 @@ zmq_build
 │   └───libzmq-v142-mt-4_3_4.lib
 ```
 
-## 3. Build the plugin:
-Build the addon with the following command
+## 3. Get boost 1.82:
+Get boost 1.82 library with Python 11 bindings. It can be obtained from the **blender-v4.3-release** branch of [Blender Libraries](https://projects.blender.org/blender/lib-windows_x64.git).
+
+## 4. Build the plugin:
+Build the addon with the following command.
+
+The `BLENDER_VER` parameter specifies the Blender version (currently 4.2, 4.3 and 4.4 are supported) for which this build is intended.
 ```bash 
 cmake -S ./vray_for_blender_addon \
       -B ./build \
       -G "Visual Studio 17 2022" \
       -A x64 -DWITH_TESTS=0 \
       -DADDON_PATH="install/location/blender_vray/vray_blender"  \
-      -DZMQ_ROOT="path/to/zmq_build" \
-      -DLIBDIR="path/to/lib-windows_x64"
+      -DBOOST_LIBDIR="path/to/boost/" \
+      -DZMQ_LIBDIR="path/to/zmq_build" \
+      -DBLENDER_SDK_ROOT="path/to/lib-windows_x64" \
+      -DBLENDER_VER=4.4
 
 ```
+
+
+# Contributing
+
+At the moment, we’re not able to accept external contributions.
+However, if you have any questions or would like to explore potential collaboration, feel free to reach out to us.

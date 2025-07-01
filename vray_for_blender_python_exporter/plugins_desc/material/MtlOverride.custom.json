@@ -3,41 +3,66 @@
     "Name": "V-Ray Mtl Override",
     "Parameters": [
         {
+            "attr" : "base_mtl",
+            "type": "BRDF"
+        },
+        {
             "attr": "gi_mtl_enabler",
-            "type": "PLUGIN_USE",
-            "target_prop": "gi_mtl",
-            "use_prop": "enable_gi_mtl",
+            "type": "BRDF_USE",
+            "bound_props": {
+                "target_prop": "gi_mtl",
+                "use_prop": "enable_gi_mtl"
+            },
             "ui": { "display_name": "GI Material" },
             "desc": "Overriding GI material.",
-            "default": true
+            "default": true,
+            "options": {
+                "derived": true
+            }
         },
         {
             "attr": "reflect_mtl_enabler",
-            "type": "PLUGIN_USE",
-            "target_prop": "reflect_mtl",
-            "use_prop": "enable_reflect_mtl",
+            "type": "BRDF_USE",
+            "bound_props": {
+                "target_prop": "reflect_mtl",
+                "use_prop": "enable_reflect_mtl"
+            },
             "ui": { "display_name": "Reflect Material" },
             "desc": "Overriding Reflect material.",
-            "default": true
+            "default": true,
+            "options": {
+                "derived": true
+            }
         },
         {
             "attr": "refract_mtl_enabler",
-            "type": "PLUGIN_USE",
-            "target_prop": "refract_mtl",
-            "use_prop": "enable_refract_mtl",
+            "type": "BRDF_USE",
+            "bound_props": {
+                "target_prop": "refract_mtl",
+                "use_prop": "enable_refract_mtl"
+            },
             "ui": { "display_name": "Refract Material" },
             "desc": "Overriding Refract material.",
-            "default": true
+            "default": true,
+            "options": {
+                "derived": true
+            }
         },
         {
             "attr": "shadow_mtl_enabler",
-            "type": "PLUGIN_USE",
-            "target_prop": "shadow_mtl",
-            "use_prop": "enable_shadow_mtl",
+            "type": "BRDF_USE",
+            "bound_props": {
+                "target_prop": "shadow_mtl",
+                "use_prop": "enable_shadow_mtl"
+            },
             "ui": { "display_name": "Shadow Material" },
             "desc": "Overriding Shadow material.",
-            "default": true
+            "default": true,
+            "options": {
+                "derived": true
+            }
         }
+
     ],
     "Widget": {
         "widgets": [

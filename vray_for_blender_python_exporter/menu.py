@@ -2,12 +2,13 @@
 
 import bpy
 
+from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
+from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive, VRAY_OT_cloud_submit
-from vray_blender.ui.classes import VRayEngines
+from vray_blender.ui.classes import pollEngine, disableLayoutInEditMode
 from vray_blender.ui.icons import getIcon, getUIIcon
 
 from vray_blender.bin import VRayBlenderLib as vray
-
 
 class VRAY_MT_help(bpy.types.Menu):
     bl_label = 'Help'
@@ -15,16 +16,19 @@ class VRAY_MT_help(bpy.types.Menu):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.render.engine in VRayEngines 
-    
+        return pollEngine(context)
+
     def draw(self, context):
         self.layout.operator(VRAY_OT_show_about_dialog.bl_idname, icon_value=getUIIcon(VRAY_OT_show_about_dialog))
-        
+
         opDocSite = self.layout.operator('wm.url_open', text='Online Documentation', icon_value=getIcon("VRAY_LOGO"))
         opDocSite.url = 'https://docs.chaos.com/display/VBLD'
 
         opHelpSite = self.layout.operator('wm.url_open', text='Online Help Center', icon='URL')
         opHelpSite.url = 'https://support.chaos.com'
+
+        opHelpSite = self.layout.operator('wm.url_open', text='V-Ray Ideas Portal', icon='URL')
+        opHelpSite.url = 'http://chaos.com/ideas/vray-blender'
 
 
 class VRAY_MT_camera(bpy.types.Menu):
@@ -33,10 +37,14 @@ class VRAY_MT_camera(bpy.types.Menu):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.render.engine in VRayEngines 
-    
+        return pollEngine(context)
+
     def draw(self, context):
         from vray_blender.ui import menus
+
+        # Forbid creation of cameras in Edit mode (it can produce errors).
+        disableLayoutInEditMode(self.layout, context)
+
         physCamera = menus.VRAY_OT_add_physical_camera
         self.layout.operator(physCamera.bl_idname, text="V-Ray Physical Camera", icon_value=getUIIcon(physCamera))
 
@@ -47,12 +55,12 @@ class VRAY_MT_lights(bpy.types.Menu):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.render.engine in VRayEngines 
-    
+        return pollEngine(context)
+
     def draw(self, context):
         from vray_blender.ui import menus
         menus.addVRayLightsToMenu(self, context)
-        
+
 
 class VRAY_MT_geometry(bpy.types.Menu):
     bl_label = 'Geometry'
@@ -60,17 +68,34 @@ class VRAY_MT_geometry(bpy.types.Menu):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.render.engine in VRayEngines 
-    
+        return pollEngine(context)
+
     def draw(self, context):
         from vray_blender.ui import menus
         vrayProxyOp = menus.VRAY_OT_add_object_proxy
+        vraySceneOp = menus.VRAY_OT_add_object_vrayscene
 
-        # To be enabled when V-Ray Scene import is re-implemented
-        # vraySceneOp = menus.VRAY_OT_add_object_vrayscene
-        # self.layout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
+        enableVrscene = not VRayRendererIprViewport.isActive()
+        vraySceneLayout = self.layout.column()
+        vraySceneLayout.active = enableVrscene
+        vraySceneLayout.enabled = enableVrscene
         
+        vraySceneLayout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
+
+
+class VRAY_MT_cosmos(bpy.types.Menu):
+    bl_label = 'Chaos Cosmos'
+    bl_idname = 'VRAY_MT_cosmos'
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def draw(self, context):
+        self.layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
+        self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
+
 
 class VRAY_MT_main(bpy.types.Menu):
     """ V-Ray menu item in main Blender menu bar """
@@ -79,8 +104,8 @@ class VRAY_MT_main(bpy.types.Menu):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.render.engine in VRayEngines 
-    
+        return pollEngine(context)
+
     def draw(self, context):
         layout = self.layout
 
@@ -90,10 +115,11 @@ class VRAY_MT_main(bpy.types.Menu):
         renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
         layout.operator(VRAY_OT_cloud_submit.bl_idname, icon_value=getUIIcon(VRAY_OT_cloud_submit))
-        
+
         layout.separator()
         layout.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
-        layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
+        layout.separator()
+        layout.menu(VRAY_MT_cosmos.bl_idname)
         layout.separator()
         layout.menu(VRAY_MT_camera.bl_idname)
         layout.menu(VRAY_MT_lights.bl_idname)
@@ -114,11 +140,11 @@ class VRAY_OT_open_collaboration(bpy.types.Operator):
         hostInfo = vray.HostInfo()
         hostInfo.vrayVersion    = ".".join(bl_info['version'])
         hostInfo.buildVersion   = build_number.BUILD
+        # Note that this is 4.2(lowest supported version hard coded in bl_info)
         hostInfo.blenderVersion = ".".join((str(i) for i in bl_info['blender']))
 
         vray.openCollaboration(hostInfo)
         return {'FINISHED'}
-
 
 class VRAY_OT_open_cosmos_browser(bpy.types.Operator):
     bl_idname =      "vray.open_cosmos_browser"
@@ -128,7 +154,20 @@ class VRAY_OT_open_cosmos_browser(bpy.types.Operator):
     def execute(self, context):
         vray.openCosmos()
         return {'FINISHED'}
-    
+
+from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy
+
+class VRAY_OT_relink_cosmos_assets(bpy.types.Operator):
+    bl_idname       = "vray.relink_cosmos_assets"
+    bl_label        = "Download Cosmos Asssets"
+    bl_description  = "Download and Relink Cosmos Assets"
+
+    def execute(self, context: bpy.types.Context):
+        cosmosHandler.downloadMissingAssets(self, context)
+        return { 'FINISHED' }
+
+    def invoke(self, context, event):
+        return cosmosHandler.checkMissingAssets(self, context, event)
 
 class VRAY_OT_open_vfb(bpy.types.Operator):
     bl_idname =      "vray.open_vfb"
@@ -139,9 +178,9 @@ class VRAY_OT_open_vfb(bpy.types.Operator):
         vfbAlwaysOnTop = context.scene.vray.Exporter.display_vfb_on_top
         vray.openVFB()
         vray.setVfbOnTop(vfbAlwaysOnTop)
-    
+
         return {'FINISHED'}
-    
+
     @staticmethod
     def openVfb(renderer, alwaysOnTop):
         vray.openVFBWithRenderer(renderer)
@@ -158,17 +197,17 @@ class VRAY_OT_show_about_dialog(bpy.types.Operator):
         from vray_blender.version import getBuildVersionString
         from vray_blender import bl_info
         import json
-        
+
         versionInfo = f"{bl_info['name']}<br>{getBuildVersionString()}"
-        
+
         dlg = {
             'type': 'AboutDialog',
             'data': versionInfo
         }
         vray.showUserDialog(json.dumps(dlg))
-        
+
         return {'FINISHED'}
-    
+
 
 class VRAY_OT_show_account_status(bpy.types.Operator):
     bl_idname       = "vray.show_account_status"
@@ -179,15 +218,15 @@ class VRAY_OT_show_account_status(bpy.types.Operator):
         from vray_blender.version import getBuildVersionString
         from vray_blender import bl_info
         import json
-        
+
         dlg = {
             'type': 'AccountInfoDialog',
             'data': None
         }
         vray.showUserDialog(json.dumps(dlg))
-        
+
         return {'FINISHED'}
-    
+
 
 def _drawMainMenu(self, context):
     layout = self.layout
@@ -204,14 +243,18 @@ def _getRegClasses():
     return (
         VRAY_OT_open_collaboration,
         VRAY_OT_open_cosmos_browser,
+        VRAY_OT_relink_cosmos_assets,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
         VRAY_OT_show_account_status,
+        VRAY_OT_show_cosmos_info_popup,
+        VRAY_OT_dummy,
 
         VRAY_MT_help,
         VRAY_MT_camera,
         VRAY_MT_lights,
         VRAY_MT_geometry,
+        VRAY_MT_cosmos,
         VRAY_MT_main
     )
 

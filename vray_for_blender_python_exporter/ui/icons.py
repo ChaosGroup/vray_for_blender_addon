@@ -28,6 +28,7 @@ def _getUIIcons():
         menu.VRAY_OT_show_about_dialog            : 'INFO_ABOUT',
         menu.VRAY_OT_open_collaboration           : 'VRAY_LOGO',
         menu.VRAY_OT_open_cosmos_browser          : 'COSMOS',
+        menu.VRAY_OT_relink_cosmos_assets         : 'COSMOS_RELINK_ASSETS',
         menu.VRAY_OT_open_vfb                     : 'VFB',
         ops.VRAY_OT_cloud_submit                  : 'CLOUD',
 
@@ -58,6 +59,7 @@ _ICON_FILES = [
         ('VRAY_PROXY',          "VRayProxy.svg"),
         
         ('COSMOS',              "CosmosBrowser.svg"),
+        ('COSMOS_RELINK_ASSETS',"CosmosRelinkAssets.svg"),
         ('INFO_ABOUT',          "VRayAbout.svg"),
         
         ("CLOUD",               "CloudRendering.svg"),

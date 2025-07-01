@@ -15,10 +15,15 @@ def nodeDraw(context, layout, node):
         # This will be the case right after the node has been copied from another node.
         return
     
-    if node.texture.image:
+    bitmapBuffer = node.BitmapBuffer
+
+    if bitmapBuffer.use_external_image:
+        layout.prop(bitmapBuffer, "file")
+    elif node.texture.image:
         layout.template_ID_preview(node.texture, "image")
     else:
         layout.template_ID(node.texture, 'image', open='image.open')
+    layout.prop(bitmapBuffer, "use_external_image", expand=True)
 
 
 def widgetDrawFile(context, layout, propGroup, widgetAttr):
@@ -31,8 +36,10 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
         col2 = split.column()
         row = col2.row(align=True)
         row.use_property_split = True # Allow property animation
-        
-        if img := node.texture.image:
+
+        if propGroup.use_external_image:
+            row.prop(propGroup, "file")
+        elif img := node.texture.image:
             row.template_ID(node.texture, 'image')
 
             # Show the pack button for external image files which have not been packed yet
@@ -46,3 +53,5 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
                 op.nodeTreeType = parentNodeTree.vray.tree_type
         else:
             row.template_ID(node.texture, 'image', open='image.open')
+
+        col2.prop(propGroup, "use_external_image", expand=True)

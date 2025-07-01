@@ -71,23 +71,11 @@ class VRayNodeOutputMaterial(VRayNodeBase):
             if ma := ob.active_material:
                 ma.update_tag()
 
-    dontOverride: bpy.props.BoolProperty(
-        name        = "Don't Override",
-        description = "Don't override material",
-        default     = False,
-        update      = _updateNode
-    )
-
     MtlMaterialID: bpy.props.PointerProperty(
         type = class_utils.TYPES['VRayMtlMaterialID']
     )
 
-    def draw_buttons(self, context, layout):
-        layout.prop(self, 'dontOverride')
-
     def draw_buttons_ext(self, context, layout):
-        layout.prop(self, 'dontOverride')
-        
         # Draw material option properties in the sidebar 
         mtl = findDataObjFromNode(bpy.data.materials, self)
         

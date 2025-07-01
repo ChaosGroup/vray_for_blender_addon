@@ -3,6 +3,14 @@
     "Name": "V-Ray Mtl 2Sided",
     "Parameters": [
         {
+            "attr" : "front",
+            "type" : "BRDF"
+        },
+        {
+            "attr" : "back",
+            "type" : "BRDF"
+        },
+        {
             "attr": "translucency",
             "options": {
                 "visible": false
@@ -63,16 +71,9 @@
                     },
                     {
                         "name": "mult_by_front_diffuse"
-                    },
-                    {
-                        "name": "channels"
                     }
                 ]
             }
         ]
-    },
-    "excluded_parameters": [
-        "translucency_tex",
-        "translucency"
-    ]
+    }
 }

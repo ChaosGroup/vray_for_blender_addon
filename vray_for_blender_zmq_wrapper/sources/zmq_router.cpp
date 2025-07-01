@@ -5,6 +5,7 @@
 
 #include "cppzmq/zmq.hpp"
 #include "cppzmq/zmq_addon.hpp"
+#include "vassert.h"
 
 
  ////////////////////////////////////////////////////////////////////////////////
@@ -37,51 +38,51 @@ ZmqRouter::~ZmqRouter() {
 	} 
 	catch(const std::exception& exc) {
 		trace(Msg("Exception in ZmqRouter's destructor:", exc.what()));
-		assert(!"Exception in ZmqRouter's destructor.");
+		vassert(!"Exception in ZmqRouter's destructor.");
 	}
 }
 
 
 void ZmqRouter::setNewWorkerCallback(NewWorkerCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!newWorkerCallback && "Multiple subscriptions are not supported");
-	assert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!newWorkerCallback && "Multiple subscriptions are not supported");
+	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
 	
 	newWorkerCallback = cb;
 }
 
 
 void ZmqRouter::setStartedCallback(StartedCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!startedCallback && "Multiple subscriptions are not supported");
-	assert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!startedCallback && "Multiple subscriptions are not supported");
+	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
 
 	startedCallback = cb;
 }
 
 
 void ZmqRouter::setErrorCallback(ErrorCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!errorCallback && "Multiple subscriptions are not supported");
-	assert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!errorCallback && "Multiple subscriptions are not supported");
+	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
 	
 	errorCallback = cb;
 }
 
 
 void ZmqRouter::setTraceCallback(TraceCallback cb) {
-	assert(cb && "Unsubscribing is not supported");
-	assert(!traceCallback && "Multiple subscriptions are not supported");
-	assert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!traceCallback && "Multiple subscriptions are not supported");
+	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
 
 	traceCallback = cb;
 }
 
 
 void ZmqRouter::run(const std::string& clientEndpoint, const std::string& workerEndopint, const ZmqTimeouts& timeoutSettings) {
-	assert(!clientEndpoint.empty() && !workerEndopint.empty());
-	assert(!pollerThread.joinable() && "Cannot run the same ZmqRouter twice");
-	assert(newWorkerCallback && "NewWorkerCallback should be set before the router is run");
+	vassert(!clientEndpoint.empty() && !workerEndopint.empty());
+	vassert(!pollerThread.joinable() && "Cannot run the same ZmqRouter twice");
+	vassert(newWorkerCallback && "NewWorkerCallback should be set before the router is run");
 
 	timeouts = timeoutSettings;
 	pollerThread = std::move(std::thread(&ZmqRouter::pollerLoop, this, clientEndpoint, workerEndopint));
@@ -175,7 +176,7 @@ zmq::socket_t ZmqRouter::bind(const std::string& endpoint) {
 /// @param sock - the connecting socket
 /// @param msg - the payload of the CONNECT message
 void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& msg) {
-	assert(newWorkerCallback);
+	vassert(newWorkerCallback);
 
 	if (sock.handle() != sockClient.handle()) {
 		trace("Invalid message received from worker: CONNECT. Only clients can send this message.");
@@ -262,7 +263,7 @@ void ZmqRouter::reportError(const std::string& errMsg) const {
 		}
 	}
 	catch (...) {
-		assert(!"Exception in error handler");
+		vassert(!"Exception in error handler");
 	}
 }
 
@@ -280,7 +281,7 @@ void ZmqRouter::trace(const std::string& msg) {
 		}
 	}
 	catch (...) {
-		assert(!"Exception in trace handler");
+		vassert(!"Exception in trace handler");
 	}
 }
 
@@ -299,7 +300,7 @@ void ZmqRouter::notifyStarted(zmq::socket_ref clientListenSocket) {
 		}
 	}
 	catch (...) {
-		assert(!"Exception in 'started' handler");
+		vassert(!"Exception in 'started' handler");
 	}
 }
 

@@ -173,6 +173,7 @@ def _drawVRayNodeSelection(layout, context, snode):
 def _drawVRayNodeCompositorAndToolSettings(layout, context, snode):
     tool_settings = context.tool_settings
     is_compositor = snode.tree_type == 'CompositorNodeTree'
+    overlay = snode.overlay
 
     if not is_compositor:
         layout.prop(snode, "pin", text="", emboss=False)
@@ -191,16 +192,21 @@ def _drawVRayNodeCompositorAndToolSettings(layout, context, snode):
         row.prop(snode, "show_backdrop", toggle=True)
         sub = row.row(align=True)
         sub.active = snode.show_backdrop
-        sub.prop(snode, "backdrop_channels", icon_only=True, text="", expand=True)
+        sub.prop(snode, "backdrop_channels", icon_only=True, text="")
+
 
     # Snap
-    row = layout.row(align=True)
-    row.prop(tool_settings, "use_snap", text="")
-    row.prop(tool_settings, "snap_node_element", icon_only=True)
-    if tool_settings.snap_node_element != 'GRID':
-        row.prop(tool_settings, "snap_target", text="")
+        row = layout.row(align=True)
+        row.prop(tool_settings, "use_snap_node", text="")
 
+        # Overlay toggle & popover
+        row = layout.row(align=True)
+        row.prop(overlay, "show_overlays", icon='OVERLAY', text="")
+        sub = row.row(align=True)
+        sub.active = overlay.show_overlays
+        sub.popover(panel="NODE_PT_overlay", text="")
 
+    
 # Function that draws custom header only for Vray Node Editors
 def vrayHeaderDrawSwitch(panel, context):
     if context.space_data.tree_type == "VRayNodeTreeEditor":

@@ -1,5 +1,6 @@
 #include "logger.hpp"
 
+#include <chrono>
 #include <array>
 #include <cstring>
 #include <iomanip>
@@ -7,7 +8,7 @@
 #include <sstream>
 
 
-#include "utils/assert.h"
+#include "vassert.h"
 
 namespace 
 {
@@ -29,13 +30,13 @@ const std::vector<std::string> LEVEL_COLORS = {COLOR_DEFAULT, COLOR_RED, COLOR_Y
 
 
 const std::string& levelColor(Logger::LogLevel logLevel) {
-	VRAY_ASSERT(LogLevel::Always <= logLevel && logLevel <= LogLevel::Debug);
+	vassert(LogLevel::Always <= logLevel && logLevel <= LogLevel::Debug);
 	return LEVEL_COLORS[static_cast<int>(logLevel)];
 }
 
 
 const std::string& Logger::levelName(Logger::LogLevel logLevel) {
-	VRAY_ASSERT(LogLevel::Always <= logLevel && logLevel <= LogLevel::Debug);
+	vassert(LogLevel::Always <= logLevel && logLevel <= LogLevel::Debug);
 	return LEVEL_NAMES[static_cast<int>(logLevel)];
 }
 
@@ -72,7 +73,7 @@ Logger& Logger::get()
 
 Logger::~Logger()
 {
-	VRAY_ASSERT(!m_isRunning && "Logger must be stopped before being destroyed");
+	vassert(!m_isRunning && "Logger must be stopped before being destroyed");
 }
 
 

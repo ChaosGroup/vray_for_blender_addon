@@ -10,7 +10,7 @@
 #include "assets/object_exporter.h"
 #include "assets/smoke_exporter.h"
 #include "plugin_desc.hpp"
-#include "utils/assert.h"
+#include "vassert.h"
 #include "utils/timers.h"
 #include "utils/synchronization.hpp"
 
@@ -38,7 +38,7 @@ SceneExporter::~SceneExporter()
 void SceneExporter::init() {
 	m_exporter.reset(new ZmqExporter(m_settings));
 
-	VRAY_ASSERT(m_exporter && "Failed to create exporter!");
+	vassert(m_exporter && "Failed to create exporter!");
 	m_exporter->init();
 
 	// directly bind to the engine
@@ -54,7 +54,7 @@ void SceneExporter::init() {
 				break;
 
 			default:
-				VRAY_ASSERT("Invalid async operation type."); 
+				vassert("Invalid async operation type."); 
 			}
 
 			if (!success) {
@@ -123,7 +123,7 @@ void SceneExporter::setRenderSizes(const RenderSizes& sizeData)
 
 void SceneExporter::setCameraName(const std::string& cameraName)
 {
-	m_exporter->setCameraPlugin(cameraName);
+	m_exporter->setCameraName(cameraName);
 }
 
 
@@ -321,13 +321,18 @@ void SceneExporter::finishExport(bool interactive)
 }
 
 
-void SceneExporter::writeVrscene(const ExportSceneSettings& exportSettings)
+int SceneExporter::writeVrscene(const ExportSceneSettings& exportSettings)
 {
 	bool inProgress = false;
 
 	if (m_vrsceneExportInProgress.compare_exchange_strong(inProgress, true)) {
-		m_exporter->exportVrscene(exportSettings);
+		const int result = m_exporter->exportVrscene(exportSettings);
+		if (!result) {
+			m_vrsceneExportInProgress.store(false);
+		}
+		return result;
 	}
+	return false;
 }
 
 

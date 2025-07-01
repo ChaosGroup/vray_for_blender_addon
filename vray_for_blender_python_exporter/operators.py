@@ -12,7 +12,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
-from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber
+from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber, checkIfSceneNeedsUpgrade
 
 
 
@@ -382,10 +382,12 @@ class VRAY_OT_export_scene(bpy.types.Operator):
     def execute(self, context):
         if renderer := VRayRendererIprVfb.getActiveRenderer() or VRayRendererIprViewport.getActiveRenderer():
             exportSettings, msgErr = common_settings.collectExportSceneSettings(context.scene)
-            
+
             if exportSettings:
                 vray.setRenderFrame(renderer, context.scene.frame_current)
-                vray.writeVrscene(renderer, exportSettings)
+                if not vray.writeVrscene(renderer, exportSettings):
+                    self.report({'ERROR'}, "Scene export failed")
+                    return { 'FINISHED' }
                 msgInfo = f"Exported scene: {exportSettings.filePath}."
                 self.report({'INFO'}, msgInfo)
                 debug.printInfo(msgInfo)
@@ -397,7 +399,7 @@ class VRAY_OT_export_scene(bpy.types.Operator):
             self.report({'ERROR'}, msgErr)
             debug.printError(msgErr)
         return {'FINISHED'}
-    
+
 
 class VRAY_OT_get_ui_mouse_position(bpy.types.Operator):
     """ Gets the mouse position relative to the current view """
@@ -482,6 +484,9 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
     
     def execute(self, context):
         if vray.isInitialized():
+            # This status message should ideally be printed right before the rendering starts but here is the last
+            # chance for it to be shown BEFORE the render job is complete. Once the operator starts executing, no 
+            # updates to the UI will be made until it's finished.
             debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
             vfb_event_handler.VfbEventHandler.startProdRender()
         else:
@@ -810,10 +815,11 @@ class VRAY_OT_copy_plugin_version(bpy.types.Operator):
         debug.report('INFO', 'Plugin version copied to clipboard.')
         return {'FINISHED'}
 
+
 class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
     bl_idname       = "vray.upgrade_scene"
-    bl_label        = "Upgrade Blender scene to the current version of the V-Ray plugin"
-    bl_description  = "If the opened scene has been created with a previous version of the V-Ray plugin, upgrade it to the current version."
+    bl_label        = "Update Blender scene to the current version of the V-Ray plugin"
+    bl_description  = "If the opened scene has been created with a previous version of the V-Ray plugin, update it to the current version."
     
     def execute(self, context):
         from vray_blender.version import getSceneUpgradeNumber, getAddonUpgradeNumber, upgradeScene
@@ -821,17 +827,31 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         sceneUpgradeNum = getSceneUpgradeNumber()
         addonUpgradeNum = getAddonUpgradeNumber()
 
-        assert sceneUpgradeNum != addonUpgradeNum
-        return {'FINISHED'} if upgradeScene(sceneUpgradeNum, addonUpgradeNum) else {'CANCELLED'}
+        # invoke() won't be called in headless mode so perform the same version number checks here
+        if sceneUpgradeNum != addonUpgradeNum:
+            if upgradeScene(sceneUpgradeNum, addonUpgradeNum):
+                return {'FINISHED'}
+        
+        return {'CANCELLED'}
 
 
     def invoke(self, context, event):
         sceneUpgradeNum = getSceneUpgradeNumber()
         addonUpgradeNum = getAddonUpgradeNumber()
 
+        if sceneUpgradeNum == '0000':
+            # Scene was produced by Blender with no V-Ray installed, no need to upgrade.
+            # The latest version will be set to the scene when it is saved.
+            return {'CANCELLED'}
+        
+        # Often the scene will not need to be upgarded because it does not contain data that needs
+        # to be upgraded. Do a precheck and spare the user the upgrade dialog.
+        if not checkIfSceneNeedsUpgrade(sceneUpgradeNum, addonUpgradeNum):
+            return {'CANCELLED'}
+        
         if sceneUpgradeNum != addonUpgradeNum:
             self._centerDialog(context, event)
-            return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Upgrade", confirm_text="OK")
+            return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Version Update", confirm_text="OK")
         
         return {'CANCELLED'}
     
@@ -844,7 +864,7 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         self.layout.label(text = f"The {sceneAlias} was created with an older version of V-Ray for Blender.")
         
         self.layout.separator()
-        self.layout.label(text="Click OK to run the upgrade procedure.")
+        self.layout.label(text="Click OK to run the update procedure.")
         self.layout.label(text="If everything goes well, save the .blend file.")
         self.layout.label(text="If you encounter any problems, look in the console for error messages.")
         self._cursorWrap(context)

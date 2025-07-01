@@ -91,11 +91,21 @@
         },
         {
             "attr": "rotate_frame",
-            "ui": { "display_name": "Rotate Frame"}
+            "subtype": "ANGLE",
+            "precision": 7,
+            "ui": { 
+                "display_name": "Rotate Frame",
+                "spin_step": 1
+            }
         },
         {
             "attr": "rotate_uv",
-            "ui": { "display_name": "Rotate UV"}
+            "subtype": "ANGLE",
+            "precision": 7,
+            "ui": { 
+                "display_name": "Rotate UV",
+                "spin_step": 1
+            }
         }
     ],
     "Widget": {

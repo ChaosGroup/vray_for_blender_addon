@@ -1,6 +1,6 @@
 #include "thread_manager.h"
-#include "assert.h"
 #include "logger.hpp"
+#include "vassert.h"
 
 
 namespace VRayForBlender {
@@ -19,7 +19,7 @@ ThreadManager::~ThreadManager() {
 	// m_workers is not protected because there is no sane way to do this from inside the ThreadManager
 	// it can't handle calling some methond and dtor concurrently
 	if (!m_workers.empty()) {
-		VRAY_ASSERT(!"VFB ThreadManager exiting while threads are running!");
+		vassert(!"VFB ThreadManager exiting while threads are running!");
 		stop();
 	}
 }
@@ -51,7 +51,7 @@ void ThreadManager::stop() {
 			if (m_workers[c].joinable()) {
 				m_workers[c].join();
 			} else {
-				VRAY_ASSERT(!"VFB ThreadManager's thread is not joinable during stop!");
+				vassert(!"VFB ThreadManager's thread is not joinable during stop!");
 			}
 		}
 

@@ -45,12 +45,16 @@ class ZMQProcess:
         from vray_blender.engine.render_engine import VRayRenderEngine
         VRayRenderEngine.resetAll()
 
+        from vray_blender.utils.cosmos_handler import cosmosHandler
+        cosmosHandler.abortDownload()
+
         # Check if ZMQ server has crashed or exited normally
         if msg in ("General error", "STD exception", "V-Ray exception", "Unknown error"):
             debug.reportAsync('WARNING', "Restart is required! V-Ray internal error occurred.")
 
     def _start(self):
-        from vray_blender.nodes.operators. import_file import assetImportCallback
+        from vray_blender.nodes.operators.import_file import assetImportCallback
+        from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
 
         self._startServerProcess()
@@ -58,6 +62,10 @@ class ZMQProcess:
         # Cosmos Browser download notifications callback
         self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
         vray.setCosmosImportCallback(self.assetImportCallback)
+        self.cosmosDownloadSize = lambda relinkStatus, downloadSize: cosmosHandler._setCosmosRelinkState(CosmosRelinkStatus(relinkStatus), downloadSize)
+        vray.setCosmosDownloadSize(self.cosmosDownloadSize)
+        self.downloadedCosmosAssets = lambda downloadStatus, assets: cosmosHandler._setCosmosDownloadedAssets(CosmosDownloadStatus(downloadStatus), assets)
+        vray.setCosmosDownloadAssets(self.downloadedCosmosAssets)
 
          # VFB start button callback
         self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport else VfbEventHandler.startProdRender()
@@ -105,7 +113,7 @@ class ZMQProcess:
             vrayLibPath = _joinPath(appSdkPath, "VRaySDKLibrary.dll")
         else:
             raise NotImplementedError()
-        
+
         if hasattr(bpy.context, 'scene'):
             settings = bpy.context.scene.vray.Exporter
         else:
@@ -113,66 +121,86 @@ class ZMQProcess:
 
             # During the add-on's registration, we are running in a restricted context
             # where no scene is available
-            
+
             settings = SimpleNamespace()
-            setattr(settings, 'zmq_port', -1)               # Efemeral port   
-            setattr(settings, 'verbose_level', sys_utils.StartupConfig.logLevel)    
-            setattr(settings, 'zmq_renderer_threads', -1 )  # Hardware concurrency - 1
+            setattr(settings, 'zmq_port', -1)                     # Efemeral port
+            setattr(settings, 'verbose_level', sys_utils.StartupConfig.logLevel)
 
         args = vray.ZmqServerArgs()
 
-        # Use default settings if vfbSettings.json isn't created yet 
+        # Use default settings if vfbSettings.json isn't created yet
         vfbSettingsPath = sys_utils.getVfbSettingsPath()
         if not os.path.isfile(vfbSettingsPath):
             vfbSettingsPath = sys_utils.getVfbDefaultSettingsPath()
 
-        args.exePath        = executablePath
-        args.port           = settings.zmq_port
-        args.logLevel       = int(settings.verbose_level)
-        args.headlessMode   = bpy.app.background  # Do not try to show VFB and agreements dialog in headless mode
-        args.noHeartbeat    = True
-        args.blenderPID     = os.getpid()
-        args.vfbSettingsFile= vfbSettingsPath
-        args.dumpLogFile    = self._getDumpInfoLogFile()
-        args.renderThreads  = settings.zmq_renderer_threads
-        args.vrayLibPath    = vrayLibPath
-        args.appSDKPath     = appSdkPath
-        args.pluginVersion  = "".join(bl_info['version'])
-        args.blenderVersion = ".".join([str(i) for i in bl_info['blender'][:2]])
+        args.exePath             = executablePath
+        args.port                = settings.zmq_port
+        args.logLevel            = int(settings.verbose_level)
+        args.headlessMode        = bpy.app.background  # Do not try to show VFB and agreements dialog in headless mode
+        args.noHeartbeat         = True
+        args.blenderPID          = os.getpid()
+        args.vfbSettingsFile     = vfbSettingsPath
+        args.dumpLogFile         = self._getDumpInfoLogFile()
+        args.vrayLibPath         = vrayLibPath
+        args.appSDKPath          = appSdkPath
+        args.pluginVersion       = "".join(bl_info['version'])
+        args.blenderVersion      = f'{bpy.app.version[0]}.{bpy.app.version[1]}'
 
         debug.printInfo("Starting ZmqServer process ...")
-        
-        # When not using an ephemeral port for the ZmqServer listener, we have to make sure that there is 
+
+        # When not using an ephemeral port for the ZmqServer listener, we have to make sure that there is
         # no other VRayZmqServer process running which would have the port open.
         useEphemeralPort = (args.port == -1)
 
         if (not useEphemeralPort) and (not ZMQProcess._waitForProcessToExit(os.path.basename(executablePath), 5)):
             debug.printError("Cannot run ZmqServer: another instance is running. Rendering in V-Ray will not be available.")
             return
-        
+
         vray.ZmqControlConn.start(args)
+
+        if bpy.app.background:
+            # In headless mode, we need to wait for the ZmqServer to start before attempting any rendering
+            if not ZMQProcess._waitForZmqServerToStart():
+                debug.printAlways('ZmqServer failed to start. Terminating application.')
+                sys.exit(-1)
 
 
     @staticmethod
     def _waitForProcessToExit(processName, seconds):
         # Wait for existing VRayZmqServer process to exit. This is done here and
         # not in VRayBlenderLib because python has a convenient multiplatform interface
-        # for listsing the running processes, which lacks in the C++ libraries that 
+        # for listsing the running processes, which lacks in the C++ libraries that
         # VRayBlenderLib is using.
         sleepInterval = 0.2 # seconds
         waitIntervals = int(float(seconds) / sleepInterval)
-        
+
         for _ in range(waitIntervals):
             try:
                 if processName not in (p.name() for p in psutil.process_iter()):
                     return True
             except psutil.NoSuchProcess:
                 return True
-            
+
             debug.printInfo("Waiting for a previous instance of ZmqServer to stop ...")
             time.sleep(sleepInterval)
 
         return False
 
 
+    @staticmethod
+    def _waitForZmqServerToStart():
+        from datetime import datetime
+        zmqServerChecks = 60
+        startTime = datetime.now()
+
+        while not ZMQProcess.isRunning():
+            if zmqServerChecks == 0:
+                elapsedSeconds = (datetime.now() - startTime).total_seconds()
+                debug.printError(f"ZMQ Server failed to start in {elapsedSeconds} seconds")
+                return False
+            zmqServerChecks -= 1
+            time.sleep(0.5)
+        
+        return True
+    
 ZMQ = ZMQProcess()

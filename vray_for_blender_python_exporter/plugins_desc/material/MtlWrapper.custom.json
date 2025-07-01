@@ -3,6 +3,10 @@
     "Name": "V-Ray Mtl Wrapper",
     "Parameters": [
         {
+            "attr": "base_material",
+            "type": "BRDF"
+        },
+        {
             "attr": "use",
             "default": false,
             "desc": "Use Wrapper material",
@@ -53,11 +57,6 @@
             }
         }
     ],
-    "Node": {
-        "input_sockets" : [
-            {"name": "base_material"}
-        ]
-    },
     "Widget": {
         "widgets": [
             {
@@ -111,9 +110,6 @@
                 "name": "additional_surface_properties",
                 "label": "Additional surface properties",
                 "attrs": [
-                    {
-                        "name": "use_irrad_map"
-                    },
                     {
                         "name": "use_generate_gi"
                     },
@@ -178,7 +174,8 @@
             "reflection_exclude",
             "reflection_list_is_inclusive",
             "refraction_exclude",
-            "refraction_list_is_inclusive"
+            "refraction_list_is_inclusive",
+            "use_irrad_map"
         ],
         "animatable": true
     }

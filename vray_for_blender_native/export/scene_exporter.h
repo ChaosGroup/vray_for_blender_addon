@@ -38,7 +38,7 @@ public:
 
 	virtual void	 renderStart(RenderPass * /*renderPass*/, py::object /*cbImageUpdated*/) {}
 	virtual void     renderEnd()	{}
-	virtual bool     renderFrame(bool /*waitForCompletion*/) {return true;}
+	virtual void     renderFrame()  {}
 	virtual void     renderSequence(int /*start*/, int /*end*/, int /*step*/){}
 	virtual bool     renderSequenceRunning() { return false; }
 	virtual bool     vrsceneExportRunning() { return false; }
@@ -56,7 +56,7 @@ public:
 
 	void             startExport(int threadCount);
 	void             finishExport(bool interactive);
-	void             writeVrscene(const ExportSceneSettings& exportSettings);
+	int              writeVrscene(const ExportSceneSettings& exportSettings);
 	void             startStatsCollection();
 	void             endStatsCollection(bool printStats, const std::string& title);
 	void             setRenderSizes(const proto::RenderSizes& sizeData);

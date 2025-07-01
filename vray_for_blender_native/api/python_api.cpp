@@ -14,13 +14,13 @@
 #include "export/scene_exporter_rt.h"
 #include "utils/logger.hpp"
 #include "utils/platform.h"
+#include "vassert.h"
 
 
 namespace py = boost::python;
 namespace np = boost::python::numpy;
 using ndarray = boost::python::numpy::ndarray;
 namespace proto = VrayZmqWrapper;
-
 
 namespace VRayForBlender
 {
@@ -136,10 +136,35 @@ void openCosmos()
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOpenCosmos{}), true);
 }
 
+void calculateDownloadSize(py::object packageIds, py::object revisionIds, py::object missingTextures)
+{
+	vray::AttrListString attrListPackageIds = toVector<std::string>(packageIds);
+	vray::AttrListInt attrListRevisionIds = toVector<int>(revisionIds);
+	vray::AttrListString attrListMissingTextures = vray::AttrListString(toVector<std::string>(missingTextures));
+
+	ZmqServer::get().sendMessage(serializeMessage(
+		proto::MsgControlCosmosCalculateDownloadSize{
+			std::move(attrListPackageIds),
+			std::move(attrListRevisionIds),
+			std::move(attrListMissingTextures)
+		}), false
+	);
+}
+
+void downloadMissingAssets() {
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlCosmosDownloadAssets{}), false);
+}
+
 // Opens VFB through control connection
 void openVFB()
 {
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowVfb{}), true);
+}
+
+// Resets toggleable VFB toolbar buttons (Render Region and Track Mouse)
+void resetVfbToolbar()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlResetVfbToolbar{}), true);
 }
 
 // Sets VFB alwaysOnTop state
@@ -175,10 +200,10 @@ void setVfbOnTopWithRenderer(py::object renderer, bool alwaysOnTop)
 	exporter->setVfbAlwaysOnTop(alwaysOnTop);
 }
 
-void pluginCreate(py::object renderer, std::string name, std::string pluginType)
+void pluginCreate(py::object renderer, std::string name, std::string pluginType, bool allowTypeChanges)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginCreate(name, pluginType);
+	exporter->getPluginExporter()->pluginCreate(name, pluginType, allowTypeChanges);
 }
 
 void pluginRemove(py::object renderer, std::string name)
@@ -420,7 +445,8 @@ void setRenderSizes(py::object renderer, py::object sizeData)
 }
 
 
-// This method results in a call to VRayRenderer->setCamera()
+// This method results in a call to VRayRenderer->setCameraName()
+// cameraName - the scene_name property of the active camera plugin
 void setCameraName(py::object renderer, py::object cameraName)
 {
 	auto* exporter = getExporter(renderer);
@@ -436,10 +462,10 @@ void syncViewSettings(py::object renderer, const ViewSettings& viewSettings)
 
 
 // Export a .vrscene file through AppSDK
-void writeVrscene(py::object renderer, const ExportSceneSettings& exportSettings)
+int writeVrscene(py::object renderer, const ExportSceneSettings& exportSettings)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->writeVrscene(exportSettings);
+	return exporter->writeVrscene(exportSettings);
 }
 
 
@@ -556,6 +582,23 @@ void setCosmosImportCallback(py::object assetImportCallback)
 	ZmqServer::get().setPythonCallback("assetImport", weakRefFromObj(assetImportCallback));
 }
 
+/// Sets python callback for cosmos assets importing
+void setCosmosDownloadSize(py::object downloadSizeCallback)
+{
+	ZmqServer::get().setPythonCallback("setCosmosDownloadSize", weakRefFromObj(downloadSizeCallback));
+}
+
+/// Sets python callback for cosmos assets importing
+void setCosmosDownloadAssets(py::object downloadAssetsCallback)
+{
+	ZmqServer::get().setPythonCallback("setCosmosDownloadAssets", weakRefFromObj(downloadAssetsCallback));
+}
+
+/// Updates the Cosmos import info after a scene change
+void updateCosmosSceneName(std::string sceneName) {
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlCosmosUpdateSceneName{sceneName}));
+}
+
 /// Sets callaback executed when rendering gets stopped or aborted
 void setRenderStoppedCallback(py::object renderer, py::object renderStoppedCallback)
 {
@@ -623,13 +666,10 @@ void renderEnd(py::object renderer)
 }
 
 
-/// Render the current frame. 
-/// @param waitForCompletion - block until the frame is rendered, set to 'false' to 
-///			return immediately and continue rendering in the background
-/// @return false if rendering was aborted 
-bool renderFrame(py::object renderer, bool waitForCompletion)
+/// Send request for rendering the current frame to the server.
+void renderFrame(py::object renderer)
 {
-	return getExporter(renderer)->renderFrame(waitForCompletion);
+	getExporter(renderer)->renderFrame();
 }
 
 
@@ -671,8 +711,6 @@ void abortRender(py::object renderer)
 	getExporter(renderer)->abortRender();
 }
 
-
-
 BOOST_PYTHON_MODULE(VRayBlenderLib)
 {
 	// Without this, numpy subsys will segfault
@@ -689,15 +727,23 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(log),						(py::args("message", "level"), py::arg("raw") = false));
 	py::def(FUN(setLogLevel),				(py::args("level")));
 	py::def(FUN(openCollaboration),			(py::args("hostInfo")));
+
 	py::def(FUN(openCosmos));
+	py::def(FUN(setCosmosImportCallback),	(py::args("assetImportCallback")));
+	py::def(FUN(setCosmosDownloadSize),	    (py::args("setCosmosDownloadSize")));
+	py::def(FUN(setCosmosDownloadAssets),	(py::args("setCosmosDownloadAssets")));
+	py::def(FUN(calculateDownloadSize),		(py::args("packageId", "revisionId", "textureFile")));
+	py::def(FUN(downloadMissingAssets));
+	py::def(FUN(updateCosmosSceneName),     (py::args("sceneName")));
+
 	py::def(FUN(openVFB));
+	py::def(FUN(resetVfbToolbar));
 	py::def(FUN(setVfbOnTop),				(py::args("alwaysOnTop")));
 	py::def(FUN(showUserDialog),			(py::args("json")));
 	py::def(FUN(setTelemetryState),			(py::args("anonymousState", "personalizedState")));
 	py::def(FUN(openVFBWithRenderer),		(py::args("renderer")));
-	
+
 	py::def(FUN(setVfbOnTopWithRenderer),	(py::args("renderer", "alwaysOnTop")));
-	py::def(FUN(setCosmosImportCallback),	(py::args("assetImportCallback")));
 	py::def(FUN(setRenderStoppedCallback),  (py::args("renderer", "renderStoppedCallback")));
 	py::def(FUN(setRenderStartCallback),	(py::args("startRenderCallback")));
 	py::def(FUN(setZmqServerAbortCallback),	(py::args("zmqServerAbortCallback")));
@@ -706,9 +752,8 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 
 	py::def(FUN(setVfbLayersUpdateCallback),(py::args("vfbLayersUpdateCallback")));
 	py::def(FUN(setVfbLayers),				 (py::args("vfbLayers")));
-	
-	
-	py::def(FUN(pluginCreate),				(py::args("renderer", "pluginName", "pluginType")));
+
+	py::def(FUN(pluginCreate),				(py::arg("renderer"), py::arg("pluginName"), py::arg("pluginType"), py::arg("allowTypeChanges") = false));
 	py::def(FUN(pluginRemove),				(py::args("renderer", "pluginName")));
 	py::def(FUN(pluginUpdateInt),			(py::args("renderer", "pluginName", "attrName", "attrValue")));
 	py::def(FUN(pluginUpdateFloat),			(py::args("renderer", "pluginName", "attrName", "attrValue")));
@@ -726,7 +771,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(pluginUpdatePluginDesc),	(py::args("renderer", "pluginName", "attrName", "pluginValue", "forceUpdate")));
 	py::def(FUN(pluginUpdateList),			(py::args("renderer", "name", "attrName", "list", "elemTypes")));
 	py::def(FUN(pluginResetValue),			(py::args("renderer", "name", "attrName")));
-	
+
 	py::def(FUN(exportGeometry),			(py::args("renderer", "meshData")));
 	py::def(FUN(exportHair),				(py::args("renderer", "hairData")));
 	py::def(FUN(exportPointCloud),			(py::args("renderer", "pcData")));
@@ -734,7 +779,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(exportInstancer),			(py::args("renderer", "instancerData")));
 	py::def(FUN(clearFrameData),			(py::args("renderer", "upToTime")));
 
-	
+
 	py::def(FUN(startExport),				(py::args("renderer", "threadCount")));
 	py::def(FUN(finishExport),				(py::args("renderer", "interactive")));
 	py::def(FUN(writeVrscene),				(py::args("renderer", "exportSettings")));
@@ -750,10 +795,10 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(getEngineUpdateMessage),	(py::args("renderer")));
 	py::def(FUN(isRenderReady),				(py::args("renderer")));
 	py::def(FUN(imageWasUpdated),			(py::args("renderer")));
-	
+
 	py::def(FUN(renderStart),				(py::args("renderer", "renderResult", "onImageUpdated")));
 	py::def(FUN(renderEnd),					(py::args("renderer")));
-	py::def(FUN(renderFrame),				(py::args("renderer", "waitForCompletion")));
+	py::def(FUN(renderFrame),				(py::args("renderer")));
 	py::def(FUN(setRenderFrame),			(py::args("renderer", "frame")));
 	py::def(FUN(renderSequenceStart),		(py::args("renderer", "start", "end")));
 	py::def(FUN(renderJobIsRunning),		(py::args("renderer")));
@@ -777,7 +822,8 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(ExporterSettings, drRenderOnlyOnHosts)
 		.ADD_RW_PROPERTY(ExporterSettings, separateFiles)
 		.ADD_RW_PROPERTY(ExporterSettings, previewDir)
-		.ADD_RW_PROPERTY(ExporterSettings, drHosts);
+		.ADD_RW_PROPERTY(ExporterSettings, drHosts)
+		.ADD_RW_PROPERTY(ExporterSettings, renderThreads);
 
 
 	py::class_<ViewSettings>("ViewSettings")
@@ -808,10 +854,10 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(ZmqServerArgs, blenderPID)
 		.ADD_RW_PROPERTY(ZmqServerArgs, dumpLogFile)
 		.ADD_RW_PROPERTY(ZmqServerArgs, vfbSettingsFile)
-		.ADD_RW_PROPERTY(ZmqServerArgs, renderThreads)
 		.ADD_RW_PROPERTY(ZmqServerArgs, vrayLibPath)
 		.ADD_RW_PROPERTY(ZmqServerArgs, appSDKPath)
-		.ADD_RW_PROPERTY(ZmqServerArgs, pluginVersion);
+		.ADD_RW_PROPERTY(ZmqServerArgs, pluginVersion)
+		.ADD_RW_PROPERTY(ZmqServerArgs, blenderVersion);
 
 
 	py::class_ <ZmqControlConn>("ZmqControlConn")
@@ -843,6 +889,8 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, matFile)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, objFile)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, lightFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, packageId)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, revisionId)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap);
 }

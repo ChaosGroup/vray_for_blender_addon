@@ -11,13 +11,19 @@ from vray_blender.lib import path_utils
 from vray_blender.nodes import importing as NodesImport
 from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
 from vray_blender.plugins.skipped_plugins import SKIPPED_PLUGINS
-
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.nodes.sockets import addInput
 from vray_blender import debug
-from vray_blender.exporting.tools import isColorSocket, getVRayBaseSockType, getInputSocketByAttr
+from vray_blender.exporting.tools import isColorSocket, getVRayBaseSockType, getInputSocketByName
 from vray_blender.exporting.node_exporters.uvw_node_export import UVWGenRandomizerModes
 
+"""
+TODO: Problems with material conversion
+Remap...
+Importer scale for distance params
+Use of missing parameters in the UI(e.g. VRayMtl reflect_weight, opacity_source)
+TexSampler
+"""
 
 def getOutputSocket(pluginType):
     if pluginType == "BRDFLayered":
@@ -92,6 +98,8 @@ def findAndCreateNode(vrsceneDict, pluginName, ntree, prevNode, locationsMap):
 ########  ##     ## ########  ##             ######## ##     ##    ##    ######## ##     ## ######## ########
 
 def _createNodeBRDFLayered(ntree, n, vrsceneDict, pluginDesc, locationsMap):
+    from vray_blender.plugins.BRDF.BRDFLayered import getLayerSocketNames
+
     def processSocket(thisNode, socket, attrValue):
         # Could happen with some broken files
         if not attrValue:
@@ -108,11 +116,10 @@ def _createNodeBRDFLayered(ntree, n, vrsceneDict, pluginDesc, locationsMap):
             # Get default output
             if plOutput is None:
                 plOutput = getOutputSocket(pl['ID'])
-            collValue = _collapseToValue(pl, toFloat=True, vrsceneDict=vrsceneDict)
+            collValue = _collapseToValue(pl, toFloat=False, vrsceneDict=vrsceneDict)
             if collValue is not None:
                 socket.value = fixValue(collValue)
             else:
-                
                 # TexCombineColor is not supported for VRaySocketFloat and texture_multiplier is mostly with value 1
                 # TODO Find a way for multiplier implementation id needed
                 plAttrs = pl['Attributes']
@@ -125,26 +132,27 @@ def _createNodeBRDFLayered(ntree, n, vrsceneDict, pluginDesc, locationsMap):
         else:
             socket.value = attrValue
 
-    brdfs   = pluginDesc['Attributes'].get('brdfs')
-    weights = pluginDesc['Attributes'].get('weights')
+    brdfs     = pluginDesc['Attributes'].get('brdfs')
+    weights   = pluginDesc['Attributes'].get('weights')
+    opacities = pluginDesc['Attributes'].get('opacities')
 
     brdfLayeredNode = NodeUtils.createNode(ntree, 'VRayNodeBRDFLayered', pluginDesc['Name'])
 
     if brdfs:
-        for i,brdf in enumerate(brdfs):
+        for i, brdf in enumerate(brdfs[:-1]):
             humanIndex = i + 1
 
-            brdfSockName   = f"BRDF {humanIndex}"
-            weightSockName = f"Weight {humanIndex}"
+            brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(humanIndex)
 
             # NOTE: Node already has two inputs
             if not brdfSockName in brdfLayeredNode.inputs:
-                addInput(brdfLayeredNode, 'VRaySocketBRDF',       brdfSockName)
-                addInput(brdfLayeredNode, 'VRaySocketFloatColor', weightSockName)
-                brdfLayeredNode.inputs[weightSockName].value = 1.0
+                addInput(brdfLayeredNode, 'VRaySocketBRDF',   brdfSockName)
+                addInput(brdfLayeredNode, 'VRaySocketColor',  weightSockName).setValue((1.0, 1.0, 1.0))
+                addInput(brdfLayeredNode, 'VRaySocketWeight', opacitySockName).setValue(1.0)
 
             brdfSocket   = brdfLayeredNode.inputs[brdfSockName]
             weightSocket = brdfLayeredNode.inputs[weightSockName]
+            opacitySocket = brdfLayeredNode.inputs[weightSockName]
 
             processSocket(brdfLayeredNode, brdfSocket, brdf)
 
@@ -152,9 +160,14 @@ def _createNodeBRDFLayered(ntree, n, vrsceneDict, pluginDesc, locationsMap):
             if weights:
                 processSocket(brdfLayeredNode, weightSocket, weights[i])
 
+            if opacities:
+                processSocket(brdfLayeredNode, opacitySocket, opacities[i])
+        brdfSock = getInputSocketByName(brdfLayeredNode, "Base Material")
+        processSocket(brdfLayeredNode, brdfSock, brdfs[-1])
+
     for attrName in pluginDesc['Attributes']:
         # Skip lists
-        if attrName in {'brdfs', 'weights'}:
+        if attrName in {'brdfs', 'weights', 'opacities'}:
             continue
 
         attrValue = pluginDesc['Attributes'][attrName]
@@ -278,6 +291,7 @@ def _createNodeTexBitmap(ntree: bpy.types.NodeTree, vrsceneDict, pluginDescTexBi
         imageFilepath = locationsMap[imageFilepath]
 
     importSettings = getPluginByName(vrsceneDict, "Import Settings")
+    importDir = None
     if importSettings:
         importDir = importSettings['Attributes']['dirpath']
 
@@ -393,9 +407,9 @@ def fillRamp(vrsceneDict, ramp, colors, positions):
 
 
 def _createNodeTexGradRamp(ntree: bpy.types.NodeTree, prevNode, vrsceneDict, pluginDesc):
-    texGradRamp  = NodeUtils.createNode(ntree, 'VRayNodeTexGradRamp', pluginDesc['Name'])
+    texGradRamp = NodeUtils.createNode(ntree, 'VRayNodeTexGradRamp', pluginDesc['Name'])
 
-    attributes   = pluginDesc['Attributes']
+    attributes = pluginDesc['Attributes']
 
     fillRamp(vrsceneDict,
         texGradRamp.texture.color_ramp,
@@ -405,6 +419,17 @@ def _createNodeTexGradRamp(ntree: bpy.types.NodeTree, prevNode, vrsceneDict, plu
 
     return texGradRamp
 
+
+def _createLightIES(ntree: bpy.types.NodeTree, prevNode, vrsceneDict, pluginDesc, locationsMap):
+    lightIES = NodeUtils.createNode(ntree, 'VRayNodeLightIES')
+
+    _fillNodeProperties(lightIES, ntree, vrsceneDict, pluginDesc, "LightIES", locationsMap)
+
+    iesFile = pluginDesc['Attributes']['ies_file']
+    if locationsMap and iesFile in locationsMap:
+        lightIES.LightIES.ies_file = locationsMap[iesFile]
+
+    return lightIES
 
 ##     ## ##     ## ##      ##  ######   ######## ##    ## 
 ##     ## ##     ## ##  ##  ## ##    ##  ##       ###   ## 
@@ -447,7 +472,7 @@ def _createTransformNode(ntree: bpy.types.NodeTree, attrValue, attrSocketName: s
     from numpy import allclose
     from mathutils import Matrix
 
-    m = attribute_utils.attrValueToMatrix(attrValue, True)
+    m = attrValue if isinstance(attrValue, Matrix) else attribute_utils.attrValueToMatrix(attrValue, True)
 
     if allclose(m, Matrix.Identity(4)):
         # If the transformation is identity, do not create a separate V-Ray Transform node for it
@@ -630,9 +655,12 @@ def _createNodeSocketConnection(ntree: bpy.types.NodeTree, node: bpy.types.Node,
             connectedNode = createNode(ntree, node, vrsceneDict, connectedPlugin, locationsMap)
             if connectedNode:
                 if inPluginOutputSocketName not in connectedNode.outputs:
-                    # TODO: Convert to exception after fixing the definitions
-                    debug.printWarning(f"Node {connectedPluginType} does not have an output socket named {inPluginOutputSocketName}")
-                else: 
+                    if connectedPluginType == 'TexAColorOp':
+                        ntree.links.new(connectedNode.outputs["Result"], node.inputs[attrSocketName])
+                    else:
+                        # TODO: Convert to exception after fixing the definitions
+                        debug.printWarning(f"Node {connectedPluginType} does not have an output socket named {inPluginOutputSocketName}")
+                else:
                     ntree.links.new(connectedNode.outputs[inPluginOutputSocketName], node.inputs[attrSocketName])
 
                 if fixBump:
@@ -669,7 +697,10 @@ def _fillNodeProperties(node: bpy.types.Node, ntree: bpy.types.NodeTree, vrscene
         if fixBump:
             attrName = 'bump_tex_color'
 
-        attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
+        attrDesc = attribute_utils.getAttrDesc(pluginModule, attrName)
+        # TODO: Figure out what to do with these params
+        if not attrDesc:
+            continue
         if "ui" in attrDesc and attrDesc["ui"].get("quantityType") == "distance":
             lengthUnit = attrDesc["ui"].get("units", "centimeters")
             attrValue = attribute_utils.scaleToSceneLengthUnit(attrValue, lengthUnit)
@@ -738,8 +769,8 @@ def _createGenericNode(ntree: bpy.types.NodeTree, vrsceneDict: dict, pluginDesc:
 
 
 def createNode(ntree: bpy.types.NodeTree, prevNode: bpy.types.Node, vrsceneDict: dict, pluginDesc: dict, locationsMap=None):
-    pluginType  = pluginDesc['ID']
-    pluginName  = pluginDesc['Name']
+    pluginType = pluginDesc['ID']
+    pluginName = pluginDesc['Name']
 
     # TexBitmap is handled by custom meta node
     if pluginType != 'TexBitmap' and pluginType in SKIPPED_PLUGINS:
@@ -761,6 +792,7 @@ def createNode(ntree: bpy.types.NodeTree, prevNode: bpy.types.Node, vrsceneDict:
             return _createNodeTexGradRamp(ntree, prevNode, vrsceneDict, pluginDesc)
         case 'UVWGenMayaPlace2dTexture' | 'UVWGenProjection' |'UVWGenObject' | 'UVWGenEnvironment':
             return _createMappingNode(ntree, vrsceneDict, pluginDesc, pluginType, locationsMap)
-
+        case 'LightIES':
+            return _createLightIES(ntree, prevNode, vrsceneDict, pluginDesc, locationsMap)
 
     return _createGenericNode(ntree, vrsceneDict, pluginDesc, locationsMap)

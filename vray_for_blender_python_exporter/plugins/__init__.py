@@ -356,6 +356,7 @@ def setFilePathValue(propGroup, path):
     else:
         propGroup["filePath"] = path
 
+
 class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
     assetType: bpy.props.EnumProperty(
         name        = "Type",
@@ -368,132 +369,23 @@ class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
         default = '0'
     )
 
-    scenePrefix: bpy.props.StringProperty(
-        name        = "Prefix",
-        description = "Scene object name prefix"
+class VRayCyclesNode(VRayEntity, bpy.types.PropertyGroup):
+    pass
+
+
+class VRayCosmosAsset(VRayEntity, bpy.types.PropertyGroup):
+    """ Base class for objects, materials and lights avaiable in Chaos Cosmos """
+
+    cosmos_package_id: bpy.props.StringProperty(
+        name = "V-Ray Cosmos Package ID",
+        description = "The V-Ray Cosmos asset package id",
+        default = ""
     )
 
-    filePath: bpy.props.StringProperty(
-        name        = "File Path",
-        subtype     = 'FILE_PATH',
-        description = "Path to a *.vrscene or *.vrmat file",
-        get = getFilePathValue,
-        set = setFilePathValue
-    )
-
-    useRelativePath: bpy.props.BoolProperty(
-        name        = "Use Relative Path",
-        description = "filePath is relative",
-        default     = True
-    )
-
-    dirPath: bpy.props.StringProperty(
-        name        = "Directory Path",
-        subtype     = 'DIR_PATH',
-        description = "Path to a directory with *.vrscene or *.vrmat files"
-    )
-
-    sceneReplace: bpy.props.BoolProperty(
-        name        = "Override Current Scene Objects",
-        description = "Replace objects in the root scene",
-        default     = False
-    )
-
-    sceneUseTransform: bpy.props.BoolProperty(
-        name        = "Use Transform",
-        description = "Use Empty transform as scene transform",
-        default     = True
-    )
-
-    sceneAddNodes: bpy.props.BoolProperty(
-        name        = "Add Nodes",
-        description = "Add nodes from the included files",
-        default     = True
-    )
-
-    sceneAddMaterials: bpy.props.BoolProperty(
-        name        = "Add Materials",
-        description = "Add materials from the included files",
-        default     = True
-    )
-
-    sceneAddLights: bpy.props.BoolProperty(
-        name        = "Add Lights",
-        description = "Add lights from the included files",
-        default     = True
-    )
-
-    sceneAddCameras: bpy.props.BoolProperty(
-        name        = "Add Cameras",
-        description = "Add cameras from the included files",
-        default     = False
-    )
-
-    sceneAddEnvironment: bpy.props.BoolProperty(
-        name        = "Add Environment",
-        description = "Add environment from the included files",
-        default     = False
-    )
-
-    maxPreviewFaces: bpy.props.IntProperty(
-        name    = "Max. Preview Faces",
-        min     = 100,
-        max     = 1000000,
-        default = 200
-    )
-
-    anim_type: bpy.props.EnumProperty(
-        name        = "Animation",
-        description = "Animation playback type",
-        items = (
-            ('0', "Loop", ""),
-            ('1', "Once", ""),
-            ('2', "Ping-Pong", ""),
-            ('3', "Still", ""),
-        ),
-        default = '0'
-    )
-
-    anim_speed: bpy.props.FloatProperty(
-        name        = "Speed",
-        description = "Animation playback speed",
-        default = 1.0
-    )
-
-    anim_offset: bpy.props.FloatProperty(
-        name        = "Offset",
-        description = "Animation initial frame offset",
-        default = 0.0
-    )
-
-    anim_start: bpy.props.IntProperty(
-        name        = "Start",
-        description = "Specifies the first frame of the animation sequence",
+    cosmos_revision_id: bpy.props.IntProperty(
+        name = "V-Ray Cosmos Revision ID",
+        description = "The V-Ray Cosmos asset revision id",
         default = 0
-    )
-
-    anim_length: bpy.props.IntProperty(
-        name        = "Length",
-        description = "Specifies the length of the animation sequence",
-        default = 0
-    )
-
-    use_hide_objects: bpy.props.BoolProperty(
-        name        = "Hide Objects",
-        description = "Hide specified objects",
-        default     = False
-    )
-
-    hidden_objects: bpy.props.StringProperty(
-        name        = "Hidden Objects",
-        description = "Semicolon separated list of plugin names to hide",
-        default     = ""
-    )
-
-    scale: bpy.props.FloatProperty(
-        name        = "Scale",
-        description = "scale of the asset's geometry",
-        default = 1.0
     )
 
 
@@ -543,7 +435,7 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
     )
 
 
-class VRayMesh(VRayEntity, bpy.types.PropertyGroup):
+class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}
 
 
@@ -551,13 +443,12 @@ class VRayMetaBall(VRayEntity, bpy.types.PropertyGroup):
     __annotations__ = {}
 
 
-class VRayMaterial(VRayEntity, bpy.types.PropertyGroup):
-    is_vray_class : bpy.props.BoolProperty(
+class VRayMaterial(VRayCosmosAsset, bpy.types.PropertyGroup):
+    is_vray_class: bpy.props.BoolProperty(
         name = "V-Ray Class Tag",
         description = "True if this is a V-Ray material.",
         default = False
     )
-
 
 class VRayNodeTreeSettings(bpy.types.PropertyGroup):
     tree_type: bpy.props.StringProperty(
@@ -567,7 +458,7 @@ class VRayNodeTreeSettings(bpy.types.PropertyGroup):
     )
 
 
-class VRayLight(VRayEntity, bpy.types.PropertyGroup):
+class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
     is_vray_class : bpy.props.BoolProperty(
         name = "V-Ray Class Tag",
         description = "True if this is a V-Ray light.",
@@ -675,6 +566,25 @@ class VRayScene(VRayEntity, bpy.types.PropertyGroup):
     )
 
 
+class VRayWindowManager(bpy.types.PropertyGroup):
+    ui_render_context: bpy.props.EnumProperty(
+        name = "Render Context Panels",
+        description = "Show render panels group",
+        items = (
+            ('0', "Sampler", ""),
+            ('1', "GI", ""),
+            ('2', "Globals", ""),
+            ('3', "System", ""),
+        ),
+        default = '0'
+    )
+
+    vrayscene_warning_shown: bpy.props.BoolProperty(
+        default = False,
+        description = "The warning about VRayScene objects in IPR was already shown to the user"
+    )
+
+    
 class VRayFur(VRayEntity, bpy.types.PropertyGroup):
     width: bpy.props.FloatProperty(
         name        = "Width",
@@ -828,9 +738,11 @@ def _getRegClasses():
     return (
         VRayRenderNode,
         VRayDR,
-        
+
         VRayAsset,
+        VRayCyclesNode,
         VRayCamera,
+        VRayCosmosAsset,
         VRayFur,
         VRayLight,
         VRayMaterial,
@@ -1040,6 +952,12 @@ def register():
         description = "V-Ray Object Settings"
     )
 
+    bpy.types.Node.vray = bpy.props.PointerProperty(
+        name = "V-Ray Entity Settings",
+        type = VRayCyclesNode,
+        description = "V-Ray Entity Settings"
+    )
+
     bpy.types.World.vray = bpy.props.PointerProperty(
         name = "V-Ray World Settings",
         type =  VRayWorld,
@@ -1095,13 +1013,21 @@ def register():
 
     
     bpy.utils.register_class(VRayScene)
-
     bpy.types.Scene.vray = bpy.props.PointerProperty(
         name = "V-Ray Settings",
         type =  VRayScene,
         description = "V-Ray Renderer settings"
     )
 
+
+    bpy.utils.register_class(VRayWindowManager)
+    bpy.types.WindowManager.vray = bpy.props.PointerProperty(
+        name = "V-Ray Settings",
+        type =  VRayWindowManager,
+        description = "V-Ray window settings"
+    )
+
+    
 
 def unregister():
     global PLUGIN_MODULES
@@ -1111,8 +1037,7 @@ def unregister():
         bpy.utils.unregister_class(regClass)
 
     bpy.utils.unregister_class(VRayScene)
-
-    #del VRayScene.Exporter
+    bpy.utils.unregister_class(VRayWindowManager)
 
     for pluginName in PLUGIN_MODULES:
         plugin = PLUGIN_MODULES[pluginName]

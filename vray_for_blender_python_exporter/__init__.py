@@ -1,14 +1,14 @@
 
 bl_info = {
     "name"        : "V-Ray For Blender",
-    "author"      : "Chaos Software GmBH",
-    "blender"     : (4, 2, 0), # this should be the version currently supported by the plugin
+    "author"      : "Chaos Software",
+    "blender"     : (4, 2, 0), # this should be the oldest version currently supported by the plugin
     "location"    : "Info header, render engine menu",
     "description" : "V-Ray render engine integration",
     "doc_url"     : "https://docs.chaos.com/display/VBLD/",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "00", "23") # Versions are strings since we can have versions like "6.00.00"
+    "version"     : ("7", "00", "40") 
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data 
@@ -17,7 +17,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 4
+UPGRADE_NUMBER = 10
 
 
 from vray_blender import debug
@@ -74,8 +74,11 @@ def initVRay():
     # level will be reset to the one saved in the scene.
     debug.setLogLevel(debug.LogLevel.Debug if StartupConfig.debugUI else debug.LogLevel.Warning)
 
+    from vray_blender.version import getBuildVersionString
+    print(f"V-Ray for Blender addon, version {getBuildVersionString()}")
     print(f"V-Ray for Blender logging to {logFile}")
     vray.init(logFile)
+
 
 
 def _getModules():
@@ -111,6 +114,9 @@ def register():
     # to be sure all used data is registered.
     engine.register()
     engine.ensureRunning()
+
+    from vray_blender.engine.vfb_event_handler import VfbEventHandler
+    VfbEventHandler.upgradeScene()
 
 
 

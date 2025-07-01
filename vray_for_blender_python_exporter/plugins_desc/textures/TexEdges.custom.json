@@ -14,9 +14,6 @@
                         "name": "bg_tex"
                     },
                     {
-                        "name": "show_hidden_edges"
-                    },
-                    {
                         "name": "width_type"
                     },
                     {
@@ -41,6 +38,7 @@
     "Parameters": [
         {
             "attr": "world_width",
+            "default": 0.01,
             "ui": {
                 "quantityType": "distance"
             }
@@ -51,7 +49,8 @@
         "excluded_parameters": [
             "raytraced",
             "raytraced_consider_same_object_only",
-            "raytraced_mode"
+            "raytraced_mode",
+            "show_hidden_edges"
         ]
     }
 }

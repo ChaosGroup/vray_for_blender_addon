@@ -3,8 +3,11 @@
     "Parameters": [
         {
             "attr": "fov",
+            "subtype": "ANGLE",
             "ui": {
-                "spin_step": 1.0
+                "spin_step": 0.1,
+                "min": 0.00017453292519943295,
+                "max": 6.283185307179586
             }
         },
         {
@@ -15,6 +18,16 @@
             "attr": "override_camera_settings",
             "default": false,
             "desc": "Use V-Ray camera type and settings",
+            "type": "BOOL",
+            "update": "onUpdateOverrideCameraSettings",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "override_fov",
+            "default": false,
+            "desc": "Override FOV settings for the currently selected camera. If enabled, viewport may not show correct image. Use VFB in IPR mode instead.",
             "type": "BOOL",
             "options": {
                 "derived": true
@@ -45,6 +58,20 @@
                 "soft_max": 4.0,
                 "spin_step": 0.01
             }
+        },
+        {
+            "attr": "vertical_fov",
+            "type": "FLOAT",
+            "subtype": "ANGLE",
+            "default": 3.141592653589793,
+            "ui": {
+                "spin_step": 0.1,
+                "min": 0.00017453292519943295,
+                "max": 3.141592653589793
+            },
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {
@@ -69,7 +96,7 @@
                     {
                         "name": "dist",
                         "active": {
-                            "cond": "::type=5"
+                            "cond": "::type=5,::auto_fit=0"
                         }
                     },
                     {
@@ -77,6 +104,25 @@
                         "active": {
                             "cond": "::type=5"
                         }
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                           {
+                               "name": "override_fov",
+                               "label": "Override FOV"
+                           },
+                           {
+                               "name": "fov",
+                               "active": {"cond": "::override_fov!=0"}
+                            },
+                            {
+                                "name": "vertical_fov",
+                                "label": "Vertical FOV",
+                                "active": {"cond": "::override_fov!=0,::type=9"}
+                           }
+
+                        ]
                     }
                 ],
                 "layout": "COLUMN"
@@ -86,7 +132,6 @@
     "Type": "CAMERA",
     "Options": {
         "excluded_parameters": [
-            "dont_affect_settings",
             "image_planes",
             "auto_exposure_compensation"
         ],

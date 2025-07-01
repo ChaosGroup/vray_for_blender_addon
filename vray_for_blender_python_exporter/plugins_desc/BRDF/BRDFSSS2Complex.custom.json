@@ -31,6 +31,10 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr": "color_mode",
+            "update": "onColorModeUpdate"
         }
     ],
     "Options": {
@@ -78,23 +82,40 @@
                         "name": "diffuse_amount"
                     },
                     {
+                        "layout": "SEPARATOR"
+                    },
+                    {
                         "name": "color_mode"
                     },
                     {
-                        "name": "sub_surface_color"
+                        "name": "sub_surface_color",
+                        "label": "Sub-surface Color",
+                        "visible": {"cond": "::color_mode=0"}
                     },
                     {
-                        "name": "scatter_radius"
+                        "name": "sub_surface_color",
+                        "label": "Scatter Coefficient",
+                        "visible": {"cond": "::color_mode=1"}
+                    },
+                    {
+                        "name": "scatter_radius",
+                        "label": "Scatter Color",
+                        "visible": {"cond": "::color_mode=0"}
+                    },
+                    {
+                        "name": "scatter_radius",
+                        "label": "Fog Color",
+                        "visible": {"cond": "::color_mode=1"}
                     },
                     {
                         "name": "scatter_radius_mult",
                         "label": "Scatter Radius (cm)"
                     },
                     {
-                        "name": "phase_function"
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "layout": "SEPARATOR"
+                        "name": "phase_function"
                     },
                     {
                         "name": "scale"

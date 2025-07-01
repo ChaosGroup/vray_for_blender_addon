@@ -26,25 +26,60 @@
         },
         {
             "attr": "ref_object",
-            "desc": "Scene object whose transormation will be used as a reference space",
+            "desc": "Scene object whose transformation will be used as a reference space",
             "type": "STRING",
             "default": "",
             "options": {
-                "derived": true
+                "derived": true,
+                "cross_dependency": true 
             }
         },
         {
             "attr": "texture_rotation_map",
-            "subtype": "EULER"
+            "subtype": "VRAY_ROTATION"
         },
         {
             "attr": "frame_offset",
+            "subtype": "VRAY_OFFSET",
             "ui": {
                 "quantityType": "distance"
             }
         }
     ],
     "Node": {
+        "input_sockets": [
+            {
+                "name": "texture_x"
+            },
+            {
+                "name": "texture_y"
+            },
+            {
+                "name": "texture_z"
+            },
+            {
+                "name": "texture_negx",
+                "label": "Texture -X"
+            },
+            {
+                "name": "texture_negy",
+                "label": "Texture -Y"
+            },
+            {
+                "name": "texture_negz",
+                "label": "Texture -Z"
+            },
+            {
+                "name": "size"
+            },
+            {
+                "name": "frame_offset"
+            },
+            {
+                "name": "texture_rotation_map",
+                "label": "Texture Rotation"
+            }
+        ],
         "output_sockets": [
             {
                 "name": "_default_",
@@ -53,6 +88,16 @@
             },
             {
                 "name": "out_intensity"
+            }
+        ],
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "texture_mode"
+                    }
+                ]
             }
         ]
     },
@@ -83,21 +128,17 @@
                         "name": "blend"
                     },
                     {
-                        "layout": "ROW",
-                        "attrs": [
-                            {
-                                "name": "frame_offset"
-                            }
-                        ]
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "layout": "ROW",
-                        "attrs": [
-                            {
-                                "name": "texture_rotation_map",
-                                "label": "Texture Rotation"
-                            }
-                        ]
+                        "name": "frame_offset"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "texture_rotation_map",
+                        "label": "Texture Rotation"
                     },
                     {
                         "layout": "SEPARATOR"
@@ -144,8 +185,7 @@
             "out_intensity",
             "rest_position_tex",
             "rest_normal_tex",
-            "scale",
-            "texture_rotation"
+            "scale"
         ],
         "animatable": true
     }

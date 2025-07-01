@@ -122,7 +122,7 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
         return exporterCtx.fullExport or (updatedObjId == lightObj) or (updatedObjId == lightObj.data.node_tree) or (updatedObjId == geomObj)
     
     def registerPair(lightObj, geomObj):
-        activeMeshLights.add(ActiveMeshLightInfo(lightObj.data.vray.unique_id, getObjTrackId(lightObj), getObjTrackId(geomObj)))
+        activeMeshLights.add(ActiveMeshLightInfo(Names.object(lightObj), getObjTrackId(lightObj), getObjTrackId(geomObj)))
         
         if exporterCtx.fullExport:
             updatedMeshLights.add(UpdatedMeshLightInfo(lightObj, getObjTrackId(geomObj)))

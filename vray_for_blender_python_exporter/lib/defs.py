@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Mapping, TypeVar
-import bpy
+from typing import Mapping, TypeVar, Dict
+import bpy, mathutils
 from numpy import ndarray
 
 from vray_blender import debug
@@ -57,12 +57,19 @@ class ExporterContext:
         def __exit__(self, *args):
             self._objectsStack.pop()
 
+    ##### Properties accessible in any context #####
+
+    # A list of plugins to remove before the next export.
+    # This list is meant to be filled in from contexts outside the export sequence where immediate changes to V-Ray state
+    # are not possible or convenient.
+    pluginsToRecreate = set()
+
 
     def __init__(self, exporterCtx: ExporterContext = None):
         from vray_blender.lib.common_settings import CommonSettings
         
         if exporterCtx:
-            self._copyConstuct(exporterCtx)
+            self._copyConstruct(exporterCtx)
             return
         
         # A raw pointer to the VRayBlenderLib's exporter(renderer) object associated with the current export
@@ -73,6 +80,9 @@ class ExporterContext:
         # only export changes. This flag has meaning for interactive renderer mode only. 
         # For all other modes, the value should always be True
         self.fullExport: bool = True 
+
+        # True if this is an export-only job. 
+        self.exportOnly: bool = False
 
         # The number of the frame being currently exported. This may be outside the animation 
         # range if motion blur is active.
@@ -117,11 +127,12 @@ class ExporterContext:
         # Any stats that exporters wish to publish, e.g. number of entities processed
         self.stats: list[str] = []
 
-        # Materials may be shared between objects. Cache the exported materials
-        # and hand out the ones from the cache on multiple rewuest for export of
-        # the same material. 
-        self.exportedMtls = {}  # blender_material: attrPlugin
-        
+        # Cache mapping for exported materials:
+        # Each key is a Blender material (bpy.types.Material) that has been processed for export,
+        # and the corresponding value is its AttrPlugin representation.
+        # This cache is used to avoid re-exporting materials that have already been exported.
+        self.exportedMtls: Dict[bpy.types.Material, AttrPlugin] = {}
+
         # There are some default plugins which may be referenced by multiple other plugins, 
         # e.g. mapping etc. We only need one copy of those.
         self.defaultPlugins = {}  # plugin_type: attrPlugin
@@ -130,8 +141,10 @@ class ExporterContext:
         # of the animation to export values. The format is {object: mathutils.Vector(X, Y)}
         self.geomAnimationRanges = {} # {Object(not ID!): Vector(start, end)
 
-        # A list of all temp objects that have been craeted to support edit mode exports
-        self.tempObjects = []
+        # A list of all objects for which temp meshes have beem created with the to_mesh method. 
+        # to_mesh_clear() must be called on these objects after the export is complete. 
+        # Currently, temp meshes are only created for objects in edit mode.
+        self.objectsWithTempMeshes = []
 
         # A dictionary of (pluginName, attrName) => list of render channels. It will be filled up during the export
         # procedure. When all other plugins have already been exported, the render channel names will be
@@ -150,49 +163,54 @@ class ExporterContext:
         # A stack of the objects that are being currently exported.
         self.objectContext = __class__._CurrentObjectContext() 
 
-        
+
         self.motionBlurBuilder = MotionBlurBuilder()
 
         # The active LightMix node in the scene or None
         self.activeLightMixNode = None
 
 
-    def _copyConstuct(self, other: ExporterContext):
-        self.renderer           = other.renderer
-        self.rendererMode       = other.rendererMode
-        self.objTrackers        = other.objTrackers
-        self.nodeTrackers       = other.nodeTrackers
-        self.visibleObjects     = other.visibleObjects
-        self.activeInstancers   = other.activeInstancers
-        self.commonSettings     = other.commonSettings
-        self.ctx                = other.ctx
-        self.dg                 = other.dg
-        self.ts                 = other.ts
-        self.updatedMeshLightsInfo = other.updatedMeshLightsInfo
-        self.cachedMeshLightsInfo = other.cachedMeshLightsInfo
-        self.activeMeshLightsInfo = other.activeMeshLightsInfo
-        self.activeGizmos       = other.activeGizmos
-        self.fullExport         = other.fullExport
-        self.currentFrame       = other.currentFrame
-        self.stats              = other.stats
-        self.exportedMtls       = other.exportedMtls
-        self.defaultPlugins     = other.defaultPlugins
-        self.geomAnimationRanges = other.geomAnimationRanges
-        self.tempObjects        = other.tempObjects
-        self.pluginRenderChannels = other.pluginRenderChannels
-        self.lightCollections   = other.lightCollections
-        self.emissiveMaterials  = other.emissiveMaterials
-        self.objectContext      = other.objectContext
-        self.motionBlurBuilder  = other.motionBlurBuilder
-        self.activeLightMixNode = other.activeLightMixNode
+    def _copyConstruct(self, other: ExporterContext):
+        self.renderer               = other.renderer
+        self.rendererMode           = other.rendererMode
+        self.objTrackers            = other.objTrackers
+        self.nodeTrackers           = other.nodeTrackers
+        self.visibleObjects         = other.visibleObjects
+        self.activeInstancers       = other.activeInstancers
+        self.commonSettings         = other.commonSettings
+        self.ctx                    = other.ctx
+        self.dg                     = other.dg
+        self.ts                     = other.ts
+        self.updatedMeshLightsInfo  = other.updatedMeshLightsInfo
+        self.cachedMeshLightsInfo   = other.cachedMeshLightsInfo
+        self.activeMeshLightsInfo   = other.activeMeshLightsInfo
+        self.activeGizmos           = other.activeGizmos
+        self.fullExport             = other.fullExport
+        self.exportOnly             = other.exportOnly
+        self.currentFrame           = other.currentFrame
+        self.stats                  = other.stats
+        self.exportedMtls           = other.exportedMtls
+        self.defaultPlugins         = other.defaultPlugins
+        self.geomAnimationRanges    = other.geomAnimationRanges
+        self.objectsWithTempMeshes  = other.objectsWithTempMeshes
+        self.pluginRenderChannels   = other.pluginRenderChannels
+        self.lightCollections       = other.lightCollections
+        self.emissiveMaterials      = other.emissiveMaterials
+        self.objectContext          = other.objectContext
+        self.motionBlurBuilder      = other.motionBlurBuilder
+        self.activeLightMixNode     = other.activeLightMixNode
 
-    @property
-    def interactive(self):
-        return self.rendererMode in (RendererMode.Viewport, RendererMode.Interactive)
-    
     @property
     def viewport(self):
         return self.rendererMode == RendererMode.Viewport
+
+    @property
+    def iprVFB(self):
+        return self.rendererMode == RendererMode.Interactive
+
+    @property
+    def interactive(self):
+        return self.viewport or self.iprVFB
 
     @property
     def production(self):
@@ -268,6 +286,13 @@ class DataArray:
         self.ptr = ptr
         self.count = count
         self.name = name
+
+    @staticmethod
+    def fromAttribute(data, attributeName: str):
+        """ Creates DataArray from attribute data """
+        if attribute := data.attributes.get(attributeName, None):
+            return DataArray(attribute.data[0].as_pointer(), len(attribute.data))
+        return DataArray(0, 0) # Return an empty DataArray if the attribute is missing
 
 @dataclass
 class NdDataArray:
@@ -384,22 +409,25 @@ class AttrPlugin:
     OUTPUT_UNDEFINED = None
     OUTPUT_DEFAULT   = ''
 
-    def __init__(self, name = "", output = OUTPUT_UNDEFINED, forceUpdate = False):
+    def __init__(self, name = "", output = OUTPUT_UNDEFINED, forceUpdate = False, pluginType = ""):
         self.name = name        # The name of the plugin
-        
+
         # The name of the output socket to connect. We distinguish between 3 states:
         # 1. None - use only to tell the generic code for exporting sockets that it should
         #           set the value, i.e. to differentiate with the default ('') value.
         # 2. ''   - use plugin's default output (i.e. do not append ::sock_name when exporting)
         # 3. non-empty - use the output name set to this field
-        self.output = output      
-        
+        self.output = output
+
         # 'True' to bypass change tracker cache on the server
-        self.forceUpdate = forceUpdate 
+        self.forceUpdate = forceUpdate
 
         # Some exporters need additional data about the exported plugin besides its V-Ray name.
-        # The actual plugin exporter may add arbitrary data as auxData to be consumed by its caller.  
+        # The actual plugin exporter may add arbitrary data as auxData to be consumed by its caller.
         self.auxData = {}
+
+        # The plugin type being exported. Used for type conversions.
+        self.pluginType = pluginType
 
     def isEmpty(self):
         return self.name == ''
@@ -512,18 +540,15 @@ class NodeContext:
         self.renderer       = renderer
         
         self.material       = None
-        self.sceneObj       = None # [optional] The bpy.types.Object which holds dataObj    
-        self.exportedPlugins = {}
+        self.sceneObj       = None # [optional] The bpy.types.Object which holds dataObj
         self.nodeTracker: ScopedNodeTracker = None
 
         self.stats = SceneStats()
 
         self.object_context = None
-        
-        # Store all nodes that have been exported - those are the reachable nodes. 
-        # We can compare them to all the nodes to figure out which nodes should be 
-        # removed from VRay
-        self.exportedNodes = set()
+
+        # Cache of exported (reachable) nodes to prevent duplicate exports.
+        self._exportedNodes: Dict[bpy.types.Node, AttrPlugin] = {}
 
         # The nodetree being exported
         self.ntree: bpy.types.NodeTree
@@ -531,7 +556,7 @@ class NodeContext:
         # A stack of the parent nodes of the node that is being curently exported.
         # The current node is at the top of the stack.
         self.nodes: list[bpy.types.Node] = []
-        
+
         # Virtual node counter. Used to append a unique suffix to vitual nodes
         self.virtualNodes: int = 0
 
@@ -540,26 +565,50 @@ class NodeContext:
         # is exported for the node 
         # The signature of the handler is customHandler(nodeCtx: NodeContext, plDesc: PluginDesc)
         self.customHandler = None
-        
+
+        # Stack of composed transforms. The last transform is the active one (if there is one).
+        self.transformStack = []
+
         # Reset the error list for each node tree that is to be exported
         __class__._errorList = set()
-
 
     @property
     def node(self):
         assert self.nodes, "Nodes stack is empty"
         return self.nodes[-1]
-    
+
     def _pushNode(self, node: bpy.types.Node):
         self.nodes.append(node)
 
     def _popNode(self):
         assert self.nodes, "Nodes stack is empty"
+
+        # Use a warning instead of "assert self.node in self._exportedNodes"
+        # because if an error occurs in the export code, the node plugin won't be cached.
+        # This would trigger the assertion, preventing the actual error from being printed.
+        if self.node not in self._exportedNodes:
+            debug.printWarning(f"Node named '{self.node.name}' is not cached!")
+
         self.nodes.pop()
 
     def push(self, node: bpy.types.Node):
         return __class__._NodeItem(self, node)
-    
+
+    def pushUVWTransform(self, matrix: mathutils.Matrix):
+        if len(self.transformStack) == 0:
+            self.transformStack.append(matrix)
+        else:
+            self.transformStack.append(matrix @ self.transformStack[-1])
+
+    def popUVWTransform(self):
+        if len(self.transformStack)>0:
+            self.transformStack.pop()
+
+    def getUVWTransform(self):
+        if len(self.transformStack)>0:
+            return self.transformStack[-1]
+        return mathutils.Matrix()
+
     def __enter__(self):
         pass
 
@@ -570,6 +619,16 @@ class NodeContext:
     def getTreeType(self):
         return self.ntree.vray.tree_type
 
+    def cacheNodePlugin(self, node: bpy.types.Node, attrPlugin: AttrPlugin = AttrPlugin()):
+        """ Caches the AttrPlugin of already exported V-Ray node.
+            If the node doesn't have corresponding AttrPlugin, an empty one is added.
+        """
+        self._exportedNodes[node] = attrPlugin
+
+    def getCachedNodePlugin(self, node: bpy.types.Node):
+        """ If the given node is cached returns its AttrPlugin, otherwise it returns None
+        """
+        return self._exportedNodes.get(node, None)
 
     @staticmethod
     def registerError(msg: str):

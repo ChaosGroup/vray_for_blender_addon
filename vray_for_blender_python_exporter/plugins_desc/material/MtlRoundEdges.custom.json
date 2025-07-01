@@ -3,6 +3,10 @@
     "Name": "V-Ray Mtl Round Edges",
     "Parameters": [
         {
+            "attr" : "base_mtl",
+            "type": "BRDF"
+        },
+        {
             "attr": "use",
             "default": false,
             "desc": "Enable the round edges effect. Only available if the object has a V-Ray material node tree.",
@@ -14,12 +18,11 @@
         },
         {
             "attr": "radius",
-            "default": 0.01
-        },
-        {
-            "attr": "radius",
+            "default": 0.01,
             "ui": {
-                "quantityType": "distance"
+                "quantityType": "distance",
+                "max" : 100.0,
+                "min" : 0.0
             }
         }
     ],

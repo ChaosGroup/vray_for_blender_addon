@@ -11,6 +11,9 @@ UPGRADE_INFO = {
 
 def run():
     from vray_blender.utils.upgrade_scene import upgradeScene
-    
     upgradeScene(UPGRADE_INFO)
+
+def check():
+    from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+    return sceneNeedsUpgrade(UPGRADE_INFO)
     

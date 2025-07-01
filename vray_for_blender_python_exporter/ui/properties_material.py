@@ -4,20 +4,20 @@ import bpy
 from vray_blender.ui      import classes
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.plugins import PLUGINS, getPluginModule
-
+from vray_blender.lib.sys_utils import StartupConfig
 
 def renderMaterialPanel(mtl, context, layout):
     assert  mtl.vray.is_vray_class, "Can draw property pages for V-Ray materials only"
 
     if not (activeNode := NodesUtils.getActiveTreeNode(mtl.node_tree, 'MATERIAL')):
         return
-        
+
     layout.label(text=f"Node:  {activeNode.name}")
     layout.label(text=f"Node type:  {activeNode.bl_label}")
     layout.prop(mtl, "diffuse_color", text="Viewport Color")
 
     layout.separator()
-    
+
     if activeNode.bl_idname == 'VRayNodeOutputMaterial':
         layout.separator()
         # The material options (MtlMaterialID etc.) will be drawn below
@@ -38,11 +38,15 @@ def renderMaterialOptionsPanel(mtl, context, layout):
 
 
 def renderMaterialSelector(layout: bpy.types.UILayout, obj: bpy.types.Object):
-    if obj.active_material:
-        if obj.active_material.vray.is_vray_class:
+    mtl = obj.active_material
+
+    if mtl:
+        if mtl.vray.is_vray_class and NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL'):
             layout.template_ID(obj, "active_material", new="vray.copy_material")
         else:
             layout.operator("vray.replace_nodetree_material", icon="NODETREE", text="Use V-Ray Material Nodes")
+            if mtl.use_nodes and StartupConfig.debugUI:
+                layout.operator("vray.convert_nodetree_material", icon="NODETREE", text="Convert to V-Ray material")
     else:
             layout.template_ID(obj, "active_material", new="vray.add_new_material")
 
@@ -118,7 +122,7 @@ class VRAY_PT_mtl_material_render_stats(classes.VRayMaterialPanel):
             sel = [n for n in context.material.node_tree.nodes if n.select]
             return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
         return False
-    
+
     def drawPanelCheckBox(self, context):
         mtl = context.material
         self.layout.label(text="")
@@ -129,7 +133,7 @@ class VRAY_PT_mtl_material_render_stats(classes.VRayMaterialPanel):
 
         enabled = context.material.vray.MtlRenderStats.use
         split.enabled = enabled
-        split.active = enabled 
+        split.active = enabled
 
         split.column()
         col = split.column()
@@ -186,7 +190,7 @@ class VRAY_PT_material_id(classes.VRayMaterialPanel):
 
         enabled = context.material.vray.MtlMaterialID.use
         split.enabled = enabled
-        split.active = enabled 
+        split.active = enabled
 
         split.column()
         col = split.column()
@@ -214,7 +218,7 @@ class VRAY_PT_mtl_material_round_edges(classes.VRayMaterialPanel):
 
         enabled = context.material.vray.MtlRoundEdges.use
         split.enabled = enabled
-        split.active = enabled 
+        split.active = enabled
 
         split.column()
         col = split.column()

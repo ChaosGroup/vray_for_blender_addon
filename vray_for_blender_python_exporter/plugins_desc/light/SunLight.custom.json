@@ -281,8 +281,12 @@
         {
             "attr": "blend_angle",
             "subtype": "ANGLE",
+            "precision": 7,
             "options": {
                 "value_conv_factor": 0.017453292519943295
+            },
+            "ui": {
+                "spin_step": 0.1
             }
         },
         {

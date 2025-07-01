@@ -1,12 +1,12 @@
 
-from vray_blender.lib.blender_utils import setShadowAttr, hasShadowedAttrChanged
+from vray_blender.lib.blender_utils import setShadowAttr, hasShadowedAttrChanged, getShadowAttr
 from vray_blender.lib import plugin_utils, export_utils
 from vray_blender.lib.defs import PluginDesc
 from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
-def camPropertyGet(propGroup, campProp):     
+def camPropertyGet(propGroup, campProp):
     if camera := propGroup.id_data:
         return getattr(camera, campProp)
     return None
@@ -32,7 +32,24 @@ def fovGet(propGroup, attrName):
 
 def fovSet(propGroup, attrName, value):
     camPropertySet(propGroup, "angle", value)
+
+
+def getSensorSizeProp(propGroup):
+    verticalFit = camPropertyGet(propGroup, "sensor_fit") == 'VERTICAL'
+    return "sensor_height" if verticalFit else "sensor_width"
+
+def filmWidthGet(propGroup, attrName):
+    if propGroup.specify_fov:
+        return getShadowAttr(propGroup, attrName)
+
+    return camPropertyGet(propGroup, getSensorSizeProp(propGroup))
     
+def filmWidthSet(propGroup, attrName, value):
+    if propGroup.specify_fov:
+        setShadowAttr(propGroup, attrName, value)
+    else:
+        camPropertySet(propGroup, getSensorSizeProp(propGroup), value)
+
 
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup

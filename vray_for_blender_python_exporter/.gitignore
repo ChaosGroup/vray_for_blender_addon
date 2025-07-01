@@ -1,23 +1,11 @@
 __pycache__
 *.pyc
 *.so
-.vscode/
-.vs/
+/.vscode
+/.vs
 
-# VRayBlenderLib
-bin/OpenImageIO_Util.dll
-bin/VRayBlenderLib.pyd
-bin/boost_numpy310-vc142-mt-x64-1_80.dll
-bin/boost_python310-vc142-mt-x64-1_80.dll
-bin/boost_thread-vc142-mt-x64-1_80.dll
-bin/imath.dll
+/bin
 
-# ZMQ server
-bin/VRayZmqServer
-
-# From installation
-bin/setvrlservice.exe
-bin/vraytools.exe
 uninstall
 
 external/pyparsing/INSTALLER

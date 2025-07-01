@@ -100,7 +100,8 @@ def _createRenderChannelIndicatorType(uiName, nodeName):
                 "enabled": bpy.props.BoolProperty(
                     name        = uiName,
                     default     = False,
-                    update = lambda self, context: _updateRenderChannel(self, context)
+                    update      = lambda self, context: _updateRenderChannel(self, context),
+                    options     = set() # Explicitly reset as it defaults to {'ANIMATABLE'}
                 ),
                 # This property is used to explicitly stop the update function
                 "nodeUpdatesEnabled": bpy.props.BoolProperty(default = True),

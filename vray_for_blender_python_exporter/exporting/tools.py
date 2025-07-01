@@ -11,12 +11,11 @@ from xml.dom import NotFoundErr
 from vray_blender import debug
 from vray_blender.lib.lib_utils import LightTypeToPlugin, LightBlenderToVrayPlugin
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
-from vray_blender.nodes.tools import isVrayNode
-
+from vray_blender.nodes.tools import isCompatibleNode
 
 
 FLOAT_SOCK_TYPES = ( "VRaySocketFloat", "VRaySocketFloatColor", "VRaySocketFloatNoValue")
-COLOR_SOCK_TYPES = ( "VRaySocketColor", "VRaySocketColorNoValue", "VRaySocketAColor", 
+COLOR_SOCK_TYPES = ( "VRaySocketColor", "VRaySocketColorNoValue", "VRaySocketAColor",
                     "VRaySocketColorTexture", "VRaySocketColorMult", "VRaySocketAColor",
                     "VRaySocketTexMulti")
 
@@ -38,7 +37,6 @@ IGNORED_PLUGINS = {
     "BakeView",
     "VRayStereoscopicSettings",
     # Unused plugins for now
-    "SettingsCurrentFrame",
     "SettingsLightTree",
     "SettingsColorMappingModo",
     "SettingsDR",
@@ -83,10 +81,9 @@ def getOutSocketSelector(sock: bpy.types.NodeSocket):
             return sock.vray_attr
     else:
         # Meta nodes do not correspond to a (single) V-Ray plugin. Normally, they should be exported by 
-        # custom code and we should not get here
-        debug.printWarning(f"Attempt to get output selector for a meta node: {sock.node.name}::{sock.vray_attr}")
+        # custom code
         return AttrPlugin.OUTPUT_DEFAULT
-    
+
 
 def typePrefix(obj):
     match type(obj):
@@ -95,7 +92,7 @@ def typePrefix(obj):
         case bpy.types.Object:        return 'OB'
         case bpy.types.Collection:    return 'CO'
         case bpy.types.Mesh:          return 'ME'
-        case bpy.types.Curves:         return 'CV'
+        case bpy.types.Curves:        return 'CV'
         case bpy.types.SurfaceCurve:  return 'CU'
         case bpy.types.TextCurve:     return 'CU'
         case bpy.types.Curve:         return 'CU'
@@ -135,32 +132,46 @@ def isObjectNonMeshClipper(obj: bpy.types.Object):
 
 def getVRayBaseSockType(sock):
     if hasattr(sock, "vray_socket_base_type"):
-        return sock.vray_socket_base_type    
-    
-    return sock.bl_idname
+        return sock.vray_socket_base_type
+
+    return sock.type
 
 def getInputSocketByName(node:bpy.types.Node, socketName):
     """ When searching node.inputs using the [] operator, the implementation
         will match either socket name or socket identifier which may lead to
         confusion when socket name has been changed for any reason. This function
         searches strictly by name.
-        
-        Return: 
-        The found socket or None 
+
+        Return:
+        The found socket or None
     """
     assert node is not None
     return next(iter(s for s in node.inputs if s.name == socketName), None)
-    
-    
+
+
 def getInputSocketByAttr(node, attrName):
     """ Search for input socket by its 'vray_attr' field.
 
-        Return: 
-        The found socket or None 
+        Return:
+        The found socket or None
     """
     assert node is not None
     try:
         return next((s for s in node.inputs if s.vray_attr == attrName))
+    except StopIteration as ex:
+        debug.printError(f"Failed to get input socket {attrName} of node {node.name}")
+        debug.printExceptionInfo(ex)
+
+
+def getOutputSocketByAttr(node, attrName):
+    """ Search for output socket by its 'vray_attr' field.
+
+        Return:
+        The found socket or None
+    """
+    assert node is not None
+    try:
+        return next((s for s in node.outputs if s.vray_attr == attrName))
     except StopIteration as ex:
         debug.printError(f"Failed to get input socket {attrName} of node {node.name}")
         debug.printExceptionInfo(ex)
@@ -172,21 +183,75 @@ def getFromNode(sock):
     return None
 
 
-def getNodeLink(sock) ->bpy.types.NodeLink | None:
-    if len(sock.links) > 0:
+def getGroupNode(node):
+    """ Get the parent tree node of another group node.
+
+        Return:
+        The parent tree node when nested groups are used.
+    """
+    res = None
+    users = bpy.context.blend_data.user_map(subset={node.id_data})
+    for group in users[node.id_data]:
+        nodes = []
+        if isinstance(group, bpy.types.Material):
+            nodes = group.node_tree.nodes
+        elif isinstance(group, bpy.types.NodeGroup):
+            nodes = group.nodes
+        elif isinstance(group, bpy.types.ShaderNodeTree):
+            nodes = group.nodes
+        for parentTreeNode in nodes:
+            if parentTreeNode.bl_idname == 'ShaderNodeGroup':
+                for groupNode in parentTreeNode.node_tree.nodes:
+                    if groupNode == node:
+                        res = parentTreeNode
+                        break
+
+    return res
+
+
+def resolveNodeSocket(socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
+    """ Resolve an input socket to either another output socket or group node inputs socket
+    going through all re-routes and nested groups.
+
+        Return:
+        The resolved socket that can be directly used for export or None if it's connected
+        to an unsupported node.
+    """
+    if len(socket.links) > 0:
 
         # If the linked node is 'Reroute', return its link to the input socket to skip the export.
-        if fromNode := getFromNode(sock):
+        if fromNode := getFromNode(socket):
             if fromNode.bl_idname == "NodeReroute":
-                return getNodeLink(fromNode.inputs[0])
-            elif not isVrayNode(fromNode):
+                return resolveNodeSocket(fromNode.inputs[0])
+            elif fromNode.bl_idname == "ShaderNodeGroup":
+                nodeGroup = fromNode.node_tree
+                groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+                for idx, outSocket in enumerate(fromNode.outputs):
+                    if outSocket == socket.links[0].from_socket:
+                        break
+                return resolveNodeSocket(groupOutput.inputs[idx])
+            elif fromNode.bl_idname == "NodeGroupInput":
+                groupNode = getGroupNode(fromNode)
+                if not groupNode:
+                    return None
+                for idx, inSocket in enumerate(fromNode.outputs):
+                    if inSocket == socket.links[0].from_socket:
+                        break
+                return resolveNodeSocket(groupNode.inputs[idx])
+            elif not isCompatibleNode(fromNode):
                 from vray_blender.lib.defs import NodeContext
                 NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
                 return None
             else:
-                return sock.links[0]
-    return None
+                return socket
+    return socket
 
+
+def getNodeLink(sock: bpy.types.NodeSocket) ->bpy.types.NodeLink | None:
+    socket = resolveNodeSocket(sock)
+    if socket is not None and len(socket.links)>0:
+        return socket.links[0]
+    return None
 
 def getLinkedFromSocket(sock):
     if link := getNodeLink(sock):
@@ -196,11 +261,23 @@ def getLinkedFromSocket(sock):
 
 def removeInputSocketLinks(sock: bpy.types.NodeSocket):
     """ Remove all links to an input socket """
+    assert not sock.is_output
+
     if fromSock := getLinkedFromSocket(sock):
         if link := next((l for l in fromSock.links if l in sock.links), None):
             ntree: bpy.types.NodeTree = sock.node.id_data
             ntree.links.remove(link)
 
+
+def removeOutputSocketLinks(sock: bpy.types.NodeSocket):
+    """ Remove all links to an output socket """
+    assert sock.is_output
+
+    ntree: bpy.types.NodeTree = sock.node.id_data
+    linksToRemove = list(sock.links)
+
+    for link in linksToRemove:
+        ntree.links.remove(link)
 
 def nodePluginType(node):
     return node.vray_plugin if hasattr(node, "vray_plugin") else None
@@ -235,12 +312,14 @@ def isNodeConnected(node):
 
 
 def isFloatSocket(sockType):
-    return sockType in FLOAT_SOCK_TYPES
+    return sockType in FLOAT_SOCK_TYPES or sockType in ('VALUE', 'ROTATION')
 
 
 def isColorSocket(sockType):
-    return sockType in COLOR_SOCK_TYPES
+    return sockType in COLOR_SOCK_TYPES or sockType in ('RGBA', 'VECTOR')
 
+def isUVWSocket(sockType):
+    return sockType == "VRaySocketCoords" or sockType == 'VECTOR'
 
 def isObjectOrphaned(obj: bpy.types.ID):
     # In Python 3.+ True and False are guaranteed to be 1 and 0
@@ -266,8 +345,8 @@ def isObjectVisible(exporterCtx, obj: bpy.types.Object):
 
 def isModifierVisible(exporterCtx, mod: bpy.types.Modifier):
     """ Get the visibility of a modifier for the current renering mode """
-    return mod.show_viewport if exporterCtx.viewport else mod.show_render
-    
+    return mod.show_viewport if exporterCtx.interactive else mod.show_render
+
 
 def vrayExporter(ctx):
     return ctx.scene.vray.Exporter

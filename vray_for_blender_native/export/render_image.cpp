@@ -1,5 +1,5 @@
 #include "render_image.h"
-#include "utils/assert.h"
+#include "vassert.h"
 #include "utils/logger.hpp"
 
 #include <cstring>
@@ -37,11 +37,11 @@ void VRayForBlender::updateImageRegion(
 	void * __restrict dest, ImageSize destSize, ImageRegion destRegion,
 	const void * __restrict source, ImageSize sourceSize, ImageRegion sourceRegion, ImageRegion::Options options)
 {
-	VRAY_ASSERT(destRegion.w == sourceRegion.w && destRegion.h == sourceRegion.h && "Source and Destination region's sizes must be equal");
-	VRAY_ASSERT(destSize.w >= destRegion.w && destSize.h >= destRegion.h && "Image region can't be bigger than dest size!");
-	VRAY_ASSERT(destRegion.x >= 0 && destRegion.y >= 0 && sourceRegion.x >= 0 && sourceRegion.y >= 0 && "Region's coords must be >= 0");
-	VRAY_ASSERT(destRegion.x + destRegion.w <= destSize.w && destRegion.y + destRegion.h <= destSize.h && "Destination region must fit inside destination size!");
-	VRAY_ASSERT(sourceSize.channels == destSize.channels && "Source and destination must have same number of channels");
+	vassert(destRegion.w == sourceRegion.w && destRegion.h == sourceRegion.h && "Source and Destination region's sizes must be equal");
+	vassert(destSize.w >= destRegion.w && destSize.h >= destRegion.h && "Image region can't be bigger than dest size!");
+	vassert(destRegion.x >= 0 && destRegion.y >= 0 && sourceRegion.x >= 0 && sourceRegion.y >= 0 && "Region's coords must be >= 0");
+	vassert(destRegion.x + destRegion.w <= destSize.w && destRegion.y + destRegion.h <= destSize.h && "Destination region must fit inside destination size!");
+	vassert(sourceSize.channels == destSize.channels && "Source and destination must have same number of channels");
 
 	const int pixelSize = destSize.channels;
 

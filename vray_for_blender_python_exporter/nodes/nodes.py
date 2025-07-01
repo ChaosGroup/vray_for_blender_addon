@@ -86,11 +86,14 @@ class VRayRenderChannelMenu(bpy.types.Menu):
     @classmethod
     def poll(cls, context):
         return classes.pollTreeType(cls, context) and _pollWorldNodeTreeSelected(context)
-       
+
     def draw(self, context):
+        nodesList = buildItemsList('RENDERCHANNEL', self.menu_type)
+        
         layout = self.layout
         col = layout.column(align=True)
-        for item in self._nodesList:
+        
+        for item in nodesList:
             item.draw(item, col, context) 
 
 
@@ -103,17 +106,13 @@ def _getChannelMenuClasses():
         from vray_blender.plugins.channel.RenderChannelsPanel import VRayChannelNodeSubtypes
         for channelSubtype in VRayChannelNodeSubtypes:
             channelSubtypeName = channelSubtype.title()
-            def initFunction(self):
-                self._nodesList = buildItemsList('RENDERCHANNEL', self.menu_type)
-
             vRayRenderChannelType = type(
                 f"VRay{channelSubtypeName}ChannelsMenu",
                 (VRayRenderChannelMenu,),
                 {
                     "bl_label": f"{channelSubtypeName}",
                     "bl_idname": f"NODE_MT_VRAY_{channelSubtypeName}_Channels_Menu",
-                    "menu_type": channelSubtype,
-                    "__init__": initFunction 
+                    "menu_type": channelSubtype
                 }
             )
             _channelMenuClasses.append(vRayRenderChannelType)
@@ -207,15 +206,20 @@ def getMaterialItemsList():
         _getMtlByTypeAndLabel("BRDF", "V-Ray Stochastic Flakes Mtl"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Switch Mtl"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl 2Sided"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Material ID"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Override"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Render Stats"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Round Edges"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Wrapper"),
+        
+        # Disabled until we decide whether we wont to show nodes for them
+        # --------------------
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Material ID"),
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Render Stats"),
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Round Edges"),
+        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Wrapper"),
+        #
         # TBD 
+        # --------------------
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl GLSL"),
-        # TBD 
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl OSL"),
+        
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray VRmat Mtl")
     )
 
@@ -372,13 +376,16 @@ def vrayNodeDrawSide(self, context, layout):
 
     vrayPlugin = PLUGINS[self.vray_type][self.vray_plugin]
 
-    classes.drawPluginUI(
-        context,
-        layout,
-        getattr(self, self.vray_plugin), # PropertyGroup
-        vrayPlugin,                      # Plugin module
-        self                             # node
-    )
+    if hasattr(vrayPlugin, 'nodeDrawSide'):
+        vrayPlugin.nodeDrawSide(context, layout, self)
+    else:
+        classes.drawPluginUI(
+            context,
+            layout,
+            getattr(self, self.vray_plugin), # PropertyGroup
+            vrayPlugin,                      # Plugin module
+            self                             # node
+        )
 
 
 def updateRenderChannelsState(node, enabled):
@@ -442,6 +449,9 @@ def vrayNodeCopy(self, node):
     # Create a new unique ID for the node and set the link to it in the property group
     syncObjectUniqueName(self, reset=True)
 
+    if self.vray_plugin == 'NONE': # No properties for copying
+        return
+
     propGroupCopy = getattr(self, self.vray_plugin)
     propGroupCopy.parent_node_id = self.unique_id
     
@@ -450,6 +460,12 @@ def vrayNodeCopy(self, node):
         # Give the node a chance to de-initialize plugin-specific state
         pluginModule.nodeCopy(self, node)
 
+    # Assign unique names to copied render channel nodes.
+    if hasattr(node, 'vray_type') and node.vray_type == "RENDERCHANNEL":
+        # By default, the render channel node labels ('bpy.types.Node.name') are the same as the render channel plugin names.
+        # When a node is copied, Blender automatically adds a unique suffix to the copied node's label.
+        # This modified label is suitable for use as a unique channel name.
+        propGroupCopy["name"] = self.name
    
 
 def vrayNodeFree(self: bpy.types.Node):
@@ -690,8 +706,6 @@ def _loadDynamicNodes():
             _dynamicClasses.append(DynNodeClass)
 
     # Add manually defined classes
-    VRayNodeTypes['BRDF'].append(specials.brdf.VRayNodeBRDFLayered)
-    
     VRayNodeTypes['MATERIAL'].append(specials.material.VRayNodeMtlMulti)
     VRayNodeTypes['MATERIAL'].append(specials.material.VRayNodeMtlOSL)
 

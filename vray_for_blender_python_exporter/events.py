@@ -1,4 +1,4 @@
-
+import os
 import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -7,9 +7,7 @@ from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQ
 from vray_blender.lib import blender_utils, image_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
-from vray_blender.lib.sys_utils import getVfbDefaultLayersPath
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps
-from vray_blender.version import getBuildVersionString
 
 IS_DEFAULT_SCENE = False # Indicates that current loaded scene is newly created
 
@@ -29,9 +27,18 @@ def _onSavePost(e):
 
 @bpy.app.handlers.persistent
 def _onSavePre(e):
+    from vray_blender.version import getBuildVersionString, getAddonUpgradeNumber
+    from vray_blender import UPGRADE_NUMBER, debug
+    
     scene = bpy.context.scene
-    scene.vray.Exporter.vrayAddonVersion = getBuildVersionString() 
-    scene.vray.SettingsVFB.vfb2_layers = VfbEventHandler.getVfbLayers()
+    
+    if scene.vray.Exporter.get('vrayAddonUpgradeNumber', None) != UPGRADE_NUMBER:
+        debug.printAlways(f"[V-Ray] Scene version updated to {getAddonUpgradeNumber()}")
+    
+    # Use the dictionary access syntax here in order to avoid updates to the scene
+    scene.vray.Exporter['vrayAddonVersion'] = getBuildVersionString() 
+    scene.vray.Exporter['vrayAddonUpgradeNumber'] = UPGRADE_NUMBER
+    scene.vray.SettingsVFB['vfb2_layers'] = VfbEventHandler.getVfbLayers()
     
 
 @bpy.app.handlers.persistent
@@ -62,17 +69,20 @@ def _onLoadPost(e):
     
     # Run upgrade for the loaded scene, if necessary
     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
-    
-    # If SettingsVFB.vfb2_layers is empty, it will be reset to the default layer configuration
+
+    # If SettingsVFB.vfb2_layers is empty, the server will reset layers to their default configuration
     # to override any VFB layer settings from previously opened scenes.
     settingsVFB = bpy.context.scene.vray.SettingsVFB
-    if not settingsVFB.vfb2_layers: 
-        with open(getVfbDefaultLayersPath() , 'r') as vfbDefaultLayers:
-            settingsVFB.vfb2_layers = vfbDefaultLayers.read()
 
     # Set VFB Layers if new scene is being loaded
     VfbEventHandler.updateVfbLayers(settingsVFB.vfb2_layers)
     vray.setVfbLayers(settingsVFB.vfb2_layers)
+
+
+    vray.resetVfbToolbar()
+
+    # Notify the Cosmos browser that the scene name has changed
+    vray.updateCosmosSceneName(os.path.basename(e))
 
     # Set the log level to the one saved in the scene
     debug.setLogLevel(int(bpy.context.scene.vray.Exporter.verbose_level))
@@ -96,11 +106,13 @@ def _onUpdatePre(e):
     from vray_blender.exporting.light_export import fixBlenderLights
     from vray_blender.plugins.templates.common import cleanupObjectSelectorLists
     from vray_blender.nodes.nodes import removeInvalidNodeLinks
+    from vray_blender.lib.camera_utils import fixOverrideCameraType
     
     fixBlenderLights()
     cleanupObjectSelectorLists()
     syncColorRamps()
     removeInvalidNodeLinks()
+    fixOverrideCameraType()
 
     image_utils.checkPackedImageForUpdates()
     

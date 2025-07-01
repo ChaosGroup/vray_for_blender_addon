@@ -18,6 +18,7 @@
         },
         {
             "attr" : "opencl_textureFormat",
+            "default" : "2",
             "ui" : { "display_name" : "Texture Format" }
         },
         {
@@ -29,35 +30,32 @@
         {
             "attr" : "enable_bucket_sampler",
             "default" : 1
+        },
+        {
+            "attr": "max_sample_level",
+            "default": 2500,
+            "ui" : {
+                "display_name": "Samples Limit"
+            }
+        },
+        {
+            "attr": "noise_threshold",
+            "default": 0.01
+        },
+        {
+            "attr": "gpu_bundle_size",
+            "ui" : {
+                "display_name": "Ray Bundle Size"
+            }
+        },
+        {
+            "attr": "gpu_samples_per_pixel",
+            "ui" : {
+                "display_name": "Rays Per Pixel"
+            }
         }
     ],
-    "Widget": {
-        "widgets": [
-            {
-                "label": "Ray Settings",
-                "layout": "SEPARATOR" 
-            },
-            {
-                "layout": "COLUMN",
-                "align": true,
-                "attrs": [
-                    { "name": "gpu_bundle_size" },
-                    { "name": "gpu_samples_per_pixel" }
-                ]
-            },
-            { 
-                "label": "Termination Settings",
-                "layout": "SEPARATOR" 
-            },
-            {
-                "layout": "COLUMN",
-                "align": true,
-                "attrs": [
-                    { "name": "max_render_time" },
-                    { "name": "max_sample_level" },
-                    { "name": "noise_threshold" }
-                ]
-            }
-        ]
+    "options" : {
+        "animatable" : false
     }
 }

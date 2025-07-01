@@ -161,8 +161,8 @@ class CommonSettings:
         self.viewportImageType      = defs.ImageType.RgbaReal
 
     def _updateAnimation(self):
-
-        if self.isPreview or self._interactive or self.vrayExporter.isBakeMode:
+        isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
+        if not isProductionRendering:
             self.animation.mode = defs.AnimationMode.SingleFrame
         else:
             self.animation.mode = self.vrayExporter.animation_mode
@@ -218,6 +218,15 @@ class CommonSettings:
 
         # Disable motion blur for bake render
         self.useMotionBlur = self.useMotionBlur and not self.vrayExporter.isBakeMode and not self.isPreview
+
+        # If we are rendering single frame but we have motion blur - override to animation rendering
+        # and set the start/end frame to the current. That way we'll export frames for motion blur
+        # override only for production rendering. IPR does not export animation frames yet so
+        # it won't handle animation being turned on
+        if isProductionRendering and not self.animation.use and self.useMotionBlur:
+            self.animation.use = True
+            self.animation.frameStart   = self.scene.frame_current
+            self.animation.frameEnd     = self.scene.frame_current
 
 
     def _updateStereoCameraObjectsList(self, leftCamName, rightCamName):

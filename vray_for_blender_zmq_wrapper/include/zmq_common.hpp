@@ -10,7 +10,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2014;
+static const int ZMQ_PROTOCOL_VERSION = 2019;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms

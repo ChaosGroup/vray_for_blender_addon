@@ -76,9 +76,6 @@
                         "name": "filtering"
                     },
                     {
-                        "name": "derive_raw_channels"
-                    },
-                    {
                         "name": "vfb_color_corrections"
                     },
                     {

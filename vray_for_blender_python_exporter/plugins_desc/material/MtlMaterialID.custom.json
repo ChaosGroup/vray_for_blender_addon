@@ -3,6 +3,10 @@
     "Name": "V-Ray Mtl Material ID",
     "Parameters": [
         {
+            "attr" : "base_mtl",
+            "type": "BRDF"
+        },
+        {
             "attr": "use",
             "default": false,
             "desc": "",

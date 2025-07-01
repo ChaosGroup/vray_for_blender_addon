@@ -24,13 +24,18 @@ class VRAY_PT_VRayProxy(classes.VRayGeomPanel):
                     (context.active_object.vray.VRayAsset.assetType == blender_utils.VRAY_ASSET_TYPE["Proxy"])
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
         obj = context.active_object
 
         if obj.type != "MESH":
             return
         
+        # Disabling the proxy panel in edit mode
+        # as generating new preview mesh while in edit mode
+        # can lead to unexpected results.
+        classes.disableLayoutInEditMode(layout, context)
+
         geomMeshFile = obj.data.vray.GeomMeshFile
 
         gemMeshFileModule = getPluginModule('GeomMeshFile')
@@ -38,8 +43,34 @@ class VRAY_PT_VRayProxy(classes.VRayGeomPanel):
         painter.renderPluginUI(layout)
 
 
+class VRAY_PT_VRayScene(classes.VRayGeomPanel):
+    bl_label   = "Scene"
+    bl_options = {'DEFAULT_CLOSED'}
+
+
+    @classmethod
+    def poll(cls, context):
+        return classes.VRayGeomPanel.poll(context) and \
+                    (context.active_object.vray.VRayAsset.assetType == blender_utils.VRAY_ASSET_TYPE["Scene"])
+
+    def draw(self, context):
+        layout= self.layout
+
+        obj = context.active_object
+
+        if obj.type != "MESH":
+            return
+        
+        vrayScene = obj.data.vray.VRayScene
+
+        vraySceneModule = getPluginModule('VRayScene')
+        painter = UIPainter(context, vraySceneModule, vrayScene)
+        painter.renderPluginUI(layout)
+
+
 def getRegClasses():
     return (
+        VRAY_PT_VRayScene,
         VRAY_PT_VRayProxy,
     )
 

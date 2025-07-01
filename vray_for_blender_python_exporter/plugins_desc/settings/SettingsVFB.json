@@ -3,394 +3,380 @@
     "Desciption" : "SettingsVFB",
     "ID" : "SettingsVFB",
     "Name" : "Settings VFB",
-    "Parameters" : 
+    "Parameters" :
     [
-        
         {
             "attr" : "version",
             "default" : 4,
             "desc" : "",
             "type" : "INT"
         },
-        
         {
             "attr" : "bloom_weight",
             "default" : 0.4000000059604645,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
         {
             "attr" : "bloom_mask_intensity",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
         {
             "attr" : "glare_on",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
         {
             "attr" : "glare_weight",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
         {
             "attr" : "glare_size",
             "default" : 30.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
         {
             "attr" : "glare_type",
             "default" : 2,
             "desc" : "0- from image  1 - from render camera  2 - from camera params",
             "type" : "INT"
         },
-        
         {
             "attr" : "glare_mode",
             "default" : 2,
             "desc" : "0-image 1-image and buffer  2-buffer",
             "type" : "INT"
         },
-        
         {
             "attr" : "glare_image_path",
             "default" : "",
             "desc" : "",
             "type" : "STRING"
         },
-        
         {
             "attr" : "glare_obstacle_image_path",
             "default" : "",
             "desc" : "",
             "type" : "STRING"
         },
-        
         {
             "attr" : "glare_diffraction_on",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
         {
             "attr" : "glare_use_obstacle_image",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
         {
             "attr" : "glare_cam_blades_on",
             "default" : true,
             "desc" : "",
             "type" : "BOOL"
         },
-        
         {
             "attr" : "glare_cam_num_blades",
             "default" : 6,
             "desc" : "",
             "type" : "INT"
         },
-        
+
         {
             "attr" : "glare_cam_rotation",
             "default" : 15.0,
             "desc" : "Rotation in degrees from 0.0 - 360.0",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "glare_cam_fnumber",
             "default" : 0.2000000029802322,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "glare_mask_intensity",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "interactive",
             "default" : true,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "hardware_accelerated",
             "default" : true,
             "desc" : "When this is 1, V-Ray will try to apply the lens effects using the best OpenCL device it can find. If there is no such (or error occures), it will fallback to a CPU implementation0",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "display_srgb",
             "default" : true,
             "desc" : "0 - sRGB is OFF, 1 - sRGB is ON",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "filter_rotation",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "use_occlusion",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "occlusion_symmetric",
             "default" : true,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "occlusion_percent",
             "default" : 20.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "occlusion_rotation",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "occlusion_arc",
             "default" : 100.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "use_grating",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "grating_length",
             "default" : 10.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "grating_slope",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "grating_strength",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "grating_density",
             "default" : 50.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "grating_zoom",
             "default" : 5.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "use_scratch",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "scr_pattern",
             "default" : 0,
             "desc" : "",
             "type" : "INT"
         },
-        
+
         {
             "attr" : "scr_symmetric",
             "default" : true,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "scr_multiglare_count",
             "default" : 1,
             "desc" : "",
             "type" : "INT"
         },
-        
+
         {
             "attr" : "scr_seed",
             "default" : 0,
             "desc" : "",
             "type" : "INT"
         },
-        
+
         {
             "attr" : "scr_density",
             "default" : 50.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_strength",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_slope_variance",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_width_variance",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_length",
             "default" : 50.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_zoom",
             "default" : 2.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "scr_rotation",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "use_dust",
             "default" : false,
             "desc" : "",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "dust_pattern",
             "default" : 0,
             "desc" : "",
             "type" : "INT"
         },
-        
+
         {
             "attr" : "dust_radius_variance",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "dust_strength",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "dust_density",
             "default" : 50.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "dust_zoom",
             "default" : 2.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "dust_rotation",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "dust_jitter",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "obst_image_zoom",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "obst_image_rotation",
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "obst_image_strength",
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT"
         },
-        
+
         {
             "attr" : "cc_settings",
             "default" : 0,
@@ -398,21 +384,21 @@
             "elements_count" : 0,
             "type" : "INT_LIST"
         },
-        
+
         {
             "attr" : "enable_vfb2",
             "default" : true,
             "desc" : "Should we try to use VFB2 (true) or VFB1 (false)",
             "type" : "BOOL"
         },
-        
+
         {
             "attr" : "vfb2_layers",
             "default" : "",
             "desc" : "VFB2 layers saved as a string",
             "type" : "STRING"
         },
-        
+
         {
             "attr" : "dont_affect_settings",
             "default" : false,
@@ -421,7 +407,7 @@
         }
     ],
     "Type" : "SETTINGS",
-    "Widget" : 
+    "Widget" :
     {
         "widgets" : []
     }

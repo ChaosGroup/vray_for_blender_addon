@@ -1,6 +1,6 @@
 #include "zmq_exporter.h"
 #include "zmq_server.h"
-#include "utils/assert.h"
+#include "vassert.h"
 #include "utils/logger.hpp"
 #include "plugin_desc.hpp"
 
@@ -293,7 +293,7 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		break;
 	default:
 		Logger::error("Invalid message type: {}", static_cast<int>(msgType));
-		VRAY_ASSERT(!"Invalid message type");
+		vassert(!"Invalid message type");
 	}
 
 	if (m_isAborted && this->callback_on_render_stopped) {
@@ -385,11 +385,9 @@ void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& messag
 void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeState& message) {
 	switch (message.state) {
 	case RendererState::Abort:
-		Logger::warning("ABORT");
 		m_isAborted = true;
 		break;
 	case RendererState::Stopped:
-		Logger::warning("STOP");
 		// 'Stopped' state is entered instead of 'Done' when a preview job is rendered 
 		// using an accelerator device. 
 		// TODO: Figure out why 
@@ -409,7 +407,7 @@ void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeS
 		break;
 
 	default:
-		VRAY_ASSERT(!"Receieved unexpected RendererState message from renderer.");
+		vassert(!"Receieved unexpected RendererState message from renderer.");
 	}
 }
 
@@ -540,9 +538,9 @@ void VRayForBlender::ZmqExporter::abortRender()
 	m_client->send(serializeMessage(MsgRendererAbort{}));
 }
 
-void ZmqExporter::pluginCreate(const std::string& pluginName, const std::string& pluginType)
+void ZmqExporter::pluginCreate(const std::string& pluginName, const std::string& pluginType, bool allowTypeChanges)
 {
-	m_client->send(serializeMessage(MsgPluginCreate{pluginName, pluginType}));
+	m_client->send(serializeMessage(MsgPluginCreate{pluginName, pluginType, allowTypeChanges}));
 	m_dirty = true;
 }
 
@@ -646,11 +644,11 @@ void ZmqExporter::setRenderSize(const RenderSizes& renderSizes)
 }
 
 
-void ZmqExporter::setCameraPlugin(const std::string &pluginName)
+void ZmqExporter::setCameraName(const std::string &cameraName)
 {
-	if (m_cachedValues.activeCamera != pluginName) {
-		m_cachedValues.activeCamera = pluginName;
-		m_client->send(serializeMessage(MsgRendererSetCurrentCamera{pluginName}));
+	if (m_cachedValues.activeCamera != cameraName) {
+		m_cachedValues.activeCamera = cameraName;
+		m_client->send(serializeMessage(MsgRendererSetCurrentCamera{cameraName}));
 		m_dirty = true;
 	}
 }
@@ -708,7 +706,7 @@ void ZmqExporter::init()
 			}
 		}
 
-		m_client->send(serializeMessage(MsgRendererInit{type, drflags}));
+		m_client->send(serializeMessage(MsgRendererInit{type, drflags, m_settings.renderThreads}));
 		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitAutoOff}));
 		m_client->send(serializeMessage(MsgRendererGetImage{static_cast<int>(RenderChannelType::RenderChannelTypeNone)}));
 		
@@ -773,21 +771,27 @@ void ZmqExporter::stop()
 }
 
 
-void ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
+int ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 {
 	if (m_settings.separateFiles) {
 		Logger::warning("ZMQ will ignore option 'Separate Files' and export in one file!");
 	}
 
-	fs::path dirPath(settings.filePath);
+	const fs::path filePath(settings.filePath);
+	if (!filePath.has_filename() || filePath.extension().empty()) {
+		Logger::error("Invalid vrscene file name.", settings.filePath);
+		return false;
+	}
+
+	fs::path dirPath(filePath);
 	dirPath.remove_filename();
 
 	std::error_code code;
-	if (!fs::exists(dirPath) && !fs::create_directories(dirPath, code)) {
+	if (!fs::exists(dirPath) && !fs::create_directories(dirPath, code) && code) {
 		Logger::error("Failed to create directory '{}': {}", settings.filePath, code.message());
-		return;
-	} 
-	
+		return false;
+	}
+
 	ExportSettings exportSettings;
 
 	exportSettings.compressed = settings.compressed;
@@ -795,7 +799,7 @@ void ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 	exportSettings.hexTransforms = settings.hexTransforms;
 	exportSettings.hostAppString = settings.hostAppString;
 	exportSettings.filePath = settings.filePath;
-	
+
 	std::vector<std::string> pluginTypes;
 	boost::split(pluginTypes, settings.pluginTypes, boost::is_any_of(","));
 
@@ -809,6 +813,7 @@ void ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 	}
 
 	m_client->send(serializeMessage(MsgRendererExportScene{exportSettings}));
+	return true;
 }
 
 

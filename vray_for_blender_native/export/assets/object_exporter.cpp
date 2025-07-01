@@ -6,7 +6,7 @@
 #include "export/zmq_exporter.h"
 
 #include "api/interop/types.h"
-#include "utils/assert.h"
+#include "vassert.h"
 
 
 using namespace VRayBaseTypes;
@@ -78,8 +78,8 @@ AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
 	const int numClrs	= static_cast<int>(pc.colors.size());
 	const int numRadii	= static_cast<int>(pc.radii.size());
 
-	VRAY_ASSERT((numClrs == 0) || (numClrs == numPts));
-	VRAY_ASSERT((numRadii == 0) || (numRadii == numPts));
+	vassert((numClrs == 0) || (numClrs == numPts));
+	vassert((numRadii == 0) || (numRadii == numPts));
 
 	auto positions	= arrayToAttrListVec3(reinterpret_cast<const float*>(pc.points.data()), numPts);
 	auto colors		= arrayToAttrListVec3(reinterpret_cast<const float*>(pc.colors.data()), numClrs);
@@ -106,11 +106,9 @@ AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
 
 AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 {
-	static const float FLOAT_DELTA = 0.0001f;
-
 	AttrInstancer instancer;
-	instancer.frameNumber = exporter.getCurrentFrame() + FLOAT_DELTA;
-	// instancer.data.resize(inst.itemCount);
+	instancer.frameNumber = exporter.getCurrentFrame();
+	instancer.data.resize(inst.itemCount);
 
 	using Matrix = float[4][4];
 
@@ -125,9 +123,9 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 	const char* ptr = &inst.data[0];
 
 	for (int i = 0; i < inst.itemCount; ++i){
-		AttrInstancer::Item item;
+		AttrInstancer::Item& item = (*instancer.data)[i];
 
-		item.index = *reinterpret_cast<const int*>(ptr); 
+		item.index = *reinterpret_cast<const int*>(ptr);
 		item.tm = AttrTransform(*reinterpret_cast<const Matrix*>(ptr + tmOffset));
 		item.vel = AttrTransform(*reinterpret_cast<const Matrix*>(ptr + velOffset));
 
@@ -139,8 +137,6 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 		item.node = AttrPlugin(name);
 		
 		ptr += objNameDataOffset + nameLen;
-
-		instancer.data.append(item);
 	}
 
 

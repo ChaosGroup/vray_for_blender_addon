@@ -2,7 +2,7 @@ import bpy
 
 from vray_blender.nodes.mixin import VRayNodeBase
 from vray_blender import debug
-from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene
+from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
 
 def _upgradeUVWGenMayaPlace2d(ctx: UpgradeContext, oldNode: VRayNodeBase, newNode: VRayNodeBase):
     # Cut off the last _tex part of the parameters.
@@ -14,7 +14,7 @@ def _upgradeUVWGenMayaPlace2d(ctx: UpgradeContext, oldNode: VRayNodeBase, newNod
 
     nodeTree: bpy.types.ShaderNodeTree = newNode.id_data
     for link in nodeTree.links:
-        if link.to_socket.vray_attr == propName:
+        if hasattr(link.to_socket, 'vray_attr') and (link.to_socket.vray_attr == propName):
             debug.printWarning(f"UVW Mapping socket {propName} will be disconnected in {ctx.nodeTreeType}::{ctx.nodeTreeName}")
             nodeTree.links.remove(link)
             break
@@ -41,3 +41,6 @@ UPGRADE_INFO = {
 
 def run():
     upgradeScene(UPGRADE_INFO)
+
+def check():
+    return sceneNeedsUpgrade(UPGRADE_INFO)

@@ -26,12 +26,12 @@ def exportDefaultUVWGenChannel(nodeCtx: NodeContext):
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
 
-    pluginType = 'UVWGenChannel'
-
-    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(pluginType)):
+    DEFAULT_PLUGIN_TYPE = 'UVWGenChannel'
+    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
         uvwGenChannel = PluginDesc('defaultUVWGenChannel', 'UVWGenChannel')
         uvwGenChannel.setAttribute('uvw_channel', -1)
-        plugin = commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenChannel)
+        plugin = commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenChannel, False)
+        nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
 
     return plugin
 
@@ -41,9 +41,9 @@ def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
      
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
-    pluginType = 'UVWGenEnironment'
+    DEFAULT_PLUGIN_TYPE = 'UVWGenEnironment'
 
-    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(pluginType)):
+    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
         uvwGenEnv = PluginDesc('defaultUVWGenEnvironment', 'UVWGenEnvironment')
 
         assert len(nodeCtx.nodes), "This function should not be executed with NodeContext without nodes"
@@ -60,6 +60,7 @@ def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
 
 
         plugin = commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenEnv)
+        nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
 
     return plugin
 

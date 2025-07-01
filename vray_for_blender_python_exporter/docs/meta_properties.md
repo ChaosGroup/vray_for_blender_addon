@@ -39,9 +39,9 @@ Combines two plugin properties - a COLOR and a TEXTURE, which should be presente
 TEXTURE if the socket is connected, otherwise - COLOR
 </ul>
 
-#### PLUGIN_USE
+#### BRDF_USE
 <ul>
-Combines two plugin properties - a PLUGIN  and a BOOL, which should be presented to the user as a single one. 
+Combines two plugin properties - a BRDF  and a BOOL, which should be presented to the user as a single one. 
 
 **Properties**
 

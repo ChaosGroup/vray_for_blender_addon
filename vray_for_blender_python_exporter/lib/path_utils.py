@@ -1,11 +1,12 @@
 
+from __future__ import annotations
+
 import os
 import sys
 import tempfile
 from pathlib import Path
 import filecmp
 import shutil
-
 import bpy
 
 from vray_blender import debug
@@ -51,6 +52,10 @@ def quotes(path, force=False):
     if not force and sys.platform == 'win32':
         return path
     return '"%s"' % (path)
+
+
+def isRelativePath(path):
+    return path.startswith("//")
 
 
 def getPreviewDir():
@@ -172,26 +177,31 @@ def copyDRAsset(scene, srcFilepath):
     return dstFilepath
 
 
-def expandPathVariables(context: bpy.types.Context, expr: str):
-    blendPath = context.blend_data.filepath
+def expandPathVariables(ctx: bpy.types.Context, expr: str, allowRelative = False):
+    """ Expand special placeholders in the supplied path expression:
+        - $F - the name of the .blend file
+        - $C - the name of the current camera
+        - $S - the name of the scene
 
-    expandedPath = expr
+    Args:
+        ctx (bpy.types.Context): context
+        expr (str): the path expression to expand
+        allowRelative (bool, optional): True to format relative Blender paths as relative in V-Ray.
+
+    Returns:
+        _type_: _description_
+    """
+    scene = ctx.scene
+    cameraName = scene.camera.name if scene.camera else "no_camera"
+
+    expandedPath = expr.replace("$F", Path(bpy.data.filepath).name)\
+                        .replace("$C", cameraName)\
+                        .replace("$S", scene.name)
     
-    if expr.startswith("//"):
-        # Path rooted at Blender's executable folder
-        prefixPath = Path(blendPath).parent if blendPath else Path(getTmpDirectory())
-        expandedPath = str(prefixPath / expr[2:])
-   
-    camera = context.scene.camera
-    cameraName = camera.name if camera else "no_camera"
+    return formatResourcePath(expandedPath, allowRelative)
 
-    expandedPath = expandedPath.replace("$F", Path(blendPath).name)\
-                                .replace("$C", cameraName)\
-                                .replace("$S", context.scene.name)
 
-    return expandedPath
-
-def getOutputFileName(context, imgFile, imgFormat, viewLayerName=""):
+def getOutputFileName(context, imgFile, imgFormat, viewLayerName="", allowRelative = False):
     imgFile = f"{imgFile}_{viewLayerName}" if viewLayerName else imgFile
 
     imgFile = expandPathVariables(context, imgFile)
@@ -202,3 +212,22 @@ def getOutputFileName(context, imgFile, imgFormat, viewLayerName=""):
     imgFile += extensions[imgFormat]
 
     return imgFile
+
+
+def formatResourcePath(path: str, allowRelative: bool):
+    """ Format absolute or relative path suitable for usage as path property in a 
+        .vrscene file.
+
+    Args:
+        path (str):             the path to the resource file as supplied by Blender
+        allowRelative(bool) :   if True, relative Blender paths will be formatted as 
+                                relative V-Ray paths, otherwise they will be converted
+                                to absolute
+    """
+
+    if allowRelative and isRelativePath(path):
+        # Path is relative to the currently open .blend file. Remove the leading '//'
+        # to change into the relative path format expected by V-Ray.
+        return path[2:]
+    
+    return bpy.path.abspath(path)

@@ -1,5 +1,5 @@
 #include "zmq_server.h"
-#include "utils/assert.h"
+#include "vassert.h"
 #include "utils/logger.hpp"
 #include "plugin_desc.hpp"
 
@@ -51,7 +51,7 @@ namespace {
 
 void ZmqServer::start(const ZmqServerArgs& args) {
 	assert(!m_conn && "ZmqServer::start() method can only be called once.");
-	assert(nullptr == m_ctx.handle());
+	assert(nullptr != m_ctx.handle());
 
 	m_args = args;
 	m_ctx = zmq::context_t(1);
@@ -222,10 +222,9 @@ void ZmqServer::runServer() {
 	});
 }
 
-
 bp::child ZmqServer::startServerProcess() {
-	
-	// Add environment variables VRayZmqServer process needs to the current environment. 
+
+	// Add environment variables VRayZmqServer process needs to the current environment.
 	auto env = boost::this_process::environment();
 
 	env["VRAY_ZMQSERVER_APPSDK_PATH"] = m_args.vrayLibPath;
@@ -234,16 +233,16 @@ bp::child ZmqServer::startServerProcess() {
 	env["QT_QPA_PLATFORM_PLUGIN_PATH"] = (fs::path(m_args.appSDKPath) / "platforms").string();
 
 	auto args = std::vector<std::string>({
-		"-p",             std::to_string(m_args.port),
-		"-log",           std::to_string(m_args.logLevel),
-		"-blenderPID",    std::to_string(m_args.blenderPID),
-		"-vfbSettings",	  m_args.vfbSettingsFile,
-		"-renderThreads", std::to_string(m_args.renderThreads),
-		"-pluginVersion", m_args.pluginVersion,
+		"-p",              std::to_string(m_args.port),
+		"-log",            std::to_string(m_args.logLevel),
+		"-blenderPID",     std::to_string(m_args.blenderPID),
+		"-vfbSettings",	   m_args.vfbSettingsFile,
+		"-pluginVersion",  m_args.pluginVersion,
+		"-blenderVersion", m_args.blenderVersion,
 		"-noHeartbeat",
 		m_args.headlessMode ? "-headlessMode" : ""
 	});
-	
+
 	if (!m_args.dumpLogFile.empty()) {
 		args.push_back("-dumpInfoLog");
 		args.push_back(m_args.dumpLogFile);
@@ -255,19 +254,19 @@ bp::child ZmqServer::startServerProcess() {
 
 
 bool ZmqServer::obtainServerEndpointInfo() {
-	
+
 
 	if (m_args.port != EPHEMERAL_PORT_NUM) {
 		m_zmqServerPort = m_args.port;
 		return true;
 	}
-	
+
 	// ZmqServer is listening on an ephemeral port. Once the port is open, ZmqServer 
 	// will publish it to shared memory with an ID set to SHARED_PORT_MAPPING_ID.
 	int zmqServerPort = 0;
 
 	SharedMemoryReader reader(std::to_string(m_args.blenderPID), SHARED_PORT_MAPPING_ID);
-	
+
 	if ( reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT)) && 
 			reader.read(ZMQ_SERVER_ENDPOINT_READ_TIMEOUT, &zmqServerPort)) {
 		
@@ -320,16 +319,20 @@ void ZmqServer::startControlConn() {
 
 void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& message)
 {
-	WithGIL gil;//This is needed for safe python dictionary creation
+	WithGIL gil; // This is needed for safe python dictionary creation(the asset import queue)
 
 	CosmosAssetSettings cosmosSettings;
 	cosmosSettings.matFile = message.materialFile;
 	cosmosSettings.objFile = message.objectFile;
 	cosmosSettings.lightFile = message.lightFile;
+	cosmosSettings.packageId = message.packageId;
+	cosmosSettings.revisionId = message.revisionId;
 	cosmosSettings.isAnimated = message.isAnimated;
 
-	const auto& assetNames = *message.assetNames.getData();
-	const auto& assetLocations = *message.assetLocations.getData();
+	const AttrListString::DataArrayPtr assetData=message.assetNames.getData();
+	const AttrListString::DataArrayPtr assetLocationsData=message.assetLocations.getData();
+	const auto& assetNames = *assetData;
+	const auto& assetLocations = *assetLocationsData;
 
 	assert(assetNames.size() == assetLocations.size());
 
@@ -350,6 +353,16 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 	}
 
 	invokePythonCallback("importCosmosAsset", getPythonCallback("assetImport"), cosmosSettings);
+}
+
+
+void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlCosmosDownloadedAssets& message) {
+	WithGIL gil;
+	py::list relinkedPaths = py::list();
+	const AttrListString::DataArrayPtr relinkedData=message.relinkedPaths.getData();
+	for (const std::string &path : *relinkedData)
+		relinkedPaths.append(path);
+	invokePythonCallback("setCosmosDownloadAssets", getPythonCallback("setCosmosDownloadAssets"), int(message.downloadStatus), relinkedPaths);
 }
 
 
@@ -381,8 +394,18 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 
 	switch (msgType) {
 		case MsgType::ControlOnImportAsset: {
-			const auto& message = deserializeMessage<MsgControlOnImportAsset>(stream);
+			const MsgControlOnImportAsset& message = deserializeMessage<MsgControlOnImportAsset>(stream);
 			processControlOnImportAsset(message);
+			break;
+		}
+		case MsgType::ControlCosmosDownloadSize: {
+			const MsgControlCosmosDownloadSize& message = deserializeMessage<MsgControlCosmosDownloadSize>(stream);
+			invokePythonCallback("setCosmosDownloadSize", getPythonCallback("setCosmosDownloadSize"), int(message.relinkStatus), message.downloadSizeMb);
+			break;
+		}
+		case MsgType::ControlCosmosDownloadedAssets: {
+			const MsgControlCosmosDownloadedAssets& message = deserializeMessage<MsgControlCosmosDownloadedAssets>(stream);
+			processControlOnCosmosAssetsDownloaded(message);
 			break;
 		}
 		case MsgType::ControlOnStartViewportRender:
@@ -405,7 +428,7 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 		}
 		case MsgType::ControlOnLogMessage: {
 			const auto& message = deserializeMessage<MsgControlOnLogMessage>(stream);
-			Logger::get().log(static_cast<Logger::LogLevel>(message.logLevel), true, message.logMessage, 0);					
+			Logger::get().log(static_cast<Logger::LogLevel>(message.logLevel), true, message.logMessage, 0);
 			break;
 		}
 		case MsgType::ControlOnRendererStatus: {

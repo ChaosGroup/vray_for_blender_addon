@@ -129,7 +129,7 @@ class SettingsOutputExporter(ExporterBase):
         if self.bake:
             bakeItem = self.scene.vray.BatchBake.active_item
             imgFmt = int(bakeItem.img_format)
-            imgFile = path_utils.getOutputFileName(self.ctx, bakeItem.img_file, imgFmt)
+            imgFile = path_utils.getOutputFileName(self.ctx, bakeItem.img_file, imgFmt, allowRelative=self.exportOnly)
             imgDir = path_utils.expandPathVariables(self.ctx, bakeItem.img_dir)
             pluginDesc.setAttribute("img_file_needFrameNumber", False)
         else:
@@ -138,7 +138,7 @@ class SettingsOutputExporter(ExporterBase):
             viewLayerName = self.dg.view_layer_eval.name if multipleLayers else ""
 
             imgFmt = int(propGroup.img_format)
-            imgFile = path_utils.getOutputFileName(self.ctx, propGroup.img_file, imgFmt, viewLayerName)
+            imgFile = path_utils.getOutputFileName(self.ctx, propGroup.img_file, imgFmt, viewLayerName, allowRelative=self.exportOnly)
             imgDir = path_utils.expandPathVariables(self.ctx, propGroup.img_dir)
         
         if self.settings.animation.mode == AnimationMode.Animation:

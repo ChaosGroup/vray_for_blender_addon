@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import bpy
 from enum import IntEnum, IntFlag
 
@@ -15,6 +17,7 @@ class UpdateTarget(IntEnum):
     OBJECT      = 1
     OBJECT_MTL_OPTIONS = 2
     LIGHT = 3
+    WORLD = 4
 
 
 class UpdateTracker:
@@ -25,7 +28,7 @@ class UpdateTracker:
         has changed, or the node tree topology.
     """
     # Dictionary {UpdateTarget: {obj.session_uid: UpdateFlags}}
-    updates = {}
+    updates: dict[int, UpdateFlags] = {}
            
     @staticmethod
     def clear():
@@ -36,7 +39,7 @@ class UpdateTracker:
         updatesForTarget = UpdateTracker.updates.setdefault(target, {})
         flags = updatesForTarget.get(target, UpdateFlags.NONE)
         updatesForTarget[getObjTrackId(obj)] = (flags | flag)
-                    
+
     @staticmethod
     def getObjUpdate(target: UpdateTarget, obj):
         return UpdateTracker.updates.get(target, {}).get(getObjTrackId(obj), UpdateFlags.NONE)
@@ -51,7 +54,7 @@ class UpdateTracker:
     @staticmethod
     def tagMtlTopology(context: bpy.types.Context, mtl: bpy.types.Material):
         """ A helper method to tag material topology and all scene objects related to this material """
-        
+
         # Tag the material proper
         UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
 
@@ -61,4 +64,32 @@ class UpdateTracker:
         for obj in objects:
             if any([s for s in obj.material_slots if s.material == mtl]):
                 UpdateTracker.tagUpdate(obj, UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
-                
+
+    @staticmethod
+    def tagCrossObjectUpdates(exporterCtx: ExporterContext, data, updateTarget: UpdateTarget):
+        """ Tag for update all properties that depend on objects that have been updated. 
+
+            Args:
+                data : the data collection ot scan e.g. bpy.data.materials
+                updateTarget: corresonding to the type of data in the collection
+        """
+
+        from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES
+        from vray_blender.nodes.utils import getVrayPropGroup
+        from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget, UpdateFlags
+
+        # Iterate over all plugin types and their cross dependencies
+        updatedObjects = [u.id.original for u in exporterCtx.dg.updates if u.is_updated_transform or u.is_updated_geometry]
+
+        if not updatedObjects:
+            return
+
+        for pluginType, propList in CROSS_DEPENDENCIES.items():
+            for item in [i for i in data if i.node_tree]:
+                for node in [n for n in item.node_tree.nodes if n.get('vray_plugin', '') == pluginType]:
+                    for propName in propList:
+                        propGroup = getVrayPropGroup(node)
+                        refProp = getattr(propGroup, propName)
+                        refObj = exporterCtx.sceneObjects.get(refProp)
+                        if refObj in updatedObjects:
+                            UpdateTracker.tagUpdate(item, updateTarget, UpdateFlags.DATA)

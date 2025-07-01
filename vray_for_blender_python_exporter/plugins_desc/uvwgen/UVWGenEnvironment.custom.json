@@ -71,6 +71,10 @@
         "input_sockets": [
             {
                 "name": "uvw_transform"
+            },
+            {
+                "name": "uvw_matrix",
+                "label": "Environment Transform"
             }
         ]
     },

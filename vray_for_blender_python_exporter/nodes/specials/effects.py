@@ -20,7 +20,8 @@ class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, bpy.type
     bl_description = "Adds Effect sockets"
     bl_options     = {'INTERNAL'}
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketEffect'
         self.vray_socket_name = "Effect"
 
@@ -31,7 +32,8 @@ class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, bpy.type
     bl_description = "Removes Effect socket (only not linked sockets will be removed)"
     bl_options     = {'INTERNAL'}
     
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketEffect'
         self.vray_socket_name = "Effect"
 

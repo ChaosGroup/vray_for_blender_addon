@@ -10,7 +10,7 @@ from vray_blender.exporting.node_export import exportNodePlugin
 from vray_blender.exporting.node_exporters.geometry_node_export import exportVRayNodeDisplacement
 from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTarget, UpdateTracker
-from vray_blender.lib.blender_utils import frameInRange, geometryObjectIt
+from vray_blender.lib.blender_utils import frameInRange, geometryObjectIt, getGeomCenter
 from vray_blender.lib.defs import AttrPlugin, DataArray, ExporterBase, ExporterContext, PluginDesc
 from vray_blender.lib import plugin_utils, sys_utils, export_utils
 from vray_blender.lib.names import Names
@@ -39,8 +39,8 @@ class MeshData:
         self.loopTris       : DataArray = None
         self.loops          : DataArray = None
         self.normals        : DataArray = None
-        self.loopTriPolys   : np.ndarray = None
-        self.polyMtlIndices : np.ndarray = None
+        self.loopTriPolys   : DataArray = None
+        self.polyMtlIndices : DataArray = None
         self.loopUVs        : list[DataArray] = []
         self.loopColors     : list[DataArray] = []
 
@@ -114,54 +114,41 @@ class GeometryExporter(ExporterBase):
 
 
     def _meshFromObj(self, obj: bpy.types.Object) -> bpy.types.Mesh | None:
-
-        if obj.mode == 'EDIT':
-            # While an object is in edit mode, evaluated copy won't change. Set a reference
-            # to the original object from which the edit-mode data could be obtained.
-            evaluatedObject = obj
-        else:
-            # In order to apply any modifiers / geometry nodes, we need to 'evaluate' the object
-            # The returned object is distinct from the original object
-            evaluatedObject = obj.evaluated_get(self.dg)
-
-        if evaluatedObject is None:
-            return None
-
         # Get temporary mesh object from the object evaluated above. This mesh
         # will be destroyed once we finish the export of the object, so don't 
         # hang on to it
         # INVESTIGATE: what should the value of 'preserve_all_data_layers' be?
         #   Looks like color channel data is not available if False
-        mesh = evaluatedObject.data if evaluatedObject.type == 'MESH' \
-                    else evaluatedObject.to_mesh(preserve_all_data_layers=True, depsgraph=self.dg)
-        
-        if mesh is None:
-            debug.printError(f"Cannot convert object {evaluatedObject.name} to mesh")
-            return None
-        
+        if (obj.type == 'MESH' and obj.mode != 'EDIT'):
+            mesh = obj.data 
+        else:
+            if mesh := obj.to_mesh(preserve_all_data_layers=True, depsgraph=self.dg):
+                self.objectsWithTempMeshes.append(obj)
+            else:
+                debug.printError(f"Cannot convert object {obj.name} to mesh")
+                return None
+            
         # VRay requires triangular faces
         self.ts.timeThis("calc_triangles", lambda :  mesh.calc_loop_triangles())
 
         if len(mesh.loops) == 0:
             # We don't export non-polygonal meshes at this point
             # TODO: Add support for point clouds represented as meshes with non-connected vertices
-            debug.printDebug(f"Object {evaluatedObject.name} has a non-polygonal mesh, skipping export")
+            debug.printDebug(f"Object {obj.name} has a non-polygonal mesh, skipping export")
             return None
 
         return mesh
 
-    
-    def _fillMeshData(self, mesh: bpy.types.Mesh, name: str, isInstanced: bool, isEditMode: bool):
-        if isEditMode:
-            mesh = self._getEditDataFromMesh(mesh)
-            
+    def _fillMeshData(self, mesh: bpy.types.Mesh, name: str, isInstanced: bool):
         meshData = MeshData(name)
 
         meshData.vertices       = DataArray(mesh.vertices[0].as_pointer(), len(mesh.vertices))
         meshData.loops          = DataArray(mesh.loops[0].as_pointer(), len(mesh.loops))
         meshData.loopTris       = DataArray(mesh.loop_triangles[0].as_pointer(), len(mesh.loop_triangles))
-        meshData.polyMtlIndices = tools.foreachGetAttr(mesh.polygons, "material_index", shape=(len(mesh.polygons), 1), dtype=np.int32)
-        meshData.loopTriPolys   = tools.foreachGetAttr(mesh.loop_triangles, "polygon_index", shape=(len(mesh.loop_triangles), 1), dtype=np.int32)
+        meshData.loopTriPolys   = DataArray(mesh.loop_triangle_polygons[0].as_pointer(), len(mesh.loop_triangle_polygons))
+
+        # Blender adds 'material_index' attribute to the mesh when additional material slots are created.
+        meshData.polyMtlIndices = DataArray.fromAttribute(mesh, 'material_index')
         
         
         match mesh.normals_domain:
@@ -190,35 +177,6 @@ class GeometryExporter(ExporterBase):
 
         return meshData
 
-    
-    def _getEditDataFromMesh(self, mesh:bpy.types.Mesh):
-        """ Return a mesh which is a copy of the 'edit' state of the input mesh.
-
-        Args:
-            mesh (bpy.types.Mesh): 
-
-        Returns:
-            A new mesh into which the current state of the edited data is copied.
-        """
-
-        bm = bmesh.from_edit_mesh(mesh)
-        
-        # Create a temporary mesh object into which the current state of the edited mesh will be copied
-        tempName = f"{mesh.name}_TMP_EDIT"
-        tempMesh = bpy.data.meshes.new(tempName)
-        tmpObj = bpy.data.objects.new(tempName, tempMesh)
-        
-        # Save the temp obect reference. It will be exported asynchronously in BlenderLib 
-        # and will be deleted after the export is finished.
-        self.tempObjects.append(tmpObj)
-
-        # Copy the data from the edit state to the newly created mesh.
-        bm.to_mesh(tmpObj.data)
-        bm.free()
-
-        return tmpObj.data
-
-
     def _applyMeshModifiers(self, obj: bpy.types.Object, meshData: MeshData):
         """ Apply modifiers to the object's proper geometry """
         if len(obj.modifiers) == 0:
@@ -246,7 +204,8 @@ class GeometryExporter(ExporterBase):
         for modifier in obj.modifiers:
             match modifier.type:
                 case 'FLUID':
-                    SmokeExporter(self).exportFluidModifier(obj, exportGeometry, isVisible)
+                    if (modifier.fluid_type == 'DOMAIN') and (modifier.domain_settings.domain_type == 'GAS'):
+                        SmokeExporter(self).exportFluidModifier(obj, exportGeometry, isVisible)
                 case _:
                     pass
 
@@ -282,7 +241,7 @@ class GeometryExporter(ExporterBase):
         return None
 
 
-    def _exportGeometrySockets(self, nodeCtx, nodeOutput, geomPlugin, trackId):
+    def _exportGeometrySockets(self, nodeCtx: NodeContext, nodeOutput, geomPlugin, trackId):
         advancedGeomPlugin = AttrPlugin()
         displacementNodeLink = self._getNodeLinkToNode(nodeOutput, "Displacement", "VRayNodeDisplacement")
         subdivNodeLink = self._getNodeLinkToNode(nodeOutput,  "Subdivision", "VRayNodeGeomStaticSmoothedMesh")
@@ -317,12 +276,13 @@ class GeometryExporter(ExporterBase):
                     forceUpdateGeomPlugin = True  # Force update only on topology changes
                 self.nodeTracker.forgetNode(trackId, nodeIdForRemoval)
                 
-                with TrackNode(nodeCtx.nodeTracker, nodeId):
-                    nodeCtx.exportedNodes.add(nodeId)
-                    advancedGeomPlugin = exportVRayNodeDisplacement(nodeCtx, subdivPropGroup)
-                    # In some cases, the V-Ray node of an object may remain linked to the removed plugin 
-                    # associated with the "track" identified by "nodeIdForRemoval".
-                    advancedGeomPlugin.forceUpdate = forceUpdateGeomPlugin
+                if (advancedGeomPlugin := nodeCtx.getCachedNodePlugin(displacementNode)) is None:
+                    with TrackNode(nodeCtx.nodeTracker, nodeId):
+                        advancedGeomPlugin = exportVRayNodeDisplacement(nodeCtx, subdivPropGroup)
+                        # In some cases, the V-Ray node of an object may remain linked to the removed plugin 
+                        # associated with the "track" identified by "nodeIdForRemoval".
+                        advancedGeomPlugin.forceUpdate = forceUpdateGeomPlugin
+                        nodeCtx.cacheNodePlugin(displacementNode, advancedGeomPlugin)
 
         if advancedGeomPlugin and not advancedGeomPlugin.isEmpty():
             # The newly created "advancedGeomPlugin" is used as geometry of the object
@@ -396,25 +356,25 @@ class GeometryExporter(ExporterBase):
 
 
     def _exportMeshObject(self, obj: bpy.types.Object, exportGeometry: bool, isInstanced: bool, isVisible: bool):
-        obj = obj.evaluated_get(self.dg)
-        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+        evaluatedObj = obj.evaluated_get(self.dg)
+        assert evaluatedObj.is_evaluated, f"Evaluated object expected: {evaluatedObj.name}"
         
         # Export main object
-        exported = (not exportGeometry) or self.ts.timeThis("export_mesh", lambda: self._exportMesh(obj, isInstanced))
+        exported = (not exportGeometry) or self.ts.timeThis("export_mesh", lambda: self._exportMesh(evaluatedObj, isInstanced))
         
         # Non-mesh modifiers show geometry, but don't need a Node plugin to be exported for them.
         # The geometry associated with them may also not need exporting, so apply them regardless
         # of the return value of exportMesh()
-        self._exportNonMeshModifiers(obj, exportGeometry, isVisible)
+        self._exportNonMeshModifiers(evaluatedObj, exportGeometry, isVisible)
         
         if not exported:
             return
 
-        objTrackId = getObjTrackId(obj)
+        objTrackId = getObjTrackId(evaluatedObj)
         
         if isVisible:
             ####  Export modifiers  ###
-            self._exportParticleSystems(obj, exportGeometry)
+            self._exportParticleSystems(evaluatedObj, exportGeometry)
 
         isMeshLightGizmo = objTrackId in [p.gizmoObjTrackId for p in self.activeMeshLightsInfo]
         isEnvFogGizmo = objTrackId in self.activeGizmos
@@ -422,79 +382,89 @@ class GeometryExporter(ExporterBase):
 
         nodePlugin = None
 
-        if (not isGizmo) and (not self._isInstancerVisibilityDisabled(obj)):
-            baseGeomPlugin = AttrPlugin(Names.objectData(obj)) # Empty plugin attribute representing the object's geometry
-            if obj.vray.ntree and NodesUtils.getOutputNode(obj.vray.ntree, 'OBJECT'):
-                nodePlugin = self._exportObjNodeTree(obj, baseGeomPlugin, isVisible)
+        if (not isGizmo) and (not self._isInstancerVisibilityDisabled(evaluatedObj)):
+            baseGeomPlugin = AttrPlugin(Names.objectData(evaluatedObj)) # Empty plugin attribute representing the object's geometry
+            if evaluatedObj.vray.ntree and NodesUtils.getOutputNode(evaluatedObj.vray.ntree, 'OBJECT'):
+                nodePlugin = self._exportObjNodeTree(evaluatedObj, baseGeomPlugin, isVisible)
             else:
-                nodePlugin = self._exportNodePlugin(obj, baseGeomPlugin, Names.object(obj), visible=isVisible)
+                nodePlugin = self._exportNodePlugin(evaluatedObj, baseGeomPlugin, Names.object(evaluatedObj), visible=isVisible)
 
             if nodePlugin is not None:
-                plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", obj.vray.VRayObjectProperties.objectID)
+                plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", evaluatedObj.vray.VRayObjectProperties.objectID)
                 self.objTracker.trackPlugin(objTrackId, nodePlugin.name)
 
         else:
             # 'Node' plugin should not be exported for gizmos
-            nodePluginName = Names.vrayNode(Names.object(obj))
+            nodePluginName = Names.vrayNode(Names.object(evaluatedObj))
             vray.pluginRemove(self.renderer, nodePluginName)
             self.objTracker.forgetPlugin(objTrackId, nodePluginName)
 
 
     # Export a MESH object to GeomStaticMesh VRay plugin
-    def _exportMesh(self, obj: bpy.types.Object, isInstanced):
-        if (mesh := self._meshFromObj(obj)) is None:
+    def _exportMesh(self, evaluatedObj: bpy.types.Object, isInstanced: bool):
+        if (mesh := self._meshFromObj(evaluatedObj)) is None:
             return False
 
-        uniqueName = Names.objectData(obj) if mesh else ""
+        uniqueName = Names.objectData(evaluatedObj) if mesh else ""
         if uniqueName in self.exported:
             # The mesh is shared between multiple objects and has already been exported
             return True
         
-        # TODO: Check if we could have FLUID modifier along with mesh modifiers    
-        if "FLUID" not in [m.type for m in obj.modifiers]:
-            meshData = self._fillMeshData(mesh, uniqueName, isInstanced, isEditMode = (obj.mode == 'EDIT'))
-            self._applyMeshModifiers(obj, meshData)
+        # Fluid modifier may be exported as mesh or as particles. The mesh is exported below,
+        # the particle mode is handles by SmokeExporter.
+        fluidMod = next((m for m in evaluatedObj.modifiers if m.type == 'FLUID'), None)
+        fluidAsMesh = False
+        if fluidMod and (fluidMod.fluid_type == 'DOMAIN') and (fluidData := fluidMod.domain_settings):
+            fluidAsMesh = (fluidData.domain_type == 'LIQUID') and fluidData.use_mesh
+
+        if (not fluidMod) or fluidAsMesh:
+            meshData = self._fillMeshData(mesh, uniqueName, isInstanced)
+            self._applyMeshModifiers(evaluatedObj, meshData)
             
             vray.pluginCreate(self.renderer, uniqueName, 'GeomStaticMesh')
             vray.exportGeometry(self.renderer, meshData)
-            self.objTracker.trackPlugin(getObjTrackId(obj), uniqueName)
+            self.objTracker.trackPlugin(getObjTrackId(evaluatedObj), uniqueName)
             self.exported.add(uniqueName)
             return True
-        
+    
         return False
 
 
     # Export a MESH object to VRayScene plugin
-    def _exportVrayScene(self, obj, isVisible):
-        vrayScene = obj.vray.VRayAsset
+    def _exportVrayScene(self, obj: bpy.types.Object, isVisible: bool):
+        vrayScene = obj.data.vray.VRayScene
         pluginName = Names.pluginObject("vrayscene", Names.object(obj))
         pluginDesc = PluginDesc(pluginName, "VRayScene")
         pluginDesc.vrayPropGroup = vrayScene
 
-        pluginDesc.setAttribute("filepath", vrayScene.filePath)
+        pluginDesc.setAttribute("filepath", vrayScene.filepath)
         pluginDesc.setAttribute("transform", obj.matrix_world)
         pluginDesc.setAttribute("mrs_visibility", isVisible)
 
         export_utils.exportPlugin(self, pluginDesc)
-        self.objTracker.trackPlugin(getObjTrackId(obj), obj.name)
+        # NOTE: The object is deliberately not added to the plugin tracker because
+        # no changes are allowed to VRayScene objects during IPR.
 
 
     # Export a MESH object to GeomMeshFile plugin
-    def _exportVrayProxy(self, obj, exportGeometry, isVisible):
+    def _exportVrayProxy(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool):
         pluginName = Names.pluginObject("vrayproxy", Names.object(obj))
         if exportGeometry:
             geomMeshFile = obj.data.vray.GeomMeshFile
+
             pluginDesc = PluginDesc(pluginName, "GeomMeshFile")
             pluginDesc.vrayPropGroup = geomMeshFile
 
             export_utils.exportPlugin(self, pluginDesc)
             self.objTracker.trackPlugin(getObjTrackId(obj), pluginName)
 
+
         nodePlugin = self._exportNodePlugin(obj, AttrPlugin(pluginName), Names.object(obj), isInstancer=False, visible=isVisible)
+
         self.objTracker.trackPlugin(getObjTrackId(obj), nodePlugin.name)
 
 
-    def _exportCurves(self, obj: bpy.types.Object, exportGeometry: bool, isVisible):
+    def _exportCurves(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool):
         obj = obj.evaluated_get(self.dg)
         assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
 
@@ -645,7 +615,7 @@ class GeometryExporter(ExporterBase):
         # still be exported. 
         exportGeometry = (self.interactive and self.fullExport) \
                             or self.preview \
-                            or (objTrackId in geometryUpdates) \
+                            or geometryUpdates.get(objTrackId, False) \
                             or isFirstMotionBlureFrame
         
         if not obj.evaluated_get(self.dg).is_evaluated:
@@ -656,7 +626,9 @@ class GeometryExporter(ExporterBase):
         match obj.type:
             case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
                 if tools.isObjectVrayScene(obj):
-                    self._exportVrayScene(obj, isVisible)
+                    if self.fullExport:
+                        # VRayScene does not handle correctly updates during IPR, this is why they are disabled
+                        self._exportVrayScene(obj, isVisible)
                 elif tools.isObjectVrayProxy(obj):
                     self._exportVrayProxy(obj, exportGeometry, isVisible)
                 elif not tools.isObjectNonMeshClipper(obj):

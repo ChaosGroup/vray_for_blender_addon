@@ -28,7 +28,7 @@
         },
         {
             "attr": "gtr_energy_compensation",
-            "default": "1"
+            "default": "2"
         },
         {
             "attr": "new_gtr_anisotropy",
@@ -320,7 +320,13 @@
                     },
                     {
                         "name": "reflect_glossiness",
-                        "label": "Glossiness"
+                        "label": "Glossiness",
+                        "visible": {"cond": "::option_use_roughness=0"}
+                    },
+                    {
+                        "name": "reflect_glossiness",
+                        "label": "Roughness",
+                        "visible": {"cond": "::option_use_roughness!=0"}
                     },
                     {
                         "name": "gtr_gamma"
@@ -451,7 +457,14 @@
                         "name": "coat_amount"
                     },
                     {
-                        "name": "coat_glossiness"
+                        "name": "coat_glossiness",
+                        "label": "Coat Roughness",
+                        "visible": {"cond": "::option_use_roughness!=0"}
+                    },
+                    {
+                        "name": "coat_glossiness",
+                        "label": "Coat Glossiness",
+                        "visible": {"cond": "::option_use_roughness=0"}
                     },
                     {
                         "name": "coat_ior"
@@ -609,7 +622,14 @@
                         "name": "sheen_color"
                     },
                     {
-                        "name": "sheen_glossiness"
+                        "name": "sheen_glossiness",
+                        "label": "Sheen Roughness",
+                        "visible": {"cond": "::option_use_roughness!=0"}
+                    },
+                    {
+                        "name": "sheen_glossiness",
+                        "label": "Sheen Glossiness",
+                        "visible": {"cond": "::option_use_roughness=0"}
                     }
                 ]
             },

@@ -6,6 +6,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix
 
 from vray_blender.lib import lib_utils
+from vray_blender.lib.blender_utils import getSpaceView3D
 
 
 handlers = []
@@ -213,6 +214,12 @@ def vrayDrawLightAmbient(ob, color):
     
 
 def vrayDrawLightShape():
+    space3D = getSpaceView3D(bpy.context)
+    assert space3D is not None
+        
+    if not space3D.overlay.show_overlays:
+        return
+    
     uiTheme   = bpy.context.preferences.themes[0]
     colorActive = uiTheme.view_3d.object_active[:] + (1.0,) # This is RGB, add alpha
     colorInactive = uiTheme.view_3d.light

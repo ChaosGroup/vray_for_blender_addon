@@ -6,7 +6,7 @@
 #include "api/interop/types.h"
 #include "export/zmq_exporter.h"
 #include "export/plugin_desc.hpp"
-#include "utils/assert.h"
+#include "vassert.h"
 
 
 using namespace VRayBaseTypes;

@@ -98,6 +98,66 @@ class VRAY_OT_replace_nodetree_material(bpy.types.Operator):
             self.report({'ERROR_INVALID_CONTEXT'}, "No active material!")
             return {'CANCELLED'}
 
+class VRAY_OT_convert_nodetree_material(bpy.types.Operator):
+    """ Covnert the active material's nodetree with a V-Ray material nodetree """
+
+    bl_idname      = "vray.convert_nodetree_material"
+    bl_label       = "Convert Cycles Material"
+    bl_description = "Convert Cycles Material to its V-Ray"
+    bl_options     = {'INTERNAL'}
+
+    def execute(self, context):
+        from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
+        from vray_blender.exporting.tools import FakeTimeStats
+        from vray_blender.lib.defs import ExporterContext, AttrPlugin, ExporterContext, RendererMode, NodeContext, ExporterType, PluginDesc
+        from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
+
+        _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
+        _fakeObjTrackers = dict([(t, FakeObjTracker()) for t in OBJ_TRACKERS])
+
+        if activeMtl := getattr(context.object, 'active_material'):
+            exporterContext = ExporterContext()
+            exporterContext.rendererMode = RendererMode.Preview
+            exporterContext.objTrackers     = _fakeObjTrackers
+            exporterContext.nodeTrackers    = _fakeNodeTrackers
+            exporterContext.ctx             = bpy.context
+            exporterContext.fullExport      = True
+            exporterContext.ts              = FakeTimeStats()
+
+            vrsceneDict = []
+            def vrsceneDictCollector(nodeCtx: NodeContext, pluginDesc: PluginDesc):
+                for key, value in pluginDesc.attrs.items():
+                    if isinstance(value, AttrPlugin):
+                        pluginDesc.attrs[key] = value.name
+                    if isinstance(value, list) and all(isinstance(item, AttrPlugin) for item in value):
+                        plNames = []
+                        for pl in value:
+                            plNames.append(pl.name)
+                        pluginDesc.attrs[key] = plNames
+                vrsceneDict.append({
+                    "ID"         : pluginDesc.type,
+                    "Name"       : pluginDesc.name,
+                    "Attributes" : pluginDesc.attrs,
+                })
+                return AttrPlugin(pluginDesc.name, pluginDesc.type)
+
+            from vray_blender.nodes.operators.import_file import importMaterial
+            from vray_blender.exporting.mtl_export import MtlExporter
+            mtlExporter = MtlExporter(exporterContext)
+            nodeCtx = NodeContext(exporterContext, bpy.context.scene, bpy.data, None)
+            nodeCtx.rootObj = activeMtl
+            nodeCtx.nodeTracker = _fakeNodeTrackers['MTL']
+            nodeCtx.ntree = activeMtl.node_tree
+            nodeCtx.customHandler = vrsceneDictCollector
+            mtlSingleBRDF, _ = mtlExporter.exportMtl(activeMtl, nodeCtx)
+            importMaterial(vrsceneDict, mtlSingleBRDF.name, activeMtl.node_tree)
+            activeMtl.vray.is_vray_class = True
+
+            _redrawNodeEditor()
+            return {'FINISHED'}
+        else:
+            self.report({'ERROR_INVALID_CONTEXT'}, "No active material!")
+            return {'CANCELLED'}
 
 class VRAY_OT_add_new_material(bpy.types.Operator):
     """ Add a new vray material to the active object's material slot """
@@ -195,6 +255,7 @@ def getRegClasses():
         VRAY_OT_add_nodetree_object,
         VRAY_OT_add_nodetree_object_lamp,
         VRAY_OT_replace_nodetree_material,
+        VRAY_OT_convert_nodetree_material,
         VRAY_OT_add_new_material,
         VRAY_OT_copy_material,
         VRAY_OT_add_nodetree_world,

@@ -1,13 +1,27 @@
+import bpy
 
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES
+from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names, NamedCounter
-from vray_blender.lib import export_utils
-from vray_blender.lib import plugin_utils
+from vray_blender.lib.sys_utils import isGPUEngine
 
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
+
+def widgetDrawDeviceDependentProperties(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
+    vrayScene = context.scene.vray
+
+    if isGPUEngine(context.scene):
+        layout.prop(vrayScene.SettingsRTEngine, "gpu_bundle_size")
+        layout.prop(vrayScene.SettingsRTEngine, "gpu_samples_per_pixel")
+        layout.prop(vrayScene.SettingsRTEngine, "max_sample_level")
+    else:
+        layout.prop(vrayScene.SettingsImageSampler, "progressive_bundleSize")
+
+    layout.prop(vrayScene.SettingsDMCSampler, "time_dependent")
+    
 
 def onUpdateRenderMaskMode(srcPropGroup, context, attrName):
     srcPropGroup['dirtyRenderMaskMode'] = True

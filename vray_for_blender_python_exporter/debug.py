@@ -195,6 +195,7 @@ def report(severity: str, msg: str):
     bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
     printMsg(msg, level=_LOG_LEVEL_MAP[severity])
 
+
 def reportAsync(severity: str, msg: str):
     """ Report in Blender's status area. This function is a replacement
         for the report() method of blender classes (e.g. operators)
@@ -209,7 +210,7 @@ def reportAsync(severity: str, msg: str):
         msg (_type_): The message to show.
     """
     from vray_blender.engine.vfb_event_handler import VfbEventHandler
-    VfbEventHandler.reportStatus('WARNING', msg)
+    VfbEventHandler.reportStatus(severity, msg)
 
 
 ############  Registration  ############

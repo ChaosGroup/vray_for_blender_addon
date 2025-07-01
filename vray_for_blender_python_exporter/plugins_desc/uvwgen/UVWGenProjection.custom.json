@@ -47,18 +47,22 @@
         },
         {
             "attr": "u_angle",
+            "subtype": "ANGLE",
+            "precision": 5,
             "ui": {
                 "soft_min": 5.0,
                 "soft_max": 360.0,
-                "spin_step": 1.0
+                "spin_step": 0.1
             }
         },
         {
             "attr": "v_angle",
+            "subtype": "ANGLE",
+            "precision": 5,
             "ui": {
                 "soft_min": 5.0,
                 "soft_max": 180.0,
-                "spin_step": 1.0
+                "spin_step": 0.1
             }
         },
         {

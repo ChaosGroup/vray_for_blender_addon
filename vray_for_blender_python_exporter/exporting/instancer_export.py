@@ -6,6 +6,7 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerL
 from vray_blender.lib.defs import DataArray, ExporterBase, ExporterContext, AttrPlugin
 from vray_blender.lib.names import Names
 from vray_blender.external import mmh3
+import struct
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -31,23 +32,24 @@ class InstancerData:
 # passing it to C++
 class Instancer:
     class Instance:
-        def __init__(self, index):
-            self.index          = index
+        def __init__(self, persistentId):
+            # The index is generated from the instance's persistent_id (an array of ints) by hashing it
+            # to create a unique identifier for this instance
+            self.index          = mmh3.hash(struct.pack(f'{len(persistentId)}I', *persistentId))
+
             self.tm: Matrix     = None
             self.velocity       = Matrix()
             self.velocity.zero()
             self.nodePlugin     = ""
 
-        def id(self):
-            return mmh3.hash(f"{id(self)}{str(self.index)}")
-
         def pack(self):
             m = marshaller.Marshaller()
             
-            m.dumpInt32(self.id())
+            m.dumpInt32(self.index)
             m.dumpMatrix4(self.tm)
             m.dumpMatrix4(self.velocity)
             m.dumpString(self.nodePlugin)
+
             return m.pack()
 
 
@@ -93,7 +95,11 @@ class InstancerExporter(ExporterBase):
             # controller objects for instanced collections
             return                 
         
-        instance = Instancer.Instance(self.instanceIndex)
+        # The inst.persistent_id is used to uniquely identify each instance across frames
+        # This allows V-Ray to track instances between frames for motion blur and other
+        # frame-dependent effects. Without it, instances could get randomly reassigned
+        # between frames, causing visual artifacts in animations.
+        instance = Instancer.Instance(inst.persistent_id)
 
         # In VRay, instance transformation should be relative to the object being duplicated.
         # Remove its component from the instance's world position.

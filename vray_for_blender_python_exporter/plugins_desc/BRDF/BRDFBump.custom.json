@@ -4,6 +4,7 @@
     "Parameters": [
         {
             "attr" : "base_brdf",
+            "type": "BRDF", 
             "desc" : "Base BRDF Material",
             "ui" : {
                 "display_name": "Base Material"
@@ -18,14 +19,16 @@
             "default": 1.0,
             "ui": {
                 "soft_min": -5.0,
-                "soft_max": 5.0
+                "soft_max": 5.0,
+                "spin_step": 0.01
             }
         },
         {
             "attr": "bump_delta_scale",
             "ui": {
                 "soft_min": 0.0,
-                "soft_max": 2.0
+                "soft_max": 2.0,
+                "spin_step": 0.01
             }
         }
     ],
@@ -45,7 +48,8 @@
                         "label": "Bump Multiplier"
                     },
                     {
-                        "name": "bump_delta_scale"
+                        "name": "bump_delta_scale",
+                        "visible": {"cond": "::map_type=0"}
                     },
                     {
                         "name": "bump_shadows"
@@ -54,11 +58,20 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+           {
+               "name": "base_brdf"
+           },
+           {
+               "name" : "bump_tex_color"
+           }
+       ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [
             "bump_tex_float",
-            "bump_tex_mult_tex",
             "bump_tex",
             "normal_uvwgen",
             "maya_compatible",

@@ -31,6 +31,7 @@ def saveAndTrackImage(image: bpy.types.Image):
     image.save(filepath=filePath)
 
     _savedImages[image.name] = filePath
+    return filePath
 
 
 def clearSavedImages():

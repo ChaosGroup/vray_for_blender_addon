@@ -8,6 +8,9 @@
             "default" : 2.0
         }
     ],
+    "options" : {
+        "animatable": false
+    },
     "Widget": {
         "widgets": [
             {

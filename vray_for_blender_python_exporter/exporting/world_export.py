@@ -36,11 +36,13 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
         with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(effectsNode)):
             with nodeCtx.push(effectsNode):
-                for inSock in effectsNode.inputs:
-                    if inSock.shouldExportLink():
-                        effect = exportSocket(nodeCtx, inSock)
-                        if type(effect) is AttrPlugin:
-                            environmentVolume.append(effect)
+                if nodeCtx.getCachedNodePlugin(effectsNode) is None:
+                    nodeCtx.cacheNodePlugin(effectsNode)
+                    for inSock in effectsNode.inputs:
+                        if inSock.shouldExportLink():
+                            effect = exportSocket(nodeCtx, inSock)
+                            if type(effect) is AttrPlugin:
+                                environmentVolume.append(effect)
 
     return environmentVolume
 
@@ -65,10 +67,12 @@ def _exportRenderChannels(nodeCtx: NodeContext):
 
         # Export channel plugins and their node trees
         with nodeCtx.push(channelsNode):
-            for inSock in [sock for sock in channelsNode.inputs if sock.is_linked and sock.use]:
-                if _sockConnectedToDenoiser(inSock) or (not nodeCtx.exporterCtx.viewport):
-                    exportLinkedSocket(nodeCtx, inSock)
-                    exportSettingsPlugin = True
+            if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
+                nodeCtx.cacheNodePlugin(channelsNode)
+                for inSock in [sock for sock in channelsNode.inputs if sock.is_linked and sock.use]:
+                    if _sockConnectedToDenoiser(inSock) or (not nodeCtx.exporterCtx.viewport):
+                        exportLinkedSocket(nodeCtx, inSock)
+                        exportSettingsPlugin = True
 
         
         # Export the SettingsRenderChannels plugin if any of its sockets are connected
@@ -91,7 +95,7 @@ class WorldExporter(ExporterBase):
     def export(self):
         world = self.ctx.scene.world
         if not world or not world.node_tree:
-            return AttrPlugin()
+            return
 
         nodeOutput = NodesUtils.getOutputNode(world.node_tree, 'WORLD')
 
@@ -101,11 +105,11 @@ class WorldExporter(ExporterBase):
                 debug.report(severity="WARNING",
                              msg=f"The World tree '{world.name}' has a V-Ray Output node but no V-Ray node tree."\
                                 " Check if 'Use V-Ray World Nodes' has been pressed")
-            return AttrPlugin()
+            return
 
         if not nodeOutput:
             debug.printError(f"Output node not found in world tree '{world.name}'")
-            return AttrPlugin()
+            return
 
         nodeCtx = NodeContext(self, None, self.ctx.scene, self.renderer)
         nodeCtx.nodeTracker = self.nodeTrackers["WORLD"]
@@ -116,8 +120,9 @@ class WorldExporter(ExporterBase):
                 nodeCtx.push(nodeOutput),
                 TrackObj(self.nodeTracker, getObjTrackId(world)),
                 TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput))):
-            
-            self._exportEnvironmentSettings(nodeCtx)
+            if nodeCtx.getCachedNodePlugin(nodeOutput) is None:
+                nodeCtx.cacheNodePlugin(nodeOutput)
+                self._exportEnvironmentSettings(nodeCtx)
 
         # Render channel export is kept outside the 'Tracking' scope,  
         # as they should be exported only once and remain unchanged.  
@@ -149,16 +154,12 @@ class WorldExporter(ExporterBase):
             if envNode.bl_idname != "VRayNodeEnvironment":
                 debug.printError("Environment: 'Environment' socket must be connected to 'Environment' node!")
                 return
-            
-            # Background
-            bgSock = getInputSocketByAttr(envNode, "bg_tex")
-            bgTex = exportSocket(nodeCtx, bgSock)
-
-            pluginDesc.setAttribute("bg_tex", bgTex)
-            pluginDesc.setAttribute("bg_tex_mult", bgSock.multiplier)
 
             # Overrides
             with nodeCtx.push(envNode):
+                if nodeCtx.getCachedNodePlugin(envNode) is not None: # Node is already exported
+                    return
+
                 for input in ENVIRONMENT_OVERRIDES:
                     colorAttrName   = input[0] 
                     texAttrName     = input[1] 
@@ -195,7 +196,8 @@ class WorldExporter(ExporterBase):
                     pluginDesc.setAttribute(texMultAttrName, mult)
                     pluginDesc.setAttribute(texUseAttrName, sock.use)
         
-        exportPluginWithStats(nodeCtx, pluginDesc)
+                nodeCtx.cacheNodePlugin(envNode)
+            exportPluginWithStats(nodeCtx, pluginDesc)
         
 
     def prunePlugins(self):

@@ -1,6 +1,6 @@
 import bpy
 from vray_blender.nodes.mixin import VRayNodeBase
-from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene
+from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
 
 def _upgradeTexSkySun(ctx: UpgradeContext, oldNode: VRayNodeBase, newNode: VRayNodeBase):
     if sunLight := oldNode.TexSky.sun:
@@ -25,3 +25,6 @@ UPGRADE_INFO = {
 
 def run():
     upgradeScene(UPGRADE_INFO)
+
+def check():
+    return sceneNeedsUpgrade(UPGRADE_INFO)

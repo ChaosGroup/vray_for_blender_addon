@@ -85,11 +85,18 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         
         exporterCtx = self._getExporterContext(context, RendererMode.Interactive, depsgraph, isFullExport)
         
+        view3d = None
         if isFullExport:
             # Updates may have accumulated from a previous renderer session.
             UpdateTracker.clear()
-        
-        view3d = blender_utils.getFirstAvailableView3D()
+            # Find an available 3D view from any screen. May be the current or another one
+            view3d = blender_utils.getFirstAvailableView3D()
+        else:
+            # We are reexporting - get the view3D only from the current screen or None if the
+            # current screen has no View3D (can happen). If we use the available here -
+            # the view will change even if we switch to some screen with no visible View3D
+            view3d=blender_utils.getActiveView3D()
+
         self._export(exporterCtx, view3D=view3d)
 
     def exportViewport(self):

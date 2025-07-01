@@ -111,7 +111,6 @@ SeparateDefinitionBlocks: Always
 MaxEmptyLinesToKeep: 2
 
 IndentAccessModifiers: false
-AlignAfterOpenBracket: true
 AlignTrailingComments: true 
 
 

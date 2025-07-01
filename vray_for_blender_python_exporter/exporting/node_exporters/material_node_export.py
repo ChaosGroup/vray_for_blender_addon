@@ -9,60 +9,6 @@ from vray_blender.lib.defs import *
 
 from vray_blender.bin import VRayBlenderLib as vray
 
-################ CONSTANTS ########################
-MAX_LAYERED_BRDFS = 64 # maximum number of brdfs that could be added in BRDFLayered
-####################################################
-
-
-################ SPECIALIZED MTL NODE EXPORTERS ########################
-
-def exportVRayNodeBRDFLayered(nodeCtx: NodeContext):
-    
-    node = nodeCtx.node
-    
-    brdfs = []
-    weights = []
-    for i in range(1, MAX_LAYERED_BRDFS + 1):
-        brdfSockName = f"BRDF {i}"
-        weigthSockName = f"Weight {i}"
-
-        if not (brdfSock := getInputSocketByName(node, brdfSockName)):
-            break
-        
-        if brdfSock.is_linked:
-            brdf = commonNodesExport.exportLinkedSocket(nodeCtx, brdfSock)
-            weight = None
-
-            weightSock = getInputSocketByName(node, weigthSockName)
-            if weightSock and weightSock.is_linked:
-                weight = commonNodesExport.exportLinkedSocket(nodeCtx, weightSock)
-            else:
-                weightTexPluginName = Names.nextVirtualNode(nodeCtx, f"TexAColor_{i}")
-                weigthDesc = PluginDesc(weightTexPluginName, "TexAColor")
-                
-                weightVal = weightSock.value if weightSock else 1.0
-                weigthDesc.setAttribute("texture", mathutils.Color((weightVal, weightVal ,weightVal)))
-                
-                weight = commonNodesExport.exportPluginWithStats(nodeCtx, weigthDesc)
-
-            brdfs.append(brdf)
-            weights.append(weight)
-    
-    transparency = commonNodesExport.exportSocketByName(nodeCtx, "Transparency")
-    
-    pluginName = Names.treeNode(nodeCtx)
-    pluginDesc = PluginDesc(pluginName, "BRDFLayered")
-
-    pluginDesc.setAttribute("brdfs", brdfs)
-    pluginDesc.setAttribute("weights", weights)
-    pluginDesc.setAttribute("additive_mode", node.additive_mode)
-
-    if transparency:
-        pluginDesc.setAttribute("transparency", transparency)
-
-    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
-
-
 def exportVRayNodeBRDFBump(nodeCtx: NodeContext):
     node = nodeCtx.node
 
@@ -177,9 +123,8 @@ def exportMtlSingleBrdf(nodeCtx: NodeContext, brdfPlugin: AttrPlugin):
     
     plDesc.setAttributes({
         'brdf'                    : brdfPlugin,
-        'scene_name'              : [pluginName],
-        'allow_negative_colors'   : True
-        })
+        'scene_name'              : [pluginName]
+    })
 
     return commonNodesExport.exportPluginWithStats(nodeCtx, plDesc)
  

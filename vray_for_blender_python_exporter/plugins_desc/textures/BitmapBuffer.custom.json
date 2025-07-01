@@ -37,6 +37,15 @@
                 [ "acescg", "ACEScg", "ACEScg" ]
             ],
             "type" : "ENUM"
+        },
+        {
+            "attr": "use_external_image",
+            "default": false,
+            "desc": "Use an external image file path instead of an image loaded into Blender.",
+            "type" : "BOOL",
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {

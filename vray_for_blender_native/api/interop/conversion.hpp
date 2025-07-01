@@ -61,6 +61,15 @@ std::span<const T> fromNdArray(const py::object& attr)
 }
 
 
+// Returns a read-only span of T from a Python attribute.
+// Uses NdArray conversion if condition is true; otherwise, uses DataArray conversion.
+template <class T>
+std::span<const T> fromNdOrDataArray(const py::object& attr, bool isDataArray)
+{
+	return (isDataArray)? fromDataArray<T>(attr) : fromNdArray<T>(attr);
+}
+
+
 template <class T>
 std::span<const T> fromPyArray(const py::object& arr)
 {

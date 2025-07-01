@@ -19,7 +19,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     if getattr(propGroup, 'auto_save'):
         autosaveFile = getattr(propGroup, "auto_save_file")
-        autosaveFile = blender_utils.getFullFilepath(autosaveFile)
+        autosaveFile = path_utils.formatResourcePath(autosaveFile, allowRelativePaths = ctx.exportOnly)
         path_utils.createDirectoryFromFilepath(autosaveFile)
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)

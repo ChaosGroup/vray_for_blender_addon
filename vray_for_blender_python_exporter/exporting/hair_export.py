@@ -10,7 +10,7 @@ from vray_blender.lib.names import Names
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.bin import VRayBlenderLib as vray
 
-
+from vray_blender.lib.defs import DataArray
 class HairData:
     TYPE_CURVES     = "CURVES"
     TYPE_PARTICLES  = "PARTICLES"
@@ -24,11 +24,13 @@ class HairData:
         self.fadeWidth      = False
         self.widthsInPixels = False
         self.useHairBSpline = False
-        self.points          = np.empty(shape=(0,3), dtype=np.float32)
         self.strandSegments  = np.empty(shape=0, dtype=np.int32)
         self.pointRadii      = np.empty(shape=0, dtype=np.float32)
-        self.uvs             = np.empty(shape=(0,2), dtype=np.float32)
         self.vertColors      = np.empty(shape=(0,3), dtype=np.float32)
+        
+        # The members below are represented as DataArray-s when the HairData is generated from curves.
+        self.uvs: DataArray | np.ndarray = None
+        self.points: DataArray | np.ndarray = None
 
 
 def gatherPoints(obj, start, end, pointsPerStrand, fnCoHair, data):
@@ -96,13 +98,12 @@ class HairExporter(ExporterBase):
         if (not exportGeometry) or (uniqueName in self.exported):
             # Already exported, return the existing plugin
             return AttrPlugin(uniqueName)
-        
-        totalPoints = len(curves.points)
-        strands = len(curves.curves)
+
+        if (totalPoints := len(curves.points)) == 0:
+            # Curves without points (the curves object is empty), nothing to export
+            return AttrPlugin()
        
-        points = tools.foreachGetAttr(curves.points, "position", shape=(totalPoints,3), dtype=np.float32) 
-        # Alternative to the above
-        # curves.postition_data.foreach_get("vector", points)
+        points = DataArray.fromAttribute(curves, "position")
 
         # The offsets are always 1 more than the curves in order to provide info about the
         # segments in the last curve
@@ -117,7 +118,7 @@ class HairExporter(ExporterBase):
 
         # UVs of strand roots ( the anchor points to the parent surface )
         # These are so far the only UVs we can obtain from Blender
-        uvs = tools.foreachGetAttr(curves.attributes["surface_uv_coordinate"].data, "vector", shape=(strands,2), dtype=np.float32)
+        uvs = DataArray.fromAttribute(curves, "surface_uv_coordinate")
 
         sameRadius = np.all(pointRadiuses == pointRadiuses[0])
         sameLength = np.all(strandSegments == strandSegments[0])
@@ -189,6 +190,8 @@ class HairExporter(ExporterBase):
         
         objMesh = evaluatedObj.to_mesh(preserve_all_data_layers=True, depsgraph=self.dg)
         self.exportUVs(objMesh, pmod, firstExported, totalParticles, psys, parents, data)
+        if data.uvs is None:
+            data.uvs = np.empty(0)
     
         # TODO: Colors are currently not rendered by VRay although they are being expotred
         self.exportColors(objMesh, pmod, firstExported, totalParticles, psys, parents, data)

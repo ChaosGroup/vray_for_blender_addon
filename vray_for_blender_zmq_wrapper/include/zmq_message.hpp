@@ -69,7 +69,7 @@ namespace vray = VRayBaseTypes;
 
 enum class MsgType : char {
 	None,
-		
+
 	// Plugin messages
 	FirstPluginMessage,
 	PluginCreate = FirstPluginMessage,
@@ -107,7 +107,7 @@ enum class MsgType : char {
 	RendererSetCropRegion,
 	RendererRenderSequence,
 	LastRendererMessage = RendererRenderSequence,
-		
+
 	// Renderer events
 	FirstRendererEvent,
 	RendererOnVRayLog = FirstRendererEvent,
@@ -120,14 +120,23 @@ enum class MsgType : char {
 	FirstControlMessage,
 	ControlSetLogLevel = FirstControlMessage,
 	ControlOpenCollaboration,
+
+	// Cosmos
 	ControlOpenCosmos,
+	ControlCosmosCalculateDownloadSize,
+	ControlCosmosDownloadSize,
+	ControlCosmosDownloadAssets,
+	ControlCosmosDownloadedAssets,
+	ControlCosmosUpdateSceneName,
+
 	ControlShowUserDialog,
 	ControlSetTelemetryState,
 	ControlSetVfbOnTop,
 	ControlUpdateVfbSettings,
 	ControlUpdateVfbLayers,
 	ControlShowVfb,
-	LastControlMessage = ControlShowVfb,
+	ControlResetVfbToolbar,
+	LastControlMessage = ControlResetVfbToolbar,
 		
 	// Control events
 	FirstControlEvent,
@@ -353,11 +362,13 @@ SERIALIZE_STRUCT(HostInfo,
 PROTO_MESSAGE( PluginCreate,
 	std::string pluginName;
 	std::string pluginType;
+	bool allowTypeChanges = false;
 );
 
 SERIALIZE_MESSAGE(PluginCreate, 
 	PARAM(pluginName)
 	PARAM(pluginType)
+	PARAM(allowTypeChanges)
 );
 
 
@@ -467,12 +478,14 @@ SERIALIZE_EMPTY_MESSAGE(RendererAbort);
 PROTO_MESSAGE(RendererInit,
 	RendererType rendererType;
 	DRFlags drFlags;
+	int renderThreads;
 	vray::AttrValue value;
 );
 
-SERIALIZE_MESSAGE(RendererInit, 
+SERIALIZE_MESSAGE(RendererInit,
 	PARAM(rendererType)
 	PARAM(drFlags)
+	PARAM(renderThreads)
 );
 
 
@@ -481,7 +494,7 @@ PROTO_MESSAGE(RendererResize,
 	RenderSizes renderSizes;
 );
 
-SERIALIZE_MESSAGE(RendererResize, 
+SERIALIZE_MESSAGE(RendererResize,
 	PARAM(renderSizes)
 );
 
@@ -491,7 +504,7 @@ PROTO_MESSAGE(RendererResetHosts,
 	std::string hosts;
 );
 
-SERIALIZE_MESSAGE(RendererResetHosts, 
+SERIALIZE_MESSAGE(RendererResetHosts,
 	PARAM(hosts)
 );
 
@@ -701,7 +714,7 @@ PROTO_MESSAGE(RendererOnAsyncOpComplete,
 	std::string message;
 );
 
-SERIALIZE_MESSAGE(RendererOnAsyncOpComplete, 
+SERIALIZE_MESSAGE(RendererOnAsyncOpComplete,
 	PARAM(operation)
 	PARAM(success)
 	PARAM(message)
@@ -727,16 +740,106 @@ SERIALIZE_MESSAGE(ControlOpenCollaboration,
 	PARAM(hostInfo)
 );
 
+/////////////////////// /////////////////////// /////////////////////// ///////////////////////
+/////////////////////// /////////////////////// /////////////////////// ///////////////////////
+
 /// MsgControlOpenCosmos
 EMPTY_PROTO_MESSAGE(ControlOpenCosmos);
 SERIALIZE_EMPTY_MESSAGE(ControlOpenCosmos);
+
+/// MsgControlCosmosCalculateDownloadSize
+PROTO_MESSAGE(ControlCosmosCalculateDownloadSize,
+	vray::AttrListString packgeIds;
+	vray::AttrListInt revisionIds;
+	vray::AttrListString missingTextures;
+);
+
+SERIALIZE_MESSAGE(ControlCosmosCalculateDownloadSize,
+	PARAM(packgeIds)
+	PARAM(revisionIds)
+	PARAM(missingTextures)
+);
+
+enum class CosmosRelinkStatus {
+	AllAssetsValid,
+	NotLoggedIn,
+	RelinkOnly,
+	DownloadAndRelink
+};
+
+/// MsgControlCosmosDownloadSize
+PROTO_MESSAGE(ControlCosmosDownloadSize,
+	int32_t downloadSizeMb;
+	CosmosRelinkStatus relinkStatus;
+);
+
+SERIALIZE_MESSAGE(ControlCosmosDownloadSize,
+	PARAM(downloadSizeMb)
+	PARAM(relinkStatus)
+);
+
+/// MsgControlCosmosDownloadAssets
+EMPTY_PROTO_MESSAGE(ControlCosmosDownloadAssets);
+SERIALIZE_EMPTY_MESSAGE(ControlCosmosDownloadAssets);
+
+
+enum class CosmosDownloadStatus {
+	Cancelled = 0,
+    Timeout = 1,
+    Done = 2,
+};
+
+/// MsgControlCosmosDownloadedAssets
+PROTO_MESSAGE(ControlCosmosDownloadedAssets,
+	vray::AttrListString relinkedPaths;
+	CosmosDownloadStatus downloadStatus;
+);
+
+SERIALIZE_MESSAGE(ControlCosmosDownloadedAssets,
+	PARAM(relinkedPaths)
+	PARAM(downloadStatus)
+);
+
+/// MsgControlCosmosUpdateSceneName
+PROTO_MESSAGE(ControlCosmosUpdateSceneName,
+	std::string sceneName;
+);
+
+SERIALIZE_MESSAGE(ControlCosmosUpdateSceneName,
+	PARAM(sceneName)
+);
+
+/// MsgControlOnImportAsset
+PROTO_MESSAGE(ControlOnImportAsset,
+	ImportedAssetType assetType;
+	vray::AttrListString assetNames;
+	vray::AttrListString assetLocations;
+	std::string materialFile;
+	std::string objectFile;
+	std::string lightFile;
+	std::string packageId;
+	uint32_t revisionId;
+	bool isAnimated;
+);
+
+SERIALIZE_MESSAGE(ControlOnImportAsset,
+	PARAM(assetType)
+	PARAM(assetNames)
+	PARAM(assetLocations)
+	PARAM(materialFile)
+	PARAM(objectFile)
+	PARAM(lightFile)
+	PARAM(packageId)
+	PARAM(revisionId)
+	PARAM(isAnimated)
+);
 
 /// MsgControlShowProductInfo
 PROTO_MESSAGE(ControlShowUserDialog,
 	std::string json;
 );
 
-SERIALIZE_MESSAGE(ControlShowUserDialog, 
+SERIALIZE_MESSAGE(ControlShowUserDialog,
 	PARAM(json)
 );
 
@@ -785,29 +888,6 @@ SERIALIZE_MESSAGE(ControlUpdateVfbLayers,
 );
 
 
-
-/// MsgControlOnImportAsset
-PROTO_MESSAGE(ControlOnImportAsset,
-	ImportedAssetType assetType;
-	vray::AttrListString assetNames;
-	vray::AttrListString assetLocations;
-	std::string materialFile;
-	std::string objectFile;
-	std::string lightFile;
-	bool isAnimated;
-);
-
-SERIALIZE_MESSAGE(ControlOnImportAsset,
-	PARAM(assetType)
-	PARAM(assetNames) 
-	PARAM(assetLocations)
-	PARAM(materialFile)
-	PARAM(objectFile)
-	PARAM(lightFile)
-	PARAM(isAnimated)
-);
-
-
 /// MsgControlOnRenderStatus
 PROTO_MESSAGE(ControlOnRendererStatus,
 	VRayStatusType status;
@@ -822,6 +902,10 @@ SERIALIZE_MESSAGE(ControlOnRendererStatus,
 /// MsgControlShowVfb
 EMPTY_PROTO_MESSAGE(ControlShowVfb);
 SERIALIZE_EMPTY_MESSAGE(ControlShowVfb);
+
+/// MsgControlResetVfbToolbar
+EMPTY_PROTO_MESSAGE(ControlResetVfbToolbar);
+SERIALIZE_EMPTY_MESSAGE(ControlResetVfbToolbar);
 
 /// MsgControlOnStartViewportRender
 EMPTY_PROTO_MESSAGE(ControlOnStartViewportRender);

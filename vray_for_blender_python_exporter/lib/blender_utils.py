@@ -44,6 +44,36 @@ def _mergeRanges(range1: mathutils.Vector, range2: mathutils.Vector):
     ))
 
 
+def _getArmatureAnimationRange(obj: bpy.types.Object):
+    """ Returns the animation frame range for an object animated by armature.
+
+    Args:
+        obj (bpy.types.Object): The object that is potentially animated by one 
+        or multuple armatures.
+
+    Returns:
+        Vector: Vector(start_frame, end_frame) as integers.
+               Returns a (0,0) range if object is not controlled by animated armature.
+    """
+    frameRange = mathutils.Vector((0,0))
+    armatureObj = None
+    
+    # Find the Armature modifier on the mesh object
+    for mod in obj.modifiers:
+        if (mod.type == 'ARMATURE') and (mod.object) and (mod.object.type == 'ARMATURE'):
+            
+            armatureObj = mod.object
+            
+            # Check if the armature has animation data and an active action
+            if armatureObj.animation_data and armatureObj.animation_data.action:
+                action = armatureObj.animation_data.action
+                frame_start = int(action.frame_range[0])
+                frame_end = int(action.frame_range[1])
+                return _mergeRanges(frameRange, mathutils.Vector((frame_start, frame_end)))
+            
+    return frameRange
+
+
 def frameInRange(frame: float, range: mathutils.Vector):
     return range.x <= frame <= range.y
 
@@ -81,8 +111,19 @@ def getGeomAnimationRange(obj: bpy.types.Object) -> mathutils.Vector:
         if any(fc for fc in animData.action.fcurves if fc.data_path.startswith('modifiers[')):
             frameRange = _mergeRanges(frameRange, animData.action.frame_range)
 
-    return frameRange
+    # Check for animated armature
+    frameRange = _mergeRanges(frameRange, _getArmatureAnimationRange(obj))
     
+    return frameRange
+
+def getGeomCenter(ob: bpy.types.Object) -> mathutils.Vector:
+    """ Returns the local-space center of object's mesh. """
+
+    assert ob.type not in NonGeometryTypes, "Object must be a geometry type"
+
+    corners = [mathutils.Vector(c) for c in ob.bound_box]
+    
+    return sum(corners, mathutils.Vector()) / len(corners)
 
 
 def getObjectList(object_names_string=None, group_names_string=None):
@@ -257,45 +298,6 @@ def getMetersToSceneUnitsMultiplier(context):
     """ Returns multiplier for conversion from meters to Blender Scene units"""
     return getCmToSceneUnitsMultiplier(context) * 100
 
-def isPathRelative(path):
-    return path.startswith("//")
-
-
-def relativePathValid(path):
-    if not isPathRelative(path):
-        return True
-    if bpy.data.filepath:
-        return True
-    return False
-
-
-def getFullFilepath(filepath, holder=None):
-    fullFilepath = filepath
-
-    if not isPathRelative(filepath):
-        fullFilepath = filepath
-
-    elif not (holder and holder.library):
-        if relativePathValid(filepath):
-            fullFilepath = bpy.path.abspath(filepath)
-        else:
-            fullFilepath = os.path.join(tempfile.gettempdir(), filepath[2:])
-
-    else:
-        # Path is from linked library and is relative
-        # Remove "//"
-        # filepath = filepath[2:]
-
-        # Use library dirpath as relative root
-        # libraryDirpath = os.path.dirname(bpy.path.abspath(holder.library.filepath))
-
-        # fullFilepath = os.path.normpath(os.path.join(libraryDirpath, filepath))
-        fullFilepath = bpy.path.abspath(filepath, library=holder.library)
-
-    fullFilepath = os.path.normpath(fullFilepath)
-
-    return fullFilepath
-
 
 def addEvent(event, func):
     if func not in event:
@@ -308,6 +310,10 @@ def delEvent(event, func):
 
 
 def selectObject(ob):
+    # When an active object is in 'EDIT' mode, execution of bpy.ops.object.select_all(action='DESELECT') raises an error.
+    # Clearing the active object before such call prevents this problem.
+    bpy.context.view_layer.objects.active = None
+    
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
@@ -322,10 +328,18 @@ def getSceneCamera(exporterCtx):
     scene: bpy.types.Scene = bpy.context.scene if exporterCtx.preview else exporterCtx.dg.scene
     return scene.camera
 
-def getFirstAvailableView3D():
-    """ Returns SpaceView3D of the first available VIEW_3D area"""
+def getActiveView3D():
+    """ Returns SpaceView3D from the active screen or None if the active screen does not have View3D"""
     if area := next((a for a in bpy.context.screen.areas if a and a.type == 'VIEW_3D'), None):
         return next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
+
+    return None
+
+def getFirstAvailableView3D():
+    """ Returns SpaceView3D of the first available VIEW_3D area"""
+    area=getActiveView3D()
+    if area:
+        return area
 
     # Check other screens
     if area := next((a for screen in bpy.data.screens for a in screen.areas if a.type == 'VIEW_3D'), None):
@@ -478,3 +492,8 @@ def setShadowAttr(data, attrName: str, value):
 def hasShadowedAttrChanged(data, attrName):
     """ Return True if the value of the attribute is not the same as the value of its shadow """
     return getShadowAttr(data, attrName) != getattr(data, attrName)
+
+
+def updateShadowAttr(data, attrName):
+    """ Update the value of a shadow attribute with the value of the main attribute """
+    data[getShadowAttrName(attrName)] = getShadowAttr(data, attrName)

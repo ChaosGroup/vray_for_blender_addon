@@ -32,17 +32,14 @@ class VRAY_OT_object_rotate_to_flip(bpy.types.Operator):
 class VRAY_OT_vrayscene_load_preview(bpy.types.Operator):
     bl_idname      = "vray.vrayscene_load_preview"
     bl_label       = "Load VRayScene Preview"
-    bl_description = "Loads *.vrscene preview from vrmesh file"
+    bl_description = "Load VRayScene preview from *.vrscene file"
 
     def execute(self, context):
         ob = context.object
-        ob.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
-        filepath = ob.vray.VRayAsset.filePath
+        filepath = ob.data.vray.VRayScene.filepath
 
-        err = vray_proxy.loadVRayScenePreviewMesh(filepath, context.scene, ob)
-
-        if err is not None:
-            self.report({'ERROR'}, err)
+        if err := vray_proxy.loadVRayScenePreviewMesh(filepath, ob):
+            debug.report('ERROR', err)
             return {'CANCELLED'}
 
         return {'FINISHED'}
@@ -51,7 +48,7 @@ class VRAY_OT_vrayscene_load_preview(bpy.types.Operator):
 class VRAY_OT_proxy_load_preview(bpy.types.Operator):
     bl_idname      = "vray.proxy_load_preview"
     bl_label       = "Load Preview"
-    bl_description = "Loads mesh preview from vrmesh file"
+    bl_description = "Load VRayProxy preview from .vrmesh or .abc file"
 
     def execute(self, context):
         geomMeshFile  = context.active_object.data.vray.GeomMeshFile
@@ -83,7 +80,7 @@ class VRAY_OT_proxy_load_preview(bpy.types.Operator):
 class VRAY_OT_proxy_generate_preview(bpy.types.Operator):
     bl_idname      = "vray.proxy_generate_preview"
     bl_label       = "Generate VRayProxy Preview"
-    bl_description = "Generate preview geometry for a VRayProxy object"
+    bl_description = "Generate preview mesh for a VRayProxy object and load it into the scene"
 
     regenerate: bpy.props.BoolProperty(
         default=True,
@@ -100,13 +97,6 @@ class VRAY_OT_proxy_generate_preview(bpy.types.Operator):
             debug.reportError(f"File not found: {previewFilePath}", self)
             return {'CANCELLED'}
         
-        if self.regenerate and (geomMeshFile.previewType == 'Preview'):
-            if vray_proxy.isAlembicFile(previewFilePath):
-                previewFilePath = vray_proxy.generateAlembicPreview(previewFilePath, geomMeshFile)
-                if previewFilePath is None:
-                    debug.reportError(f"Failed to generate preview from file: {geomMeshFile.file}", self)
-                    return {'CANCELLED'}
-            
         if err := vray_proxy.loadVRayProxyPreviewMesh(ob, previewFilePath, geomMeshFile.anim_type,
                                             geomMeshFile.anim_offset, geomMeshFile.anim_speed, context.scene.frame_current):
             debug.reportError(err, self)
@@ -119,19 +109,23 @@ class VRAY_OT_proxy_generate_preview(bpy.types.Operator):
 class VRAY_OT_vrayscene_generate_preview(bpy.types.Operator):
     bl_idname      = "vray.vrayscene_generate_preview"
     bl_label       = "Generate VRayScene Preview"
-    bl_description = "Generate *.vrscene preview into vrmesh file"
+    bl_description = "Generate preview mesh for a VRayScene object and load it into the scene"
 
+    regenerate: bpy.props.BoolProperty(
+        default=True,
+        description="True if operator is called to regenerate an existing scene preview")
+    
     def execute(self, context):
         ob  = context.object
-
-        sceneFilepath = bpy.path.abspath(ob.vray.VRayAsset.filePath)
-        if not sceneFilepath:
+        vrayScene = ob.data.vray.VRayScene
+        
+        if not (sceneFilepath := bpy.path.abspath(vrayScene.filepath)):
             self.report({'ERROR'}, "Scene filepath is not set!")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
-        vrmeshFile = str(PurePath(sceneFilepath).with_suffix('.vrmesh'))
-        vray_proxy.launchPly2Vrmesh(sceneFilepath, vrmeshFile, previewOnly=True, previewFaces=ob.vray.VRayAsset.maxPreviewFaces)
-        vray_proxy.loadVRayScenePreviewMesh(vrmeshFile, context.scene, ob)
+        if err:= vray_proxy.loadVRayScenePreviewMesh(sceneFilepath, ob):
+            debug.report('ERROR', err)
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 

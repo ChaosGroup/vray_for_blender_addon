@@ -5,7 +5,7 @@ from vray_blender.exporting import update_tracker
 from vray_blender.lib import class_utils
 from vray_blender.nodes.mixin import VRayNodeBase
 from vray_blender.nodes.operators import sockets as SocketOperators
-from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs
+from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput
 from vray_blender.nodes.utils import UpdateTracker, getMaterialFromNode, selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui import classes
@@ -53,7 +53,7 @@ class VRaySocketTexLayeredBlendMode(VRaySocket):
             ("23", "Color", "Color"),
             ("24", "Value", "Value")
         ),
-        default = '1',
+        default = '0',
         update = selectedObjectTagUpdate
     )
 
@@ -76,7 +76,7 @@ class VRaySocketTexLayeredOpacity(VRaySocket):
         max = 1.0,
         soft_min = 0.0,
         soft_max =  1.0,
-        default = 0.5,
+        default = 1.0,
         update = selectedObjectTagUpdate
     )
 
@@ -200,18 +200,17 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
 
             split = layout.split(factor=0.1)
             split.column()
-            
+
             subpanel = split.column()
 
             row  = subpanel.row()
-            sockBlendMode = node.inputs[f'Blend Mode {humanIndex}']
+            sockBlendMode = getHiddenInput(self, f'Blend Mode {humanIndex}')
             row.label(text="Blend Mode")
             sockBlendMode.draw(context, row, node, text="")
-        
+
             row  = subpanel.row()
-            sockOpacity = node.inputs[f'Opacity {humanIndex}']
-            row.label(text="Opacity")
-            sockOpacity.draw(context, row, node, text="")
+            sockOpacity = getHiddenInput(self, f'Opacity {humanIndex}')
+            sockOpacity.draw(context, row, node, text="Opacity")
 
 
     @staticmethod
@@ -223,7 +222,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         addInput(node, "VRaySocketTexLayeredOpacity", f"Opacity {humanIndex}", visible = False)
         addInput(node, "VRaySocketTexLayeredBlendMode", f"Blend Mode {humanIndex}", visible = False)
 
-        node.layers += 1 
+        node.layers += 1
 
 
 class VRAY_OT_pack_image(bpy.types.Operator):

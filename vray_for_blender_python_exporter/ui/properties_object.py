@@ -193,67 +193,6 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         # col.prop(vrayClipper, 'material_id')
         
        
-
-
-class VRAY_PT_VRayScene(classes.VRayObjectPanel):
-    bl_label   = "Scene"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def drawPanelCheckBox(self, context):
-        self.layout.prop(context.object.vray, 'overrideWithScene', text="")
-
-    def draw(self, context):
-        wide_ui = context.region.width > classes.narrowui
-        layout  = self.layout
-
-        VRayObject = context.object.vray
-        VRayAsset  = VRayObject.VRayAsset
-
-        layout.active = VRayObject.overrideWithScene
-
-        layout.label(text="Filepath:")
-        layout.prop(VRayAsset, 'filePath', text="")
-        layout.separator()
-
-        split = layout.split()
-        col = split.column()
-        col.prop(VRayAsset, 'sceneUseTransform')
-        # col.prop(VRayAsset, 'flipAxis')
-        if wide_ui:
-            col = split.column()
-        col.prop(VRayAsset, 'sceneAddNodes')
-        col.prop(VRayAsset, 'sceneAddLights')
-
-        # col.prop(VRayAsset, 'sceneAddMaterials')
-        # col.prop(VRayAsset, 'sceneAddCameras')
-        # col.prop(VRayAsset, 'sceneAddEnvironment')
-
-        layout.separator()
-        layout.prop(VRayAsset, 'anim_type')
-        split = layout.split()
-        col = split.column(align=True)
-        col.prop(VRayAsset, 'anim_speed')
-        col.prop(VRayAsset, 'anim_offset')
-        if wide_ui:
-            col = split.column(align=True)
-        col.prop(VRayAsset, 'anim_start')
-        col.prop(VRayAsset, 'anim_length')
-
-        layout.separator()
-        layout.prop(VRayAsset, 'use_hide_objects')
-        col = layout.column()
-        col.active = VRayAsset.use_hide_objects
-        col.prop(VRayAsset, 'hidden_objects')
-
-        layout.separator()
-        layout.label(text="Preview Mesh:")
-        layout.prop(VRayAsset, 'maxPreviewFaces')
-        row = layout.row(align=True)
-        row.operator('vray.vrayscene_generate_preview', icon='OUTLINER_OB_MESH', text="Generate")
-        row.operator('vray.vrayscene_load_preview',     icon='EDITMODE_HLT',     text="Load")
-        row.operator('vray.object_rotate_to_flip',      icon='FILE_REFRESH',     text="Rotate")
-
-
 class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
     bl_label = "User Attributes"
     bl_options = {'DEFAULT_CLOSED'}

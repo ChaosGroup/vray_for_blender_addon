@@ -2,7 +2,7 @@
 import bpy
 
 from vray_blender.lib.defs import ExporterContext
-from vray_blender.lib import export_utils, path_utils, blender_utils
+from vray_blender.lib import export_utils, path_utils
 from vray_blender.lib import plugin_utils
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
@@ -23,7 +23,7 @@ def onCausticsEnabled(SettingsCaustics, context, attrName):
 def exportCustom(ctx: ExporterContext, pluginDesc):
     if getattr(pluginDesc.vrayPropGroup, 'auto_save'):
         autosaveFile = getattr(pluginDesc.vrayPropGroup, "auto_save_file")
-        autosaveFile = blender_utils.getFullFilepath(autosaveFile)
+        autosaveFile = path_utils.formatResourcePath(autosaveFile, alllowRelativePaths = ctx.exportOnly)
         path_utils.createDirectoryFromFilepath(autosaveFile)
 
     # Only 'Progressive' mode is available during IPR

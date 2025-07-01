@@ -1,11 +1,11 @@
 
-import bpy
+import bpy, os
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.lib.defs import ExporterContext
 from vray_blender.lib import export_utils
 from vray_blender.lib import plugin_utils
-from vray_blender.plugins import PLUGIN_MODULES 
+from vray_blender.plugins import PLUGIN_MODULES
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -14,7 +14,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
     scene = ctx.dg.scene
     vrayScene = scene.vray
     vrayDR    = vrayScene.VRayDR
-    
+
     if vrayDR.on and vrayDR.assetSharing == 'TRANSFER':
         pluginDesc.setAttribute('misc_transferAssets', True)
 
@@ -28,7 +28,13 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
         key = attrDesc['attr']
         if key in propGroup and attrDesc['default'] != getattr(propGroup, key):
             pluginDesc.setAttribute(key, getattr(propGroup, key))
-        
+
+    if bpy.app.background:
+        threadPriority = os.getenv("VRAY_BLENDER_HEADLESS_THREAD_PRIORITY", 0)
+    else:
+        threadPriority = 2 if bpy.context.scene.vray.Exporter.lower_thread_priority else 1
+    pluginDesc.setAttribute("misc_lowThreadPriority", threadPriority)
+
     pluginDesc.removeAttribute('mtl_override')
     pluginDesc.vrayPropGroup = propGroup
 

@@ -26,7 +26,6 @@ using namespace Interop;
 /// ZmqServer singleton manages the zmq context and control connection to ZmqServer.
 class ZmqServer {
 public:
-	
 	// Disable the heartbeat on the control connection. The liveness of ZmqServer
 	// will be checked by other means.
 	static const int SERVER_INACTIVITY_INTERVAL = VrayZmqWrapper::HEARTBEAT_NO_TIMEOUT;
@@ -46,7 +45,7 @@ public:
 	bool isRunning() const;
 	void setLogLevel(int lvl);
 	std::string getEndpoint() const;
-	
+
 	/// Indicates if the V-Ray instance in the ZmqServer is fully initialized
 	bool vrayInitialized() const;
 
@@ -74,7 +73,7 @@ public:
 private:
 	/// Run ZmqSrever process in a thread that will monitor and restart it as needed.
 	void runServer();
-	
+
 	/// Start VRayZmqServer process.
 	boost::process::child startServerProcess();
 
@@ -84,9 +83,10 @@ private:
 
 	/// Process a message from ZmqServer
 	void handleMsg(const zmq::message_t& msg);
-	
+
 	void processControlOnImportAsset(const proto::MsgControlOnImportAsset& message);
 	void processControlOnRendererStatus(const proto::MsgControlOnRendererStatus& message);
+	void processControlOnCosmosAssetsDownloaded(const proto::MsgControlCosmosDownloadedAssets& message);
 
 	/// Gets callback from m_pyCallbacks
 	py::object getPythonCallback(const std::string &name);
@@ -99,7 +99,7 @@ private:
 	std::jthread     m_processRunner;     /// A thread which will start and monitor ZmqServer process
 	std::atomic_int  m_zmqServerPID = 0;  /// The process ID of ZMQ server, != 0 if server is running
 	std::atomic_int  m_zmqServerPort = 0; /// The port on which ZmqServer listens for connections
-	
+
 	mutable std::recursive_mutex m_lockConn;  /// Synchronize access to the zmq agent
 
 	std::unordered_map<std::string, py::object> m_pyCallbacks; /// Stores python callbacks 

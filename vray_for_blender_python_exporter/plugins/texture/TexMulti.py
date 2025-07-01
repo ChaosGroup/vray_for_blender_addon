@@ -8,7 +8,7 @@ from vray_blender.lib import plugin_utils, draw_utils
 from vray_blender.lib.defs import  PluginDesc, NodeContext
 from vray_blender.lib.names import Names
 from vray_blender.nodes.operators.sockets import VRayNodeAddCustomSocket, VRayNodeDelCustomSocket
-from vray_blender.nodes.sockets import addInput, COLOR_SOCKET_COLOR, VRaySocketColorMult
+from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup
 from vray_blender.plugins.templates.common import VRAY_OT_simple_button
 
@@ -45,8 +45,9 @@ class VRaySocketTexMulti(VRaySocketColorMult):
         col2 = split.column()
         col2.prop(self, 'use', text='')
 
-    def draw_color(self, context, node):
-        return COLOR_SOCKET_COLOR
+    @classmethod
+    def draw_color_simple(cls):
+        return RGBA_SOCKET_COLOR
 
     def shouldExportLink(self):
         return self.use and super().shouldExportLink()
@@ -58,7 +59,8 @@ class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, bpy.types.Operat
     bl_description = "Add Texture socket"
     bl_options     = {'INTERNAL'}
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketTexMulti'
         self.vray_socket_name = 'Texture'
 
@@ -76,7 +78,8 @@ class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, bpy.types.Operat
     bl_description = "Removes Texure socket (only not linked sockets will be removed)"
     bl_options     = {'INTERNAL'}
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketTexMulti'
         self.vray_socket_name = 'Texture'
 

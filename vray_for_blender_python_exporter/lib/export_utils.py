@@ -1,17 +1,16 @@
 
 import os
 import contextlib
+import mathutils
 
-
-from vray_blender.lib import attribute_utils, plugin_utils
-from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin, AColor
-from vray_blender.nodes.utils import getNonExportablePluginProperties, getNodeOfPropGroup
-from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
 from vray_blender import debug
-from vray_blender.lib import attribute_types, path_utils, blender_utils
-
 from vray_blender.bin import VRayBlenderLib as vray
-
+from vray_blender.exporting import node_export as commonNodesExport
+from vray_blender.lib import attribute_utils, plugin_utils, attribute_types, path_utils
+from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin, NodeContext
+from vray_blender.lib.names import Names
+from vray_blender.nodes.utils import getNonExportablePluginProperties
+from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
 
 def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     mode = "PRODUCTION"
@@ -38,14 +37,14 @@ def _convertEnumValue(value):
     with contextlib.suppress(ValueError):
         return int(value)
     return str(value)
-        
+
 
 def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
     overriddenParams = _getOverridesFor(ctx, pluginDesc.type)
     pluginModule = getPluginModule(pluginDesc.type)
 
     nonExportableParams = getNonExportablePluginProperties(pluginModule)
-    
+
     for attrDesc in pluginModule.Parameters:
         attrName = attrDesc['attr']
         attrType = attrDesc['type']
@@ -55,13 +54,13 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
             continue
 
         options = attrDesc.get('options', {})
-        
+
         # Some attributes are not plugin properties ( i.e. they are only used in Blender ), 
         # but are added to the json descriptions to make them available through the standard 
         # property description mechanism. They are marked with a 'derived' field set to 'true'
         if options.get('derived', False):
             continue
-        
+
         # Skip output attributes
         if attrType in attribute_types.NodeOutputTypes:
             continue
@@ -97,11 +96,11 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
         if value is None:
             value = attrDesc['default']
-       
+
         if value is None:
             # 'None' is a valid default for some attribuute types
             value = AttrPlugin()
-            
+
         # Handle special attribute types
         match attrType:
             case 'ENUM':
@@ -109,14 +108,14 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
             case 'STRING':
                 subtype = attrDesc.get('subtype')
-                
+
                 if subtype == 'FILE_PATH':
-                    value = blender_utils.getFullFilepath(value)
+                    value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
                     _copyDrAsset(ctx, value)
                 elif subtype == 'DIR_PATH':
                     # Add a trailing slash to directory paths
                     value = os.path.normpath(value) + os.sep
-            
+
             case "COLOR_TEXTURE":
                 # Change the name of the attribute to export to the correct sub-attribute of the meta attribute.
                 attrName = attrDesc['tex_prop'] if type(value) == AttrPlugin else attrDesc['color_prop']
@@ -125,30 +124,24 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
                 if attrName == attrDesc['color_prop']: 
                     plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrDesc['tex_prop'], AttrPlugin())
 
-            case "PLUGIN_USE":
-                attrNameUse = attrDesc['use_prop']
-                valueUse = getattr(pluginDesc.vrayPropGroup, attrNameUse, None) 
-                plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrNameUse, attribute_utils.convertUIValueToVRay(attrDesc, valueUse))
-                continue
-
         plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrName, attribute_utils.convertUIValueToVRay(attrDesc, value))
-        
 
-    return AttrPlugin(pluginDesc.name)
+
+    return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
 
 
 def _exportTemplates(ctx: ExporterContext, pluginDesc: PluginDesc):
     if not pluginDesc.vrayPropGroup:
         # Some template are meant to be exported manually and they are not tied
         # to a specific plugin instance
-        return 
-    
+        return
+
     pluginModule = getPluginModule(pluginDesc.type)
 
     for attrDesc in [p for p in pluginModule.Parameters if p['type'] == 'TEMPLATE']:
         attrName = attrDesc['attr']
         template = getattr(pluginDesc.vrayPropGroup, attrName)
-        
+
         if not attrDesc['options']['template'].get('custom_exporter', False):
             template.exportToPluginDesc(ctx, pluginDesc)
 
@@ -158,18 +151,18 @@ def _exportTemplates(ctx: ExporterContext, pluginDesc: PluginDesc):
 # @param overrideParams - override the default param export 
 def exportPluginCommon(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
     vray.pluginCreate(ctx.renderer, pluginDesc.name, pluginDesc.type)
-    
+
     _exportTemplates(ctx, pluginDesc)
     return _exportPluginParams(ctx, pluginDesc)
 
 
 def exportPlugin(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
     pluginModule = getPluginModule(pluginDesc.type)
-    
+
     if not hasattr(pluginModule, 'Parameters'):
         debug.printError(f"Module {pluginDesc.type} doesn't have any parameters defined!")
         return AttrPlugin()
-    
+
     try:
         if hasattr(pluginModule, 'exportCustom'):
             # Plugins may override part or all of the export procedure
@@ -184,6 +177,22 @@ def exportPlugin(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
 
     return result
 
+
+def wrapAsTexture(nodeCtx: NodeContext, listItem: mathutils.Color | AttrPlugin):
+    """ Wrap a texture or color in a TexAColor plugin which can be added to a plugin list.
+
+        The reason for wrapping the texture plugins is that non-default output sockets are not supported
+        for the items set to a TEXTURE_LIST parameter, so we need to route the socket through a convetrer.
+    """
+
+    if isinstance(listItem, mathutils.Color) or listItem is None or listItem.output != "":
+        texAColor = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexAColor"), "TexAColor")
+        color = listItem if listItem else mathutils.Color((1.0, 1.0, 1.0))
+        texAColor.setAttribute("texture", color)
+
+        return commonNodesExport.exportPluginWithStats(nodeCtx, texAColor)
+    else:
+        return listItem
 
 def _copyDrAsset( ctx: ExporterContext, filePath: str):
     scene = ctx.dg.scene

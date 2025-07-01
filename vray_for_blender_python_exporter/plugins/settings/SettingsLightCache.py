@@ -3,7 +3,7 @@ import bpy
 
 from vray_blender.lib.defs import ExporterContext
 from vray_blender import debug
-from vray_blender.lib import export_utils, path_utils, blender_utils
+from vray_blender.lib import export_utils, path_utils
 from vray_blender.lib import plugin_utils
 
 
@@ -20,7 +20,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     if getattr(propGroup, 'auto_save'):
         autosaveFile = getattr(propGroup, "auto_save_file")
-        autosaveFile = blender_utils.getFullFilepath(autosaveFile)
+        autosaveFile = path_utils.formatResourcePath(autosaveFile, allowRelative = ctx.exportOnly)
         path_utils.createDirectoryFromFilepath(autosaveFile)
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)

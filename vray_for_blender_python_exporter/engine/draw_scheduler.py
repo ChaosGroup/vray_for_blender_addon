@@ -48,7 +48,7 @@ class VRay_OT_draw_viewport_timer(bpy.types.Operator):
             # with V-Ray viewport rendering.
             scene.display_settings.display_device = "sRGB"
             scene.view_settings.view_transform = 'Standard'
-            scene.view_settings.exposure = 0.5
+            scene.view_settings.exposure = 0.0
             scene.view_settings.gamma = 1.0
             scene.view_settings.look = "None"
     

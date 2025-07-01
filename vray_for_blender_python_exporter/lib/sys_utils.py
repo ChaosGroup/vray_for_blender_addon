@@ -141,6 +141,10 @@ def getAppSdkPath():
     """ Return the full path to the appsdk/bin folder """
     return os.path.join(getZmqServerFolder(), "appsdk", "bin")
 
+def getAppSdkLibPath():
+    libFileNameName = "VRaySDKLibrary.dll" if sys.platform == 'win32' else "VRaySDKLibrary" 
+    return os.path.join(getAppSdkPath(), libFileNameName)
+
 
 def _getResourcesPath():
     """ Returns the full path to the resources folder """
@@ -149,11 +153,9 @@ def _getResourcesPath():
 def getVfbSettingsPath():
     return os.path.join(_getResourcesPath(), "vfbSettings.json")
 
-def getVfbDefaultLayersPath():
-    return os.path.join(_getResourcesPath(), "VfbDefaultLayers.json")
-
 def getVfbDefaultSettingsPath():
-    return os.path.join(_getResourcesPath(), "vfbDefaultSettings.json")
+    """ Returns the full path (no filename) to the VFB settings default JSON """
+    return _getResourcesPath()
 
 def getDefaultTexturePath():
     return os.path.join(_getResourcesPath(), "defaultTexture.png")

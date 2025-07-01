@@ -20,6 +20,9 @@ from vray_blender.bin import VRayBlenderLib as vray
 # A list of plugins description as read from the json definition files
 PLUGINS_DESC = {}
 
+# A map of {pluginType: [property_list]} with cross-object dependencies 
+CROSS_DEPENDENCIES = {}
+
 # Key that serves to describe a comment into a *.custom.json plugin description
 DESC_COMMENT_KEY = "//Comment"
 

@@ -49,6 +49,7 @@ RenderPanelGroups = {
     '3' : (
         'VRAY_PT_Exporter',
         'VRAY_PT_SceneExporter',
+        'VRAY_PT_Performance',
         'VRAY_PT_SettingsSystem',
         'VRAY_PT_DR',
     ),
@@ -103,6 +104,14 @@ def pollTreeType(cls, context):
     is_vray_tree = context.space_data.tree_type.startswith('VRayNodeTree')
     return is_vray and is_vray_tree
 
+
+def disableLayoutInEditMode(layout, context):
+    """ Disable the layout if selected object is in Edit Mode and show a message if it is disabled. """
+
+    inEditMode = context.active_object and context.active_object.mode == 'EDIT'
+    layout.enabled = not inEditMode
+    if inEditMode:
+        layout.label(text="Not available in Edit Mode.", icon="INFO")
 
 ########  ########     ###    ##      ##
 ##     ## ##     ##   ## ##   ##  ##  ##
@@ -327,10 +336,8 @@ class VRayRenderPanel(VRayPanel):
     bl_context     = 'render'
 
     @classmethod
-    def poll_group(cls, context):
-        VRayExporter = context.scene.vray.Exporter
-        
-        activeGroup = VRayExporter.ui_render_context
+    def poll_group(cls, context: bpy.types.Context):
+        activeGroup = context.window_manager.vray.ui_render_context
         # 'activeGroup' may no longer be valid  if there are changes to the render context group
         # and we are loadig an older scene.
         if cls.__name__ in cls.bl_panel_groups.get(activeGroup, tuple()):

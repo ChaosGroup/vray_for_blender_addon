@@ -141,6 +141,5 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
         brdfNode.location.y += 50
 
         ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
-    
 
     NodeTools.deselectNodes(ntree)

@@ -46,13 +46,13 @@ class NodeLink:
 def logMsg(msg: str):
     """ Log message at low verbosity """
     if _DEBUG_OUTPUT:
-        debug.printAlways(f"UPGRADE: {msg}")
+        debug.printAlways(f"UPDATE: {msg}")
 
 
 def logVerboseMsg(msg: str):
     """ Log message at full verbosity """
     if _DEBUG_OUTPUT and _DEBUG_LEVEL_VERBOSE:
-        debug.printAlways(f"UPGRADE:   {msg}")
+        debug.printAlways(f"UPDATE:   {msg}")
 
 
 def _getNodeLinksInfo(node: bpy.types.Node):
@@ -94,7 +94,7 @@ def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
     assert ctx is not None
     assert node is not None
 
-    logMsg(f"Upgrading node '{node.name}' [{node.bl_idname}]")
+    logVerboseMsg(f"Updating node '{node.name}' [{node.bl_idname}]")
 
     ctx.currentNodeType = node.bl_idname
 
@@ -128,6 +128,11 @@ def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
     # Recreate node links on the new node
     failedLinks = _createNodeLinks(ctx, nodeLinks)
     
+    # Run custom script to process any data that is not part of the plugin properties
+    if ctx.nodeUpgradeInfo and (fnPostCopyNode := ctx.nodeUpgradeInfo.get('node_post_copy', None)):
+        fnPostCopyNode(ctx, nodeLinks, newNode)
+
+
     if failedLinks:
         logMsg("Failed to create some links:")
         for l in failedLinks:
@@ -145,10 +150,15 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
         nodeType (str): the type name of the node (bl_idname)
     """
     from vray_blender.plugins import getPluginModule, getPluginAttr
-    
+    from vray_blender.lib.attribute_utils import isOutputAttribute
+
     assert ctx is not None
     assert srcNode is not None
     assert targetNode is not None
+
+    # Skip custom V-Ray nodes that don’t correspond to actual V-Ray plugins
+    if srcNode.vray_plugin == 'NONE':
+        return
 
     sourceProps = getattr(srcNode, srcNode.vray_plugin)
     targetProps = getattr(targetNode, targetNode.vray_plugin)
@@ -167,11 +177,11 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
     for propName in sourcePropertyNames:
         
         try:
-            if ctx.nodeUpgradeInfo and (fnUpgrade := ctx.nodeUpgradeInfo['attributes'].get(propName, None)):
+            if ctx.nodeUpgradeInfo and (fnUpgrade := ctx.nodeUpgradeInfo.get('attributes', {}).get(propName, None)):
                 # A custom upgrade function is defined for this attribute, call it instead of the generic upgrade.
                 ctx.currentPropName = propName
                 fnUpgrade(ctx, srcNode, targetNode)
-            else:
+            elif not(isOutputAttribute(pluginModule, propName)): # Outputs don't have a value that can be copied
                 if (attrDesc := getPluginAttr(pluginModule, propName)) and (attrDesc['type'] == 'TEMPLATE'):
                     logVerboseMsg(f"Copy template: {srcNode.name} => {targetNode.name} {propName}")
                     
@@ -179,7 +189,10 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
                     targetProp = getattr(targetProps, propName, None)
                     
                     assert targetProp is not None
-                    srcProp.copy(targetProp)
+
+                    # Call the optional 'copy' method of the template
+                    if hasattr(srcProp, 'copy'):
+                        srcProp.copy(targetProp)
                 else:
                     logVerboseMsg(f"Copy attribute: {srcNode.name} => {targetNode.name} {propName}")
                     setattr(targetProps, propName, getattr(sourceProps, propName))
@@ -267,42 +280,61 @@ def upgradeScene(upgradeInfo: dict):
     """
     
     
-    logVerboseMsg("Upgrading scene materials ...")
+    logVerboseMsg("Updating scene materials ...")
     for material in bpy.data.materials:
         if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):       
-            logMsg(f"Upgrading material '{material.name}'")
+            logVerboseMsg(f"Updating material '{material.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = material.node_tree, 
                                             nodeTreeName = material.name,
                                             nodeTreeType = 'Material',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
 
 
-    logVerboseMsg("Upgrading scene lights ...")
+    logVerboseMsg("Updating scene lights ...")
     for light in bpy.data.lights:
         if _hasUpgradeableNodes(light, upgradeInfo):
-            logMsg(f"Upgrading light '{light.name}'")
+            logVerboseMsg(f"Updating light '{light.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = light.node_tree, 
                                             nodeTreeName = light.name,
                                             nodeTreeType = 'Light',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
 
 
-    logVerboseMsg("Upgrading scene worlds ...")
+    logVerboseMsg("Updating scene worlds ...")
     for world in bpy.data.worlds:
         if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
-            logMsg(f"Upgrading world '{world.name}'")
+            logVerboseMsg(f"Updating world '{world.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = world.node_tree, 
                                             nodeTreeName = world.name,
                                             nodeTreeType = 'World',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
 
-    logVerboseMsg("Upgrading scene object node trees ...")
+    logVerboseMsg("Updating scene object node trees ...")
     for group in bpy.data.node_groups:
         if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
-            logMsg(f"Upgrading object node tree '{group.name}'")
+            logVerboseMsg(f"Updating object node tree '{group.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = group, 
                                             nodeTreeName = group.name,
                                             nodeTreeType = 'Node tree',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
             
-    logMsg("Upgrade complete")
+    logMsg("Update complete")
+
+
+def sceneNeedsUpgrade(upgradeInfo: dict):
+    """ Return True if the scene contains data that need to be upgraded. """
+    for material in bpy.data.materials:
+        if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):       
+            return True
+
+    for light in bpy.data.lights:
+        if _hasUpgradeableNodes(light, upgradeInfo):
+            return True
+
+    for world in bpy.data.worlds:
+        if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
+           return True
+        
+    for group in bpy.data.node_groups:
+        if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
+            return True
