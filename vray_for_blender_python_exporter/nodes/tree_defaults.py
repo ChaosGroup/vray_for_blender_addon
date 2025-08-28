@@ -4,8 +4,8 @@ import bpy
 from vray_blender.lib import lib_utils
 from vray_blender.lib.attribute_types import MetaPropertyTypes
 from vray_blender.plugins import getPluginModule
-
 from vray_blender.nodes import tools as NodeTools
+from vray_blender.nodes import utils as NodeUtils
 
 
 def removeNonVRayNodes(ntree: bpy.types.NodeTree):
@@ -135,11 +135,16 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
     # Add a default material tree consisting of an output node and a VRayBRDF material node
 
     if addDefaultTree:
-        outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
-        brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
-        brdfNode.location.x  = outputNode.location.x - brdfNode.width - 50
-        brdfNode.location.y += 50
+        outputNode = NodeUtils.getOutputNode(mtl.node_tree, 'MATERIAL')
+        
+        if outputNode is None:    
+            outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
 
-        ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
+        if not NodeTools.isInputSocketLinked(outputNode.inputs[0]):    
+            brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
+            brdfNode.location.x  = outputNode.location.x - brdfNode.width - 50
+            brdfNode.location.y += 50
+
+            ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
 
     NodeTools.deselectNodes(ntree)

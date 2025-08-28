@@ -34,6 +34,10 @@
             "ui": {
                 "soft_max": 10
             }
+        },
+        {
+            "attr": "on",
+            "desc" : "Enable motion blur fon non-physical cameras only"
         }
     ],
     "Options": {
@@ -51,22 +55,29 @@
                 "layout": "ROLLOUT",
                 "name": "Motion Blur",
                 "label": "Motion Blur",
-                "use_prop": "on",
                 "attrs": [
+                    {
+                        "name": "on",
+                        "label": "Enable Motion Blur"
+                    },
                     {
                         "name": "camera_motion_blur"
                     },
                     {
-                        "name": "duration"
+                        "name": "duration",
+                        "active": {"cond": "::on=1"}
                     },
                     {
-                        "name": "interval_center"
+                        "name": "interval_center",
+                        "active": {"cond": "::on=1"}
                     },
                     {
-                        "name": "bias"
+                        "name": "bias",
+                        "active": {"cond": "::on=1"}
                     },
                     {
-                        "name": "shutter_efficiency"
+                        "name": "shutter_efficiency",
+                        "active": {"cond": "::on=1"}
                     },
                     {
                         "name": "geom_samples"

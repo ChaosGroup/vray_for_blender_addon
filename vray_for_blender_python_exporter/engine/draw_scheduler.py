@@ -1,6 +1,7 @@
 import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 
@@ -27,7 +28,7 @@ class ColorManagementSettings:
     
 
 
-class VRay_OT_draw_viewport_timer(bpy.types.Operator):
+class VRay_OT_draw_viewport_timer(VRayOperatorBase):
     """ A modal operator which will periodically check for new rendered images and
         trigger a viewport redraw operation.
     """

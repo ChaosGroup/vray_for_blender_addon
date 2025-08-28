@@ -104,16 +104,16 @@ def getGeomAnimationRange(obj: bpy.types.Object) -> mathutils.Vector:
     if (modifiers := getattr(obj, "modifiers", None)) and (animData := getattr(obj, "animation_data")):
         # Geometry nodes
         if geomNodeTree := next((m.node_group for m in modifiers if hasattr(m, 'node_group')), None):
-            if treeAnimData := getattr(geomNodeTree, "animation_data", None): 
+            if (treeAnimData := getattr(geomNodeTree, "animation_data", None)) and treeAnimData.action: 
                 frameRange = _mergeRanges(frameRange, treeAnimData.action.frame_range)
-        
+
         # Non geometry-nodes
-        if any(fc for fc in animData.action.fcurves if fc.data_path.startswith('modifiers[')):
+        if animData.action and any(fc for fc in animData.action.fcurves if fc.data_path.startswith('modifiers[')):
             frameRange = _mergeRanges(frameRange, animData.action.frame_range)
 
     # Check for animated armature
     frameRange = _mergeRanges(frameRange, _getArmatureAnimationRange(obj))
-    
+
     return frameRange
 
 def getGeomCenter(ob: bpy.types.Object) -> mathutils.Vector:
@@ -122,8 +122,13 @@ def getGeomCenter(ob: bpy.types.Object) -> mathutils.Vector:
     assert ob.type not in NonGeometryTypes, "Object must be a geometry type"
 
     corners = [mathutils.Vector(c) for c in ob.bound_box]
-    
+
     return sum(corners, mathutils.Vector()) / len(corners)
+
+
+def vecElemMult(v1, v2):
+    """ Elem-wise multiplication of two vectors """
+    return  mathutils.Vector((v1.x * v2.x, v1.y * v2.y, v1.z * v2.z))
 
 
 def getObjectList(object_names_string=None, group_names_string=None):

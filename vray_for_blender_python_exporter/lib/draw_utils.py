@@ -4,9 +4,10 @@ import importlib
 import json
 
 from vray_blender import debug
-from vray_blender.lib import attribute_types, attribute_utils, plugin_utils
-from vray_blender.nodes.utils import getInputSocketByVRayAttr
+from vray_blender.lib import attribute_types, attribute_utils
+from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.plugins import getPluginAttr
+from vray_blender.lib.sys_utils import isGPUEngine, importFunction
 
 
 def getContextType(context):
@@ -27,6 +28,25 @@ def getRegionWidthFromContext(context):
     return 1024
 
 
+def getAttrLabel(pluginModule, widgetAttr: dict):
+    """ Get the label to show for an attribute, searching the definitions at all 
+        possible levels.
+    """
+    attrName = widgetAttr['name']
+
+    if label := widgetAttr.get('label', None):
+        return attribute_utils.formatAttributeName(label)
+    
+    attrDesc = getPluginAttr(pluginModule, attrName)
+    if not attrDesc:
+        debug.printError(f"Failed to draw unknown plugin parameter {pluginModule.ID}::{attrName}")
+        
+    if displayName := attribute_utils.getAttrDisplayName(attrDesc):
+        return attribute_utils.formatAttributeName(displayName)
+        
+    return attribute_utils.formatAttributeName(attrName)
+    
+
 def subPanel(layout: bpy.types.UILayout):
     split = layout.split(factor=0.05, align=True)
     split.column()
@@ -46,7 +66,7 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
         label (str): the label to show for the panel
         defaultClosed(bool): the initial state of the rollout is closed
         usePropDataSrc: data source for the checkbox property
-        usePropName: the name of he checkbox property
+        usePropName: the name of the checkbox property
 
     Returns:
         body (bpy.types.UILayout) | None: the layout for the body of the panel or None if the panel is collapsed.
@@ -77,14 +97,13 @@ class UIPainter:
         self.propGroup = propGroup
         self.pluginModule = pluginModule
 
-
     def _drawAttr(self, layout: bpy.types.UILayout, attrName, label: str):
         """ Draw a single attribute of the plugin. This method will select between drawing node sockets
             and fields from the property group depending on whether the plugin is part of a
             nodetree.
         """
         
-        if self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByVRayAttr(self.node, attrName)):
+        if self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByAttr(self.node, attrName)):
             # We're drawing a node and the property is exposed as a node socket, let the socket draw itself  
             # in both the node and the property pages. This is necessary because, due to Blender limitations, 
             # only the values of sockets can be animated, and not the fields of the prop group of the node.
@@ -108,13 +127,13 @@ class UIPainter:
         else:
             expand = widgetAttr.get('expand', False)
             slider = widgetAttr.get('slider', False)
-            label  = self._getAttrLabel(widgetAttr)
+            label  = getAttrLabel(self.pluginModule, widgetAttr)
 
             if (searchType := widgetAttr.get('search_bar_for')):
                 layout.prop_search(self.propGroup, attrName,  bpy.data, searchType, text=label)
             elif (template := getPluginAttr(self.pluginModule, attrName).get('options', {}).get('template')):
                 self._drawTemplate(layout, widgetAttr, template)
-            elif self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByVRayAttr(self.node, attrName)):
+            elif self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByAttr(self.node, attrName)):
                 # If there is a socket for the attribute, draw it instead of the value from the property 
                 # group. In this way  what is shown in self.node and in the property pages will always stay in sync.
                 label = label if (label is not None) else socket.name
@@ -136,7 +155,7 @@ class UIPainter:
             return False
 
         if attrDesc['type'] in attribute_types.MetaPropertyTypes:
-            label = self._getAttrLabel(widgetAttr)
+            label = getAttrLabel(self.pluginModule, widgetAttr)
             self._drawAttr(layout, attrName, label)
             return True
             
@@ -147,7 +166,7 @@ class UIPainter:
         from vray_blender.plugins import templates
 
         templateInst = getattr(self.propGroup, widgetAttr['name'])
-        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, self._getAttrLabel(widgetAttr))
+        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, getAttrLabel(self.pluginModule, widgetAttr))
 
 
     def _renderDefault(self, layout: bpy.types.UILayout):
@@ -185,7 +204,7 @@ class UIPainter:
             return cond['evaluate'](self.propGroup, self.node)
         
         # NOTE: 'cond' may contain quote chars so don't use an f-string to construct the message  
-        errMsg = "Incorrect condition definition [" + cond + f"] in {self.propGroup.bl_rna.name}."
+        errMsg = "Incorrect condition definition [" + str(cond) + f"] in {self.propGroup.bl_rna.name}."
         if 'evaluate' not in cond:
             errMsg += " Evaluation function not compiled."
 
@@ -196,23 +215,8 @@ class UIPainter:
         if not (drawFnName := widgetAttr.get('custom_draw')):
             return None
 
-        fnDraw = None
-        pythonModule = self.pluginModule
-
-        if ':' in drawFnName:
-            moduleName, fnName = drawFnName.split(':')
-            modulePath = f"vray_blender.{moduleName}"
-
-            try:
-                pythonModule = importlib.import_module(modulePath)
-            except ImportError as e:
-                debug.printError(f"Failed to load python module: {modulePath}")
-                raise e
-
-            if hasattr(pythonModule, fnName):
-                fnDraw = getattr(pythonModule, fnName)
-        else:
-            fnDraw = getattr(self.pluginModule, drawFnName)
+        if (fnDraw := importFunction(drawFnName, self.pluginModule)) is None:
+            raise Exception(f"Failed to load custom draw function {self.pluginModule.ID}::{drawFnName}")
 
         return fnDraw
         
@@ -300,7 +304,14 @@ class UIPainter:
                 self._setActive(container, active)
             
         return container
-
+    
+    def _isAttributeSupportedOnGpu(self, widgetAttr):
+        """ Check if the given attribute is supported by the V-Ray GPU engine.
+        """
+        attrDesc = getPluginAttr(self.pluginModule, widgetAttr["name"])
+        if not attrDesc:
+            return True
+        return attribute_utils.getAttrGpuSupport(attrDesc) != "none"
 
     def renderWidgetAttributes(self, widget, container):
         # Render widget attributes
@@ -315,16 +326,21 @@ class UIPainter:
                 subContainer = container.column()
                 subContainer.use_property_split = False
                 self.renderWidget(subContainer, widgetAttr)
-            else:
-                # Render a simple (non-widget) attribute
-                if ('visible' not in widgetAttr) or self._evaluateCondition(widgetAttr['visible']):
+
+            else: # Render a simple (non-widget) attribute
+
+                # Skip drawing of attributes that are not supported by the V-Ray GPU engine.
+                if isGPUEngine(self.context.scene) and (not self._isAttributeSupportedOnGpu(widgetAttr)):
+                    continue
+
+                if (('visible' not in widgetAttr) or self._evaluateCondition(widgetAttr['visible'])):
                     self._renderItem(container, widgetAttr)
 
 
     def renderWidget(self, layout: bpy.types.UILayout, widget: dict):
         """ Render a single widget onto the supplied layout """
         # If the widget has a 'visible' condition, check it first
-        
+
         if (showCond := widget.get('visible')) and not self._evaluateCondition(showCond):
             return None
 
@@ -336,11 +352,14 @@ class UIPainter:
             # The rest of the widget is hidden ( e.g. a closed rollout ). 
             # Do not render its attributes.
             return None
-        
+
         container.use_property_split = widget.get('use_property_split', True)
-        
+
         # Show animation dots for animatable properties (the ones which have the 'ANIMATABLE' option set).
-        container.use_property_decorate = True
+        animatable = self.pluginModule.Options.get('animatable', True)
+        if not animatable:
+            animatable = self.pluginModule.Options.get('use_animation_layout', False)
+        container.use_property_decorate = animatable
 
         self.renderWidgetAttributes(widget, container)
 
@@ -349,29 +368,9 @@ class UIPainter:
             # sometings difficult to separate its contents visually from 
             # the contents that follow.
             container.separator()
-        
+
         return container
 
-
-
-    def _getAttrLabel(self, widgetAttr: dict):
-        """ Get the label to show for an attribute, searching the definitions at all 
-            possible levels.
-        """
-        attrName = widgetAttr['name']
-
-        if label := widgetAttr.get('label', None):
-            return attribute_utils.formatAttributeName(label)
-        
-        attrDesc = getPluginAttr(self.pluginModule, attrName)
-        if not attrDesc:
-            debug.printError(f"Failed to draw unknown plugin parameter {self.pluginModule.ID}::{attrName}")
-            
-        if displayName := attribute_utils.getAttrDisplayName(attrDesc):
-            return attribute_utils.formatAttributeName(displayName)
-            
-        return attribute_utils.formatAttributeName(attrName)
-        
 
     def _getWidgets(self):
         jsonTemplate = self.pluginModule.Widget

@@ -3,7 +3,7 @@ from vray_blender.exporting.tools import *
 from vray_blender.exporting.node_export import *
 from vray_blender.lib import export_utils
 from vray_blender.lib.defs import *
-from vray_blender.nodes.tools import isVrayNodeTree
+from vray_blender.nodes.tools import isVrayNodeTree, isInputSocketLinked
 from vray_blender.nodes import utils as NodesUtils
 
 import mathutils
@@ -26,9 +26,8 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
     effectsSock = getInputSocketByName(worldOutputNode, "Effects")
     environmentVolume = []
 
-    if effectsSock and effectsSock.is_linked:
-        if not (effectsNode := getFromNode(effectsSock)):
-            return []
+    if effectsSock and isInputSocketLinked(effectsSock):
+        effectsNode = effectsSock.links[0].from_node
         
         if effectsNode.bl_idname != "VRayNodeEffectsHolder":
             debug.printError("Environment: 'Effects' socket must be connected to a \"V-Ray Effects Container\" node!")
@@ -49,7 +48,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
 
 def _sockConnectedToDenoiser(sock):
-    node = getNodeLink(sock).from_node
+    node = getFarNodeLink(sock).from_node
     return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelDenoiser")
 
 def _exportRenderChannels(nodeCtx: NodeContext):
@@ -69,7 +68,7 @@ def _exportRenderChannels(nodeCtx: NodeContext):
         with nodeCtx.push(channelsNode):
             if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
                 nodeCtx.cacheNodePlugin(channelsNode)
-                for inSock in [sock for sock in channelsNode.inputs if sock.is_linked and sock.use]:
+                for inSock in [sock for sock in channelsNode.inputs if isInputSocketLinked(sock) and sock.use]:
                     if _sockConnectedToDenoiser(inSock) or (not nodeCtx.exporterCtx.viewport):
                         exportLinkedSocket(nodeCtx, inSock)
                         exportSettingsPlugin = True
@@ -146,8 +145,8 @@ class WorldExporter(ExporterBase):
         worldOutputNode = nodeCtx.node
         envSock = getInputSocketByName(worldOutputNode, "Environment")
 
-        if envSock and envSock.is_linked:
-            envNode = getFromNode(envSock)
+        if envSock and isInputSocketLinked(envSock):
+            envNode = envSock.links[0].from_node
             if not envNode:
                 return
             
@@ -172,7 +171,7 @@ class WorldExporter(ExporterBase):
                     mult = sock.multiplier
                     
                     if sock.use:
-                        if sock.is_linked:
+                        if isInputSocketLinked(sock):
                             tex = exportSocket(nodeCtx, sock)
                         else:
                             # On GPU, the 'xxx_color' properties do not work correctly. As a workaround, export the color as a plugin.

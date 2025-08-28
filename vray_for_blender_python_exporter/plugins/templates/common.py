@@ -5,6 +5,7 @@ from vray_blender import debug
 from vray_blender.nodes.utils import tagRedrawNodeEditor, tagRedrawPropertyEditor
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.plugins import getPluginAttr, getPluginModule
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 class TemplateListItem(bpy.types.PropertyGroup):
@@ -44,7 +45,7 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
         row.label(text=item.name, icon=iconID)
 
 
-class VRAY_OT_simple_button(bpy.types.Operator):
+class VRAY_OT_simple_button(VRayOperatorBase):
     bl_label = 'Button'
     bl_idname = 'vray.simple_button'
 
@@ -213,6 +214,8 @@ class VRayObjectSelector(VRayUITemplate):
         selected = set()
 
         for i in self.selectedItems:
+            if not i.objectPtr:
+                continue
             obj = i.objectPtr.original
             if isCollection(obj):
                 selected.update([o for o in obj.all_objects if o in dataProvider.values() and self._filterObject(o)])

@@ -1,7 +1,7 @@
 
 import bpy
 
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addOutput
 from vray_blender.lib import plugin_utils, draw_utils
 from vray_blender.lib.defs import ExporterContext, PluginDesc
@@ -14,16 +14,6 @@ class VRayObjectProps(VRayNodeBase):
     pluginWidgetIdx = ""
     bl_width_default = 160
 
-    def _setPropValWithoutUpdate(self, prop, value):
-        """ Set value to property without calling its update function """
-
-        if obj := bpy.context.active_object:
-            # Setting the property in the usual way (obj.vray.VRayObjectProperties.prop = value)
-            # triggers an update, which can lead to the creation or removal of a node.
-            # This behavior is not always desirable.
-            # For instance, when creating a "matte property" node from the node menu, we want to set 'use_matte' to true.
-            # However, if set normally, it will trigger the creation of another "matte" node.
-            obj.vray.VRayObjectProperties[prop] = value
 
     def draw_buttons_ext(self, context, layout):
         if obj := context.active_object:
@@ -65,10 +55,6 @@ class VRayObjectMatteProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Matte")
-        self._setPropValWithoutUpdate("matte_surface", True)
-
-    def free(self):
-        self._setPropValWithoutUpdate("matte_surface", False)
 
 
 
@@ -92,10 +78,6 @@ class VRayObjectSurfaceProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Surface")
-        self._setPropValWithoutUpdate("use_surface", True)
-
-    def free(self):
-        self._setPropValWithoutUpdate("use_surface", False)
 
 
 class VRayObjectVisibilityProps(VRayObjectProps):
@@ -119,10 +101,6 @@ class VRayObjectVisibilityProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Visibility")
-        self._setPropValWithoutUpdate("use_visibility", True)
-
-    def free(self):
-        self._setPropValWithoutUpdate("use_visibility", False)
 
     def fillReflectAndRefractLists(self, exporterCtx: ExporterContext, pluginDesc: PluginDesc):
         """ Fills the reflection and refraction exclusion lists with objects selected in the property panel of visibility props.

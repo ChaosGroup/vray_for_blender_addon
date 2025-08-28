@@ -8,10 +8,12 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.names import Names
 from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getInputSocketByName
 from vray_blender.plugins import getPluginModule
+from vray_blender.lib.mixin import VRayOperatorBase
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -57,7 +59,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     brdfSock = getInputSocketByName(node, "Base Material")
     assert brdfSock
 
-    if brdfSock.is_linked:
+    if isInputSocketLinked(brdfSock):
         brdfs.append(commonNodesExport.exportLinkedSocket(nodeCtx, brdfSock))
         weights.append(wrapAsTexture(nodeCtx, mathutils.Color((1.0, 1.0, 1.0))))
         opacities.append(1.0)
@@ -69,14 +71,14 @@ def exportTreeNode(nodeCtx: NodeContext):
         if not (brdfSock := getInputSocketByName(node, brdfSockName)):
             break
 
-        if brdfSock.is_linked:
+        if isInputSocketLinked(brdfSock):
             brdf = commonNodesExport.exportLinkedSocket(nodeCtx, brdfSock)
             weight = None
 
             weightSock = getInputSocketByName(node, weightSockName)
             opacitySock = getInputSocketByName(node, opacitySockName)
 
-            if weightSock.is_linked:
+            if isInputSocketLinked(weightSock):
                 weight = commonNodesExport.exportLinkedSocket(nodeCtx, weightSock)
             else:
                 weight = mathutils.Color(weightSock.value)
@@ -98,7 +100,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
-class VRAY_OT_node_add_brdf_layered_sockets(bpy.types.Operator):
+class VRAY_OT_node_add_brdf_layered_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_add_brdf_layered_sockets'
     bl_label       = "Add Coat Material"
     bl_description = "Add a new coat material"
@@ -122,7 +124,7 @@ class VRAY_OT_node_add_brdf_layered_sockets(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_node_del_brdf_layered_sockets(bpy.types.Operator):
+class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_del_brdf_layered_sockets'
     bl_label       = "Remove Coat Material"
     bl_description = "Removes the last coat material (only if there are no links to it)"
@@ -146,7 +148,7 @@ class VRAY_OT_node_del_brdf_layered_sockets(bpy.types.Operator):
             weightSock = node.inputs[weightSockName]
             opacitySock = getHiddenInput(node, opacitySockName)
 
-            if not brdfSock.is_linked and not weightSock.is_linked:
+            if not isInputSocketLinked(brdfSock) and not isInputSocketLinked(weightSock):
                 node.inputs.remove(node.inputs[brdfSockName])
                 node.inputs.remove(node.inputs[weightSockName])
                 node.inputs.remove(node.inputs[opacitySockName])

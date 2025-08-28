@@ -1,13 +1,14 @@
 
 import bpy
 
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.nodes import updateRenderChannelsState
 from vray_blender.nodes.operators import sockets as SocketOperators
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender import plugins
 from vray_blender.engine import resetActiveIprRendering
-from vray_blender.exporting.tools import getNodeLink
+from vray_blender.exporting.tools import getFarNodeLink
 from vray_blender.lib import class_utils
 from vray_blender.ui import classes
 from vray_blender.lib import draw_utils
@@ -20,7 +21,7 @@ from vray_blender.lib import draw_utils
 ##     ## ##        ##       ##    ##  ##     ##    ##    ##     ## ##    ##  ##    ##
  #######  ##        ######## ##     ## ##     ##    ##     #######  ##     ##  ######
 
-class VRAY_OT_node_renderchannels_socket_add(SocketOperators.VRayNodeAddCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_renderchannels_socket_add(SocketOperators.VRayNodeAddCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_renderchannels_socket_add'
     bl_label       = "Add Render Channel Socket"
     bl_description = "Adds Render Channel sockets"
@@ -32,7 +33,7 @@ class VRAY_OT_node_renderchannels_socket_add(SocketOperators.VRayNodeAddCustomSo
         self.vray_socket_name = "Channel"
 
 
-class VRAY_OT_node_renderchannels_socket_del(SocketOperators.VRayNodeDelCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_renderchannels_socket_del(SocketOperators.VRayNodeDelCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_renderchannels_socket_del'
     bl_label       = "Remove Render Channel Socket"
     bl_description = "Removes Render Channel socket (only not linked sockets will be removed)"
@@ -82,8 +83,8 @@ class VRayNodeRenderChannels(VRayNodeBase):
     def update(self: bpy.types.Node):
         # If there is a new denoiser channel or an existing one is disconnected,
         # the viewport renderer (if there is such running) should be reset
-        hasDenoiser = any([sock for sock in self.inputs if sock.is_linked and sock.use and \
-                              (link := getNodeLink(sock)) and (link.from_node.bl_idname == "VRayNodeRenderChannelDenoiser")])
+        hasDenoiser = any([sock for sock in self.inputs if isInputSocketLinked(sock) and sock.use and \
+                              (link := getFarNodeLink(sock)) and (link.from_node.bl_idname == "VRayNodeRenderChannelDenoiser")])
         
         if hasDenoiser != self.hasDenoiser:
             resetActiveIprRendering()

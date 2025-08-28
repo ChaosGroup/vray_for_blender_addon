@@ -2,13 +2,20 @@
     "ID": "RenderChannelVelocity",
     "Name" : "Velocity",
     "Subtype" : "GEOMETRY",
+    "Parameters": [
+        {
+            "attr": "name",
+            "default": "Velocity",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -38,7 +45,6 @@
             }
         ]
     },
-    "Parameters": [],
     "Options": {
         "animatable": false,
         "excluded_parameters": []

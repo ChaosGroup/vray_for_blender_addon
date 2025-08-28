@@ -2,12 +2,13 @@ import bpy
 
 from vray_blender.exporting.tools import removeOutputSocketLinks, getOutputSocketByAttr
 from vray_blender.lib import plugin_utils
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-class VRAY_OT_node_texsampler_sockets(bpy.types.Operator):
+class VRAY_OT_node_texsampler_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_texsampler_sockets'
     bl_label       = "Add/Remove Sampler"
     bl_description = "Adds/removes the selected sampler"

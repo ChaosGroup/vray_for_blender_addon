@@ -67,5 +67,8 @@
                 ]
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

@@ -118,6 +118,15 @@
             }
         },
         {
+            "attr": "enable_vignetting",
+            "default": false,
+            "desc": "Enable vignetting effect",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
             "attr" : "specify_focus",
             "default" : true
         },
@@ -280,7 +289,15 @@
                                 }
                             },
                             {
-                                "name": "vignetting"
+                                "name": "enable_vignetting",
+                                "label": "Vignetting"
+                            },
+                            {
+                                "name": "vignetting",
+                                "label": "Vignetting Strength",
+                                "active": {
+                                    "cond": "::enable_vignetting=1"
+                                }
                             },
                             {
                                 "name": "white_balance"
@@ -380,11 +397,12 @@
                         "attrs": [
                             {
                                 "name": "rolling_shutter_mode",
-                                "label": "Mode"
+                                "label": "Rolling Shutter Mode"
                             },
                             {
                                 "name": "rolling_shutter_duration",
-                                "label": "Duration (s^-1)"
+                                "label": "Duration (s^-1)",
+                                "active": {"cond": "::rolling_shutter_mode!=0"}
                             }
                         ]
                     }

@@ -7,6 +7,7 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
 from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 
@@ -50,7 +51,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     if node := pluginDesc.node:
         geometrySocket = node.inputs['Geometry']
-        if geometrySocket.is_linked:
+        if isInputSocketLinked(geometrySocket):
             # Even if an empty selector or a wrong node is attached to the 'geometry' socket, we
             # want to suppress the usage of internal objects list because it will be confusing
             # to the users (as list is hidden in the UI).

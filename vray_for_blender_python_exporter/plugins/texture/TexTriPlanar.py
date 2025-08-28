@@ -4,10 +4,10 @@ from re import S
 import mathutils
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getLinkedFromSocket
-from vray_blender.nodes.utils import getInputSocketByVRayAttr, getNodeOfPropGroup, getVrayPropGroup
-from vray_blender.lib import  export_utils, plugin_utils
-from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin, NodeContext
+from vray_blender.exporting.tools import getLinkedFromSocket, getInputSocketByAttr
+from vray_blender.nodes.utils import getNodeOfPropGroup, getVrayPropGroup
+from vray_blender.lib import  plugin_utils
+from vray_blender.lib.defs import PluginDesc, AttrPlugin, NodeContext
 from vray_blender.lib.names import Names
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -28,12 +28,12 @@ def _onModeChanged(node):
 
     showNegative = (newMode == 2)
     for propName in ("texture_negx", "texture_negy", "texture_negz"):
-        sock = getInputSocketByVRayAttr(node, propName)
+        sock = getInputSocketByAttr(node, propName)
         sock.enabled = showNegative
 
     showNonX = (newMode > 0)    
     for propName in ("texture_y", "texture_z"):
-        sock = getInputSocketByVRayAttr(node, propName)
+        sock = getInputSocketByAttr(node, propName)
         sock.enabled = showNonX
 
 
@@ -72,7 +72,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     #  - 'texture_rotation' - use to set a constant value - unlinked or linked to a V-Ray Vector node
     #  - 'texture_rotation_map' - linked to a node that exports to AttrPlugin
 
-    sockRotation = getInputSocketByVRayAttr(node, "texture_rotation_map")
+    sockRotation = getInputSocketByAttr(node, "texture_rotation_map")
 
     if sockRotation.shouldExportLink():
         sockSource = getLinkedFromSocket(sockRotation)

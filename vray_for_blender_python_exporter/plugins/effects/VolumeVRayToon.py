@@ -101,16 +101,16 @@ def exportTreeNode(nodeCtx: NodeContext):
 
             pluginDesc.setAttribute(f"{curveType}CurvePositions", [point.location[0] for point in curve.points])
             pluginDesc.setAttribute(f"{curveType}CurveInterpolations", [("3" if "AUTO" in point.handle_type else "1") for point in curve.points])
-            
+
             # The Y coordinate of the points should be exported as TEXTURE_FLOAT_LIST, i.e. a list of plugins
-            pointYCoords = [] 
+            pointYCoords = []
             for point in curve.points:
                 texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, 'FloatToTex'), 'FloatToTex')
-                texPlugin.setAttribute('input', point.location[1]) 
+                texPlugin.setAttribute('input', point.location[1])
                 pointYCoords.append(commonNodesExport.exportPluginWithStats(nodeCtx, texPlugin))
 
             pluginDesc.setAttribute(f"{curveType}CurveValues", pointYCoords )
-        
+
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 

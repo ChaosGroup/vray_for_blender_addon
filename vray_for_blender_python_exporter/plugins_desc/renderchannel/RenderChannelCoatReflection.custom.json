@@ -2,13 +2,24 @@
     "ID": "RenderChannelCoatReflection",
     "Name" : "Coat Reflection",
     "Subtype" : "ADVANCED",
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Coat Reflection",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -39,16 +50,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "color_mapping",
-            "default": true
-        },
-        {
-            "attr" : "name",
-            "default" : "Coat Reflection"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": [

@@ -1,13 +1,20 @@
 {
     "ID": "RenderChannelGlossiness",
     "Name" : "Glossiness",
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Glossines",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs":[
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -25,12 +32,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr" : "name",
-            "default" : "Glossines"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": []

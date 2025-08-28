@@ -8,8 +8,11 @@
                         "name": "size"
                     }
                 ],
-                "layout": "ROW"
+                "layout": "COLUMN"
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

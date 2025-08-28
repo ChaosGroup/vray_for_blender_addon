@@ -3,8 +3,7 @@ import bpy
 
 from vray_blender.exporting import update_tracker
 from vray_blender.lib import class_utils
-from vray_blender.nodes.mixin import VRayNodeBase
-from vray_blender.nodes.operators import sockets as SocketOperators
+from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput
 from vray_blender.nodes.utils import UpdateTracker, getMaterialFromNode, selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
@@ -93,7 +92,7 @@ class VRaySocketTexLayeredOpacity(VRaySocket):
 ##     ## ##        ##       ##    ##  ##     ##    ##    ##     ## ##    ##  ##    ##
  #######  ##        ######## ##     ## ##     ##    ##     #######  ##     ##  ######
 
-class VRAY_OT_node_texlayered_layer_add(bpy.types.Operator):
+class VRAY_OT_node_texlayered_layer_add(VRayOperatorBase):
     bl_idname      = 'vray.node_texlayered_layer_add'
     bl_label       = "Add Texture Layer"
     bl_description = "Adds Texture Layer to V-Ray Layered texture"
@@ -108,7 +107,7 @@ class VRAY_OT_node_texlayered_layer_add(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_node_texlayered_layer_del(bpy.types.Operator):
+class VRAY_OT_node_texlayered_layer_del(VRayOperatorBase):
     bl_idname      = 'vray.node_texlayered_layer_del'
     bl_label       = "Remove Texture Layer"
     bl_description = "Removes Texture layer from V-Ray Layered texture"
@@ -225,7 +224,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         node.layers += 1
 
 
-class VRAY_OT_pack_image(bpy.types.Operator):
+class VRAY_OT_pack_image(VRayOperatorBase):
     bl_idname      = 'vray.pack_image'
     bl_label       = "Pack image"
     bl_description = "Packs the image into the .blend file."

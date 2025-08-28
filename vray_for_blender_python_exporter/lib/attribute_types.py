@@ -62,7 +62,12 @@ HiddenNodeInputTypes = {
     'ENUM'
 }
 
-AllNodeInputTypes = NodeInputTypes.union(HiddenNodeInputTypes)
+NodeStructuralInputTypes = {
+    'ROLLOUT'
+}
+
+AllNodeInputTypes = NodeInputTypes.union(HiddenNodeInputTypes).union(NodeStructuralInputTypes)
+
 
 # Meta properties are artificial properties which combine one or more 'real' properties
 # and have custom draw and/or export logic.
@@ -263,6 +268,7 @@ CompatibleNonVrayNodes = {
     'ShaderNodeLayerWeight', # partial
     'ShaderNodeFresnel', # partial
     'ShaderNodeMix', # full
+    'ShaderNodeMixRGB', # full
     'ShaderNodeClamp', # full
     'ShaderNodeGamma', # full
     'ShaderNodeHueSaturation', # full

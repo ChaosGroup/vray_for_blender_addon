@@ -2,7 +2,7 @@
 import bpy 
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getNodeLink
+from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import  AColor, PluginDesc, NodeContext
 from vray_blender.lib.names import Names
@@ -46,7 +46,10 @@ def nodeInit(node: bpy.types.Node):
     color_ramp.createRampTexture(node)
     _createRampSockets(node, node.texture.color_ramp)
     color_ramp.registerColorRamp(node, 'texture', node.texture)
-
+    positionSocket = getInputSocketByAttr(node, "gradient_position")
+    positionSocket.hide = True
+    textureMapSocket = getInputSocketByAttr(node, "texture_map")
+    textureMapSocket.hide = True
 
 def nodeCopy(nodeCopy: bpy.types.Node, nodeOrig: bpy.types.Node):
     texture = color_ramp.createRampTexture(nodeCopy)
@@ -62,25 +65,42 @@ def nodeCopy(nodeCopy: bpy.types.Node, nodeOrig: bpy.types.Node):
 def nodeFree(node: bpy.types.Node):
     color_ramp.unregisterColorRamp(node, 'texture', node.texture)
 
-    
+
 # TODO: Create a function to automatically draw ramp widget from
 # the attribute type
-def nodeDraw(context, layout, node):
+def nodeDraw(context, layout: bpy.types.UILayout, node):
     if not node.texture:
         # This will be the case right after the node has been copied from another node
         return
-    
     layout.template_color_ramp(node.texture, 'color_ramp', expand=True)
+    layout.separator()
 
 
-def widgetDrawRamp(context, layout, propGroup, widgetAttr):
+def widgetDrawRamp(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
     node = getNodeOfPropGroup(propGroup)
     if not node.texture:
         # This will be the case right after the node has been copied from another node
         return
-    
-    layout.template_color_ramp(node.texture, 'color_ramp', expand=True)
 
+    layout.separator()
+    box = layout.box()
+    box.label(text="Color Ramp")
+    box.template_color_ramp(node.texture, 'color_ramp', expand=True)
+
+
+def onUpdateGradientType(texGradRamp, context, attrName):
+    node = getNodeOfPropGroup(texGradRamp)
+
+    positionSocket = getInputSocketByAttr(node, "gradient_position")
+    positionSocket.hide = texGradRamp.gradient_type!="12"
+
+    textureMapSocket = getInputSocketByAttr(node, "texture_map")
+    textureMapSocket.hide = texGradRamp.gradient_type!="5"
+
+    # The Lighting, Normal, Mapped, Position types do not use the uvwgen.
+    NoMappingTypes = ( "3", "5", "6", "12" )
+    textureMapSocket = getInputSocketByAttr(node, "uvwgen")
+    textureMapSocket.hide = (texGradRamp.gradient_type in NoMappingTypes)
 
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
@@ -91,29 +111,30 @@ def exportTreeNode(nodeCtx: NodeContext):
     # Export all properties associated with the color ramp.
     rampAttributes = ("texture", "colors", "positions", "interpolation")
     color_ramp.exportRampAttributes(nodeCtx.exporterCtx, pluginDesc, *rampAttributes)
-    
+
     textures = pluginDesc.getAttribute('colors')
-    
+
     for sock in node.inputs:
         if sock.shouldExportLink():
-            nodeLink = getNodeLink(sock)
+            nodeLink = getFarNodeLink(sock)
             assert nodeLink is not None
-            
+
             linkedPlugin = commonNodesExport.exportVRayNode(nodeCtx, nodeLink)
-            
+
             if _isRampTextureSocket(sock):
                 # Replace the exported colors with textures
                 texIndex = _sockNameToTexIndex(sock.name)
                 textures[texIndex] = commonNodesExport._exportConverters(nodeCtx, nodeLink.to_socket, linkedPlugin)
             else:
+                linkedPlugin = commonNodesExport._exportConverters(nodeCtx, nodeLink.to_socket, linkedPlugin)
                 pluginDesc.setAttribute(sock.vray_attr, linkedPlugin)
-        elif sock.vray_attr not in ('', *rampAttributes): 
+        elif sock.vray_attr not in ('', *rampAttributes):
             # rampAttributes were already exported, dynamic texture sockets have empty vray_attr
             if hasattr(sock, 'exportUnlinked'):
                 attrDesc = getPluginAttr(getPluginModule(_PLUGIN_TYPE), sock.vray_attr)
                 sock.exportUnlinked(nodeCtx, pluginDesc, attrDesc)
-    
-    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc) 
+
+    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
 def registerColorRamps():
@@ -133,7 +154,7 @@ def registerColorRamps():
 def syncColorRamps():
     """ Called from Update Depsgraph Pre event handler """
     for node, _, texture in color_ramp.getColorRampsForPlugin(_PLUGIN_TYPE):
-        _createRampSockets(node, texture.color_ramp) 
+        _createRampSockets(node, texture.color_ramp)
 
 
 def onUpdateColorRampSocket(socket, texture):
@@ -142,8 +163,8 @@ def onUpdateColorRampSocket(socket, texture):
     elemIndex = _sockNameToTexIndex(socket.name)
     if ramp.elements[elemIndex].color[:] != socket.value[:]:
         ramp.elements[elemIndex].color = socket.value[:]
-    
-    
+
+
 def _createRampSockets(node:bpy.types.Node, ramp):
     elemCount = len(ramp.elements)
     socketCount = len([s for s in node.inputs if _isRampTextureSocket(s)])
@@ -177,14 +198,9 @@ def _texIndexToSockName(i: int):
     return f"{_TEX_SOCKET_PREFIX}{i+1}"
 
 
-
 def register():
     bpy.utils.register_class(VRaySocketColorRampTexture)
 
 
 def unregister():
     bpy.utils.unregister_class(VRaySocketColorRampTexture)
-    
-
-
-

@@ -2,6 +2,8 @@
 import bpy
 import mathutils
 
+from vray_blender.lib.mixin import VRayOperatorBase
+
 
 TYPE = 'OBJECT'
 ID   = 'GeomVRayPattern'
@@ -186,7 +188,7 @@ def add_properties(rna_pointer):
     )
 
 
-class VRAY_OT_pattern_fix(bpy.types.Operator):
+class VRAY_OT_pattern_fix(VRayOperatorBase):
     bl_idname      = 'vray.pattern_fit'
     bl_label       = "Fit Crop Size"
     bl_description = "Fit Crop Size"

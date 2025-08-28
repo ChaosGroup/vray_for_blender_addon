@@ -27,6 +27,26 @@
             "ui": {
                 "spin_step": 0.01
             }
+        },
+        {
+            "attr": "brightness",
+            "ui":
+            {
+                "min": -10.0,
+                "max": 10.0,
+                "soft_min": -1.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "contrast",
+            "ui":
+            {
+                "min": -10.0,
+                "max": 10.0,
+                "soft_min": 0.0,
+                "soft_max": 2.0
+            }
         }
     ],
     "Widget": {

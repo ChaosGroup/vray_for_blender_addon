@@ -128,10 +128,10 @@ class ExporterContext:
         self.stats: list[str] = []
 
         # Cache mapping for exported materials:
-        # Each key is a Blender material (bpy.types.Material) that has been processed for export,
+        # Each key is a session_uid of a Blender material that has been processed for export,
         # and the corresponding value is its AttrPlugin representation.
         # This cache is used to avoid re-exporting materials that have already been exported.
-        self.exportedMtls: Dict[bpy.types.Material, AttrPlugin] = {}
+        self.exportedMtls: Dict[int, AttrPlugin] = {}
 
         # There are some default plugins which may be referenced by multiple other plugins, 
         # e.g. mapping etc. We only need one copy of those.
@@ -634,9 +634,15 @@ class NodeContext:
     def registerError(msg: str):
         __class__._errorList.add(msg)
 
+    @staticmethod
+    def getErrors():
+        return __class__._errorList
 
     def _reportErrors(self):
-        for msg in __class__._errorList:
+        for i, msg in enumerate(__class__._errorList):
+            if i > 1:
+                debug.reportAsync('WARNING', "Multiple node export warnings")
+                break
             errMsg = f"{msg} [{self.rootObj.id_type} {self.rootObj.name}]"
             if self.sceneObj is not None:
                 errMsg += f" Object: {self.sceneObj.name}"
@@ -646,7 +652,7 @@ class NodeContext:
                 # report as status during the first export after switching to viewport/IPR.
                 debug.reportAsync('WARNING', errMsg)
             elif not self.exporterCtx.preview:
-                # In production or subsequnt changes to the scene while viewport render is runoing,
+                # In production or subsequnt changes to the scene while viewport render is running,
                 # only log the issues to the console. In preview mode, we don't want to print anything
                 # at all as it could easily flood the console with messages.
                 debug.printWarning(errMsg)

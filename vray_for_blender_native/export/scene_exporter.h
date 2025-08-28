@@ -39,6 +39,7 @@ public:
 	virtual void	 renderStart(RenderPass * /*renderPass*/, py::object /*cbImageUpdated*/) {}
 	virtual void     renderEnd()	{}
 	virtual void     renderFrame()  {}
+	virtual void     continueRenderSequence() {}
 	virtual void     renderSequence(int /*start*/, int /*end*/, int /*step*/){}
 	virtual bool     renderSequenceRunning() { return false; }
 	virtual bool     vrsceneExportRunning() { return false; }
@@ -47,7 +48,7 @@ public:
 	virtual void     setupCallbacks()              {}
 	virtual void     abortRender() {}
 
-	void             exportMesh(MeshDataPtr mesh);
+	void             exportMesh(MeshDataPtr mesh, bool asyncExport);
 	void             exportHair(HairDataPtr hair);
 	void             exportPointCloud(PointCloudDataPtr pc);
 	void             exportSmoke(SmokeDataPtr smoke);

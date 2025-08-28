@@ -1,12 +1,11 @@
 #include "logger.hpp"
 
-#include <chrono>
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
-
 
 #include "vassert.h"
 

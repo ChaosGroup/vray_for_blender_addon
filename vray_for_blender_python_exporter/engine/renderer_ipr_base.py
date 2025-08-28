@@ -17,7 +17,6 @@ from vray_blender.exporting.settings_export import SettingsExporter
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget
 from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export
-from vray_blender.plugins import VRayWindowManager
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -152,6 +151,11 @@ def _syncNames(exporterCtx: ExporterContext):
 
     if exporterCtx.fullExport:
         exporterCtx.ts.timeThis("syncNames", lambda: syncUniqueNames(reset=False))
+
+        for id in [ id for id in exporterCtx.dg.ids if hasattr(id, 'vray') and isinstance(id, bpy.types.Object)]:
+            for slot in [s for s in id.material_slots if s.material and s.material.use_nodes and hasattr(s.material.node_tree, 'nodes')]:
+                for node in slot.material.node_tree.nodes:
+                    syncObjectUniqueName(node, reset=False)
     else:
         exporterCtx.ts.timeThis("syncNames", lambda: impl(exporterCtx) )
 

@@ -86,7 +86,7 @@ class UpdateTracker:
 
         for pluginType, propList in CROSS_DEPENDENCIES.items():
             for item in [i for i in data if i.node_tree]:
-                for node in [n for n in item.node_tree.nodes if n.get('vray_plugin', '') == pluginType]:
+                for node in [n for n in item.node_tree.nodes if getattr(n, 'vray_plugin', '') == pluginType]:
                     for propName in propList:
                         propGroup = getVrayPropGroup(node)
                         refProp = getattr(propGroup, propName)

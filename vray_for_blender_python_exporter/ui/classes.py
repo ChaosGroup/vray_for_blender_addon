@@ -6,6 +6,7 @@ from vray_blender.lib import draw_utils
 from vray_blender     import plugins, debug
 from vray_blender.ui  import icons
 from vray_blender.nodes.utils import getVrayPropGroup
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 ########  ######## ######## #### ##    ## ########  ######
@@ -104,7 +105,6 @@ def pollTreeType(cls, context):
     is_vray_tree = context.space_data.tree_type.startswith('VRayNodeTree')
     return is_vray and is_vray_tree
 
-
 def disableLayoutInEditMode(layout, context):
     """ Disable the layout if selected object is in Edit Mode and show a message if it is disabled. """
 
@@ -123,21 +123,21 @@ def disableLayoutInEditMode(layout, context):
 
 
 def drawPluginUI(context, layout, propGroup, pluginModule, node = None):
-    """ Draw property pages for the plugin in the supplied container. 
+    """ Draw property pages for the plugin in the supplied container.
 
         @param layout - container to draw into
         @param propGroup - Blender PropertyGroup for the plugin
-        @param vrayPlugin - 
+        @param vrayPlugin -
         @param node - optional. If valid, draw node input sockets as properties in the property page
     """
     uiPainter = draw_utils.UIPainter(context, pluginModule, propGroup, node)
     uiPainter.renderPluginUI(layout)
-    
+
 
 def drawNodePanel(context, layout, node, PLUGINS):
     """ Draw the main property panel for the node ( the one in the main
         Properties tab; the node sidebar panel is drawn by nodes.py::VRayNodeDrawSide() )
-    """   
+    """
     pluginModule = None
     show         = True
 
@@ -147,7 +147,7 @@ def drawNodePanel(context, layout, node, PLUGINS):
 
     show = getattr(node, 'vray_type', 'NONE') != 'NONE'
     show = show and (getattr(node, 'vray_plugin', 'NONE') != 'NONE')
-    
+
     if show:
         pluginTypes = PLUGINS[node.vray_type]
         if node.vray_plugin in pluginTypes:
@@ -155,7 +155,7 @@ def drawNodePanel(context, layout, node, PLUGINS):
 
     layout.label(text=f"Node:  {node.name}")
     layout.separator()
-    
+
     if show and pluginModule and (propGroup := getVrayPropGroup(node)):
         drawPluginUI(context, layout, propGroup, pluginModule, node)
     else:
@@ -234,8 +234,8 @@ class VRayPanel(bpy.types.Panel):
     @classmethod
     def poll(cls, context):
         return pollBase(cls, context)
-    
-        
+
+
     def draw(self, context: bpy.types.Context):
         for vrayPlugin in self.vrayPlugins:
             self.drawPlugin(context, self.layout, vrayPlugin)
@@ -246,10 +246,10 @@ class VRayPanel(bpy.types.Panel):
         if hasattr(context.scene.vray, pluginType):
             propGroup = getattr(context.scene.vray, pluginType)
             pluginModule = plugins.getPluginModule(pluginType)
-            
+
             uiPainter = draw_utils.UIPainter(context, pluginModule, propGroup)
             uiPainter.renderWidgets(layout, pluginModule.Widget.get('widgets', []))
-    
+
 
     def drawSection(self, context: bpy.types.Context, layout: bpy.types.UILayout, pluginType, widgetName):
         """ Draw a top-level widget from a plugin description. This method is 
@@ -258,13 +258,13 @@ class VRayPanel(bpy.types.Panel):
         """
         pluginModule = plugins.getPluginModule(pluginType)
         propGroup = getattr(context.scene.vray, pluginType)
-        
+
         if widget := next((w for w in pluginModule.Widget['widgets'] if w.get('name') == widgetName), None):
             painter = draw_utils.UIPainter(context, pluginModule, propGroup)
             return painter.renderWidget(layout, widget)
         else:
             debug.printError(f"Plugin {pluginType} has no widget with name '{widgetName}'")
-        
+
         return None
 
 
@@ -408,7 +408,7 @@ class VRayOpListBase:
     def_item_name: bpy.props.StringProperty()
 
 
-class VRAY_OT_ui_list_item_add(VRayOpListBase, bpy.types.Operator):
+class VRAY_OT_ui_list_item_add(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_add'
     bl_label       = "Add Item"
     bl_description = "Add list item"
@@ -422,7 +422,7 @@ class VRAY_OT_ui_list_item_add(VRayOpListBase, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_ui_list_item_del(VRayOpListBase, bpy.types.Operator):
+class VRAY_OT_ui_list_item_del(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_del'
     bl_label       = "Delete Item"
     bl_description = "Delete list item"
@@ -444,7 +444,7 @@ class VRAY_OT_ui_list_item_del(VRayOpListBase, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_ui_list_item_up(VRayOpListBase, bpy.types.Operator):
+class VRAY_OT_ui_list_item_up(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_up'
     bl_label       = "Move Item Up"
     bl_description = "Move list item up"
@@ -462,7 +462,7 @@ class VRAY_OT_ui_list_item_up(VRayOpListBase, bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_ui_list_item_down(VRayOpListBase, bpy.types.Operator):
+class VRAY_OT_ui_list_item_down(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_down'
     bl_label       = "Move Item Down"
     bl_description = "Move list item down"

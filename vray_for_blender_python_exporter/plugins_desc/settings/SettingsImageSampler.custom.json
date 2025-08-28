@@ -63,13 +63,13 @@
             }
         },
         {
-            "attr" : "render_mask_mode",
+            "attr": "render_mask_mode",
             "update": "onUpdateRenderMaskMode"
         },
         {
             "attr": "render_mask_object_selector",
             "desc": "Objects to use for render mask.",
-            "type" : "OBJECT",
+            "type": "OBJECT",
             "filter_type": "geometry",
             "options": {
                 "derived": true
@@ -78,7 +78,7 @@
         {
             "attr": "render_mask_collection_selector",
             "desc": "Collection to use for render mask.",
-            "type" : "OBJECT",
+            "type": "OBJECT",
             "options": {
                 "derived": true
             }
@@ -86,12 +86,12 @@
         {
             "attr": "render_mask_object_ids_list",
             "desc": "Object IDs to use for render mask, separated by a semicolon.",
-            "type" : "STRING",
+            "type": "STRING",
             "options": {
                 "derived": true
             },
-            "ui" : {
-                "display_name" : "Object IDs"
+            "ui": {
+                "display_name": "Object IDs"
             }
         },
         {
@@ -103,33 +103,38 @@
             "options": {
                 "derived": true
             },
-            "ui" : {
-                "display_name" : "Texture"
+            "ui": {
+                "display_name": "Texture"
             }
         },
         {
-            "attr" : "type",
-            "default" : "3",
-            "desc" : "The type of the image sampler (Bucket or Progressive)",
-            "items" : 
-            [
-                [ "1", "Bucket", "Bucket" ],
-                [ "3", "Progressive", "Progressive" ]
+            "attr": "type",
+            "default": "3",
+            "desc": "The type of the image sampler (Bucket or Progressive)",
+            "items": [
+                [
+                    "1",
+                    "Bucket",
+                    "Bucket"
+                ],
+                [
+                    "3",
+                    "Progressive",
+                    "Progressive"
+                ]
             ],
-            "type" : "ENUM",
-            "ui" : 
-            {
-                "display_name" : "Sampler Type"
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Sampler Type"
             }
         },
         {
             "attr": "lock_subdivs",
-            "desc" : "Using fixed subdivs",
+            "desc": "Using fixed subdivs",
             "default": false,
             "type": "BOOL",
-            "ui" : 
-            {
-                "display_name" : "Lock Subdivs"
+            "ui": {
+                "display_name": "Lock Subdivs"
             },
             "options": {
                 "derived": true
@@ -137,27 +142,28 @@
         },
         {
             "attr": "dmc_fireflyRemoval",
-            "default" : 0.05,
+            "default": 0.05,
             "ui": {
-                "max" : 1,
-                "min" : 0
+                "max": 1,
+                "min": 0,
+                "gpuSupport": "none"
             }
         },
         {
-            "attr" : "progressive_maxSubdivs",
-            "default" : 100
+            "attr": "progressive_maxSubdivs",
+            "default": 100
         },
         {
-            "attr" : "dmc_maxSubdivs",
-            "default" : 24
+            "attr": "dmc_maxSubdivs",
+            "default": 24
         },
         {
-            "attr" : "dmc_adaptivity_clamp",
-            "default" : 1.5
+            "attr": "dmc_adaptivity_clamp",
+            "default": 1.5
         },
         {
-            "attr" : "min_shade_rate",
-            "default" : 6
+            "attr": "min_shade_rate",
+            "default": 6
         },
         {
             "attr": "device_dependent_properties",
@@ -165,12 +171,12 @@
             "desc": "Dummy attribute for a block of device-dependent properties drawn in code",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
             "attr": "progressive_maxTime",
-            "ui" : {
+            "ui": {
                 "display_name": "Max Render Time (mins)"
             }
         }
@@ -231,7 +237,8 @@
                     {
                         "name": "dmc_threshold",
                         "label": "Noise Limit"
-                    },{
+                    },
+                    {
                         "name": "dmc_adaptivity_clamp"
                     },
                     {

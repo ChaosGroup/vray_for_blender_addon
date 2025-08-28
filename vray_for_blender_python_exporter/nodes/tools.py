@@ -1,45 +1,82 @@
 import bpy
 
 from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 
 
 NODE_LEVEL_WIDTH = VRayNodeBase.bl_width_default + 50
 
+SOCKET_HEIGHT = 15
 
-def _getNodeHeight(n):
-    socketHeigth = 15
-    return n.height + socketHeigth * (len(n.inputs) + len(n.outputs))
+def _getNodeHeight(node: bpy.types.Node) -> float:
+    height = node.height + 50
+
+    if node.vray_plugin == 'TexBitmap':
+        height += 120
+    elif node.vray_plugin == 'TexGradRamp':
+        height += 80
+
+    for inp in node.inputs:
+        if inp.enabled and not inp.hide:
+            height += SOCKET_HEIGHT
+    for out in node.outputs:
+        if out.enabled and not out.hide:
+            height += SOCKET_HEIGHT
+
+    return height
 
 
-def _getConnectedNode(toSocket):
-    for l in toSocket.links:
-        if l.from_node:
-            return l.from_node
-    return None
 
-def collectLeafs(tree, ntree, n, depth):
+def _collectLeafs(tree, ntree, n: bpy.types.Node, depth):
+    def getConnectedNode(toSocket):
+        for l in toSocket.links:
+            if l.from_node:
+                return l.from_node
+        return None
+
     for inSock in n.inputs:
         if inSock.is_linked:
-            inNode = _getConnectedNode(inSock)
+            inNode = getConnectedNode(inSock)
             if not depth in tree:
-                tree[depth] = []
-            tree[depth].append(inNode)
-            tree = collectLeafs(tree, ntree, inNode, depth+1)
+                tree[depth] = set()
+            # Remove the node if it was in any of the previous levels since it can cause some weird
+            # arrangements if a node is used in multiple levels.
+            for layer in range(depth-1):
+                tree[layer].discard(inNode)
+            tree[depth].add(inNode)
+            tree = _collectLeafs(tree, ntree, inNode, depth+1)
     return tree
 
+def calculateTreeBounds(ntree):
+    minX = float('inf')
+    maxX = float('-inf')
+    minY = float('inf')
+    maxY = float('-inf')
 
-def rearrangeTree(ntree, n, depth=0):
+    for node in ntree.nodes:
+        x, y = node.location
+        w, h = node.dimensions
+
+        minX = min(minX, x)
+        maxX = max(maxX, x + w)
+        minY = min(minY, y - h)
+        maxY = max(maxY, y)
+
+    return (minX, minY, maxX, maxY)
+
+
+def rearrangeTree(ntree, n, depth=0, bounds=(0, 0, 0, 0)):
     tree = {
-        depth : [n],
+        depth : { n },
     }
 
-    tree = collectLeafs(tree, ntree, n, depth+1)
-
-    # pprint(tree)
-
+    tree = _collectLeafs(tree, ntree, n, depth+1)
+    minX, minY, maxX, maxY = bounds
     for level in sorted(tree):
         if level == 0:
+            node = next(iter(tree[0]))
+            node.location.x = n.location.x + minX - NODE_LEVEL_WIDTH
+            node.location.y = n.location.y + (maxY - minY) / 2.0
             continue
 
         levelNodes = tree[level]
@@ -49,7 +86,7 @@ def rearrangeTree(ntree, n, depth=0):
         for node in levelNodes:
             levelHeigth += _getNodeHeight(node)
 
-        levelTop        = levelHeigth
+        levelTop        = levelHeigth + (maxY - minY) / 2.0
         levelHeightHalf = levelHeigth / 2.0
 
         for node in levelNodes:
@@ -133,13 +170,15 @@ def getLinkInfo(pluginType: str, attrName: str):
     from vray_blender.lib.defs import LinkInfo
 
     linkInfo = LinkInfo()
-    
+
     if not (pluginModule := findPluginModule(pluginType)):
         # The linked node does not have a corresponding V-Ray plugin, return empty info.
         return linkInfo
-    
-    attrDesc = getPluginAttr(pluginModule, attrName)
-    
+
+    if (attrDesc := getPluginAttr(pluginModule, attrName)) is None:
+        # Attribute may be a structural socket, e.g. rollout
+        return linkInfo
+
     if linkDesc := attrDesc.get('options', {}).get('link_info'):
         linkInfo.linkType = linkDesc.get('link_type')
 
@@ -147,3 +186,19 @@ def getLinkInfo(pluginType: str, attrName: str):
             linkInfo.fnFilter = getFilterFunction(pluginType, filterFnName)
 
     return linkInfo
+
+
+def isInputSocketLinked(sock: bpy.types.NodeSocket):
+    """ Returns True if an input socket is linked to an exportable part of the node tree """
+    assert not sock.is_output
+    return sock.is_linked and any(l for l in sock.links if not l.is_muted and not l.is_hidden)
+
+
+def getSocketPanelName(pluginModule: dict, vrayAttrName: str):
+    """ Returns the name of the panel that the socket for the vray attribute is placed on, or None """
+    return next((name for name in pluginModule.SocketPanels if vrayAttrName in pluginModule.SocketPanels[name]), None)
+
+
+def getSocketPanel(pluginModule: dict, panelName: str):
+    """ Returns the 'panel' socket by its name, or None """
+    return next((d for d in pluginModule.Node.get('input_sockets', []) if d['name'] == panelName), None)

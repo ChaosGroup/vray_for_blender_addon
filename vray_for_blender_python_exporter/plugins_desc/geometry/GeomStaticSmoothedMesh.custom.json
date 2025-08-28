@@ -4,12 +4,37 @@
     "Parameters":
     [
         {
-            "attr" : "water_level",
-            "default" : -1.0
+            "attr" : "use_globals",
+            "default" : true
         },
         {
-            "attr" : "use_globals",
-            "default" : false
+            "attr": "static_subdiv",
+            "default": "1",
+            "type": "ENUM",
+            "items": [
+                [
+                    "0",
+                    "On The Fly",
+                    "On The Fly"
+                ],
+                [
+                    "1",
+                    "Pre-tesselated",
+                    "Pre-tesselated"
+                ]
+            ]
+        },
+        {
+            "attr": "subdivide_uvs",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "preserve_map_borders",
+            "default": "1"
         }
     ],
     "Node":{
@@ -19,31 +44,61 @@
     "Widget": {
         "widgets": [
             {
+                "layout": "ROLLOUT",
+                "label": "Parameters",
+                "name": "common",
+                "default_closed": false,
                 "attrs": [
                     {
-                        "name": "edge_length"
+                        "name": "static_subdiv",
+                        "label": "Geometry Generation"
                     },
                     {
-                        "name": "view_dep",
-                        "label": "View Dependent"
+                        "name": "preserve_map_borders",
+                        "active": { "cond": "::subdivide_uvs=1" }
+                    },
+                    { "name": "subdivide_uvs" },
+                    { "name": "preserve_geometry_borders" },
+                    { "name": "classic_catmark" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label": "Quality Overrides",
+                "name": "overrides",
+                "align": true,
+                "attrs": [
+                    {
+                        "attrs": [
+                            {
+                                "name": "use_globals"
+                            }
+                        ],
+                        "layout": "COLUMN"
                     },
                     {
-                        "name": "max_subdivs"
-                    },
-                    {
-                        "name": "use_bounds",
-                        "label": "Tight Bounds"
-                    },
-                    {
-                        "name": "displacement_amount",
-                        "label": "Amount"
+                        "active": {
+                            "cond": "::use_globals=0"
+                        },
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "view_dep"
+                            },
+                            {
+                                "name": "edge_length"
+                            },
+                            {
+                                "name": "max_subdivs"
+                            }
+                        ]
                     }
-                ],
-                "layout": "COLUMN"
+                ]
             }
         ]
     },
     "Options": {
+        "animatable": false,
         "excluded_parameters": [
             "mesh"
         ]

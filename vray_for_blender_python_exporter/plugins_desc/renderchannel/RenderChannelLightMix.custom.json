@@ -50,7 +50,7 @@
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "mode",

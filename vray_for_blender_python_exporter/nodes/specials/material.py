@@ -5,12 +5,13 @@ import bpy
 from vray_blender import plugins, osl
 from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.lib import draw_utils, class_utils
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs
 from vray_blender.nodes.operators import sockets as SocketOperators
 from vray_blender.nodes.nodes import vrayNodeInit, vrayNodeDraw, vrayNodeDrawSide
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode
 from vray_blender.ui import classes
+
 
 class VRaySocketMtlMulti(VRayValueSocket):
     bl_idname = 'VRaySocketMtlMulti'
@@ -53,7 +54,7 @@ def _getMtlNodeFromOperatorContext(context: bpy.types.Context):
     elif context.material and context.material.node_tree:
         return getActiveTreeNode(context.material.node_tree, 'MATERIAL')
 
-class VRAY_OT_node_mtlmulti_socket_add(bpy.types.Operator):
+class VRAY_OT_node_mtlmulti_socket_add(VRayOperatorBase):
     bl_idname      = 'vray.node_mtlmulti_socket_add'
     bl_label       = "Add MtlMulti Socket"
     bl_description = "Adds MtlMulti sockets"
@@ -68,7 +69,7 @@ class VRAY_OT_node_mtlmulti_socket_add(bpy.types.Operator):
         return {'FINISHED'}
     
 
-class VRAY_OT_node_mtlmulti_socket_del(bpy.types.Operator):
+class VRAY_OT_node_mtlmulti_socket_del(VRayOperatorBase):
     bl_idname      = 'vray.node_mtlmulti_socket_del'
     bl_label       = "Remove MtlMulti Socket"
     bl_description = "Removes MtlMulti socket (only not linked sockets will be removed)"
@@ -168,7 +169,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
                 sockMtl.draw_property(context, draw_utils.subPanel(panelBody), self, text="")
 
 
-class VRAY_OT_osl_node_update(bpy.types.Operator):
+class VRAY_OT_osl_node_update(VRayOperatorBase):
     bl_idname      = "vray.osl_node_update"
     bl_label       = "Update"
     bl_description = ""

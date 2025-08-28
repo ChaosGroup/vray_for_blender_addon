@@ -4,6 +4,7 @@ import random
 import bpy
 import mathutils
 from vray_blender.lib import plugin_utils
+from vray_blender.lib.mixin import VRayOperatorBase
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -22,10 +23,10 @@ gUserAttributeTypeToValue = {
 }
 
 
-class VRAY_OT_user_attribute_promote(bpy.types.Operator):
-    bl_idname      = 'vray.user_attribute_promote'
-    bl_label       = "Promote"
-    bl_description = "Promote user attribute to selected objects"
+class VRAY_OT_user_attribute_assign_to_selected(VRayOperatorBase):
+    bl_idname      = 'vray.user_attribute_assign_to_selected'
+    bl_label       = "Assign to Selected Objects"
+    bl_description = "Copy the currently selected user attribute from the active object to all other selected objects"
     bl_options     = {'INTERNAL'}
 
     def execute(self, context):
@@ -86,6 +87,9 @@ class VRAY_OT_user_attribute_promote(bpy.types.Operator):
                         randB = random.random()
                         newValue = mathutils.Color((randR, randG, randB))
                     setattr(attr, attrValueName, newValue)
+
+            # Tag the object for update so that user attribute changes are recognized and exported immediately.
+            ob.update_tag()
 
         return {'FINISHED'}
 
@@ -183,7 +187,7 @@ class VRayUserAttributes(bpy.types.PropertyGroup):
         return ";".join(items)
 
 
-class VRAY_OT_user_attribute_add(bpy.types.Operator):
+class VRAY_OT_user_attribute_add(VRayOperatorBase):
     bl_idname      = 'vray.user_attribute_add'
     bl_label       = "Add User Attribute"
     bl_description = "Add user attribute"
@@ -198,7 +202,7 @@ class VRAY_OT_user_attribute_add(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_user_attribute_del(bpy.types.Operator):
+class VRAY_OT_user_attribute_del(VRayOperatorBase):
     bl_idname      = 'vray.user_attribute_del'
     bl_label       = "Delete User Attribute"
     bl_description = "Delete user attribute"
@@ -227,7 +231,7 @@ def getRegClasses():
         VRAY_OT_user_attribute_del,
         VRAY_UL_UserAttributes,
         VRayUserAttributes,
-        VRAY_OT_user_attribute_promote,
+        VRAY_OT_user_attribute_assign_to_selected,
     )
 
 

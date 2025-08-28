@@ -129,20 +129,11 @@
                 "label": "Options",
                 "attrs": [
                     {
-                        "name": "invisible",
-                        "active": {
-                            "cond": "::sun!=NONE"
-                        }
-                    },
-                    {
                         "name": "sun",
                         "search_bar_for": "objects"
                     },
                     {
-                        "name": "sun_dir_only",
-                        "active": {
-                            "cond": "::sun!=NONE"
-                        }
+                        "name": "sun_dir_only"
                     }
                 ]
             }

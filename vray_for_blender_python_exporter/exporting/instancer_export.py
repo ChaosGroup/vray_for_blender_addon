@@ -1,4 +1,6 @@
+import bpy
 import ctypes
+import struct
 from mathutils import Matrix
 from vray_blender.exporting import tools, marshaller
 from vray_blender.exporting.node_export import exportNodePlugin
@@ -6,7 +8,6 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerL
 from vray_blender.lib.defs import DataArray, ExporterBase, ExporterContext, AttrPlugin
 from vray_blender.lib.names import Names
 from vray_blender.external import mmh3
-import struct
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -35,7 +36,7 @@ class Instancer:
         def __init__(self, persistentId):
             # The index is generated from the instance's persistent_id (an array of ints) by hashing it
             # to create a unique identifier for this instance
-            self.index          = mmh3.hash(struct.pack(f'{len(persistentId)}I', *persistentId))
+            self.index          = mmh3.hash(struct.pack(f'{len(persistentId)}i', *persistentId))
 
             self.tm: Matrix     = None
             self.velocity       = Matrix()
@@ -71,29 +72,25 @@ class Instancer:
         return InstancerData(self.name, self.frame, self._data, len(self._items))
 
 
+
 class InstancerExporter(ExporterBase):
 
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
         self.instancers       = {}
-        self.instanceIndex    = 0
         self.exporter         = self.ctx.scene.vray.Exporter
         self.objTracker       = ctx.objTrackers['OBJ']
         self.objMtlTracker    = ctx.objTrackers['OBJ_MTL']
         self.instTracker      = ctx.objTrackers['INSTANCER']
 
-    def addInstance(self, inst):
+    def addInstance(self, inst: bpy.types.DepsgraphObjectInstance, objectName):
         instancerObj = inst.parent  # This is the object whose vertices/faces are used for the instantiation
-        # NOTE: possibly flaky behaviour
-        # inst.object and inst.instance_object point to the same object, but for some reason 
-        # when it is accesed through inst.object, its matrix_world transform is sometimes incorrect 
-        # ( is in fact equal to inst.matrix_world )
         instancedObj = inst.instance_object     # The object being instanced
 
         if instancedObj.type not in tools.EXPORTED_OBJECT_TYPES:
             # There are some instanced types we are not interested in, like armature or the empty
             # controller objects for instanced collections
-            return                 
+            return
         
         # The inst.persistent_id is used to uniquely identify each instance across frames
         # This allows V-Ray to track instances between frames for motion blur and other
@@ -103,12 +100,10 @@ class InstancerExporter(ExporterBase):
 
         # In VRay, instance transformation should be relative to the object being duplicated.
         # Remove its component from the instance's world position.
-        instance.tm         = inst.matrix_world @ instancedObj.matrix_world.inverted() 
-        instance.nodePlugin = Names.vrayNode(Names.object(instancedObj))
-
-        if self.exporter.calculate_instancer_velocity:
-            # TODO: calculate
-            pass
+        instance.tm         = inst.matrix_world
+        # Pass the name of the exported node, for geometry nodes this will result in one Instancer2
+        # instancing multiple different nodes. But we will still have one Instancer2 per scene object.
+        instance.nodePlugin = objectName
 
         if instancerObj.instance_type == 'COLLECTION':
             instancerObj = instancerObj.instance_collection
@@ -116,9 +111,6 @@ class InstancerExporter(ExporterBase):
         idInstancer = mmh3.hash(f"{id(instancerObj.original)}{id(instancedObj.original)}")
         instancer = self.instancers.setdefault(idInstancer, Instancer(inst))
         instancer.append(instance)
-        
-        self.instanceIndex += 1
-
 
     def export(self):
         # Export an Instancer2 plugin + a wrapper node for it

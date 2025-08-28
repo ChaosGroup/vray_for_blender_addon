@@ -1,7 +1,7 @@
 
 import bpy
 
-from vray_blender.nodes.mixin import VRayEntity
+from vray_blender.lib.mixin import VRayEntity
 from vray_blender.lib import blender_utils
 from vray_blender.ui import classes
 from vray_blender.plugins import VRayNodeTreeSettings
@@ -58,6 +58,17 @@ class VRayNodeTreeObject(VRayEntity, bpy.types.NodeTree):
     @classmethod
     def get_from_context(cls, context):
         return _getVRayObjectNTreeData(context)
+
+    def update(self):
+        self.tagUsersForUpdate()
+
+    def tagUsersForUpdate(self):
+        """ Update all objects that use this node tree
+        """
+        for obj in bpy.data.objects:
+            if hasattr(obj, "vray") and obj.vray and obj.vray.ntree == self:
+                obj.update_tag()
+
 
 
 

@@ -1,12 +1,22 @@
 {
     "ID": "RenderChannelColor",
+    "Parameters": [
+        {
+            "attr": "name",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        },
+        {
+            "attr": "color_mapping",
+            "default": true
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -36,12 +46,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "color_mapping",
-            "default": true
-        }
-    ],
     "Options": {
         "animatable": false
     }

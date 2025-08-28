@@ -1,10 +1,9 @@
 
 import bpy
 
-from vray_blender.nodes.mixin    import VRayNodeBase
+from vray_blender.lib.mixin import VRayOperatorBase, VRayNodeBase
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.operators import sockets as SocketOperators
-
 
  #######  ########  ######## ########     ###    ########  #######  ########   ######
 ##     ## ##     ## ##       ##     ##   ## ##      ##    ##     ## ##     ## ##    ##
@@ -14,7 +13,7 @@ from vray_blender.nodes.operators import sockets as SocketOperators
 ##     ## ##        ##       ##    ##  ##     ##    ##    ##     ## ##    ##  ##    ##
  #######  ##        ######## ##     ## ##     ##    ##     #######  ##     ##  ######
 
-class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_effects_add'
     bl_label       = "Add Effect Socket"
     bl_description = "Adds Effect sockets"
@@ -26,7 +25,7 @@ class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, bpy.type
         self.vray_socket_name = "Effect"
 
 
-class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_effects_del'
     bl_label       = "Remove Effect Socket"
     bl_description = "Removes Effect socket (only not linked sockets will be removed)"

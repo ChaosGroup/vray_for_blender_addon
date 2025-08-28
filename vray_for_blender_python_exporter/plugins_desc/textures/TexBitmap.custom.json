@@ -65,7 +65,7 @@
                     },
                     {
                         "name": "invert",
-                        "label": "Invert color"
+                        "label": "Invert Color"
                     }
                 ]
             },
@@ -85,7 +85,8 @@
                         "name": "alpha_offset"
                     },
                     {
-                        "name": "invert_alpha"
+                        "name": "invert_alpha",
+                        "active": {"cond": "::invert!=0"}
                     }
                 ]
             },

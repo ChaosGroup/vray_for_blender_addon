@@ -66,7 +66,8 @@
             "desc": "External from SettingsTextureCache",
             "type": "INT",
             "options": {
-                "derived": true
+                "derived": true,
+                "animatable": false
             }
         },
         {

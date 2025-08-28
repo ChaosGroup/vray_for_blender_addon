@@ -72,6 +72,15 @@
             }
         },
         {
+            "attr" : "initial_preview_dims",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Initial dimensions of the preview mesh (in local space)",
+            "type" : "VECTOR",
+            "options": {
+               "derived": true
+            }
+        },
+        {
             "attr": "anim_override",
             "default": 0,
             "items" :

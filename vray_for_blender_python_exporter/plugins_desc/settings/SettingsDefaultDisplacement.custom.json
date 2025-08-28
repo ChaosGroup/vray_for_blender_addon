@@ -18,7 +18,7 @@
 
     ],
     "Type" : "SETTINGS",
-    "Widget" : 
+    "Widget" :
     {
         "widgets" : [
             {
@@ -39,7 +39,8 @@
                         "name": "tightBounds"
                     },
                     {
-                        "name": "relative"
+                        "name": "amount",
+                        "label": "Displacement Multiplier"
                     },
                     {
                         "name": "external_min_hair_width",
@@ -48,5 +49,8 @@
                 ]
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

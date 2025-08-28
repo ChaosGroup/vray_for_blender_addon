@@ -129,7 +129,8 @@
             {
                 "attrs": [
                     {
-                        "name": "invert"
+                        "name": "invert",
+                        "label": "Invert Color"
                     }
                 ],
                 "layout": "COLUMN"
@@ -146,7 +147,8 @@
                         "name": "alpha_from_intensity"
                     },
                     {
-                        "name": "invert_alpha"
+                        "name": "invert_alpha",
+                        "active": {"cond": "::invert!=0"}
                     }
                 ],
                 "layout": "COLUMN"

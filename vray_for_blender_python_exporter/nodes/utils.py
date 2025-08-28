@@ -4,12 +4,14 @@ import functools
 import operator
 
 from vray_blender import debug
-from vray_blender.exporting.tools import getInputSocketByName, getNodeLink
+from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
 from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, getSocketType
 from vray_blender.lib.attribute_utils import getAttrDisplayName
-from vray_blender.nodes.tools import isVrayNode, isVraySocket
+from vray_blender.lib.names import Names
+from vray_blender.lib.sys_utils import importFunction
+from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel
 
 
 class PropertyContext:
@@ -25,7 +27,7 @@ class PropertyContext:
         self.propGroup = propGroup
 
     def get(self, attrName: str):
-        if sock := getInputSocketByVRayAttr(self.node, attrName) if self.node else None:
+        if sock := getInputSocketByAttr(self.node, attrName) if self.node else None:
             return sock.value
         return getattr(self.propGroup, attrName)
     
@@ -34,7 +36,7 @@ class PropertyContext:
             the property is not set. This allows to break the infinite updates sequence 
             when updating linked properties.
         """
-        if sock := getInputSocketByVRayAttr(self.node, attrName) if self.node else None:
+        if sock := getInputSocketByAttr(self.node, attrName) if self.node else None:
             if newValue != sock.value:
                 sock.value = newValue
         else:
@@ -110,7 +112,7 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
     visited.add(fromNode)
 
     for output in fromNode.outputs:
-        for link in output.links:
+        for link in [l for l in output.links if not l.is_muted and not l.is_hidden]:
             nextNode = link.to_node
 
             if not link.to_socket.shouldExportLink():
@@ -123,6 +125,11 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
                 return True
 
     return False
+
+
+def getNearLink(fromSock: bpy.types.NodeSocket, toSock: bpy.types.NodeSocket):
+    """ Return the direct link between two sockets, if any. """
+    return next((l for l in toSock.links if l.from_socket == fromSock), None)
 
 
 def createFakeName():
@@ -205,18 +212,20 @@ def _getPluginInputSockets(pluginModule, nodeType):
     # socketOverrides 
     #   None means that there are no overrides
     #   [] means that no sockets should be shown
-    socketOverrides = None
+    inputSocketsList = None
     pluginParams = pluginModule.Parameters
 
     # Order the parameters of the plugin the same way as the ones included in the 'input_sockets' list.
-    if getattr(pluginModule, 'Node') and (socketOverrides := pluginModule.Node.get('input_sockets')):
+    if getattr(pluginModule, 'Node') and (inputSocketsList := pluginModule.Node.get('input_sockets')):
         # There is no other way to order the node sockets except create them in the desired order.
         # The parameters that are not on the list are moved to the back without keeping any order. The order 
         # doesn't matter in this case becuase they will not be visible in the node.
-        lastItem = len(socketOverrides)
-        orderedNames = [n['name'] for n in socketOverrides]
+        lastItem = len(inputSocketsList)
+        orderedNames = [n['name'] for n in inputSocketsList]
         pluginParams = sorted(pluginParams, key=lambda item: lastItem if item['attr'] not in orderedNames else orderedNames.index(item['attr']))
-                                                                      
+
+    createdPanels = []
+
     for attr in [p for p in pluginParams if p['attr'] not in excludedParams]:
         attrName = attr['attr']
         attrType = attr['type']
@@ -225,8 +234,8 @@ def _getPluginInputSockets(pluginModule, nodeType):
 
         # If an input socket list is found in the plugin description, use it to determine how and 
         # which sockets to show 
-        if socketOverrides is not None:
-            if overrideDesc := next((s for s in socketOverrides if s['name'] == attrName), None):
+        if inputSocketsList is not None:
+            if overrideDesc := next((s for s in inputSocketsList if s['name'] == attrName), None):
                 attrType = overrideDesc.get('type', attrType) 
                 socketName = overrideDesc.get('label', socketName)
         
@@ -235,12 +244,32 @@ def _getPluginInputSockets(pluginModule, nodeType):
             continue
         
         isTypeVisible    = attrType not in attribute_types.HiddenNodeInputTypes
-        isListExplicit   = socketOverrides is not None
+        isListExplicit   = inputSocketsList is not None
         isSocketExplicit = overrideDesc is not None
 
         visible = ((isListExplicit and isSocketExplicit) or ((not isListExplicit) and isTypeVisible))\
                         and attr.get('options', {}).get('visible', True)
         
+        # Add a panel for the socket, if necessary. The panel is added the first time a socket placed on it is added.
+        if inputSocketsList is not None:
+            panelAttrName = next((name for name in pluginModule.SocketPanels if attrName in pluginModule.SocketPanels[name]), None)
+
+            if panelAttrName is not None:
+                # Socket is placed on a panel
+                panelSockDesc = getSocketPanel(pluginModule, panelAttrName)
+                
+                if panelAttrName not in createdPanels:
+                    # This is the first socket on this panel, create the panel
+                    assert panelSockDesc is not None
+
+                    sockets[panelAttrName] = {
+                        'type': panelSockDesc['type'],
+                        'name': Names.panelSocket(panelSockDesc['label']),
+                        'visible':  True
+                    }
+                
+                    createdPanels.append(panelAttrName)
+                
         sockets[attrName] = {
             'type': socketType,
             'name': socketName,
@@ -248,7 +277,9 @@ def _getPluginInputSockets(pluginModule, nodeType):
             'visible':  visible
         }
 
+    # Insert any panel sockets at the correct place
     return sockets
+
 
 
 def addInputs(node: bpy.types.Node, pluginModule):
@@ -414,7 +445,7 @@ def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree)
     if objTreeOutput := getOutputNode(objTree, 'OBJECT'):
         return areNodesInterconnected(node, objTreeOutput)
     return False
-    
+
 
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """ Triggers an update of the currently selected object or node tree and a redraw of the 
@@ -452,7 +483,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                         node = self.node if isinstance(self, bpy.types.NodeSocket) else getNodeOfPropGroup(self)
 
                         if _nodeConnectedToObjOutput(node, ob.vray.ntree):
-                            ob.update_tag()
+                            ob.vray.ntree.tagUsersForUpdate()
 
                 elif (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
 
@@ -491,15 +522,18 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
     tagRedrawPropertyEditor()
 
 
-def selectedObjectTagUpdateWrapper(propGroup, context: bpy.types.Context, pluginModule, attrName, fnUpdateName: str):
+def selectedObjectTagUpdateWrapper(propGroup, context: bpy.types.Context, pluginModule, attrName, updateFuncPath: str):
     """ Wrap invocation of the selectedObjectTagUpdate function, calling in addition a custom function.
 
-        @param fnUpdateName - the name of the custom function to call before selectedObjectTagUpdate
+        @param modulePath - the path to the custom function to call before selectedObjectTagUpdate.
+                            By default, this is the name of a function in the plugin module.
+                            If the path contains a '.', this is a path of any package relative to vray_blender.
     """
     from vray_blender.nodes.utils import selectedObjectTagUpdate
-    
-    if fnUpdate := getattr(pluginModule, fnUpdateName, None):
+
+    if fnUpdate := importFunction(updateFuncPath, pluginModule):
         fnUpdate(propGroup, context, attrName)
+    
     selectedObjectTagUpdate(propGroup, context)
 
 
@@ -524,7 +558,7 @@ def tagObjectsForMaterial(mtl: bpy.types.Material):
                     UpdateTracker.tagUpdate(obj, UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
 
 
-def getInputSocketByVRayAttr(node: bpy.types.Node, attrName):
+def getInputSocketByAttr(node: bpy.types.Node, attrName):
     try:
         return next((i for i in node.inputs if isVraySocket(i) and (i.vray_attr == attrName)), None)
     except AttributeError as ex:
@@ -596,21 +630,22 @@ _OUTPUT_NODE_TYPES = {
         'SHADER'    : 'ShaderNodeOutputMaterial' # Cycles Material Output
     }
 
+
 def getOutputNode(ntree, treeType = '')-> bpy.types.Node | None:
     """ Get the root node of a node tree """
     if not treeType:
         treeType = ntree.vray.tree_type
-
     
     if not (outputNodeType := _OUTPUT_NODE_TYPES.get(treeType)):
         return None
 
     return getNodeByType(ntree, outputNodeType)
 
+
 def getChannelsOutputNode(worldTree: bpy.types.NodeTree):
     if outputNode := getOutputNode(worldTree, 'WORLD'):
         channelsSocket = getInputSocketByName(outputNode, 'Channels')
-        if channelsLink := getNodeLink(channelsSocket):
+        if channelsLink := getFarNodeLink(channelsSocket):
             return channelsLink.from_node
     return None
 

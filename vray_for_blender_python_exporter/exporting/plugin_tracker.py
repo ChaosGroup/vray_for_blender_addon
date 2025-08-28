@@ -24,17 +24,16 @@ def getNodeTrackId(obj: bpy.types.Node):
     """ Returns a unique identifier for the node. """
     return Names.node(obj)
 
-def getConnectedTrackIds(node, connectedIds=None):
+def getConnectedTrackIds(node: bpy.types.Node, connectedIds=None):
     """ Returns a list of Track Ids of the nodes connected to 'node' """
     if connectedIds is None:
         connectedIds = set()
 
     for inputSocket in node.inputs:
-        if inputSocket.is_linked:
-            for link in inputSocket.links:
-                fromNode = link.from_node
-                connectedIds.add(getNodeTrackId(fromNode))
-                getConnectedTrackIds(fromNode, connectedIds) 
+        for link in [l for l in inputSocket.links if not l.is_muted and not l.is_hidden]:
+            fromNode = link.from_node
+            connectedIds.add(getNodeTrackId(fromNode))
+            getConnectedTrackIds(fromNode, connectedIds) 
 
     return connectedIds
 
@@ -45,15 +44,17 @@ class ObjTracker:
         removed in reponse to changes to the Blender scene.
     """
     def __init__(self, type: str):
-        self.type:    str                   = type  # Arbitrary description of the tracked objects' type
-        self.ids:     Dict[str, Set(str)]   = {}    # objTrackId: set(pluginId) - plugins per object
-        self.plugins: Dict[str, int]        = {}    # pluginId: refCount - flat plugins list with refcounts
+        self.type:      str                   = type  # Arbitrary description of the tracked objects' type
+        self.ids:       Dict[str, Set(str)]   = {}    # objTrackId: set(pluginId) - plugins per object
+        self.plugins:   Dict[str, int]        = {}    # pluginId: refCount - flat plugins list with refcounts
+        self.instanced: Dict[str, bool]       = {}    # objTrackId: Bool - True if the object is instanced.
 
 
-    def trackPlugin(self, objTrackId: str, pluginId: str):
+    def trackPlugin(self, objTrackId: str, pluginId: str, isInstanced=False):
         """ Add plugin to the object's tracking list """
         self._trackObj(objTrackId)
         self._addPluginToObj(objTrackId, pluginId)
+        self.instanced[pluginId] = isInstanced
         log(f"TRACK PLUGIN {self.type}: {objTrackId} => {pluginId}  [{self.ids[objTrackId]}]")
 
     
@@ -98,6 +99,12 @@ class ObjTracker:
             return self.ids[objTrackId]
         return set()
 
+    def getPluginInstanced(self, pluginId):
+        """ Returns True if the tracked plugin is instanced """
+        if pluginId in self.instanced:
+            return self.instanced[pluginId]
+        return False
+
 
     def _trackObj(self, objTrackId: str):
         if objTrackId not in self.ids.keys():
@@ -119,6 +126,7 @@ class ObjTracker:
         self.plugins[pluginId] -= 1
         if self.plugins[pluginId] == 0:
             del self.plugins[pluginId]
+            del self.instanced[pluginId]
 
 
     # Register plugin with object
@@ -338,7 +346,7 @@ class FakeScopedNodeTracker:
 
 class FakeObjTracker:
     """ A no-op impementation for use with production exports """
-    def trackPlugin(self, objTrackId: str, pluginId: str):
+    def trackPlugin(self, objTrackId: str, pluginId: str, isInstanced = False):
         pass
 
     def forget(self, objTrackId: str):

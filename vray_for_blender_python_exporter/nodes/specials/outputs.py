@@ -3,7 +3,7 @@ import bpy
 
 from vray_blender.ui import classes
 from vray_blender.lib import class_utils, draw_utils
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes.utils import findDataObjFromNode
 from vray_blender.plugins import PLUGINS, getPluginModule
@@ -26,7 +26,7 @@ class VRayNodeObjectOutput(VRayNodeBase):
     vray_plugin = 'NONE'
 
     def init(self, context):
-        addInput(self, 'VRaySocketGeom', "Displacement", 'geometry')
+        addInput(self, 'VRaySocketGeom', "Displacement", 'displacement')
         addInput(self, 'VRaySocketGeom', "Subdivision", 'geometry')
         addInput(self, 'VRaySocketObjectProps', "Matte")
         addInput(self, 'VRaySocketObjectProps', "Surface")

@@ -6,7 +6,7 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine import ZMQ
 from vray_blender.external import psutil
 from vray_blender.lib import draw_utils
-from vray_blender.lib.sys_utils import StartupConfig, isGPUEngine
+from vray_blender.lib.sys_utils import StartupConfig, activeRendererExists
 from vray_blender.operators import VRAY_OT_render
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
@@ -30,7 +30,7 @@ def _drawRendererSelector(self, context):
         vrayExporter = context.scene.vray.Exporter
 
         # Render engine/device cannot be changed if a rendering job is under way.
-        enabled = not VRayRendererIprViewport.isActive()
+        enabled = not activeRendererExists()
 
         layoutDevice = layout.column()
         layoutDevice.use_property_split = True
@@ -125,19 +125,16 @@ class VRAY_PT_Device(classes.VRayRenderPanel):
 class VRAY_PT_Globals(classes.VRayRenderPanel):
     bl_label   = "Globals"
     bl_panel_groups = RenderPanelGroups
-    
+
     def draw(self, context):
-        # The active state of camera settings depends on the GI settings
-        settingsGI = context.scene.vray.SettingsGI
         cameraLayout = self.layout.column()
-        cameraLayout.active = settingsGI.on and (settingsGI.secondary_engine == _GI_ENGINE_LIGHT_CACHE)
 
         cameraLayoutContainer  = self.drawSection(context, cameraLayout, "SettingsCameraGlobal", "camera")
         if cameraLayoutContainer:
             cameraLayoutContainer.use_property_split = False
             self.drawPlugin(context, cameraLayoutContainer, "SettingsMotionBlur")
             self.drawPlugin(context, cameraLayoutContainer, "SettingsCameraDof")
-        
+
         self.drawPlugin(context, self.layout, "SettingsDefaultDisplacement")
         self.drawPlugin(context, self.layout, "SettingsOptions")
 
@@ -172,10 +169,10 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
                 boxDebug.prop(vrayExporter, "debug_log_times")
                 boxDebug.separator()
                 row = boxDebug.row(align=True)
-                row.prop(vrayExporter, 'export_scene_file_path', text='Scene path')
+                row.prop(vrayExporter, 'export_scene_file_path', text='Vrscene path')
+                boxDebug.prop(vrayExporter, 'export_material_preview_scene', text='Export material preview vrscene')
                 row.operator('vray.select_vrscene_export_file', text='', icon='FILE_FOLDER')
-                boxDebug.operator("vray.export_scene", text="Export scene")
-
+                boxDebug.operator("vray.export_scene", text="Export vrscene")
 
             layout.separator()
 
@@ -220,8 +217,9 @@ class VRAY_PT_ColorManagement(classes.VRayRenderPanel):
     bl_label = "Color Management"
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
-    
+
     vrayPlugins = ["SettingsUnitsInfo"]
+
 
 class VRAY_PT_GpuTextureOptions(classes.VRayRenderPanel):
     bl_label = "GPU Texture Options"
@@ -236,13 +234,16 @@ class VRAY_PT_GpuTextureOptions(classes.VRayRenderPanel):
         layout = draw_utils.subPanel(self.layout)
         settingsRTEngine = context.scene.vray.SettingsRTEngine
 
+        layout.use_property_decorate = False
         resizeTexRow = layout.row()
         resizeTexRow.prop(settingsRTEngine, "opencl_resizeTextures")
         resizeTexRow.enabled = not settingsRTEngine.out_of_core_textures
         texSizeRow = layout.row()
         texSizeRow.prop(settingsRTEngine, "opencl_texsize")
         texSizeRow.enabled = settingsRTEngine.opencl_resizeTextures == "1" and not settingsRTEngine.out_of_core_textures
-        layout.prop(settingsRTEngine, "opencl_textureFormat")
+        textureFormatRow = layout.row()
+        textureFormatRow.enabled = not settingsRTEngine.out_of_core_textures
+        textureFormatRow.prop(settingsRTEngine, "opencl_textureFormat")
         layout.prop(settingsRTEngine, "out_of_core_textures")
 
 
@@ -262,14 +263,14 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         vrayScene = context.scene.vray
         settingsImageSampler = vrayScene.SettingsImageSampler
 
-        layout = self.layout 
+        layout = self.layout
+        layout.use_property_decorate = False
 
         classes.drawPluginUI(context, layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
         
         # Antialiasing rollout
         panelAntialiasingUniqueId = f'SettingsImageSampler_Antialiasing'
         if panelAntialiasing := draw_utils.rollout(layout, panelAntialiasingUniqueId, "Anti-Aliasing Filter"):
-            panelAntialiasing.use_property_decorate = False
             panelAntialiasing.prop(settingsImageSampler, "filter_type")
 
             if settingsImageSampler.filter_type not in {'NONE'}:
@@ -281,7 +282,6 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         # Render Mask rollout
         panelRenderMaskUniqueId = f'SettingsImageSampler_RenderMask'
         if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "RenderMask"):
-            panelRenderMask.use_property_decorate = False
             panelRenderMask.prop(settingsImageSampler, 'render_mask_mode', text="Type")
         
             match settingsImageSampler.render_mask_mode:
@@ -339,6 +339,7 @@ class VRAY_PT_GI(classes.VRayRenderPanel):
 
     def draw(self, context):
         layout = draw_utils.subPanel(self.layout)
+        layout.use_property_decorate = False
 
         settingsGI = context.scene.vray.SettingsGI
         assert settingsGI.primary_engine == _GI_ENGINE_BRUTE_FORCE, "The Primary GI engine should always be Brute Force"

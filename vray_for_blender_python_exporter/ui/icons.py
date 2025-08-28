@@ -24,11 +24,12 @@ def _getUIIcons():
         ui.VRAY_OT_add_object_vray_sun_sky        : 'SUN_SKY',
         ui.VRAY_OT_add_object_vrayscene           : 'VRAY_SCENE',
         ui.VRAY_OT_add_object_proxy               : 'VRAY_PROXY',
-        
+
         menu.VRAY_OT_show_about_dialog            : 'INFO_ABOUT',
         menu.VRAY_OT_open_collaboration           : 'VRAY_LOGO',
         menu.VRAY_OT_open_cosmos_browser          : 'COSMOS',
         menu.VRAY_OT_relink_cosmos_assets         : 'COSMOS_RELINK_ASSETS',
+        menu.VRAY_OT_convert_materials            : 'CONVERT_MATERIALS',
         menu.VRAY_OT_open_vfb                     : 'VFB',
         ops.VRAY_OT_cloud_submit                  : 'CLOUD',
 
@@ -40,7 +41,7 @@ _ICON_FILES = [
         #(ICON_KEY,             FILE_NAME),
         ("VRAY_LOGO",           "vray_logo.svg"),
         ("VRAY_PLACEHOLDER",    "VRayPlaceholder.svg"),
-        
+
         ("LIGHT_AMBIENT",       "VRayLightAmbient.svg"),
         ("LIGHT_DIRECT",        "VRayLightDirect.svg"),
         ("LIGHT_DOME",          "VRayLightDome.svg"),
@@ -57,11 +58,12 @@ _ICON_FILES = [
 
         ('VRAY_SCENE',          "VRayScene.svg"),
         ('VRAY_PROXY',          "VRayProxy.svg"),
-        
+
         ('COSMOS',              "CosmosBrowser.svg"),
         ('COSMOS_RELINK_ASSETS',"CosmosRelinkAssets.svg"),
+        ('CONVERT_MATERIALS',   "VRayConvertMaterials.svg"),
         ('INFO_ABOUT',          "VRayAbout.svg"),
-        
+
         ("CLOUD",               "CloudRendering.svg"),
         ('VFB',                 "VRayVFB.svg"),
         ('RENDER_PROD',         "VRayProductionRender.svg"),
@@ -90,10 +92,10 @@ def getUIIcon(element: bpy.types.Struct):
 
 def _loadVRayIcons():
     from vray_blender.lib.path_utils import getIconsDir
-    
+
     icons = bpy.utils.previews.new()
     iconsDir = getIconsDir()
-    
+
     for iconKey, fileName in _ICON_FILES:
         icons.load(iconKey, os.path.join(iconsDir, fileName), 'IMAGE')
 

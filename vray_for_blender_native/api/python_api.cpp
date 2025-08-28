@@ -133,7 +133,7 @@ void openCollaboration(const HostInfo& hi)
 /// Opens Cosmos Asset Browser
 void openCosmos()
 {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOpenCosmos{}), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnOpenCosmos{}), true);
 }
 
 void calculateDownloadSize(py::object packageIds, py::object revisionIds, py::object missingTextures)
@@ -143,7 +143,7 @@ void calculateDownloadSize(py::object packageIds, py::object revisionIds, py::ob
 	vray::AttrListString attrListMissingTextures = vray::AttrListString(toVector<std::string>(missingTextures));
 
 	ZmqServer::get().sendMessage(serializeMessage(
-		proto::MsgControlCosmosCalculateDownloadSize{
+		proto::MsgControlOnCosmosCalculateDownloadSize{
 			std::move(attrListPackageIds),
 			std::move(attrListRevisionIds),
 			std::move(attrListMissingTextures)
@@ -152,7 +152,7 @@ void calculateDownloadSize(py::object packageIds, py::object revisionIds, py::ob
 }
 
 void downloadMissingAssets() {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlCosmosDownloadAssets{}), false);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnCosmosDownloadAssets{}), false);
 }
 
 // Opens VFB through control connection
@@ -354,12 +354,12 @@ void pluginUpdatePluginDesc(py::object renderer, std::string name, std::string a
 
 //////////////////  Object exporters  ///////////////////////////////
 
-void exportGeometry(py::object renderer, py::object meshData)
+void exportGeometry(py::object renderer, py::object meshData, bool asyncExport)
 {
 	auto* exporter = getExporter(renderer);
 
 	MeshDataPtr mesh = std::make_shared<MeshData>(meshData);
-	exporter->exportMesh(mesh);
+	exporter->exportMesh(mesh, asyncExport);
 }
 
 
@@ -596,7 +596,26 @@ void setCosmosDownloadAssets(py::object downloadAssetsCallback)
 
 /// Updates the Cosmos import info after a scene change
 void updateCosmosSceneName(std::string sceneName) {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlCosmosUpdateSceneName{sceneName}));
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnCosmosUpdateSceneName{sceneName}));
+}
+
+void checkScannedLicense() {
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnScannedLicenseCheck{}));
+}
+
+void setScannedLicenseCallback(py::object callback)
+{
+	ZmqServer::get().setPythonCallback("scannedLicense", weakRefFromObj(callback));
+}
+
+void setScannedParamBlockCallback(py::object callback)
+{
+	ZmqServer::get().setPythonCallback("scannedParamBlock", weakRefFromObj(callback));
+}
+
+void encodeScannedParameters(int materialId, const std::string& nodeName, const std::string& paramsJson)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnScannedEncodeParameters{materialId, nodeName, paramsJson}));
 }
 
 /// Sets callaback executed when rendering gets stopped or aborted
@@ -705,6 +724,11 @@ int getLastRenderedFrame(py::object renderer)
 	return getExporter(renderer)->lastRenderedFrame();
 }
 
+void continueRenderSequence(py::object renderer)
+{
+	getExporter(renderer)->continueRenderSequence();
+}
+
 // Aborts the rendering
 void abortRender(py::object renderer)
 {
@@ -735,6 +759,11 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(calculateDownloadSize),		(py::args("packageId", "revisionId", "textureFile")));
 	py::def(FUN(downloadMissingAssets));
 	py::def(FUN(updateCosmosSceneName),     (py::args("sceneName")));
+
+	py::def(FUN(checkScannedLicense));
+	py::def(FUN(setScannedLicenseCallback), (py::args("scannedLicenseCallback")));
+	py::def(FUN(setScannedParamBlockCallback), (py::args("scannedParamBlock")));
+	py::def(FUN(encodeScannedParameters),   (py::args("paramsJson")));
 
 	py::def(FUN(openVFB));
 	py::def(FUN(resetVfbToolbar));
@@ -772,7 +801,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(pluginUpdateList),			(py::args("renderer", "name", "attrName", "list", "elemTypes")));
 	py::def(FUN(pluginResetValue),			(py::args("renderer", "name", "attrName")));
 
-	py::def(FUN(exportGeometry),			(py::args("renderer", "meshData")));
+	py::def(FUN(exportGeometry),			(py::args("renderer", "meshData", "asyncExport")));
 	py::def(FUN(exportHair),				(py::args("renderer", "hairData")));
 	py::def(FUN(exportPointCloud),			(py::args("renderer", "pcData")));
 	py::def(FUN(exportSmoke),				(py::args("renderer", "smokeData")));
@@ -804,6 +833,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(renderJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(exportJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(getLastRenderedFrame),		(py::args("renderer")));
+	py::def(FUN(continueRenderSequence),			(py::args("renderer")));
 	py::def(FUN(abortRender),				(py::args("renderer")));
 
 
@@ -872,6 +902,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(ExportSceneSettings, hexArrays)
 		.ADD_RW_PROPERTY(ExportSceneSettings, hexTransforms)
 		.ADD_RW_PROPERTY(ExportSceneSettings, separateFiles)
+		.ADD_RW_PROPERTY(ExportSceneSettings, cloudExport)
 		.ADD_RW_PROPERTY(ExportSceneSettings, pluginTypes)
 		.ADD_RW_PROPERTY(ExportSceneSettings, hostAppString)
 		.ADD_RW_PROPERTY(ExportSceneSettings, filePath);

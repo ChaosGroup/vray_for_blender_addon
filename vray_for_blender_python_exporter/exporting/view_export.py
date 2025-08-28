@@ -8,7 +8,7 @@ from vray_blender.lib import export_utils, blender_utils
 from vray_blender.lib.blender_utils import isCamera
 from vray_blender.lib.camera_utils import ViewParams, Rect, Size, isOrthographicCamera
 from vray_blender.lib import camera_utils as ct
-from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc
+from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc, ProdRenderMode
 from vray_blender.lib.names import Names
 from vray_blender.plugins.settings.SettingsOutput import SettingsOutputExporter
 from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
@@ -93,15 +93,31 @@ class ViewExporter(ExporterBase):
             Parameters:
             perCameraViewParams: camera object full name => last evaluated ViewParams
         """
+        from vray_blender.engine.renderer_prod import VRayRendererProd
+
         assert self.production or self.preview, "Method should only be called for prod and preview renders"
 
-        # Export all cameras in the scene. This is necessary for subsequent renderings with V-Ray Standalone
+        exportOnly = self.production and (VRayRendererProd.renderMode == ProdRenderMode.EXPORT_VRSCENE)
+
+        cameras = []
+
+        # When writing a .vrscene file, export all cameras in the scene.
+        # This is necessary for subsequent renderings with V-Ray Standalone
         # where the user can select which one of the exported cameras to use.
-        cameras = list([inst.object for inst in self.dg.object_instances if inst.object.type == 'CAMERA'])
-        
+        # During production rendering, only the active camera is needed (or the marked cameras, if any, in animation mode).
+        if exportOnly or self.preview:
+            cameras = list([inst.object for inst in self.dg.object_instances if inst.object.type == 'CAMERA'])
+            assert (not self.preview) or len(cameras) == 1, "Exactly 1 camera should exist in the material preview scene"
+        elif self.isAnimation:
+            # Camera objects marked in the timeline
+            markedCameras = set(m.camera.name for m in self.scene.timeline_markers if m.camera and (m.frame <= self.scene.frame_end))
+            
+            # Evaluated marked camera objects
+            cameras = list([inst.object for inst in self.dg.object_instances if inst.object.name in markedCameras])
+
         # If an object other than a camera has been set as the active camera, add it to the cameras' list.
         # A camera with suitable parameters will be exported for it.
-        if self.activeCamera and (not blender_utils.isCamera(self.activeCamera)):
+        if self.activeCamera and ((not blender_utils.isCamera(self.activeCamera)) or (not cameras)):
             cameras.append(self.activeCamera)
 
         perCameraViewParams: dict[str, ViewParams] = {}

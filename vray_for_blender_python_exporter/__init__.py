@@ -8,7 +8,7 @@ bl_info = {
     "doc_url"     : "https://docs.chaos.com/display/VBLD/",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "00", "40") 
+    "version"     : ("7", "10", "00") 
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data 
@@ -17,7 +17,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 10
+UPGRADE_NUMBER = 17
 
 
 from vray_blender import debug

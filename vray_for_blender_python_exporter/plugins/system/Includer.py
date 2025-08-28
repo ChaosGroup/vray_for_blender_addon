@@ -1,6 +1,7 @@
 
 import bpy
 
+from vray_blender.lib.mixin import VRayOperatorBase
 
 TYPE = 'SETTINGS'
 ID   = 'Includer'
@@ -43,7 +44,7 @@ class Includer(bpy.types.PropertyGroup):
     )
 
 
-class VRAY_OT_includer_add(bpy.types.Operator):
+class VRAY_OT_includer_add(VRayOperatorBase):
     bl_idname=      'vray.includer_add'
     bl_label=       "Add Include"
     bl_description= "Add Include *.vrsene"
@@ -59,7 +60,7 @@ class VRAY_OT_includer_add(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_includer_remove(bpy.types.Operator):
+class VRAY_OT_includer_remove(VRayOperatorBase):
     bl_idname=      'vray.includer_remove'
     bl_label=       "Remove Include"
     bl_description= "Remove Include *.vrsene"
@@ -76,7 +77,7 @@ class VRAY_OT_includer_remove(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_includer_up(bpy.types.Operator):
+class VRAY_OT_includer_up(VRayOperatorBase):
     bl_idname=      'vray.includer_up'
     bl_label=       "Up Include"
     bl_description= "Up Include *.vrsene"
@@ -96,7 +97,7 @@ class VRAY_OT_includer_up(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_includer_down(bpy.types.Operator):
+class VRAY_OT_includer_down(VRayOperatorBase):
     bl_idname=      'vray.includer_down'
     bl_label=       "Down Include"
     bl_description= "Down Include *.vrsene"

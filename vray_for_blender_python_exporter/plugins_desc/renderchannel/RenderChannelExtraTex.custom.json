@@ -31,7 +31,8 @@
         },
         {
             "attr" : "name",
-            "default" : "Extra Tex"
+            "default" : "Extra Tex",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
         }
     ],
     "Widget": {
@@ -40,7 +41,7 @@
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",

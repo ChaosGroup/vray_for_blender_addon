@@ -1,18 +1,17 @@
-
 import bpy
 
-from vray_blender import debug
 from vray_blender.nodes.operators.misc import _redrawNodeEditor
-from vray_blender.nodes import tree_defaults
+from vray_blender.nodes import tree_defaults, utils as NodeUtils
 from vray_blender.lib import blender_utils
+from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.operators import VRAY_OT_message_box_base
 
-
-class VRAY_OT_add_nodetree_light(bpy.types.Operator):
+class VRAY_OT_add_nodetree_light(VRayOperatorBase):
     bl_idname       = "vray.add_nodetree_light"
     bl_label        = "Add Light Nodetree"
     bl_description  = "Add light nodetree"
     bl_options      = {'INTERNAL'}
-    
+
     def execute(self, context):
         from vray_blender.nodes.utils import getLightOutputNode
 
@@ -23,14 +22,13 @@ class VRAY_OT_add_nodetree_light(bpy.types.Operator):
         # node to an existing tree.
         if (light.node_tree) and (getLightOutputNode(light.node_tree)):
             return {'CANCELLED'}
-        
+
         tree_defaults.addLightNodeTree(light)
         bpy.ops.vray.show_ntree(data='OBJECT')
         return {'FINISHED'}
 
 
-
-class VRAY_OT_add_nodetree_object(bpy.types.Operator):
+class VRAY_OT_add_nodetree_object(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_object"
     bl_label       = "Add Object Nodetree"
     bl_description = "Add object nodetree"
@@ -42,7 +40,7 @@ class VRAY_OT_add_nodetree_object(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_add_nodetree_object_lamp(bpy.types.Operator):
+class VRAY_OT_add_nodetree_object_lamp(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_object_lamp"
     bl_label       = "Add Object / Light Nodetree"
     bl_description = "Add object / light nodetree"
@@ -65,7 +63,7 @@ class VRAY_OT_add_nodetree_object_lamp(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_add_nodetree_world(bpy.types.Operator):
+class VRAY_OT_add_nodetree_world(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_world"
     bl_label       = "Add World Nodetree"
     bl_description = "Add world nodetree"
@@ -77,7 +75,7 @@ class VRAY_OT_add_nodetree_world(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_replace_nodetree_material(bpy.types.Operator):
+class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
     """ Replace the active material's nodetree with a V-Ray material nodetree """
 
     bl_idname      = "vray.replace_nodetree_material"
@@ -98,68 +96,49 @@ class VRAY_OT_replace_nodetree_material(bpy.types.Operator):
             self.report({'ERROR_INVALID_CONTEXT'}, "No active material!")
             return {'CANCELLED'}
 
-class VRAY_OT_convert_nodetree_material(bpy.types.Operator):
+class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
     """ Covnert the active material's nodetree with a V-Ray material nodetree """
 
     bl_idname      = "vray.convert_nodetree_material"
     bl_label       = "Convert Cycles Material"
     bl_description = "Convert Cycles Material to its V-Ray"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
-        from vray_blender.exporting.tools import FakeTimeStats
-        from vray_blender.lib.defs import ExporterContext, AttrPlugin, ExporterContext, RendererMode, NodeContext, ExporterType, PluginDesc
-        from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
-
-        _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
-        _fakeObjTrackers = dict([(t, FakeObjTracker()) for t in OBJ_TRACKERS])
-
         if activeMtl := getattr(context.object, 'active_material'):
-            exporterContext = ExporterContext()
-            exporterContext.rendererMode = RendererMode.Preview
-            exporterContext.objTrackers     = _fakeObjTrackers
-            exporterContext.nodeTrackers    = _fakeNodeTrackers
-            exporterContext.ctx             = bpy.context
-            exporterContext.fullExport      = True
-            exporterContext.ts              = FakeTimeStats()
-
-            vrsceneDict = []
-            def vrsceneDictCollector(nodeCtx: NodeContext, pluginDesc: PluginDesc):
-                for key, value in pluginDesc.attrs.items():
-                    if isinstance(value, AttrPlugin):
-                        pluginDesc.attrs[key] = value.name
-                    if isinstance(value, list) and all(isinstance(item, AttrPlugin) for item in value):
-                        plNames = []
-                        for pl in value:
-                            plNames.append(pl.name)
-                        pluginDesc.attrs[key] = plNames
-                vrsceneDict.append({
-                    "ID"         : pluginDesc.type,
-                    "Name"       : pluginDesc.name,
-                    "Attributes" : pluginDesc.attrs,
-                })
-                return AttrPlugin(pluginDesc.name, pluginDesc.type)
-
-            from vray_blender.nodes.operators.import_file import importMaterial
-            from vray_blender.exporting.mtl_export import MtlExporter
-            mtlExporter = MtlExporter(exporterContext)
-            nodeCtx = NodeContext(exporterContext, bpy.context.scene, bpy.data, None)
-            nodeCtx.rootObj = activeMtl
-            nodeCtx.nodeTracker = _fakeNodeTrackers['MTL']
-            nodeCtx.ntree = activeMtl.node_tree
-            nodeCtx.customHandler = vrsceneDictCollector
-            mtlSingleBRDF, _ = mtlExporter.exportMtl(activeMtl, nodeCtx)
-            importMaterial(vrsceneDict, mtlSingleBRDF.name, activeMtl.node_tree)
-            activeMtl.vray.is_vray_class = True
-
+            from vray_blender.nodes.importing import convertMaterial
+            convertMaterial(activeMtl, self)
             _redrawNodeEditor()
+
             return {'FINISHED'}
         else:
             self.report({'ERROR_INVALID_CONTEXT'}, "No active material!")
             return {'CANCELLED'}
 
-class VRAY_OT_add_new_material(bpy.types.Operator):
+    def invoke(self, context, event):
+        if self._checkForExistingVrayNodes(context):
+            # Invoking props dialog that warns the user that there is already a V-Ray material
+            # attached to the node tree
+            self._centerDialog(context, event)
+            return context.window_manager.invoke_props_dialog(self, width=300)
+        
+        return self.execute(context)
+    
+    def draw(self, context):
+        self.layout.label(text="There are V-Ray nodes in this tree.")
+        self.layout.label(text="If you proceed, they will be deleted.")
+
+
+    def _checkForExistingVrayNodes(self, context: bpy.types.Context):
+        from vray_blender.nodes.tools import isVrayNode
+        
+        if (activeMtl := getattr(context.object, 'active_material')) is not None:
+            return any([n for n in activeMtl.node_tree.nodes if isVrayNode(n)])
+        
+        return False
+        
+
+class VRAY_OT_add_new_material(VRayOperatorBase):
     """ Add a new vray material to the active object's material slot """
 
     bl_idname      = "vray.add_new_material"
@@ -198,7 +177,7 @@ class VRAY_OT_add_new_material(bpy.types.Operator):
             return {'CANCELLED'}
 
 
-class VRAY_OT_copy_material(bpy.types.Operator):
+class VRAY_OT_copy_material(VRayOperatorBase):
     """ Add a new vray material to the active object's material slot """
 
     bl_idname      = "vray.copy_material"
@@ -221,7 +200,7 @@ class VRAY_OT_copy_material(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_copy_world(bpy.types.Operator):
+class VRAY_OT_copy_world(VRayOperatorBase):
     """ Add a new vray world node tree to the active scene """
 
     bl_idname      = "vray.copy_world"

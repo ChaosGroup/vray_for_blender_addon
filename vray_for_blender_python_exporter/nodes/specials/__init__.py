@@ -11,7 +11,6 @@ def _getModules():
     from vray_blender.nodes.specials import renderchannels
     from vray_blender.nodes.specials import inputlist
     from vray_blender.nodes.specials import transform
-    from vray_blender.nodes.specials import debug
     from vray_blender.nodes.specials import object_properties
 
     return (
@@ -25,7 +24,6 @@ def _getModules():
         renderchannels,
         inputlist,
         transform,
-        debug,
         object_properties,
     )
 

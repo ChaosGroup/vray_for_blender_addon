@@ -8,7 +8,9 @@ from io import BufferedReader
 import bpy
 import bmesh
 import numpy as np
-from mathutils import Vector
+from mathutils import Vector, Matrix
+
+from vray_blender.exporting.tools import isObjectVrayProxy
 
 from vray_blender import debug
 from vray_blender.lib import blender_utils, sys_utils, path_utils
@@ -21,6 +23,7 @@ from vray_blender.vray_tools import vray_proxy
 class PreviewAction:
     MeshPreview    = '1'      # Geometry from a VRayProxy-compatible files
     ScenePreview   = '2'      # Geometry from a VRayScene-compatible files
+    ScannedPreset  = '3'      # Scanned material preset info
 
 
 _PREVIEW_TYPES = {
@@ -154,6 +157,19 @@ def _getCenterOfProxyPreview(filePath, geomMeshFile):
 
     return Vector(np.mean(np.array(meshData['vertices']), axis=0)) * geomMeshFile.scale
 
+def _getDimsOfProxyPreview(filePath, geomMeshFile):
+    """ Get the dimensions of the bounding box of the proxy mesh preview.
+    """
+    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
+    if err:
+        debug.printError(f"Proxy preview mesh dimensions calculation error: {err}")
+        return Vector((0.0, 0.0, 0.0))
+
+    maxVec = Vector(np.max(np.array(meshData['vertices']), axis=0))
+    minVec = Vector(np.min(np.array(meshData['vertices']), axis=0))
+    return (maxVec - minVec) * geomMeshFile.scale
+
+
 def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffset, animSpeed, animFrame):
     """ Load the preview voxel from a .vrmesh file, if any.
     
@@ -174,6 +190,8 @@ def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffse
         geomMeshFile['num_preview_faces'] = 0
 
         geomMeshFile.initial_preview_mesh_pos = Vector((0.0, 0.0, 0.0))
+        geomMeshFile.initial_preview_dims = _getDimsOfProxyPreview(filePath, geomMeshFile)
+
         return
 
     meshData, err = _getDataFromMeshFile(filePath, geomMeshFile.previewType,
@@ -185,7 +203,7 @@ def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffse
 
     if geomMeshFile.initial_preview_mesh_pos != Vector((0.0, 0.0, 0.0)):
         offset = blender_utils.getGeomCenter(ob) - geomMeshFile.initial_preview_mesh_pos 
-        if (offset != Vector((0.0, 0.0, 0.0))) or \
+        if (offset != Vector((0.0, 0.0, 0.0))) and \
             (geomMeshFile.scale != 0): # If scale is zero, all vertices collapse to (0,0,0), so no offset is needed.
             
             offset /= geomMeshFile.scale  # Apply scaling to the object offset.
@@ -211,13 +229,17 @@ def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffse
     # Depending on the source of the model, scaling may be necessary. E.g. Cosmos assets are in 
     # cm. Scale the model gometry without affecting any currently set scale value for the object.
     if geomMeshFile.scale != 1.0:
-        oldScale = ob.scale
+        oldScale = ob.scale.copy()
         ob.scale = Vector((1.0, 1.0, 1.0))
         ob.scale *= geomMeshFile.scale
         # Apply the selected object's scale. This will apply the transform to the mesh and 
         # reset the 'scale' field to 1.0.
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True) 
         ob.scale = oldScale
+
+    # Setting initial dimensions of the preview mesh. They are needed for the preview scale calculations.
+    # No need for calculating the dimensions of the preview mesh, they are set in ob.dimensions from Blender
+    geomMeshFile.initial_preview_dims = ob.dimensions
 
     # Set the initial position of the preview mesh to the center of the bounding box of the mesh.
     # This position can't be obtained from the mesh itself, as it may be offset by the object's transform.
@@ -405,3 +427,69 @@ def flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
     flipMatrix[2][1] = 1.0 if yToZ else -1.0
 
     mesh.transform(flipMatrix)
+
+
+def getProxyPreviewScale(obj: bpy.types.Object):
+    assert isObjectVrayProxy(obj)
+
+    geomMeshFile = obj.data.vray.GeomMeshFile
+    initialPreviewDims = geomMeshFile.initial_preview_dims
+    curObjDims = obj.dimensions
+
+    # If the preview type is None, the preview mesh is empty, so use the initial dimensions of the object.
+    # Otherwise in that case the calculation of the scale will be incorrect.
+    if geomMeshFile.previewType == "None":
+        curObjDims = initialPreviewDims
+
+    # (curObjDims / initialPreviewDims) / obj.scale
+    return Vector(((a / b) / c if b != 0 and c != 0 else 0 \
+            for a, b, c in zip(curObjDims, initialPreviewDims, obj.scale)))
+
+
+def fixPosOfProxyLightsOnPreviewUpdate(depsgraph: bpy.types.Depsgraph):
+    """ Fix the position of lights attached to a VRayProxy object when the mesh is updated.
+    
+        This is necessary because the lights are positioned relative to the initial position of the mesh,
+        and if the mesh origin point is moved, the lights need to be updated accordingly.
+    """
+
+    importedLightPositions = {}
+    
+    for update in depsgraph.updates:
+        if isinstance(update.id, bpy.types.Object) and \
+            update.id.type == 'MESH' and \
+            update.is_updated_geometry:
+
+            # Getting the object from bpy.data.objects,
+            # because "update.id" doesn't have references to the children objects.
+            obj = bpy.data.objects[update.id.name]
+
+            if isObjectVrayProxy(obj):
+                initialPreviewMeshPos = obj.data.vray.GeomMeshFile.initial_preview_mesh_pos
+                scale = getProxyPreviewScale(obj) # Scale of preview mesh of V-Ray Proxy
+
+                originToPreviewOffset = blender_utils.getGeomCenter(obj) 
+                originToPreviewOffset -= blender_utils.vecElemMult(initialPreviewMeshPos, scale)
+
+                for light in (c for c in obj.children if c.type == 'LIGHT'):
+                    initialLightOffset = blender_utils.vecElemMult(Vector(light.data.vray.initial_proxy_light_pos), scale)
+                    initialLightScale = light.data.vray.initial_proxy_light_scale
+                    
+                    parentProxyScaleAdj = 0
+                    if initialLightScale != 0: # Object with initial scale of 0 can't be scaled up or down
+                        parentProxyScaleAdj = obj.data.vray.GeomMeshFile.scale / initialLightScale
+
+                    lightTranslation = originToPreviewOffset + initialLightOffset * parentProxyScaleAdj
+                    lightScale = scale * parentProxyScaleAdj
+
+                    importedLightPositions[light] = (lightTranslation, lightScale)
+
+    if importedLightPositions:
+        # We cannot change the scene here. Fire a one time timer to set the new values.
+        
+        def onTimer():
+            for light, pos in importedLightPositions.items():
+                light.matrix_local.translation = pos[0]
+                light.scale = pos[1]
+
+        bpy.app.timers.register(onTimer, first_interval=0)

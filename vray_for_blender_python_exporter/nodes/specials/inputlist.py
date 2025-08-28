@@ -2,13 +2,12 @@
 import bpy
 
 from ..importing import getSocketName
-from ..mixin    import VRayNodeBase
 from ..sockets import addInput, addOutput
 from ..operators import sockets as SocketOperators
+from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 
 
-
-class VRAY_OT_node_list_plugin_add(SocketOperators.VRayNodeAddCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_list_plugin_add(SocketOperators.VRayNodeAddCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_list_plugin_add'
     bl_label       = "Add Plugin Socket"
     bl_description = "Adds Plugin sockets"
@@ -20,7 +19,7 @@ class VRAY_OT_node_list_plugin_add(SocketOperators.VRayNodeAddCustomSocket, bpy.
         self.vray_socket_name = "Plugin"
 
 
-class VRAY_OT_node_list_plugin_del(SocketOperators.VRayNodeDelCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_list_plugin_del(SocketOperators.VRayNodeDelCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_list_plugin_del'
     bl_label       = "Remove Plugin Socket"
     bl_description = "Removes Plugin socket (only not linked sockets will be removed)"

@@ -1,10 +1,10 @@
 
 import bpy
 
-from vray_blender import plugins 
+from vray_blender import plugins
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.nodes import sockets as SocketUtils, utils as NodeUtils
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
 
 
@@ -15,34 +15,38 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
 
     vray_type  : bpy.props.StringProperty(default='TEXTURE')
     vray_plugin: bpy.props.StringProperty(default='TexBitmap')
-    
+
     vray_plugins_list = ["BitmapBuffer", "TexBitmap"]
-        
+
     def init(self, context):
         NodeUtils.createBitmapTexture(self)
 
         SocketUtils.addInput(self, 'VRaySocketCoords', "Mapping")
         NodeUtils.addOutputs(self, plugins.PLUGIN_MODULES['TexBitmap'])
-        
-        syncObjectUniqueName(self, reset=True)
 
+        syncObjectUniqueName(self, reset=True)
 
     def copy(self, node):
-        tex = NodeUtils.createBitmapTexture(self)
-        
-        def _reattachTexture():
-            self.texture = tex
+        def _createTexture():
+            
+            hasTexture = bool(self.texture)
+            NodeUtils.createBitmapTexture(self)
 
-        
-        # Set the same image file
-        if node.texture.image:
-            self.texture.image = node.texture.image
+            if hasTexture:
+                if hasattr(node.texture, 'image'):
+                    # The node is copied from the current scene. Link the texture to the
+                    # original texture image.
+                    self.texture.image = node.texture.image
+                else:
+                    # The node is copied from a diffent scene. The texture image is not copied, so
+                    # it will be empty in the copy.
+                    pass
 
-        # For some reason Blender will reset the 'texture' property of the node.
-        # Schedule a reattach.
-        bpy.app.timers.register(_reattachTexture)
-        
-        syncObjectUniqueName(self, reset=True)
+            syncObjectUniqueName(self, reset=True)
+
+        # The 'texture' property of the node is still not valid here. Execute the
+        # reattachment asynchronously.
+        bpy.app.timers.register(_createTexture)
 
 
     def draw_buttons(self, context, layout):
@@ -69,7 +73,7 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
             self
         )
 
-   
+
 def register():
     for pluginType in VRayNodeMetaImageTexture.vray_plugins_list:
         pluginDesc = plugins.PLUGIN_MODULES[pluginType]

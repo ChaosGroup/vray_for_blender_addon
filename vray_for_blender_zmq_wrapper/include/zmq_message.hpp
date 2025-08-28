@@ -12,53 +12,53 @@
 
 /// Protocol serialization
 /// How to define a new message:
-/// 
+///
 ///	All helper macros and functions are defined in msg_serializer.hpp.
-/// 
+///
 /// 1. Add a new message type to the appropriate range in MsgType enum. Messages sent
 ///    from the client are called 'message', messages sent from the server are called 'event'.
-/// 
+///
 ///     enum MsgType {
 ///        ...
 ///        ControlNewMessage
 ///     }
-/// 
-/// 2. Define the new message type. The name of the resulting class will be the message type name 
+///
+/// 2. Define the new message type. The name of the resulting class will be the message type name
 ///    prefixed by 'Msg', i.e. MsgControlNewMessage.
-/// 
+///
 ///	     PROTO_MESSAGE(ControlNewMessage,
 ///		    int number;
 ///         std::string item;
 ///      );
-/// 
+///
 ///		NOTE: For empty messages, use the EMPTY_PROTO_MESSAGE macro.
-/// 
+///
 /// 3. Declare the default serialization procedure
-///      SERIALIZE_MESSAGE(ControlNewMessage, 
+///      SERIALIZE_MESSAGE(ControlNewMessage,
 ///         PARAM(number)
 ///         PARAM(item)
 ///      );
-/// 
+///
 ///		NOTE: For empty messages, use the SERIALIZE_EMPTY_MESSAGE macro.
-/// 
+///
 ///   3.a. If default serialization cannot be used, define custom serialization:
 ///      static SerializerStream& operator&& (SerializerStream& stream, const MsgControlNewMessage& msg) {
 ///         stream  << msg.nubmer << msg.item
 ///         return stream;
 ///      }
 ///      static DeserializerStream& operator&& (DeserializerStream& stream, MsgControlNewMessage& msg) {
-///       	stream  >> msg.number >> msg.item; 
+///       	stream  >> msg.number >> msg.item;
 ///       	return stream;
-///      } 
-/// 
+///      }
+///
 /// 4. To serialize
 ///      const auto& zmq::message_t = serializeMessage(MsgControlNewMessage{10, "boxes"});
-/// 
-/// 5. Te deserialize 
+///
+/// 5. Te deserialize
 ///		 DeserializerStream& stream; // Unpacked from zmq::message_t
 ///      const MsgControlNewMessage& message = deserializeMessage<MsgControlNewMessage>(stream);
 ///	     std::cout << message.number << message.item;
-/// 
+///
 
 #pragma warning (push)
 #pragma warning (disable: 4505) // Unreferenced function has been removed
@@ -106,7 +106,8 @@ enum class MsgType : char {
 	RendererSetRenderRegion,
 	RendererSetCropRegion,
 	RendererRenderSequence,
-	LastRendererMessage = RendererRenderSequence,
+	RendererContinueSequence,
+	LastRendererMessage = RendererContinueSequence,
 
 	// Renderer events
 	FirstRendererEvent,
@@ -114,6 +115,7 @@ enum class MsgType : char {
 	RendererOnImage,
 	RendererOnChangeState,
 	RendererOnAsyncOpComplete,
+	RendererOnProgress,
 	LastRendererEvent = RendererOnChangeState,
 
 	// Control messages
@@ -122,12 +124,17 @@ enum class MsgType : char {
 	ControlOpenCollaboration,
 
 	// Cosmos
-	ControlOpenCosmos,
-	ControlCosmosCalculateDownloadSize,
-	ControlCosmosDownloadSize,
-	ControlCosmosDownloadAssets,
-	ControlCosmosDownloadedAssets,
-	ControlCosmosUpdateSceneName,
+	ControlOnOpenCosmos,
+	ControlOnCosmosCalculateDownloadSize,
+	ControlOnCosmosDownloadSize,
+	ControlOnCosmosDownloadAssets,
+	ControlOnCosmosDownloadedAssets,
+	ControlOnCosmosUpdateSceneName,
+
+	// Scanned materials
+	ControlOnScannedLicenseCheck,
+	ControlOnScannedEncodeParameters,
+	ControlOnScannedEncodedParameters,
 
 	ControlShowUserDialog,
 	ControlSetTelemetryState,
@@ -137,7 +144,7 @@ enum class MsgType : char {
 	ControlShowVfb,
 	ControlResetVfbToolbar,
 	LastControlMessage = ControlResetVfbToolbar,
-		
+
 	// Control events
 	FirstControlEvent,
 	ControlOnStartViewportRender = FirstControlEvent,
@@ -182,7 +189,7 @@ enum class RendererState : char {
 /// Asyncronous operations for which a RendererOnAsyncOpComplete message will be sent to the client
 enum class RendererAsyncOp: char {
 	None,
-	ExportVrscene		// Export .vrscene		
+	ExportVrscene		// Export .vrscene
 };
 
 
@@ -304,6 +311,7 @@ struct ExportSettings {
 	bool compressed;
 	bool hexArrays;
 	bool hexTransforms;
+	bool cloudExport;
 	std::string hostAppString;
 	std::string filePath;
 	std::vector<SubFileInfo> subFileInfo;
@@ -314,8 +322,9 @@ struct ExportSettings {
 static SerializerStream& operator&& (SerializerStream& stream, const ExportSettings& settings) {
 	stream  << settings.compressed
 			<< settings.hexArrays << settings.hexTransforms
-			<< settings.hostAppString 
-			<< settings.filePath 
+			<< settings.cloudExport
+			<< settings.hostAppString
+			<< settings.filePath
 			<< settings.subFileInfo.size();
 
 	for ( const auto item : settings.subFileInfo) {
@@ -328,10 +337,11 @@ static SerializerStream& operator&& (SerializerStream& stream, const ExportSetti
 static DeserializerStream& operator&& (DeserializerStream& stream, ExportSettings& settings) {
 	size_t numSubFiles = 0;
 
-	stream  >> settings.compressed 
+	stream  >> settings.compressed
 			>> settings.hexArrays >> settings.hexTransforms
-			>> settings.hostAppString 
-			>> settings.filePath 
+			>> settings.cloudExport
+			>> settings.hostAppString
+			>> settings.filePath
 			>> numSubFiles;
 
 	settings.subFileInfo.resize(numSubFiles);
@@ -365,7 +375,7 @@ PROTO_MESSAGE( PluginCreate,
 	bool allowTypeChanges = false;
 );
 
-SERIALIZE_MESSAGE(PluginCreate, 
+SERIALIZE_MESSAGE(PluginCreate,
 	PARAM(pluginName)
 	PARAM(pluginType)
 	PARAM(allowTypeChanges)
@@ -376,12 +386,12 @@ PROTO_MESSAGE(PluginRemove,
 	std::string pluginName;
 );
 
-SERIALIZE_MESSAGE(PluginRemove, 
+SERIALIZE_MESSAGE(PluginRemove,
 	PARAM(pluginName)
 );
 
 
-/// MsgPluginUpdate 
+/// MsgPluginUpdate
 PROTO_MESSAGE(PluginUpdate,
 	std::string pluginName;
 	std::string propertyName;
@@ -400,18 +410,18 @@ SERIALIZE_MESSAGE(PluginUpdate,
 );
 
 
-/// MsgPluginReplace 
+/// MsgPluginReplace
 PROTO_MESSAGE(PluginReplace,
 	std::string oldPluginName;
 	std::string newPluginName;
 );
 
-SERIALIZE_MESSAGE(PluginReplace, 
+SERIALIZE_MESSAGE(PluginReplace,
 	PARAM(oldPluginName)
 	PARAM(newPluginName)
 );
 
-/// MsgImage 
+/// MsgImage
 PROTO_MESSAGE(RendererOnImage,
 	vray::AttrImageSet imageSet;
 );
@@ -421,22 +431,22 @@ SERIALIZE_MESSAGE(RendererOnImage,
 );
 
 
-/// MsgVfbLayers 
+/// MsgVfbLayers
 PROTO_MESSAGE(ControlOnUpdateVfbLayers,
 	std::string vfbLayersJson;
 );
 
-SERIALIZE_MESSAGE(ControlOnUpdateVfbLayers, 
+SERIALIZE_MESSAGE(ControlOnUpdateVfbLayers,
 	PARAM(vfbLayersJson)
 );
 
-/// MsgVRayLog 
+/// MsgVRayLog
 PROTO_MESSAGE(RendererOnVRayLog,
 	int logLevel;
 	std::string log;
 );
 
-SERIALIZE_MESSAGE(RendererOnVRayLog, 
+SERIALIZE_MESSAGE(RendererOnVRayLog,
 	PARAM(logLevel)
 	PARAM(log)
 );
@@ -514,7 +524,7 @@ PROTO_MESSAGE(RendererLoadScene,
 	std::string fileName;
 );
 
-SERIALIZE_MESSAGE(RendererLoadScene, 
+SERIALIZE_MESSAGE(RendererLoadScene,
 	PARAM(fileName)
 );
 
@@ -524,7 +534,7 @@ PROTO_MESSAGE(RendererAppendScene,
 	std::string fileName;
 );
 
-SERIALIZE_MESSAGE(RendererAppendScene, 
+SERIALIZE_MESSAGE(RendererAppendScene,
 	PARAM(fileName)
 );
 
@@ -534,7 +544,7 @@ PROTO_MESSAGE(RendererExportScene,
 	ExportSettings exportSettings;
 );
 
-SERIALIZE_MESSAGE(RendererExportScene, 
+SERIALIZE_MESSAGE(RendererExportScene,
 	PARAM(exportSettings)
 );
 
@@ -544,7 +554,7 @@ PROTO_MESSAGE(RendererSetRenderMode,
 	int renderMode;	// VRay::VRayRenderer::RenderMode
 );
 
-SERIALIZE_MESSAGE(RendererSetRenderMode, 
+SERIALIZE_MESSAGE(RendererSetRenderMode,
 	PARAM(renderMode)
 );
 
@@ -554,7 +564,7 @@ PROTO_MESSAGE(RendererSetCurrentTime,
 	float frame;
 );
 
-SERIALIZE_MESSAGE(RendererSetCurrentTime, 
+SERIALIZE_MESSAGE(RendererSetCurrentTime,
 	PARAM(frame)
 );
 
@@ -564,7 +574,7 @@ PROTO_MESSAGE(RendererSetCurrentFrame,
 	float frame;
 );
 
-SERIALIZE_MESSAGE(RendererSetCurrentFrame, 
+SERIALIZE_MESSAGE(RendererSetCurrentFrame,
 	PARAM(frame)
 );
 
@@ -574,7 +584,7 @@ PROTO_MESSAGE(RendererClearFrameValues,
 	float upToTime;
 );
 
-SERIALIZE_MESSAGE(RendererClearFrameValues, 
+SERIALIZE_MESSAGE(RendererClearFrameValues,
 	PARAM(upToTime)
 );
 
@@ -584,7 +594,7 @@ PROTO_MESSAGE(RendererGetImage,
 	int renderElementType; // VRay::RenderElement::Type
 );
 
-SERIALIZE_MESSAGE(RendererGetImage, 
+SERIALIZE_MESSAGE(RendererGetImage,
 	PARAM(renderElementType)
 );
 
@@ -594,7 +604,7 @@ PROTO_MESSAGE(RendererSetQuality,
 	int jpegQuality;
 );
 
-SERIALIZE_MESSAGE(RendererSetQuality, 
+SERIALIZE_MESSAGE(RendererSetQuality,
 	PARAM(jpegQuality)
 );
 
@@ -604,7 +614,7 @@ PROTO_MESSAGE(RendererSetCurrentCamera,
 	std::string cameraName;
 );
 
-SERIALIZE_MESSAGE(RendererSetCurrentCamera, 
+SERIALIZE_MESSAGE(RendererSetCurrentCamera,
 	PARAM(cameraName)
 );
 
@@ -614,7 +624,7 @@ PROTO_MESSAGE(RendererSetCommitAction,
 	vray::CommitAction commitAction;
 );
 
-SERIALIZE_MESSAGE(RendererSetCommitAction, 
+SERIALIZE_MESSAGE(RendererSetCommitAction,
 	PARAM(commitAction)
 );
 
@@ -624,7 +634,7 @@ PROTO_MESSAGE(RendererSetVfbOptions,
 	int vfbFlags;
 );
 
-SERIALIZE_MESSAGE(RendererSetVfbOptions, 
+SERIALIZE_MESSAGE(RendererSetVfbOptions,
 	PARAM(vfbFlags)
 );
 
@@ -634,7 +644,7 @@ PROTO_MESSAGE(RendererSetViewportImageFormat,
 	vray::AttrImage::ImageType format;
 );
 
-SERIALIZE_MESSAGE(RendererSetViewportImageFormat, 
+SERIALIZE_MESSAGE(RendererSetViewportImageFormat,
 	PARAM(format)
 );
 
@@ -644,7 +654,7 @@ PROTO_MESSAGE(RendererSetRenderRegion,
 	vray::AttrListInt coords;
 );
 
-SERIALIZE_MESSAGE(RendererSetRenderRegion, 
+SERIALIZE_MESSAGE(RendererSetRenderRegion,
 	PARAM(coords)
 );
 
@@ -654,7 +664,7 @@ PROTO_MESSAGE(RendererSetCropRegion,
 	vray::AttrListInt coords;
 );
 
-SERIALIZE_MESSAGE(RendererSetCropRegion, 
+SERIALIZE_MESSAGE(RendererSetCropRegion,
 	PARAM(coords)
 );
 
@@ -664,10 +674,14 @@ PROTO_MESSAGE(RendererRenderSequence,
 	RenderSequenceDesc description;
 );
 
-SERIALIZE_MESSAGE(RendererRenderSequence, 
+SERIALIZE_MESSAGE(RendererRenderSequence,
 	PARAM(description)
 );
 
+
+/// MsgRendererContinueSequence
+EMPTY_PROTO_MESSAGE(RendererContinueSequence);
+SERIALIZE_EMPTY_MESSAGE(RendererContinueSequence);
 
 
 /// MsgRendererOnChangeState
@@ -721,12 +735,23 @@ SERIALIZE_MESSAGE(RendererOnAsyncOpComplete,
 );
 
 
+/// MsgRendererOnProgress
+PROTO_MESSAGE(RendererOnProgress,
+	int elements;		// Render job completed elements
+	int totalElements;	// Render job total elements
+);
+
+SERIALIZE_MESSAGE(RendererOnProgress,
+	PARAM(elements)
+	PARAM(totalElements)
+);
+
 /// MsgControlSetLogLevel
 PROTO_MESSAGE(ControlSetLogLevel,
 	int logLevel;
 );
 
-SERIALIZE_MESSAGE(ControlSetLogLevel, 
+SERIALIZE_MESSAGE(ControlSetLogLevel,
 	PARAM(logLevel)
 );
 
@@ -743,18 +768,18 @@ SERIALIZE_MESSAGE(ControlOpenCollaboration,
 /////////////////////// /////////////////////// /////////////////////// ///////////////////////
 /////////////////////// /////////////////////// /////////////////////// ///////////////////////
 
-/// MsgControlOpenCosmos
-EMPTY_PROTO_MESSAGE(ControlOpenCosmos);
-SERIALIZE_EMPTY_MESSAGE(ControlOpenCosmos);
+/// MsgControlOnOpenCosmos
+EMPTY_PROTO_MESSAGE(ControlOnOpenCosmos);
+SERIALIZE_EMPTY_MESSAGE(ControlOnOpenCosmos);
 
-/// MsgControlCosmosCalculateDownloadSize
-PROTO_MESSAGE(ControlCosmosCalculateDownloadSize,
+/// MsgControlOnCosmosCalculateDownloadSize
+PROTO_MESSAGE(ControlOnCosmosCalculateDownloadSize,
 	vray::AttrListString packgeIds;
 	vray::AttrListInt revisionIds;
 	vray::AttrListString missingTextures;
 );
 
-SERIALIZE_MESSAGE(ControlCosmosCalculateDownloadSize,
+SERIALIZE_MESSAGE(ControlOnCosmosCalculateDownloadSize,
 	PARAM(packgeIds)
 	PARAM(revisionIds)
 	PARAM(missingTextures)
@@ -767,20 +792,20 @@ enum class CosmosRelinkStatus {
 	DownloadAndRelink
 };
 
-/// MsgControlCosmosDownloadSize
-PROTO_MESSAGE(ControlCosmosDownloadSize,
+/// MsgControlOnCosmosDownloadSize
+PROTO_MESSAGE(ControlOnCosmosDownloadSize,
 	int32_t downloadSizeMb;
 	CosmosRelinkStatus relinkStatus;
 );
 
-SERIALIZE_MESSAGE(ControlCosmosDownloadSize,
+SERIALIZE_MESSAGE(ControlOnCosmosDownloadSize,
 	PARAM(downloadSizeMb)
 	PARAM(relinkStatus)
 );
 
-/// MsgControlCosmosDownloadAssets
-EMPTY_PROTO_MESSAGE(ControlCosmosDownloadAssets);
-SERIALIZE_EMPTY_MESSAGE(ControlCosmosDownloadAssets);
+/// MsgControlOnCosmosDownloadAssets
+EMPTY_PROTO_MESSAGE(ControlOnCosmosDownloadAssets);
+SERIALIZE_EMPTY_MESSAGE(ControlOnCosmosDownloadAssets);
 
 
 enum class CosmosDownloadStatus {
@@ -789,23 +814,23 @@ enum class CosmosDownloadStatus {
     Done = 2,
 };
 
-/// MsgControlCosmosDownloadedAssets
-PROTO_MESSAGE(ControlCosmosDownloadedAssets,
+/// MsgControlOnCosmosDownloadedAssets
+PROTO_MESSAGE(ControlOnCosmosDownloadedAssets,
 	vray::AttrListString relinkedPaths;
 	CosmosDownloadStatus downloadStatus;
 );
 
-SERIALIZE_MESSAGE(ControlCosmosDownloadedAssets,
+SERIALIZE_MESSAGE(ControlOnCosmosDownloadedAssets,
 	PARAM(relinkedPaths)
 	PARAM(downloadStatus)
 );
 
-/// MsgControlCosmosUpdateSceneName
-PROTO_MESSAGE(ControlCosmosUpdateSceneName,
+/// MsgControlOnCosmosUpdateSceneName
+PROTO_MESSAGE(ControlOnCosmosUpdateSceneName,
 	std::string sceneName;
 );
 
-SERIALIZE_MESSAGE(ControlCosmosUpdateSceneName,
+SERIALIZE_MESSAGE(ControlOnCosmosUpdateSceneName,
 	PARAM(sceneName)
 );
 
@@ -834,6 +859,43 @@ SERIALIZE_MESSAGE(ControlOnImportAsset,
 	PARAM(isAnimated)
 );
 
+/// MsgControlOnScannedLicenseCheck
+PROTO_MESSAGE(ControlOnScannedLicenseCheck,
+	bool license;
+);
+
+SERIALIZE_MESSAGE(ControlOnScannedLicenseCheck,
+	PARAM(license)
+);
+
+/// MsgControlOnScannedEncodeParameters
+PROTO_MESSAGE(ControlOnScannedEncodeParameters,
+	int materialId;
+	std::string nodeName;
+	std::string paramsJson;
+);
+
+SERIALIZE_MESSAGE(ControlOnScannedEncodeParameters,
+	PARAM(materialId)
+	PARAM(nodeName)
+	PARAM(paramsJson)
+);
+
+/// MsgControlOnScannedEncodedParameters
+PROTO_MESSAGE(ControlOnScannedEncodedParameters,
+	int materialId;
+	std::string nodeName;
+	bool licensed;
+	vray::AttrListInt encodedParams;
+);
+
+SERIALIZE_MESSAGE(ControlOnScannedEncodedParameters,
+	PARAM(materialId)
+	PARAM(nodeName)
+	PARAM(licensed)
+	PARAM(encodedParams)
+);
+
 /// MsgControlShowProductInfo
 PROTO_MESSAGE(ControlShowUserDialog,
 	std::string json;
@@ -850,7 +912,7 @@ PROTO_MESSAGE(ControlSetTelemetryState,
 	bool personalized;
 );
 
-SERIALIZE_MESSAGE(ControlSetTelemetryState, 
+SERIALIZE_MESSAGE(ControlSetTelemetryState,
 	PARAM(anonymous)
 	PARAM(personalized)
 );
@@ -861,7 +923,7 @@ PROTO_MESSAGE(ControlSetVfbOnTop,
 	int onTopFlags;
 );
 
-SERIALIZE_MESSAGE(ControlSetVfbOnTop, 
+SERIALIZE_MESSAGE(ControlSetVfbOnTop,
 	PARAM(onTopFlags)
 );
 
@@ -872,7 +934,7 @@ PROTO_MESSAGE(ControlUpdateVfbSettings,
 	std::string vfbSettings;
 );
 
-SERIALIZE_MESSAGE(ControlUpdateVfbSettings, 
+SERIALIZE_MESSAGE(ControlUpdateVfbSettings,
 	PARAM(vfbSettings)
 );
 
@@ -883,7 +945,7 @@ PROTO_MESSAGE(ControlUpdateVfbLayers,
 	std::string vfbLayersInfo;
 );
 
-SERIALIZE_MESSAGE(ControlUpdateVfbLayers, 
+SERIALIZE_MESSAGE(ControlUpdateVfbLayers,
 	PARAM(vfbLayersInfo)
 );
 
@@ -920,7 +982,7 @@ PROTO_MESSAGE(ControlOnUpdateVfbSettings,
 	std::string vfbSettings;
 );
 
-SERIALIZE_MESSAGE(ControlOnUpdateVfbSettings, 
+SERIALIZE_MESSAGE(ControlOnUpdateVfbSettings,
 	PARAM(vfbSettings)
 );
 
@@ -931,12 +993,12 @@ PROTO_MESSAGE(ControlOnLogMessage,
 	std::string logMessage;
 );
 
-SERIALIZE_MESSAGE(ControlOnLogMessage, 
+SERIALIZE_MESSAGE(ControlOnLogMessage,
 	PARAM(logLevel)
 	PARAM(logMessage)
 );
 
-};  // end VrayZmqWrapper namespace 
+};  // end VrayZmqWrapper namespace
 
 #pragma warning (pop)
 

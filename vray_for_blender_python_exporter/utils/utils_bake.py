@@ -6,6 +6,7 @@ from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib import lib_utils
 from vray_blender.lib.defs import ProdRenderMode
 from vray_blender.ui import classes
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 # Temporary cache for global settings that we need to change during the 
@@ -192,7 +193,7 @@ class VRayPropGroupMultiBake(bpy.types.PropertyGroup):
             return self.default_item
 
 
-class VRAY_OT_batch_bake_add_selection(bpy.types.Operator):
+class VRAY_OT_batch_bake_add_selection(VRayOperatorBase):
     bl_idname      = 'vray.batch_bake_add_selection'
     bl_label       = "Add Selection"
     bl_description = "Add selected objects to baking list"
@@ -288,7 +289,7 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
         layout.prop(dataSrc, 'img_format')
 
 
-class VRAY_OT_batch_bake(bpy.types.Operator):
+class VRAY_OT_batch_bake(VRayOperatorBase):
     """ This operator runs a bake render job. In the UI, it is attached to the Bake button in the 
         'Bake' section.
     """  

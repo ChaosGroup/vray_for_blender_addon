@@ -23,6 +23,7 @@ public:
 	virtual void	  renderStart(RenderPass *renderResult, py::object imageUpdatedCallback) override;
 	virtual void      renderEnd() override;
 	virtual void      renderFrame() override;
+	virtual void      continueRenderSequence() override;
 	virtual void      renderSequence(int start, int end, int step) override;
 	virtual bool	  renderSequenceRunning() override;
 	virtual bool	  vrsceneExportRunning() override;

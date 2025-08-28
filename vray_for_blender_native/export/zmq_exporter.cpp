@@ -285,6 +285,11 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		processRendererOnAsyncOpComplete(message);
 		break;
 	}
+	case MsgType::RendererOnProgress: {
+		const auto& message = deserializeMessage<MsgRendererOnProgress>(stream);
+		processRendererOnProgress(message);
+		break;
+	}
 	case MsgType::ControlOnUpdateVfbLayers:
 		if (callback_on_vfb_layers_updated) {
 			const auto& message = deserializeMessage<MsgControlOnUpdateVfbLayers>(stream);
@@ -393,12 +398,6 @@ void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeS
 		// TODO: Figure out why 
 		m_isAborted = (m_settings.getExporterType() != ExporterType::PREVIEW);
 		break;
-	case RendererState::Progress:
-		renderProgress = message.renderProgress;
-		break;
-	case RendererState::ProgressMessage:
-		progressMessage = message.progressMessage;
-		break;
 	case RendererState::Continue:
 		this->m_lastRenderedFrame = message.lastRenderedFrame;
 		break;
@@ -417,6 +416,12 @@ void ZmqExporter::processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsy
 		this->callback_on_async_op_complete(message.operation, message.success, message.message);
 	}
 }
+
+
+void ZmqExporter::processRendererOnProgress(const proto::MsgRendererOnProgress& message) {
+	m_renderProgress = static_cast<float>(message.elements) / message.totalElements;
+}
+
 
 /// Read an image published by ZmqServer in a shared memory region.
 /// @return true if the image was read successfully
@@ -615,7 +620,7 @@ void ZmqExporter::setVfbAlwaysOnTop(bool alwaysOnTop)
 
 float ZmqExporter::getRenderProgress() const
 {
-	return renderProgress;
+	return m_renderProgress;
 }
 
 
@@ -757,11 +762,19 @@ void ZmqExporter::start()
 void ZmqExporter::renderSequence(int start, int end, int step)
 {
 	m_layerImages.clear();
+
+	m_lastRenderedFrame = start - 1;
 	m_client->send(serializeMessage(MsgRendererRenderSequence{start, end, step}));
+
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
 	m_isAborted = false;
+}
+
+void ZmqExporter::continueRenderSequence()
+{
+	m_client->send(serializeMessage(MsgRendererContinueSequence{}));
 }
 
 
@@ -799,6 +812,7 @@ int ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 	exportSettings.hexTransforms = settings.hexTransforms;
 	exportSettings.hostAppString = settings.hostAppString;
 	exportSettings.filePath = settings.filePath;
+	exportSettings.cloudExport = settings.cloudExport;
 
 	std::vector<std::string> pluginTypes;
 	boost::split(pluginTypes, settings.pluginTypes, boost::is_any_of(","));

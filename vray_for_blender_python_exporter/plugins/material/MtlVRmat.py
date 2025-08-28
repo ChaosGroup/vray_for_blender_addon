@@ -7,6 +7,7 @@ from vray_blender.vray_tools.vrscene_parser import getMaterialNamesFromVRScene
 from vray_blender.vray_tools.vrmat_parser     import getMaterialNamesFromVRMatFile
 
 from vray_blender.lib.defs import ExporterContext, PluginDesc
+from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib import export_utils
 
 from vray_blender.lib import plugin_utils
@@ -30,7 +31,7 @@ class VRAY_MT_MaterialName(bpy.types.Menu):
             sub.operator("vray.set_vrscene_material_name", text=maName).name = maName
 
 
-class VRAY_OT_set_vrscene_material_name(bpy.types.Operator):
+class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
     bl_idname      = "vray.set_vrscene_material_name"
     bl_label       = "Set Material Name"
     bl_description = "Set material name from *.vrscene file"
@@ -81,7 +82,7 @@ def _getMaterialNamesFromMtlFile(fileName):
     return []
     
 
-class VRAY_OT_get_vrscene_material_name(bpy.types.Operator):
+class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
     bl_idname      = "vray.get_vrscene_material_name"
     bl_label       = "Get Material Name"
     bl_description = "Get material name from *.vrscene file"

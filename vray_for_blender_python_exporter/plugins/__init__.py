@@ -2,7 +2,7 @@
 import json
 import os
 import sys
-import math
+from mathutils import Vector
 
 import bpy
 
@@ -10,8 +10,9 @@ from vray_blender import debug
 from vray_blender.lib import class_utils
 from vray_blender.lib import sys_utils
 from vray_blender.lib import attribute_utils, plugin_utils, sys_utils
-from vray_blender.nodes.mixin import VRayEntity
+from vray_blender.lib.mixin import VRayEntity
 from vray_blender.nodes.utils import selectedObjectTagUpdate
+
 
 
 # Holds the structure of the ./plugins folder
@@ -530,6 +531,22 @@ class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
         ),
         default = 'BLENDER'
     )
+
+    # Used only for VRayProxy objects
+    initial_proxy_light_pos: bpy.props.FloatVectorProperty(
+        name = "Initial Proxy Light Position",
+        description = "Initial position of light object attached to a VRayProxy object",
+        unit = 'NONE',
+        default = Vector((0.0, 0.0, 0.0))
+    )
+
+    initial_proxy_light_scale: bpy.props.FloatProperty(
+        name = "Initial Proxy Light Scale",
+        description = "Initial scale of light object attached to a VRayProxy object",
+        default = 1.0
+    )
+
+
 
 
 class VRayWorld(VRayEntity, bpy.types.PropertyGroup):

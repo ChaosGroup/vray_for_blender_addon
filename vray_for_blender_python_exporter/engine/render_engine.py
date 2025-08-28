@@ -11,6 +11,7 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQProcess
+from vray_blender.nodes.utils import tagRedrawPropertyEditor
 from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
@@ -103,12 +104,14 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     def startInteractiveRenderer():
         VRayRenderEngine.iprRenderer = VRayRendererIprVfb()
         VRayRenderEngine.iprRenderer.start()
+        tagRedrawPropertyEditor()
 
     @staticmethod
     def stopInteractiveRenderer():
         if VRayRenderEngine.iprRenderer:
             VRayRenderEngine.iprRenderer.stop()
             VRayRenderEngine.iprRenderer = None
+            tagRedrawPropertyEditor()
 
     def _stopViewportRenderer(self):
         # Enabling "Solid" viewport mode triggers blender to stop the viewport rendering instance

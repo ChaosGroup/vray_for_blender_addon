@@ -1,10 +1,11 @@
 import bpy
 from vray_blender import debug
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes import utils as NodesUtils
-from vray_blender.exporting.tools import getNodeLink, getLinkedFromSocket
+from vray_blender.exporting.tools import getFarNodeLink, getLinkedFromSocket
 from vray_blender.nodes import tree_defaults
+from vray_blender.nodes.tools import deselectNodes
 from vray_blender.lib import class_utils
 
 
@@ -24,6 +25,9 @@ VRayChannelNodeSubtypes = (
 
 
 def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
+    
+    deselectNodes(worldTree)
+    
     renderChannel  = worldTree.nodes.new(nodeName)
     renderChannel.location.x = channelsNode.location.x - 200
     sockPos = 0
@@ -45,7 +49,8 @@ def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.
 def _removeRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
     nodeForRemoval = NodesUtils.getNodeByType(worldTree, nodeName)
     outputSocket = nodeForRemoval.outputs['Channel']
-    if nodeLink := getNodeLink(outputSocket):
+    
+    for nodeLink in outputSocket.links:
         if nodeLink.to_node == channelsNode and len(channelsNode.inputs) > 1:
             channelsNode.inputs.remove(nodeLink.to_socket)
             # Fixing Channel sockets counters in their labels
@@ -53,6 +58,8 @@ def _removeRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.
             for inputSock in channelsNode.inputs:
                 inputSock.name = f"Channel {channelCnt}"
                 channelCnt += 1
+        elif nodeLink.to_node.bl_idname == 'NodeReroute':
+            worldTree.nodes.remove(nodeLink.to_node)
 
     worldTree.nodes.remove(nodeForRemoval)
 

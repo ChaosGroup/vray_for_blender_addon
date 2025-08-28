@@ -2,12 +2,27 @@ from vray_blender.plugins import PLUGINS
 from vray_blender.lib     import class_utils
 import bpy
 
+# Plugins which are not skipped for import/conversion purposes or plugins that were simply hidden from
+# the menus but should still remain active and just not show up in node creation menus.
+HIDDEN_PLUGINS = (
+    "TexFresnel",
+    "Float3ToAColor",
+    "TexBlend",
+    "TexColorCorrect",
+    "TexVectorProduct",
+    "TexVectorToColor",
+    "TexUVW",
+    "UVWGenObjectBBox",
+    "TexNormalMapFlip",
+    "TexBlendBumpNormal"
+)
+
 # Plugins for which node generation and
 # visualization in the UI is not required
 SKIPPED_PLUGINS = (
     # 'Virtual' plugins
     'SettingsCameraGlobal',
-     
+
     # not meant to be used
     'MtlSingleBRDF',
     'BRDFSkinComplex',
@@ -107,7 +122,6 @@ SKIPPED_PLUGINS = (
     'TexExtMapChannels',
 
     # Not yet implemented
-    'BRDFScanned',
     'TexRamp',
 
     # Not useful
@@ -118,7 +132,6 @@ SKIPPED_PLUGINS = (
     "TexBerconTile",
     "TexBerconWood",
     "TexBifrostVVMix",
-    "TexFresnel",
     "TexGradient",
     "TexICC",
     "TexInt",
@@ -138,14 +151,11 @@ SKIPPED_PLUGINS = (
     "TexWater",
     "ColorCorrect",
     "ColorTextureToMono",
-    "Float3ToAColor",
     "FloatToTex",
     "TexAColorChannel",
-    "TexBlend",
     "TexColorAndAlpha",
     "TexColorCondition",
     "TexColorConstant",
-    "TexColorCorrect",
     "TexColorLogic",
     "TexColorMask",
     "TexCombineColor",
@@ -157,6 +167,7 @@ SKIPPED_PLUGINS = (
     "TexMaxGamma",
     "TexPlusMinusAverage",
     "TexRGBMultiplyMax",
+    "TexSurfaceLuminance",
     "TexSwitch",
     "TexSwitchFloat",
     "TexSwitchInt",
@@ -165,15 +176,12 @@ SKIPPED_PLUGINS = (
     "TexTemperatureToColor",
     "TexUVWGenToTexture",
     "TexVectorOp",
-    "TexVectorProduct",
-    "TexVectorToColor",
     "TexVertexColorDirect",
     "TransformToTex",
-    
+
     # Could be used in future
     "TexCondition",
     "TexCondition2",
-    "TexUVW",
     "TexSnow",
     "PhxShaderOceanTex",
     "PhxShaderTex",

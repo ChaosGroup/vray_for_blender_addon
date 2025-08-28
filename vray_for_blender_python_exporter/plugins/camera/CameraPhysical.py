@@ -59,4 +59,7 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
         # DOF enable/disable cannot be animated so we need to re-export the whole plugin.
         vray.pluginRemove(exporterCtx.renderer, pluginDesc.name)
 
+    if not propGroup.enable_vignetting:
+        pluginDesc.setAttribute("vignetting", 0)
+
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)

@@ -11,6 +11,20 @@
             "ui" : {
                 "display_name": "UVW Transform"
             }
+        },
+        {
+            "attr": "ground_radius",
+            "ui" : {
+                "min": 0.001,
+                "max": 1000000
+            }
+        },
+        {
+            "attr": "duvw_scale",
+            "ui" : {
+                "min": 0.01,
+                "max": 100.0
+            }
         }
     ],
     "Widget": {
@@ -41,7 +55,7 @@
                     },
                     {
                         "name": "duvw_scale",
-                        "label": "DUVW Scale"
+                        "label": "Filter Multiplier"
                     },
                     {
                         "name": "ground_on",

@@ -9,8 +9,8 @@ from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.lib.settings_defs import LightSelectMode
 from vray_blender.lib import export_utils, plugin_utils
-from vray_blender.nodes.tools import isVrayNodeTree
-from vray_blender.nodes.utils import getInputSocketByVRayAttr, getLightOutputNode, areNodesInterconnected, getOutputNode
+from vray_blender.nodes.tools import isVrayNodeTree, isInputSocketLinked
+from vray_blender.nodes.utils import getLightOutputNode, areNodesInterconnected, getOutputNode
 from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
 
 
@@ -151,7 +151,7 @@ def _customExportLightNode(nodeCtx: NodeContext, pluginDesc: PluginDesc):
 def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc):
     """ Add Dome light settings which need special handling to the exported properties """
     if nodeCtx.rootObj.vray.light_type == 'DOME' and nodeCtx.node.bl_idname == 'VRayNodeUVWMapping':
-        if nodeCtx.node.mapping_node_type != 'ENVIRONMENT' or not getInputSocketByVRayAttr(nodeCtx.nodes[0], 'dome_lock_texture').value:
+        if nodeCtx.node.mapping_node_type != 'ENVIRONMENT' or not getInputSocketByAttr(nodeCtx.nodes[0], 'dome_lock_texture').value:
             pluginDesc.setAttribute('uvw_matrix', Matrix())
             return
 
@@ -160,7 +160,7 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
         # do not allow connections from native VRay plugins.
         uvwNode = nodeCtx.node
         texNode = nodeCtx.nodes[-2]
-        if not any([i for i in texNode.inputs if i.is_linked and \
+        if not any([i for i in texNode.inputs if isInputSocketLinked(i) and \
                                                 ((i.links[0].to_socket.name == 'Uvwgen') or (i.links[0].to_socket.name == 'Mapping')) and \
                                                 (i.links[0].from_socket == uvwNode.outputs['Mapping']) ]):
             # The socket is not connected to the corrrect socket type on the texture node
@@ -174,7 +174,7 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
         texNode = nodeCtx.nodes[1]
         for sockName in ['color_colortex', 'intensity_tex', 'shadowColor_colortex']:
             sock = getInputSocketByAttr(domeNode, sockName)
-            if any ([l for l in sock.links if l.from_node == texNode]):
+            if any ([l for l in sock.links if (not l.is_muted and not l.is_hidden) and (l.from_node == texNode)]):
                 _, rotQuat, _ = nodeCtx.sceneObj.matrix_world.decompose()
                 tm = rotQuat.inverted().to_matrix().to_4x4()
                 pluginDesc.setAttribute('uvw_matrix', tm)

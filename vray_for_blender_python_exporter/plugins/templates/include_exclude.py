@@ -4,7 +4,9 @@ import bpy
 from vray_blender.lib import draw_utils
 from vray_blender.lib.attribute_utils import getAttrDesc
 from vray_blender.lib.defs import ExporterContext, PluginDesc
-from vray_blender.nodes.utils import getNodeOfPropGroup, getInputSocketByVRayAttr, selectedObjectTagUpdate
+from vray_blender.exporting.tools import getInputSocketByAttr
+from vray_blender.nodes.tools import isInputSocketLinked
+from vray_blender.nodes.utils import getNodeOfPropGroup, selectedObjectTagUpdate
 from vray_blender.plugins import getPluginAttr
 from vray_blender.plugins.templates import multi_select
 from vray_blender.plugins.templates.common import VRayObjectSelector
@@ -44,10 +46,10 @@ class TemplateIncludeExclude(multi_select.TemplateMultiObjectSelect):
         sock: bpy.types.NodeSocket = None
 
         if (boundProperty := self.getTemplateAttr('bound_property')) and (node := getNodeOfPropGroup(propGroup)):
-            sock = getInputSocketByVRayAttr(node, boundProperty)
+            sock = getInputSocketByAttr(node, boundProperty)
         
         # Draw the template only when the socket is not linked.
-        if sock and sock.is_linked:
+        if sock and isInputSocketLinked(sock):
             return
         
         panel = layout

@@ -57,8 +57,7 @@ def calculateMatExportCache(exporterCtx: ExporterContext):
         updatedVrayMtls = {m for m in bpy.data.materials if (getObjTrackId(m) in updatedVrayMtlSIDs) or (m and (m.node_tree in updates))}
 
         updatedTextures = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
-        updatedVrayMtls = updatedVrayMtls.union(_getMtlsOfTextures(updatedTextures))
-
+        updatedVrayMtls = [getObjTrackId(mtl) for mtl in updatedVrayMtls.union(_getMtlsOfTextures(updatedTextures))]
         for m in (exporterCtx.exportedMtls.keys() & updatedVrayMtls):
             del exporterCtx.exportedMtls[m]
 
@@ -83,44 +82,49 @@ class MtlExporter(ExporterBase):
         Returns:
             tuple(AttrPlugin, SceneStats): the exported plugin and the update to the export statistics
         """
-
-        if mtl in self.exportedMtls:
-            return self.exportedMtls[mtl], SceneStats()
+        mtlId = getObjTrackId(mtl)
+        if mtlId in self.exportedMtls:
+            return self.exportedMtls[mtlId], SceneStats()
 
         assert mtl.use_nodes and mtl.node_tree, f"Material has no node tree: {mtl.name}"
 
         isVRayMtl = mtl.vray.is_vray_class
 
+        isConversion = (nodeCtx is not None)
         if nodeCtx is None:
             nodeCtx = NodeContext(self, bpy.context.scene, bpy.data, self.renderer)
             nodeCtx.rootObj     = mtl
             nodeCtx.nodeTracker = self.nodeTracker
             nodeCtx.ntree       = mtl.node_tree
-        
-        with nodeCtx:
-            if not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL')) and not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, 'SHADER')):
-                NodeContext.registerError(f"Output node not found in material tree")
-                return  None, SceneStats()
 
-            sock = None
-            if isVRayMtl:
-                sock = getInputSocketByName(nodeOutput, "Material")
-            if sock is None:
-                sock = getInputSocketByName(nodeOutput, "Surface")
+        with nodeCtx:
+            # A material may have both Cycles and VRay nodes regardless of its type. 
+            # Render the node tree that corresponds to the material type.
+            outputNodeType = 'MATERIAL' if isVRayMtl else 'SHADER'
+            
+            if not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, outputNodeType)) :
+                NodeContext.registerError(f"Output node not found in {'V-Ray' if isVRayMtl else 'Cycles'} material tree")
+                return None, SceneStats()
+
+            sockName = 'Material' if isVRayMtl else 'Surface'
+            sock = getInputSocketByName(nodeOutput, sockName)
             assert sock, "Material output node has no input socket"
 
-            if not (nodeLink := getNodeLink(sock)):
+            if not (nodeLink := getFarNodeLink(sock)):
                 # The output node has nothing connected to it. This is a normal situation when the BRDF
                 # is changed, so don't report it to the status field.
-                debug.printWarning(f"No tree connected to output node in material '{mtl.name}'")
+                NodeContext.registerError(f"No tree connected to output node in material '{mtl.name}'")
+                if isConversion:
+                    return None, SceneStats()
+
                 defaultMtlPlugin = MtlExporter.exportDefaultMaterial(self)
-                self.exportedMtls[mtl] = defaultMtlPlugin
+                self.exportedMtls[mtlId] = defaultMtlPlugin
                 return defaultMtlPlugin, SceneStats()
-            
+
             with nodeCtx.push(nodeOutput):
                 # Track the plugins exported for each node of the tree
                 if (singleBRDFMtl := nodeCtx.getCachedNodePlugin(nodeOutput)) is None:
-                    with TrackObj(self.nodeTracker, getObjTrackId(mtl)):
+                    with TrackObj(self.nodeTracker, mtlId):
                         brdfPlugin = exportVRayNode(nodeCtx, nodeLink) if nodeLink else AttrPlugin()
 
                         with TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput)):
@@ -129,9 +133,9 @@ class MtlExporter(ExporterBase):
                         nodeCtx.stats.uniqueMtls.add(mtl.name)
                         nodeCtx.stats.mtls += 1
 
-                    self.exportedMtls[mtl] = singleBRDFMtl
+                    self.exportedMtls[mtlId] = singleBRDFMtl
                     nodeCtx.cacheNodePlugin(nodeOutput, singleBRDFMtl)
-        
+
         return singleBRDFMtl, nodeCtx.stats
 
 

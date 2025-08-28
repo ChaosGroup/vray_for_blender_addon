@@ -3,6 +3,28 @@
     "Name": "V-Ray Gradient Ramp",
     "Parameters": [
         {
+            "attr" : "gradient_type",
+            "default" : "0",
+            "desc" : "The type of gradient to use",
+            "items" :
+            [
+                [ "0", "Four corner", "Four corner" ],
+                [ "1", "Box", "Box" ],
+                [ "2", "Diagonal", "Diagonal" ],
+                [ "3", "Lighting", "Lighting" ],
+                [ "4", "Linear", "Linear" ],
+                [ "5", "Mapped", "Mapped" ],
+                [ "6", "Normal", "Normal" ],
+                [ "7", "Pong", "Pong" ],
+                [ "8", "Radial", "Radial" ],
+                [ "9", "Spiral", "Spiral" ],
+                [ "10", "Sweep", "Sweep" ],
+                [ "11", "Tartan", "Tartan" ],
+                [ "12", "Position", "Position" ]
+            ],
+            "update": "onUpdateGradientType"
+        },
+        {
             "attr": "texture_map",
             "options": {
                 "linked_only": true
@@ -23,6 +45,13 @@
             "options": {
                "derived": true
             }
+        },
+        {
+            "attr": "gradient_position",
+            "ui": {
+                "min": 0.0,
+                "max": 1.0
+            }
         }
     ],
     "Widget": {
@@ -34,23 +63,14 @@
                         "name": "gradient_type"
                     },
                     {
-                        "layout": "SEPARATOR",
-                        "label": "Color ramp"
-                    },
-                    {
-                        "layout": "BOX",
-                        "attrs": [
-                            {
-                                "name": "color_ramp",
-                                "custom_draw": "widgetDrawRamp"
-                            }
-                        ]
+                        "name": "color_ramp",
+                        "custom_draw": "widgetDrawRamp"
                     }
                 ]
             },
             {
                 "layout": "SEPARATOR"
-            },    
+            },
             {
                 "layout": "ROLLOUT",
                 "name": "common",
@@ -58,22 +78,22 @@
                 "default_closed": false,
                 "attrs": [
                     {
-                        "name": "gradient_position"
+                        "name": "gradient_position",
+                        "visible": {"cond": "::gradient_type=12"}
                     },
                     {
                         "layout": "SEPARATOR"
                     },
                     {
-                        "name": "compatibility_with"
-                    },
-                    {
                         "name": "alpha_from_intensity"
                     },
                     {
-                        "name": "invert"
+                        "name": "invert",
+                        "label": "Invert Color"
                     },
                     {
-                        "name": "invert_alpha"
+                        "name": "invert_alpha",
+                        "active": {"cond": "::invert!=0"}
                     },
                     {
                         "name": "color_mult"
@@ -175,8 +195,20 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            { "name": "color_mult" },
+            { "name": "color_offset" },
+            { "name": "alpha_mult" },
+            { "name": "alpha_offset" },
+            { "name": "nouvw_color" },
+            { "name": "gradient_position" },
+            { "name": "texture_map" },
+            { "name": "uvwgen" }
+        ]
+    },
     "Options": {
-        "excluded_parameters": [],
+        "excluded_parameters": [ "compatibility_with" ],
         "animatable": true
     }
 }

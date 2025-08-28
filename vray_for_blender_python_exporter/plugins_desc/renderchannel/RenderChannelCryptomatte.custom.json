@@ -2,13 +2,24 @@
     "ID": "RenderChannelCryptomatte",
     "Name" : "Cryptomatte",
     "Subtype" : "MATTE",
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Cryptomatte",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        },
+        {
+            "attr" : "write_metadata",
+            "default" : "1"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -47,16 +58,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr" : "name",
-            "default" : "Cryptomatte"
-        },
-        {
-            "attr" : "write_metadata",
-            "default" : "1"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": [

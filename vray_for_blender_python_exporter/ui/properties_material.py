@@ -4,7 +4,8 @@ import bpy
 from vray_blender.ui      import classes
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.plugins import PLUGINS, getPluginModule
-from vray_blender.lib.sys_utils import StartupConfig
+from vray_blender.ui.icons import getUIIcon
+from vray_blender.menu import VRAY_OT_convert_materials
 
 def renderMaterialPanel(mtl, context, layout):
     assert  mtl.vray.is_vray_class, "Can draw property pages for V-Ray materials only"
@@ -39,14 +40,15 @@ def renderMaterialOptionsPanel(mtl, context, layout):
 
 def renderMaterialSelector(layout: bpy.types.UILayout, obj: bpy.types.Object):
     mtl = obj.active_material
-
+    
     if mtl:
-        if mtl.vray.is_vray_class and NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL'):
-            layout.template_ID(obj, "active_material", new="vray.copy_material")
+        if mtl.vray.is_vray_class:
+            if NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL') is not None:
+                layout.template_ID(obj, "active_material", new="vray.copy_material")
         else:
             layout.operator("vray.replace_nodetree_material", icon="NODETREE", text="Use V-Ray Material Nodes")
-            if mtl.use_nodes and StartupConfig.debugUI:
-                layout.operator("vray.convert_nodetree_material", icon="NODETREE", text="Convert to V-Ray material")
+            if mtl.use_nodes:
+                layout.operator("vray.convert_nodetree_material", icon_value=getUIIcon(VRAY_OT_convert_materials), text="Convert to V-Ray Material")
     else:
             layout.template_ID(obj, "active_material", new="vray.add_new_material")
 

@@ -196,7 +196,7 @@ endif()
 if (INSTALL_LOCAL)
 
     if (WIN32)
-        if (BLENDER_VER STREQUAL "4.4")
+        if (BLENDER_VER VERSION_GREATER_EQUAL "4.4")
             set (COPY_LIBS 
                 "${BOOST_LIBDIR}/lib/boost_filesystem-vc142-mt-x64-1_82.dll"
                 "${BOOST_LIBDIR}/lib/boost_python311-vc142-mt-x64-1_82.dll"

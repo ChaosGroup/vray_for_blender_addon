@@ -356,7 +356,7 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 }
 
 
-void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlCosmosDownloadedAssets& message) {
+void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlOnCosmosDownloadedAssets& message) {
 	WithGIL gil;
 	py::list relinkedPaths = py::list();
 	const AttrListString::DataArrayPtr relinkedData=message.relinkedPaths.getData();
@@ -365,6 +365,17 @@ void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlCosmosDow
 	invokePythonCallback("setCosmosDownloadAssets", getPythonCallback("setCosmosDownloadAssets"), int(message.downloadStatus), relinkedPaths);
 }
 
+
+void ZmqServer::processControlOnScannedEncodedParameters(const MsgControlOnScannedEncodedParameters& message) {
+	if (message.licensed) {
+		WithGIL gil;
+		boost::python::list paramBlock;
+		const AttrListInt::DataArrayPtr paramData=message.encodedParams.getData();
+		for (int param : *paramData)
+			paramBlock.append(param);
+		invokePythonCallback("scannedParamBlock", getPythonCallback("scannedParamBlock"), message.materialId, message.nodeName, paramBlock);
+	}
+}
 
 void ZmqServer::processControlOnRendererStatus(const MsgControlOnRendererStatus& message)
 {
@@ -385,7 +396,7 @@ void ZmqServer::processControlOnRendererStatus(const MsgControlOnRendererStatus&
 }
 
 
-void ZmqServer::handleMsg(const zmq::message_t& msg) 
+void ZmqServer::handleMsg(const zmq::message_t& msg)
 {
 	DeserializerStream stream(reinterpret_cast<const char*>(msg.data()), msg.size());
 
@@ -398,14 +409,24 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 			processControlOnImportAsset(message);
 			break;
 		}
-		case MsgType::ControlCosmosDownloadSize: {
-			const MsgControlCosmosDownloadSize& message = deserializeMessage<MsgControlCosmosDownloadSize>(stream);
+		case MsgType::ControlOnCosmosDownloadSize: {
+			const MsgControlOnCosmosDownloadSize& message = deserializeMessage<MsgControlOnCosmosDownloadSize>(stream);
 			invokePythonCallback("setCosmosDownloadSize", getPythonCallback("setCosmosDownloadSize"), int(message.relinkStatus), message.downloadSizeMb);
 			break;
 		}
-		case MsgType::ControlCosmosDownloadedAssets: {
-			const MsgControlCosmosDownloadedAssets& message = deserializeMessage<MsgControlCosmosDownloadedAssets>(stream);
+		case MsgType::ControlOnCosmosDownloadedAssets: {
+			const MsgControlOnCosmosDownloadedAssets& message = deserializeMessage<MsgControlOnCosmosDownloadedAssets>(stream);
 			processControlOnCosmosAssetsDownloaded(message);
+			break;
+		}
+		case MsgType::ControlOnScannedLicenseCheck: {
+			const MsgControlOnScannedLicenseCheck& message = deserializeMessage<MsgControlOnScannedLicenseCheck>(stream);
+			invokePythonCallback("scannedLicense", getPythonCallback("scannedLicense"), message.license);
+			break;
+		}
+		case MsgType::ControlOnScannedEncodedParameters: {
+			const MsgControlOnScannedEncodedParameters& message = deserializeMessage<MsgControlOnScannedEncodedParameters>(stream);
+			processControlOnScannedEncodedParameters(message);
 			break;
 		}
 		case MsgType::ControlOnStartViewportRender:

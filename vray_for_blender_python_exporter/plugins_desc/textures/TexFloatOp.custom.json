@@ -21,7 +21,7 @@
         {
             "attr" : "mode",
             "default" : "2",
-            "items" : 
+            "items":
             [
                 [ "0", "Product", "Product: A * B" ],
                 [ "1", "Ratio", "Ratio: A / B" ],
@@ -100,9 +100,36 @@
         "output_sockets":[
             {
                 "label": "Result",
-                "name": "result",
+                "name": "_default_",
                 "type": "OUTPUT_FLOAT_TEXTURE"
-            }
+            },
+            { "label": "Average", "name": "average", "visible": false },
+            { "label": "Sum", "name": "sum", "visible": false },
+            { "label": "Product", "name": "product", "visible": false },
+            { "label": "Difference", "name": "difference", "visible": false },
+            { "label": "Ratio", "name": "ratio", "visible": false },
+            { "label": "Min", "name": "min", "visible": false },
+            { "label": "Max", "name": "max", "visible": false },
+            { "label": "Power", "name": "power", "visible": false },
+            { "label": "Sin", "name": "sin", "visible": false },
+            { "label": "Cos", "name": "cos", "visible": false },
+            { "label": "Asin", "name": "asin", "visible": false },
+            { "label": "Acos", "name": "acos", "visible": false },
+            { "label": "Tan", "name": "tan", "visible": false },
+            { "label": "Atan", "name": "atan", "visible": false },
+            { "label": "Atan2", "name": "atan2", "visible": false },
+            { "label": "Abs", "name": "abs", "visible": false },
+            { "label": "Ceil", "name": "ceil", "visible": false },
+            { "label": "Exp", "name": "exp", "visible": false },
+            { "label": "Floor", "name": "floor", "visible": false },
+            { "label": "Log", "name": "log", "visible": false },
+            { "label": "Log10", "name": "log10", "visible": false },
+            { "label": "Sqrt", "name": "sqrt", "visible": false },
+            { "label": "Fmod", "name": "fmod", "visible": false },
+            { "label": "Bias Schlick", "name": "bias_schlick", "visible": false },
+            { "label": "Gain Schlick", "name": "gain_schlick", "visible": false },
+            { "label": "Bias Perlin", "name": "bias_perlin", "visible": false },
+            { "label": "Gain Perlin", "name": "gain_perlin", "visible": false }
         ]
     },
     "Options": {

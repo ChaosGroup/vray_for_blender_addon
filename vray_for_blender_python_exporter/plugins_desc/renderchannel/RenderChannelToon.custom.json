@@ -2,13 +2,30 @@
     "ID": "RenderChannelToon",
     "Name" : "Toon",
     "Subtype" : "ADVANCED",
+    "Parameters": [
+        {
+            "attr": "color_mapping",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Toon",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        },
+        {
+            "attr" : "alias",
+            "default" : 154,
+            "desc" : "Internal unique identifier for this channel type",
+            "type" : "INT"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -42,16 +59,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "color_mapping",
-            "default": true
-        },
-        {
-            "attr" : "name",
-            "default" : "Toon"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": []

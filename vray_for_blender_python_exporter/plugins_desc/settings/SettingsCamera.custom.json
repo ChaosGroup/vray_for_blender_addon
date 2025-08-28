@@ -12,7 +12,10 @@
         },
         {
             "attr": "type",
-            "update": "onUpdateCamType"
+            "update": "onUpdateCamType",
+            "options": {
+                "animatable": false
+            }
         },
         {
             "attr": "override_camera_settings",
@@ -134,7 +137,6 @@
         "excluded_parameters": [
             "image_planes",
             "auto_exposure_compensation"
-        ],
-        "animatable": false
+        ]
     }
 }

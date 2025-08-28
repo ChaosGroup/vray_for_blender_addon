@@ -98,6 +98,12 @@ class _VfbEventHandler:
 
     def startProdRender(self):
         """ Start production rendering """
+        from vray_blender.engine.renderer_prod import VRayRendererProd
+
+        if self._isEventInQueue(_Event.RenderProd) or VRayRendererProd.isActive():
+            # This could happen if the user clicks several times in rapid succession on the
+            # 'Start Prod Render' VFB button
+            return
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.RenderProd)
@@ -146,7 +152,12 @@ class _VfbEventHandler:
         with self._lock:
             return self._vfbLayersJson
         
-        
+
+    def _isEventInQueue(self, eventType: int):
+        with self._lock:
+            return any(e for e in self._eventQueue if e.eventType == eventType)
+
+
     @staticmethod
     def _onTimer():
         # bpy.app.timers.register works with non-static methods but such methods

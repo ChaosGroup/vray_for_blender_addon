@@ -33,7 +33,8 @@
         },
         {
             "attr" : "name",
-            "default" : "Multi Matte"
+            "default" : "Multi Matte",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
         },
         {
             "attr": "use_mtl_id",
@@ -121,7 +122,7 @@
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",

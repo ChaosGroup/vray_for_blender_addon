@@ -6,18 +6,24 @@ import sys
 
 from vray_blender import debug
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import COLOR_SOCK_TYPES, FLOAT_SOCK_TYPES, getVRayBaseSockType, removeInputSocketLinks
+from vray_blender.exporting.tools import removeInputSocketLinks
 from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getPluginInputNodeDesc, getPluginModule
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.lib.attribute_utils import toAColor
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
-from vray_blender.nodes.tools import isCompatibleNode
+from vray_blender.nodes.tools import isCompatibleNode, getSocketPanelName, getSocketPanel, isInputSocketLinked
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 
 
 DYNAMIC_SOCKET_OVERRIDES = {}
 DYNAMIC_SOCKET_CLASSES = set()
 DYNAMIC_SOCKET_CLASS_NAMES = set()
+
+STRUCTURAL_SOCKET_CLASSES = {
+    # Sockets used for organizing node UI, e.g. rollouts, separators etc
+    'ROLLOUT' : 'VRaySocketRollout'
+}
+
 
 # Colors for standard Blender sockets. List copied from .\source\blender\editors\space_node\drawnode.cc
 BLENDER_SOCKET_COLORS = {
@@ -54,16 +60,13 @@ OBJECT_SOCKET_COLOR         = BLENDER_SOCKET_COLORS['OBJECT']
 COLLECTION_SOCKET_COLOR     = BLENDER_SOCKET_COLORS['COLLECTION']  
 VECTOR_SOCKET_COLOR         = BLENDER_SOCKET_COLORS['VECTOR']  
 TRANSFORM_SOCKET_COLOR      = BLENDER_SOCKET_COLORS['MATRIX']  
+ROLLOUT_SOCKET_COLOR        = BLENDER_SOCKET_COLORS['UNUSED']  
 
 MAPPING_SOCKET_COLOR        = (0.250, 0.273, 0.750, 1.0)
 CHANNEL_SOCKET_COLOR        = (0.0, 0.83, 0.63, 1.0)
 EFFECT_SOCKET_COLOR         = (0.92, 0.45, 0.5, 1.0)
 PLUGIN_SOCKET_COLOR         = (1.0, 1.0, 1.0, 1.0)
 OBJ_PROP_SOCKET_COLOR       = (0.8, 0.2, 0.5, 1.0)
-
-
-
-
 
 
 def getDynamicSocketClassName(pluginType, socketTypeName, attrName):
@@ -84,6 +87,24 @@ def getDynamicSocketClassName(pluginType, socketTypeName, attrName):
         hashLen = 64 - 1 - (len(socketTypeName) + 1)
         typeName = "%s_%s" % (socketTypeName, hashed[0:hashLen])
     return typeName
+
+
+def _setSockDefaultValue(sockParams, socketTypeName, attrDesc):
+    """ Sets the default value of a socket, applying necessary conversions based on the socket type.
+    """
+    if "default" not in attrDesc:
+        return
+    
+    value = attrDesc["default"]
+    match socketTypeName:
+        case 'VRaySocketColor':
+            sockParams['default'] = attribute_utils.toColor(value)
+        case 'VRaySocketAColor':
+            sockParams['default'] = attribute_utils.toAColor(value)
+        case 'VRaySocketTransform':
+            sockParams['default'] = attribute_utils.tupleTo4x4MatrixLayout(value)
+        case _:
+            sockParams['default'] = value
 
 
 def registerDynamicSocketClass(pluginType, socketTypeName, attrName):
@@ -137,6 +158,8 @@ def registerDynamicSocketClass(pluginType, socketTypeName, attrName):
             attribute_utils.setAttrLimits(overrideParams, attrDesc)
             attribute_utils.setAttrOptions(overrideParams, attrDesc, pluginModule)
 
+            _setSockDefaultValue(overrideParams, socketTypeName, attrDesc)
+
             socketTypeAttributes['__annotations__'][overrideName] = overrideType(**overrideParams)
 
         socketBaseClass = getattr(sys.modules[__name__], socketTypeName)
@@ -185,13 +208,16 @@ def addInput(node, socketType, socketName, attrName='', pluginType='', visible=T
     # a dedicated class is registered during the VRay addon initialization. The second kind is bound to 
     # data that is not directly exported to VRay but is part of node operation logic.
 
-    if attrName and (socketType in DYNAMIC_SOCKET_OVERRIDES):
-        dynamicType = getDynamicSocketClassName(pluginType, socketType, attrName)
-        if dynamicType not in DYNAMIC_SOCKET_CLASS_NAMES:
-            raise Exception(f"Dynamic socket class not registered for {node.vray_plugin}::{socketType}::{socketName}: {dynamicType}")
-        
-        socketType = dynamicType
-        
+    if attrName:
+        if (socketType in DYNAMIC_SOCKET_OVERRIDES):
+            dynamicType = getDynamicSocketClassName(pluginType, socketType, attrName)
+            if dynamicType not in DYNAMIC_SOCKET_CLASS_NAMES:
+                raise Exception(f"Dynamic socket class not registered for {node.vray_plugin}::{socketType}::{socketName}: {dynamicType}")
+            
+            socketType = dynamicType
+        elif socketType in STRUCTURAL_SOCKET_CLASSES:
+            socketType = STRUCTURAL_SOCKET_CLASSES[socketType]
+    
     createdSocket: bpy.types.NodeSocket = node.inputs.new(socketType, socketName, use_multi_input=isMultiInput)
     
     if not hasattr(createdSocket, 'vray_attr'):
@@ -209,9 +235,27 @@ def addInput(node, socketType, socketName, attrName='', pluginType='', visible=T
     createdSocket.show_expanded = True
     createdSocket.vray_socket_base_type = baseType
     createdSocket.vray_attr = attrName
-    createdSocket.vray_plugin = pluginType
+
+    _configureInPanel(createdSocket, node)
 
     return createdSocket
+
+
+def _configureInPanel(sock: bpy.types.NodeSocket, node: bpy.types.Node):
+    """ Set socket's initial state if it is placed on a panel or if it is a 'panel' socket """ 
+    assert not sock.is_output, "Only input sockets may be placed onz panels"
+
+    if node.vray_plugin != 'NONE':
+        pluginModule = getPluginModule(node.vray_plugin)
+
+        if sock.bl_idname == 'VRaySocketRollout':
+            panelDesc = getSocketPanel(pluginModule, sock.vray_attr)
+            sock.is_open = not panelDesc.get('default_closed', True)
+        elif panelName := getSocketPanelName(pluginModule, sock.vray_attr):
+            # This is a regular socket that is shown in a panel
+            panelDesc = getSocketPanel(pluginModule, panelName)
+            sock.nest_level = 1
+            sock.hide = panelDesc.get('default_closed', True)
 
 
 def addOutput(node: bpy.types.Node, socketType: str, socketName: str, attrName: str=None, description: str=None):
@@ -272,22 +316,22 @@ def _isConnectionMuted(inputSocket):
 
 
 def _wrapperSocketSetItem(self, value):
-    propGroup = getattr(self.node, self.vray_plugin)
+    propGroup = getattr(self.node, self.node.vray_plugin)
     setattr(propGroup, self.vray_attr, value)
 
 
 def _wrapperSocketSetItemWithConv(self, value, convFunc):
-    propGroup = getattr(self.node, self.vray_plugin)
+    propGroup = getattr(self.node, self.node.vray_plugin)
     setattr(propGroup, self.vray_attr, convFunc(value))
 
 
 def _wrapperSocketGetItem(self):
-    propGroup = getattr(self.node, self.vray_plugin)
+    propGroup = getattr(self.node, self.node.vray_plugin)
     return getattr(propGroup, self.vray_attr)
 
 
 def _wrapperSocketGetItemWithConv(self, convFunc):
-    propGroup = getattr(self.node, self.vray_plugin)
+    propGroup = getattr(self.node, self.node.vray_plugin)
     return convFunc(getattr(propGroup, self.vray_attr))
 
 
@@ -319,6 +363,12 @@ class VRaySocket(bpy.types.NodeSocket):
         default = ""
     )
 
+    nest_level: bpy.props.IntProperty(
+        name = "Nest level",
+        description = "The nest level of the socket when part of a rollout",
+        default = 0
+    )
+
     # Checks if a node is linked to a valid V-Ray node, even through a 'NodeReroute' chain.
     def _isNodeChainLinked(self, node):
         if (node.bl_idname != "NodeReroute"):
@@ -330,8 +380,13 @@ class VRaySocket(bpy.types.NodeSocket):
             return self._isNodeChainLinked(node.inputs[0].links[0].from_node)
         return False
 
+    def isLinked(self):
+        """ Return True if the socket has a non-muted link """
+        assert not self.is_output
+        return self.is_linked and (not self.links[0].is_muted and not self.links[0].is_hidden)
+
     def shouldExportLink(self):
-        if self.is_linked:
+        if isInputSocketLinked(self):
             return self._isNodeChainLinked(self.links[0].from_node)
 
         return False
@@ -341,6 +396,24 @@ class VRaySocket(bpy.types.NodeSocket):
 
     def exportUnlinked(self, nodeCtx: NodeContext, pluginDesc, attrDesc):
         pluginDesc.resetAttribute(attrDesc['attr'])
+
+    def getNestedLayout(self, layout: bpy.types.UILayout):
+        if self.nest_level == 0:
+            col = layout
+        else:
+            split = layout.split(factor = 0.01 + self.nest_level * 0.02, align = True)
+            split.column()
+            col = split.column()
+
+        return col
+
+    def draw(self, context, layout, node, text):
+        """ Draw handler for all vray socket types. It will setup the correct layout
+            for the socket. Children may draw in their draw_impl method.
+        """
+        layout = self.getNestedLayout(layout)
+        if fnDraw := getattr(self, 'draw_impl'):
+            fnDraw(context, layout, node, text)
 
 
 class VRayValueSocket(VRaySocket):
@@ -361,6 +434,43 @@ class VRayValueSocket(VRaySocket):
         dest.value = self.value
 
 
+
+class VRaySocketRollout(VRaySocket):
+    is_open: bpy.props.BoolProperty(
+        default = False,
+        update = lambda self, value: self.updateIsOpen(value)
+    )
+    
+    def updateIsOpen(self, context: bpy.types.Context):
+        pluginModule = getPluginModule(self.node.vray_plugin)
+        panelSockets = pluginModule.SocketPanels.get(self.vray_attr, [])
+
+        for sockAttrName in panelSockets:
+            sock = next((s for s in self.node.inputs if s.vray_attr == sockAttrName), None)
+            
+            if sock:
+                show = self.is_open or sock.is_linked
+                sock.hide = not show 
+            # Do nothing if the socket is missing. This is a normal situation right
+            # after the rollout socket is created because its is_open property is
+            # set before any of the sokets it groups have been added to the node.
+
+
+    def exportLinked(self, pluginDesc, attrDesc, linkValue):
+        assert False, "Rollouts cannot be exported"
+
+    def exportUnlinked(self, nodeCtx: NodeContext, pluginDesc, attrDesc):
+        assert False, "Rollouts cannot be exported"
+
+    @classmethod
+    def draw_color_simple(cls):
+        return ROLLOUT_SOCKET_COLOR
+        
+    def draw_impl(self, context, layout, node, text):
+        layout.alignment = 'LEFT'
+        icon = 'DOWNARROW_HLT' if self.is_open else 'RIGHTARROW'
+        layout.prop(self, 'is_open', text=self.name[:-1], emboss = False, icon = icon)
+        
 
 class VRaySocketMult(VRayValueSocket):
     multiplier: bpy.props.FloatProperty(
@@ -398,10 +508,10 @@ class VRaySocketMult(VRayValueSocket):
         layout.prop(self, 'value', text=text, expand=expand, slider=slider)
 
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         if self.is_output:
             layout.label(text=text)
-        elif self.is_linked and not _isConnectionMuted(self):
+        elif isInputSocketLinked(self):
             split = layout.split(factor=0.4)
             split.prop(self, 'value', text="")
             split.prop(self, 'multiplier', text=text)
@@ -445,7 +555,7 @@ class VRaySocketUse(VRayValueSocket):
 
 class VRaySocketGeom(VRayValueSocket):
     bl_idname = 'VRaySocketGeom'
-    bl_label  = 'Geomtery socket'
+    bl_label  = 'Geometry socket'
 
     value: bpy.props.StringProperty(
         name = "Geometry",
@@ -453,7 +563,7 @@ class VRaySocketGeom(VRayValueSocket):
         default = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -481,7 +591,7 @@ class VRaySocketObject(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -507,7 +617,7 @@ class VRaySocketObjectList(VRaySocket):
     bl_idname = 'VRaySocketObjectList'
     bl_label  = 'Object list'
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -568,11 +678,11 @@ class VRaySocketIncludeExcludeList(VRaySocketObjectList):
         return [('inclusionMode', inclusionMode)]
     
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         row = layout.row()
         row.label(text=text)
 
-        if self.is_linked:
+        if isInputSocketLinked(self):
             row.prop(self, 'inclusionMode', text='Type', expand=True)
 
     @classmethod
@@ -611,8 +721,8 @@ class VRaySocketInt(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
 
-    def draw(self, context, layout, node, text):
-        if self.is_linked or self.is_output:
+    def draw_impl(self, context, layout, node, text):
+        if isInputSocketLinked(self):
             layout.label(text=text)
         else:
             layout.prop(self, 'value', text=text)
@@ -627,7 +737,7 @@ class VRaySocketIntNoValue(VRaySocket):
     bl_idname = 'VRaySocketIntNoValue'
     bl_label  = 'Integer socket'
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -646,8 +756,8 @@ class VRaySocketBool(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
 
-    def draw(self, context, layout, node, text):
-        if self.is_linked or self.is_output:
+    def draw_impl(self, context, layout, node, text):
+        if self.is_output or isInputSocketLinked(self):
             layout.label(text=text)
         else:
             layout.prop(self, 'value', text=text)
@@ -693,14 +803,15 @@ class VRaySocketEnum(VRayValueSocket):
                 description = attrDesc.get('desc', 'Value'),
                 items = tuple(tuple(sub) for sub in attrDesc['items']),
                 set = VRaySocketEnum.setItem,
-                get = VRaySocketEnum.getItem
+                get = VRaySocketEnum.getItem,
+                options=set()
             )
         return [('value', prop)]
 
     def draw_property(self, context, layout, node, text, expand=False, slider=True):
         layout.prop(self, 'value', text=text, expand=expand, slider=slider)
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -739,7 +850,7 @@ class VRaySocketFloatNoValue(VRaySocket):
     bl_idname = 'VRaySocketFloatNoValue'
     bl_label  = 'Float socket'
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -761,8 +872,8 @@ class VRaySocketWeight(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
     
-    def draw(self, context, layout, node, text):
-        if self.is_linked or self.is_output:
+    def draw_impl(self, context, layout, node, text):
+        if self.is_output or isInputSocketLinked(self):
             layout.label(text=text)
         else:
             layout.prop(self, 'value', text=text)
@@ -895,7 +1006,7 @@ class VRaySocketColorNoValue(VRaySocket):
     bl_idname = 'VRaySocketColorNoValue'
     bl_label  = 'Color socket'
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -957,7 +1068,7 @@ class VRaySocketPluginUse(VRaySocketUse):
         layout.prop(self, 'use', text=attrLabel, expand=expand, slider=slider)
 
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.active = self.use
         split = layout.split()
         row = split.row(align=True)
@@ -1004,8 +1115,8 @@ class VRaySocketVectorBase(VRayValueSocket):
     bl_idname = 'VRaySocketVectorBase'
     bl_label  = 'Vector Socket Base'
 
-    def draw(self, context, layout, node, text):
-        if self.is_linked or self.is_output:
+    def draw_impl(self, context, layout, node, text):
+        if self.is_output or isInputSocketLinked(self):
             layout.label(text=text)
         else:
             layout.row().column().prop(self, 'value', text=text)
@@ -1013,7 +1124,7 @@ class VRaySocketVectorBase(VRayValueSocket):
     @classmethod
     def draw_color_simple(cls):
         return VECTOR_SOCKET_COLOR
-    
+
 class VRaySocketVector(VRaySocketVectorBase):
     bl_idname = 'VRaySocketVector'
     bl_label  = 'Vector Socket'
@@ -1039,11 +1150,11 @@ class VRaySocketVectorInt(VRaySocketVectorBase):
 
 # Base socket class for transform vectors (Rotation, Scale, Offset)
 class VRaySocketVectorTransformBase(VRaySocketVectorBase):
-    def draw(self, context, layout, node, text):
-        if (objSock := self.node.inputs.get('Object')) and objSock.is_linked:
+    def draw_impl(self, context, layout, node, text):
+        if (objSock := self.node.inputs.get('Object')) and isInputSocketLinked(objSock):
             layout.label(text=text)
         else:
-            super().draw(context, layout, node, text)
+            super().draw_impl(context, layout, node, text)
 
 
 class VRaySocketVectorRotation(VRaySocketVectorTransformBase):
@@ -1113,7 +1224,8 @@ class VRaySocketCoords(VRayValueSocket):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
+        layout = self.getNestedLayout(layout)
         layout.label(text=text)
 
     @classmethod
@@ -1140,7 +1252,7 @@ class VRaySocketBRDF(VRayValueSocket):
         default     = "BRDFNOBRDFISSET"
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1166,7 +1278,7 @@ class VRaySocketString(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.prop(self, 'value', text=text)
 
     @classmethod
@@ -1192,7 +1304,7 @@ class VRaySocketMtl(VRayValueSocket):
         default     = "MANOMATERIALISSET"
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1212,7 +1324,7 @@ class VRaySocketObjectProps(VRayValueSocket):
     bl_idname = 'VRaySocketObjectProps'
     bl_label  = 'Object Properties Socket'
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1230,7 +1342,7 @@ class VRaySocketPlugin(VRayValueSocket):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1256,7 +1368,7 @@ class VRaySocketRenderChannel(VRaySocketUse):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.active = self.use
         split = layout.split()
         row = split.row(align=True)
@@ -1278,7 +1390,7 @@ class VRaySocketRenderChannelOutput(VRaySocket):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1304,7 +1416,7 @@ class VRaySocketEffect(VRaySocketUse):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.active = self.use
         split = layout.split()
         row = split.row(align=True)
@@ -1326,7 +1438,7 @@ class VRaySocketEffectOutput(VRaySocket):
         default     = ""
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1355,7 +1467,7 @@ class VRaySocketTransform(VRayValueSocket):
         update = selectedObjectTagUpdate
     )
 
-    def draw(self, context, layout, node, text):
+    def draw_impl(self, context, layout, node, text):
         layout.label(text=text)
 
     @classmethod
@@ -1414,7 +1526,8 @@ def getRegClasses():
         VRaySocketPlugin,
         VRaySocketObjectProps,
         VRaySocketPluginUse,
-        VRaySocketWeight
+        VRaySocketWeight,
+        VRaySocketRollout
     )
 
 # A socket's properties are registered as part of the RNA structure of the socket 

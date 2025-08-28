@@ -5,7 +5,8 @@
     "Parameters": [
         {
             "attr" : "name",
-            "default" : "Object Select"
+            "default" : "Object Select",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
         },
         {
             "attr": "light_object_ids_as_string",
@@ -54,7 +55,7 @@
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",

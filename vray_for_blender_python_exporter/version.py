@@ -124,8 +124,8 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     Returns:
         bool: True if the upgrade was successful
     """
-    import importlib
     from vray_blender.events import isDefaultScene
+    from vray_blender.lib.sys_utils import importModule
 
     if isDefaultScene():
         debug.printAlways(f"Updating default scene version")
@@ -141,13 +141,11 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
         toVer         = scriptInfo[2].replace('_', '.')
         upgradeScript = scriptInfo[3]
 
-        upgradeScriptModule = f"vray_blender.resources.upgrade_scripts.{upgradeScript}"
+        upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
         upgradeModule = None
         
-        try:
-            upgradeModule = importlib.import_module(upgradeScriptModule)
-        except ImportError as e:
-            debug.reportError(f'Scene version update failed. See console log for details.', exc=e)
+        if (upgradeModule := importModule(upgradeScriptModule)) is None:
+            debug.reportError(f'Scene version update failed. See console log for details.')
             return False
             
         debug.printAlways(f"Running version update script {upgradeScriptModule}")
@@ -179,7 +177,7 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
         bool: True if upgrade script(s) should be run
     """
 
-    import importlib
+    from vray_blender.lib.sys_utils import importModule
 
     scriptInfos = findUpgradeScripts(fromUpgradeNum, toUpgradeNum)
 
@@ -188,15 +186,13 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
     for scriptInfo in scriptInfos:
         upgradeScript = scriptInfo[3]
 
-        upgradeScriptModule = f"vray_blender.resources.upgrade_scripts.{upgradeScript}"
+        upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
         upgradeModule = None
         
-        try:
-            upgradeModule = importlib.import_module(upgradeScriptModule)
-        except ImportError as e:
+        if (upgradeModule := importModule(upgradeScriptModule)) is None:
             debug.reportError(f"Scene version updatecheck failed. See console log for details.", exc=e)
             return False
-            
+        
         try:
             if upgradeModule.check():
                 return True

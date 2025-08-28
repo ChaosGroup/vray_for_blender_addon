@@ -2,13 +2,20 @@
     "ID": "RenderChannelDRBucket",
     "Name" : "DR Bucket",
     "Subtype" : "UTILITY",
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "DR Bucket",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -32,12 +39,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr" : "name",
-            "default" : "DR Bucket"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": []

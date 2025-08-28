@@ -51,7 +51,8 @@
         },
         {
             "attr" : "matte_surface",
-            "update": "onMattePropsUpdate"
+            "get": "mattePropsGetter",
+            "set": "mattePropsSetter"
         },
         {
             "attr": "use_surface",
@@ -59,7 +60,8 @@
             "desc": "Use Surface properties",
             "name": "Use surface properties",
             "type": "BOOL",
-            "update": "onSurfacePropsUpdate",
+            "get": "surfacePropsGetter",
+            "set": "surfacePropsSetter",
             "options": {
                 "derived": true
             }
@@ -70,7 +72,8 @@
             "desc": "Use Visibility properties",
             "name": "Use visibility properties",
             "type": "BOOL",
-            "update": "onVisibilityPropsUpdate",
+            "get": "visibilityPropsGetter",
+            "set": "visibilityPropsSetter",
             "options": {
                 "derived": true
             }
@@ -105,6 +108,7 @@
             "desc" : "When Override Motion Blur Samples is enabled, this value is used when sampling the motion blur created by the current object.",
             "type" : "INT",
             "ui": {
+                "min": 1,
                 "display_name" : "Motion Blur Samples"
             },
             "options": {

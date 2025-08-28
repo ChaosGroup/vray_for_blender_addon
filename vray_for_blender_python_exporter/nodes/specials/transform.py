@@ -1,9 +1,10 @@
 import bpy
 import mathutils
 
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.nodes.sockets import addInput, addOutput
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.exporting.tools import getLinkedFromSocket
 
 
@@ -22,7 +23,7 @@ def _drawVectorSock(node, sockName, layout):
     assert sockName in node.inputs, "Drawing nonexisting vector socket"
 
     vSock = node.inputs[sockName]
-    if not vSock.is_linked:
+    if not isInputSocketLinked(vSock):
         layout.row().column().prop(vSock, 'value')
 
 class VRayNodeTransform(VRayNodeBase):
@@ -43,7 +44,7 @@ class VRayNodeTransform(VRayNodeBase):
 
     def _getConnectedObject(self, context: bpy.types.Context):
         inputSocket = self.inputs['Object']
-        if inputSocket.is_linked:
+        if isInputSocketLinked(inputSocket):
             connectedNode = inputSocket.links[0].from_node
             if connectedNode.bl_idname == 'VRayNodeSelectObject':
                  return connectedNode.getSelected(context)
@@ -62,7 +63,7 @@ class VRayNodeTransform(VRayNodeBase):
     def draw_buttons_ext(self, context, layout):
         inputSocket = self.inputs['Object']
         layout.prop(self, 'invert')
-        if not inputSocket.is_linked:
+        if not isInputSocketLinked(inputSocket):
             _drawVectorSock(self, 'Rotation', layout)
             _drawVectorSock(self, 'Offset', layout)
             _drawVectorSock(self, 'Scale', layout)

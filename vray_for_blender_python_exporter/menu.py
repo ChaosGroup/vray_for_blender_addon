@@ -2,11 +2,14 @@
 
 import bpy
 
-from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive, VRAY_OT_cloud_submit
 from vray_blender.ui.classes import pollEngine, disableLayoutInEditMode
 from vray_blender.ui.icons import getIcon, getUIIcon
+from vray_blender.lib.sys_utils import activeRendererExists
+from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.nodes.importing import convertMaterial
+from vray_blender.operators import VRAY_OT_message_box_base
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -97,6 +100,18 @@ class VRAY_MT_cosmos(bpy.types.Menu):
         self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
 
 
+class VRAY_MT_tools(bpy.types.Menu):
+    bl_label = 'Tools'
+    bl_idname = 'VRAY_MT_tools'
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def draw(self, context):
+        self.layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
+
+
 class VRAY_MT_main(bpy.types.Menu):
     """ V-Ray menu item in main Blender menu bar """
     bl_label = "V-Ray"
@@ -125,11 +140,13 @@ class VRAY_MT_main(bpy.types.Menu):
         layout.menu(VRAY_MT_lights.bl_idname)
         layout.menu(VRAY_MT_geometry.bl_idname)
         layout.separator()
+        layout.menu(VRAY_MT_tools.bl_idname)
+        layout.separator()
         layout.menu(VRAY_MT_help.bl_idname)
         layout.operator(VRAY_OT_show_account_status.bl_idname)
 
 
-class VRAY_OT_open_collaboration(bpy.types.Operator):
+class VRAY_OT_open_collaboration(VRayOperatorBase):
     bl_idname       = "vray.open_collaboration"
     bl_label        = "Chaos Collaboration"
     bl_description  = "Open Chaos Collaboration"
@@ -146,7 +163,7 @@ class VRAY_OT_open_collaboration(bpy.types.Operator):
         vray.openCollaboration(hostInfo)
         return {'FINISHED'}
 
-class VRAY_OT_open_cosmos_browser(bpy.types.Operator):
+class VRAY_OT_open_cosmos_browser(VRayOperatorBase):
     bl_idname =      "vray.open_cosmos_browser"
     bl_label =       "Cosmos Browser"
     bl_description = "Open Cosmos Browser"
@@ -157,10 +174,14 @@ class VRAY_OT_open_cosmos_browser(bpy.types.Operator):
 
 from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy
 
-class VRAY_OT_relink_cosmos_assets(bpy.types.Operator):
+class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
     bl_idname       = "vray.relink_cosmos_assets"
-    bl_label        = "Download Cosmos Asssets"
+    bl_label        = "Download Cosmos Assets"
     bl_description  = "Download and Relink Cosmos Assets"
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context) and not activeRendererExists()
 
     def execute(self, context: bpy.types.Context):
         cosmosHandler.downloadMissingAssets(self, context)
@@ -169,7 +190,36 @@ class VRAY_OT_relink_cosmos_assets(bpy.types.Operator):
     def invoke(self, context, event):
         return cosmosHandler.checkMissingAssets(self, context, event)
 
-class VRAY_OT_open_vfb(bpy.types.Operator):
+
+class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
+    bl_idname      = "vray.convert_materials"
+    bl_label       = "Convert Materials"
+    bl_description = "Convert Cycles Materials to V-Ray"
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def execute(self, context):
+        converted = 0
+        for material in bpy.data.materials:
+            if (not material.vray.is_vray_class) and material.use_nodes: 
+                convertMaterial(material, self)
+                converted += 1
+        self.report({'INFO'}, f"Converted {converted} material(s)")
+
+        return { 'FINISHED' }
+
+    def invoke(self, context, event):
+        self._centerDialog(context, event)
+        return context.window_manager.invoke_props_dialog(self, width=300)
+    
+    def draw(self, context):
+        self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
+        self.layout.label(text="they will be deleted before the conversion.")
+
+
+class VRAY_OT_open_vfb(VRayOperatorBase):
     bl_idname =      "vray.open_vfb"
     bl_label =       "V-Ray VFB"
     bl_description = "Open VFB"
@@ -188,7 +238,7 @@ class VRAY_OT_open_vfb(bpy.types.Operator):
 
 
 
-class VRAY_OT_show_about_dialog(bpy.types.Operator):
+class VRAY_OT_show_about_dialog(VRayOperatorBase):
     bl_idname       = "vray.show_about_dialog"
     bl_label        = "About V-Ray for Blender"
     bl_description  = "About V-Ray for Blender"
@@ -209,7 +259,7 @@ class VRAY_OT_show_about_dialog(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_show_account_status(bpy.types.Operator):
+class VRAY_OT_show_account_status(VRayOperatorBase):
     bl_idname       = "vray.show_account_status"
     bl_label        = "Chaos Account"
     bl_description  = "Show Chaos Account management dialog"
@@ -244,6 +294,7 @@ def _getRegClasses():
         VRAY_OT_open_collaboration,
         VRAY_OT_open_cosmos_browser,
         VRAY_OT_relink_cosmos_assets,
+        VRAY_OT_convert_materials,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
         VRAY_OT_show_account_status,
@@ -255,6 +306,7 @@ def _getRegClasses():
         VRAY_MT_lights,
         VRAY_MT_geometry,
         VRAY_MT_cosmos,
+        VRAY_MT_tools,
         VRAY_MT_main
     )
 

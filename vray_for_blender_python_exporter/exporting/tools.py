@@ -9,9 +9,8 @@ from io import StringIO
 from xml.dom import NotFoundErr
 
 from vray_blender import debug
-from vray_blender.lib.lib_utils import LightTypeToPlugin, LightBlenderToVrayPlugin
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
-from vray_blender.nodes.tools import isCompatibleNode
+from vray_blender.nodes.tools import isCompatibleNode, isInputSocketLinked, isVrayNode
 
 
 FLOAT_SOCK_TYPES = ( "VRaySocketFloat", "VRaySocketFloatColor", "VRaySocketFloatNoValue")
@@ -67,9 +66,9 @@ def getOutSocketSelector(sock: bpy.types.NodeSocket):
     """
     from vray_blender.plugins import findPluginModule
     from vray_blender.lib.defs import AttrPlugin
-    
+
     if pluginModule := findPluginModule(sock.node.vray_plugin):
-    
+
         if not (outputs := pluginModule.Outputs):
             # Plugin has only default output
             return AttrPlugin.OUTPUT_DEFAULT
@@ -148,7 +147,6 @@ def getInputSocketByName(node:bpy.types.Node, socketName):
     assert node is not None
     return next(iter(s for s in node.inputs if s.name == socketName), None)
 
-
 def getInputSocketByAttr(node, attrName):
     """ Search for input socket by its 'vray_attr' field.
 
@@ -156,11 +154,13 @@ def getInputSocketByAttr(node, attrName):
         The found socket or None
     """
     assert node is not None
+    assert isVrayNode(node)
     try:
-        return next((s for s in node.inputs if s.vray_attr == attrName))
-    except StopIteration as ex:
-        debug.printError(f"Failed to get input socket {attrName} of node {node.name}")
-        debug.printExceptionInfo(ex)
+        return next((i for i in node.inputs if i.vray_attr == attrName), None)
+    except AttributeError as ex:
+        debug.printError(f"{node.bl_idname}::{attrName} is not a V-Ray socket")
+        return None
+        
 
 
 def getOutputSocketByAttr(node, attrName):
@@ -175,12 +175,6 @@ def getOutputSocketByAttr(node, attrName):
     except StopIteration as ex:
         debug.printError(f"Failed to get input socket {attrName} of node {node.name}")
         debug.printExceptionInfo(ex)
-
-
-def getFromNode(sock):
-    if len(sock.links) > 0:
-        return sock.links[0].from_node
-    return None
 
 
 def getGroupNode(node):
@@ -209,7 +203,7 @@ def getGroupNode(node):
     return res
 
 
-def resolveNodeSocket(socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
+def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
     """ Resolve an input socket to either another output socket or group node inputs socket
     going through all re-routes and nested groups.
 
@@ -217,44 +211,81 @@ def resolveNodeSocket(socket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | No
         The resolved socket that can be directly used for export or None if it's connected
         to an unsupported node.
     """
-    if len(socket.links) > 0:
+    if isInputSocketLinked(toSocket):
 
         # If the linked node is 'Reroute', return its link to the input socket to skip the export.
-        if fromNode := getFromNode(socket):
-            if fromNode.bl_idname == "NodeReroute":
-                return resolveNodeSocket(fromNode.inputs[0])
-            elif fromNode.bl_idname == "ShaderNodeGroup":
-                nodeGroup = fromNode.node_tree
-                groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
-                for idx, outSocket in enumerate(fromNode.outputs):
-                    if outSocket == socket.links[0].from_socket:
-                        break
-                return resolveNodeSocket(groupOutput.inputs[idx])
-            elif fromNode.bl_idname == "NodeGroupInput":
-                groupNode = getGroupNode(fromNode)
-                if not groupNode:
-                    return None
-                for idx, inSocket in enumerate(fromNode.outputs):
-                    if inSocket == socket.links[0].from_socket:
-                        break
-                return resolveNodeSocket(groupNode.inputs[idx])
-            elif not isCompatibleNode(fromNode):
-                from vray_blender.lib.defs import NodeContext
-                NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
+        fromNode = toSocket.links[0].from_node
+        
+        if fromNode.bl_idname == "NodeReroute":
+            return resolveNodeSocket(fromNode.inputs[0])
+        elif fromNode.bl_idname == "ShaderNodeGroup":
+            nodeGroup = fromNode.node_tree
+            groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+            for idx, outSocket in enumerate(fromNode.outputs):
+                if outSocket == toSocket.links[0].from_socket:
+                    break
+            return resolveNodeSocket(groupOutput.inputs[idx])
+        elif fromNode.bl_idname == "NodeGroupInput":
+            groupNode = getGroupNode(fromNode)
+            if not groupNode:
                 return None
-            else:
-                return socket
-    return socket
+            for idx, inSocket in enumerate(fromNode.outputs):
+                if inSocket == toSocket.links[0].from_socket:
+                    break
+            return resolveNodeSocket(groupNode.inputs[idx])
+        elif not isCompatibleNode(fromNode):
+            from vray_blender.lib.defs import NodeContext
+            NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
+            return None
+           
+    return toSocket
 
 
-def getNodeLink(sock: bpy.types.NodeSocket) ->bpy.types.NodeLink | None:
-    socket = resolveNodeSocket(sock)
-    if socket is not None and len(socket.links)>0:
-        return socket.links[0]
+class FarNodeLink:
+    """ Node link that can span one or more Reroute nodes. 
+        The interface is a drop-in replacement for bpy.types.NodeLink.
+    """
+    def __init__(self, fromSock: bpy.types.NodeSocket, toSock: bpy.types.NodeSocket):
+        self.from_socket  = fromSock
+        self.to_socket    = toSock
+        self.from_node    = fromSock.node
+        self.to_node      = toSock.node
+
+
+def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
+    """ Get the link between toSock and an output socket possibly
+        spanning one or more Reroute nodes.
+
+        If no output socket is found, return None.
+    """
+    socket = resolveNodeSocket(toSock)
+    if (socket is not None) and isInputSocketLinked(socket):
+        return FarNodeLink(socket.links[0].from_socket, toSock)
     return None
 
-def getLinkedFromSocket(sock):
-    if link := getNodeLink(sock):
+
+def getActiveFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
+    """ Get all far links between toSock and connected input sockets, possibly
+        spanning one or more Reroute nodes.
+    """
+    assert fromSock is not None
+    assert fromSock.is_output
+
+    def getActiveFarSockets(outSock: bpy.types.NodeSocket):
+        result = []
+        for link in [l for l in outSock.links if not l.is_muted and not l.is_hidden]:
+            if link.to_node.bl_idname != 'NodeReroute':
+                result.append(link.to_socket)
+            else:
+                result.extend(getActiveFarSockets(link.to_node.outputs[0]))
+        return result
+
+    farSocks = getActiveFarSockets(fromSock)
+    return [FarNodeLink(fromSock, s) for s in farSocks]
+
+
+def getLinkedFromSocket(toSock: bpy.types.NodeSocket):
+    if link := getFarNodeLink(toSock):
         return link.from_socket
     return None
 

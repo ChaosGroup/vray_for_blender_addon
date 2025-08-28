@@ -86,7 +86,8 @@ private:
 
 	void processControlOnImportAsset(const proto::MsgControlOnImportAsset& message);
 	void processControlOnRendererStatus(const proto::MsgControlOnRendererStatus& message);
-	void processControlOnCosmosAssetsDownloaded(const proto::MsgControlCosmosDownloadedAssets& message);
+	void processControlOnCosmosAssetsDownloaded(const proto::MsgControlOnCosmosDownloadedAssets& message);
+	void processControlOnScannedEncodedParameters(const proto::MsgControlOnScannedEncodedParameters& message);
 
 	/// Gets callback from m_pyCallbacks
 	py::object getPythonCallback(const std::string &name);

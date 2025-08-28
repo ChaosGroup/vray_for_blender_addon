@@ -1,17 +1,19 @@
-from vray_blender.exporting.node_export import exportLinkedSocket
-from vray_blender.exporting.tools import resolveNodeSocket
-from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.lib.attribute_utils import toColor
-from vray_blender.lib.plugin_utils import updateValue
-from vray_blender.lib.defs import NodeContext, PluginDesc, AttrPlugin, AttrListValue
-from vray_blender.lib.names import Names
-from vray_blender.plugins.texture.TexBitmap import getImageFilePath
 from vray_blender.bin import VRayBlenderLib as vray
-from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.exporting.mtl_export import MtlExporter
+from vray_blender.exporting.node_export import exportLinkedSocket
+from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
+from vray_blender.exporting.tools import resolveNodeSocket, FarNodeLink
+from vray_blender.lib.attribute_utils import toColor
+from vray_blender.lib.defs import AttrPlugin, NodeContext, PluginDesc
+from vray_blender.lib.export_utils import wrapAsTexture
+from vray_blender.lib.names import Names
+from vray_blender.lib.plugin_utils import updateValue
+from vray_blender.nodes.tools import isInputSocketLinked
+from vray_blender.plugins.texture.TexBitmap import getImageFilePath
+from vray_blender.plugins.texture.TexRemap import fillSplineData
+from mathutils import Color, Euler, Matrix, Vector
 
 import bpy, math
-from mathutils import Matrix, Vector, Euler, Color
 import numpy as np
 
 # There are a few things to keep in mind when adding support for a new node.
@@ -80,12 +82,9 @@ def _getResolvedSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType)
             assert False, "Unsupported socket type"
     return value if type == SocketValueType.Float else toColor(value)
 
-def _isSocketLinked(socket: bpy.types.NodeSocket):
-    # Note: Do not use this function for exporting parameters!!!
-    return socket.is_linked and not socket.links[0].is_muted
 
 def _getSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType) -> Color | float:
-    if not _isSocketLinked(socket):
+    if socket.is_output or not isInputSocketLinked(socket):
         return _getResolvedSocketValue(socket, type)
 
     if resolvedSocket := resolveNodeSocket(socket):
@@ -95,10 +94,10 @@ def _getSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType) -> Colo
 def _isSocketTexture(socket: bpy.types.NodeSocket):
     # The check the two basic cases - if we have an unmuted conneciton. Then check if the connection
     # is meaningful i.e. going to an actual node not just re-routed to a node group.
-    if not _isSocketLinked(socket):
+    if not isInputSocketLinked(socket):
         return False
     resolvedSocket = resolveNodeSocket(socket)
-    if not resolvedSocket or not _isSocketLinked(resolvedSocket):
+    if not resolvedSocket or not isInputSocketLinked(resolvedSocket):
         return False
     return True
 
@@ -164,9 +163,16 @@ def _exportCyclesMixedAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, co
         pluginDesc.setAttribute(plgParamName, BLACK_COLOR)
         return
     # If strength is 1.0 then just export the color parameter without a mix plugin.
-    if not _isSocketTexture(strengthSocket) and _getSocketValue(strengthSocket, SocketValueType.Float) == 1.0:
-        _exportCyclesColorAttribute(nodeCtx, pluginDesc, colorAttrName, plgParamName)
-        return
+    if not _isSocketTexture(strengthSocket):
+        if _getSocketValue(strengthSocket, SocketValueType.Float) == 1.0:
+            _exportCyclesColorAttribute(nodeCtx, pluginDesc, colorAttrName, plgParamName)
+            return
+        else:
+            colorSocket = nodeCtx.node.inputs[colorAttrName]
+            if not _isSocketTexture(colorSocket):
+                value = _getSocketValue(colorSocket, SocketValueType.Color) * _getSocketValue(strengthSocket, SocketValueType.Float)
+                pluginDesc.setAttribute(plgParamName, value)
+                return
 
     pluginName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
     texAColorOpDesc = PluginDesc(pluginName, "TexAColorOp")
@@ -204,8 +210,8 @@ def _exportCyclesVectorAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, v
     else:
         uvwChannelName = Names.nextVirtualNode(nodeCtx, "UVWGenChannel")
         uvwChanneDesc = PluginDesc(uvwChannelName, "UVWGenChannel")
-        uvwChanneDesc.setAttribute('uvw_channel', -1)
-        uvwChanneDesc.setAttribute('tex_transform', nodeCtx.getUVWTransform())
+        uvwChanneDesc.setAttribute("uvw_channel", -1)
+        uvwChanneDesc.setAttribute("tex_transform", nodeCtx.getUVWTransform())
         uvwgen =_exportCyclesPluginWithStats(nodeCtx, uvwChanneDesc)
 
     pluginDesc.setAttribute("uvwgen", uvwgen)
@@ -254,13 +260,120 @@ def _wrapColorFactorSocket(nodeCtx: NodeContext, factorSocket: bpy.types.NodeSoc
         texMixDesc.setAttribute("mix_map", _getSocketValue(factorSocket, SocketValueType.Color))
     return _exportCyclesPluginWithStats(nodeCtx, texMixDesc)
 
+def _exportUVWToColor(nodeCtx: NodeContext, input: AttrPlugin):
+    texUVWName = Names.nextVirtualNode(nodeCtx, "TexUVW")
+    texUVWDesc = PluginDesc(texUVWName, "TexUVW")
+    texUVWDesc.setAttribute("uvwgen", input)
+    return _exportCyclesPluginWithStats(nodeCtx, texUVWDesc)
+
 def _isSocketZero(socket):
     return not _isSocketNonZero(socket)
 
 def _isSocketNonZero(socket):
     return _isSocketTexture(socket) or _getSocketValue(socket, SocketValueType.Float) != 0.0
 
-def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
+def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+    match nodeCtx.node.bl_idname:
+        case "ShaderNodeBsdfPrincipled":
+            return _exportCyclesBsdfPrincipled(nodeCtx)
+        case "ShaderNodeBsdfDiffuse":
+            return _exportCyclesDiffuseBsdf(nodeCtx)
+        case "ShaderNodeEmission":
+            return _exportCyclesEmissionBsdf(nodeCtx)
+        case "ShaderNodeBsdfRefraction":
+            return _exportCyclesRefractiveBsdf(nodeCtx, isGlass=False)
+        case "ShaderNodeBsdfGlass":
+            return _exportCyclesRefractiveBsdf(nodeCtx, isGlass=True)
+        case "ShaderNodeBsdfSheen":
+            return _exportCyclesSheenBsdf(nodeCtx)
+        case "ShaderNodeBsdfAnisotropic":
+            return _exportCyclesGlossyBsdf(nodeCtx)
+        case "ShaderNodeAddShader":
+            return _exportCyclesBlendShaderNode(nodeCtx, isMix=False)
+        case "ShaderNodeMixShader":
+            return _exportCyclesBlendShaderNode(nodeCtx, isMix=True)
+        case "ShaderNodeTexChecker":
+            return _exportCyclesCheckerTexture(nodeCtx, nodeLink)
+        case "ShaderNodeNormalMap":
+            return _exportCyclesNormalMap(nodeCtx)
+        case "ShaderNodeMath":
+            return _exportCyclesMathNode(nodeCtx)
+        case "ShaderNodeRGB":
+            return _exportCyclesRGBNode(nodeCtx)
+        case "ShaderNodeInvert":
+            return _exportCyclesInvertNode(nodeCtx)
+        case "ShaderNodeRGBToBW":
+            return _exportCyclesRGBToBwNode(nodeCtx)
+        case "ShaderNodeTexImage":
+            return _exportCyclesImageNode(nodeCtx, nodeLink, isEnvironment=False)
+        case "ShaderNodeTexEnvironment":
+            return _exportCyclesImageNode(nodeCtx, nodeLink, isEnvironment=True)
+        case "ShaderNodeUVMap":
+            return _exportCyclesUVWMapNode(nodeCtx)
+        case "ShaderNodeCombineColor":
+            return _exportCyclesCombineColorNode(nodeCtx)
+        case "ShaderNodeCombineXYZ":
+            return _exportCyclesCombineVectorNode(nodeCtx)
+        case "ShaderNodeValToRGB":
+            return _exportCyclesRampNode(nodeCtx, nodeLink)
+        case "ShaderNodeTexGradient":
+            return _exportCyclesGradientNode(nodeCtx, nodeLink)
+        case "ShaderNodeBlackbody":
+            return _exportCyclesBlackbodyNode(nodeCtx)
+        case "ShaderNodeWireframe":
+            return _exportCyclesWireframeNode(nodeCtx)
+        case "ShaderNodeRGBCurve":
+            return _exportCyclesCurvesNode(nodeCtx, isColor=True)
+        case "ShaderNodeVectorCurve":
+            return _exportCyclesCurvesNode(nodeCtx, isColor=False)
+        case "ShaderNodeValue":
+            return _exportCyclesValueNode(nodeCtx)
+        case "ShaderNodeTexCoord":
+            return _exportCyclesTextureCoordinatesNode(nodeCtx, nodeLink)
+        case "ShaderNodeMapping":
+            return _exportCyclesMappingNode(nodeCtx)
+        case "ShaderNodeAttribute":
+            return _exportCyclesAttributeNode(nodeCtx, nodeLink)
+        case "ShaderNodeVertexColor":
+            return _exportCyclesColorAttributeNode(nodeCtx, nodeLink)
+        case "ShaderNodeNormal":
+            return _exportCyclesNormalNode(nodeCtx, nodeLink)
+        case "ShaderNodeCameraData":
+            return _exportCyclesCameraDataNode(nodeCtx, nodeLink)
+        case "ShaderNodeBevel":
+            return _exportCyclesBevelNode(nodeCtx)
+        case "ShaderNodeAmbientOcclusion":
+            return _exportCyclesAmbientOcclusionNode(nodeCtx, nodeLink)
+        case "ShaderNodeBump":
+            return _exportCyclesBumpNode(nodeCtx)
+        case "ShaderNodeObjectInfo":
+            return _exportCyclesObjectInfoNode(nodeCtx, nodeLink)
+        case "ShaderNodeNewGeometry":
+            return _exportCyclesGeometryNode(nodeCtx, nodeLink)
+        case "ShaderNodeSeparateColor":
+            return _exportCyclesSeperateColorNode(nodeCtx, nodeLink)
+        case "ShaderNodeSeparateXYZ":
+            return _exportCyclesSeperateXYZNode(nodeCtx, nodeLink)
+        case "ShaderNodeFresnel":
+            return _exportCyclesFresnelNode(nodeCtx)
+        case "ShaderNodeLayerWeight":
+            return _exportCyclesLayerWeightNode(nodeCtx, nodeLink)
+        case "ShaderNodeMix":
+            return _exportCyclesMixNode(nodeCtx)
+        case "ShaderNodeMixRGB":
+            return _exportCyclesColorMixNode(nodeCtx, isColorMix=True, isLegacy=True)
+        case "ShaderNodeClamp":
+            return _exportCyclesClampNode(nodeCtx)
+        case "ShaderNodeGamma":
+            return _exportCyclesGammaNode(nodeCtx)
+        case "ShaderNodeHueSaturation":
+            return _exportCyclesHSVNode(nodeCtx)
+        case "ShaderNodeBrightContrast":
+            return _exportCyclesBrightnessNode(nodeCtx)
+        case "ShaderNodeTexNoise":
+            return _exportCyclesNoiseNode(nodeCtx, nodeLink)
+
+def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeBsdfPrincipled = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
@@ -320,16 +433,33 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     # export.
 
     # diffuse = (1-transmission)*base color
-    invertTransmissionName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
-    invertTransmissionDesc = PluginDesc(invertTransmissionName, "TexInvertFloat")
-    _exportCyclesFloatAttribute(nodeCtx, invertTransmissionDesc, transmissionWeight, "texture")
-    invertTransmission = _exportCyclesPluginWithStats(nodeCtx, invertTransmissionDesc)
-    texAColorOpName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
-    texAColorOpDesc = PluginDesc(texAColorOpName, "TexAColorOp")
-    texAColorOpDesc.setAttribute("color_a", baseColor)
-    texAColorOpDesc.setAttribute("mult_a", invertTransmission)
-    diffuse = _exportCyclesPluginWithStats(nodeCtx, texAColorOpDesc)
-    mtlDesc.setAttribute("diffuse", diffuse)
+    if _isSocketTexture(transmissionWeight):
+        invertTransmissionName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
+        invertTransmissionDesc = PluginDesc(invertTransmissionName, "TexInvertFloat")
+        _exportCyclesFloatAttribute(nodeCtx, invertTransmissionDesc, transmissionWeight, "texture")
+        invertTransmission = _exportCyclesPluginWithStats(nodeCtx, invertTransmissionDesc)
+    else:
+        invertTransmission = 1 - transmissionWeight.default_value
+
+    simpleDiffuse=False
+    if isinstance(invertTransmission, float):
+        if isinstance(baseColor, Color):
+            mtlDesc.setAttribute("diffuse", baseColor * invertTransmission)
+            simpleDiffuse = True
+        elif invertTransmission == 1.0:
+            mtlDesc.setAttribute("diffuse", baseColor)
+            simpleDiffuse = True
+
+    if not simpleDiffuse:
+        texAColorOpName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
+        texAColorOpDesc = PluginDesc(texAColorOpName, "TexAColorOp")
+        texAColorOpDesc.setAttribute("color_a", baseColor)
+        texAColorOpDesc.setAttribute("mult_a", invertTransmission)
+        diffuse = _exportCyclesPluginWithStats(nodeCtx, texAColorOpDesc)
+        mtlDesc.setAttribute("diffuse", diffuse)
+
+    # TODO: Remove the mess above after we switch to stable/7.2
+    # mtlDesc.setAttribute("diffuse", baseColor)
 
     if node.subsurface_method != 'BURLEY':
         sssAnisotropySocket = nodeCtx.node.inputs["Subsurface Anisotropy"]
@@ -344,7 +474,13 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     # This is a bit of a mess... Ignore it for now...
     magicNumber = 1.0
     if hasTransmission and not hasSSS:
-        mtlDesc.setAttribute("fog_color_tex", baseColor)
+        # Try and use the non-textured fog_color parameter as it us supported on GPU, fog_color_tex is not.
+        if isinstance(baseColor, AttrPlugin):
+            mtlDesc.setAttribute("fog_color", WHITE_COLOR)
+            mtlDesc.setAttribute("fog_color_tex", baseColor)
+        else:
+            mtlDesc.setAttribute("fog_color", baseColor)
+            mtlDesc.setAttribute("fog_color_tex", AttrPlugin())
         mtlDesc.setAttribute("fog_depth", 1.0)
         mtlDesc.setAttribute("translucency", 0) # none
     elif not hasTransmission and hasSSS:
@@ -352,7 +488,7 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
         _exportCyclesFloatAttribute(nodeCtx, mtlDesc, sssWeightSocket, "translucency_amount")
         mtlDesc.setAttribute("translucency", 6) # sss
 
-        _exportCyclesColorAttribute(nodeCtx, mtlDesc, "Subsurface Radius", "fog_color")
+        _exportCyclesColorAttribute(nodeCtx, mtlDesc, "Subsurface Radius", "fog_color_tex")
 
         # fog_depth = sss_radius * magic number
         texFloatOpName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
@@ -444,9 +580,8 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     mtlDesc.setAttribute("option_use_roughness", True)
     mtlDesc.setAttribute("fresnel_ior_lock", True)
     mtlDesc.setAttribute("opacity_source", 0) # gray scale alpha
-    mtlDesc.setAttribute("opacity_mode", 0) # normal opacity
     mtlDesc.setAttribute("option_shading_model", 1) # openpbr for the fuzz sheen
-    mtlDesc.setAttribute("fog_unit_scale_on", False)
+    mtlDesc.setAttribute("fog_unit_scale_on", True)
     mtlDesc.setAttribute("anisotropy_derivation", 0) # local axis
     mtlDesc.setAttribute("anisotropy_axis", 2) # Z axis
     mtlDesc.setAttribute("brdf_type", 4) # ggx
@@ -456,6 +591,7 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     mtlDesc.setAttribute("self_illumination_gi", True)
     mtlDesc.setAttribute("gtr_energy_compensation", 2)
     mtlDesc.setAttribute("option_reflect_on_back", True)
+    # TODO: Enable this when switching to stable 7.2
     # mtlDesc.setAttribute("option_energy_mode", 1) # monochrome
     # TODO: Export from cycles render engine->Light Paths, these are default-ish
     mtlDesc.setAttribute("reflect_depth", 4)
@@ -466,7 +602,7 @@ def exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesDiffuseBsdf(nodeCtx: NodeContext):
+def _exportCyclesDiffuseBsdf(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
 
@@ -479,7 +615,7 @@ def exportCyclesDiffuseBsdf(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesEmissionBsdf(nodeCtx: NodeContext):
+def _exportCyclesEmissionBsdf(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFLight")
 
@@ -488,7 +624,7 @@ def exportCyclesEmissionBsdf(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesSheenBsdf(nodeCtx: NodeContext):
+def _exportCyclesSheenBsdf(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeBsdfSheen = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
@@ -510,7 +646,7 @@ def exportCyclesSheenBsdf(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesGlossyBsdf(nodeCtx: NodeContext):
+def _exportCyclesGlossyBsdf(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
 
@@ -553,7 +689,7 @@ def exportCyclesGlossyBsdf(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesRefractiveBsdf(nodeCtx: NodeContext, isGlass: bool):
+def _exportCyclesRefractiveBsdf(nodeCtx: NodeContext, isGlass: bool):
     if not isGlass:
         NodeContext.registerError("V-Ray Refractive BSDF will render different")
     pluginName = Names.treeNode(nodeCtx)
@@ -587,7 +723,7 @@ def exportCyclesRefractiveBsdf(nodeCtx: NodeContext, isGlass: bool):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesBlendShaderNode(nodeCtx: NodeContext, isMix: bool):
+def _exportCyclesBlendShaderNode(nodeCtx: NodeContext, isMix: bool):
     pluginName = Names.treeNode(nodeCtx)
     mtlDesc = PluginDesc(pluginName, "BRDFLayered")
 
@@ -617,14 +753,16 @@ def exportCyclesBlendShaderNode(nodeCtx: NodeContext, isMix: bool):
             else:
                 weight = wrapAsTexture(nodeCtx, _getSocketValue(factorSocket, SocketValueType.Color))
                 weights.append(weight)
+        else:
+            weights.append(wrapAsTexture(nodeCtx, WHITE_COLOR))
 
     mtlDesc.setAttribute("brdfs", list(reversed(brdfs)))
     mtlDesc.setAttribute("weights", list(reversed(weights)))
-    mtlDesc.setAttribute("additive_mode", not isMix)
+    mtlDesc.setAttribute("additive_mode", 1 if not isMix else 0)
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
-def exportCyclesCheckerTexture(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesCheckerTexture(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     # The blender checker node is very very very weird...
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexChecker")
@@ -660,7 +798,7 @@ def exportCyclesCheckerTexture(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLin
         checkerPlugin.output = "out_intensity"
     return checkerPlugin
 
-def exportCyclesNormalMap(nodeCtx: NodeContext):
+def _exportCyclesNormalMap(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeNormalMap = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexNormalBump")
@@ -683,7 +821,7 @@ def exportCyclesNormalMap(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesMathNode(nodeCtx: NodeContext):
+def _exportCyclesMathNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeMath = nodeCtx.node
     op = node.operation
     if op in ['SIGN', 'LESS_THAN', 'GREATER_THAN', 'COMPARE', 'SMOOTH_MIN', 'SMOOTH_MAX', 'FLOORED_MODULO', 'WRAP', 'SNAP', 'PINGPONG', 'SINH', 'COSH', 'TANH', 'MULTIPLY_ADD']:
@@ -752,7 +890,7 @@ def exportCyclesMathNode(nodeCtx: NodeContext):
 
     return attrPlugin
 
-def exportCyclesRGBNode(nodeCtx: NodeContext):
+def _exportCyclesRGBNode(nodeCtx: NodeContext):
     # Export a texture instead of returning the color directly to preserve material graph
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexAColor")
@@ -761,7 +899,7 @@ def exportCyclesRGBNode(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesRGBToBwNode(nodeCtx: NodeContext):
+def _exportCyclesRGBToBwNode(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     # V-Ray TexLuminance is a bit different than the one in blender
     texDesc = PluginDesc(pluginName, "TexLuminance")
@@ -770,7 +908,7 @@ def exportCyclesRGBToBwNode(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesInvertNode(nodeCtx: NodeContext):
+def _exportCyclesInvertNode(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexInvert")
 
@@ -842,7 +980,7 @@ def _computeImageMappingTransform(mapping: bpy.types.TexMapping):
 
     return mat @ mmat
 
-def exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink, isEnvironment = False):
+def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnvironment = False):
     node: bpy.types.ShaderNodeTexImage = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texBitmapDesc = PluginDesc(pluginName, "TexBitmap")
@@ -961,14 +1099,14 @@ def exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink, is
 
     return bitmapPlugin
 
-def exportCyclesUVWMapNode(nodeCtx: NodeContext):
+def _exportCyclesUVWMapNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeNormalMap = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     uvwgenDesc = PluginDesc(pluginName, "UVWGenMayaPlace2dTexture")
     uvwgenDesc.setAttribute("uv_set_name", node.uv_map)
     return _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc)
 
-def exportCyclesCombineColorNode(nodeCtx: NodeContext):
+def _exportCyclesCombineColorNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeCombineColor = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "Float3ToAColor")
@@ -994,7 +1132,7 @@ def exportCyclesCombineColorNode(nodeCtx: NodeContext):
         NodeContext.registerError("V-Ray does not support Combine Color nodes in HSL mode")
     return attrPlugin
 
-def exportCyclesCombineVectorNode(nodeCtx: NodeContext):
+def _exportCyclesCombineVectorNode(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "Float3ToAColor")
 
@@ -1004,7 +1142,7 @@ def exportCyclesCombineVectorNode(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesRampNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesRampNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeValToRGB = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexGradRamp")
@@ -1037,7 +1175,7 @@ def exportCyclesRampNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
         rampPlugin.output = "out_alpha"
     return rampPlugin
 
-def exportCyclesGradientNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesGradientNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeTexGradient = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexGradRamp")
@@ -1075,7 +1213,7 @@ def exportCyclesGradientNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink)
     else:
         return _exportIntensityOutput(nodeCtx, rampTex)
 
-def exportCyclesBlackbodyNode(nodeCtx: NodeContext):
+def _exportCyclesBlackbodyNode(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexTemperature")
 
@@ -1091,7 +1229,7 @@ def _exportCyclesGeneratedCoordsUVWGen(nodeCtx, fromMappingNode=True):
     uvwgenDesc.setAttribute("uvw_transform", nodeCtx.getUVWTransform())
     return _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc, fromMappingNode)
 
-def exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeTexCoord = nodeCtx.node
     fromSocket = nodeLink.from_socket
     if fromSocket.name == "Generated":
@@ -1153,14 +1291,14 @@ def exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: bpy.types
         NodeContext.registerError(f"Texture coordinates '{fromSocket.name}' are not supported")
     return None
 
-def exportCyclesWireframeNode(nodeCtx: NodeContext):
+def _exportCyclesWireframeNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeWireframe = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexEdges")
 
     sizeSocket = node.inputs["Size"]
 
-    def exportWidthTexture(widthParam, multiplier):
+    def _exportWidthTexture(widthParam, multiplier):
         if _isSocketTexture(sizeSocket):
             texFloatOpDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexFloatOp"), "TexFloatOp")
             _exportCyclesFloatAttribute(nodeCtx, texFloatOpDesc, sizeSocket, "float_a")
@@ -1175,59 +1313,20 @@ def exportCyclesWireframeNode(nodeCtx: NodeContext):
         # It seems we need to double the width in pixels mode, however, blender's node seems to
         # work directly in screen space while V-Ray does not.
         texDesc.setAttribute("width_type", 1) # pixels
-        exportWidthTexture("pixel_width", 2)
+        _exportWidthTexture("pixel_width", 2)
     else:
         # And it seems world width does the opposite to pixel width and we need half width....
         texDesc.setAttribute("width_type", 0) # world
-        exportWidthTexture("world_width", 0.5)
+        _exportWidthTexture("world_width", 0.5)
     texDesc.setAttribute("show_subtriangles", False)
     texDesc.setAttribute("show_hidden_edges", True)
 
     plugin = _exportCyclesPluginWithStats(nodeCtx, texDesc)
     return _exportIntensityOutput(nodeCtx, plugin)
 
-# This is not quite correct for bezier curves, but is close enough for now as it simply calculates a linearly
-# extrapolated point from the two next to it. For this to be correct we would need some more complex math which
-# would be easier done in the plugin itself.
-def _extrapolateToEdge(p1, p2, extend, left=True):
-    x1, y1 = p1
-    x2, y2 = p2
-
-    if left and math.isclose(x1, 0.0):
-        return None
-    if not left and math.isclose(x2, 1.0):
-        return None
-
-    if extend=='HORIZONTAL':
-        if left:
-            return (0.0, y1)
-        else:
-            return (1.0, y2)
-
-    dx = x2 - x1
-    dy = y2 - y1
-
-    if dx == 0 and dy == 0:
-        return None
-
-    if left:
-        tx = float('-inf') if dx == 0 else (0 - x1) / dx
-        ty = float('-inf') if dy == 0 else (0 - y1) / dy
-    else:
-        tx = float('inf') if dx == 0 else (1 - x1) / dx
-        ty = float('inf') if dy == 0 else (1 - y1) / dy
-
-    if left:
-        t = max(tx, ty)
-    else:
-        t = min(tx, ty)
-
-    x = x1 + t * dx
-    y = y1 + t * dy
-
-    return (x, y)
 
 def _detectSimpleSpline(curve: bpy.types.CurveMap):
+    """ Return True if the spline has only 1 points - at (0,0) and at (1,1) """
     points = curve.points
     def vector2Approx(point: Vector, v: float):
         return math.isclose(point.x, v) and math.isclose(point.y, v)
@@ -1238,57 +1337,33 @@ def _detectSimpleSpline(curve: bpy.types.CurveMap):
         return True
     return False
 
-def _getInterpolation(point: bpy.types.CurveMapPoint):
-    if point.handle_type == 'VECTOR':
-        return 0 # linear
-    else:
-        return 4 # bezier
 
-def _fillSplineData(curve: bpy.types.CurveMap, extend: str):
-    positions, values, types = [], [], []
-    left, right = None, None
-    if len(curve.points) >= 2:
-        left = _extrapolateToEdge(curve.points[0].location, curve.points[1].location, extend, True)
-        right = _extrapolateToEdge(curve.points[-2].location, curve.points[-1].location, extend, False)
 
-    if left:
-        positions.append(left[0])
-        values.append(left[1])
-        types.append(_getInterpolation(curve.points[0]))
-    for point in curve.points:
-        positions.append(point.location.x)
-        values.append(point.location.y)
-        types.append(_getInterpolation(point))
-    if right:
-        positions.append(right[0])
-        values.append(right[1])
-        types.append(_getInterpolation(curve.points[-1]))
-    return positions, values, types
 
 def _exportSplineColorData(seperateChannelSplineDesc: PluginDesc, curveMapping: bpy.types.CurveMapping):
-    rPoints, rValues, rTypes = _fillSplineData(curveMapping.curves[0], curveMapping.extend)
+    rPoints, rValues, rTypes = fillSplineData(curveMapping.curves[0], curveMapping.extend)
     seperateChannelSplineDesc.setAttribute("red_positions", rPoints)
     seperateChannelSplineDesc.setAttribute("red_values", rValues)
     seperateChannelSplineDesc.setAttribute("red_types", rTypes)
 
-    gPoints, gValues, gTypes = _fillSplineData(curveMapping.curves[1], curveMapping.extend)
+    gPoints, gValues, gTypes = fillSplineData(curveMapping.curves[1], curveMapping.extend)
     seperateChannelSplineDesc.setAttribute("green_positions", gPoints)
     seperateChannelSplineDesc.setAttribute("green_values", gValues)
     seperateChannelSplineDesc.setAttribute("green_types", gTypes)
 
-    bPoints, bValues, bTypes = _fillSplineData(curveMapping.curves[2], curveMapping.extend)
+    bPoints, bValues, bTypes = fillSplineData(curveMapping.curves[2], curveMapping.extend)
     seperateChannelSplineDesc.setAttribute("blue_positions", bPoints)
     seperateChannelSplineDesc.setAttribute("blue_values", bValues)
     seperateChannelSplineDesc.setAttribute("blue_types", bTypes)
 
-def exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
+def _exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
     node: bpy.types.ShaderNodeRGBCurve = nodeCtx.node
     # Here we might export 2 TexRemaps - one for the full Color spline and one for the seperate channels ramps
     curveMapping: bpy.types.CurveMapping = node.mapping
     colorSocket = node.inputs["Color"] if isColor else nodeCtx.node.inputs["Vector"]
     input = None
     if _isSocketTexture(colorSocket):
-        input = _exportCyclesLinkedSocket(nodeCtx, colorSocket)
+        input: AttrPlugin = _exportCyclesLinkedSocket(nodeCtx, colorSocket)
     else:
         input = _getSocketValue(colorSocket, SocketValueType.Color)
 
@@ -1301,7 +1376,7 @@ def exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
             rgbSplineDesc.setAttribute("input_color", input)
             rgbSplineDesc.setAttribute("type", 1) # remap color
 
-            positions, values, types = _fillSplineData(rgbCurve, curveMapping.extend)
+            positions, values, types = fillSplineData(rgbCurve, curveMapping.extend)
 
             for param in ["red_positions", "blue_positions", "green_positions"]:
                 rgbSplineDesc.setAttribute(param, positions)
@@ -1311,6 +1386,9 @@ def exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
                 rgbSplineDesc.setAttribute(param, types)
 
             input = _exportCyclesPluginWithStats(nodeCtx, rgbSplineDesc, True)
+    else:
+        if "UVWGen" in input.pluginType:
+            input = _exportUVWToColor(nodeCtx, input)
 
     simpleSpline = _detectSimpleSpline(curveMapping.curves[0]) and _detectSimpleSpline(curveMapping.curves[1]) and _detectSimpleSpline(curveMapping.curves[2])
     if simpleSpline:
@@ -1326,7 +1404,7 @@ def exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
 
     return _exportCyclesPluginWithStats(nodeCtx, seperateChannelSplineDesc, True)
 
-def exportCyclesValueNode(nodeCtx: NodeContext):
+def _exportCyclesValueNode(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "FloatToTex")
 
@@ -1334,7 +1412,7 @@ def exportCyclesValueNode(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesMappingNode(nodeCtx: NodeContext):
+def _exportCyclesMappingNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeMapping = nodeCtx.node
 
     location = node.inputs["Location"] if "Location" in node.inputs else None
@@ -1368,7 +1446,7 @@ def exportCyclesMappingNode(nodeCtx: NodeContext):
     texDesc.setAttribute("operation", 4) # point matrix prod
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def _exportCyclesAttributeNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink, attribute: str):
+def _exportCyclesAttributeNodeHelper(nodeCtx: NodeContext, nodeLink: FarNodeLink, attribute: str):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexUserColor")
@@ -1385,11 +1463,11 @@ def _exportCyclesAttributeNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLin
         texAColorOp.output = "alpha"
         return texAColorOp
 
-def exportCyclesAttributeNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesAttributeNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeAttribute = nodeCtx.node
     fromSocket = nodeLink.from_socket
     if fromSocket.name == "Color" or fromSocket.name == "Vector" or fromSocket.name == "Alpha":
-        return _exportCyclesAttributeNode(nodeCtx, nodeLink, node.attribute_name)
+        return _exportCyclesAttributeNodeHelper(nodeCtx, nodeLink, node.attribute_name)
     elif fromSocket.name == "Fac":
         pluginName = Names.treeNode(nodeCtx)
         texDesc = PluginDesc(pluginName, "TexUserColor")
@@ -1404,11 +1482,11 @@ def exportCyclesAttributeNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink
         texAColorOp.output = "intensity"
         return texAColorOp
 
-def exportCyclesColorAttributeNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesColorAttributeNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeVertexColor = nodeCtx.node
-    return _exportCyclesAttributeNode(nodeCtx, nodeLink, node.layer_name)
+    return _exportCyclesAttributeNodeHelper(nodeCtx, nodeLink, node.layer_name)
 
-def exportCyclesNormalNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesNormalNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexVectorProduct")
@@ -1425,7 +1503,7 @@ def exportCyclesNormalNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
         return _exportIntensityOutput(nodeCtx, plugin)
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesCameraDataNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesCameraDataNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexSampler")
@@ -1446,7 +1524,7 @@ def exportCyclesCameraDataNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLin
         NodeContext.registerError(f"Camera Data {fromSocket.name} output is not supported")
     return texVectorProduct
 
-def exportCyclesBevelNode(nodeCtx: NodeContext):
+def _exportCyclesBevelNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeBevel = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     texEdgesDesc = PluginDesc(pluginName, "TexEdges")
@@ -1477,7 +1555,7 @@ def exportCyclesBevelNode(nodeCtx: NodeContext):
     # normalBumpDesc.setAttribute("normal_uvwgen_auto", True)
     return _exportCyclesPluginWithStats(nodeCtx, normalBumpDesc)
 
-def exportCyclesAmbientOcclusionNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesAmbientOcclusionNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeAmbientOcclusion = nodeCtx.node
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
@@ -1503,7 +1581,7 @@ def exportCyclesAmbientOcclusionNode(nodeCtx: NodeContext, nodeLink: bpy.types.N
         return _exportIntensityOutput(nodeCtx, texDirt)
     return texDirt
 
-def exportCyclesBumpNode(nodeCtx: NodeContext):
+def _exportCyclesBumpNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeBump = nodeCtx.node
     strengthSocket = node.inputs["Strength"]
     distanceSocket = node.inputs["Distance"]
@@ -1571,7 +1649,7 @@ def exportCyclesBumpNode(nodeCtx: NodeContext):
 
     return texNormalBump
 
-def exportCyclesObjectInfoNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesObjectInfoNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexSampler")
@@ -1588,7 +1666,7 @@ def exportCyclesObjectInfoNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLin
         NodeContext.registerError(f"Object Info {fromSocket.name} output is not supported by V-Ray")
     return texSampler
 
-def exportCyclesGeometryNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesGeometryNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexSampler")
@@ -1617,7 +1695,7 @@ def exportCyclesGeometryNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink)
         return _wrapVectorToColor(nodeCtx, texSampler)
     return texSampler
 
-def exportCyclesSeperateColorNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesSeperateColorNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeSeparateColor = nodeCtx.node
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
@@ -1642,10 +1720,15 @@ def exportCyclesSeperateColorNode(nodeCtx: NodeContext, nodeLink: bpy.types.Node
         texAColorOp.output = "blue"
     return texAColorOp
 
-def exportCyclesSeperateXYZNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesSeperateXYZNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexAColorOp")
+    vectorSocket = nodeCtx.node.inputs["Vector"]
+    value = _exportCyclesLinkedSocket(nodeCtx, vectorSocket) if _isSocketTexture(vectorSocket) else _getSocketValue(vectorSocket, SocketValueType.Color)
+    if value is not None and isinstance(value, AttrPlugin) and "UVWGen" in value.pluginType:
+        value = _exportUVWToColor(nodeCtx, value)
+    texDesc.setAttribute("color_a", value)
     texAColorOp = _exportCyclesPluginWithStats(nodeCtx, texDesc)
     texAColorOp.output = "red"
     if fromSocket.name == "X":
@@ -1656,7 +1739,7 @@ def exportCyclesSeperateXYZNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLi
         texAColorOp.output = "blue"
     return texAColorOp
 
-def exportCyclesFresnelNode(nodeCtx: NodeContext):
+def _exportCyclesFresnelNode(nodeCtx: NodeContext):
     NodeContext.registerError("V-Ray Fresnel will render differently, you may need to adjust your IOR values")
 
     pluginName = Names.treeNode(nodeCtx)
@@ -1698,7 +1781,7 @@ def _exportLayerWeightBias(nodeCtx: NodeContext, input: AttrPlugin):
         texInvertDesc.setAttribute("texture", texFloatOp)
         return _exportCyclesPluginWithStats(nodeCtx, texInvertDesc)
 
-def exportCyclesLayerWeightNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesLayerWeightNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     fromSocket = nodeLink.from_socket
     pluginName = Names.treeNode(nodeCtx)
 
@@ -1719,7 +1802,7 @@ def exportCyclesLayerWeightNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLi
 
     return 0.0
 
-def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool):
+def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool, isLegacy=False):
     node: bpy.types.ShaderNodeMix = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
     # TexLayeredMax with 2 layers as it seems to be the only texture supporting all modes
@@ -1775,10 +1858,13 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool):
         else:
             return wrapAsTexture(nodeCtx, _getSocketValue(socket, SocketValueType.Color))
 
-    factorSocket = nodeCtx.node.inputs["Factor"]
+    if isLegacy:
+        factorSocket = nodeCtx.node.inputs["Fac"]
+    else:
+        factorSocket = nodeCtx.node.inputs["Factor"]
     if isColorMix or node.factor_mode=='UNIFORM':
         factor = _exportCyclesLinkedSocket(nodeCtx, factorSocket) if _isSocketTexture(factorSocket) else _getSocketValue(factorSocket, SocketValueType.Float)
-        if node.clamp_factor:
+        if not isLegacy and node.clamp_factor:
             factor = _wrapClampPlugin01(nodeCtx, factor)
         floatToColor = _wrapFloatToColor(nodeCtx, factor)
         masks = [wrapAsTexture(nodeCtx, WHITE_COLOR), floatToColor]
@@ -1791,7 +1877,10 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool):
         else:
             masks = [wrapAsTexture(nodeCtx, WHITE_COLOR), wrapAsTexture(nodeCtx, _getSocketValue(factorSocket, SocketValueType.Color))]
 
-    A, B = node.inputs["A"], node.inputs["B"]
+    if isLegacy:
+        A, B = node.inputs["Color1"], node.inputs["Color2"]
+    else:
+        A, B = node.inputs["A"], node.inputs["B"]
     textures = [wrapMixInput(A), wrapMixInput(B)]
     texDesc.setAttribute("blend_modes", blendModes)
     texDesc.setAttribute("textures", textures)
@@ -1802,8 +1891,8 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool):
     else:
         texDesc.setAttribute("allow_negative_colors", False)
 
-    plugin = _exportCyclesPluginWithStats(nodeCtx, texDesc)
-    if isColorMix and node.clamp_result:
+    plugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
+    if isColorMix and (node.use_clamp if isLegacy else node.clamp_result):
         texClampName = Names.nextVirtualNode(nodeCtx, "TexClamp")
         texClampDesc = PluginDesc(texClampName, "TexClamp")
         texClampDesc.setAttribute("texture", plugin)
@@ -1843,9 +1932,9 @@ def _exportCyclesFloatMixNode(nodeCtx: NodeContext):
     bTex = _exportCyclesPluginWithStats(nodeCtx, bTexDesc)
     texDesc.setAttribute("float_b", bTex)
 
-    return _exportCyclesPluginWithStats(nodeCtx, texDesc)
+    return _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
 
-def exportCyclesMixNode(nodeCtx: NodeContext):
+def _exportCyclesMixNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeMix = nodeCtx.node
     if node.data_type == 'RGBA':
         return _exportCyclesColorMixNode(nodeCtx, True)
@@ -1854,7 +1943,7 @@ def exportCyclesMixNode(nodeCtx: NodeContext):
     elif node.data_type == 'FLOAT':
         return _exportCyclesFloatMixNode(nodeCtx)
 
-def exportCyclesClampNode(nodeCtx: NodeContext):
+def _exportCyclesClampNode(nodeCtx: NodeContext):
     valueSocket = nodeCtx.node.inputs["Value"]
     value = _exportCyclesLinkedSocket(nodeCtx, valueSocket) if _isSocketTexture(valueSocket) else _getSocketValue(valueSocket, SocketValueType.Float)
     minSocket = nodeCtx.node.inputs["Min"]
@@ -1863,7 +1952,7 @@ def exportCyclesClampNode(nodeCtx: NodeContext):
     max = _exportCyclesLinkedSocket(nodeCtx, maxSocket) if _isSocketTexture(maxSocket) else _getSocketValue(maxSocket, SocketValueType.Float)
     return _wrapClampPlugin(nodeCtx, value, min, max)
 
-def exportCyclesHSVNode(nodeCtx: NodeContext):
+def _exportCyclesHSVNode(nodeCtx: NodeContext):
     # Note that this public is different than the one used by VBLD but support everything needed.
     texName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(texName, "TexColorCorrect")
@@ -1890,7 +1979,7 @@ def exportCyclesHSVNode(nodeCtx: NodeContext):
     factorSocket = nodeCtx.node.inputs["Fac"]
     return _wrapColorFactorSocket(nodeCtx, factorSocket, inputColor, colorCorrect)
 
-def exportCyclesGammaNode(nodeCtx: NodeContext):
+def _exportCyclesGammaNode(nodeCtx: NodeContext):
     texName = Names.treeNode(nodeCtx)
     # Note that this plugin is different than the one used by VBLD but support everything needed.
     texDesc = PluginDesc(texName, "TexColorCorrect")
@@ -1901,13 +1990,15 @@ def exportCyclesGammaNode(nodeCtx: NodeContext):
         invertDesc.setAttribute("float_a", 1.0)
         invertDesc.setAttribute("mode", 1) # ratio
         gamma = _exportCyclesPluginWithStats(nodeCtx, invertDesc)
+        gamma = _wrapFloatToColor(gamma)
         texDesc.setAttribute("col_gamma", gamma)
     else:
-        texDesc.setAttribute("col_gamma", 1.0 / _getSocketValue(gammaSocket, SocketValueType.Float))
+        gamma = 1.0 / _getSocketValue(gammaSocket, SocketValueType.Float)
+        texDesc.setAttribute("col_gamma", Color((gamma, gamma, gamma)))
     _exportCyclesColorAttribute(nodeCtx, texDesc, "Color", "in_color")
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesBrightnessNode(nodeCtx: NodeContext):
+def _exportCyclesBrightnessNode(nodeCtx: NodeContext):
     texName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(texName, "ColorCorrection")
     contrastSocket = nodeCtx.node.inputs["Contrast"]
@@ -1919,7 +2010,7 @@ def exportCyclesBrightnessNode(nodeCtx: NodeContext):
     _exportCyclesColorAttribute(nodeCtx, texDesc, "Color", "texture_map")
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def exportCyclesNoiseNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportCyclesNoiseNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     # The node is not at all well supported but allow export for it since it's commonly used.
     NodeContext.registerError("Noise is not well supported by V-Ray. You may need you adjust your setup")
     fromSocket = nodeLink.from_socket

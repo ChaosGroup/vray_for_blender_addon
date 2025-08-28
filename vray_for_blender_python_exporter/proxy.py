@@ -8,9 +8,10 @@ import bpy
 from vray_blender import debug
 from vray_blender.lib import blender_utils
 from vray_blender.vray_tools import vray_proxy
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
-class VRAY_OT_object_rotate_to_flip(bpy.types.Operator):
+class VRAY_OT_object_rotate_to_flip(VRayOperatorBase):
     bl_idname      = "vray.object_rotate_to_flip"
     bl_label       = "Rotate Object"
     bl_description = "Rotate object to flip axis"
@@ -29,7 +30,7 @@ class VRAY_OT_object_rotate_to_flip(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_vrayscene_load_preview(bpy.types.Operator):
+class VRAY_OT_vrayscene_load_preview(VRayOperatorBase):
     bl_idname      = "vray.vrayscene_load_preview"
     bl_label       = "Load VRayScene Preview"
     bl_description = "Load VRayScene preview from *.vrscene file"
@@ -45,7 +46,7 @@ class VRAY_OT_vrayscene_load_preview(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_proxy_load_preview(bpy.types.Operator):
+class VRAY_OT_proxy_load_preview(VRayOperatorBase):
     bl_idname      = "vray.proxy_load_preview"
     bl_label       = "Load Preview"
     bl_description = "Load VRayProxy preview from .vrmesh or .abc file"
@@ -77,7 +78,7 @@ class VRAY_OT_proxy_load_preview(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_proxy_generate_preview(bpy.types.Operator):
+class VRAY_OT_proxy_generate_preview(VRayOperatorBase):
     bl_idname      = "vray.proxy_generate_preview"
     bl_label       = "Generate VRayProxy Preview"
     bl_description = "Generate preview mesh for a VRayProxy object and load it into the scene"
@@ -106,7 +107,7 @@ class VRAY_OT_proxy_generate_preview(bpy.types.Operator):
     
 
 
-class VRAY_OT_vrayscene_generate_preview(bpy.types.Operator):
+class VRAY_OT_vrayscene_generate_preview(VRayOperatorBase):
     bl_idname      = "vray.vrayscene_generate_preview"
     bl_label       = "Generate VRayScene Preview"
     bl_description = "Generate preview mesh for a VRayScene object and load it into the scene"

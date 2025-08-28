@@ -2,8 +2,9 @@
 import bpy
 
 from vray_blender.lib.sys_utils import isGPUEngine
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import RGBA_SOCKET_COLOR, addInput, addOutput, VRayValueSocket
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.plugins import getPluginModule, getPluginAttr
 
 
@@ -71,8 +72,8 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
 
     def _drawGPU(self, context, layout: bpy.types.UILayout, node, text):
         
-        if self.is_linked:
-            # For GPU renders, the blend between texrure and color does not work. The _mult property
+        if isInputSocketLinked(self):
+            # For GPU renders, the blend between texture and color does not work. The _mult property
             # is a simple multiplier for the color. Do not show the color in this case.
             row = layout.split(factor=0.935, align=True)
             row.prop(self, 'multiplier', text=text)

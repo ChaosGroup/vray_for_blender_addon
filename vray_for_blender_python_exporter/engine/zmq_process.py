@@ -29,7 +29,7 @@ class ZMQProcess:
 
     def _getDumpInfoLogFile(self):
         from vray_blender.lib.path_utils import getV4BTempDir
-        
+
         if zmqLog := sys_utils.StartupConfig.zmqServerLog:
             return zmqLog
 
@@ -37,7 +37,7 @@ class ZMQProcess:
             # The {pid} pattern will be replaced by the process id of ZmqServer, so that each instance
             # had its own log file.
             return os.path.join(getV4BTempDir(), "dumpInfoLog_{pid}.txt")
-        
+
         return ""
 
     @staticmethod
@@ -53,9 +53,9 @@ class ZMQProcess:
             debug.reportAsync('WARNING', "Restart is required! V-Ray internal error occurred.")
 
     def _start(self):
-        from vray_blender.nodes.operators.import_file import assetImportCallback
-        from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus
+        from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus, assetImportCallback
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
+        from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
 
         self._startServerProcess()
 
@@ -66,17 +66,21 @@ class ZMQProcess:
         vray.setCosmosDownloadSize(self.cosmosDownloadSize)
         self.downloadedCosmosAssets = lambda downloadStatus, assets: cosmosHandler._setCosmosDownloadedAssets(CosmosDownloadStatus(downloadStatus), assets)
         vray.setCosmosDownloadAssets(self.downloadedCosmosAssets)
+        self.scannedLicenseCallback = lambda licensed: scannedLicenseCallback(licensed)
+        vray.setScannedLicenseCallback(self.scannedLicenseCallback)
+        self.scannedParamBlockCallback = lambda materialId, nodeName, paramBlock: scannedParamBlockCallback(materialId, nodeName, paramBlock)
+        vray.setScannedParamBlockCallback(self.scannedParamBlockCallback)
 
          # VFB start button callback
         self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport else VfbEventHandler.startProdRender()
         vray.setRenderStartCallback(self.renderStartCallback)
-        
+
         # Abort-all-renders callback (e.g. if ZmqServer crashes)
         vray.setZmqServerAbortCallback(ZMQProcess._zmqServerAbortCallback)
 
         self._updateVFBSettings = lambda vfbSettings: VfbEventHandler.updateVfbSettings(vfbSettings)
         vray.setVfbSettingsUpdateCallback( self._updateVFBSettings)
-        
+
         self._updateVFBLayers = lambda vfbLayers: VfbEventHandler.updateVfbLayers(vfbLayers)
         vray.setVfbLayersUpdateCallback( self._updateVFBLayers )
 
@@ -88,12 +92,12 @@ class ZMQProcess:
                                 'immediately if there are pending production jobs.' )
             vray.ZmqControlConn.stop()
             ZMQProcess._started = False
-    
+
 
     @staticmethod
     def isRunning():
         return vray.ZmqControlConn.check()
-    
+
 
     def _startServerProcess(self):
         assert not ZMQProcess._started
@@ -200,7 +204,7 @@ class ZMQProcess:
                 return False
             zmqServerChecks -= 1
             time.sleep(0.5)
-        
+
         return True
-    
+
 ZMQ = ZMQProcess()

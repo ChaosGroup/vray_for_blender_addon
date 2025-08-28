@@ -221,15 +221,16 @@ using SmokeDataPtr = std::shared_ptr<SmokeData>;
 
 
 /// Info for the ExportScene render action
-struct ExportSceneSettings 
+struct ExportSceneSettings
 {
 	PROPERTY(bool, compressed    , true)
 	PROPERTY(bool, hexArrays     , true)
 	PROPERTY(bool, hexTransforms , false)
 	PROPERTY(bool, separateFiles , false)
+	PROPERTY(bool, cloudExport   , false)
 	PROPERTY(std::string, hostAppString, "")
 	PROPERTY(std::string, filePath, "")
-	
+
 	// A comma-separated list of categories from
 	// {"view", "lights", "geometry", "nodes", "materials", "textures", "bitmaps", "render_elements"}
 	PROPERTY(std::string, pluginTypes, "")

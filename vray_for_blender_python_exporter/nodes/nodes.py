@@ -1,16 +1,20 @@
+from dataclasses import dataclass
+
 import bpy
 import nodeitems_utils
 
 from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
-from vray_blender.nodes import utils as NodeUtils, specials, mixin
+from vray_blender.nodes import utils as NodeUtils, specials
+from vray_blender.nodes.tools import isVrayNode
+from vray_blender.nodes.sockets import STRUCTURAL_SOCKET_CLASSES
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget
 from vray_blender.lib import class_utils, draw_utils, blender_utils
 from vray_blender.lib.names import syncObjectUniqueName
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
-from vray_blender.plugins.skipped_plugins import MANUALLY_CREATED_PLUGINS, SKIPPED_PLUGINS
-
+from vray_blender.plugins.skipped_plugins import MANUALLY_CREATED_PLUGINS, SKIPPED_PLUGINS, HIDDEN_PLUGINS
 
 
 VRayNodeTypes = {
@@ -36,10 +40,40 @@ VRayNodeTypeIcon = {
     'RENDERCHANNEL' : 'SCENE_DATA',
 }
 
+@dataclass
+class _NewLinkInfo:
+    nodeTree: bpy.types.NodeTree
+    fromNodeName: str
+    fromSocketName: str
+    toNodeName: str
+    toSocketName: str
 
-# A list of tuple(node_tree, link) for links that are deemed invalid and need to be deleted.
-InvalidLinks = []
 
+class _InvalidLinkInfo (_NewLinkInfo):
+
+    def __init__(self, nodeTree, link):
+        super().__init__(nodeTree, link.from_node.name, link.to_node.name, link.from_socket.name, link.to_socket.name)
+        self.link = link
+        
+
+    def isSameAs(self, newLinkInfo: _NewLinkInfo):
+        return  newLinkInfo.fromNodeName    == self.fromNodeName and    \
+                newLinkInfo.toNodeName      == self.toNodeName and      \
+                newLinkInfo.fromSocketName  == self.fromSocketName and  \
+                newLinkInfo.toSocketName    == self.toSocketName
+    
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+        
+    def __hash__(self):
+        return hash(f"{self.nodeTree.session_uid}_{self.fromNodeName}_{self.toNodeName}_{self.fromSocketName}_{self.toSocketName}")
+    
+
+# A list of links that are deemed invalid and need to be deleted.
+_InvalidLinks: set[_InvalidLinkInfo] = set()
+
+# A list of links created for nodes with a nodeInsertLink callback
+_NewlyCreatedLinks: list[_NewLinkInfo] = []
 
 ##     ## ######## ##    ## ##     ##
 ###   ### ##       ###   ## ##     ##
@@ -135,7 +169,7 @@ class VRayNodeRenderChannelCategory(nodeitems_utils.NodeItem):
 def buildItemsList(nodeType, subType=None):
     def _hidePlugin(pluginName):
 
-        if pluginName in SKIPPED_PLUGINS:
+        if pluginName in SKIPPED_PLUGINS or pluginName in HIDDEN_PLUGINS:
             return True
 
         # App specific
@@ -203,6 +237,7 @@ def getMaterialItemsList():
         _getMtlByTypeAndLabel("BRDF", "V-Ray Hair Next Mtl"),
         _getMtlByTypeAndLabel("BRDF", "V-Ray Car Paint 2 Mtl"),
         _getMtlByTypeAndLabel("BRDF", "V-Ray Flakes 2 Mtl"),
+        _getMtlByTypeAndLabel("BRDF", "V-Ray Scanned Mtl"),
         _getMtlByTypeAndLabel("BRDF", "V-Ray Stochastic Flakes Mtl"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Switch Mtl"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl 2Sided"),
@@ -322,7 +357,6 @@ def getCategories():
             "Layout",
             items = [
                 nodeitems_utils.NodeItem("VRayPluginListHolder"),
-                nodeitems_utils.NodeItem("VRayNodeDebugSwitch"),
                 nodeitems_utils.NodeItem("NodeFrame"),
                 nodeitems_utils.NodeItem("NodeReroute"),
             ],
@@ -397,6 +431,26 @@ def updateRenderChannelsState(node, enabled):
         renderChannels.enabled = renderChannels.nodesCount >= 1
 
 
+def setUniqueRenderChannelName(node: bpy.types.Node, isNewNode: bool):
+    """ Set a unique channel name. By default, the name of the channel is set to be
+        the name as the name of the render channel. If this name is already in use for another 
+        render channel however, create a new unique name by adding a numeric suffix. 
+    """
+    propGroup = NodeUtils.getVrayPropGroup(node)
+    channelName = propGroup.name
+    
+    attempt = 1
+    while any([n for n in node.id_data.nodes if isVrayNode(n) and (n.vray_type == 'RENDERCHANNEL') \
+                                                and n != node \
+                                                and NodeUtils.getVrayPropGroup(n).name == channelName]):
+        channelName = f"{propGroup.name} {attempt}"
+        attempt += 1
+
+    # Prevent infinite recursion
+    if propGroup.name != channelName:
+        propGroup.name = channelName 
+
+
 def _initTemplates(node, pluginModule):
     if not (propGroup := NodeUtils.getVrayPropGroup(node)):
         return
@@ -428,6 +482,7 @@ def vrayNodeInit(self, context):
 
         if self.vray_type == 'RENDERCHANNEL':
             updateRenderChannelsState(self, True)
+            setUniqueRenderChannelName(self, isNewNode = True)
         
         if hasattr(pluginModule, "nodeInit"):
             # Give the node a chance to initialize plugin-specific state
@@ -462,10 +517,7 @@ def vrayNodeCopy(self, node):
 
     # Assign unique names to copied render channel nodes.
     if hasattr(node, 'vray_type') and node.vray_type == "RENDERCHANNEL":
-        # By default, the render channel node labels ('bpy.types.Node.name') are the same as the render channel plugin names.
-        # When a node is copied, Blender automatically adds a unique suffix to the copied node's label.
-        # This modified label is suitable for use as a unique channel name.
-        propGroupCopy["name"] = self.name
+        setUniqueRenderChannelName(self, isNewNode = True)
    
 
 def vrayNodeFree(self: bpy.types.Node):
@@ -494,6 +546,11 @@ def vrayNodeUpdate(node: bpy.types.Node):
     # to manually tag the nodetree as having been updated
     parentNodeTree = node.id_data
 
+    # Call custom nodeUpdate() function, if defined
+    pluginModule = getPluginModule(node.vray_plugin)
+    if hasattr(pluginModule, "nodeUpdate"):
+        pluginModule.nodeUpdate(node)
+
     # For V-Ray nodes, update the object whose nodetree has changed
     if hasattr(parentNodeTree, 'vray'):
         match parentNodeTree.vray.tree_type:
@@ -521,29 +578,78 @@ def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink):
         This insert_link callback is registered in VRayNodeBase and calls this 
         function to process the event.
     """
+    global STRUCTURAL_SOCKET_CLASSES
+    assert type(link) is bpy.types.NodeLink
+    
     from vray_blender.nodes.tools import isCompatibleNode
     
-    incompatibleNode = None
+    isLinkValid = False
+
     if (node == link.to_node) and  (not isCompatibleNode(link.from_node)):
-        incompatibleNode = link.from_node
-        
-    if (node == link.from_node) and  (not isCompatibleNode(link.to_node)):
-        incompatibleNode = link.to_node
+        debug.report('WARNING', f"Node '{link.from_node.name}' not compatible with V-Ray node tree")
+    elif (node == link.from_node) and  (not isCompatibleNode(link.to_node)):
+        debug.report('WARNING', f"Node '{link.to_node.name}' not compatible with V-Ray node tree")
+    elif link.to_socket.bl_idname in STRUCTURAL_SOCKET_CLASSES.values():
+        pass
+    else:
+        isLinkValid = True
 
-    if incompatibleNode:
-        global InvalidLinks
-        InvalidLinks.append((node.id_data, link))
-        debug.report('WARNING', f"Cannot link non V-Ray node '{incompatibleNode.name}'")
+    if not isLinkValid:
+        global _InvalidLinks
+        _InvalidLinks.add(_InvalidLinkInfo(node.id_data, link))
 
-
-def removeInvalidNodeLinks():
-    """ Delete invalid links from the scene """
-    global InvalidLinks
-    for l in InvalidLinks:
-        l[0].links.remove(l[1])
-
-    InvalidLinks = []
     
+    # Store newly created links for nodes that have registered a custom nodeInsertLink callback
+    if getattr(node, 'vray_plugin', 'NONE') == 'NONE':
+        return
+    
+    pluginModule = getPluginModule(node.vray_plugin)
+
+    if hasattr(pluginModule, "nodeInsertLink"):
+        global _NewlyCreatedLinks
+        # Give the node a chance to initialize plugin-specific state. At this point, 
+        # the 'link' parameter is not a real link yet and we cannot store it for later use.
+        # Store the node tree and the names of the node and the socket which could
+        # be used later to find the correct socket.
+        _NewlyCreatedLinks.append(_NewLinkInfo(node.id_data, 
+                                               link.from_node.name,
+                                               link.from_socket.name,
+                                               link.to_node.name, 
+                                               link.to_socket.name))
+
+
+def updateNodeLinks():
+    """ Delete invalid links from the scene """
+    global _InvalidLinks, _NewlyCreatedLinks
+
+    # Invoke the callback for the newly created links
+    for linkInfo in _NewlyCreatedLinks:
+        if any(l for l in _InvalidLinks if l.isSameAs(linkInfo)):\
+            # This is a link that will be removed in the next step
+            continue
+
+        fromNode = linkInfo.nodeTree.nodes[linkInfo.fromNodeName]
+        toNode = linkInfo.nodeTree.nodes[linkInfo.toNodeName]
+
+        if (toPluginType := getattr(toNode, 'vray_plugin', 'NONE')) != 'NONE':
+            
+            pluginModule = getPluginModule(toPluginType)
+            
+            assert hasattr(pluginModule, "nodeInsertLink")
+            fromSocket = fromNode.outputs[linkInfo.fromSocketName]
+            toSocket = toNode.inputs[linkInfo.toSocketName]
+
+            if link := NodeUtils.getNearLink(fromSocket, toSocket):
+                pluginModule.nodeInsertLink(link)
+
+    # Remove links between incompatible sockets
+    for linkInfo in _InvalidLinks:
+        linkInfo.nodeTree.links.remove(linkInfo.link)
+
+    _NewlyCreatedLinks = []
+    _InvalidLinks = set()
+    
+
 
 ########  ##    ## ##    ##    ###    ##     ## ####  ######     ##    ##  #######  ########  ########  ######
 ##     ##  ##  ##  ###   ##   ## ##   ###   ###  ##  ##    ##    ###   ## ##     ## ##     ## ##       ##    ##
@@ -602,7 +708,7 @@ def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, me
 
     return type(
         className,                # Name
-        (mixin.VRayNodeBase,),    # Inheritance
+        (VRayNodeBase,),    # Inheritance
         DynNodeClassAttrs         # Attributes
     )
 

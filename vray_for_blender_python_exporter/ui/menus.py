@@ -17,8 +17,9 @@ from vray_blender.menu import VRAY_OT_open_vfb
 from vray_blender.vray_tools import vray_proxy
 
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.lib.mixin import VRayOperatorBase
 
-class VRAY_OT_set_view(bpy.types.Operator):
+class VRAY_OT_set_view(VRayOperatorBase):
     bl_idname = "vray.set_view"
     bl_label = "Set View"
 
@@ -29,7 +30,7 @@ class VRAY_OT_set_view(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_set_camera(bpy.types.Operator):
+class VRAY_OT_set_camera(VRayOperatorBase):
     bl_idname = "vray.set_camera"
     bl_label = "Set Active Camera"
 
@@ -43,7 +44,7 @@ class VRAY_OT_set_camera(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_select_camera(bpy.types.Operator):
+class VRAY_OT_select_camera(VRayOperatorBase):
     bl_idname = "vray.select_camera"
     bl_label = "Select Active Camera"
 
@@ -53,7 +54,7 @@ class VRAY_OT_select_camera(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_camera_lock_unlock_view(bpy.types.Operator):
+class VRAY_OT_camera_lock_unlock_view(VRayOperatorBase):
     bl_idname = "vray.camera_lock_unlock_view"
     bl_label = "Lock / Unlock Camera To View"
 
@@ -65,13 +66,9 @@ class VRAY_OT_camera_lock_unlock_view(bpy.types.Operator):
 ####### OPERATORS FOR LIGHT CREATION ##########
 ###############################################
 
-class VRAY_OT_add_object_vray_light(bpy.types.Operator):
+class VRAY_OT_add_object_vray_light(VRayOperatorBase):
     bl_idname = "vray.add_object_vray_light"
     bl_label = "Add V-Ray Light"
-    
-    @classmethod
-    def poll(cls, context):
-        return classes.pollEngine(context)
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -343,7 +340,7 @@ def addVRayLightsToMenu(self, context):
 ####### OPERATORS FOR CAMERA CREATION #########
 ###############################################
 
-class VRAY_OT_add_physical_camera(bpy.types.Operator):
+class VRAY_OT_add_physical_camera(VRayOperatorBase):
     bl_idname = "vray.add_physical_camera"
     bl_label = "Add V-Ray Physical Camera"
     bl_description = "Add V-Ray Physical Camera"
@@ -370,7 +367,7 @@ class VRAY_OT_add_physical_camera(bpy.types.Operator):
 ####### OPERATORS FOR PROXY CREATION ##########
 ###############################################
 
-class VRAY_OT_add_object_proxy(bpy.types.Operator):
+class VRAY_OT_add_object_proxy(VRayOperatorBase):
     """ Show FileSelect dialog for file types supported by GeomMeshFile and import the selected file """
 
     bl_idname = "vray.add_object_proxy"
@@ -400,7 +397,7 @@ class VRAY_OT_add_object_proxy(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_add_object_vrayscene(bpy.types.Operator):
+class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
     """ Show FileSelect dialog for .vrscene files and import the selected file """
     
     bl_idname = "vray.add_object_vrayscene"

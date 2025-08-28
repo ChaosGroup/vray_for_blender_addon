@@ -1,41 +1,70 @@
-import bpy
 from vray_blender.lib import plugin_utils, export_utils
 from vray_blender.lib.defs import PluginDesc
-from vray_blender.nodes import utils as NodesUtils, filters
+from vray_blender.nodes import utils as NodesUtils
 from vray_blender.nodes import tree_defaults
 
 from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
-def _updatePropPlugins(src, context, pluginName, pluginUseProp, locationY):
-    if obj := context.active_object:
+
+def _propSetter(propGroup, pluginName, locationY, useProp):
+    """ If 'useProp' is True, connects a 'VRayNodeObject{pluginName}Props' node to the Object node tree.
+        If 'useProp' is False, disconnects and removes any such node already connected.
+    """
+
+    if obj := propGroup.id_data:
         if not obj.vray.ntree:
             tree_defaults.addObjectNodeTree(obj)
+        
+        objTree = obj.vray.ntree
+        objOutput = NodesUtils.getNodeByType(objTree, 'VRayNodeObjectOutput')
+        
+        # No checks are needed to verify if the connected node is of type "VRayNodeObject{pluginName}Props",
+        # as the getter function already handles this logic, and "useProp" will be the inverse of its return value.
+        if useProp:
+            if not objOutput:
+                objOutput = objTree.nodes.new(f"VRayNodeObjectOutput")
 
+            propNode = objTree.nodes.new(f"VRayNodeObject{pluginName}Props")
+            propNode.location.x = objOutput.location.x - 200
+            propNode.location.y = objOutput.location.y - locationY
+
+            objTree.links.new(propNode.outputs[pluginName], objOutput.inputs[pluginName])
+        else:
+            objTree.nodes.remove(NodesUtils.getFarNodeLink(objOutput.inputs[pluginName]).from_node)
+
+def _propGetter(propGroup, pluginName):
+    """ Checks if 'VRayNodeObject{pluginName}Props' node is connected to the Object tree """
+    
+    if (obj := propGroup.id_data) and obj.vray.ntree:
         objTree = obj.vray.ntree
 
-        if hasattr(src, pluginUseProp):
-            objOutput = NodesUtils.getNodeByType(objTree, 'VRayNodeObjectOutput')
-            
-            if objOutput.inputs[pluginName].is_linked:
-                objTree.nodes.remove(NodesUtils.getNodeByType(objTree, f'VRayNodeObject{pluginName}Props'))
-            elif getattr(src, pluginUseProp):
-                propNode = objTree.nodes.new(f"VRayNodeObject{pluginName}Props")
-                propNode.location.x = objOutput.location.x - 200
-                propNode.location.y = objOutput.location.y - locationY
+        objOutput = NodesUtils.getNodeByType(objTree, 'VRayNodeObjectOutput')     
+        if objOutput and (nodeLink := NodesUtils.getFarNodeLink(objOutput.inputs[pluginName])):
+            return nodeLink.from_node.bl_idname == f'VRayNodeObject{pluginName}Props'
 
-                objTree.links.new(propNode.outputs[pluginName], objOutput.inputs[pluginName])
+    return False
+
+def mattePropsSetter(propGroup, attrName, useProp):
+    _propSetter(propGroup, "Matte", 80, useProp)
+
+def mattePropsGetter(propGroup, attrName):
+    return _propGetter(propGroup, "Matte")
 
 
-def onMattePropsUpdate(src, context, attrName):
-    _updatePropPlugins(src, context, "Matte", attrName, 80)
+def surfacePropsSetter(propGroup, attrName, useProp):
+    _propSetter(propGroup, "Surface", 150, useProp)
 
-def onSurfacePropsUpdate(src, context, attrName):
-    _updatePropPlugins(src, context, "Surface", attrName, 150)
+def surfacePropsGetter(propGroup, attrName):
+    return _propGetter(propGroup, "Surface")
 
-def onVisibilityPropsUpdate(src, context, attrName):
-    _updatePropPlugins(src, context, "Visibility", attrName, 220)
+
+def visibilityPropsSetter(propGroup, attrName, useProp):
+    _propSetter(propGroup, "Visibility", 220, useProp)
+
+def visibilityPropsGetter(propGroup, attrName):
+    return _propGetter(propGroup, "Visibility")
 
 
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):

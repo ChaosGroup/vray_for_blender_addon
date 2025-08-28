@@ -287,6 +287,12 @@ class VRayExporter(bpy.types.PropertyGroup):
         description = "Path to the exported .vrscene file"
     )
 
+    export_material_preview_scene: bpy.props.BoolProperty(
+        name = "Export material preview scene",
+        description = "Export a .vrscene for the material preview. The scene path is the vrscene path set above but with a '_preview' suffix",
+        default = False
+    )
+
     export_scene_compressed: bpy.props.BoolProperty(
         name = "Compressed",
         description = "Compress geometric information so that the resulting .vrscene file is smaller. Only valid if 'Meshes in HEX Format' is enabled",
@@ -524,7 +530,7 @@ class VRayExporter(bpy.types.PropertyGroup):
     vray_cloud_project_name: bpy.props.StringProperty(
         name = "Project",
         description = "Chaos Cloud Project Name",
-        default = "Blender for V-Ray"
+        default = "V-Ray for Blender"
     )
 
     vray_cloud_job_name: bpy.props.StringProperty(

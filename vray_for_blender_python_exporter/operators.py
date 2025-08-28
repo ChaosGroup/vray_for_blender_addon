@@ -14,34 +14,7 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber, checkIfSceneNeedsUpgrade
 
-
-
- ######     ###    ##     ## ######## ########     ###
-##    ##   ## ##   ###   ### ##       ##     ##   ## ##
-##        ##   ##  #### #### ##       ##     ##  ##   ##
-##       ##     ## ## ### ## ######   ########  ##     ##
-##       ######### ##     ## ##       ##   ##   #########
-##    ## ##     ## ##     ## ##       ##    ##  ##     ##
- ######  ##     ## ##     ## ######## ##     ## ##     ##
-
-class VRAY_OT_lens_shift(bpy.types.Operator):
-    bl_idname      = 'vray.lens_shift'
-    bl_label       = "Get lens shift"
-    bl_description = "Calculate lens shift"
-    bl_options     = {'INTERNAL'}
-
-    @classmethod
-    def poll(cls, context):
-        return (hasattr(context, "camera") and context.camera)
-
-    def execute(self, context):
-        VRayCamera = context.camera.vray
-
-        CameraPhysical = VRayCamera.CameraPhysical
-
-        CameraPhysical.lens_shift = blender_utils.getLensShift(context.object)
-
-        return {'FINISHED'}
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 ########  ########
@@ -52,7 +25,7 @@ class VRAY_OT_lens_shift(bpy.types.Operator):
 ##     ## ##    ##
 ########  ##     ##
 
-class VRAY_OT_node_add(bpy.types.Operator):
+class VRAY_OT_node_add(VRayOperatorBase):
     bl_idname         = 'vray.render_nodes_add'
     bl_label          = "Add Render Node"
     bl_description    = "Add render node"
@@ -68,7 +41,7 @@ class VRAY_OT_node_add(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_node_del(bpy.types.Operator):
+class VRAY_OT_node_del(VRayOperatorBase):
     bl_idname         = 'vray.render_nodes_remove'
     bl_label          = "Remove Render Node"
     bl_description    = "Remove render node"
@@ -85,7 +58,7 @@ class VRAY_OT_node_del(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_dr_nodes_load(bpy.types.Operator):
+class VRAY_OT_dr_nodes_load(VRayOperatorBase):
     bl_idname      = "vray.dr_nodes_load"
     bl_label       = "Load DR Nodes"
     bl_description = "Load distributed rendering nodes list"
@@ -133,7 +106,7 @@ class VRAY_OT_dr_nodes_load(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_dr_nodes_save(bpy.types.Operator):
+class VRAY_OT_dr_nodes_save(VRayOperatorBase):
     bl_idname      = "vray.dr_nodes_save"
     bl_label       = "Save DR Nodes"
     bl_description = "Save distributed rendering nodes list"
@@ -161,7 +134,7 @@ class VRAY_OT_dr_nodes_save(bpy.types.Operator):
 ##    ##  ##       ##    ## ##     ## ##       ##     ##    ##     ##  ##     ## ##   ###
 ##     ## ########  ######   #######  ########  #######     ##    ####  #######  ##    ##
 
-class VRAY_OT_flip_resolution(bpy.types.Operator):
+class VRAY_OT_flip_resolution(VRayOperatorBase):
     bl_idname      = "vray.flip_resolution"
     bl_label       = "Flip resolution"
     bl_description = "Flip render resolution"
@@ -188,7 +161,7 @@ class VRAY_OT_flip_resolution(bpy.types.Operator):
 ##    ## ##     ## ##       ##     ## ##    ##
  ######   #######  ########  #######  ##     ##
 
-class VRAY_OT_set_kelvin_color(bpy.types.Operator):
+class VRAY_OT_set_kelvin_color(VRayOperatorBase):
     bl_idname      = "vray.set_kelvin_color"
     bl_label       = "Kelvin color"
     bl_description = "Set color temperature"
@@ -282,7 +255,7 @@ class VRAY_OT_set_kelvin_color(bpy.types.Operator):
    ##    ##        ##   ##     ##    ##     ## ##    ##  ##       ##    ##
    ##    ######## ##     ##    ##     #######  ##     ## ########  ######
 
-class VRAY_OT_add_sky(bpy.types.Operator):
+class VRAY_OT_add_sky(VRayOperatorBase):
     bl_idname      = "vray.add_sky"
     bl_label       = "Add Sky texture"
     bl_description = "Add Sky texture to the background"
@@ -302,7 +275,7 @@ class VRAY_OT_add_sky(bpy.types.Operator):
 ##     ##  ##  ##    ## ##    ##
 ##     ## ####  ######   ######
 
-class VRAY_OT_message_box_base(bpy.types.Operator):
+class VRAY_OT_message_box_base(VRayOperatorBase):
     """ Base class for an OK/Cancel message box. It will position the dialog
         in the center of the screen.
 
@@ -347,7 +320,7 @@ class VRAY_OT_message_box_base(bpy.types.Operator):
 
 
 
-class VRAY_OT_add_new_material(bpy.types.Operator):
+class VRAY_OT_add_new_material(VRayOperatorBase):
     bl_idname      = "vray.new_material"
     bl_label       = "Add New Material"
     bl_description = "Add new material"
@@ -373,7 +346,7 @@ class VRAY_OT_add_new_material(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_export_scene(bpy.types.Operator):
+class VRAY_OT_export_scene(VRayOperatorBase):
     bl_idname       = "vray.export_scene"
     bl_label        = "Export V-Ray scene"
     bl_description  = "Export V-Ray scene to a file using the interactive renderer"
@@ -401,7 +374,7 @@ class VRAY_OT_export_scene(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_get_ui_mouse_position(bpy.types.Operator):
+class VRAY_OT_get_ui_mouse_position(VRayOperatorBase):
     """ Gets the mouse position relative to the current view """
     bl_idname   = "vray.get_ui_mouse_position"
     bl_label    = "Mouse location"
@@ -421,7 +394,7 @@ class VRAY_OT_get_ui_mouse_position(bpy.types.Operator):
 
         return {'FINISHED'}
     
-class VRAY_OT_select_vrscene_export_file(bpy.types.Operator):
+class VRAY_OT_select_vrscene_export_file(VRayOperatorBase):
     """ Shows a File Select dialog for selecting a an output file
         for the vrscene export operation.
     """
@@ -472,15 +445,6 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         if vray.isInitialized():
             return cls.bl_description
         return f"{cls.bl_description}. Unavailable until V-Ray is initialized"
-
-    @classmethod
-    def poll(cls, context):
-        # This function is essential for the 'Render' keyboard shortcut to work
-        # corrrectly. The shortcut is the same as the one registered by Blender
-        # for its renderers. By returning False from this function, we tell Blender 
-        # to disregard the V-Ray shortcut and go on executing the Blender one.
-        from vray_blender.ui.classes import pollEngine
-        return pollEngine(context)
     
     def execute(self, context):
         if vray.isInitialized():
@@ -590,7 +554,7 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
                 assert not f'Invalid message selector: {self.errorType}'
 
 
-class VRAY_OT_render_viewport(bpy.types.Operator):
+class VRAY_OT_render_viewport(VRayOperatorBase):
     bl_idname = "vray.render_viewport"
     bl_label = "Start Viewport Render"
     bl_description = "Render scene using the viewport V-Ray renderer"
@@ -605,7 +569,7 @@ class VRAY_OT_render_viewport(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_render_interactive(bpy.types.Operator):
+class VRAY_OT_render_interactive(VRayOperatorBase):
     bl_idname = "vray.render_interactive"
     bl_label = "Start Interactive Render"
     bl_description = "Render scene using the interactive V-Ray renderer"
@@ -622,7 +586,7 @@ class VRAY_OT_render_interactive(bpy.types.Operator):
         return {'FINISHED'}
     
 
-class VRAY_OT_render_interactive_stop(bpy.types.Operator):
+class VRAY_OT_render_interactive_stop(VRayOperatorBase):
     bl_idname = "vray.render_interactive_stop"
     bl_label = "Stop Interactive Render"
     bl_description = "Stop render of scene using the interactive V-Ray renderer"
@@ -684,11 +648,6 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         description="If True, run the export operator directly, not through VfbEventHandler" 
     )
 
-    @classmethod
-    def poll(cls, context):
-        from vray_blender.ui.classes import pollEngine
-        return pollEngine(context) 
-    
     def execute(self, context):
         debug.report('INFO', 'Started .vrscene export. Blender UI will be unresponsive until the operation is complete.')
         fileTypes = []
@@ -802,7 +761,7 @@ class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
         self._cursorWrap(context)
 
 
-class VRAY_OT_copy_plugin_version(bpy.types.Operator):
+class VRAY_OT_copy_plugin_version(VRayOperatorBase):
     bl_idname       = "vray.copy_plugin_version"
     bl_label        = "Copy V-Ray plugin version to clipboard"
     bl_description  = "Copy to clipboard the version of the V-Ray plugin with which the scene was last saved."
@@ -869,10 +828,14 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         self.layout.label(text="If you encounter any problems, look in the console for error messages.")
         self._cursorWrap(context)
 
+    @classmethod
+    def poll(cls, context):
+        # The operator vray.upgrade_scene should be callable even if the default engine is not V-Ray.
+        return True
+
 
 def getRegClasses():
     return (
-        VRAY_OT_lens_shift,
         VRAY_OT_node_add,
         VRAY_OT_node_del,
         VRAY_OT_dr_nodes_load,

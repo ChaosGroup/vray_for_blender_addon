@@ -3,14 +3,16 @@ import bpy
 import mathutils
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getNodeLink, getInputSocketByAttr, getInputSocketByName
+from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr, getInputSocketByName
 from vray_blender.lib import plugin_utils, draw_utils
 from vray_blender.lib.defs import  PluginDesc, NodeContext
 from vray_blender.lib.names import Names
 from vray_blender.nodes.operators.sockets import VRayNodeAddCustomSocket, VRayNodeDelCustomSocket
 from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult
+from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup
 from vray_blender.plugins.templates.common import VRAY_OT_simple_button
+from vray_blender.lib.mixin import VRayOperatorBase
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -53,7 +55,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
         return self.use and super().shouldExportLink()
     
 
-class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_texmulti_socket_add'
     bl_label       = "Add Texture Socket"
     bl_description = "Add Texture socket"
@@ -72,7 +74,7 @@ class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, bpy.types.Operat
         return {'FINISHED'}
 
 
-class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, bpy.types.Operator):
+class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_texmulti_socket_del'
     bl_label       = "Remove Texture Socket"
     bl_description = "Removes Texure socket (only not linked sockets will be removed)"
@@ -132,7 +134,7 @@ def widgetDrawTexMap(context, layout, propGroup, widgetAttr):
         panel.label(text=_getTexSockName(i + 1))
         row = panel.row()
         row.prop(s, 'value', text="Color")
-        if s.is_linked:
+        if isInputSocketLinked(s):
             row.prop(s, 'multiplier', text='')
         
         row = panel.row()
@@ -157,7 +159,7 @@ def exportTreeNode(nodeCtx: NodeContext):
             continue
 
         if sock.shouldExportLink():
-            nodeLink = getNodeLink(sock)
+            nodeLink = getFarNodeLink(sock)
             assert nodeLink is not None
             
             texPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, nodeLink.to_socket)

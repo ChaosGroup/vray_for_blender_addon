@@ -107,7 +107,7 @@ class CommonSettings:
         
         # settingsDR = []
         
-    def updateFromScene(self):
+    def updateFromScene(self, cameraObjs = None):
         vrayExporter = self.vrayExporter
 
         self.backgroundScene              = self.scene
@@ -116,7 +116,12 @@ class CommonSettings:
         self.autoSaveRender               = vrayExporter.auto_save_render
         self.exportMeshes                 = True
         self.selectedObjects              = set()
-        self.loopCameras                  = []
+        self.cameraObjs                   = cameraObjs if cameraObjs is not None else [] # Cameras needed for settings calculation.
+
+
+        # Add the active camera if the 'cameraObjs' list is empty.
+        if (not cameraObjs) and (activeCamObj := self.scene.camera) and blender_utils.isCamera(activeCamObj):
+            self.cameraObjs.append(activeCamObj)
 
         self.exportFileFormat  = vrayExporter.data_format
         if self.isPreview:
@@ -160,6 +165,7 @@ class CommonSettings:
         self.viewportImageQuality   = 93
         self.viewportImageType      = defs.ImageType.RgbaReal
 
+
     def _updateAnimation(self):
         isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
         if not isProductionRendering:
@@ -182,39 +188,37 @@ class CommonSettings:
         self.useMotionBlur      = False
         self.usePhysicalCamera  = False
 
-        cameraObject = self.scene.camera
-        if blender_utils.isCamera(cameraObject):
+        self.mbDuration = 0
+
+        mbSettings = self.scene.vray.SettingsMotionBlur
+        self.mbSamples = mbSettings.geom_samples
+
+        # Multiple cameras may exist in the scene, and their individual motion blur settings
+        # must be taken into account to ensure all necessary frames are exported.
+        for cameraObject in self.cameraObjs:
             camera: bpy.types.Camera = cameraObject.data
 
             vrayCamera = camera.vray
             physCamera = vrayCamera.CameraPhysical
 
-            self.useHideFromView = vrayCamera.hide_from_view
-            mbSettings = self.scene.vray.SettingsMotionBlur
-            self.mbSamples = mbSettings.geom_samples
+            self.useMotionBlur |= physCamera.use_moblur if physCamera.use else mbSettings.on
 
-            self.usePhysicalCamera = physCamera.use
-            self.useMotionBlur = mbSettings.on
-            if self.usePhysicalCamera:
-
+            if physCamera.use:
                 cameraType = int(physCamera.type)
                 
                 frameDuration = 1.0 / self.animation.fps
 
                 match cameraType:
                     case defs.PhysicalCameraType.Still:
-                        self.mbDuration = 1.0 / (physCamera.shutter_speed * frameDuration)
-                        self.mbOffset = self.mbDuration * 0.5
+                        self.mbDuration = max(1.0 / (physCamera.shutter_speed * frameDuration), self.mbDuration)
                     case defs.PhysicalCameraType.Cinematic:
-                        self.mbDuration = physCamera.shutter_angle / 360.0
-                        self.mbOffset = physCamera.shutter_offset / 360.0 + self.mbDuration * 0.5
+                        self.mbDuration =  max(physCamera.shutter_angle / 360.0, self.mbDuration)
                     case defs.PhysicalCameraType.Video:
-                        self.mbDuration = 1.0 + physCamera.latency / frameDuration
-                        self.mbOffset = -self.mbDuration * 0.5
+                        self.mbDuration = max(1.0 + physCamera.latency / frameDuration, self.mbDuration)
                     case _:
                         self.useMotionBlur = False
             else:
-                self.mbDuration = mbSettings.duration
+                self.mbDuration = max(self.mbDuration, mbSettings.duration)
 
         # Disable motion blur for bake render
         self.useMotionBlur = self.useMotionBlur and not self.vrayExporter.isBakeMode and not self.isPreview
@@ -230,7 +234,6 @@ class CommonSettings:
 
 
     def _updateStereoCameraObjectsList(self, leftCamName, rightCamName):
-        self.useHideFromView = False
         self.selectedObjects = set()
         self.cameraStereoLeft = None
         self.cameraStereoRight = None

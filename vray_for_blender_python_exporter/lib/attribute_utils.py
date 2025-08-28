@@ -3,7 +3,6 @@ import re
 import bpy
 import mathutils
 
-
 from vray_blender import debug
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, tupleTo4x4MatrixLayout, matrixLayoutToMatrix
 from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
@@ -31,7 +30,7 @@ def createPropSearchPointerProp(origAttr, propSearchAttr, type, name, descriptio
 def formatAttributeName(nameOrLabel):
     """ Create display name (label) from an attribute name or label.
         The function removes any underscores and capitalizes the first letter of each word in the string. 
-    
+
         Args:
             nameOrLabel (str) - an attribute name or a widget label to format
 
@@ -41,14 +40,14 @@ def formatAttributeName(nameOrLabel):
     attrName = nameOrLabel.strip().replace("_", " ")
     attrName = re.sub(' +', ' ', attrName) # Collapse multuple spaces
     words = attrName.split(' ')
-    
+
     try:
         formattedName = [f"{w[0].title()}{w[1:]}" for w in words]
         return ' '.join(formattedName)
     except Exception as ex:
         debug.printExceptionInfo(ex, f"Failed to format attribute label '{nameOrLabel}'")
         return nameOrLabel
-    
+
 def getAttrDesc(pluginModule, attrName):
     return next((p for p in pluginModule.Parameters if p['attr'] == attrName), None)
 
@@ -59,13 +58,13 @@ def valueInEnumItems(attrDesc, enumValue):
             return True
     return False
 
-    
+
 def isAnimatableAttribute(pluginModule, attrDesc):
     pluginAnimatable = pluginModule.Options.get('animatable', True)
     if 'options' in attrDesc:
         flag = attrDesc['options'].get('animatable', None)
         return pluginAnimatable if flag is None else flag
-    
+
     return pluginAnimatable
 
 
@@ -89,20 +88,20 @@ def convertVRayValueToUI(attrDesc, value):
 def convertUIValueToVRay(attrDesc, value):
     """ Convert property value from its UI representation in Blender to its V-Ray 
         representation.
-    """ 
+    """
     # Apply custom multiplier. This is necessary because for some 
     # of the predefined Blender UI subtypes, the measurement units do not coincide
     # with those used in V-Ray.
     if multiplier := attrDesc.get('options',{}).get('value_conv_factor'):
         assert type(value) in (int, float)
         return value / multiplier
-    
+
     # TRANSFORM and MATRIX types are stored in a FloatVectorProp property of length 16
     if (type(value) is bpy.types.bpy_prop_array) and (attrDesc['type'] in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE')):
         return matrixLayoutToMatrix(value)
-    
+
     return value
-   
+
 
 # Converters between property group and blender socket value types.
 def toColor(value):
@@ -138,9 +137,9 @@ def attrValueToMatrix(value, applyScale: bool):
 
     else:
         import struct, binascii
-        
+
         tmArray = struct.unpack("fffffffffddd", binascii.unhexlify(bytes(value, 'ascii')))
-        
+
         i = 0
         for c in range(3):
             for r in range(3):
@@ -178,7 +177,7 @@ def generateAttribute(classMembers, pluginModule, attrDesc):
     if attrType == 'TEMPLATE':
         _generateTemplate(classMembers, pluginModule, attrDesc)
         return
-    
+
     attrArgs = {
         'attr' : attrName,
         'name' : getAttrDisplayName(attrDesc)
@@ -193,17 +192,17 @@ def generateAttribute(classMembers, pluginModule, attrDesc):
     _setAttrValueCallbacks(attrArgs, attrDesc, pluginModule)
     _setAttrSize(attrArgs, attrDesc)
     _setAttrDefault(attrArgs, attrDesc, pluginModule)
-    
+
     if attrType == 'ENUM':
         # JSON parser returns lists but EnumProperty types expects tuples
         attrArgs['items'] = (tuple(item) for item in attrDesc['items'])
 
     _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
-   
+
     if attrDesc.get('options', {}).get('shadowed', False):
         # Add a 'shadow' for the current attribute
         _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
-    
+
     if attrName in {'render_mask_objects', 'exclusion_nodes'}:
         # Attribute has a collection prop search UI - add an additional pointer property
         # which updates the original property with the object name when changed.
@@ -243,7 +242,7 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
     # Add properties common to all templates
     templateMembers['vray_plugin'] = bpy.props.StringProperty(default=pluginModule.ID)
     templateMembers['vray_attr'] = bpy.props.StringProperty(default=attrName)
-    
+
     templateClass = templateClassFunc()
     if fnRegister := getattr(templateClass, 'registerProperties', None):
         # Give a chance to the template class to register its own properties. This will usually
@@ -264,7 +263,7 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
         type = templatePropGroup
     )
 
-    
+
 def setAttrDescription(attrArgs, attrDesc):
     # NOTE: Implicitly created attributes (e.g. for templates) may not have descriptions
     attrArgs['description'] = attrDesc.get('desc', '')
@@ -282,19 +281,29 @@ def getAttrDisplayName(attrDesc):
 
     if (uiDesc := attrDesc.get('ui')) and ('display_name' in uiDesc):
         return formatAttributeName(uiDesc['display_name'])
-    
+
     return attrDesc.get('name', formatAttributeName(attrDesc['attr']))
+
+def getAttrGpuSupport(attrDesc):
+    """ Returns the GPU support type for the attribute.
+        The returned type could be "partial", "full" or "none"
+    """
+
+    if (uiDesc := attrDesc.get("ui", None)) and (gpuSupport := uiDesc.get("gpuSupport", None)):
+        return gpuSupport
+
+    return "full"
 
 
 def setAttrSubtype(attrArgs, attrDesc):
-    
+
     # Vray subtypes only have meaning for choosing the socket type and an error will be generated
     # if we try to set them as a subtype of a property during registration.
     if attrDesc.get('subtype', '').startswith('VRAY_'):
         return
 
     attrType = attrDesc['type']
-    
+
     if (attrType == 'STRING') and ('ui' in attrDesc) and ('file_extensions' in attrDesc['ui']):
              attrArgs['subtype'] = 'FILE_PATH'
     elif attrType in TypeToUISubtype:
@@ -311,8 +320,8 @@ def _setAttrSize(attrArgs, attrDesc):
         attrArgs['size'] = 3
     elif attrType in {'ACOLOR', 'TEXTURE'}:
         attrArgs['size'] = 3
-    
-    
+
+
 def setAttrPrecision(attrArgs, attrDesc):
     attrType = attrDesc['type']
 
@@ -327,7 +336,7 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
 
     attrName = attrDesc['attr']
     attrType = attrDesc['type']
-    
+
     if 'default' in attrDesc:
         attrArgs['default'] = convertVRayValueToUI(attrDesc, attrDesc['default'])
 
@@ -360,7 +369,7 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
 
 def setAttrLimits(attrArgs, attrDesc):
     attrType = attrDesc['type']
-    
+
     defUi = {
         'min'      : -1<<20,
         'max'      :  1<<20,
@@ -389,7 +398,7 @@ def setAttrLimits(attrArgs, attrDesc):
         attrArgs['max'] = convertVRayValueToUI(attrDesc, maxValue)
         attrArgs['soft_min'] = convertVRayValueToUI(attrDesc, attrDesc['ui'].get('soft_min', minValue))
         attrArgs['soft_max'] = convertVRayValueToUI(attrDesc, attrDesc['ui'].get('soft_max', maxValue))
-        
+
         if 'spin_step' in attrDesc['ui']:
             stepValue = attrDesc['ui']['spin_step']
             if attrType in {'FLOAT', 'FLOAT_TEXTURE'}:
@@ -409,6 +418,12 @@ def setAttrOptions(attrArgs, attrDesc, pluginModule):
     if not attrDescOptions.get('visible', True):
         attrOptions.add('HIDDEN')
 
+    # In Blender 4.5 a new flag was added for FILE_PATH subtypes that has to be set to enable relative paths.
+    if bpy.app.version >= (4, 5, 0):
+        attrType = attrDesc['type']
+        if (attrType == 'STRING') and ('ui' in attrDesc) and ('file_extensions' in attrDesc['ui']):
+            attrOptions.add('PATH_SUPPORTS_BLEND_RELATIVE')
+
     # Cross-dependencies - properties that depend on a scene object. The property
     # should receive updates when the referenced object changes.
     if attrDescOptions.get('cross_dependency', False):
@@ -417,9 +432,8 @@ def setAttrOptions(attrArgs, attrDesc, pluginModule):
         else:
             CROSS_DEPENDENCIES[pluginModule.ID].append(attrDesc['attr'])
 
-    
     attrArgs['options'] = attrOptions
-    
+
     # Pass-through values
     for optionalKey in {'size'}:
         if optionalKey in attrDesc:
@@ -433,17 +447,17 @@ def setAttrUpdateCallback(attrArgs, attrDesc, pluginModule):
     # Changes to custom node trees do not result in updates, so we need to manually
     # tag the updated objects and the property editor for redraw. 
     updateFunc = selectedObjectTagUpdate
-    
+
     if 'update' in attrDesc:
         # Call the custom update function as part of the update callback
         updateFunc = lambda s, ctx: selectedObjectTagUpdateWrapper(s, ctx, pluginModule, attrName, attrDesc['update'])
-    
+
     attrArgs['update'] = updateFunc
 
     if attrDesc.get('poll', None):
         if pollFunc := getattr(pluginModule, attrDesc['poll'], None):
             attrArgs['poll'] = pollFunc
-        
+
 
 
 def _setAttrValueCallbacks(attrArgs, attrDesc, pluginModule):
@@ -451,13 +465,11 @@ def _setAttrValueCallbacks(attrArgs, attrDesc, pluginModule):
 
     if fnSet := attrDesc.get('set'):
         # Call the custom update function as part of the update callback
-        getFunc = lambda s, value: _setValueWrapper(pluginModule, s, attrName, value, fnSet)
-        attrArgs['set'] = getFunc
+        attrArgs['set'] = lambda s, value: _setValueWrapper(pluginModule, s, attrName, value, fnSet)
 
     if fnGet := attrDesc.get('get'):
         # Call the custom update function as part of the update callback
-        getFunc = lambda s: _getValueWrapper(pluginModule, s, attrName, fnGet)
-        attrArgs['get'] = getFunc
+        attrArgs['get'] = lambda s: _getValueWrapper(pluginModule, s, attrName, fnGet)
 
 
 def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc, pluginType):
@@ -465,7 +477,7 @@ def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc, pluginType):
         attrArgs["type"] = bpy.types.Object
         if ("object_type" in attrDesc) and hasattr( bpy.types, attrDesc["object_type"]):
             attrArgs["type"] = getattr( bpy.types, attrDesc["object_type"] )
-        
+
 
         if filterType := attrDesc.get("filter_type"):
             match filterType:
@@ -479,7 +491,7 @@ def _fillOBjectAttributeArguments(attrType, attrArgs, attrDesc, pluginType):
         else:
             linkInfo = getLinkInfo (pluginType, attrDesc['attr'])
             attrArgs['poll'] = lambda self, obj: linkInfo.fnFilter(obj)
-         
+
         if "default" in attrArgs:
             # Pointer properties don't have default argument
             del attrArgs["default"]
@@ -532,7 +544,6 @@ def _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
         classMembers[attrName] = attrFunc(shadowAttrArgs["default"])
     else:
         classMembers[attrName] = attrFunc(**shadowAttrArgs)
-    
 
 
 def _setValueWrapper(pluginModule, propGroup, attrName, value, fnSetName: str):
@@ -542,5 +553,5 @@ def _setValueWrapper(pluginModule, propGroup, attrName, value, fnSetName: str):
 def _getValueWrapper(pluginModule, propGroup, attrName, fnSetName: str):
     if fnGet := getattr(pluginModule, fnSetName, None):
         return fnGet(propGroup, attrName)
-    
+
     return None

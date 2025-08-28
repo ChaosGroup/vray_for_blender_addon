@@ -1,16 +1,12 @@
 {
     "ID": "FilterLanczos",
-    "Parameters" : 
+    "Parameters" :
     [
-        
         {
             "attr" : "size",
             "default" : 2.0
         }
     ],
-    "options" : {
-        "animatable": false
-    },
     "Widget": {
         "widgets": [
             {
@@ -22,5 +18,8 @@
                 "layout": "ROW"
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

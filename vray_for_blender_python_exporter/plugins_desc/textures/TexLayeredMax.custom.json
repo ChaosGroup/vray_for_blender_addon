@@ -20,10 +20,12 @@
                 "default_closed": false,
                 "attrs": [
                     {
-                        "name": "invert"
+                        "name": "invert",
+                        "label": "Invert Color"
                     },
                     {
-                        "name": "invert_alpha"
+                        "name": "invert_alpha",
+                        "active": {"cond": "::invert!=0"}
                     },
                     {
                         "name": "allow_negative_colors"

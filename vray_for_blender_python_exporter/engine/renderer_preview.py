@@ -6,9 +6,9 @@ import time
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 
 from vray_blender import debug
-from vray_blender.lib.common_settings import CommonSettings
-from vray_blender.lib.defs import ExporterContext, NodeContext, PluginDesc, ExporterContext, ExporterType
-from vray_blender.lib.names import Names, syncUniqueNames, syncUniqueNamesForPreview
+from vray_blender.lib.common_settings import CommonSettings, collectExportSceneSettings
+from vray_blender.lib.defs import ExporterContext, NodeContext, PluginDesc, ExporterContext, ExporterType, ProdRenderMode
+from vray_blender.lib.names import Names, syncUniqueNamesForPreview
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.lib.export_utils import exportPlugin
 
@@ -75,6 +75,12 @@ class VRayRendererPreview(VRayRendererProdBase):
         vray.setRenderFrame(self.renderer, scene.frame_current)
         self._export(engine, exporterCtx)
 
+        # Look up whether we need to export a vrscene for the material preview
+        # in the original scene. This property is not set in the preview scene.
+        originalScene = bpy.context.scene
+        if originalScene.vray.Exporter.export_material_preview_scene:
+            self._writeVrscene(originalScene, engine)
+
         vray.renderFrame(self.renderer)
 
         while vray.renderJobIsRunning(self.renderer):
@@ -134,3 +140,32 @@ class VRayRendererPreview(VRayRendererProdBase):
     def _exportWorld(self, exporterCtx: ExporterContext):
         # World tree should not be exported during Preview rendering.
         return
+    
+
+    def _writeVrscene(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine, scenePath="", isCloudExport=False):
+        """ Export the preview scene to a .vrscene file """
+        from pathlib import Path
+
+        vrayExporter = scene.vray.Exporter
+        assert vrayExporter.export_material_preview_scene
+
+        # Reuse the path set for the .vrscene for the interactive scene, but 
+        # add the '_preview' suffix. This is only available in in debug mode, so
+        # no need for other user-controllable options here.
+        exportPath = Path(vrayExporter.export_scene_file_path)
+        vrsceneFile = exportPath.parent / f"{exportPath.stem}_preview.vrscene"
+
+        exportSettings, errMsg = collectExportSceneSettings(scene, str(vrsceneFile))
+
+        if exportSettings:
+            if not vray.writeVrscene(self.renderer, exportSettings):
+                self._reportError(engine, "Preview scene export failed")
+                return
+
+            # Writing the scene is an asynchronous task during which we need to keep the renderer alive.
+            while vray.exportJobIsRunning(self.renderer):
+                time.sleep(0.5)
+
+            self._reportInfo(engine, f"Exported preview scene: {exportSettings.filePath}")
+        elif errMsg:
+            self._reportError(engine, f"Export preview scene: {errMsg}")

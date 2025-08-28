@@ -1,10 +1,11 @@
 import bpy
 from vray_blender import plugins 
+from vray_blender.exporting.tools import getActiveFarNodeLinks
 from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.lib import draw_utils
 from vray_blender.ui import classes
 
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.nodes import sockets as SocketUtils
 
@@ -124,9 +125,10 @@ class VRayNodeUVWMapping(VRayNodeBase):
     def _isOnlyRandomizerConnected(self):
         # Return True if all links of the otput socket are to UVWGenRandomizer nodes
         outSock = self.outputs[0]
-        randomizerLinks = len([l for l in outSock.links if l.to_socket.node.bl_idname == 'VRayNodeUVWGenRandomizer'])
+        farLinks = getActiveFarNodeLinks(outSock)
+        randomizerLinksCount = sum(1 for l in farLinks if l.to_socket.node.bl_idname == 'VRayNodeUVWGenRandomizer')
 
-        return outSock.links and (len(outSock.links) == randomizerLinks)
+        return (randomizerLinksCount > 0) and (randomizerLinksCount == len(farLinks))
        
 
 def register():

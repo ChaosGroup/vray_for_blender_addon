@@ -11,6 +11,15 @@ import bpy
 from vray_blender import debug
 
 
+def activeRendererExists():
+    """ Check if there is an active renderer """
+    from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
+    from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+    from vray_blender.engine.renderer_prod import VRayRendererProd
+
+    return any(r.isActive() for r in (VRayRendererProd, VRayRendererIprViewport, VRayRendererIprVfb))
+
+
 def getUsername():
     if sys.platform == 'win32':
         return "standalone"
@@ -170,6 +179,36 @@ def copyToClipboard(text):
     else:
         debug.printWarning("Unable to locate the Windows directory needed for clip.exe," \
                            " which is necessary to copy text to the clipboard.")
+
+def importFunction(functionPath: str, pluginModule):
+    """ Import function from a module.
+
+        @param functionPath: path to the function in format [folder1.folder2...folderN.]functionName
+                            If only the name is given, the function is loaded from the pluginModule
+        @param pluginModule: the plugin module to load the function from
+    """
+    assert ('.' in functionPath) or (pluginModule != ''), f"Plugin module not specified for function {functionPath}"
+
+    funcModule = pluginModule
+    funcName = functionPath
+
+    if '.' in functionPath:
+        # Path relative to vray_blender. Format is folder1....folderN.funcName
+        funcModule = importModule('.'.join(functionPath.split('.')[:-1]))
+        funcName   = functionPath.split('.')[-1]
+        
+    return getattr(funcModule, funcName, None)
+
+
+def importModule(modulePath: str):
+    """ Import a Python module given the path relative to vray_blender """
+    import importlib
+    try:
+        return importlib.import_module(f"vray_blender.{modulePath}")
+    except ImportError as e:
+        debug.reportError(f"Failed to import module {modulePath}.", exc=e)
+        return None
+    
 
 class StartupConfig:
     """ General configuration settings passed on the command line.

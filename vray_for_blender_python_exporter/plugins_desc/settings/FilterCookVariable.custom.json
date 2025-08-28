@@ -11,5 +11,8 @@
                 "layout": "ROW"
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

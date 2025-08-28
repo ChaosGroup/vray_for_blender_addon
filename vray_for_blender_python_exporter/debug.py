@@ -7,6 +7,7 @@ import datetime
 import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.lib.mixin import VRayOperatorBase
 
 
 class LogLevel:
@@ -156,7 +157,7 @@ class ExceptionLogger:
 
 
 ############  Reports in Blender's UI  ############
-class VRAY_OT_report(bpy.types.Operator):
+class VRAY_OT_report(VRayOperatorBase):
     """ Implements reporting in Blender status area regardless of the context """
     bl_idname = "vray.report"
     bl_label = "Report"
@@ -175,6 +176,12 @@ class VRAY_OT_report(bpy.types.Operator):
         except:
             return {'PASS_THROUGH'}
         
+
+    @classmethod
+    def poll(cls, context):
+        # The operator should be callable even if the default engine is not V-Ray.
+        return True
+
 
 def report(severity: str, msg: str):
     """ Report in Blender's status area. This function is a replacement

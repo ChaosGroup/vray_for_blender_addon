@@ -2,6 +2,7 @@ from vray_blender.exporting import light_export
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
 from vray_blender.lib import  export_utils, plugin_utils
+from vray_blender.nodes.tools import isInputSocketLinked
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -42,7 +43,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         # Get a list of lights that should be included in this light select render channel 
         includedLights = []
 
-        if (node := pluginDesc.node) and getInputSocketByAttr(node, 'lights').is_linked:
+        if (node := pluginDesc.node) and isInputSocketLinked(getInputSocketByAttr(node, 'lights')):
             # The LightSelect node is linked to a selector node. The selected lights have already
             # been collected in its 'lights' property by the node tree export procedure
             selectedLightPlugins = pluginDesc.getAttribute('lights')

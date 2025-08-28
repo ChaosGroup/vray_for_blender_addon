@@ -29,7 +29,7 @@ Get boost 1.82 library with Python 11 bindings. It can be obtained from the **bl
 ## 4. Build the plugin:
 Build the addon with the following command.
 
-The `BLENDER_VER` parameter specifies the Blender version (currently 4.2, 4.3 and 4.4 are supported) for which this build is intended.
+The `BLENDER_VER` parameter specifies the Blender version (currently 4.2, 4.3, 4.4 and 4.5 are supported) for which this build is intended.
 ```bash 
 cmake -S ./vray_for_blender_addon \
       -B ./build \

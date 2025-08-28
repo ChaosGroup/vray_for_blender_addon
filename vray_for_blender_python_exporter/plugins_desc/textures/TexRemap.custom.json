@@ -2,62 +2,11 @@
     "ID": "TexRemap",
     "Name": "V-Ray Remap",
     "Subtype": "UTILITY",
-    "Widget": {
-        "widgets": [
-            {
-                "attrs": [
-                    {
-                        "name": "input_color",
-                        "label": "Input"
-                    }
-                ],
-                "layout": "COLUMN"
-            },
-            {
-                "layout": "ROLLOUT",
-                "name": "parameters",
-                "label": "Parameters",
-                "default_closed": false,
-                "attrs": [
-                    {
-                        "name": "type",
-                        "label": "Type",
-                        "custom_draw": "drawCurveTemplate"
-                    },
-                    {
-                        "name": "color_spline_type",
-                        "active": {
-                            "cond": "::type=1"
-                        }
-                    }
-                ]
-            },
-            {
-                "layout": "ROLLOUT",
-                "name": "set range",
-                "label": "Set Range",
-                "attrs": [
-                    {
-                        "name": "input_min"
-                    },
-                    {
-                        "name": "input_max"
-                    },
-                    {
-                        "name": "output_min"
-                    },
-                    {
-                        "name": "output_max"
-                    }
-                ]
-            }
-        ]
-    },
     "Parameters": [
         {
             "attr" : "color_spline_type",
             "default" : "0",
-            "desc" : "Color spline type to export",
+            "desc" : "Color spline type to export. Unlike Cycles, either RGB or Combined set of curves will be exported to V-Ray, not both.",
             "items" : 
             [
                 [ "0", "Combined", "Combined"],
@@ -120,8 +69,66 @@
                 "soft_min": 0.0,
                 "soft_max": 1.0
             }
+        },
+        {
+            "attr": "curves_data",
+            "type": "STRING",
+            "desc": "Internal representation of the remapping curves data",
+            "default": "",
+            "options": {
+               "derived": true
+            }
         }
     ],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "input_color",
+                        "label": "Input"
+                    }
+                ],
+                "layout": "COLUMN"
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "type",
+                        "label": "Type"
+                    },
+                    {
+                        "name": "color_spline_type",
+                        "label": "Color Spline Type",
+                        "custom_draw": "drawCurveTemplate"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "set range",
+                "label": "Set Range",
+                "attrs": [
+                    {
+                        "name": "input_min"
+                    },
+                    {
+                        "name": "input_max"
+                    },
+                    {
+                        "name": "output_min"
+                    },
+                    {
+                        "name": "output_max"
+                    }
+                ]
+            }
+        ]
+    },
     "Node": {
         "output_sockets": [
             {

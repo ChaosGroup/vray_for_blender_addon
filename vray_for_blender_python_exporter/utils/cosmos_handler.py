@@ -1,8 +1,10 @@
 from enum import Enum
-import bpy, os, time
+import bpy, os, time, queue
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.lib_utils import getLightPropGroup
+from vray_blender.nodes.operators.import_file import importHDRI, importMaterials, importProxyFromMeshFile
 from vray_blender import debug
+from vray_blender.lib.mixin import VRayOperatorBase
 
 # Cosmos relinking states, keep in sync with the enum in zmq_messages.hpp.
 class CosmosRelinkStatus(Enum):
@@ -31,14 +33,14 @@ completed. BlenderCosmosImporter::downloadMissingAssets(...) will send back the 
 are then directly changed in the materials and objects.
 """
 
-class VRAY_OT_dummy(bpy.types.Operator):
+class VRAY_OT_dummy(VRayOperatorBase):
     bl_idname = "vray.dummy_operator"
     bl_label = "Does Nothing"
 
     def execute(self, context):
         return {'FINISHED'}
 
-class VRAY_OT_show_cosmos_info_popup(bpy.types.Operator):
+class VRAY_OT_show_cosmos_info_popup(VRayOperatorBase):
     bl_idname       = "vray.cosmos_info_popup"
     bl_label        = "Chaos Cosmos"
     bl_description  = "Chaos Cosmos Info Message"
@@ -121,7 +123,7 @@ class CosmosHandler:
 
         unresolvedPackageIds, unresolvedRevisionIds, unresolvedPaths = [], [], []
 
-        def checkNodeTreeBitmaps(object):
+        def checkNodeTreeAssets(object):
             for node in object.node_tree.nodes:
                 if (texture := getattr(node, 'texture', None)):
                     if unresolvedPath := self._getPathIfAssetMissing(texture.image.filepath):
@@ -129,13 +131,19 @@ class CosmosHandler:
                         unresolvedRevisionIds.append(object.vray.cosmos_revision_id)
                         unresolvedPaths.append(unresolvedPath)
                         self.unresolvedCallbacks.append(lambda x, img=texture.image: setattr(img, 'filepath', x))
+                elif (brdfScanned := getattr(node, 'BRDFScanned', None)):
+                    if unresolvedPath := self._getPathIfAssetMissing(brdfScanned.file):
+                        unresolvedPackageIds.append(object.vray.cosmos_package_id)
+                        unresolvedRevisionIds.append(object.vray.cosmos_revision_id)
+                        unresolvedPaths.append(unresolvedPath)
+                        self.unresolvedCallbacks.append(lambda x, brdf=brdfScanned: setattr(brdf, 'file', x))
 
         for material in bpy.data.materials:
             if not hasattr(material, 'vray') or not material.node_tree or not material.use_nodes:
                 continue
             if not material.vray.cosmos_package_id:
                 continue
-            checkNodeTreeBitmaps(material)
+            checkNodeTreeAssets(material)
 
         for mesh in bpy.data.meshes:
             if not hasattr(mesh, 'vray') or not mesh.vray.cosmos_package_id:
@@ -158,7 +166,7 @@ class CosmosHandler:
                     unresolvedPaths.append(unresolvedPath)
                     self.unresolvedCallbacks.append(lambda x, ies=propGroup: setattr(ies, 'ies_file', x))
             if light.vray.light_type=='DOME':
-                checkNodeTreeBitmaps(light)
+                checkNodeTreeAssets(light)
 
         if len(unresolvedPackageIds) == 0:
             return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message='There are no Cosmos assets that require relinking.',
@@ -201,3 +209,67 @@ class CosmosHandler:
             )
 
 cosmosHandler = CosmosHandler()
+
+# bpy datastructures modifying from another thread could crash Blender.
+# This means that vrmat and vrmesh file importing can be done only from the main thread.
+# For that reason 'assetImportTimerFunction' is registered as timer and waits until asset import data is
+# added to the 'assetImportQueue' from 'assetImportCallback' which is safe for execution from another thread
+# This is the recommended by the  blender community way for dealing with this problem:
+# https://docs.blender.org/api/current/bpy.app.timers.html#use-a-timer-to-react-to-events-in-another-thread
+assetImportQueue = queue.Queue()
+
+def assetImportTimerFunction():
+    global assetImportQueue
+
+    try:
+        while not assetImportQueue.empty():
+            settings = assetImportQueue.get()
+            match(settings.assetType):
+                case "Material":
+                    if not os.path.exists(settings.matFile):
+                        debug.printError(f"VRmat file {settings.matFile} does not exist")
+                        continue
+                    importMaterials(settings.matFile, 'STANDARD', settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+                case "VRMesh":
+                    COSMOS_SCALE_UNIT = 0.01 # centimeters
+                    ob, err = importProxyFromMeshFile(bpy.context,
+                                            settings.matFile, settings.objFile, lightPath=settings.lightFile,
+                                            packageId=settings.packageId, revisionId=settings.revisionId,
+                                            locationsMap=settings.locationsMap,
+                                            scaleUnit=COSMOS_SCALE_UNIT)
+                    if err:
+                        debug.printError(err)
+
+                    # Animated cosmos models need the attribute below
+                    # to function properly when the scene containing them is exported and rendered through Vantage.
+                    if ob and settings.isAnimated:
+                        userAttrs = ob.vray.UserAttributes
+                        userAttrs.user_attributes.add()
+
+                        animAttr = userAttrs.user_attributes[-1]
+                        animAttr.name = "lavina_fast_morph_mesh"
+                        animAttr.value_type = "0"
+                        animAttr.value_int = 2
+
+                case "HDRI":
+                    importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+    except Exception as e:
+        debug.printExceptionInfo(e, "cosmos_handler.assetImportTimerFunction")
+
+    return 1.0 # Timeout before the next invocation
+
+def assetImportCallback(assetSettings):
+    global assetImportQueue
+    assetImportQueue.put(assetSettings)
+
+def registerAssetImportTimerFunction():
+    if not bpy.app.timers.is_registered(assetImportTimerFunction):
+        bpy.app.timers.register(assetImportTimerFunction)
+
+def register():
+    registerAssetImportTimerFunction()
+
+
+def unregister():
+    if bpy.app.timers.is_registered(assetImportTimerFunction):
+        bpy.app.timers.unregister(assetImportTimerFunction)

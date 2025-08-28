@@ -6,7 +6,7 @@
         {
             "attr" : "mode",
             "default" : "0",
-            "items" : 
+            "items" :
             [
                 [ "0", "Result A", "Value of A: A * Mult_A" ],
                 [ "1", "Result B", "Value of B: B * Mult_B" ],
@@ -98,9 +98,46 @@
         "output_sockets":[
             {
                 "label": "Result",
-                "name": "result",
+                "name": "_default_",
                 "type": "OUTPUT_TEXTURE"
-            }
+            },
+            { "label": "Red", "name": "red", "visible": false },
+            { "label": "Green", "name": "green", "visible": false },
+            { "label": "Blue", "name": "blue", "visible": false },
+            { "label": "Alpha", "name": "alpha", "visible": false },
+            { "label": "Intensity", "name": "intensity", "visible": false },
+            { "label": "Average", "name": "average", "visible": false },
+            { "label": "Sum", "name": "sum", "visible": false },
+            { "label": "Product", "name": "product", "visible": false },
+            { "label": "Difference", "name": "difference", "visible": false },
+            { "label": "Absolute Difference", "name": "absolute_difference", "visible": false },
+            { "label": "Lower Intensity Color", "name": "lower_intensity_color", "visible": false },
+            { "label": "Greater Intensity Color", "name": "greater_intensity_color", "visible": false },
+            { "label": "Minimum", "name": "minimum", "visible": false },
+            { "label": "Maximum", "name": "maximum", "visible": false },
+            { "label": "Result A", "name": "result_a", "visible": false },
+            { "label": "Result B", "name": "result_b", "visible": false },
+            { "label": "Division", "name": "division", "visible": false },
+            { "label": "Power", "name": "power", "visible": false },
+            { "label": "Sin", "name": "sin", "visible": false },
+            { "label": "Cos", "name": "cos", "visible": false },
+            { "label": "Asin", "name": "asin", "visible": false },
+            { "label": "Acos", "name": "acos", "visible": false },
+            { "label": "Tan", "name": "tan", "visible": false },
+            { "label": "Atan", "name": "atan", "visible": false },
+            { "label": "Atan2", "name": "atan2", "visible": false },
+            { "label": "Abs", "name": "abs", "visible": false },
+            { "label": "Ceil", "name": "ceil", "visible": false },
+            { "label": "Exp", "name": "exp", "visible": false },
+            { "label": "Floor", "name": "floor", "visible": false },
+            { "label": "Log", "name": "log", "visible": false },
+            { "label": "Log10", "name": "log10", "visible": false },
+            { "label": "Sqrt", "name": "sqrt", "visible": false },
+            { "label": "Fmod", "name": "fmod", "visible": false },
+            { "label": "Bias Schlick", "name": "bias_schlick", "visible": false },
+            { "label": "Gain Schlick", "name": "gain_schlick", "visible": false },
+            { "label": "Bias Perlin", "name": "bias_perlin", "visible": false },
+            { "label": "Gain Perlin", "name": "gain_perlin", "visible": false }
         ]
     }
 }

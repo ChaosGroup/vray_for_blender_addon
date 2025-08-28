@@ -185,7 +185,7 @@ def wrapAsTexture(nodeCtx: NodeContext, listItem: mathutils.Color | AttrPlugin):
         for the items set to a TEXTURE_LIST parameter, so we need to route the socket through a convetrer.
     """
 
-    if isinstance(listItem, mathutils.Color) or listItem is None or listItem.output != "":
+    if isinstance(listItem, mathutils.Color) or listItem is None or (listItem.output != "" and listItem.output != None):
         texAColor = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexAColor"), "TexAColor")
         color = listItem if listItem else mathutils.Color((1.0, 1.0, 1.0))
         texAColor.setAttribute("texture", color)

@@ -1,5 +1,5 @@
 from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
-from vray_blender.nodes.mixin import VRayNodeBase
+from vray_blender.lib.mixin import VRayNodeBase
 
 
 # The Vector properties of the previous versions of the transform nodes have been removed.

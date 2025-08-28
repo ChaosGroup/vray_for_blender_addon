@@ -8,6 +8,8 @@ from vray_blender.engine.zmq_process import ZMQ
 from vray_blender.lib import blender_utils, image_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps
+from vray_blender.vray_tools.vray_proxy import fixPosOfProxyLightsOnPreviewUpdate
+from vray_blender.plugins.BRDF.BRDFScanned import registerScannedNodes
 
 IS_DEFAULT_SCENE = False # Indicates that current loaded scene is newly created
 
@@ -52,21 +54,26 @@ def _onLoadPre(e):
 def _onLoadPost(e):
     global IS_DEFAULT_SCENE
     IS_DEFAULT_SCENE = not bpy.data.filepath
-    
+
     from vray_blender import engine, debug
+    from vray_blender.plugins.texture.TexRemap import registerCurvesNodes as registerTexRemapCurves
     engine.ensureRunning()
 
     # Reset the global unique ID generator. This will keep the generated IDs to a 
     # decent size and will also ensure that on reload, given that no changes have been
     # made to the scene, the IDs will remain the same
     IdGenerator.reset()
-    
+
     # Set unique ids to all objects with VRay properties
     syncUniqueNames(reset=True)
 
     # Register all color ramp controls that need to receive update notifications
     registerColorRamps()
-    
+
+    registerTexRemapCurves()
+
+    registerScannedNodes()
+
     # Run upgrade for the loaded scene, if necessary
     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
 
@@ -105,18 +112,32 @@ def _onRedoPost(e):
 def _onUpdatePre(e):
     from vray_blender.exporting.light_export import fixBlenderLights
     from vray_blender.plugins.templates.common import cleanupObjectSelectorLists
-    from vray_blender.nodes.nodes import removeInvalidNodeLinks
+    from vray_blender.nodes.nodes import updateNodeLinks
     from vray_blender.lib.camera_utils import fixOverrideCameraType
     
     fixBlenderLights()
     cleanupObjectSelectorLists()
     syncColorRamps()
-    removeInvalidNodeLinks()
+    updateNodeLinks()
     fixOverrideCameraType()
 
     image_utils.checkPackedImageForUpdates()
-    
 
+
+@bpy.app.handlers.persistent
+def _onUpdatePost(scene, depsgraph):
+    fixPosOfProxyLightsOnPreviewUpdate(depsgraph)
+
+# bpy.types.BlendImportContext was added in 4.3
+if bpy.app.version >= (4, 3, 0):
+    @bpy.app.handlers.persistent
+    def _onImportPost(ctx: bpy.types.BlendImportContext):
+        from vray_blender.plugins.texture.TexRemap import createMtlCurvesNodes
+        for item in ctx.import_items:
+            if item.id_type == 'MATERIAL':
+                createMtlCurvesNodes(item.id)
+
+    
 def register():
     blender_utils.addEvent(bpy.app.handlers.save_pre, _onSavePre)
     blender_utils.addEvent(bpy.app.handlers.save_post, _onSavePost)
@@ -125,6 +146,11 @@ def register():
     blender_utils.addEvent(bpy.app.handlers.undo_post, _onUndoPost)
     blender_utils.addEvent(bpy.app.handlers.undo_post, _onRedoPost)
     blender_utils.addEvent(bpy.app.handlers.depsgraph_update_pre, _onUpdatePre)
+    blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
+
+    # bpy.app.handlers.blend_import_post was added in 4.3
+    if bpy.app.version >= (4, 3, 0):
+        blender_utils.addEvent(bpy.app.handlers.blend_import_post, _onImportPost)
 
     # Explicitly run VfbEventHandler as the add-on registration won't trigger
     # a scene reload.
@@ -142,3 +168,8 @@ def unregister():
     blender_utils.delEvent(bpy.app.handlers.undo_post, _onUndoPost)
     blender_utils.delEvent(bpy.app.handlers.undo_post, _onRedoPost)
     blender_utils.delEvent(bpy.app.handlers.depsgraph_update_pre, _onUpdatePre)
+    blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
+
+    # bpy.app.handlers.blend_import_post was added in 4.3
+    if bpy.app.version >= (4, 3, 0):
+        blender_utils.delEvent(bpy.app.handlers.blend_import_post, _onImportPost)

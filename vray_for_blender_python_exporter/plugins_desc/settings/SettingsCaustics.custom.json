@@ -88,9 +88,6 @@
                 "layout": "SEPARATOR"
             },
             {
-                "active": {
-                    "cond": "::mode=0"
-                },
                 "layout": "COLUMN",
                 "align": true,
                 "attrs": [
@@ -98,10 +95,16 @@
                         "name": "multiplier"
                     },
                     {
-                        "name": "max_photons"
+                        "name": "max_photons",
+                        "active": {
+                            "cond": "::mode!=2"
+                        }
                     },
                     {
-                        "name": "max_density"
+                        "name": "max_density",
+                        "active": {
+                            "cond": "::mode!=2"
+                        }
                     }
                 ]
             },
@@ -129,7 +132,7 @@
                     },
                     {
                         "active": {
-                            "cond": "::auto_save=1"
+                            "cond": "::auto_save=1,::mode!=2"
                         },
                         "name": "auto_save_file"
                     }

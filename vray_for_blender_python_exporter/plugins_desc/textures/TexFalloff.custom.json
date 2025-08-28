@@ -146,9 +146,7 @@
             "compatibility_with",
             "invert_alpha",
             "alpha_offset",
-            "nouvw_color",
-            "blend_input",
-            "use_blend_input"
+            "nouvw_color"
         ],
         "animatable": true
     }

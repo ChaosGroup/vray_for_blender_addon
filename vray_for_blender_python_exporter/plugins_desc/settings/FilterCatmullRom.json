@@ -5,8 +5,11 @@
     "Name" : "Filter Catmull Rom",
     "Parameters" : [],
     "Type" : "SETTINGS",
-    "Widget" : 
+    "Widget" :
     {
         "widgets" : []
+    },
+    "Options": {
+        "animatable": false
     }
 }

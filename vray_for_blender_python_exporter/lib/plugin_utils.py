@@ -90,10 +90,13 @@ def loadPluginDescriptions():
                 'Options'      : pluginOptions,
                 'Widget'       : pluginWidget,
                 'Node'         : pluginNode,
-                'Outputs'      : pluginOutputs
+                'Outputs'      : pluginOutputs,
+                'SocketPanels' : {}
             }
 
             _generateUIConditionEvaluators(pluginDesc)
+            _loadSocketPanels(pluginDesc)
+
             PLUGINS_DESC[pluginID] = pluginDesc
         
         except Exception as ex:
@@ -247,6 +250,25 @@ def _generateUIConditionEvaluators(pluginDesc: dict):
     """ Generates evaluation functions for the conditions in all widgets of the plugin. """
     for widget in pluginDesc['Widget']['widgets']:
         _generateWidgetConditionEvaluators(widget, pluginDesc)
+
+
+def _loadSocketPanels(pluginDesc: dict):
+    """ Load the information about how sockets are grouped into panels on the node """
+    if (inputSockets := pluginDesc.get('Node', {}).get('input_sockets', None)) is None:
+        return
+    
+    panelSockets = None
+
+    for sockDesc in inputSockets:
+        if sockDesc.get('type', '') == 'ROLLOUT':
+            if panelSockets is not None:
+                pluginDesc['SocketPanels'][panelSockets[0]] = panelSockets[1]
+            panelSockets = (sockDesc['name'], [])
+        elif panelSockets is not None:
+            panelSockets[1].append(sockDesc['name'])
+
+    if panelSockets is not None:
+        pluginDesc['SocketPanels'][panelSockets[0]] = panelSockets[1]
 
 
 def _compileConditionForProperty(propName: str, propCond: str, translator: UIConditionConverter, pluginDesc):

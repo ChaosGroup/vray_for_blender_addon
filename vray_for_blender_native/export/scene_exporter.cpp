@@ -192,27 +192,36 @@ void SceneExporter::onImageUpdated()
 }
 
 
-void SceneExporter::exportMesh(MeshDataPtr mesh)
+void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 {
-	m_wg->add(1);
-	m_threadManager->addTask([this, mesh](int, const volatile bool &)mutable{
-		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
-		
+	if (asyncExport) {
+		m_wg->add(1);
+		m_threadManager->addTask([this, mesh](int, const volatile bool &)mutable{
+			NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
+
+			PluginDesc pluginDesc(mesh->name, "GeomStaticMesh");
+
+			{
+
+				ScopeTimer tm("fillMeshData async");
+				Assets::fillMeshData(*mesh, pluginDesc);
+			}
+
+			m_exporter->exportPlugin(pluginDesc);
+
+			{
+				WithGIL gil;
+				mesh.reset();
+			}
+		}, ThreadManager::Priority::LOW);
+	} else {
 		PluginDesc pluginDesc(mesh->name, "GeomStaticMesh");
-
-		{
- 		
-			ScopeTimer tm("fillMeshData");
-			Assets::fillMeshData(*mesh, pluginDesc);
-		}
-	
+		ScopeTimer tm("fillMeshData sync");
+		Assets::fillMeshData(*mesh, pluginDesc);
 		m_exporter->exportPlugin(pluginDesc);
-
-		{
-			WithGIL gil;
-			mesh.reset();
-		}
-	}, ThreadManager::Priority::LOW);
+		WithGIL gil;
+		mesh.reset();
+	}
 }
 
 

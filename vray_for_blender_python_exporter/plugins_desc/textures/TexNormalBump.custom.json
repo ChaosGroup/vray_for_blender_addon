@@ -6,12 +6,9 @@
             "attr": "bump_tex_color",
             "options": {
                 "linked_only": true
-            }
-        },
-        {
-            "attr": "bump_tex_float",
-            "options": {
-                "linked_only": true
+            },
+            "ui": {
+                "display_name": "Map"
             }
         },
         {
@@ -21,18 +18,45 @@
             }
         },
         {
+            "attr": "additional_bump_type",
+            "type": "ENUM",
+            "items": [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "5", "From Texture Bump Output", "From Texture Bump Output" ]
+            ]
+        },
+        {
+            "attr": "bump_map_mult",
+            "ui": {
+                "display_name": "Additional Bump Amount",
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "normal_map_mult",
+            "ui": {
+                "display_name": "Normal Map Multiplier",
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.01
+            }
+        },
+        {
             "attr": "bump_tex_mult",
             "ui": {
-                "soft_min": 0.0,
-                "soft_max": 1.0,
-                "spin_step": 0.01
+                "soft_min": -10.0,
+                "soft_max": 10.0,
+                "spin_step": 0.01,
+                "display_name": "Global Multiplier"
             }
         },
         {
             "attr": "bump_delta_scale",
             "ui": {
-                "soft_min": 0.0,
-                "soft_max": 1.0,
+                "soft_min": 0.001,
+                "soft_max": 2.0,
                 "spin_step": 0.01
             }
         },
@@ -47,7 +71,49 @@
         },
         {
             "attr": "normal_uvwgen",
-            "type": "UVWGEN"
+            "type": "UVWGEN",
+            "ui" : {
+                "display_name": "Mapping"
+            }
+        },
+        {
+            "attr": "flip_red",
+            "type": "BOOL",
+            "default": false,
+            "desc": "If set the red channel of the input will be flipped",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "flip_green",
+            "type": "BOOL",
+            "default": false,
+            "desc": "If set the green channel of the input will be flipped",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "swap_red_green",
+            "type": "BOOL",
+            "default": false,
+            "desc": "If set the red and green channels will be swapped",
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "blue2Z_mapping_method",
+            "type": "ENUM",
+            "default": "1",
+            "ui": {
+                "display_name": "Blue to Z Mapping"
+            },
+            "items": [
+                [ "0", "Blue to Z[0, 1]", "Blue to Z[0, 1]" ],
+                [ "1", "Blue to Z[-1, 1]", "Blue to Z[-1, 1]" ]
+            ]
         }
     ],
     "Widget": {
@@ -56,37 +122,41 @@
                 "layout": "COLUMN",
                 "attrs": [
                     {
-                        "name": "bump_tex_mult"
-                    },
-                    {
                         "name": "map_type"
                     },
                     {
-                        "name": "normal_uvwgen_auto"
+                        "name": "normal_map_mult",
+                        "active": {"cond": "::map_type!=0,::map_type!=5,::map_type!=6"}
                     },
                     {
-                        "name": "maya_compatible"
+                        "name": "normal_map_rotation_angle",
+                        "active": {"cond": "::map_type=1"}
+                    },
+                    {
+                        "name": "bump_map_mult",
+                        "active": {"cond": "::map_type!=0,::map_type!=5"}
+                    },
+                    {
+                        "name": "additional_bump_type",
+                        "active": {"cond": "::map_type!=0,::map_type!=5"}
                     },
                     {
                         "name": "bump_delta_scale"
                     },
                     {
-                        "name": "normal_map_mult"
+                        "name": "bump_tex_mult"
                     },
                     {
-                        "name": "bump_map_mult"
+                        "name": "flip_red"
                     },
                     {
-                        "name": "additional_bump_type"
+                        "name": "flip_green"
                     },
                     {
-                        "name": "units"
+                        "name": "swap_red_green"
                     },
                     {
                         "name": "blue2Z_mapping_method"
-                    },
-                    {
-                        "name": "normal_map_rotation_angle"
                     }
                 ]
             }
@@ -98,13 +168,10 @@
                 "name": "bump_tex_color"
             },
             {
-                "name": "bump_tex_mult"
-            },
-            {
-                "name": "bump_tex_float"
-            },
-            {
                 "name": "additional_bump"
+            },
+            {
+                "name": "bump_tex_mult"
             },
             {
                 "name": "normal_uvwgen"
@@ -114,7 +181,8 @@
     "Options": {
         "animatable": true,
         "excluded_parameters": [
-            "bump_tex_mult_tex"
+            "bump_tex_mult_tex",
+            "bump_tex_float"
         ]
     }
 }

@@ -36,7 +36,8 @@
                         "name": "color_offset"
                     },
                     {
-                        "name": "invert"
+                        "name": "invert",
+                        "label": "Invert Color"
                     },
                     {
                         "layout": "SEPARATOR"
@@ -49,7 +50,8 @@
                                 "label": "Alpha Source"
                             },
                             {
-                                "name": "invert_alpha"
+                                "name": "invert_alpha",
+                                "active": {"cond": "::invert!=0"}
                             }
                         ]
                     },

@@ -119,6 +119,13 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr": "compatibilityMode",
+            "default": "1",
+            "options": {
+                "visible": false
+            }
         }
     ],
     "Widget": {
@@ -328,7 +335,6 @@
         "excluded_parameters": [
             "depthCurveExternal",
             "angularCurveExternal",
-            "compatibilityMode",
             "lineColor",
             "lineColorInner",
             "lineWidth",

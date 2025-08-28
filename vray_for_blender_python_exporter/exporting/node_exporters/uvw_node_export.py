@@ -2,9 +2,7 @@ from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.exporting.tools import *
-from vray_blender.nodes.utils import getInputSocketByVRayAttr
-import mathutils
-import copy
+from vray_blender.nodes.tools import isInputSocketLinked
 
 # Flags for the different UVWGenRandomizer modes
 UVWGenRandomizerModes = {
@@ -48,7 +46,7 @@ def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
 
         assert len(nodeCtx.nodes), "This function should not be executed with NodeContext without nodes"
 
-        if nodeCtx.nodes[0].bl_idname == 'VRayNodeLightDome' and getInputSocketByVRayAttr(nodeCtx.nodes[0], 'dome_lock_texture').value:
+        if nodeCtx.nodes[0].bl_idname == 'VRayNodeLightDome' and getInputSocketByAttr(nodeCtx.nodes[0], 'dome_lock_texture').value:
             # A separate default UVWGenEnvironment is created when LightDome::dome_lock_texture is enabled,
             # as it requires a unique uvw_matrix to account for the light's rotation.
             uvwGenEnv.name = f'defaultUVWGenEnvironment_{ Names.object(nodeCtx.rootObj) }'
@@ -77,7 +75,7 @@ def exportVRayNodeUVWGenRandomizer(nodeCtx: NodeContext):
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
 
     # If the 'input' socket is not connected, export with the default mapping
-    if not node.inputs['Input'].is_linked:
+    if not isInputSocketLinked(node.inputs['Input']):
         pluginDesc.setAttribute('input', exportDefaultUVWGenChannel(nodeCtx))
 
     # UVWGenRandomizer's 'mode' attribute is used as mask on which the first five bits

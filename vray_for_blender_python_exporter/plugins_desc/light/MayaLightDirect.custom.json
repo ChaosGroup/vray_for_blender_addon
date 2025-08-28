@@ -230,7 +230,7 @@
                                 "name": "shadowBias"
                             },
                             {
-                                "name": "shadowColor"
+                                "name": "shadowColor_colortex"
                             },
                             {
                                 "name": "shadowRadius"

@@ -2,18 +2,21 @@ import bpy
 import mathutils
 
 from vray_blender.lib import export_utils, lib_utils
+from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
 from vray_blender.lib.names import Names
 from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId
 from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeMtlMulti, exportVRayNodeShaderScript
 from vray_blender.exporting.node_exporters.uvw_node_export import exportVRayNodeUVWGenRandomizer, exportVRayNodeUVWMapping
 from vray_blender.nodes import utils as NodesUtils
-from vray_blender.nodes.tools import getLinkInfo, isVraySocket, isVrayNode, isCompatibleNode
+from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isVraySocket, isCompatibleNode, isInputSocketLinked
 
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
 from vray_blender import debug
-from vray_blender.lib.blender_utils import getGeomCenter
+from vray_blender.lib.blender_utils import getGeomCenter, vecElemMult
+
+from vray_blender.vray_tools.vray_proxy import getProxyPreviewScale
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -37,8 +40,7 @@ def exportPluginWithStats(nodeCtx: NodeContext, plDesc: PluginDesc, trackPlugin 
 
 
 def exportLinkedSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
-    """ Export the tree branch starting at an output socket, applying any necessary conversions
-        on the node link defined by the from socket
+    """ Export the tree branch connected to the input socket, applying any necessary conversions.
 
     Args:
         nodeCtx (NodeContext): the active node export context
@@ -49,7 +51,7 @@ def exportLinkedSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
     """
     assert not inSocket.is_output
 
-    if nodeLink := getNodeLink(inSocket):
+    if nodeLink := getFarNodeLink(inSocket):
         sockValue = exportVRayNode(nodeCtx, nodeLink)
 
         # Not all nodes are exported as plugins. Some may just return a value.
@@ -64,7 +66,7 @@ def exportLinkedSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
 
 
 def exportSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
-    if inSocket.is_linked:
+    if isInputSocketLinked(inSocket):
         return exportLinkedSocket(nodeCtx, inSocket)
 
     return inSocket.value
@@ -75,11 +77,16 @@ def exportSocketByName(nodeCtx: NodeContext, inSocketName: str):
     return exportSocket(nodeCtx, socket)
 
 
-def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     import vray_blender.exporting.cycles_export as cycles_export
     """ Export V-Ray node using its custom function if it has one or with '_exportArbitraryNode' otherwise
     """
     node = nodeCtx.node
+
+    # Currently the list of compatible nodes contains only cycles nodes and
+    # group/re-route which are skipped by the export anyways.
+    if not isVrayNode(node) and (node.bl_idname in CompatibleNonVrayNodes):
+        return cycles_export.exportCyclesNode(nodeCtx, nodeLink)
 
     # TODO Move all of the custom export functions into 'exportTreeNode' members of their plugin modules
     match node.bl_idname:
@@ -101,107 +108,13 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
             return exportVRayNodeUVWGenRandomizer(nodeCtx)
         case "VRayNodeUVWMapping":
             return exportVRayNodeUVWMapping(nodeCtx)
+        case "VRayNodeTexVectorProduct":
+            return _exportVRayNodeTexVectorProduct(nodeCtx)
         case "VRayNodeTransform":
             return node.getValue(nodeCtx.exporterCtx.ctx)
         case "VRayNodeMatrix" | "VRayNodeVector":
             return node.getValue()
 
-        case "ShaderNodeBsdfPrincipled":
-            return cycles_export.exportCyclesBsdfPrincipled(nodeCtx)
-        case "ShaderNodeBsdfDiffuse":
-            return cycles_export.exportCyclesDiffuseBsdf(nodeCtx)
-        case "ShaderNodeEmission":
-            return cycles_export.exportCyclesEmissionBsdf(nodeCtx)
-        case "ShaderNodeBsdfRefraction":
-            return cycles_export.exportCyclesRefractiveBsdf(nodeCtx, False)
-        case "ShaderNodeBsdfGlass":
-            return cycles_export.exportCyclesRefractiveBsdf(nodeCtx, True)
-        case "ShaderNodeBsdfSheen":
-            return cycles_export.exportCyclesSheenBsdf(nodeCtx)
-        case "ShaderNodeBsdfAnisotropic":
-            return cycles_export.exportCyclesGlossyBsdf(nodeCtx)
-        case "ShaderNodeAddShader":
-            return cycles_export.exportCyclesBlendShaderNode(nodeCtx, False)
-        case "ShaderNodeMixShader":
-            return cycles_export.exportCyclesBlendShaderNode(nodeCtx, True)
-        case "ShaderNodeTexChecker":
-            return cycles_export.exportCyclesCheckerTexture(nodeCtx, nodeLink)
-        case "ShaderNodeNormalMap":
-            return cycles_export.exportCyclesNormalMap(nodeCtx)
-        case "ShaderNodeMath":
-            return cycles_export.exportCyclesMathNode(nodeCtx)
-        case "ShaderNodeRGB":
-            return cycles_export.exportCyclesRGBNode(nodeCtx)
-        case "ShaderNodeInvert":
-            return cycles_export.exportCyclesInvertNode(nodeCtx)
-        case "ShaderNodeRGBToBW":
-            return cycles_export.exportCyclesRGBToBwNode(nodeCtx)
-        case "ShaderNodeTexImage":
-            return cycles_export.exportCyclesImageNode(nodeCtx, nodeLink, False)
-        case "ShaderNodeTexEnvironment":
-            return cycles_export.exportCyclesImageNode(nodeCtx, nodeLink, True)
-        case "ShaderNodeUVMap":
-            return cycles_export.exportCyclesUVWMapNode(nodeCtx)
-        case "ShaderNodeCombineColor":
-            return cycles_export.exportCyclesCombineColorNode(nodeCtx)
-        case "ShaderNodeCombineXYZ":
-            return cycles_export.exportCyclesCombineVectorNode(nodeCtx)
-        case "ShaderNodeValToRGB":
-            return cycles_export.exportCyclesRampNode(nodeCtx, nodeLink)
-        case "ShaderNodeTexGradient":
-            return cycles_export.exportCyclesGradientNode(nodeCtx, nodeLink)
-        case "ShaderNodeBlackbody":
-            return cycles_export.exportCyclesBlackbodyNode(nodeCtx)
-        case "ShaderNodeWireframe":
-            return cycles_export.exportCyclesWireframeNode(nodeCtx)
-        case "ShaderNodeRGBCurve":
-            return cycles_export.exportCyclesCurvesNode(nodeCtx, True)
-        case "ShaderNodeVectorCurve":
-            return cycles_export.exportCyclesCurvesNode(nodeCtx, False)
-        case "ShaderNodeValue":
-            return cycles_export.exportCyclesValueNode(nodeCtx)
-        case "ShaderNodeTexCoord":
-            return cycles_export.exportCyclesTextureCoordinatesNode(nodeCtx, nodeLink)
-        case "ShaderNodeMapping":
-            return cycles_export.exportCyclesMappingNode(nodeCtx)
-        case "ShaderNodeAttribute":
-            return cycles_export.exportCyclesAttributeNode(nodeCtx, nodeLink)
-        case "ShaderNodeVertexColor":
-            return cycles_export.exportCyclesColorAttributeNode(nodeCtx, nodeLink)
-        case "ShaderNodeNormal":
-            return cycles_export.exportCyclesNormalNode(nodeCtx, nodeLink)
-        case "ShaderNodeCameraData":
-            return cycles_export.exportCyclesCameraDataNode(nodeCtx, nodeLink)
-        case "ShaderNodeBevel":
-            return cycles_export.exportCyclesBevelNode(nodeCtx)
-        case "ShaderNodeAmbientOcclusion":
-            return cycles_export.exportCyclesAmbientOcclusionNode(nodeCtx, nodeLink)
-        case "ShaderNodeBump":
-            return cycles_export.exportCyclesBumpNode(nodeCtx)
-        case "ShaderNodeObjectInfo":
-            return cycles_export.exportCyclesObjectInfoNode(nodeCtx, nodeLink)
-        case "ShaderNodeNewGeometry":
-            return cycles_export.exportCyclesGeometryNode(nodeCtx, nodeLink)
-        case "ShaderNodeSeparateColor":
-            return cycles_export.exportCyclesSeperateColorNode(nodeCtx, nodeLink)
-        case "ShaderNodeSeparateXYZ":
-            return cycles_export.exportCyclesSeperateXYZNode(nodeCtx, nodeLink)
-        case "ShaderNodeFresnel":
-            return cycles_export.exportCyclesFresnelNode(nodeCtx)
-        case "ShaderNodeLayerWeight":
-            return cycles_export.exportCyclesLayerWeightNode(nodeCtx, nodeLink)
-        case "ShaderNodeMix":
-            return cycles_export.exportCyclesMixNode(nodeCtx)
-        case "ShaderNodeClamp":
-            return cycles_export.exportCyclesClampNode(nodeCtx)
-        case "ShaderNodeGamma":
-            return cycles_export.exportCyclesGammaNode(nodeCtx)
-        case "ShaderNodeHueSaturation":
-            return cycles_export.exportCyclesHSVNode(nodeCtx)
-        case "ShaderNodeBrightContrast":
-            return cycles_export.exportCyclesBrightnessNode(nodeCtx)
-        case "ShaderNodeTexNoise":
-            return cycles_export.exportCyclesNoiseNode(nodeCtx, nodeLink)
         case _:
             if node.vray_plugin and (node.vray_plugin != 'NONE') and \
                     (exportTreeNode := getattr(getPluginModule(node.vray_plugin), "exportTreeNode", None)):
@@ -210,7 +123,7 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
                 return _exportArbitraryNode(nodeCtx, nodeLink)
 
 
-def exportVRayNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def exportVRayNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     """ Export a VRay node, calling a specialized export function if one exists for the node type. """
     node = nodeLink.from_node
 
@@ -249,7 +162,7 @@ def exportVRayNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
 
 # Some nodes require special handling and we have dedicated export methods for them.
 # For the rest, use this method
-def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
+def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node = nodeLink.from_node
     if node and not hasattr(node, "vray_plugin"):
         if nodeCtx.material:
@@ -347,6 +260,11 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object):
 
         mtlSingleBRDF, _ = mtlExporter.exportMtl(mtl)
 
+        if mtlSingleBRDF is None:
+            # This may happen when the output node corresponding to the tree type (V-Ray or Cycles)
+            # is missing
+            return
+        
         mtlWrapped = _exportMtlOptions(exporterCtx, obj, mtl, mtlSingleBRDF)
         mtlWrapped.auxData['mtl'] = {'name': mtl.name}
 
@@ -438,23 +356,38 @@ def exportNodePlugin(exporterCtx: ExporterContext,
                      geomPlugin: AttrPlugin,
                      objectName: str,
                      isInstancer = False,
-                     visible = True): 
+                     visible = True,
+                     tmOverride: Matrix = None):
         """ Exports a V-Ray Node plugin for the specified geometry """
-        tm = mathutils.Matrix() if isInstancer else obj.matrix_world
+        tm = mathutils.Matrix() if isInstancer else (obj.matrix_world if not tmOverride else tmOverride)
 
         # Proxy objects must be rendered at the location of their preview meshes.
         if isObjectVrayProxy(obj) and \
             (geomMeshFile := obj.data.vray.GeomMeshFile) and \
-                (geomMeshFile.previewType != 'None'):
+                (geomMeshFile.previewType != 'None') and \
+                    tmOverride is None:
+
+            proxyPreviewScale = getProxyPreviewScale(obj)
 
             # Adjust the transformation matrix to account for any changes in the preview mesh's position
             # relative to its initial position or origin point. This ensures the preview mesh is rendered
-            # at the correct location in the scene.
-            offset = getGeomCenter(obj) - geomMeshFile.initial_preview_mesh_pos
-            tm = tm @ mathutils.Matrix.Translation(offset)
+            # at the correct location in the scene with its correct scale.
+            offset = getGeomCenter(obj)
+            offset -= vecElemMult(geomMeshFile.initial_preview_mesh_pos, proxyPreviewScale)
+            
+            scaleMat = mathutils.Matrix.Diagonal((
+                proxyPreviewScale.x,
+                proxyPreviewScale.y,
+                proxyPreviewScale.z,
+                1.0
+            ))
+
+            tm = tm @ mathutils.Matrix.Translation(offset) @ scaleMat
 
         pluginName = Names.vrayNode(objectName)
         nodeDesc = PluginDesc(pluginName, "Node")
+        if isInstancer:
+            geomPlugin.forceUpdate = True
         nodeDesc.setAttribute("geometry", geomPlugin)
         nodeDesc.setAttribute("objectID", obj.pass_index)
         nodeDesc.setAttribute("transform", tm)
@@ -470,7 +403,7 @@ def exportNodePlugin(exporterCtx: ExporterContext,
     
         # Export empty material plugin(s) for the node. They will be filled in later by the 
         # material export procedure
-        matPlugin = _exportObjMaterials(exporterCtx, obj.original)
+        matPlugin = _exportObjMaterials(exporterCtx, obj)
         nodeDesc.setAttribute("material", matPlugin)
 
         scene = exporterCtx.dg.scene
@@ -525,12 +458,15 @@ def getTextureUVWGen(nodeCtx: NodeContext, sockNormal):
 
 
 ################ IN-PLACE values export ############################
-def _exportVRayNodeMultiSelect(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink) -> list[AttrPlugin]:
+def _exportVRayNodeMultiSelect(nodeCtx: NodeContext, nodeLink: FarNodeLink) -> list[AttrPlugin]:
     node = nodeCtx.node
     selectedObjects = node.getSelected(nodeCtx.exporterCtx.ctx)
     
     result = []
 
+    if not isVrayNode(nodeLink.to_node):
+        return result
+    
     for obj in selectedObjects:
         socket = nodeLink.to_socket
         linkInfo = getLinkInfo(socket.node.vray_plugin, socket.vray_attr)
@@ -542,7 +478,7 @@ def _exportVRayNodeMultiSelect(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLin
     return result
 
 
-def _exportVRayNodeSelectObject(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink) -> AttrPlugin:
+def _exportVRayNodeSelectObject(nodeCtx: NodeContext, nodeLink: FarNodeLink) -> AttrPlugin:
     node = nodeCtx.node
 
     if obj := node.getSelected(nodeCtx.exporterCtx.ctx):
@@ -614,6 +550,25 @@ def _exportVRayNodeSelectObjectGeometry(nodeCtx: NodeContext):
     return AttrPlugin()
 
 
+def _exportVRayNodeTexVectorProduct(nodeCtx: NodeContext):
+    # TexVectorProduct is only used by the converter for now and it requires
+    # some vector->color->vector hacks because blender clamps colors, but the
+    # plugin uses color textures.
+    node = nodeCtx.node
+    pluginType = node.vray_plugin
+    pluginName = Names.treeNode(nodeCtx)
+    plDesc = PluginDesc(pluginName, pluginType)
+    plDesc.vrayPropGroup = node.TexVectorProduct
+
+    exportNodeTree(nodeCtx, plDesc)
+    inp1 = plDesc.getAttribute("input1")
+    if isinstance(inp1, Vector):
+        plDesc.setAttribute("input1", mathutils.Color(inp1[:]), True)
+    attrPlugin = exportPluginWithStats(nodeCtx, plDesc)
+
+    return attrPlugin
+
+
 def _exportVRayPluginListHolder(nodeCtx: NodeContext):
     pluginList = []
     for inSock in nodeCtx.node.inputs:
@@ -643,6 +598,9 @@ def _needTexIntToFloatConversion(fromSockType, toSockType):
 
 def _needUVWGenToColorConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
     return isUVWSocket(fromSockType) and "UVWGen" in fromAttrPlugin.pluginType and isColorSocket(toSockType) and toSockType!='VECTOR'
+
+def _needColorToUVWConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
+    return isUVWSocket(toSockType) and "UVWGen" not in fromAttrPlugin.pluginType and isColorSocket(toSockType) and toSockType!='VECTOR'
 
 def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAttrPlugin: AttrPlugin):
     """ Export one or more 'convert' and/or 'combine' plugins to convert
@@ -678,8 +636,9 @@ def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAt
         elif _needTexIntToFloatConversion(fromSockType, toSockType):
             fromAttrPlugin = _exportTexConverter(nodeCtx, fromAttrPlugin, "TexIntToFloat")
         elif _needUVWGenToColorConversion(fromSockType, toSockType, fromAttrPlugin):
-            fromAttrPlugin = _exportUVWConverter(nodeCtx, fromAttrPlugin)
-
+            fromAttrPlugin = _exportUVWToColorConverter(nodeCtx, fromAttrPlugin)
+        elif _needColorToUVWConversion(fromSockType, toSockType, fromAttrPlugin):
+            fromAttrPlugin = _exportColorToUVWConverter(nodeCtx, fromAttrPlugin)
         if needMult:
             fromAttrPlugin = _exportCombineTexture(nodeCtx, toSock.value, fromAttrPlugin, mult, asFloat)
 
@@ -702,15 +661,15 @@ def _exportCombineTexture(ctxNode: NodeContext, value, txValue: AttrPlugin, txMu
     pluginType = "TexCombineFloat" if asFloat else "TexCombineColor"
     pluginName = Names.nextVirtualNode(ctxNode, pluginType)
     plDesc = PluginDesc(pluginName, pluginType)
-    
+
     if asFloat:
         plDesc.attrs["value"] = value
     else:
         plDesc.attrs["color"] = AColor(value)
-    
+
     plDesc.attrs["texture"] = txValue
     plDesc.attrs["texture_multiplier"] = txMult
-    
+
     return exportPluginWithStats(ctxNode, plDesc)
 
 
@@ -731,9 +690,16 @@ def _exportTexConverter(nodeCtx: NodeContext, texPlugin: AttrPlugin, converterPl
 
     return exportPluginWithStats(nodeCtx, plDesc)
 
-def _exportUVWConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+def _exportUVWToColorConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
     pluginName = Names.nextVirtualNode(nodeCtx, "TexUVW")
     plDesc = PluginDesc(pluginName, "TexUVW")
     plDesc.attrs['uvwgen'] = fromPlugin
+
+    return exportPluginWithStats(nodeCtx, plDesc)
+
+def _exportColorToUVWConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+    pluginName = Names.nextVirtualNode(nodeCtx, "UVWGenExplicit")
+    plDesc = PluginDesc(pluginName, "UVWGenExplicit")
+    plDesc.attrs['uvw'] = fromPlugin
 
     return exportPluginWithStats(nodeCtx, plDesc)

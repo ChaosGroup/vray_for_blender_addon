@@ -179,12 +179,13 @@
         {
             "attr" : "preserve_map_borders",
             "default" : "-1",
-            "desc" : "The valid values are: -1 - not set; 0 - none; 1 - internal; 2 - all",
+            "desc" : "The valid values are: -1 - not set; 0 - none; 1 - internal; 2 - all; 3 - corners",
             "items" : 
             [
                 [ "0", "None", "None" ],
                 [ "1", "Internal", "Internal" ],
-                [ "2", "All", "All" ]
+                [ "2", "All", "All" ],
+                [ "3", "Corners", "Corners" ]
             ],
             "type" : "ENUM",
             "ui" : 

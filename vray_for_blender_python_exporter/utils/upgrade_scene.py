@@ -244,10 +244,13 @@ def _createNodeLinks(ctx: UpgradeContext, nodeLinks: list[bpy.types.NodeLink]):
 
 
 def _hasUpgradeableNodes(obj, upgradeInfo: dict) -> bool:
-    if (ntree := getattr(obj, 'node_tree', None)) and hasattr(ntree, 'vray'):
-        return any([n for n in ntree.nodes if n.bl_idname in upgradeInfo['nodes'].keys()])
-
-    return False
+    if isinstance(obj, bpy.types.NodeTree):
+        ntree = obj
+    else:
+        ntree = getattr(obj, 'node_tree', None)
+    if not ntree or not hasattr(ntree, 'vray'):
+        return False
+    return any([n for n in ntree.nodes if n.bl_idname in upgradeInfo['nodes'].keys()])
 
 
 def upgradeScene(upgradeInfo: dict):

@@ -2,13 +2,20 @@
     "ID": "RenderChannelNodeID",
     "Name" : "Object ID",
     "Subtype" : "MATTE",
+    "Parameters": [
+        {
+            "attr" : "name",
+            "default" : "Object ID",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
                 "attrs":[
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -23,12 +30,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr" : "name",
-            "default" : "Object ID"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": []

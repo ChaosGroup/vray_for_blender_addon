@@ -74,6 +74,7 @@ public:
 	void        init();
 	void        start();
 	void		renderSequence(int start, int end, int step);
+	void		continueRenderSequence();
 	void        stop();
 	void        free();
 
@@ -129,6 +130,7 @@ private:
 	void processRendererOnImage(const proto::MsgRendererOnImage& message);
 	void processRendererOnChangeState(const proto::MsgRendererOnChangeState& message);
 	void processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message);
+	void processRendererOnProgress(const proto::MsgRendererOnProgress& message);
 
 private:
 	ExporterSettings m_settings;
@@ -146,18 +148,17 @@ private:
 	std::atomic<bool> m_isAborted = false;
 	std::atomic<int>  m_exportedCount = 0;  // Number of exported plugins
 
-	std::mutex   m_imgMutex;  // Ensures the image is not changed while it is read
-	std::mutex   m_zmqClientMutex;
+	std::mutex        m_imgMutex;  // Ensures the image is not changed while it is read
+	std::mutex        m_zmqClientMutex;
 
-	ImageMap     m_layerImages;
-	ImgIdReaderPtr m_imgIdReader;
+	ImageMap          m_layerImages;
+	ImgIdReaderPtr    m_imgIdReader;
 
-	int64_t      m_exportedAttributes = 0;
-	int64_t      m_exportedSize = 0;
-	float        m_currentSceneFrame = 0;
-	float        renderProgress;     // Fraction of job done in [0, 1]
-	std::string  progressMessage;
-	std::atomic<int>	 m_lastRenderedFrame = 0;
+	int64_t           m_exportedAttributes = 0;
+	int64_t           m_exportedSize = 0;
+	float             m_currentSceneFrame = 0;
+	float             m_renderProgress = 0.0;     // Fraction of job done in [0, 1]
+	std::atomic<int>  m_lastRenderedFrame = 0;
 
 	std::map<std::string, AttrStats> m_exportStats;
 	std::mutex m_statsMutex;

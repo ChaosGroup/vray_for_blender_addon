@@ -31,10 +31,12 @@
                         "name": "alpha_from_intensity"
                     },
                     {
-                        "name": "invert"
+                        "name": "invert",
+                        "label": "Invert Color"
                     },
                     {
-                        "name": "invert_alpha"
+                        "name": "invert_alpha",
+                        "active": {"cond": "::invert!=0"}
                     },
                     {
                         "name": "color_mult"

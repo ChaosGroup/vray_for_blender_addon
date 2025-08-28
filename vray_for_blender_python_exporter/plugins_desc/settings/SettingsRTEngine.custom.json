@@ -55,7 +55,7 @@
             }
         }
     ],
-    "options" : {
+    "Options" : {
         "animatable" : false
     }
 }

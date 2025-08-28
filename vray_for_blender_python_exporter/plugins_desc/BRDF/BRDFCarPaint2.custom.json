@@ -74,6 +74,10 @@
             "options": {
                 "linked_only": true
             }
+        },
+        {
+            "attr": "mapping_type",
+            "default": "1"
         }
     ],
     "Widget": {
@@ -128,10 +132,12 @@
                         "name": "flake_density"
                     },
                     {
-                        "name": "flake_scale"
+                        "name": "flake_scale",
+                        "active": {"cond": "::mapping_type!=1"}
                     },
                     {
-                        "name": "flake_scale_triplanar"
+                        "name": "flake_scale_triplanar",
+                        "active": {"cond": "::mapping_type!=0"}
                     },
                     {
                         "name": "flake_size"
@@ -146,7 +152,8 @@
                         "name": "mapping_type"
                     },
                     {
-                        "name": "mapping_channel"
+                        "name": "mapping_channel",
+                        "active": {"cond": "::mapping_type!=1"}
                     },
                     {
                         "name": "flake_traceReflections"

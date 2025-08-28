@@ -7,6 +7,12 @@
         {
             "attr": "uvw_channel",
             "default": -1
+        },
+        {
+            "attr": "nsamples",
+            "ui": {
+                "min": 0
+            }
         }
     ],
     "Node": {

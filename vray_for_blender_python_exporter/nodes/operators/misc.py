@@ -6,6 +6,7 @@ from vray_blender import debug
 from vray_blender.lib import blender_utils
 from vray_blender.nodes.utils import getLightOutputNode
 from vray_blender.ui.properties_material import renderMaterialSelector
+from vray_blender.lib.mixin import VRayOperatorBase
 
 originalNodeEditorDraw = None
 
@@ -14,7 +15,7 @@ def _redrawNodeEditor():
         area.tag_redraw()
 
 
-class VRAY_OT_show_ntree(bpy.types.Operator):
+class VRAY_OT_show_ntree(VRayOperatorBase):
     bl_idname   = "vray.show_ntree"
     bl_label    = "Show Node Tree"
     bl_options  = {'INTERNAL'}
@@ -86,7 +87,7 @@ class VRAY_OT_show_ntree(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class VRAY_OT_ntree_sync_name(bpy.types.Operator):
+class VRAY_OT_ntree_sync_name(VRayOperatorBase):
     bl_label    = "Sync Node Tree Name"
     bl_idname   = "vray.sync_ntree_name"
     bl_options  = {'INTERNAL'}

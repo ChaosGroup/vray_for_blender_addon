@@ -29,7 +29,7 @@ class VRayRendererProdBase:
     """ Final (or 'production' in VRay lingo) renderer implementation.
         It is used for non-interactive rendering - e.g. production and material previews 
     """
-
+    
     def __init__(self, isPreview: bool):
         # An opaque pointer to the VRay renderer object owned by the C++ library
         self.renderer = None 
@@ -118,6 +118,7 @@ class VRayRendererProdBase:
 
             if not exporterCtx.bake:
                 self.viewParams = self._exportCameras(exporterCtx, self.viewParams)
+
                 if not any(p.isActiveCamera for p in self.viewParams.values()):
                     raise Exception("No cameras selected for production rendering. Render aborted.")
             else:

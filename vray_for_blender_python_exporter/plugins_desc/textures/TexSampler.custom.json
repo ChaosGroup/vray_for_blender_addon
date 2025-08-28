@@ -81,7 +81,7 @@
                     {
                         "name": "uv_set_name",
                         "label": "UV Set Name",
-                        "custom_draw": "plugins.texture.TexSampler:widgetDrawUVSetName"
+                        "custom_draw": "plugins.texture.TexSampler.widgetDrawUVSetName"
                     },
                     {
                         "name": "refraction_ior"

@@ -2,6 +2,25 @@
     "ID": "RenderChannelDenoiser",
     "Name" : "Denoiser",
     "Subtype" : "SPECIAL",
+    "Parameters": [
+        {
+            "attr": "enabled",
+            "default": true
+        },
+        {
+            "attr": "use_gpu",
+            "default": true
+        },
+        {
+            "attr" : "name",
+            "default" : "Denoiser",
+            "update": "plugins.channel.RenderChannelDenoiser.onUpdateChannelName"
+        },
+        {
+            "attr": "engine",
+            "update": "onUpdateEngine"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -60,24 +79,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "enabled",
-            "default": true
-        },
-        {
-            "attr": "use_gpu",
-            "default": true
-        },
-        {
-            "attr" : "name",
-            "default" : "Denoiser"
-        },
-        {
-            "attr": "engine",
-            "update": "onUpdateEngine"
-        }
-    ],
     "Options": {
         "animatable": false,
         "excluded_parameters": [

@@ -55,7 +55,7 @@ class SettingsOutputExporter(ExporterBase):
         self._fillRenderSizes(pluginDesc)
         self._fillAnimation(pluginDesc)
 
-        self._fillOutputPaths(pluginDesc.vrayPropGroup, pluginDesc, noOutput=self.interactive)
+        self._fillOutputPaths(pluginDesc.vrayPropGroup, pluginDesc)
         
         if not self._isDrawCall():
             # NOTE: When loading preview image for World image alpha will be replaced with black color.
@@ -107,21 +107,14 @@ class SettingsOutputExporter(ExporterBase):
         })
 
 
-    def _fillOutputPaths(self, propGroup, pluginDesc, noOutput: bool):
+    def _fillOutputPaths(self, propGroup, pluginDesc):
         # In case of an error or early return, make sure the plugin has valid values
         pluginDesc.setAttribute('img_file', "")
         pluginDesc.setAttribute('img_dir', "")
         
-        if noOutput or \
-            ((not self.preview) and (not self.bake) and (not self.settings.autoSaveRender)):
+        if self.interactive or self.preview or (not self.settings.autoSaveRender and not self.bake):
             return 
 
-        if self.preview:
-            pluginDesc.setAttribute('img_file', "preview.exr")
-            pluginDesc.setAttribute('img_dir', path_utils.getPreviewDir())
-            pluginDesc.setAttribute("img_file_needFrameNumber", False)
-            return
-        
         imgFile = ""
         imgDir = ""
         imgFmt = 0

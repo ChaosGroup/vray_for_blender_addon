@@ -72,14 +72,15 @@ class VRayRendererProd(VRayRendererProdBase):
         success  = True
 
         try:
-            match self.renderMode:
+            match __class__.renderMode:
                 case ProdRenderMode.CLOUD_SUBMIT:
                     self._submitToCloud(engine)
                 case ProdRenderMode.EXPORT_VRSCENE:
                     self._writeVrscene(scene, engine)
                 case ProdRenderMode.RENDER:
                     self._render(scene, engine)
-
+                case _:
+                    assert False, "Invalid render mode in PROD renderer: {__class__.renderMode}"
 
         except Exception as ex:
             success = False
@@ -99,6 +100,11 @@ class VRayRendererProd(VRayRendererProdBase):
 
             # Save the current render frame since VRayRendererProd._exportAnimationFrame() modifies it.
             currentFrame = bpy.context.scene.frame_current
+
+            # Determine if the rendering process has started.
+            # Note: Don't replace it with "frame == self.exporterCtx.commonSettings.animation.startFrame" if-statement,
+            # because in 'Single Frame' render mode with motion blur enabled, this statement won't be valid.
+            renderingStarted = False
 
             for frame in self._getFrameRange(scene):
                 if not self._exportAnimationFrame(engine, frame):
@@ -123,10 +129,19 @@ class VRayRendererProd(VRayRendererProdBase):
                 else:
                      self._clearFrameData(upToTime=frame)
 
-                if not self._renderAnimationFrame(engine, frame):
+                if not renderingStarted:
+                    if not (renderingStarted := self._startRenderSequence(engine)):
+                        # Rendering sequence couldn't be started
+                        break
+                else:
+                    # Proceed to the next frame
+                    vray.continueRenderSequence(self.renderer)
+
+                if not self._waitFrameToBeRendered(engine, frame):
                     # Render job has been aborted
                     animationExported = False
                     break
+
 
             if animationExported:
                 self._reportInfo(engine, "Animation exported.")
@@ -137,12 +152,14 @@ class VRayRendererProd(VRayRendererProdBase):
             self._renderSingleFrame(engine, scene.frame_current)
 
 
-    def _writeVrscene(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine, scenePath=""):
+    def _writeVrscene(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine, scenePath="", isCloudExport=False):
         """ Export the full animation sequence to V-Ray and write a .vrscene file """
         self._exportFullScene(scene, engine)
         exportSettings, errMsg = collectExportSceneSettings(scene, scenePath)
-
+        
         if exportSettings:
+            exportSettings.cloudExport = isCloudExport
+            
             if not vray.writeVrscene(self.renderer, exportSettings):
                 self._reportError(engine, "Scene export failed")
                 return
@@ -216,7 +233,7 @@ class VRayRendererProd(VRayRendererProdBase):
 
         # Create temporary vrscene file used only for cloud submissions
         scenePath = os.path.join(getV4BTempDir(), f"cloud{os.getpid()}.vrscene").replace("\\", "/")
-        self._writeVrscene(bpy.context.scene, engine, scenePath=scenePath)
+        self._writeVrscene(bpy.context.scene, engine, scenePath=scenePath, isCloudExport=True)
             
         job = VCloudJob(bpy.context.scene, scenePath)
         job.submitToCloud() # This function waits for the submission to finish
@@ -224,10 +241,7 @@ class VRayRendererProd(VRayRendererProdBase):
         pathlib.Path.unlink(scenePath)
 
 
-    def _renderAnimationFrame(self, engine: bpy.types.RenderEngine, frame: float):
-        """ Render animation sequence. """
-        scene = bpy.context.scene
-
+    def _startRenderSequence(self, engine: bpy.types.RenderEngine):
         if self._checkRenderJobCancelled(engine):
             debug.printDebug("Render job cancelled.")
             return False
@@ -236,13 +250,27 @@ class VRayRendererProd(VRayRendererProdBase):
         
         # Obtain a rendering target from Blender and set it to the C++ renderer
         self._renderStart(self.exporterCtx)
-        
-        # Run the render job asynchronously so that we could abort it while the frame is 
-        # still rendering.
-        vray.renderFrame(self.renderer)
 
-        # renderJobIsRunning() will return false when the job is finished regardless of the
-        # cause ( success or error)
+        anim = self.exporterCtx.commonSettings.animation
+
+        # No need for sequence rendering, when there is only a single frame for rendering
+        if (bpy.context.scene.vray.Exporter.animation_mode == 'FRAME') \
+                or (anim.frameStart == anim.frameEnd):   
+
+            vray.renderFrame(self.renderer) # Rendering only the current frame
+        else:
+            vray.renderSequenceStart(self.renderer, anim.frameStart, anim.frameEnd, anim.frameStep)
+
+        return True
+
+    def _waitFrameToBeRendered(self, engine: bpy.types.RenderEngine, currentFrame: float):
+        """ Waits until rendering of the current frame is complete or the render job finishes """
+        scene = bpy.context.scene
+
+        # The next frame in the sequence. When vray.getLastRenderedFrame() returns this value,
+        # it indicates that rendering of "currentFrame" has completed.
+        nextFrame = currentFrame + self.exporterCtx.commonSettings.animation.frameStep
+        
         while vray.renderJobIsRunning(self.renderer):
             if self._checkRenderJobCancelled(engine):
                 # The mechanism for checking for aborted jobs assumes that this could be done using a signal 
@@ -251,14 +279,13 @@ class VRayRendererProd(VRayRendererProdBase):
                 vray.abortRender(self.renderer)
                 debug.printDebug("Render job cancelled.")
                 return False
-            else:
-                frame = vray.getLastRenderedFrame(self.renderer)
-                engine.update_progress(1.0 / (scene.frame_end - scene.frame_start + 1) * (frame - scene.frame_start))
+            elif nextFrame == vray.getLastRenderedFrame(self.renderer):
+                engine.update_progress(1.0 / (scene.frame_end - scene.frame_start + 1) * (currentFrame - scene.frame_start))
+                return True
                 
             time.sleep(0.5)
 
-        debug.printDebug("End animation render.")
-        
+        # Rendering finished
         return True
 
 
@@ -281,7 +308,13 @@ class VRayRendererProd(VRayRendererProdBase):
         vray.setRenderFrame(self.renderer, frame)
         self.exporterCtx.currentFrame = frame
         
-        self.exporterCtx.commonSettings.updateFromScene()
+        cameraObjs = []
+        # When exporting a .vrscene, settings from all cameras must be considered to ensure all frames
+        # required for motion blur are exported.
+        if __class__.renderMode == ProdRenderMode.EXPORT_VRSCENE:
+            cameraObjs = [inst.object for inst in self.exporterCtx.dg.object_instances if inst.object.type == 'CAMERA']
+
+        self.exporterCtx.commonSettings.updateFromScene(cameraObjs)
         self.exporterCtx.calculateObjectAnimationRanges()
         
         self._export(engine, self.exporterCtx)
@@ -306,7 +339,7 @@ class VRayRendererProd(VRayRendererProdBase):
         """ Export the complete frame sequence. This is only called in order to export a .vrscene 
             file. Normal render jobs will be exported frame by frame.
         """
-        if self.renderMode == ProdRenderMode.EXPORT_VRSCENE:
+        if __class__.renderMode == ProdRenderMode.EXPORT_VRSCENE:
             self.exporterCtx.exportOnly = True
             
         if not self.exporterCtx.isAnimation:
@@ -407,5 +440,4 @@ class VRayRendererProd(VRayRendererProdBase):
 
     @staticmethod
     def _cbRenderStopped(self):
-        print("RENDER STOPPED")
         self.aborted = True

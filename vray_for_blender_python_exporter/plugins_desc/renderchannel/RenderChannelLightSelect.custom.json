@@ -13,7 +13,8 @@
         },
         {
             "attr" : "name",
-            "default" : "Light Select"
+            "default" : "Light Select",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
         },
         {
             "attr": "lights",
@@ -45,17 +46,13 @@
             }
         }
     ],
-    "Options": {
-        "excluded_parameters": [],
-        "animatable": false
-    },
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
                         "name": "channelType",
-                        "custom_draw": "plugins.channel.render_channel_common:widgetDrawChannelType"
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
                     },
                     {
                         "name": "name",
@@ -99,5 +96,9 @@
                 "layout": "COLUMN"
             }
         ]
+    },
+    "Options": {
+        "excluded_parameters": [],
+        "animatable": false
     }
 }

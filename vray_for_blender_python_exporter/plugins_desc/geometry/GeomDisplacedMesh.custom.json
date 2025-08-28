@@ -40,25 +40,83 @@
             }
         },
         {
-            "attr": "water_level",
-            "default": -1.0
-        },
-        {
             "attr": "displacement_amount",
             "ui": {
+                "display_name": "Amount",
                 "quantityType": "distance"
+            },
+            "options": {
+                "animatable": true
             }
         },
         {
             "attr": "displacement_shift",
             "ui": {
+                "display_name": "Shift",
                 "quantityType": "distance"
+            },
+            "options": {
+                "animatable": true
+            }
+        },
+        {
+            "attr": "use_water_level",
+            "type": "BOOL",
+            "default": false,
+            "options": {
+                "derived": true,
+                "animatable": true
             }
         },
         {
             "attr": "water_level",
+            "default": -1.0,
             "ui": {
                 "quantityType": "distance"
+            },
+            "options": {
+                "animatable": true
+            }
+        },
+        {
+            "attr": "static_displacement",
+            "default": "1",
+            "type": "ENUM",
+            "items": [
+                [
+                    "0",
+                    "On The Fly",
+                    "On The Fly"
+                ],
+                [
+                    "1",
+                    "Pre-tesselated",
+                    "Pre-tesselated"
+                ]
+            ]
+        },
+        {
+            "attr": "min_bound_float",
+            "default": 0.0,
+            "type": "FLOAT",
+            "options": {
+                "animatable": true,
+                "derived": true
+            }
+        },
+        {
+            "attr": "max_bound_float",
+            "default": 1.0,
+            "type": "FLOAT",
+            "options": {
+                "animatable": true,
+                "derived": true
+            }
+        },
+        {
+            "attr": "displace_2d_transform",
+            "options": {
+                "visible": false
             }
         }
     ],
@@ -73,170 +131,157 @@
                     {
                         "name": "displacement_amount",
                         "label": "Amount"
+                    },
+                    {
+                        "name": "displacement_shift",
+                        "label": "Shift"
                     }
                 ]
             }
         ],
         "input_sockets": [
             {
-                "name": "min_bound"
-            },
-            {
-                "name": "max_bound"
-            },
-            {
-                "name": "displace_2d_transform"
+                "name": "displace_2d_transform",
+                "label": "2D Displacement Transform"
             }
         ]
     },
     "Widget": {
         "widgets": [
             {
+                "layout": "ROLLOUT",
+                "label": "Displacement",
+                "name": "displacement",
+                "default_closed": false,
+                "align": true,
                 "attrs": [
                     {
                         "name": "type"
+                    },
+                    {
+                        "name": "displacement_amount"
+                    },
+                    {
+                        "name": "displacement_shift"
                     }
-                ],
-                "layout": "COLUMN"
+                ]
             },
             {
-                "layout": "COLUMN",
+                "layout": "ROLLOUT",
+                "label": "Advanced",
+                "name": "advanced",
+                "align": true,
                 "attrs": [
                     {
-                        "align": true,
+                        "name": "static_displacement",
+                        "label": "Geometry Generation",
+                        "active": {
+                            "cond": "::type!=1;"
+                        }
+                    },
+                    {
+                        "name": "keep_continuity"
+                    },
+                    {
+                        "name": "cache_normals"
+                    },
+                    {
+                        "name": "use_water_level"
+                    },
+                    {
+                        "name": "water_level",
+                        "active": { "cond": "::use_water_level=1" }
+                    },
+                    {
+                        "name": "use_bounds",
+                        "active": {
+                            "cond": "::type!=1;"
+                        }
+                    },
+                    {
+                        "name": "min_bound_float",
+                        "active": {
+                            "cond": "::type!=1,::use_bounds=1"
+                        }
+                    },
+                    {
+                        "name": "max_bound_float",
+                        "active": {
+                            "cond": "::type!=1,::use_bounds=1"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label": "2D Displacement",
+                "name": "2d",
+                "active": {
+                    "cond": "::type=1"
+                },
+                "attrs": [
+                    {
+                        "name": "resolution"
+                    },
+                    {
+                        "name": "filter_texture"
+                    },
+                    {
+                        "name": "filter_blur",
+                        "active": {
+                            "cond": "::filter_texture=1"
+                        }
+                    },
+                    {
+                        "name": "precision"
+                    },
+                    {
+                        "name": "tight_bounds"
+                    },
+                    {
+                        "name": "displace_2d_multi_tile",
+                        "label": "Multi Tile"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "label": "Quality Overrides",
+                "name": "overrides",
+                "align": true,
+                "attrs": [
+                    {
                         "attrs": [
                             {
-                                "name": "displacement_amount"
-                            },
-                            {
-                                "name": "displacement_shift"
-                            },
-                            {
-                                "name": "water_level"
+                                "name": "use_globals"
                             }
                         ],
                         "layout": "COLUMN"
                     },
                     {
+                        "active": {
+                            "cond": "::use_globals=0"
+                        },
+                        "layout": "COLUMN",
                         "attrs": [
                             {
-                                "name": "resolution"
+                                "name": "view_dep"
                             },
-                            {
-                                "name": "precision"
-                            },
-                            {
-                                "name": "keep_continuity"
-                            }
-                        ],
-                        "layout": "COLUMN"
-                    }
-                ]
-            },
-            {
-                "attrs": [
-                    {
-                        "name": "use_globals"
-                    }
-                ],
-                "layout": "COLUMN"
-            },
-            {
-                "active": {
-                    "cond": "::use_globals=0"
-                },
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "align": true,
-                        "attrs": [
                             {
                                 "name": "edge_length"
                             },
                             {
                                 "name": "max_subdivs"
                             }
-                        ],
-                        "layout": "COLUMN"
-                    },
-                    {
-                        "align": true,
-                        "attrs": [
-                            {
-                                "name": "view_dep"
-                            },
-                            {
-                                "name": "tight_bounds"
-                            }
-                        ],
-                        "layout": "COLUMN"
+                        ]
                     }
                 ]
-            },
-            {
-                "attrs": [
-                    {
-                        "name": "use_bounds"
-                    }
-                ],
-                "active": {
-                    "cond": "::type!=1;"
-                },
-                "layout": "COLUMN"
-            },
-            {
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "active": {
-                            "cond": "::type!=1,::use_bounds=1"
-                        },
-                        "attrs": [
-                            {
-                                "name": "min_bound"
-                            }
-                        ],
-                        "layout": "COLUMN"
-                    },
-                    {
-                        "active": {
-                            "cond": "::type!=1,::use_bounds=1"
-                        },
-                        "attrs": [
-                            {
-                                "name": "max_bound"
-                            }
-                        ],
-                        "layout": "COLUMN"
-                    }
-                ]
-            },
-            {
-                "attrs": [
-                    {
-                        "name": "static_displacement"
-                    },
-                    {
-                        "name": "cache_normals"
-                    },
-                    {
-                        "name": "filter_texture",
-                        "active": {
-                            "cond": "::type!=0"
-                        }
-                    },
-                    {
-                        "active": {
-                            "cond": "::filter_texture=1"
-                        },
-                        "name": "filter_blur"
-                    }
-                ],
-                "layout": "COLUMN"
             }
         ]
     },
     "Options": {
+        "animatable": false,
+        "use_animation_layout": true,
         "excluded_parameters": [
             "mesh"
         ]

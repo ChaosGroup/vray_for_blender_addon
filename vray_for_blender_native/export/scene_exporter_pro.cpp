@@ -112,6 +112,11 @@ void ProductionExporter::renderFrame()
 	m_exporter->start();
 }
 
+void ProductionExporter::continueRenderSequence()
+{
+	m_exporter->continueRenderSequence();
+}
+
 void ProductionExporter::renderSequence(int start, int end, int step)
 {
 	WithNoGIL noGIL;

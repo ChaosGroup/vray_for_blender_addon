@@ -84,6 +84,11 @@ class Names:
         return obj.original.vray.unique_id
 
     @staticmethod
+    def instanceObject(originalName: str, instanceID: str):
+        """ Return a name that can be used for instance export. """
+        return originalName + instanceID
+
+    @staticmethod
     def struct(obj: bpy.types.Struct):
         """ Return the unique name for an object that is not a subclass of bpy.types.ID, e.g. bpy.types.Node. """
         if not hasattr(obj, "unique_id"):
@@ -175,7 +180,14 @@ class Names:
         # regardless of the letter case. We use an underscore here to avoid this situation.
         return f"_{_changeFirstLetterToLower(pluginType)}"
     
-        
+
+    @staticmethod
+    def panelSocket(sockLabel: str):
+        """ Return the name of a panel (rollout) socket """
+        # A panel socket name may often coincide with the name of a regular socket.
+        # Add a suffix which is unlikely to be used in a socket name.
+        return f"{sockLabel}_"
+
 
 #########################  Scene obects ID  generator ##################
 class IdGenerator:
@@ -246,7 +258,7 @@ def _changeFirstLetterToLower(name: str):
 
 
 def syncUniqueNamesForPreview(dg: bpy.types.Depsgraph):
-    """ Set unique names for the objects of a preview scene. 
+    """ Set unique names for the objects of a preview scene.
         Preview objects can only be accessed through the depsgraph, hence the
         need for a separate function.
     """
@@ -256,7 +268,7 @@ def syncUniqueNamesForPreview(dg: bpy.types.Depsgraph):
 
         if isinstance(id, bpy.types.Object):
             # Walk material node trees and set unique ids to the nodes
-            for slot in [s for s in id.original.material_slots if hasattr(s.material.node_tree, 'nodes')]:
+            for slot in [s for s in id.material_slots if hasattr(s.material.node_tree, 'nodes')]:
                 for node in slot.material.node_tree.nodes:
                     syncObjectUniqueName(node, reset=False)
 

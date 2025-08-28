@@ -3,6 +3,10 @@
     "Name": "V-Ray Mtl",
     "Parameters": [
         {
+            "attr": "option_shading_model",
+            "update": "onShadingModelUpdate"
+        },
+        {
             "attr": "opacity",
             "options": {
                 "visible": false
@@ -97,7 +101,8 @@
                     "SSS",
                     "SSS (wax) model"
                 ]
-            ]
+            ],
+            "update": "onTranslucencyUpdate"
         },
         {
             "attr": "fog_depth",
@@ -255,6 +260,15 @@
             }
         },
         {
+            "attr" : "coat_darkening",
+            "ui" :
+            {
+                "spin_step" : 0.01,
+                "min": 0.0,
+                "max": 1.0
+            }
+        },
+        {
             "attr" : "coat_glossiness",
             "ui" : 
             {
@@ -264,10 +278,25 @@
         {
             "attr" : "option_use_roughness",
             "update": "onUseRoughnessUpdate"
+        },
+        {
+            "attr": "bump_type",
+            "update": "onBumpTypeUpdate"
         }
     ],
     "Widget": {
         "widgets": [
+            {
+                "layout": "ROW",
+                "name": "shading_model",
+                "attrs": [
+                    {
+                        "name": "option_shading_model",
+                        "label": "Mode",
+                        "expand": true
+                    }
+                ]
+            },
             {
                 "layout": "ROLLOUT",
                 "name": "diffuse",
@@ -296,10 +325,23 @@
                     },
                     {
                         "name": "self_illumination",
-                        "label": "Self-Illumination Color"
+                        "label": "Self-Illumination Color",
+                        "visible": {"cond": "::option_shading_model=0"}
                     },
                     {
-                        "name": "self_illumination_gi"
+                        "name": "self_illumination",
+                        "label": "Emission",
+                        "visible": {"cond": "::option_shading_model=1"}
+                    },
+                    {
+                        "name": "self_illumination_gi",
+                        "label": "Self-Illumination GI",
+                        "visible": {"cond": "::option_shading_model=0"}
+                    },
+                    {
+                        "name": "self_illumination_gi",
+                        "label": "Emission GI",
+                        "visible": {"cond": "::option_shading_model=1"}
                     },
                     {
                         "name": "compensate_camera_exposure"
@@ -312,7 +354,8 @@
                 "label": "Reflection",
                 "attrs": [
                     {
-                        "name": "brdf_type"
+                        "name": "brdf_type",
+                        "active": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "name": "reflect",
@@ -321,21 +364,23 @@
                     {
                         "name": "reflect_glossiness",
                         "label": "Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0"}
+                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
                     },
                     {
                         "name": "reflect_glossiness",
                         "label": "Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0"}
+                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model=1"}
                     },
                     {
-                        "name": "gtr_gamma"
+                        "name": "gtr_gamma",
+                        "active": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "name": "metalness"
                     },
                     {
-                        "name": "option_use_roughness"
+                        "name": "option_use_roughness",
+                        "active": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "layout": "ROLLOUT",
@@ -457,14 +502,17 @@
                         "name": "coat_amount"
                     },
                     {
-                        "name": "coat_glossiness",
-                        "label": "Coat Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0"}
+                        "name": "coat_darkening"
                     },
                     {
                         "name": "coat_glossiness",
                         "label": "Coat Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0"}
+                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
+                    },
+                    {
+                        "name": "coat_glossiness",
+                        "label": "Coat Roughness",
+                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model=1"}
                     },
                     {
                         "name": "coat_ior"
@@ -478,9 +526,6 @@
                                 "name": "coat_bump_lock"
                             },
                             {
-                                "name": "coat_bump_map"
-                            },
-                            {
                                 "name": "coat_bump_amount"
                             },
                             {
@@ -492,18 +537,41 @@
             },
             {
                 "layout": "ROLLOUT",
+                "name": "sheen",
+                "label": "Sheen",
+                "attrs": [
+                    {
+                        "name": "sheen_color"
+                    },
+                    {
+                        "name": "sheen_glossiness",
+                        "label": "Sheen Glossiness",
+                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
+                    },
+                    {
+                        "name": "sheen_glossiness",
+                        "label": "Sheen Roughness",
+                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model==1"}
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
                 "name": "refraction",
                 "label": "Refraction",
+                "visible": {"cond": "::option_shading_model=0"},
                 "attrs": [
                     {
                         "name": "refract",
                         "label": "Refraction Color"
                     },
                     {
-                        "name": "refract_glossiness"
+                        "name": "refract_glossiness",
+                        "label": "Refraction Glossiness"
                     },
                     {
-                        "name": "refract_ior"
+                        "name": "refract_ior",
+                        "label": "Refract IOR"
                     },
                     {
                         "name": "refract_affect_shadows"
@@ -613,23 +681,130 @@
                     }
                 ]
             },
-            {
+             {
                 "layout": "ROLLOUT",
-                "name": "sheen",
-                "label": "Sheen",
+                "name": "refraction",
+                "label": "Transmission",
+                "visible": {"cond": "::option_shading_model=1"},
                 "attrs": [
                     {
-                        "name": "sheen_color"
+                        "name": "refract",
+                        "label": "Transmission"
                     },
                     {
-                        "name": "sheen_glossiness",
-                        "label": "Sheen Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0"}
+                        "name": "refract_glossiness",
+                        "label": "Transmission Roughness"
                     },
                     {
-                        "name": "sheen_glossiness",
-                        "label": "Sheen Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0"}
+                        "name": "refract_ior",
+                        "label": "Transmission IOR"
+                    },
+                    {
+                        "name": "refract_affect_shadows"
+                    },
+                    {
+                        "name": "refract_thin_walled"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "translucency",
+                        "label": "Translucency",
+                        "attrs": [
+                            {
+                                "name": "translucency"
+                            },
+                            {
+                                "name": "fog_color_colortex",
+                                "label": "Fog Color",
+                                "visible": {
+                                    "cond": "::translucency=0;::translucency=5"
+                                }
+                            },
+                            {
+                                "name": "fog_color_colortex",
+                                "label": "Scatter Radius",
+                                "visible": {
+                                    "cond": "::translucency=6"
+                                }
+                            },
+                            {
+                                "name": "fog_mult",
+                                "label": "Depth (cm)",
+                                "visible": {
+                                    "cond": "::translucency=0;::translucency=5"
+                                }
+                            },
+                            {
+                                "name": "fog_mult",
+                                "label": "Scale (cm)",
+                                "visible": {
+                                    "cond": "::translucency=6"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "name": "translucency_options",
+                                "active": {
+                                    "cond": "::translucency=5;::translucency=6"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "translucency_surfaceLighting",
+                                        "label": "Illumination"
+                                    },
+                                    {
+                                        "name": "translucency_color",
+                                        "label": "Scatter Color",
+                                        "visible": {
+                                            "cond": "::translucency=0;::translucency=5"
+                                        }
+                                    },
+                                    {
+                                        "name": "translucency_color",
+                                        "label": "SSS Color",
+                                        "visible": {
+                                            "cond": "::translucency=6"
+                                        }
+                                    },
+                                    {
+                                        "name": "translucency_amount",
+                                        "label": "SSS Amount",
+                                        "active": {
+                                            "cond": "::translucency=6;::translucency=5"
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "refraction advanced",
+                        "label": "Transmission Advanced",
+                        "attrs": [
+                            {
+                                "name": "refract_trace",
+                                "label": "Trace Transmission"
+                            },
+                            {
+                                "name": "refract_depth"
+                            },
+                            {
+                                "name": "refract_affect_alpha"
+                            },
+                            {
+                                "name": "dispersion_on"
+                            },
+                            {
+                                "name": "dispersion",
+                                "active": {
+                                    "cond": "::dispersion_on!=0"
+                                }
+                            }
+                        ]
                     }
                 ]
             },
@@ -639,10 +814,10 @@
                 "label": "Bump",
                 "attrs": [
                     {
-                        "name": "bump_map"
-                    },
-                    {
-                        "name": "bump_amount"
+                        "name": "bump_amount",
+                        "active": {
+                            "cond": "::bump_type!=6"
+                        }
                     },
                     {
                         "name": "bump_type"
@@ -659,7 +834,7 @@
                     },
                     {
                         "name": "option_energy_mode",
-                        "label": "Preserve energy"
+                        "label": "Preserve Energy"
                     },
                     {
                         "name": "lpe_label",
@@ -667,6 +842,81 @@
                     }
                 ]
             }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            { "name": "diffuse" },
+            { "name": "opacity_color" },
+            { "name": "roughness" },
+            { "name": "self_illumination" },
+
+            { 
+                "name": "panel_reflection",
+                "label": "Reflection",
+                "type": "ROLLOUT" 
+            },
+            { "name": "reflect" },
+            { "name": "reflect_glossiness" },
+            { "name": "gtr_gamma" },
+            { "name": "fresnel_ior" },
+            { "name": "metalness" },
+            { "name": "anisotropy" },
+            { "name": "anisotropy_rotation" },
+            { "name": "anisotropy_uvwgen" },
+            { "name": "thin_film_thickness" },
+            { "name": "thin_film_ior" },
+
+            { 
+                "name": "panel_coat",
+                "label": "Coat",
+                "type": "ROLLOUT" 
+            },
+            { "name": "coat_color" },
+            { "name": "coat_amount" },
+            { "name": "coat_darkening" },
+            { "name": "coat_glossiness" },
+            { "name": "coat_ior" },
+            { "name": "coat_anisotropy" },
+            { "name": "coat_anisotropy_rotation" },
+            { "name": "coat_bump_map" },
+            { "name": "coat_bump_amount" },
+            
+            { 
+                "name": "panel_sheen",
+                "label": "Sheen",
+                "type": "ROLLOUT" 
+            },
+            { "name": "sheen_color" },
+            { "name": "sheen_amount" },
+            { "name": "sheen_glossiness" },
+
+            { 
+                "name": "panel_refraction",
+                "label": "Refraction",
+                "type": "ROLLOUT" 
+            },
+            { "name": "refract" },
+            { "name": "refract_ior" },
+            { "name": "refract_glossiness" },
+
+            { 
+                "name": "panel_translucency",
+                "label": "Translucency",
+                "type": "ROLLOUT" 
+            },
+            { "name": "translucency_color", "label": "Scatter Color" },
+            { "name": "translucency_amount", "label": "SSS Amount" },
+            { "name": "fog_color_colortex" },
+            { "name": "fog_depth" },
+            
+            { 
+                "name": "panel_bump",
+                "label": "Bump",
+                "type": "ROLLOUT" 
+            },
+            { "name": "bump_map" },
+            { "name": "bump_amount" }
         ]
     },
     "Options": {
@@ -678,6 +928,7 @@
             "reflect_subdivs",
             "refract_subdivs",
             "fog_bias",
+            "reflect_weight",
             "fog_unit_scale_on",
             "translucency_light_mult",
             "translucency_scatter_dir",

@@ -232,7 +232,7 @@ class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
             user_attribute = ua.user_attributes[selectedItem]
 
             box = layout.box()
-            box.label(text=f"Promote '{user_attribute.name}' To Selection")
+            box.label(text=f"Assign '{user_attribute.name}' To Selection")
             box.prop(ua, 'user_attributes_rnd_use')
             box_split = box.split()
             box_split.active = ua.user_attributes_rnd_use
@@ -244,7 +244,7 @@ class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
                 sub = box_split.row(align=True)
                 sub.prop(ua, 'user_attributes_float_rnd_min')
                 sub.prop(ua, 'user_attributes_float_rnd_max')
-            box.operator('vray.user_attribute_promote')
+            box.operator('vray.user_attribute_assign_to_selected')
 
 
 class VRAY_PT_Advanced(classes.VRayObjectPanel):

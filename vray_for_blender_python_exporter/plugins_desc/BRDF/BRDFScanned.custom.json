@@ -1,0 +1,537 @@
+{
+    "ID": "BRDFScanned",
+    "Name": "V-Ray Scanned Mtl",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "tiling_factor",
+                        "cond": {"evaluated": "plugins.BRDF.BRDFScanned:test"}
+                    },
+                    {
+                        "name": "twoside",
+                        "label": "Double-Sided"
+                    },
+                    {
+                        "name": "notransp",
+                        "label": "Disable Transparency"
+                    },
+                    {
+                        "name": "triplanar",
+                        "label": "Use Triplanar Mapping"
+                    },
+                    {
+                        "name": "triplanar_random_offset",
+                        "label": "Random Offset",
+                        "active": {"cond": "::triplanar=1"}
+                    },
+                    {
+                        "name": "triplanar_random_rotation",
+                        "label": "Random Rotation",
+                        "active": {"cond": "::triplanar=1"}
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "advanced",
+                "label": "Advanced",
+                "attrs": [
+                    {
+                        "name": "trace_depth",
+                        "label": "Trace Depth"
+                    },
+                    {
+                        "name": "cutoff",
+                        "label": "Cutoff"
+                    },
+                    {
+                        "name": "bumpstart",
+                        "label": "Bump and Parallax Zone"
+                    },
+                    {
+                        "name": "DepthMul",
+                        "label": "Parallax Multiplier"
+                    },
+                    {
+                        "name": "bumpmul",
+                        "label": "Bump Multiplier"
+                    },
+                    {
+                        "name": "sssmul",
+                        "label": "SSS Multiplier"
+                    },
+                    {
+                        "name": "UnfRefl",
+                        "label": "Sampling Type"
+                    },
+                    {
+                        "name": "plain",
+                        "label": "Plain Materials Strategy"
+                    },
+                    {
+                        "name": "displace",
+                        "label": "Edges Displacement"
+                    },
+                    {
+                        "name": "NoCachedGI",
+                        "label": "No Cached Light"
+                    },
+                    {
+                        "name": "BWforGI",
+                        "label": "Prevent Color Bleeding"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "appearance",
+                "label": "Appearance",
+                "attrs": [
+                    {
+                        "name": "use_filter",
+                        "label": "Use Filter"
+                    },
+                    {
+                        "name": "fltstrength",
+                        "label": "Filter Strength",
+                        "active": {"cond": "::use_filter=1"}
+                    },
+                    {
+                        "name": "filtercolor",
+                        "active": {"cond": "::use_filter=1"}
+                    },
+                    {
+                        "name": "use_paint",
+                        "label": "Use Paint"
+                    },
+                    {
+                        "name": "paintstrength",
+                        "label": "Paint Strength",
+                        "active": {"cond": "::use_paint=1"}
+                    },
+                    {
+                        "name": "paintcolor",
+                        "label": "Paint Color",
+                        "active": {"cond": "::use_paint=1"}
+                    },
+                    {
+                        "name": "invgamma",
+                        "label": "Gamma Correction"
+                    },
+                    {
+                        "name": "saturation",
+                        "label": "Saturation"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "clear coat",
+                "label": "Clear Coat",
+                "attrs": [
+                    {
+                        "name": "enable_clear_coat",
+                        "label": "Enable"
+                    },
+                    {
+                        "name": "cchlight",
+                        "label": "Highlights",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccmul",
+                        "label": "Strength",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccmult",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccior",
+                        "label": "IOR",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccbump",
+                        "label": "Bump Multiplier",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccmetalrefl",
+                        "label": "Coloring",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccglossy",
+                        "label": "Glossiness",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    },
+                    {
+                        "name": "ccglossyvar",
+                        "label": "Glossiness Variation",
+                        "active": {"cond": "::enable_clear_coat=1"}
+                    }
+                ]
+            }
+        ]
+    },
+    "Parameters": [
+        {
+            "attr": "mapChannel",
+            "default": 0,
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "param_block",
+            "type": "STRING",
+            "default": "",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "file",
+            "subtype": "FILE_PATH",
+            "update": "onFileUpdate",
+            "options": {
+                "shadowed": true
+            }
+        },
+        {
+            "attr": "file_info",
+            "type": "STRING",
+            "default": "[No File Loaded]",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "tiling_factor",
+            "default": 1.0,
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "twoside",
+            "default": 0,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "notransp",
+            "default": 0,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "trace_depth",
+            "default": -1,
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "cutoff",
+            "default": 0.01,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.005
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "triplanar",
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "triplanar_random_offset",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "triplanar_random_rotation",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "use_filter",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "use_paint",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "enable_clear_coat",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "invgamma",
+            "type": "FLOAT",
+            "default": 1.0,
+            "ui": {
+                "min": 0.1,
+                "max": 10
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "bumpstart",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.005
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "DepthMul",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 4.0,
+                "spin_step": 0.05
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "bumpmul",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 4.0,
+                "spin_step": 0.05
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "sssmul",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 4.0,
+                "spin_step": 0.05
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "UnfRefl",
+            "default": 0,
+            "type": "ENUM",
+            "items": [
+                [
+                    "0",
+                    "Importance Sampling",
+                    "Importance Sampling"
+                ],
+                [
+                    "1",
+                    "Uniform Sampling",
+                    "Uniform Sampling"
+                ]
+            ],
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "plain",
+            "default": 0,
+            "type": "ENUM",
+            "items": [
+                [
+                    "0",
+                    "None",
+                    "No plain strategy"
+                ],
+                [
+                    "1",
+                    "Average BRDF",
+                    "The material is homogenous and potentially anisotropic, an averaged brdf is used instead texture, but uv mapping must still be provided"
+                ],
+                [
+                    "2",
+                    "Average Symmetrized BRDF",
+                    "The material is homogenous and isotropic, no uv mapping is needed"
+                ]
+            ],
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "displace",
+            "default": 0,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "NoCachedGI",
+            "default": 0,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "BWforGI",
+            "default": 0,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "fltstrength",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "filtercolor",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "ui": {
+                "display_name": "Filter Color"
+            }
+        },
+        {
+            "attr": "paintstrength",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "paintcolor",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "ui": {
+                "display_name": "Paint Color"
+            }
+        },
+        {
+            "attr": "saturation",
+            "default": 1.0,
+            "ui": {
+                "spin_step": 0.1
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "cchlight",
+            "default": 1,
+            "type": "BOOL",
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccmul",
+            "default": 0.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccmult",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "ccior",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 20.0,
+                "spin_step": 0.05
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccbump",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccmetalrefl",
+            "default": 0.0,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccglossy",
+            "default": 0.9574,
+            "ui": {
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "ccglossyvar",
+            "default": 0.0,
+            "ui": {
+                "spin_step": 0.025
+            },
+            "update": "onParameterUpdate"
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
+    "Node": {
+        "input_sockets": [
+            { "name": "filtercolor" },
+            { "name": "paintcolor" },
+            { "name": "ccmult" },
+            { "name": "uvwgen" }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "uvtrans",
+            "filter"
+        ]
+    }
+}
