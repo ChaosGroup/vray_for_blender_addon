@@ -13,12 +13,38 @@
         },
         {
             "attr" : "name",
-            "default" : "Denoiser",
-            "update": "plugins.channel.RenderChannelDenoiser.onUpdateChannelName"
+            "default" : "Denoiser"
         },
         {
             "attr": "engine",
             "update": "onUpdateEngine"
+        },
+        {
+            "attr": "viewport_enabled",
+            "type": "BOOL",
+            "default": false,
+            "desc" : "True to enable the viewport denoising",
+            "update": "onUpdateViewportEngine",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "viewport_engine",
+            "type": "ENUM",
+            "desc" : "The denoising engine to use. The default V-Ray denoiser (0) is slower but may produce better results and has a version that runs on CPUs. The NVIDIA AI denoiser (1) is very fast but may be less accurate and requires a compatible NVIDIA GPU. The Intel Open Image Denoise (2) is fast and runs on CPUs (it utilizes advanced instructions sets like AVX2, AVX512). Note that the three denoising engines use slightly different render elements",
+            "items":
+            [
+                [ "0", "V-Ray", "Default V-Ray denoiser" ],
+                [ "2", "Intel", "Intel Open Image Denoise" ],
+                [ "1", "NVIDIA", "NVIDIA AI denoiser" ],
+                [ "3", "NVIDIA(upscaling)", "NVIDIA AI upscaling denoiser" ]
+            ],
+            "update": "onUpdateViewportEngine",
+            "default": "2",
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {
@@ -30,23 +56,40 @@
                         "custom_draw": "widgetDrawChannelType"
                     },
                     {
-                        "name": "name",
-                        "label": "Channel Name"
-                    },
-                    {
                         "name": "enabled"
                     },
                     {
-                        "name": "engine"
-                    },
-                    {
-                        "name": "preset"
-                    },
-                    {
-                        "name": "strength"
-                    },
-                    {
-                        "name": "radius"
+                        "layout": "COLUMN",
+                        "active": { "cond": "::enabled=1" },
+                        "attrs": [
+                            {
+                                "name": "engine"
+                            },
+                            {
+                                "name": "preset",
+                                "visible": {
+                                    "cond": "::engine=0"
+                                }
+                            },
+                            {
+                                "name": "strength",
+                                "active": {
+                                    "cond": "::preset=3"
+                                },
+                                "visible": {
+                                    "cond": "::engine=0"
+                                }
+                            },
+                            {
+                                "name": "radius",
+                                "active": {
+                                    "cond": "::preset=3"
+                                },
+                                "visible": {
+                                    "cond": "::engine=0"
+                                }
+                            }
+                        ]
                     }
                 ],
                 "layout": "COLUMN"
@@ -55,19 +98,42 @@
                 "layout": "ROLLOUT",
                 "name": "advanced",
                 "label": "Advanced",
+                "default_closed": false,
+                "active": { "cond": "::enabled=1" },
                 "attrs": [
                     {
-                        "name": "use_gpu"
+                        "name": "use_gpu",
+                        "visible": {
+                            "cond": "::engine=0"
+                        }
+                    },
+                    {
+                        "name": "wrap_around_borders",
+                        "visible": {
+                            "cond": "::engine=0"
+                        }
                     },
                     {
                         "name": "temporal_mode",
                         "label": "Use NVIDIA Temporal Mode",
                         "active": {
-                            "cond": "::enabled=1,::engine=1,::optix_use_upscale=0"
+                            "cond": "::optix_use_upscale=0"
+                        },
+                        "visible": {
+                            "cond": "::engine=1"
                         }
                     },
                     {
-                        "name": "optix_use_upscale"
+                        "name": "optix_use_upscale",
+                        "visible": {
+                            "cond": "::engine=1"
+                        }
+                    },
+                    {
+                        "name": "oidn_prefilter",
+                        "visible": {
+                            "cond": "::engine=2"
+                        }
                     },
                     {
                         "name": "mode"
@@ -78,6 +144,19 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "engine"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [ ]
     },
     "Options": {
         "animatable": false,

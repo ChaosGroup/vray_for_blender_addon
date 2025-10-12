@@ -70,18 +70,25 @@ def parseVrmat(filePath):
             float(rawValue.find('b').text),
         )
 
+    def _getVectorValue(rawValue):
+        return (
+            float(rawValue.find('x').text),
+            float(rawValue.find('y').text),
+            float(rawValue.find('z').text),
+        )
+
     def _getTransformValue(rawValue):
         v3 = rawValue[3]
 
         return (  _getMatrixValue(rawValue),
                   (float(v3[0].text), float(v3[1].text), float(v3[2].text)))
-    
+
 
     def _getMatrixValue(rawValue):
         v0 = rawValue[0]
         v1 = rawValue[1]
         v2 = rawValue[2]
-        
+
         return ( (float(v0[0].text), float(v0[1].text), float(v0[2].text)),
                  (float(v1[0].text), float(v1[1].text), float(v1[2].text)),
                  (float(v2[0].text), float(v2[1].text), float(v2[2].text)))
@@ -127,9 +134,14 @@ def parseVrmat(filePath):
                     case 'bool':
                         attrValue = (rawValue.text != '0')
 
-                    case 'color':
+                    case 'color' | 'acolor':
                         if rawValue.find('r') is not None:
                             attrValue = _getColorValue(rawValue)
+
+                    case 'vector':
+                        # Most likely a pivot offset
+                        if rawValue.find('x') is not None:
+                            attrValue = _getVectorValue(rawValue)
 
                     case 'float texture':
                         if rawValue.text:
@@ -144,6 +156,13 @@ def parseVrmat(filePath):
                                 attrValue = rawValue.text
                             else:
                                 attrValue = _getColorValue(rawValue)
+
+                    case 'int texture':
+                        if rawValue.text:
+                            if rawValue.text.replace('.','',1).isdigit():
+                                attrValue = int(rawValue.text)
+                            else:
+                                attrValue = rawValue.text
 
                     case 'plugin' | 'string':
                         attrValue = rawValue.text
@@ -167,6 +186,8 @@ def parseVrmat(filePath):
 
                         continue
 
+                    case _:
+                        debug.printWarning(f"Unsupported data type: {attrName}, {attrType}")
 
                 if attrValue is not None:
                     vrayPluginAttributes[attrName] = attrValue

@@ -3,8 +3,7 @@
     "Name": "V-Ray Mtl",
     "Parameters": [
         {
-            "attr": "option_shading_model",
-            "update": "onShadingModelUpdate"
+            "attr": "option_shading_model"
         },
         {
             "attr": "opacity",
@@ -55,7 +54,7 @@
         {
             "attr": "opacity_mode",
             "default": "2",
-            "desc": "The opacity mode (1 - Clip, 2 - Stochastic)",
+            "desc": "How opacity is sampled. The Clip Mode is very fast, but produces flickering in animations. The Stochastic Mode is more optimal but might add noise in gray-scale areas of the opacity map.",
             "items": [
                 [
                     "1",
@@ -101,8 +100,7 @@
                     "SSS",
                     "SSS (wax) model"
                 ]
-            ],
-            "update": "onTranslucencyUpdate"
+            ]
         },
         {
             "attr": "fog_depth",
@@ -276,19 +274,26 @@
             }
         },
         {
-            "attr" : "option_use_roughness",
-            "update": "onUseRoughnessUpdate"
+            "attr": "brdf_type",
+            "desc": "The shape of the highlight. GGX is recommended for most cases, as it is the most modern and flexible BRDF."
         },
         {
-            "attr": "bump_type",
-            "update": "onBumpTypeUpdate"
+            "attr": "anisotropy_derivation",
+            "desc": "Specifies the method for deriving anisotropy axes. Either using the local axis, or through a user-specified Mapping node."
+        },
+        {
+            "attr": "anisotropy_axis",
+            "desc": "Specifies the axis when the UV Derivation is set to Local object axis."
+        },
+        {
+            "attr": "dispersion",
+            "desc": "Increase or decrease the dispersion effect. Lowering it widens the dispersion and vice versa."
         }
     ],
     "Widget": {
         "widgets": [
             {
                 "layout": "ROW",
-                "name": "shading_model",
                 "attrs": [
                     {
                         "name": "option_shading_model",
@@ -325,23 +330,21 @@
                     },
                     {
                         "name": "self_illumination",
-                        "label": "Self-Illumination Color",
-                        "visible": {"cond": "::option_shading_model=0"}
-                    },
-                    {
-                        "name": "self_illumination",
-                        "label": "Emission",
-                        "visible": {"cond": "::option_shading_model=1"}
-                    },
-                    {
-                        "name": "self_illumination_gi",
-                        "label": "Self-Illumination GI",
-                        "visible": {"cond": "::option_shading_model=0"}
+                        "label": {
+                            "cond": {
+                                "Self-Illumination Color": "::option_shading_model=0",
+                                "Emission":                "::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "self_illumination_gi",
-                        "label": "Emission GI",
-                        "visible": {"cond": "::option_shading_model=1"}
+                        "label": {
+                            "cond": {
+                                "Self-Illumination GI": "::option_shading_model=0",
+                                "Emission GI":          "::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "compensate_camera_exposure"
@@ -363,13 +366,12 @@
                     },
                     {
                         "name": "reflect_glossiness",
-                        "label": "Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
-                    },
-                    {
-                        "name": "reflect_glossiness",
-                        "label": "Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model=1"}
+                        "label": {
+                            "cond": {
+                                "Glossiness": "::option_use_roughness=0,::option_shading_model=0",
+                                "Roughness": "::option_use_roughness!=0;::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "gtr_gamma",
@@ -506,13 +508,12 @@
                     },
                     {
                         "name": "coat_glossiness",
-                        "label": "Coat Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
-                    },
-                    {
-                        "name": "coat_glossiness",
-                        "label": "Coat Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model=1"}
+                        "label": {
+                            "cond": {
+                                "Coat Glossiness": "::option_use_roughness=0,::option_shading_model=0",
+                                "Coat Roughness":  "::option_use_roughness!=0;::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "coat_ior"
@@ -545,159 +546,51 @@
                     },
                     {
                         "name": "sheen_glossiness",
-                        "label": "Sheen Glossiness",
-                        "visible": {"cond": "::option_use_roughness=0,::option_shading_model=0"}
-                    },
-                    {
-                        "name": "sheen_glossiness",
-                        "label": "Sheen Roughness",
-                        "visible": {"cond": "::option_use_roughness!=0;::option_shading_model==1"}
+                        "label": {
+                            "cond": {
+                                "Sheen Glossiness": "::option_use_roughness=0,::option_shading_model=0",
+                                "Sheen Roughness":  "::option_use_roughness!=0;::option_shading_model=1"
+                            }
+                        }
                     }
                 ]
             },
             {
                 "layout": "ROLLOUT",
                 "name": "refraction",
-                "label": "Refraction",
-                "visible": {"cond": "::option_shading_model=0"},
-                "attrs": [
-                    {
-                        "name": "refract",
-                        "label": "Refraction Color"
-                    },
-                    {
-                        "name": "refract_glossiness",
-                        "label": "Refraction Glossiness"
-                    },
-                    {
-                        "name": "refract_ior",
-                        "label": "Refract IOR"
-                    },
-                    {
-                        "name": "refract_affect_shadows"
-                    },
-                    {
-                        "name": "refract_thin_walled"
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "translucency",
-                        "label": "Translucency",
-                        "attrs": [
-                            {
-                                "name": "translucency"
-                            },
-                            {
-                                "name": "fog_color_colortex",
-                                "label": "Fog Color",
-                                "visible": {
-                                    "cond": "::translucency=0;::translucency=5"
-                                }
-                            },
-                            {
-                                "name": "fog_color_colortex",
-                                "label": "Scatter Radius",
-                                "visible": {
-                                    "cond": "::translucency=6"
-                                }
-                            },
-                            {
-                                "name": "fog_mult",
-                                "label": "Depth (cm)",
-                                "visible": {
-                                    "cond": "::translucency=0;::translucency=5"
-                                }
-                            },
-                            {
-                                "name": "fog_mult",
-                                "label": "Scale (cm)",
-                                "visible": {
-                                    "cond": "::translucency=6"
-                                }
-                            },
-                            {
-                                "layout": "SEPARATOR"
-                            },
-                            {
-                                "layout": "COLUMN",
-                                "name": "translucency_options",
-                                "active": {
-                                    "cond": "::translucency=5;::translucency=6"
-                                },
-                                "attrs": [
-                                    {
-                                        "name": "translucency_surfaceLighting",
-                                        "label": "Illumination"
-                                    },
-                                    {
-                                        "name": "translucency_color",
-                                        "label": "Scatter Color",
-                                        "visible": {
-                                            "cond": "::translucency=0;::translucency=5"
-                                        }
-                                    },
-                                    {
-                                        "name": "translucency_color",
-                                        "label": "SSS Color",
-                                        "visible": {
-                                            "cond": "::translucency=6"
-                                        }
-                                    },
-                                    {
-                                        "name": "translucency_amount",
-                                        "label": "SSS Amount",
-                                        "active": {
-                                            "cond": "::translucency=6;::translucency=5"
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "refraction advanced",
-                        "label": "Refraction Advanced",
-                        "attrs": [
-                            {
-                                "name": "refract_trace"
-                            },
-                            {
-                                "name": "refract_depth"
-                            },
-                            {
-                                "name": "refract_affect_alpha"
-                            },
-                            {
-                                "name": "dispersion_on"
-                            },
-                            {
-                                "name": "dispersion",
-                                "active": {
-                                    "cond": "::dispersion_on!=0"
-                                }
-                            }
-                        ]
+                "label": {
+                    "cond": {
+                        "Refraction": "::option_shading_model=0",
+                        "Transmission": "::option_shading_model=1"
                     }
-                ]
-            },
-             {
-                "layout": "ROLLOUT",
-                "name": "refraction",
-                "label": "Transmission",
-                "visible": {"cond": "::option_shading_model=1"},
+                },
                 "attrs": [
                     {
                         "name": "refract",
-                        "label": "Transmission"
+                        "label": {
+                            "cond": {
+                                "Refraction Color": "::option_shading_model=0",
+                                "Transmission":     "::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "refract_glossiness",
-                        "label": "Transmission Roughness"
+                        "label": {
+                            "cond" : {
+                                "Refraction Glossiness":  "::option_shading_model=0",
+                                "Transmission Roughness": "::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "refract_ior",
-                        "label": "Transmission IOR"
+                        "label": { 
+                            "cond": {
+                                "Refract IOR":      "::option_shading_model=0",
+                                "Transmission IOR": "::option_shading_model=1"
+                            }
+                        }
                     },
                     {
                         "name": "refract_affect_shadows"
@@ -715,30 +608,20 @@
                             },
                             {
                                 "name": "fog_color_colortex",
-                                "label": "Fog Color",
-                                "visible": {
-                                    "cond": "::translucency=0;::translucency=5"
-                                }
-                            },
-                            {
-                                "name": "fog_color_colortex",
-                                "label": "Scatter Radius",
-                                "visible": {
-                                    "cond": "::translucency=6"
+                                "label": {
+                                    "cond": {
+                                        "Fog Color":      "::translucency=0;::translucency=5",
+                                        "Scatter Radius": "::translucency=6"
+                                    }
                                 }
                             },
                             {
                                 "name": "fog_mult",
-                                "label": "Depth (cm)",
-                                "visible": {
-                                    "cond": "::translucency=0;::translucency=5"
-                                }
-                            },
-                            {
-                                "name": "fog_mult",
-                                "label": "Scale (cm)",
-                                "visible": {
-                                    "cond": "::translucency=6"
+                                "label": {
+                                    "cond": {
+                                        "Depth (cm)": "::translucency=0;::translucency=5",
+                                        "Scale (cm)": "::translucency=6"
+                                    }
                                 }
                             },
                             {
@@ -757,16 +640,11 @@
                                     },
                                     {
                                         "name": "translucency_color",
-                                        "label": "Scatter Color",
-                                        "visible": {
-                                            "cond": "::translucency=0;::translucency=5"
-                                        }
-                                    },
-                                    {
-                                        "name": "translucency_color",
-                                        "label": "SSS Color",
-                                        "visible": {
-                                            "cond": "::translucency=6"
+                                        "label": {
+                                            "cond": {
+                                                "Scatter Color": "::translucency=0;::translucency=5",
+                                                "SSS Color":     "::translucency=6"
+                                            }
                                         }
                                     },
                                     {
@@ -783,11 +661,21 @@
                     {
                         "layout": "ROLLOUT",
                         "name": "refraction advanced",
-                        "label": "Transmission Advanced",
+                        "label": { 
+                            "cond": {
+                                "Refraction Advanced": "::option_shading_model=0",
+                                "Transmission Advanced": "::option_shading_model=1"
+                            }
+                        },
                         "attrs": [
                             {
                                 "name": "refract_trace",
-                                "label": "Trace Transmission"
+                                "label": {
+                                    "cond" : {
+                                        "Trace Refrations": "::option_shading_model=0",
+                                        "Trace Transmission": "::option_shading_model=1"
+                                    }
+                                }
                             },
                             {
                                 "name": "refract_depth"
@@ -846,10 +734,17 @@
     },
     "Node": {
         "input_sockets": [
-            { "name": "diffuse" },
+            { "name": "diffuse"},
             { "name": "opacity_color" },
             { "name": "roughness" },
-            { "name": "self_illumination" },
+            {   "name": "self_illumination",
+                "label": {
+                    "cond": {
+                        "Emission":                 "::option_shading_model=1",
+                        "Self-Illumination Color":  "::option_shading_model!=1"
+                    }
+                }
+            },
 
             { 
                 "name": "panel_reflection",
@@ -857,7 +752,14 @@
                 "type": "ROLLOUT" 
             },
             { "name": "reflect" },
-            { "name": "reflect_glossiness" },
+            {   "name": "reflect_glossiness",
+                "label": {
+                    "cond": {
+                        "Roughness":              "::option_shading_model=1;::option_use_roughness=1",
+                        "Reflection Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                    }
+                } 
+            },
             { "name": "gtr_gamma" },
             { "name": "fresnel_ior" },
             { "name": "metalness" },
@@ -875,7 +777,14 @@
             { "name": "coat_color" },
             { "name": "coat_amount" },
             { "name": "coat_darkening" },
-            { "name": "coat_glossiness" },
+            {   "name": "coat_glossiness",
+                "label": {
+                    "cond": {
+                        "Coat Roughness":   "::option_shading_model=1;::option_use_roughness=1",
+                        "Coat Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                    }
+                } 
+            },
             { "name": "coat_ior" },
             { "name": "coat_anisotropy" },
             { "name": "coat_anisotropy_rotation" },
@@ -889,25 +798,73 @@
             },
             { "name": "sheen_color" },
             { "name": "sheen_amount" },
-            { "name": "sheen_glossiness" },
+            {   "name": "sheen_glossiness",
+                "label": {
+                    "cond": {
+                        "Sheen Roughness":   "::option_shading_model=1;::option_use_roughness=1",
+                        "Sheen Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                    }
+                } 
+            },
 
             { 
                 "name": "panel_refraction",
-                "label": "Refraction",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT",
+                "label": {
+                    "cond": {
+                        "Transmission": "::option_shading_model=1",
+                        "Refraction":   "::option_shading_model!=1"
+                    }
+                } 
             },
-            { "name": "refract" },
-            { "name": "refract_ior" },
-            { "name": "refract_glossiness" },
+            {   "name": "refract",
+                "label": {
+                     "cond": {
+                        "Transmission":      "::option_shading_model=1",
+                        "Refraction Color":  "::option_shading_model!=1"
+                     }
+                } 
+            },
+            {   "name": "refract_ior",
+                "label": {
+                     "cond": {
+                        "Transmission IOR":  "::option_shading_model=1",
+                        "Refract IOR":       "::option_shading_model!=1"
+                     }
+                }
+            },
+            {   "name": "refract_glossiness",
+                "label": {
+                     "cond": {
+                        "Transmission Roughness":   "::option_shading_model=1",
+                        "Refract Glossiness":       "::option_shading_model!=1"
+                     }
+                }
+            },
 
             { 
                 "name": "panel_translucency",
                 "label": "Translucency",
                 "type": "ROLLOUT" 
             },
-            { "name": "translucency_color", "label": "Scatter Color" },
+            { 
+                "name": "translucency_color", 
+                "label": {
+                     "cond": {
+                        "Scatter Color": "::translucency!=6",
+                        "SSS Color":     "::translucency=6"
+                     }
+                }
+            },
             { "name": "translucency_amount", "label": "SSS Amount" },
-            { "name": "fog_color_colortex" },
+            {   "name": "fog_color_colortex",
+                "label": {
+                    "cond": {
+                        "Fog Color":        "::translucency!=6",
+                        "Scatter Radius":   "::translucency=6"
+                    }
+                }
+            },
             { "name": "fog_depth" },
             
             { 
@@ -916,7 +873,12 @@
                 "type": "ROLLOUT" 
             },
             { "name": "bump_map" },
-            { "name": "bump_amount" }
+            {   "name": "bump_amount",
+                "visible": {
+                    "cond": "::bump_type!=6",
+                    "default": true
+                }    
+            }
         ]
     },
     "Options": {

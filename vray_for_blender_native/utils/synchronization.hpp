@@ -1,6 +1,6 @@
 #pragma once
 
-#include <python.h>
+#include <Python.h>
 #include <boost/python.hpp>
 
 #include "vassert.h"

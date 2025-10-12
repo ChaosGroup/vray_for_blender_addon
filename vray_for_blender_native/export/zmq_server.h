@@ -9,10 +9,20 @@
 #include "zmq_message.hpp"
 #include "zmq_agent.h"
 
+#include <stop_token>
 #include <string>
-#include <boost/process.hpp>
-#include <unordered_map>
+#include <thread>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include <boost/process.hpp>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#include <unordered_map>
 
 // Forward declarations
 struct PluginDesc;
@@ -52,8 +62,11 @@ public:
 	///  Indicates that license is obtained
 	bool licenseAcquired() const;
 
-	// Adds python callback to the m_pyCallbacks map
+	// Adds python callback to the callbacks list
 	void setPythonCallback(const std::string &name, py::object callback);
+
+	/// Gets a stored callback
+	py::object getPythonCallback(const std::string &name);
 
 	/// Sends message to ZmqServer through control connection
 	/// @param msg Message to be sent
@@ -67,8 +80,6 @@ public:
 
 	/// This class' singleton instance accessor.
 	static ZmqServer& get();
-
-
 
 private:
 	/// Run ZmqSrever process in a thread that will monitor and restart it as needed.
@@ -89,18 +100,18 @@ private:
 	void processControlOnCosmosAssetsDownloaded(const proto::MsgControlOnCosmosDownloadedAssets& message);
 	void processControlOnScannedEncodedParameters(const proto::MsgControlOnScannedEncodedParameters& message);
 
-	/// Gets callback from m_pyCallbacks
-	py::object getPythonCallback(const std::string &name);
 
 private:
 	zmq::context_t   m_ctx;               /// Zmq context. Needed for all communication operations through ZMQ
 	ZmqAgentPtr      m_conn;              /// The connection to ZMQ Server used for control (non-render) messages
 	ZmqServerArgs	 m_args;              /// Configuration information for the ZmqServer process
 
-	std::jthread     m_processRunner;     /// A thread which will start and monitor ZmqServer process
+	std::thread      m_processRunner;     /// A thread which will start and monitor ZmqServer process
+	std::stop_source m_stopSource;        //// A stop source object for stopping the process runner thread.
 	std::atomic_int  m_zmqServerPID = 0;  /// The process ID of ZMQ server, != 0 if server is running
 	std::atomic_int  m_zmqServerPort = 0; /// The port on which ZmqServer listens for connections
 
+	mutable std::mutex m_lock;				  /// Synchronize internal state
 	mutable std::recursive_mutex m_lockConn;  /// Synchronize access to the zmq agent
 
 	std::unordered_map<std::string, py::object> m_pyCallbacks; /// Stores python callbacks 

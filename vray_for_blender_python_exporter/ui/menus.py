@@ -4,7 +4,6 @@ import os
 from pathlib import PurePath
 
 from vray_blender import debug
-from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.events import isDefaultScene
 from vray_blender.lib import blender_utils, lib_utils
@@ -15,6 +14,7 @@ from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive
 from vray_blender.ui import classes, icons
 from vray_blender.menu import VRAY_OT_open_vfb
 from vray_blender.vray_tools import vray_proxy
+from vray_blender.exporting.tools import MESH_OBJECT_TYPES
 
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -69,7 +69,8 @@ class VRAY_OT_camera_lock_unlock_view(VRayOperatorBase):
 class VRAY_OT_add_object_vray_light(VRayOperatorBase):
     bl_idname = "vray.add_object_vray_light"
     bl_label = "Add V-Ray Light"
-    
+    bl_options = { "UNDO" }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "BLENDER"
@@ -82,11 +83,11 @@ class VRAY_OT_add_object_vray_light(VRayOperatorBase):
 
         if hasattr(self, "_initLight"):
             self._initLight(lightData)
-        
+
         lightObj = bpy.data.objects.new(name=self.lightName, object_data=lightData)
         lightObj.location = bpy.context.scene.cursor.location
         return lightObj
-    
+
     def execute(self, context):
         lightObject = self._createLightObject()
         bpy.context.collection.objects.link(lightObject)
@@ -101,7 +102,7 @@ class VRAY_OT_add_object_vray_light_ambient(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_ambient"
     bl_label = "V-Ray Ambient Light"
     bl_description = "V-Ray Ambient Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "AMBIENT"
@@ -112,7 +113,7 @@ class VRAY_OT_add_object_vray_light_direct(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_direct"
     bl_label = "V-Ray Direct Light"
     bl_description = "V-Ray Direct Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "DIRECT"
@@ -123,7 +124,7 @@ class VRAY_OT_add_object_vray_light_ies(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_ies"
     bl_label = "V-Ray IES Light"
     bl_description = "V-Ray IES Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "IES"
@@ -134,7 +135,7 @@ class VRAY_OT_add_object_vray_light_mesh(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_mesh"
     bl_label = "V-Ray Mesh Light"
     bl_description = "V-Ray Mesh Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "MESH"
@@ -145,7 +146,7 @@ class VRAY_OT_add_object_vray_light_omni(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_omni"
     bl_label = "V-Ray Omni Light"
     bl_description = "V-Ray Omni Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "OMNI"
@@ -156,7 +157,7 @@ class VRAY_OT_add_object_vray_light_sphere(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_sphere"
     bl_label = "V-Ray Sphere Light"
     bl_description = "V-Ray Sphere Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "SPHERE"
@@ -167,7 +168,7 @@ class VRAY_OT_add_object_vray_light_spot(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_spot"
     bl_label = "V-Ray Spot Light"
     bl_description = "V-Ray Spot Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "SPOT"
@@ -176,7 +177,7 @@ class VRAY_OT_add_object_vray_light_spot(VRAY_OT_add_object_vray_light):
 
     def _initLight(self, light: bpy.types.Light):
         propGroup = light.vray.LightSpot
-        
+
         light.spot_size  = propGroup.coneAngle
         light.spot_blend = max(-propGroup.penumbraAngle / propGroup.coneAngle, 0)
         light.show_cone  = propGroup.show_cone
@@ -207,7 +208,7 @@ class VRAY_OT_add_object_vray_light_sun_base(VRAY_OT_add_object_vray_light):
 
         constraint = lightObject.constraints.new(type='TRACK_TO')
         constraint.target = targetObject
-        
+
         return targetObject, lightObject
 
 
@@ -215,7 +216,7 @@ class VRAY_OT_add_object_vray_light_sun(VRAY_OT_add_object_vray_light_sun_base):
     bl_idname = "vray.add_object_vray_light_sun"
     bl_label = "V-Ray Sun Light"
     bl_description = "V-Ray Sun Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "SUN"
@@ -232,7 +233,7 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
     bl_idname = "vray.add_object_vray_sun_sky"
     bl_label = "V-Ray Sun And Sky"
     bl_description = "V-Ray Sun And Sky"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "SUN"
@@ -253,7 +254,7 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
         if envNode:
             skyTexNode.location.y = envNode.location.y - 20
             skyTexNode.location.x = envNode.location.x - skyTexNode.bl_width_default - 50
-            
+
             linkedNodes = set()
             for sock in envNode.inputs:
                 if sock.name == "Secondary Matte":
@@ -263,7 +264,7 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
                     envNode.id_data.links.remove(sock.links[0])
                 worldTree.links.new(skyTexNode.outputs[0], sock)
                 sock.use = True
-            
+
             # Move any previously linked nodes to the left of 'skyTexNode'
             for node in linkedNodes:
                 node.location.x = skyTexNode.location.x - node.bl_width_default - 50
@@ -277,7 +278,7 @@ class VRAY_OT_add_object_vray_light_rect(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_rect"
     bl_label = "V-Ray Rect Light"
     bl_description = "V-Ray Rect Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "RECT"
@@ -288,13 +289,13 @@ class VRAY_OT_add_object_vray_light_rect(VRAY_OT_add_object_vray_light):
         lightData.size = 1
         lightData.size_y = 1
         lightData.shape = 'RECTANGLE'
-    
+
 
 class VRAY_OT_add_object_vray_light_dome(VRAY_OT_add_object_vray_light):
     bl_idname = "vray.add_object_vray_light_dome"
     bl_label = "V-Ray Dome Light"
     bl_description = "V-Ray Dome Light"
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.lightType = "DOME"
@@ -344,6 +345,7 @@ class VRAY_OT_add_physical_camera(VRayOperatorBase):
     bl_idname = "vray.add_physical_camera"
     bl_label = "Add V-Ray Physical Camera"
     bl_description = "Add V-Ray Physical Camera"
+    bl_options = { "UNDO" }
 
     def execute(self, context):
         import math
@@ -351,7 +353,7 @@ class VRAY_OT_add_physical_camera(VRayOperatorBase):
         camera = bpy.data.cameras.new(name='Physical Camera')
         camera.vray['use_physical'] = True
         camera.vray.CameraPhysical['use'] = True
-        
+
         cameraObj = bpy.data.objects.new(name='Physical Camera', object_data=camera)
         cameraObj.location = context.scene.cursor.location
         # Rotate the same as Blender camera
@@ -373,14 +375,32 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
     bl_idname = "vray.add_object_proxy"
     bl_label = "Add V-Ray Proxy"
     bl_description = "Import V-Ray Proxy object."
+    bl_options = { "UNDO" }
+
+    filter_glob: bpy.props.StringProperty(
+        default="*.vrmesh;*.abc",
+        options={'HIDDEN'}
+    )
 
     filepath: bpy.props.StringProperty(name="Filepath (*.vrmesh, *abc)", subtype="FILE_PATH")
     relpath: bpy.props.BoolProperty(name="Use Relative Path", default=False)
-
+    unit_scale: bpy.props.FloatProperty(
+        name="Unit scale",
+        description="The unit scale to apply during import",
+        subtype='DISTANCE',
+        default=1.0,
+        min=0.0001,
+        max=10000.0
+    )
+    
     def draw(self, context):
+        layout = self.layout
+        
         # If the scene has not been saved yet, we cannot use relative paths
         if not isDefaultScene():
-            self.layout.prop(self, 'relpath')       
+            layout.prop(self, 'relpath')
+        
+        layout.prop(self, "unit_scale", text='Unit scale')
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -389,22 +409,57 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
     def execute(self, context):
         matPath =  "" if vray_proxy.isAlembicFile(self.filepath) else PurePath(self.filepath).with_suffix(".vrmat").as_posix()
 
-        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=self.relpath)
+        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=self.relpath, scaleUnit=self.unit_scale)
+        
         if err:
             self.report({'ERROR'}, err)
             return {'CANCELLED'} 
-        
+
         return {'FINISHED'}
+
+class VRAY_OT_add_object_fur(VRayOperatorBase):
+    """Add a V-Ray Fur object (Empty with isVRayFur=True)"""
+
+    bl_idname = "vray.add_object_fur"
+    bl_label = "Add V-Ray Fur"
+    bl_description = "Create an Empty object and set V-Ray Fur property"
+    bl_options = {'UNDO'}
+
+    def execute(self, context):
+        furData = bpy.data.hair_curves.new('V-Ray Fur')
+        furObj = bpy.data.objects.new("V-Ray Fur", furData)
+        furObj.vray.isVRayFur = True
+        context.collection.objects.link(furObj)
+
+        # Add all selected objects to the fur object.
+        for obj in context.selected_objects:
+            if obj.type in MESH_OBJECT_TYPES:
+                newItem = furData.vray.GeomHair.object_selector.selectedItems.add()
+                newItem.objectPtr = obj
+                newItem.enabled = True
+                newItem.name = obj.name
+
+        # Deselect all, select only the new object
+        blender_utils.selectObject(furObj)
+
+        return {'FINISHED'}
+
 
 
 class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
     """ Show FileSelect dialog for .vrscene files and import the selected file """
-    
+
     bl_idname = "vray.add_object_vrayscene"
     bl_label = "Add V-Ray Scene"
     bl_description = "Import V-Ray Scene object. Only available in Solid viewport mode"
+    bl_options = { "UNDO" }
 
-    filepath: bpy.props.StringProperty(name="Filepath (*.vrscene)", subtype="FILE_PATH")
+    filter_glob: bpy.props.StringProperty(
+        default="*.vrscene;*.usd;*.usda;*.usdc;*.usdz",
+        options={'HIDDEN'}
+    )
+
+    filepath: bpy.props.StringProperty(name="Filepath (*.vrscene, *.usd, *.usda, *.usdc, *.usdz)", subtype="FILE_PATH")
     relpath: bpy.props.BoolProperty(name="Use Relative Path", default=True)
 
     def invoke(self, context, event):
@@ -420,10 +475,11 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
             self.report({'ERROR'}, "File not found!")
             return {'CANCELLED'}
 
-        if ( fileExt:= PurePath(filepath).suffix) != '.vrscene':
+        fileExt = PurePath(filepath).suffix
+        if fileExt != '.vrscene' and not fileExt.startswith(".usd"):
            self.report({'ERROR'}, f"File format {fileExt} is not supported by V-Ray Scene")
            return {'CANCELLED'}
-    
+
         # Create a new mesh object to represent the scene
         name = f"VRayScene@{PurePath(filepath).stem}"
 
@@ -438,7 +494,7 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
 
         vrayScene = ob.data.vray.VRayScene
         vrayScene['filepath'] = filepath    # Set to the value obtained from the FileSelect dialog
-        
+
         ob.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
 
         if err := vray_proxy.loadVRayScenePreviewMesh(sceneFilepath, ob):
@@ -463,9 +519,10 @@ class VRAY_MT_Mesh(bpy.types.Menu):
         vraySceneLayout = self.layout.column()
         vraySceneLayout.active = enableVrscene
         vraySceneLayout.enabled = enableVrscene
-        
+
         vraySceneLayout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_vrayscene))
         self.layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
+        self.layout.operator(VRAY_OT_add_object_fur.bl_idname, text="V-Ray Fur", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
 
 
 def addVRayMeshesToMenu(self, context):
@@ -514,6 +571,7 @@ def getRegClasses():
         VRAY_OT_set_view,
         VRAY_OT_add_object_vrayscene,
         VRAY_OT_add_object_proxy,
+        VRAY_OT_add_object_fur,
         VRAY_OT_select_camera,
         VRAY_OT_camera_lock_unlock_view,
         VRAY_MT_Mesh,
@@ -527,7 +585,7 @@ def register():
 
     bpy.types.VIEW3D_MT_mesh_add.append(addSeparatorToMenu)
     bpy.types.VIEW3D_MT_mesh_add.append(addVRayMeshesToMenu)
-    
+
     bpy.types.VIEW3D_MT_light_add.append(addSeparatorToMenu)
     bpy.types.VIEW3D_MT_light_add.append(addVRayLightsToMenu)
 

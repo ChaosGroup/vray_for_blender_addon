@@ -13,10 +13,55 @@
             "type": "UVWGEN"
         },
         {
+            "attr": "flake_orientation",
+            "desc": "Determines the orientation of the metal flakes, in relation to the surface normal. Setting to 0 aligns the flakes with the surface normal, and setting to 1 rotates the flakes randomly."
+        },
+        {
+            "attr": "flake_orientation_tail",
+            "desc": "Controls the transition from highlighted to non-highlighted areas."
+        },
+        {
+            "attr": "flake_scale",
+            "desc": "Scales the entire flake when the Mapping Type is set to Mapping channel."
+        },
+        {
             "attr": "flake_scale_triplanar",
+            "desc": "Scales the entire flake structure when the Mapping Type is set to Triplanar.",
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr": "flake_size",
+            "desc": "Specifies the size of the flakes relative to the distance between them."
+        },
+        {
+            "attr": "flake_map_size",
+            "desc": "The size of the internally-generated bitmaps that store the flakes. Higher values consume more RAM, but reduce tiling."
+        },
+        {
+            "attr": "traceReflections",
+            "desc": "Toggles reflections for all layers."
+        },
+        {
+            "attr": "doubleSided",
+            "desc": "When enabled, the material is applied to both sides of the surface normals.E.g. If it’s a plane, it will be applied to the front and back."
+        },
+        {
+            "attr": "cutoff_threshold",
+            "desc": "Specifies the reflections’ cutoff threshold for all layers."
+        },
+        {
+            "attr": "use_environment_override",
+            "desc": "True to use the 'environment override' texture for reflections and refractions."
+        },
+        {
+            "attr": "environment_override",
+            "desc": "Attach the environment override texture here."
+        },
+        {
+            "attr": "environment_priority",
+            "desc": "Specifies the environment priority for the Environment Override texture."
         }
     ],
     "Widget": {
@@ -105,8 +150,10 @@
             }
         ]
     },
-    "excluded_parameters": [
-        "flake_bin_subdivs",
-        "subdivs"
-    ]
+    "Options": {
+        "excluded_parameters": [
+            "flake_bin_subdivs",
+            "subdivs"
+        ]
+    }
 }

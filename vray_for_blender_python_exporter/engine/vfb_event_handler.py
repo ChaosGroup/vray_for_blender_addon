@@ -10,7 +10,7 @@ from vray_blender.nodes.utils import tagRedrawViewport
 from vray_blender import debug
 
 class _Event:
-    Undefined               = 0     
+    Undefined               = 0
     RenderViewport          = 1     # Switch viewport to RENDERED mode
     RenderSolid             = 2     # Switch  viewport to SOLID mode
     RenderProd              = 3     # Start production rendering
@@ -21,7 +21,8 @@ class _Event:
     CloudSubmit             = 9     # Submit scene for V-Ray Cloud rendering
     ReportStatus            = 10    # Report to Bleder status area
     UpgradeScene            = 11    # Run a scene version upgrade
-   
+    RenderVantageStop       = 12    # Stop Vantage Live Link
+
 
 class _EventInfo:
     """ Encapsulates the event type and any parameters to the evennt handler procedure """
@@ -81,6 +82,7 @@ class _VfbEventHandler:
 
     def stopViewportRender(self):
         """ Set the viewport to SOLID mode """
+        self.stopVantageLiveLink()
         self.addEvent(_Event.RenderSolid)
 
     def startViewportRender(self):
@@ -89,6 +91,7 @@ class _VfbEventHandler:
 
     def startInteractiveRender(self):
         """ Start interactive rendering """
+        self.stopVantageLiveLink()
         self.addEvent(_Event.RenderInteractive)
 
     def stopInteractiveRender(self):
@@ -107,6 +110,9 @@ class _VfbEventHandler:
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.RenderProd)
+
+    def stopVantageLiveLink(self):
+        self.addEvent(_Event.RenderVantageStop)
 
     def exportVrscene(self):
         """ Export .vrscene """
@@ -180,24 +186,23 @@ class _VfbEventHandler:
 
             # Exporting interactive viewport if there is Interactive renderer running
             self._exportInteractiveViewport()
-            
+
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::onTimer()")
-        
+
         return 1.0 / self._fps
-        
-    
+
 
     def _handleQueuedEvent(self, event: tuple):
         processed = True
 
         try:
             # Change the render mode
-            
+
             match event.eventType:
                 case _Event.RenderSolid:
                     self.changeViewportModeSync('SOLID')
-                
+
                 case _Event.RenderViewport:
                     self.changeViewportModeSync('RENDERED')
 
@@ -212,7 +217,7 @@ class _VfbEventHandler:
 
                 case _Event.RenderInteractive:
                     self._startInteractiveRender()
-                
+
                 case _Event.RenderInteractiveStop:
                     self._stopInteractiveRender()
 
@@ -222,10 +227,13 @@ class _VfbEventHandler:
                 case _Event.UpgradeScene:
                     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
 
+                case _Event.RenderVantageStop:
+                    self._stopVantageLiveLink()
+
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::_handleQueuedEvent()")
-            # If the processing failed with an error, the event is still considered processed 
+            # If the processing failed with an error, the event is still considered processed
 
         with self._lock:
             if processed:
@@ -233,14 +241,14 @@ class _VfbEventHandler:
 
 
     def changeViewportModeSync(self, newMode: str):
-        """ Synchronously change viewport mode between SOLID and RENDERED. 
-            
+        """ Synchronously change viewport mode between SOLID and RENDERED.
+
             @param newMode - the mode to set
             @param targetArea - the area for which the mode is changed. If None, then
                                 the first found area of type View3D.
         """
         from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
-        
+
         if not (space := VRayRendererIprViewport.getLastActiveSpace(bpy.context)):
             # We don't have information as to which space was last used by the user for V-Ray rendering.
             # Find any View3D space.
@@ -298,13 +306,13 @@ class _VfbEventHandler:
         # and camera of the viewport. 
         VRayRendererProd.renderMode = renderMode
         bpy.ops.render.render('EXEC_DEFAULT', use_viewport=True)
-        
+
         renderModeName = {
             ProdRenderMode.CLOUD_SUBMIT: "Submit to cloud",
             ProdRenderMode.EXPORT_VRSCENE: "Scene export",
             ProdRenderMode.RENDER: "Render"
         }[renderMode]
-        
+
         debug.report('INFO', f"{renderModeName} finished")
 
         return True
@@ -318,7 +326,11 @@ class _VfbEventHandler:
     def _stopInteractiveRender(self):
         from vray_blender.engine.render_engine import VRayRenderEngine
         VRayRenderEngine.stopInteractiveRenderer()
-    
+
+    def _stopVantageLiveLink(self):
+        from vray_blender.engine.render_engine import VRayRenderEngine
+        VRayRenderEngine.stopVantageLiveLink()
+
     def _exportInteractiveViewport(self):
         """ Exporting of scene on every Viewport change """
         from vray_blender.engine.render_engine import VRayRenderEngine
@@ -328,10 +340,3 @@ class _VfbEventHandler:
 
 # Export 'singleton' instance
 VfbEventHandler = _VfbEventHandler()
-
-
-    
-
-
-
-

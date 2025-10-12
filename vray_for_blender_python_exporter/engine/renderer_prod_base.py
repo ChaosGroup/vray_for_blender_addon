@@ -2,7 +2,7 @@ import bpy
 
 from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
-from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
+from vray_blender.exporting.plugin_tracker import ObjTracker, FakeScopedNodeTracker
 from vray_blender.exporting.tools import FakeTimeStats
 from vray_blender.exporting import obj_export, mtl_export, light_export, settings_export, view_export, world_export
 
@@ -10,16 +10,14 @@ from vray_blender import debug
 from vray_blender.lib import path_utils
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.common_settings import CommonSettings
-from vray_blender.lib.defs import ExporterContext, ExporterContext, RendererMode
+from vray_blender.lib.defs import ExporterContext, ExporterContext, RendererMode, PersistedState
 from vray_blender.lib.plugin_utils import updateValue
 
 from vray_blender.bin import VRayBlenderLib as vray
 
 
-# We are always exporting the full scene when rendering for production
 # Use the no-op implementations of the plugin trackers defined below
 _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
-_fakeObjTrackers = dict([(t, FakeObjTracker()) for t in OBJ_TRACKERS])
 
 #############################
 ## VRayRendererProd
@@ -35,8 +33,7 @@ class VRayRendererProdBase:
         self.renderer = None 
         self.isPreview = isPreview
         self.viewParams: dict[str, ViewParams] = {}    # Per-camera ViewParams from the latest evaluation. 
-                                                       # Used for difference comparison with the current state. 
-
+        
         # RenderResult will be passed to the C++ library to be updated with the image data
         # as it is received from VRay, so we need to keep it alive between render
         # methods invocations
@@ -44,6 +41,12 @@ class VRayRendererProdBase:
 
         self.cbUpdateImage = None
         self.cbUpdateVfbLayers = None
+
+        self.objTrackers = dict([(t, ObjTracker(t)) for t in OBJ_TRACKERS])
+
+        # State to carry on to the next render cycle
+        self.persistedState = PersistedState()
+
 
     def _reportInfo(self, engine: bpy.types.RenderEngine, msg: str):
         debug.printInfo(msg)
@@ -108,10 +111,11 @@ class VRayRendererProdBase:
         """
         try:
             exporterCtx.calculateObjectVisibility()
-            
+            obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
+
             light_export.syncLightMeshInfo(exporterCtx)
             light_export.collectLightMixInfo(exporterCtx)
-            
+
             self._exportObjects(exporterCtx)
             self._exportMaterials(exporterCtx)
             self._exportLights(exporterCtx)
@@ -125,10 +129,13 @@ class VRayRendererProdBase:
                 # Baking textures does not require a camera setup. Only export basic view configuration.
                 self._exportBakeView(exporterCtx)
 
-            self._exportSettings(exporterCtx)
             self._exportWorld(exporterCtx)
+            if exporterCtx.fullExport:
+                self._exportSettings(exporterCtx)
 
-            self._linkRenderChannels(exporterCtx)
+                self._linkRenderChannels(exporterCtx)
+            else:
+                settings_export.SettingsExporter(exporterCtx).exportPlugin("SettingsLightLinker")
 
             # Call descendant's interface
             self._exportSceneAdjustments(exporterCtx)
@@ -136,7 +143,16 @@ class VRayRendererProdBase:
             # Wait for all async export tasks to finish before proceeding.
             # This should be done even if an error occured during export
             vray.finishExport(self.renderer, interactive = False)
-        
+
+
+    def _persistState(self, exporterCtx: ExporterContext):
+        self.persistedState.visibleObjects = exporterCtx.visibleObjects
+        self.persistedState.activeInstancers = exporterCtx.activeInstancers
+        self.persistedState.activeGizmos = exporterCtx.activeGizmos
+        self.persistedState.exportedMtls = exporterCtx.exportedMtls
+        self.persistedState.activeFurInfo = exporterCtx.activeFurInfo
+        self.persistedState.activeMeshLightsInfo = exporterCtx.activeMeshLightsInfo
+
 
     @staticmethod
     def _syncView(ctx: ExporterContext):
@@ -155,7 +171,7 @@ class VRayRendererProdBase:
             if not self.renderResult:
                 debug.printError("Invalid render result in drawing callback")
                 return
-        
+
             # renderResult has been updated by the caller. Push the updated data to the screen.
             engine.update_result(self.renderResult)
         except Exception as ex:
@@ -166,12 +182,13 @@ class VRayRendererProdBase:
         context = ExporterContext()
         context.renderer        = renderer
         context.commonSettings  = commonSettings
-        context.objTrackers     = _fakeObjTrackers
+        context.objTrackers     = self.objTrackers
         context.nodeTrackers    = _fakeNodeTrackers
         context.ctx             = bpy.context
         context.dg              = dg
         context.fullExport      = True
         context.ts              = FakeTimeStats()
+        context.persistedState  = self.persistedState
 
         if self.isPreview:
             context.rendererMode = RendererMode.Preview
@@ -184,12 +201,16 @@ class VRayRendererProdBase:
 
 
     def _createRenderer(self, exporterType):
+        from vray_blender.lib.export_utils import setupDistributedRendering
+
         exporter = bpy.context.scene.vray.Exporter
 
         settings = vray.ExporterSettings()
         settings.exporterType     = exporterType
         settings.closeVfbOnStop   = True
         settings.renderThreads    = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
+
+        setupDistributedRendering(settings, exporterType)
 
         if self.isPreview:
             settings.previewDir = path_utils.getPreviewDir()

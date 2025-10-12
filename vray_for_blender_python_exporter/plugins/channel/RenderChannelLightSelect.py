@@ -31,15 +31,21 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     
     # This method may be called to export LightSelect world-tree nodes or light select
     # channels created to support the various light select modes.
-    propGroup = pluginDesc.vrayPropGroup
-    isNode = bool(propGroup)
+    lightSelect = pluginDesc.vrayPropGroup
+    isNode = bool(lightSelect)
     
     if isNode: 
-        # Plugins are exported for RenderChannelLightSelect nodes only if light mix
-        # is active and the light select mode is set to 'manual'
-        if ctx.activeLightMixNode and (ctx.activeLightMixNode.RenderChannelLightMix.mode != 'manual'):
-            return AttrPlugin()
-        
+        # Do not export Light Select nodes in 'full' mode for lights that are already
+        # exported in the light mix. This is an optimization to deal with the hard limit
+        # of 64 light selects. 
+        # TODO: This might change when https://jira-chaos.atlassian.net/browse/VRCORE-152
+        # gets implemented (increase the limit to 256).
+        if ctx.activeLightMixNode:
+            lightMixMode = ctx.activeLightMixNode.RenderChannelLightMix.mode
+            
+            if lightMixMode == 'individual' and lightSelect.light_select_mode == '4':
+                return AttrPlugin()
+
         # Get a list of lights that should be included in this light select render channel 
         includedLights = []
 
@@ -50,10 +56,11 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             includedLights = [p.auxData['object'] for p in selectedLightPlugins]
         else:
             # No Selector node is connected to the LightSelect node. Export LightSelect node's own data
-            includedLights = propGroup.light_selector.getSelectedItems(ctx.ctx, 'objects')
+            includedLights = lightSelect.light_selector.getSelectedItems(ctx.ctx, 'objects')
+        
             
         # Reference the LightSelect in the lights affecter by it
-        channelsPropName = _CHANNELS_PROPERTY_MAP[propGroup.light_select_mode]
+        channelsPropName = _CHANNELS_PROPERTY_MAP[lightSelect.light_select_mode]
         lsPlugin = export_utils.exportPluginCommon(ctx, pluginDesc)
 
         for objLight in includedLights:

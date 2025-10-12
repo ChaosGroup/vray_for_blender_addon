@@ -3,7 +3,6 @@ import getpass
 import os
 import socket
 import sys
-import winreg
 from contextlib import suppress
 from pathlib import PurePath
 
@@ -36,10 +35,10 @@ def getPlatformName(executableBaseName: str):
     match sys.platform:
         case 'win32': suffix = ".exe"
         case 'linux': suffix = ".bin"
-        case 'darwin': suffix = ".mach"
+        case 'darwin': suffix = ""
         case _:
             raise Exception(f"Unsupported platform: {sys.platform}")
-                            
+
     return str(PurePath(executableBaseName).with_suffix(suffix))
 
 
@@ -57,7 +56,11 @@ def getUserConfigDir():
     return userConfigDirpath
 
 
-def getWinRegistry(path: str, key_name: str, registry_root=winreg.HKEY_CURRENT_USER) -> str:
+def getWinRegistry(path: str, key_name: str, registry_root=None) -> str:
+    import winreg
+    if registry_root:
+        registry_root = winreg.HKEY_CURRENT_USER
+
     """
     Reads a string value from the Windows registry.
 
@@ -74,8 +77,31 @@ def getWinRegistry(path: str, key_name: str, registry_root=winreg.HKEY_CURRENT_U
         return value
     return None
 
+def parseIni(filename):
+    """ Parse an .ini file. Note that this funciton is only written to 
+    be able to parse the telemetry config.ini file and not all files.
+    """
+    config = {}
 
-def setWinRegistry(path: str, key_name: str, value: str, registry_root=winreg.HKEY_CURRENT_USER) -> bool:
+    with open(filename, "r", encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+
+            if not line or line.startswith(";") or line.startswith("#"):
+                continue
+
+            if "=" in line:
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                config[key] = value
+
+    return config
+
+def setWinRegistry(path: str, key_name: str, value: str, registry_root=None) -> bool:
+    import winreg
+    if registry_root:
+        registry_root = winreg.HKEY_CURRENT_USER
     """
     Sets a string value in the Windows registry.
 
@@ -142,7 +168,7 @@ def getZmqServerFolder():
 
 def getZmqServerPath():
     """ Return the full path to the VRayZmqServer executable """
-    executableName = "VRayZmqServer.exe" if sys.platform == 'win32' else "VRayZmqServer" 
+    executableName = "VRayZmqServer.exe" if sys.platform == 'win32' else "VRayZmqServer"
     return os.path.join(getZmqServerFolder(), executableName)
 
 
@@ -151,7 +177,12 @@ def getAppSdkPath():
     return os.path.join(getZmqServerFolder(), "appsdk", "bin")
 
 def getAppSdkLibPath():
-    libFileNameName = "VRaySDKLibrary.dll" if sys.platform == 'win32' else "VRaySDKLibrary" 
+    if sys.platform == 'win32':
+        libFileNameName = "VRaySDKLibrary.dll"
+    elif sys.platform == 'darwin':
+        libFileNameName = "libVRaySDKLibrary.dylib"
+    else:
+        raise NotImplementedError()
     return os.path.join(getAppSdkPath(), libFileNameName)
 
 
@@ -180,12 +211,13 @@ def copyToClipboard(text):
         debug.printWarning("Unable to locate the Windows directory needed for clip.exe," \
                            " which is necessary to copy text to the clipboard.")
 
-def importFunction(functionPath: str, pluginModule):
+def importFunction(functionPath: str, pluginModule = ''):
     """ Import function from a module.
 
-        @param functionPath: path to the function in format [folder1.folder2...folderN.]functionName
-                            If only the name is given, the function is loaded from the pluginModule
-        @param pluginModule: the plugin module to load the function from
+        @param functionPath:    path to the function in format [folder1.folder2...folderN.]functionName
+                                If only the name is given, the function is loaded from the pluginModule
+        @param pluginModule:    the plugin module to load the function from. Leave empty if full path
+                                to the function is specified. 
     """
     assert ('.' in functionPath) or (pluginModule != ''), f"Plugin module not specified for function {functionPath}"
 

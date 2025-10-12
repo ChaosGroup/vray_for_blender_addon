@@ -32,9 +32,6 @@
                         "name": "max_velocity"
                     },
                     {
-                        "name": "max_velocity_last_frame"
-                    },
-                    {
                         "name": "ignore_z"
                     },
                     {
@@ -47,6 +44,6 @@
     },
     "Options": {
         "animatable": false,
-        "excluded_parameters": []
+        "excluded_parameters": [ "max_velocity_last_frame" ]
     }
 }

@@ -28,7 +28,7 @@
         {
             "attr" : "switch_id",
             "type": "INT", 
-            "desc": "Switch ID",
+            "desc": "The index used to switch between the assigned materials. If the index does not correspond to any connected node, the Round Mode determines which node is sampled.",
             "default" : 0,
             "ui": {
                 "min": 0,
@@ -39,6 +39,10 @@
             "options": {
                 "derived": true
             }
+        },
+        {
+            "attr": "mtlid_gen_float_round_mode",
+            "desc": "How to round the values returned by the ID parameter of connected materials."
         }
     ],
     "Widget": {
@@ -48,7 +52,7 @@
                 "attrs": [
                     {
                         "name": "switch_id",
-                        "label": "Switch"
+                        "label": "Switch ID"
                     },
                     {
                         "layout": "ROW",

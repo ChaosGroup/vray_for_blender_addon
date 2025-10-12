@@ -40,9 +40,9 @@ class VRaySocketTexMulti(VRaySocketColorMult):
 
     def draw(self, context, layout, node, text):
         split = layout.split(factor=0.9)
-        
+
         col1 = split.column().row(align=True)
-        
+
         super().draw(context, col1, node, text)
         col2 = split.column()
         col2.prop(self, 'use', text='')
@@ -53,13 +53,13 @@ class VRaySocketTexMulti(VRaySocketColorMult):
 
     def shouldExportLink(self):
         return self.use and super().shouldExportLink()
-    
+
 
 class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, VRayOperatorBase):
     bl_idname      = 'vray.node_texmulti_socket_add'
     bl_label       = "Add Texture Socket"
     bl_description = "Add Texture socket"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -78,7 +78,7 @@ class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, VRayOperatorBase
     bl_idname      = 'vray.node_texmulti_socket_del'
     bl_label       = "Remove Texture Socket"
     bl_description = "Removes Texure socket (only not linked sockets will be removed)"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

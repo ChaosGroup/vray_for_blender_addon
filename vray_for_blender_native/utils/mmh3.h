@@ -7,13 +7,13 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 
-#ifdef _WIN32
-	using u_int8_t  = unsigned __int8;
-	using u_int16_t = unsigned __int16;
-	using u_int32_t = unsigned __int32;
-	using u_int64_t = unsigned __int64;
-#endif
+using u_int8_t  = uint8_t;
+using u_int16_t = uint16_t;
+using u_int32_t = uint32_t;
+using u_int64_t = uint64_t;
 
 using MHash = u_int32_t;
 

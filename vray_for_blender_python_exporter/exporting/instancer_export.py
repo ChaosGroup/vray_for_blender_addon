@@ -1,6 +1,7 @@
 import bpy
 import ctypes
 import struct
+from collections import defaultdict
 from mathutils import Matrix
 from vray_blender.exporting import tools, marshaller
 from vray_blender.exporting.node_export import exportNodePlugin
@@ -54,10 +55,10 @@ class Instancer:
             return m.pack()
 
 
-    def __init__(self, inst):
+    def __init__(self, inst, name: str):
         self.obj    = inst.instance_object  # The object being instanced
         self.instancer = inst.parent        # The object whose geometry determines the position and number of instances
-        self.name   = Names.instancer(inst)
+        self.name   = name
         self.frame  = 0
         self._data = bytearray()
         self._items: list[Instancer.Instance]  = []
@@ -72,18 +73,17 @@ class Instancer:
         return InstancerData(self.name, self.frame, self._data, len(self._items))
 
 
-
 class InstancerExporter(ExporterBase):
 
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
-        self.instancers       = {}
+        self.instancers       = defaultdict(dict)
         self.exporter         = self.ctx.scene.vray.Exporter
         self.objTracker       = ctx.objTrackers['OBJ']
         self.objMtlTracker    = ctx.objTrackers['OBJ_MTL']
         self.instTracker      = ctx.objTrackers['INSTANCER']
 
-    def addInstance(self, inst: bpy.types.DepsgraphObjectInstance, objectName):
+    def addInstance(self, inst: bpy.types.DepsgraphObjectInstance, nodePluginName: str, instTrackIdOverride: int = None, nameOverride: str = None):
         instancerObj = inst.parent  # This is the object whose vertices/faces are used for the instantiation
         instancedObj = inst.instance_object     # The object being instanced
 
@@ -100,46 +100,67 @@ class InstancerExporter(ExporterBase):
 
         # In VRay, instance transformation should be relative to the object being duplicated.
         # Remove its component from the instance's world position.
-        instance.tm         = inst.matrix_world
+        instance.tm = inst.matrix_world
+
         # Pass the name of the exported node, for geometry nodes this will result in one Instancer2
         # instancing multiple different nodes. But we will still have one Instancer2 per scene object.
-        instance.nodePlugin = objectName
+        instance.nodePlugin = nodePluginName
 
-        if instancerObj.instance_type == 'COLLECTION':
-            instancerObj = instancerObj.instance_collection
-
-        idInstancer = mmh3.hash(f"{id(instancerObj.original)}{id(instancedObj.original)}")
-        instancer = self.instancers.setdefault(idInstancer, Instancer(inst))
+        idInstancer = instTrackIdOverride or getObjTrackId(instancerObj.original)
+        nameInstancer = nameOverride or Names.instancer(inst)
+        
+        # There could be multiple instancers with the same id, but different names.
+        instancer = self.instancers.setdefault(idInstancer, {}).setdefault(nameInstancer, Instancer(inst, nameInstancer))
         instancer.append(instance)
+
 
     def export(self):
         # Export an Instancer2 plugin + a wrapper node for it
-        for instancer in self.instancers.values():
-            vray.pluginCreate(self.renderer, instancer.name, 'Instancer2')
-            vray.exportInstancer(self.renderer, instancer.toData())
-            
-            # Track the Instancer2 plugin in both the instancer and the instanced_object
-            self.instTracker.trackPlugin(getObjTrackId(instancer.instancer), instancer.name)
-            self.objTracker.trackPlugin(getObjTrackId(instancer.obj), instancer.name)
-            
-            nodePlugin = exportNodePlugin(self, instancer.instancer, AttrPlugin(instancer.name), instancer.name, True)
-            self.objTracker.trackPlugin(getObjTrackId(instancer.instancer), nodePlugin.name) 
-            
-            # In addition to tracking the Node plugin in the instancer, track it in the instanced object as well
-            # so that deleting the object would delete the node
-            self.instTracker.trackPlugin(getObjTrackId(instancer.obj), nodePlugin.name)
+        for instancerId, instancers in self.instancers.items():
+            for instancer in instancers.values():
+                vray.pluginCreate(self.renderer, instancer.name, 'Instancer2')
+                vray.exportInstancer(self.renderer, instancer.toData())
+                
+                # Track the Instancer2 plugin in both the instancer and the instanced_object
+                self.instTracker.trackPlugin(instancerId, instancer.name)
+                self.objTracker.trackPlugin(getObjTrackId(instancer.obj), instancer.name)
+                
+                nodePlugin = exportNodePlugin(self, instancer.instancer, AttrPlugin(instancer.name), 
+                                            instancer.name, self.objTracker, isInstancer=True)
+                
+                # In addition to tracking the Node plugin in the instancer, track it in the instanced object as well
+                # so that deleting the object would delete the node
+                self.instTracker.trackPlugin(instancerId, nodePlugin.name)
+
 
     @staticmethod
-    def pruneInstances(prevActiveInstancers, exporterCtx: ExporterContext):
+    def pruneInstances(exporterCtx: ExporterContext):
         """ Remove plugins associated with instanced objects.
 
             @param prevActiveInstancers - a set of track object IDs, snapshot of the state before the current export
             @param exporterCtx - the exporter context of the current export 
         """
         instTracker = exporterCtx.objTrackers['INSTANCER']
-        for objTrackId in prevActiveInstancers.difference(exporterCtx.activeInstancers):
-            for pluginName in instTracker.getOwnedPlugins(objTrackId):
+
+        def removeInstancer(instancerTrackId):
+            for pluginName in instTracker.getOwnedPlugins(instancerTrackId):
                 vray.pluginRemove(exporterCtx.renderer, pluginName)
-                trackerLog(f"REMOVE: {objTrackId} => {pluginName}")
-            instTracker.forget(objTrackId) 
+        
+            instTracker.forget(instancerTrackId) 
+
+        def showInstancer(instancerTrackId, show: bool):
+            for pluginName in instTracker.getOwnedPlugins(instancerTrackId):
+                if pluginName.startswith('instancer@'):
+                    vray.pluginUpdateInt(exporterCtx.renderer, pluginName, 'visible', show)
+
+        instancers = [o for o in exporterCtx.sceneObjects if (o.is_instancer or o.vray.isVRayFur)]
+
+        for instancer in instancers:
+            show = instancer.visible_get() if exporterCtx.interactive else instancer.hide_render
+            showInstancer(getObjTrackId(instancer), show)
+
+        for objTrackId in exporterCtx.persistedState.activeInstancers.difference(exporterCtx.activeInstancers):
+            # The instancer has been deleted, remove all plugins associated with it.
+            removeInstancer(objTrackId)
+            
 

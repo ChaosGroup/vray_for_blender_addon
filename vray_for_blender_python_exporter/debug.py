@@ -47,7 +47,8 @@ def printAlways(message, raw=False):
         message (str)
         raw (bool, optional): Do not prepend attributes (e.g. time/level) to the message. Defaults to False.
     """
-    printMsg(message, level=LogLevel.Always, raw=raw)
+    msg = message if raw else f"[V-Ray] {message}"
+    printMsg(msg, level=LogLevel.Always, raw=raw)
 
 def printError(message, raw=False):
     printMsg(message, level=LogLevel.Error, raw=raw)
@@ -66,16 +67,22 @@ def reportError(message, engine: bpy.types.RenderEngine = None, exc: Exception =
     """ Show the error message in Blender UI. In addition, print the message
         and the exception info to the console.
     """
-    if engine:
-        engine.report({'ERROR'}, message)
-    else:
-        report('ERROR', message)
 
     errMsg = f"{message} Error: {exc}" if exc else message
     printError(f"{errMsg}")
     
     if exc:
         printExceptionInfo(exc)
+
+    from vray_blender.lib.lib_utils import isRestrictedContext
+
+    # The function may be called in a restricted context (e.g. during Blender startup).
+    # UI-related services are not available in this context.
+    if not isRestrictedContext(bpy.context):
+        if engine:
+            engine.report({'ERROR'}, message)
+        else:
+            report('ERROR', message)
 
 
 def setLogLevel(level: int):

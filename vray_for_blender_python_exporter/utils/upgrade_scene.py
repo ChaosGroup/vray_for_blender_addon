@@ -46,13 +46,13 @@ class NodeLink:
 def logMsg(msg: str):
     """ Log message at low verbosity """
     if _DEBUG_OUTPUT:
-        debug.printAlways(f"UPDATE: {msg}")
+        debug.printDebug(f"UPDATE: {msg}")
 
 
 def logVerboseMsg(msg: str):
     """ Log message at full verbosity """
     if _DEBUG_OUTPUT and _DEBUG_LEVEL_VERBOSE:
-        debug.printAlways(f"UPDATE:   {msg}")
+        debug.printDebug(f"UPDATE:   {msg}")
 
 
 def _getNodeLinksInfo(node: bpy.types.Node):

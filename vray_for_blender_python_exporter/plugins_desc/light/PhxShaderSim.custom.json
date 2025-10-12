@@ -35,9 +35,5 @@
             "absorption_color",
             "absorption_tex"
         ]
-    },
-    "excluded_parameters": [
-        "absorption_color",
-        "absorption_tex"
-    ]
+    }
 }

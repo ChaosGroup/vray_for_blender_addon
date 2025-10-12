@@ -1,4 +1,3 @@
-
 import bpy
 
 from vray_blender.lib import lib_utils
@@ -297,6 +296,14 @@ class VRayLampPanel(VRayDataPanel):
         return context.light and pollBase(cls, context)
 
 
+class VRayFurPanel(VRayDataPanel):
+    bl_icon = "VRAY_PLACEHOLDER"
+
+    @classmethod
+    def poll(cls, context):
+        return context.object and context.object.vray.isVRayFur and pollBase(cls, context)
+
+
 class VRayMaterialPanel(VRayPanel):
     bl_space_type  = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -353,7 +360,7 @@ class VRayOutputPanel(VRayPanel):
     @classmethod
     def poll(cls, context):
         return pollBase(cls, context)
-    
+
 
 class VRayRenderLayersPanel(VRayPanel):
     bl_space_type  = 'PROPERTIES'
@@ -412,7 +419,7 @@ class VRAY_OT_ui_list_item_add(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_add'
     bl_label       = "Add Item"
     bl_description = "Add list item"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         listAttr = lib_utils.getPropGroup(context.scene, self.list_attr)
@@ -426,7 +433,7 @@ class VRAY_OT_ui_list_item_del(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_del'
     bl_label       = "Delete Item"
     bl_description = "Delete list item"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         listAttr = lib_utils.getPropGroup(context.scene, self.list_attr)
@@ -448,7 +455,7 @@ class VRAY_OT_ui_list_item_up(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_up'
     bl_label       = "Move Item Up"
     bl_description = "Move list item up"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         listAttr = lib_utils.getPropGroup(context.scene, self.list_attr)
@@ -466,8 +473,8 @@ class VRAY_OT_ui_list_item_down(VRayOpListBase, VRayOperatorBase):
     bl_idname      = 'vray.ui_list_item_down'
     bl_label       = "Move Item Down"
     bl_description = "Move list item down"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         listAttr = lib_utils.getPropGroup(context.scene, self.list_attr)
         if listAttr.list_item_selected < 0:

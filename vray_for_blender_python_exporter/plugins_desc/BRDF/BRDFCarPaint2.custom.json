@@ -4,10 +4,15 @@
     "Parameters": [
         {
             "attr": "base_glossiness_tail",
+            "desc": "Controls the transition from highlighted areas to non-highlighted areas. Higher values, such as the default, make the highlight transition sharper.",
             "ui": {
                 "soft_max": 10.0,
                 "spin_step": 0.1
             }
+        },
+        {
+            "attr": "base_traceReflections",
+            "desc": "When disabled, the base layer only produces specular highlights but no (glossy) reflections."
         },
         {
             "attr": "base_bump_color",
@@ -30,7 +35,12 @@
             }
         },
         {
+            "attr": "flake_orientation",
+            "desc": "Determines the orientation of the metal flakes, in relation to the surface normal. Setting to 0 aligns the flakes with the surface normal, and setting to 1 rotates the flakes randomly."
+        },
+        {
             "attr": "flake_orientation_tail",
+            "desc": "Controls the transition from highlighted to non-highlighted areas.",
             "ui": {
                 "soft_max": 100.0,
                 "spin_step": 1.0
@@ -44,10 +54,12 @@
         },
         {
             "attr": "flake_scale",
+            "desc": "Scales the entire flake when the Mapping Type is set to Mapping channel.",
             "default": 0.5
         },
         {
             "attr": "flake_scale_triplanar",
+            "desc": "Scales the entire flake structure when the Mapping Type is set to Triplanar.",
             "ui": {
                 "soft_max": 100.0,
                 "spin_step": 1.0,
@@ -55,7 +67,12 @@
             }
         },
         {
+            "attr": "flake_size",
+            "desc": "Specifies the size of the flakes relative to the distance between them."
+        },
+        {
             "attr": "flake_map_size",
+            "desc": "The size of the internally-generated bitmaps that store the flakes. Higher values consume more RAM, but reduce tiling.",
             "ui": {
                 "soft_max": 4096,
                 "spin_step": 32
@@ -78,6 +95,18 @@
         {
             "attr": "mapping_type",
             "default": "1"
+        },
+        {
+            "attr": "traceReflections",
+            "desc": "Toggles reflections for all layers."
+        },
+        {
+            "attr": "doubleSided",
+            "desc": "When enabled, the material is applied to both sides of the surface normals.E.g. If it’s a plane, it will be applied to the front and back."
+        },
+        {
+            "attr": "cutoff_threshold",
+            "desc": "Specifies the reflections’ cutoff threshold for all layers."
         }
     ],
     "Widget": {

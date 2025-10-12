@@ -12,45 +12,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 
-if(PROJECT_IS_TOP_LEVEL)
-    set(BLENDER_VER      ""  CACHE STRING  "Blender version in format major.minor, e.g. 4.2")
-    set(INSTALL_LOCAL    ON  CACHE BOOL    "Configure Install step")
-    set(INSTALL_PREFIX   ""  CACHE PATH    "Path to the installation folder")
-endif()
-
-include(common_macros)
-set_build_configurations()
-
 if (WITH_TESTS)
     set(CATCH2_ROOT "" CACHE PATH   "Path to Catch2 install dir")
     fix_separators(CATCH2_ROOT)
 endif()
 
 if (NOT BINTOOLS_PATH)
-
     set(BOOST_LIBDIR  "./boost" CACHE PATH "Path to Boost libs")
     set(ZMQ_LIBDIR    "./zmq"   CACHE PATH "Path to ZMQ libs")
 else()
-    
-    include(xpak)
-    include(xpak_versions)
-    
-    xpak_work_dir()
-    install_xpak(PAK ${BLENDER_SDK_XPAK} VERSION ${BLENDER_SDK_XPAK_VERSION})
-    
-    
-    set(SDK_ROOT      "${${BLENDER_SDK_XPAK}_ROOT}")
-    
     set(BOOST_LIBDIR  "${SDK_ROOT}/boost" CACHE PATH    "Path to Boost libs")
     set(ZMQ_LIBDIR    "${SDK_ROOT}/zmq"   CACHE PATH    "Path to ZMQ libs")
-
 endif()
-
-
 
 fix_separators(BOOST_LIBDIR)
 fix_separators(ZMQ_LIBDIR)
-fix_separators(INSTALL_PREFIX)
 
 message(STATUS "   Dependencies")
 message(STATUS "   -------------")
@@ -61,11 +37,11 @@ message(STATUS "   ZMQ libs: \"${ZMQ_LIBDIR}\"")
 if (WIN32)
     # Organize the source files by folder in the IDE
     source_group(extern/cppzmq REGULAR_EXPRESSION ".*/extern/cppzmq/.*\\.(cpp|hpp)")
-    
+
     GroupSources(include .)
     GroupSources(sources .)
     GroupSources(utils .)
-    
+
     if (WITH_TESTS)
         source_group(tests REGULAR_EXPRESSION ".*/tests/.*")
         source_group(extern/catch2 FILES ${CATCH2_ROOT}/extras/catch_amalgamated.cpp)
@@ -79,6 +55,7 @@ include_directories(
     "extern"
     "include"
 	"utils"
+    ${ZMQ_LIBDIR}/include
     ${BOOST_LIBDIR}/include
 )
 
@@ -121,6 +98,8 @@ if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:W0 /external:anglebrackets /W4 /WX")
 
 	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /D\"VASSERT_ENABLED\"")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 endif()
 
 

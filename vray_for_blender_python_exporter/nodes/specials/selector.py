@@ -79,6 +79,22 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         self.drawSelectorUI(context, layout, dataProvider=context.scene, dataProperty='objects', listLabel="Object List")
         
 
+    def onFilterObject(self: bpy.types.Node, obj):
+        # Return the poll (filter) function for the Object Select field
+        sockOut = self.outputs[0]
+        
+        activeLinks = getActiveFarNodeLinks(sockOut)
+        if len(activeLinks) != 1:
+            return True
+        
+        sockTo = activeLinks[0].to_socket
+        if not isVrayNode(sockTo.node):
+            return True
+        
+        if linkInfo := getLinkInfo(sockTo.node.vray_plugin, sockTo.vray_attr):
+            return linkInfo.fnFilter(obj)
+        
+        
     def onSelectionChanged(self, context: bpy.types.Context):
         self.update()
         

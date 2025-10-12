@@ -1,16 +1,17 @@
 #pragma once
 
-#include <cstdarg>
+#include <atomic>
 #include <format>
+#include <fstream>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
-#include <queue>
-#include <mutex>
-#include <atomic>
+#include <vector>
 
-#include <utils/file_writer.h>
+#include "vassert.h"
 
+#include <boost/format.hpp>
 
 enum class LogLevel : int {
 	Always = 0,	// Write regardless of the current log level
@@ -21,20 +22,20 @@ enum class LogLevel : int {
 };
 
 
-/// Interface for log writers. Log writers provide to the Logger class publishing of log messages.  
+/// Interface for log writers. Log writers provide to the Logger class publishing of log messages.
 struct LogWriter {
 	virtual ~LogWriter() = default;
 	virtual void write (LogLevel level, const std::string& msg) = 0;
 };
 
 
-/// Singleton logger. 
-/// 
+/// Singleton logger.
+///
 /// Usage:
 ///   Logger::get().addWriter(...);
 ///   Logger::get().startLogging();
 ///   Logger::get().log(...)
-/// 
+///
 class Logger {
 
 	Logger(const Logger&) = delete;
@@ -56,9 +57,9 @@ public:
 
 	using LogLevel = LogLevel;
 
-	/// Log with corresponding level. 
-	/// The format string should conform to the std::format specification
-	
+	/// Log with corresponding level.
+	/// The format string should conform to the boost::format specification
+
 	template <class ...TArgs>
 	static void always(std::string format, TArgs&&... args)
 	{
@@ -107,29 +108,39 @@ public:
 	/// Get singleton instance of Logger.
 	static Logger& get();
 
-
 	/// Add message to the queue
 	/// @param level Message level
 	/// @param raw If true, do not add time and level info
-	/// @param format Format string conforming to std::format specification
+	/// @param format Format string conforming to boost::format specification
 	/// @param args Format arguments
 	template<class ...TArgs>
 	void log(LogLevel level, bool raw, const std::string& format, TArgs&&... args) const
 	{
+		// Note that currently in order to print percentage signs with a format and arguments the
+		// percentage sign has to be escaped (%%). If no variadic arguments are provided the message
+		// will be printed directly(mainly for message coming from the ZMQ server).
+
 		if (m_logLevel < level){
 			return;
 		}
 
 		std::stringstream msg;
-		
+
 		if (!raw) {
 			msg << formatTime() << " ";
 			if (level != LogLevel::Always) {
 				msg << "[" << levelName(level) << "] ";
 			}
 		}
-		
-		msg << std::vformat(format, std::make_format_args(args...)) << std::endl;
+
+		if constexpr (sizeof...(args) > 0) {
+			vassert(std::count(format.begin(), format.end(), '%') % 2 == 0);
+			boost::format fmt(format);
+			(fmt % ... % std::forward<TArgs>(args));
+			msg << fmt.str() << std::endl;
+		} else {
+			msg << format << std::endl;
+		}
 
 		std::scoped_lock lock(m_queueLock);
 		m_queue.push_back(LogItem{level, msg.str()});
@@ -149,12 +160,12 @@ private:
 private:
 	std::atomic<LogLevel> m_logLevel = LogLevel::Error;  /// Current max log level to be shown.
 	std::atomic<int>      m_isRunning = false;           /// Run flag.
-	
+
 	Writers m_writers;						/// A list of log writers
 	mutable LogQueue m_queue;               /// Log message queue.
 	mutable std::mutex m_queueLock;         /// Queue guard.
 	mutable std::mutex m_writersLock;       /// Writers list guard.
-	std::jthread m_logThread;               /// Logger thread.
+	std::thread m_logThread;                /// Logger thread.
 };
 
 
@@ -165,7 +176,7 @@ public:
 };
 
 
-class FileLogger : public LogWriter{
+class FileLogger : public LogWriter {
 public:
 	explicit FileLogger(const std::string& filePath);
 
@@ -173,7 +184,7 @@ public:
 	bool good() const;
 
 private:
-	platform::FileWriter  m_file;
+	std::ofstream m_file;
 };
 
 

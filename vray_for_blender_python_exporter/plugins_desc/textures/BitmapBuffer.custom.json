@@ -46,6 +46,22 @@
             "options": {
                 "derived": true
             }
+        },
+        {
+            "attr": "filter_type",
+            "desc": "The internal texture filtering method."
+        },
+        {
+            "attr": "interpolation",
+            "desc": "Determines how the image is interpolated from the pixel values."
+        },
+        {
+            "attr": "filter_blur",
+            "desc": "Multiplier for the filter blurring. Higher values create more blurred textures but take less time, and vice versa."
+        },
+        {
+            "attr": "transfer_function",
+            "desc": "Specify the transfer function of the loaded file. We recommend keeping this option set to Auto."
         }
     ],
     "Widget": {
@@ -68,13 +84,7 @@
                         "label": "Filter"
                     },
                     {
-                        "layout": "ROW",
-                        "attrs": [
-                            {
-                                "name": "interpolation",
-                                "expand": true
-                            }
-                        ]
+                        "name": "interpolation"
                     },
                     {
                         "name": "filter_blur",

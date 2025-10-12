@@ -29,7 +29,7 @@ class VRAY_OT_node_add(VRayOperatorBase):
     bl_idname         = 'vray.render_nodes_add'
     bl_label          = "Add Render Node"
     bl_description    = "Add render node"
-    bl_options        = {'INTERNAL'}
+    bl_options        = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         vs= context.scene.vray
@@ -45,8 +45,8 @@ class VRAY_OT_node_del(VRayOperatorBase):
     bl_idname         = 'vray.render_nodes_remove'
     bl_label          = "Remove Render Node"
     bl_description    = "Remove render node"
-    bl_options        = {'INTERNAL'}
-    
+    bl_options        = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         vs= context.scene.vray
         module= vs.VRayDR
@@ -62,7 +62,7 @@ class VRAY_OT_dr_nodes_load(VRayOperatorBase):
     bl_idname      = "vray.dr_nodes_load"
     bl_label       = "Load DR Nodes"
     bl_description = "Load distributed rendering nodes list"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         VRayScene = context.scene.vray
@@ -299,7 +299,7 @@ class VRAY_OT_message_box_base(VRayOperatorBase):
         self.originalMouseY = event.mouse_y
         context.window.cursor_warp(int(context.window.width / 2), int(context.window.height / 2))
 
-    
+
     def modal(self, context, event):
         match event.type:
             case 'RET':
@@ -310,7 +310,7 @@ class VRAY_OT_message_box_base(VRayOperatorBase):
                 return {'CANCELLED'}
             case _:
                 return {"PASS_THROUGH"}
-    
+
 
     def _cursorWrap(self, context: bpy.types.Context):
         if not self.mouseMoved:
@@ -324,7 +324,7 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
     bl_idname      = "vray.new_material"
     bl_label       = "Add New Material"
     bl_description = "Add new material"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         from vray_blender.nodes import tree_defaults
@@ -379,21 +379,20 @@ class VRAY_OT_get_ui_mouse_position(VRayOperatorBase):
     bl_idname   = "vray.get_ui_mouse_position"
     bl_label    = "Mouse location"
     bl_options  = {'INTERNAL'}
-    
+
     pos_x: bpy.props.IntProperty()
     pos_y: bpy.props.IntProperty()
 
     def invoke(self, context, event):
-        
-        region = context.region.view2d  
-        ui_scale = context.preferences.system.ui_scale     
+        region = context.region.view2d
+        ui_scale = context.preferences.system.ui_scale
         x, y = region.region_to_view(event.mouse_region_x, event.mouse_region_y)
-        
+
         VRAY_OT_get_ui_mouse_position.pos_x = x / ui_scale
         VRAY_OT_get_ui_mouse_position.pos_y = y / ui_scale
 
         return {'FINISHED'}
-    
+
 class VRAY_OT_select_vrscene_export_file(VRayOperatorBase):
     """ Shows a File Select dialog for selecting a an output file
         for the vrscene export operation.
@@ -402,9 +401,14 @@ class VRAY_OT_select_vrscene_export_file(VRayOperatorBase):
     bl_label        = "V-Ray Select vrscene file for output"
     bl_description  = "Select an output .vrscene file"
     bl_options      = {'INTERNAL'}
-    
+
+    filter_glob: bpy.props.StringProperty(
+        default="*.vrscene",
+        options={'HIDDEN'}
+    )
+
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
-    
+
     def invoke(self, context, event):
         from pathlib import Path
         exporter = context.scene.vray.Exporter
@@ -420,7 +424,6 @@ class VRAY_OT_select_vrscene_export_file(VRayOperatorBase):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        from pathlib import Path
         context.scene.vray.Exporter.export_scene_file_path = self.filepath
         context.area.tag_redraw()
         return {'FINISHED'}
@@ -445,7 +448,7 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         if vray.isInitialized():
             return cls.bl_description
         return f"{cls.bl_description}. Unavailable until V-Ray is initialized"
-    
+
     def execute(self, context):
         if vray.isInitialized():
             # This status message should ideally be printed right before the rendering starts but here is the last
@@ -729,6 +732,29 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         col2.prop(self, 'exportTextures')
         col2.prop(self, 'exportBitmaps')
         col2.prop(self, 'exportRenderChannels')
+
+        # Animation export options
+        layout.separator()
+        animationRow = layout.box().row(align=True)
+        
+        animSettings = vrayExporter.animationSettingsVrsceneExport
+        animationRow.prop(animSettings, 'exportAnimation')
+        
+        animationRangeCol = animationRow.column()
+        animationRangeCol.use_property_split = False
+        animationRangeCol.enabled = animSettings.exportAnimation
+        animationRangeCol.prop(animSettings, 'frameRangeMode', text="")
+        
+        customRangeCol = animationRangeCol.column()
+        customRangeCol.use_property_split = False
+        customRangeCol.enabled = animSettings.exportAnimation and animSettings.frameRangeMode == 'CUSTOM_RANGE'
+        if animSettings.frameRangeMode == 'CUSTOM_RANGE':
+            customRangeCol.prop(animSettings, 'customFrameStart')
+            customRangeCol.prop(animSettings, 'customFrameEnd')
+        else:
+            customRangeCol.prop(context.scene, 'frame_start')
+            customRangeCol.prop(context.scene, 'frame_end')
+        
 
         self._cursorWrap(context)
 

@@ -77,7 +77,7 @@ void ThreadManager::addTask(ThreadManager::Task task, ThreadManager::Priority pr
 }
 
 void ThreadManager::workerRun(int thIdx) {
-	Logger::debug("Thread [{}] starting...", thIdx);
+	Logger::debug("Thread [%1%] starting...", thIdx);
 
 	while (!m_stop) {
 		Task task;
@@ -97,7 +97,7 @@ void ThreadManager::workerRun(int thIdx) {
 		task(thIdx, m_stop);
 	}
 
-	Logger::info("Thread [{}] stopping...", thIdx);
+	Logger::info("Thread [%1%] stopping...", thIdx);
 }
 
 } // end namespace VRayForBlender

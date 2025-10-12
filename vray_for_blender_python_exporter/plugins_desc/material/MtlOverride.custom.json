@@ -14,7 +14,7 @@
                 "use_prop": "enable_gi_mtl"
             },
             "ui": { "display_name": "GI Material" },
-            "desc": "Overriding GI material.",
+            "desc": "Whether the connected GI material overrides the Global Illumination in the scene.",
             "default": true,
             "options": {
                 "derived": true
@@ -28,7 +28,7 @@
                 "use_prop": "enable_reflect_mtl"
             },
             "ui": { "display_name": "Reflect Material" },
-            "desc": "Overriding Reflect material.",
+            "desc": "Whether the connected material is seen in reflections.",
             "default": true,
             "options": {
                 "derived": true
@@ -42,7 +42,7 @@
                 "use_prop": "enable_refract_mtl"
             },
             "ui": { "display_name": "Refract Material" },
-            "desc": "Overriding Refract material.",
+            "desc": "Whether the connected material is seen in refractions.",
             "default": true,
             "options": {
                 "derived": true
@@ -56,13 +56,12 @@
                 "use_prop": "enable_shadow_mtl"
             },
             "ui": { "display_name": "Shadow Material" },
-            "desc": "Overriding Shadow material.",
+            "desc": "Whether the connected material shades the object's shadows.",
             "default": true,
             "options": {
                 "derived": true
             }
         }
-
     ],
     "Widget": {
         "widgets": [
@@ -91,16 +90,20 @@
                 "name": "base_mtl"
             },
             {
-                "name": "gi_mtl_enabler"
+                "name": "gi_mtl_enabler",
+                "label": "Enable the GI Material"
             },
             {
-                "name": "reflect_mtl_enabler"
+                "name": "reflect_mtl_enabler",
+                "label": "Enable the Reflect Material"
             },
             {
-                "name": "refract_mtl_enabler"
+                "name": "refract_mtl_enabler",
+                "label": "Enable the Refract Material"
             },
             {
-                "name": "shadow_mtl_enabler"
+                "name": "shadow_mtl_enabler",
+                "label": "Enable the Shadow Material"
             }
         ]
     },

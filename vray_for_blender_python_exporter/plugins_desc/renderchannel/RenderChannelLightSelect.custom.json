@@ -44,6 +44,10 @@
                     }
                 }
             }
+        },
+        {
+            "attr": "light_select_in_lightmix",
+            "default": true
         }
     ],
     "Widget": {
@@ -82,10 +86,12 @@
                         "name": "light_select_mode"
                     },
                     {
-                        "name": "light_path_expression"
+                        "name": "light_path_expression",
+                        "active": { "cond": "::light_select_mode=9" }
                     },
                     {
-                        "name": "light_select_matte"
+                        "name": "light_select_matte",
+                        "active": { "cond": "::light_select_mode=12" }
                     },
                     {
                         "name": "light_selector",

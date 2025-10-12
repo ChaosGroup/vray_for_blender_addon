@@ -1,0 +1,336 @@
+{
+    "ID": "GeomHair",
+    "Parameters": [
+        {
+            "attr": "distribution",
+            "default": "1"
+        },
+        {
+            "attr": "perFace",
+            "default": 1
+        },
+        {
+            "attr": "perArea",
+            "default": 100
+        },
+        {
+            "attr": "length_base",
+            "default": 0.15,
+            "subtype": "DISTANCE",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "thickness_base",
+            "default": 0.002,
+            "subtype": "DISTANCE",
+            "ui": {
+                "spin_step": 0.001
+            }
+        },
+        {
+            "attr": "gravity_base",
+            "default": 3.0
+        },
+        {
+            "attr": "gravity_vector",
+            "subtype": "XYZ",
+            "default": [0, 0, -1]
+        },
+        {
+            "attr": "bend",
+            "default": 1.0,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "dir_var",
+            "default": 0.2,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 2.0
+            }
+        },
+        {
+            "attr": "length_var",
+            "subtype": "DISTANCE",
+            "default": 0.002,
+            "ui": {
+                "spin_step": 0.001
+            }
+        },
+        {
+            "attr": "thickness_var",
+            "subtype": "DISTANCE",
+            "default": 0.002,
+            "ui": {
+                "spin_step": 0.001
+            }
+        },
+        {
+            "attr": "gravity_var",
+            "default": 0.2
+        },
+        {
+            "attr": "curl_radius_var",
+            "default": 0.2
+        },
+        {
+            "attr": "mesh",
+            "type": "OBJECT",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterMeshes"
+                }
+            }
+        },
+        {
+            "attr": "object_selector",
+            "type": "TEMPLATE",
+            "desc": "List of mesh objects to add to hair strands",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "mesh",
+                        "filter_function": "filters.filterMeshes"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "map_channel",
+            "default": -1
+        },
+        {
+            "attr": "mtlID",
+            "default": 0
+        },
+        {
+            "attr": "hair_sides",
+            "default": 1
+        },
+        {
+            "attr": "length_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "thickness_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "gravity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bend_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "density_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "curl_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bend_direction_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "initial_direction_tex",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "object_selector",
+                        "label": "Objects",
+                        "list_label": "Objects",
+                        "draw_container": "ROLLOUT",
+                        "default_closed": false
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "distribution"
+                    },
+                    {
+                        "name": "perFace",
+                        "active": {
+                            "cond": "::distribution=0"
+                        }
+                    },
+                    {
+                        "name": "perArea",
+                        "active": {
+                            "cond": "::distribution=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "length_base"
+                    },
+                    {
+                        "name": "thickness_base"
+                    },
+                    {
+                        "name": "gravity_base"
+                    },
+                    {
+                        "name": "gravity_vector"
+                    },
+                    {
+                        "name": "bend"
+                    },
+                    {
+                        "name": "taper"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "variation",
+                        "label": "Variation",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "dir_var"
+                            },
+                            {
+                                "name": "length_var"
+                            },
+                            {
+                                "name": "thickness_var"
+                            },
+                            {
+                                "name": "gravity_var"
+                            },
+                            {
+                                "name": "curl_radius_var"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "curl",
+                        "label": "Curl",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "curl_enabled"
+                            },
+                            {
+                                "name": "curl_radius",
+                                "active": {
+                                    "cond": "::curl_enabled=1"
+                                }
+                            },
+                            {
+                                "name": "curl_angle",
+                                "active": {
+                                    "cond": "::curl_enabled=1"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "detail",
+                "label": "Detail",
+                "attrs": [
+                    {
+                        "name": "hair_knots"
+                    },
+                    {
+                        "name": "lod_enabled"
+                    },
+                    {
+                        "name": "lod_startDistance",
+                        "active": {
+                            "cond": "::lod_enabled=1"
+                        }
+                    },
+                    {
+                        "name": "lod_rate",
+                        "active": {
+                            "cond": "::lod_enabled=1"
+                        }
+                    },
+                    {
+                        "name": "tessellation_on"
+                    },
+                    {
+                        "name": "tessellation_edge_length",
+                        "active": {
+                            "cond": "::tessellation_on=1"
+                        }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "misc",
+                "label": "Misc",
+                "attrs": [
+                    {
+                        "name": "ignore_base_mesh_displacement"
+                    },
+                    {
+                        "name": "generate_w_coord"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "faceList",
+            "fixed_areas",
+            "areaList",
+            "override_mtlID_on",
+            "override_mtlID",
+            "mtlIDList"
+        ]
+    }
+}

@@ -1,17 +1,21 @@
-import bpy, platform
+import bpy, platform, os, sys
 from bpy.types import Context
-
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine import ZMQ
-from vray_blender.external import psutil
 from vray_blender.lib import draw_utils
 from vray_blender.lib.sys_utils import StartupConfig, activeRendererExists
 from vray_blender.operators import VRAY_OT_render
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
-from vray_blender.ui.classes import RenderPanelGroups
+from vray_blender.ui.classes import pollEngine, RenderPanelGroups
 from vray_blender.bin import VRayBlenderLib as vray
+
+if sys.platform == "win32":
+    # The psutil we ship is currently broken on macos. It takes into account numa nodes
+    # and is only used for the total thread count message we show the user, but we should
+    # be fine with os.cpu_count on most MacOS machines.
+    from vray_blender.external import psutil
 
 _GI_ENGINE_BRUTE_FORCE = '2'
 _GI_ENGINE_LIGHT_CACHE = '3'
@@ -40,7 +44,7 @@ def _drawRendererSelector(self, context):
 
         layoutDevice.prop(vrayExporter, "device_type", text="V-Ray Engine", )
 
-        if vrayExporter.device_type == 'GPU':
+        if vrayExporter.device_type == 'GPU' and sys.platform != "darwin":
             layoutDevice.separator()
             gpuDeviceRow = layoutDevice.row()
             gpuDeviceRow.alignment = 'CENTER'
@@ -57,6 +61,8 @@ def _drawRendererSelector(self, context):
             rtxRow.alignment = 'CENTER'
             rtxRow.scale_x = 2
             rtxRow.prop(vrayExporter, "use_gpu_rtx")
+
+
 
 class VRAY_PT_Context(classes.VRayRenderPanel):
     """ PROPERTIES->Render panel header"""
@@ -196,7 +202,10 @@ class VRAY_PT_Performance(classes.VRayRenderPanel):
         layout.prop(vrayExporter, 'use_custom_thread_count', text='Thread Mode')
         row = layout.row()
         row.alignment = 'RIGHT'
-        row.label(text=f"The system has {psutil.cpu_count()} CPU threads")
+        if sys.platform == "win32":
+            row.label(text=f"The system has {psutil.cpu_count()} CPU threads")
+        else:
+            row.label(text=f"The system has {os.cpu_count()} CPU threads")
         row = layout.row()
         row.enabled = vrayExporter.use_custom_thread_count == 'FIXED'
         row.prop(vrayExporter, 'custom_thread_count', text='Threads')
@@ -283,7 +292,7 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         panelRenderMaskUniqueId = f'SettingsImageSampler_RenderMask'
         if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "RenderMask"):
             panelRenderMask.prop(settingsImageSampler, 'render_mask_mode', text="Type")
-        
+
             match settingsImageSampler.render_mask_mode:
                 case '1': # Texture
                     # Disable the Texture field when the IPR is active, as changing the texture
@@ -297,6 +306,7 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
                     panelRenderMask.prop_search(settingsImageSampler, 'render_mask_collection_selector',  bpy.data, 'collections', text="Collection")
                 case '3': # Object IDs
                     panelRenderMask.prop(settingsImageSampler, 'render_mask_object_ids_list')
+            panelRenderMask.prop(settingsImageSampler, 'render_mask_clear', text="Clear Render Mask")
 
 
 class VRAY_PT_BucketSize(classes.VRayRenderPanel):
@@ -444,10 +454,14 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
 
+    @classmethod
+    def poll_custom(cls, context):
+        return vray.withDR2 and pollEngine(context)
+
     def drawPanelCheckBox(self, context: Context):
         vrayDR = context.scene.vray.VRayDR
         self.layout.prop(vrayDR, "on", text="")
-    
+
     def draw(self, context):
         layout = self.layout
 
@@ -455,44 +469,42 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
         vrayDR          = vrayScene.VRayDR
         settingsOptions = vrayScene.SettingsOptions
 
-        layout.active = vrayDR.on
-        layout.prop(vrayDR, 'assetSharing')
+        layout.enabled = vrayDR.on
+
+        split = layout.split()
+        col = split.column()
+        col.prop(vrayDR, 'renderOnlyOnNodes')
+        col.prop(vrayDR, 'ignoreInInteractive')
+        col = split.column()
+        col.prop(vrayDR, 'transferAssets')
+
+        sub = col.row()
+        sub.enabled = vrayDR.transferAssets
+        sub.prop(settingsOptions, 'misc_useCachedAssets')
+        sub = col.row()
+        sub.enabled = vrayDR.transferAssets and settingsOptions.misc_useCachedAssets
+        sub.prop(settingsOptions, 'dr_assetsCacheLimitType', text="Limit Cache")
+        sub = col.row()
+        sub.enabled = vrayDR.transferAssets and settingsOptions.misc_useCachedAssets and settingsOptions.dr_assetsCacheLimitType != '0'
+        sub.prop(settingsOptions, 'dr_assetsCacheLimitValue', text="Limit")
+
+        header, body = layout.panel("remote_dispatcher", default_closed=True)
+        header.alignment = 'LEFT'
+        header.prop(vrayDR, "use_remote_dispatcher")
+        if body:
+            body.enabled = vrayDR.use_remote_dispatcher
+            split = body.split(factor=0.6)
+            col = split.column()
+            col.prop(vrayDR.dispatcher, "address")
+            col = split.column()
+            col.prop(vrayDR.dispatcher, "port")
+
         layout.separator()
 
-        if vrayDR.assetSharing == 'SHARE':
-            layout.prop(vrayDR, 'networkType')
-            layout.prop(vrayDR, 'shared_dir')
-            if vrayDR.networkType == 'WW':
-                layout.prop(vrayDR, 'share_name')
-            layout.separator()
-
-        elif vrayDR.assetSharing == 'TRANSFER':
-            split = layout.split()
-            col = split.column()
-            col.prop(vrayDR, 'checkAssets')
-            col.prop(vrayDR, 'renderOnlyOnNodes')
-            col = split.column()
-            col.prop(settingsOptions, 'misc_useCachedAssets')
-            col.prop(settingsOptions, 'misc_abortOnMissingAsset')
-            col.prop(settingsOptions, 'dr_overwriteLocalCacheSettings')
-
-            split= layout.split()
-            split.active = settingsOptions.dr_overwriteLocalCacheSettings
-            col= split.column()
-            col.prop(settingsOptions, 'dr_assetsCacheLimitType', text="Cache Limit")
-            sub = col.row()
-            sub.active = settingsOptions.dr_assetsCacheLimitType != '0'
-            sub.prop(settingsOptions, 'dr_assetsCacheLimitValue', text="Limit")
-            layout.separator()
-
-        layout.prop(vrayDR, 'port', text="Port")
-        layout.prop(vrayDR, 'limitHosts')
-        layout.separator()
-
-        split= layout.split()
-        row= split.row()
+        split = layout.split()
+        row = split.row()
         row.template_list("VRAY_UL_DR", "", vrayDR, 'nodes', vrayDR, 'nodes_selected', rows= 3)
-        col= row.column(align=True)
+        col = row.column(align=True)
         col.operator('vray.render_nodes_add',    text="", icon="ADD")
         col.operator('vray.render_nodes_remove', text="", icon="REMOVE")
 
@@ -501,7 +513,7 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
         col.operator('vray.dr_nodes_save',       text="", icon='DISK_DRIVE')
 
         if vrayDR.nodes_selected >= 0 and len(vrayDR.nodes) > 0:
-            render_node= vrayDR.nodes[vrayDR.nodes_selected]
+            render_node = vrayDR.nodes[vrayDR.nodes_selected]
 
             layout.separator()
 
@@ -604,7 +616,7 @@ def getRegClasses():
         VRAY_PT_Exporter,
         VRAY_PT_Performance,
         VRAY_PT_SettingsSystem,
-        # VRAY_PT_DR,
+        VRAY_PT_DR,
     )
 
 

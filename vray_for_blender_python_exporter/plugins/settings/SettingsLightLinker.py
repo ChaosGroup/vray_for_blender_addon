@@ -5,6 +5,7 @@ from vray_blender.lib import export_utils
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.names import Names
 from vray_blender.lib.plugin_utils import objectToAttrPlugin, AttrListValue
+from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -31,7 +32,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     # These variables are captured by the local functions. Listed here just for clarity.
     light: bpy.types.Light  = None
     excludeList             = []
-    
+
     def fillLightExclusionAttrs(illuminationShadowType, listAttrName: str, flagAttrName: str, includeExcludeFlag: bool):
         if light.vray.illumination_shadow == illuminationShadowType or light.vray.illumination_shadow == '2':
             if not pluginDesc.getAttribute(listAttrName):
@@ -53,8 +54,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     if ctx.fullExport:
         _resetStoredLists()
 
-    scene = ctx.dg.scene
-    sceneLightObjs = [o for o in scene.objects if o.type == 'LIGHT']
+    sceneLightObjs = [o for o in ctx.dg.objects if o.type == 'LIGHT']
 
     # Set all attributes to empty lists so that we could compare against the stored state even
     # if some of the lists are empty.
@@ -70,26 +70,39 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     for obj in sceneLightObjs:
         light = obj.data
+        lightPlugins = [] # Light plugins that need exclusion/inclusion lists to be set.
 
         if light.vray.include_exclude == '0':
             continue
+
+        if light.vray.light_type == 'MESH':
+            # All mesh light plugins related to the current mesh light property group
+            lightPlugins = [AttrPlugin(getLightMeshPluginName(al.parentName, al.gizmoObjTrackId)) \
+                            for al in ctx.activeMeshLightsInfo if al.parentName == Names.object(obj)]
+        else:
+            lightPlugins = [objectToAttrPlugin(obj)]
+
         
-        lightListsAreValid = True
+        for lightPlugin in lightPlugins:
+                
+            # Each list starts with the light object itsels
+            excludeList = [lightPlugin]
 
-        # Each list starts with the light object itsels
-        excludeList = [objectToAttrPlugin(obj)]
+            # Get the list of affected objects from the object selector
+            excludeList += [objectToAttrPlugin(o) for o in light.vray.objectList.getSelectedItems(ctx.ctx, searchCollection='')]
+            
+            # include_exclude_light_flags and include_exclude_shadow_flags
+            # take '0' for exclusion and '1' for inclusion
+            includeExcludeFlag = int(light.vray.include_exclude) - 1
 
-        # Get the list of affected objects from the object selector
-        excludeList += [objectToAttrPlugin(o) for o in light.vray.objectList.getSelectedItems(ctx.ctx, searchCollection='')]
-        
-        # include_exclude_light_flags and include_exclude_shadow_flags
-        # take '0' for exclusion and '1' for inclusion
-        includeExcludeFlag = int(light.vray.include_exclude) - 1
+            # Light inclusion/exclusion
+            fillLightExclusionAttrs('0', _IGNORED_LIGHTS_ATTR, _INCLUDE_EXCLUDE_LIGHT_ATTR, includeExcludeFlag)
+            # Shadows inclusion/exclusion
+            fillLightExclusionAttrs('1', _IGNORED_SHADOWS_ATTR, _INCLUDE_EXCLUDE_SHADOW_ATTR, includeExcludeFlag)
 
-        # Light inclusion/exclusion
-        fillLightExclusionAttrs('0', _IGNORED_LIGHTS_ATTR, _INCLUDE_EXCLUDE_LIGHT_ATTR, includeExcludeFlag)
-        # Shadows inclusion/exclusion
-        fillLightExclusionAttrs('1', _IGNORED_SHADOWS_ATTR, _INCLUDE_EXCLUDE_SHADOW_ATTR, includeExcludeFlag)
+            lightListsAreValid = True
+
+
 
     if lightListsAreValid:
         if  (not listHasChanges(_IGNORED_LIGHTS_ATTR, _prevIgnoredLights)) and \

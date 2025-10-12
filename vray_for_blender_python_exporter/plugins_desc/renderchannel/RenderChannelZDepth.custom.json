@@ -29,10 +29,12 @@
                         "name" : "depth_from_camera"
                     },
                     {
-                        "name" : "depth_black"
+                        "name" : "depth_black",
+                        "active": { "cond": "::depth_from_camera=0" }
                     },
                     {
-                        "name" : "depth_white"
+                        "name" : "depth_white",
+                        "active": { "cond": "::depth_from_camera=0" }
                     },
                     {
                         "name" : "depth_clamp"

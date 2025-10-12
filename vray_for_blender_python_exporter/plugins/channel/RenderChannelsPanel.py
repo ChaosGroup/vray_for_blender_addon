@@ -168,7 +168,7 @@ def register():
     global _vrayRenderChannelsType
 
     elementsAnnotations = _loadRenderChannelAnnotations(plugins)
-    
+
     # Creates indication if channel nodes subtype rollout menu is enabled
     for subtype in VRayChannelNodeSubtypes:
         subtypeName = subtype.title()

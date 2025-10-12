@@ -129,6 +129,11 @@
             }
         },
         {
+            "attr": "render_mask_clear",
+            "default": true,
+            "type": "BOOL"
+        },
+        {
             "attr": "lock_subdivs",
             "desc": "Using fixed subdivs",
             "default": false,

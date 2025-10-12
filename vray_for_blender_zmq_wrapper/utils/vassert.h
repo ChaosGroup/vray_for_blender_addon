@@ -1,21 +1,23 @@
-#pragma once 
+#pragma once
 
 #ifdef _WIN32
-	#include <windows.h>
+	#include <Windows.h>
 	#include <debugapi.h>
+#else
+	#include <signal.h>
 #endif
 
 #include <stdio.h>
 
 // Usually, the NDEBUG preprocessor macro is used to turn off asserts. In this project however
-// NDEBUG is defined in all build configurations. To avoid confusion and to make sure no other 
+// NDEBUG is defined in all build configurations. To avoid confusion and to make sure no other
 // debug features are inadvertently turned on, use the dedicated VASSERT_ENABLED macro instead.
 // Note that it deliberately the same macro that enables assert functionality in vraysdk/vassert
 // so that this implementation was a drop-in replacement for the one in vraysdk.
 #ifdef VASSERT_ENABLED
 
 	inline void vassertTrap() {
-	#if _WIN32		
+	#if _WIN32
 		if (IsDebuggerPresent()) {
 			__debugbreak();
 		} else {
@@ -23,9 +25,8 @@
 			abort();
 		}
 	#else // not _WIN32
-		// TODO: Impplement breaking into debugger depending for the target OS
 		fprintf(stderr, "ASSERT: Terminating application.\n");
-		abort();
+		raise(SIGTRAP)
 	#endif // _WIN32
 	}
 
@@ -38,7 +39,7 @@
 	#endif
 
 
-	// The vassert macro is deliberately the same as the one defined in vraysdk/vassert so that this 
+	// The vassert macro is deliberately the same as the one defined in vraysdk/vassert so that this
 	// implememtation was a drop-in replacement for the one in vraysdk.
 	#define vassert(test) \
 		do {\

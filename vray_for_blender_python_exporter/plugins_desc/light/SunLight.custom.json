@@ -299,9 +299,11 @@
             "attr": "clouds_height",
             "ui": {
                 "spin_step": 100,
-                "value_conv_factor": 0.1,
                 "units": "meters",
                 "quantityType": "distance"
+            },
+            "options": {
+                "value_conv_factor": 0.1
             }
         },
         {
@@ -578,10 +580,7 @@
                     },
                     {
                         "name": "lpe_label",
-                        "label": "LPE Label",
-                        "show": {
-                            "prop": "0"
-                        }
+                        "label": "LPE Label"
                     }
                 ]
             },

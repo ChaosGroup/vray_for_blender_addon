@@ -19,7 +19,7 @@ class VRAY_OT_show_ntree(VRayOperatorBase):
     bl_idname   = "vray.show_ntree"
     bl_label    = "Show Node Tree"
     bl_options  = {'INTERNAL'}
-    
+
     data: bpy.props.EnumProperty(
         items = (
             ('MATERIAL', "Material", ""),
@@ -112,6 +112,7 @@ def _drawVrayNodeSelector(layout, data, property, new, icon, text):
 
     row = layout.row()
 
+
 # Draws Tree select, View, Select, Add and Node menus
 def _drawVRayNodeEditorMenus(layout, context: bpy.types.Context):
     layout.template_header()
@@ -164,7 +165,10 @@ def _drawVRayNodeSelection(layout, context, snode):
                 layout.label(text=ob.data.name, icon='LIGHT_DATA')
         
         elif vrayTreeType == "OBJECT" and has_material_slots:
-            _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_object", "OBJECT_DATAMODE", "Use V-Ray Object Nodes")
+            if ob.vray.isVRayFur:
+                _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_fur", "OBJECT_DATAMODE", "Use V-Ray Fur Nodes")
+            else:
+                _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_object", "OBJECT_DATAMODE", "Use V-Ray Object Nodes")
         
         else:
             row = layout.row()
@@ -207,7 +211,7 @@ def _drawVRayNodeCompositorAndToolSettings(layout, context, snode):
         sub.active = overlay.show_overlays
         sub.popover(panel="NODE_PT_overlay", text="")
 
-    
+
 # Function that draws custom header only for Vray Node Editors
 def vrayHeaderDrawSwitch(panel, context):
     if context.space_data.tree_type == "VRayNodeTreeEditor":

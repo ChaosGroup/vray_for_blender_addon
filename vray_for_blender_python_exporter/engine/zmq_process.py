@@ -5,11 +5,16 @@ import sys
 import time
 
 from vray_blender import debug
-from vray_blender.external import psutil
 from vray_blender.lib import sys_utils
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender import bl_info
 
+# Update the compute devices in the UI in the main thread.
+def _updateComputeDevicesCallback(deviceType: int, deviceNames: list[str], defaultDeviceStates: list[bool]):
+    def _updateComputeDevices():
+        computeDevices = bpy.context.scene.vray.Exporter.computeDevices
+        computeDevices.updateComputeDeviceSelectors(deviceType, deviceNames, defaultDeviceStates)
+    bpy.app.timers.register(_updateComputeDevices)
 
 class ZMQProcess:
     """ The ZMQ server process is started on the local machine and uses the Blender 
@@ -84,6 +89,10 @@ class ZMQProcess:
         self._updateVFBLayers = lambda vfbLayers: VfbEventHandler.updateVfbLayers(vfbLayers)
         vray.setVfbLayersUpdateCallback( self._updateVFBLayers )
 
+        self._updateComputeDevices = lambda deviceType, deviceNames, defaultDeviceStates: _updateComputeDevicesCallback(deviceType, deviceNames, defaultDeviceStates)
+        vray.setUpdateComputeDevicesCallback(self._updateComputeDevices)
+        
+
 
     def stop(self):
         """ Stop VRayZmqServer process """
@@ -107,16 +116,6 @@ class ZMQProcess:
         if not executablePath or not os.path.exists(executablePath):
             debug.printError(f"Can't find V-Ray ZMQ Server at path {executablePath}")
             return
-
-        def _joinPath(*args):
-            return os.path.normpath(os.path.join(*args))
-
-        appSdkPath = sys_utils.getAppSdkPath()
-
-        if sys.platform == "win32":
-            vrayLibPath = _joinPath(appSdkPath, "VRaySDKLibrary.dll")
-        else:
-            raise NotImplementedError()
 
         if hasattr(bpy.context, 'scene'):
             settings = bpy.context.scene.vray.Exporter
@@ -145,8 +144,8 @@ class ZMQProcess:
         args.blenderPID          = os.getpid()
         args.vfbSettingsFile     = vfbSettingsPath
         args.dumpLogFile         = self._getDumpInfoLogFile()
-        args.vrayLibPath         = vrayLibPath
-        args.appSDKPath          = appSdkPath
+        args.vrayLibPath         = sys_utils.getAppSdkLibPath()
+        args.appSDKPath          = sys_utils.getAppSdkPath()
         args.pluginVersion       = "".join(bl_info['version'])
         args.blenderVersion      = f'{bpy.app.version[0]}.{bpy.app.version[1]}'
 
@@ -156,9 +155,14 @@ class ZMQProcess:
         # no other VRayZmqServer process running which would have the port open.
         useEphemeralPort = (args.port == -1)
 
-        if (not useEphemeralPort) and (not ZMQProcess._waitForProcessToExit(os.path.basename(executablePath), 5)):
-            debug.printError("Cannot run ZmqServer: another instance is running. Rendering in V-Ray will not be available.")
-            return
+        if (not useEphemeralPort):
+            if sys.platform != "win32":
+                debug.printError("Running ZmqServer on a fixed port is only supported on Windows")
+                return
+
+            if (not ZMQProcess._waitForProcessToExit(os.path.basename(executablePath), 5)):
+                debug.printError("Cannot run ZmqServer: another instance is running. Rendering in V-Ray will not be available.")
+                return
 
         vray.ZmqControlConn.start(args)
 
@@ -171,6 +175,7 @@ class ZMQProcess:
 
     @staticmethod
     def _waitForProcessToExit(processName, seconds):
+        from vray_blender.external import psutil
         # Wait for existing VRayZmqServer process to exit. This is done here and
         # not in VRayBlenderLib because python has a convenient multiplatform interface
         # for listsing the running processes, which lacks in the C++ libraries that

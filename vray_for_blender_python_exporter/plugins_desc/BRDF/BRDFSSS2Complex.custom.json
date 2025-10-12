@@ -4,6 +4,7 @@
     "Parameters": [
         {
             "attr": "scatter_radius_mult",
+            "desc": "Controls the scatter depth for both color modes. Smaller values result in a shallower layer of scattered light and the material appears more diffuse-like. Higher values define a deeper layer, and makes the material look more translucent.",
             "ui": {
                 "soft_max": 10.0,
                 "quantityType": "distance"
@@ -33,8 +34,33 @@
             }
         },
         {
+            "attr": "overall_color",
+            "desc": "Color tint that filters both the Diffuse and the Sub-surface Colors. Pure white is neutral and doesn’t introduce tinting."
+        },
+        {
+            "attr": "diffuse_color",
+            "desc": "Determines the diffuse color when the Diffuse Amount is above 0."
+        },
+        {
             "attr": "color_mode",
+            "desc": "Determines how the Sub-surface Color and Scatter Radius parameters are read. Sub-surface color and scatter radius reads the general Sub-surface Color and an inside Scatter Color. Suitable for relatively opaque materials. Scatter coefficient and fog color – This mode uses a Scatter coefficient to define the outside scatter layer color and translucency and a Fog color for the respective inside values",
             "update": "onColorModeUpdate"
+        },
+        {
+            "attr": "sub_surface_color",
+            "desc": "The Sub-surface Color is filtered/multiplied by the Overall Color and both filter the Scatter Color."
+        },
+        {
+            "attr": "specular_color",
+            "desc": "Specifies the specular color of the material, when the Specular Amount is larger than 0."
+        },
+        {
+            "attr": "refraction_depth",
+            "desc": "Determines the depth of refraction rays when the Single Scatter parameter is set to Raytraced (refractive) mode."
+        },
+        {
+            "attr": "scatter_gi",
+            "desc": "Enable to accurately scatter global illumination. When disabled, global illumination is calculated using a simple diffuse approximation on top of the sub-surface scattering."
         }
     ],
     "Options": {

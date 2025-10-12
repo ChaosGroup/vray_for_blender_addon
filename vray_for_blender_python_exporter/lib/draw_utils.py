@@ -8,7 +8,7 @@ from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.plugins import getPluginAttr
 from vray_blender.lib.sys_utils import isGPUEngine, importFunction
-
+from vray_blender.lib.condition_processor import evaluateCondition, isCondition
 
 def getContextType(context):
     if hasattr(context, 'node') and context.node:
@@ -28,20 +28,32 @@ def getRegionWidthFromContext(context):
     return 1024
 
 
-def getAttrLabel(pluginModule, widgetAttr: dict):
+def getAttrLabel(pluginModule, widgetAttr: dict, propGroup, node: bpy.types.Node = None):
     """ Get the label to show for an attribute, searching the definitions at all 
-        possible levels.
+        possible levels and also applying conditions.
     """
-    attrName = widgetAttr['name']
 
-    if label := widgetAttr.get('label', None):
+    label = widgetAttr.get('label', None)
+
+    if isCondition(label):
+        # A multi-rule condition
+        return evaluateCondition(propGroup, node, label)
+    
+    if label:
+        # A single-rule condition
         return attribute_utils.formatAttributeName(label)
     
+    if 'layout' in widgetAttr:
+        # Containers do not get their labels from their 'name' property because not all
+        # containers have it. 
+        return ""
+    
+    attrName = widgetAttr['name']
     attrDesc = getPluginAttr(pluginModule, attrName)
+    
     if not attrDesc:
         debug.printError(f"Failed to draw unknown plugin parameter {pluginModule.ID}::{attrName}")
-        
-    if displayName := attribute_utils.getAttrDisplayName(attrDesc):
+    elif displayName := attribute_utils.getAttrDisplayName(attrDesc):
         return attribute_utils.formatAttributeName(displayName)
         
     return attribute_utils.formatAttributeName(attrName)
@@ -127,7 +139,7 @@ class UIPainter:
         else:
             expand = widgetAttr.get('expand', False)
             slider = widgetAttr.get('slider', False)
-            label  = getAttrLabel(self.pluginModule, widgetAttr)
+            label  = self._getAttrLabel(widgetAttr)
 
             if (searchType := widgetAttr.get('search_bar_for')):
                 layout.prop_search(self.propGroup, attrName,  bpy.data, searchType, text=label)
@@ -155,7 +167,7 @@ class UIPainter:
             return False
 
         if attrDesc['type'] in attribute_types.MetaPropertyTypes:
-            label = getAttrLabel(self.pluginModule, widgetAttr)
+            label = self._getAttrLabel(widgetAttr)
             self._drawAttr(layout, attrName, label)
             return True
             
@@ -166,7 +178,7 @@ class UIPainter:
         from vray_blender.plugins import templates
 
         templateInst = getattr(self.propGroup, widgetAttr['name'])
-        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, getAttrLabel(self.pluginModule, widgetAttr))
+        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, getAttrLabel(self.pluginModule, widgetAttr, self.propGroup))
 
 
     def _renderDefault(self, layout: bpy.types.UILayout):
@@ -189,28 +201,6 @@ class UIPainter:
             self._drawAttr(layout, attrName, attribute_utils.getAttrDisplayName(attrDesc))
 
 
-    def _evaluateCondition(self, cond):
-        """ Evaluates whether a condition set for an attribute is fulfilled.
-
-            Conditions can be applied to any attribute of a widget. This function only
-            evaluates the condition to True or False. The semantics of the condition
-            itself (i.e. what will happen if it is true) are implemented by the caller.
-        """
-
-        if type(cond) is not dict:
-            return bool(cond)
-        
-        if cond.get('cond') and ('evaluate' in cond):
-            return cond['evaluate'](self.propGroup, self.node)
-        
-        # NOTE: 'cond' may contain quote chars so don't use an f-string to construct the message  
-        errMsg = "Incorrect condition definition [" + str(cond) + f"] in {self.propGroup.bl_rna.name}."
-        if 'evaluate' not in cond:
-            errMsg += " Evaluation function not compiled."
-
-        raise Exception(errMsg)
-
-
     def getCustomDrawFunction(self, widgetAttr):
         if not (drawFnName := widgetAttr.get('custom_draw')):
             return None
@@ -221,9 +211,9 @@ class UIPainter:
         return fnDraw
         
         
-    def _setActive(self, layout, active):
-        if active is not None:
-            isActive = self._evaluateCondition(active)
+    def _setActive(self, layout, activeCond):
+        if activeCond is not None:
+            isActive = evaluateCondition(self.propGroup, self.node, activeCond)
             layout.active = isActive
             layout.enabled = isActive
 
@@ -256,7 +246,7 @@ class UIPainter:
                 the rollout is closed.
         """         
 
-        label = widget.get('label', "")
+        label = self._getAttrLabel(widget)
         useProp = widget.get('use_prop', None)
         uniqueID = f"{self.propGroup.as_pointer()}_{widget['name']}"
         defaultClosed = widget.get('default_closed', True)
@@ -275,7 +265,7 @@ class UIPainter:
 
         containerType   = widget.get('layout', 'COLUMN')
         align           = widget.get('align', True)
-        label           = widget.get('label', "")
+        label           = self._getAttrLabel(widget)
         active          = widget.get('active', None)
         
         match containerType:
@@ -333,7 +323,7 @@ class UIPainter:
                 if isGPUEngine(self.context.scene) and (not self._isAttributeSupportedOnGpu(widgetAttr)):
                     continue
 
-                if (('visible' not in widgetAttr) or self._evaluateCondition(widgetAttr['visible'])):
+                if (('visible' not in widgetAttr) or evaluateCondition(self.propGroup, self.node, widgetAttr['visible'])):
                     self._renderItem(container, widgetAttr)
 
 
@@ -341,11 +331,11 @@ class UIPainter:
         """ Render a single widget onto the supplied layout """
         # If the widget has a 'visible' condition, check it first
 
-        if (showCond := widget.get('visible')) and not self._evaluateCondition(showCond):
+        if (showCond := widget.get('visible')) and not evaluateCondition(self.propGroup, self.node, showCond):
             return None
 
         # Create a container to put widget's attributes in
-        if ('visible' not in widget) or self._evaluateCondition(widget['visible']):
+        if ('visible' not in widget) or evaluateCondition(self.propGroup, self.node, widget['visible']):
             container = self._renderContainer(layout, widget)
 
         if not container:
@@ -378,6 +368,10 @@ class UIPainter:
         return widgetDesc['widgets']
 
 
+    def _getAttrLabel(self, widget):
+        return getAttrLabel(self.pluginModule, widget, self.propGroup, self.node)
+    
+    
     def renderPluginUI(self, layout: bpy.types.UILayout):
         """ Render the custom widget UI defined in a plugin description (if found), or all visible
             plugin parameters.

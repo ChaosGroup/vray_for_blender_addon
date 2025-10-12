@@ -25,47 +25,43 @@ using MeshData = Interop::MeshData;
 
 struct ChanVertex
 {
-	ChanVertex()
-		: index(0)
-	{}
+	ChanVertex() { }
 
-	template <int size>
+	template <std::size_t size>
 	ChanVertex(const std::array<float, size> &data)
-		: index(0)
 	{
 		float *dest = &v.x;
-		for (int c = 0; c < std::min(3, size); c++) {
+		for (int c = 0; c < std::min(std::size_t(3), size); c++) {
 			dest[c] = data[c];
 		}
 	}
 
-	// TODO: Optimize this, should probably be a new constructor
 	template <int size>
-	static ChanVertex fromArray(const float data[size])
+	static ChanVertex fromArray(const float (&data)[size])
 	{
 		std::array<float, size> a;
 		::memcpy(a.data(), data, size * sizeof(float));
 		return ChanVertex(a);
 	}
 
-	static ChanVertex fromRGBbytes(char r, char g, char b)
+	static inline ChanVertex fromRGBbytes(char r, char g, char b)
 	{
 		const float clr[3] = { clrByteToFlt(r), clrByteToFlt(g), clrByteToFlt(b) };
-		return ChanVertex::fromArray<3>(clr);
+		return ChanVertex::fromArray(clr);
 	}
 
-	bool operator == (const ChanVertex &other) const {
+	inline bool operator==(const ChanVertex &other) const {
 		return (v.x == other.v.x) && (v.y == other.v.y) && (v.z == other.v.z);
 	}
-	
+
 	static inline float clrByteToFlt(char v)
-	{	
+	{
 		static const float mult = 1.0f / 255.f;
 		return static_cast<float>(v) * mult;
 	}
 
-	AttrVector   v;
-	mutable int  index;
+	AttrVector  v;
+	mutable int index = 0;
 };
 
 
@@ -189,8 +185,10 @@ struct MapChannelMerge : MapChannelBase
 					ChanSet& uvSet = chan_data[uvLayer.name];
 
 					for (size_t vi = 0; vi < 3; ++vi) {
-						const float *uv = uvLayer.data[face[vi]];
-						uvSet.insert(ChanVertex::fromArray<2>(uv));
+						// Use auto reference so it doesn't decay to float*(because then we can't
+						// call fromArray(...). This should probably be reworked...
+						const auto& uv = uvLayer.data[face[vi]];
+						uvSet.insert(ChanVertex::fromArray(uv));
 					}
 				}
 
@@ -421,7 +419,7 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
 	AttrMapChannels map_channels;
 	MapChannelMerge mergeMapChannel(mesh, numFaces);
 	MapChannelRaw rawMapChannel(mesh, numFaces);
-	
+
 	MapChannelBase *channels_data = nullptr;
 	if (mesh.options.mergeChannelVerts) {
 		channels_data = &mergeMapChannel;
@@ -433,13 +431,10 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
 	channels_data->init();
 	channels_data->initAttributes(map_channels_names, map_channels);
 
-	
 	if (channels_data->numChannels() && channels_data->needProcessFaces()) {
-		
-
 		// Now that we have all per-vertex values stored, set indices into the created lists 
 		// to the face(tris) vertices
-	
+
 		for (const auto& uvLayer : mesh.uvLayers) {
 			// Store tris' UVs as indices into the UV map for each UV layer
 			int channel_vert_index = 0;
@@ -447,8 +442,10 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
 			for( const auto& face : mesh.loopTris ) {
 
 				for (size_t vi = 0; vi < 3; ++vi) {
-					const float *uv = uvLayer.data[face[vi]];
-					const int v = channels_data->getMapFaceVertexIndex(uvLayer.name, ChanVertex::fromArray<2>(uv));
+					// Use auto reference so it doesn't decay to float*(because then we can't
+					// call fromArray(...). This should probably be reworked...
+					const auto& uv = uvLayer.data[face[vi]];
+					const int v = channels_data->getMapFaceVertexIndex(uvLayer.name, ChanVertex::fromArray(uv));
 					(*uvData)[channel_vert_index++] = v;
 				}
 			}

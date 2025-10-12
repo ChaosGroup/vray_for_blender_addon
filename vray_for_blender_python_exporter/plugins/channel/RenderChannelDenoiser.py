@@ -1,4 +1,4 @@
-from vray_blender.engine import resetActiveIprRendering
+from vray_blender.engine import resetActiveIprRendering, resetViewportIprRendering
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import NodeContext, PluginDesc
@@ -13,15 +13,15 @@ def widgetDrawChannelType(context, layout, propGroup, widgetAttr):
     assert widgetAttr['name'] == 'channelType'
     drawChannelType(layout, "Denoiser")
 
+
 def onUpdateEngine(src, context, attrName):
     # The change of the engine type requires a restart in order to take effect
     resetActiveIprRendering()
 
-def onUpdateChannelName(propGroup, context, attrName):
-    # The denoiser node is 'fake' and its parameters are stored in the world itself instead of the node tree.
-    ntree = propGroup.id_data.node_tree
-    node = next((n for n in ntree.nodes if hasattr(n, "RenderChannelDenoiser")), None)
-    setUniqueRenderChannelName(node, isNewNode = False)
+
+def onUpdateViewportEngine(src, context, attrName):
+    resetViewportIprRendering()
+
 
 def exportTreeNode(nodeCtx: NodeContext):
     pluginType = nodeCtx.node.vray_plugin
@@ -29,4 +29,4 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginDesc.vrayPropGroup = nodeCtx.scene.world.vray.RenderChannelDenoiser
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=[])
-    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc) 
+    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)

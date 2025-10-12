@@ -2,6 +2,10 @@
     "ID": "BRDFLayered",
     "Name": "V-Ray Blend Mtl",
     "Parameters": [
+        {
+            "attr": "additive_mode",
+            "desc": "When enabled, the V-Ray Blend Mtl behaves like a multi-layered Additive material. This often can result in physically incorrect materials. It is recommended to disable this option, unless you know what you are doing."
+        }
     ],
     "Widget": {
         "widgets": [

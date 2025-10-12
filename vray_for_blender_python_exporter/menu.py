@@ -1,14 +1,17 @@
 # This file contains definitions for the V-Ray menu in the main Blender menu bar
 
 import bpy
+import sys
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink, VantageInitStatus
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive, VRAY_OT_cloud_submit
 from vray_blender.ui.classes import pollEngine, disableLayoutInEditMode
 from vray_blender.ui.icons import getIcon, getUIIcon
 from vray_blender.lib.sys_utils import activeRendererExists
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.nodes.importing import convertMaterial
+from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.operators import VRAY_OT_message_box_base
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -25,7 +28,7 @@ class VRAY_MT_help(bpy.types.Menu):
         self.layout.operator(VRAY_OT_show_about_dialog.bl_idname, icon_value=getUIIcon(VRAY_OT_show_about_dialog))
 
         opDocSite = self.layout.operator('wm.url_open', text='Online Documentation', icon_value=getIcon("VRAY_LOGO"))
-        opDocSite.url = 'https://docs.chaos.com/display/VBLD'
+        opDocSite.url = 'https://documentation.chaos.com/space/VBLD'
 
         opHelpSite = self.layout.operator('wm.url_open', text='Online Help Center', icon='URL')
         opHelpSite.url = 'https://support.chaos.com'
@@ -77,15 +80,16 @@ class VRAY_MT_geometry(bpy.types.Menu):
         from vray_blender.ui import menus
         vrayProxyOp = menus.VRAY_OT_add_object_proxy
         vraySceneOp = menus.VRAY_OT_add_object_vrayscene
+        vrayFurOp = menus.VRAY_OT_add_object_fur
 
         enableVrscene = not VRayRendererIprViewport.isActive()
         vraySceneLayout = self.layout.column()
         vraySceneLayout.active = enableVrscene
         vraySceneLayout.enabled = enableVrscene
-        
+
         vraySceneLayout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
-
+        self.layout.operator(vrayFurOp.bl_idname, text="V-Ray Fur", icon_value=getUIIcon(vrayFurOp))
 
 class VRAY_MT_cosmos(bpy.types.Menu):
     bl_label = 'Chaos Cosmos'
@@ -135,6 +139,9 @@ class VRAY_MT_main(bpy.types.Menu):
         layout.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
         layout.separator()
         layout.menu(VRAY_MT_cosmos.bl_idname)
+        if vray.withDR2 and sys.platform == "win32":
+            layout.separator()
+            layout.operator(VRAY_OT_vantage_live_link.bl_idname)
         layout.separator()
         layout.menu(VRAY_MT_camera.bl_idname)
         layout.menu(VRAY_MT_lights.bl_idname)
@@ -195,6 +202,7 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
     bl_idname      = "vray.convert_materials"
     bl_label       = "Convert Materials"
     bl_description = "Convert Cycles Materials to V-Ray"
+    bl_options     = { "UNDO" }
 
     @classmethod
     def poll(cls, context):
@@ -213,11 +221,25 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
     def invoke(self, context, event):
         self._centerDialog(context, event)
         return context.window_manager.invoke_props_dialog(self, width=300)
-    
+
     def draw(self, context):
         self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
         self.layout.label(text="they will be deleted before the conversion.")
 
+class VRAY_OT_vantage_live_link(VRayOperatorBase):
+    bl_idname       = "vray.vantage_live_link"
+    bl_label        = "Vantage Live Link"
+    bl_description  = "Vantage Live Link"
+
+    def invoke(self, context, event):
+        if (status := VRayRendererVantageLiveLink.checkAndReportVantageState()) != VantageInitStatus.Success:
+            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Vantage Live Link failed: " + status.value)
+        return self.execute(context)
+
+    def execute(self, context: bpy.types.Context):
+        VRayRenderEngine.stopInteractiveRenderer()
+        VRayRenderEngine.startVantageLiveLink()
+        return { 'FINISHED' }
 
 class VRAY_OT_open_vfb(VRayOperatorBase):
     bl_idname =      "vray.open_vfb"
@@ -295,6 +317,7 @@ def _getRegClasses():
         VRAY_OT_open_cosmos_browser,
         VRAY_OT_relink_cosmos_assets,
         VRAY_OT_convert_materials,
+        VRAY_OT_vantage_live_link,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
         VRAY_OT_show_account_status,

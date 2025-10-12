@@ -10,7 +10,7 @@ class VRAY_OT_add_nodetree_light(VRayOperatorBase):
     bl_idname       = "vray.add_nodetree_light"
     bl_label        = "Add Light Nodetree"
     bl_description  = "Add light nodetree"
-    bl_options      = {'INTERNAL'}
+    bl_options      = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         from vray_blender.nodes.utils import getLightOutputNode
@@ -32,7 +32,7 @@ class VRAY_OT_add_nodetree_object(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_object"
     bl_label       = "Add Object Nodetree"
     bl_description = "Add object nodetree"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         tree_defaults.addObjectNodeTree(context.object)
@@ -44,7 +44,7 @@ class VRAY_OT_add_nodetree_object_lamp(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_object_lamp"
     bl_label       = "Add Object / Light Nodetree"
     bl_description = "Add object / light nodetree"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         ob = context.object
@@ -62,12 +62,28 @@ class VRAY_OT_add_nodetree_object_lamp(VRayOperatorBase):
 
         return {'FINISHED'}
 
+class VRAY_OT_add_nodetree_fur(VRayOperatorBase):
+    bl_idname      = "vray.add_nodetree_fur"
+    bl_label       = "Add Fur Nodetree"
+    bl_description = "Add V-Ray Fur nodetree"
+    bl_options     = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context):
+        ob = context.object
+        if not hasattr(ob, "vray") or not getattr(ob.vray, "isVRayFur", False):
+            self.report({'ERROR_INVALID_CONTEXT'}, "Selected object is not a V-Ray Fur object!")
+            return {'CANCELLED'}
+
+        tree_defaults.addFurNodeTree(ob)
+        bpy.ops.vray.show_ntree(data='OBJECT')
+        return {'FINISHED'}
+
 
 class VRAY_OT_add_nodetree_world(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_world"
     bl_label       = "Add World Nodetree"
     bl_description = "Add world nodetree"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         tree_defaults.addWorldNodeTree(context.scene.world)
@@ -81,7 +97,7 @@ class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
     bl_idname      = "vray.replace_nodetree_material"
     bl_label       = "Replace Material Nodetree"
     bl_description = "Add material nodetree"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         if activeMtl := getattr(context.object, 'active_material'):
@@ -121,9 +137,9 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
             # attached to the node tree
             self._centerDialog(context, event)
             return context.window_manager.invoke_props_dialog(self, width=300)
-        
+
         return self.execute(context)
-    
+
     def draw(self, context):
         self.layout.label(text="There are V-Ray nodes in this tree.")
         self.layout.label(text="If you proceed, they will be deleted.")
@@ -131,12 +147,12 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
 
     def _checkForExistingVrayNodes(self, context: bpy.types.Context):
         from vray_blender.nodes.tools import isVrayNode
-        
+
         if (activeMtl := getattr(context.object, 'active_material')) is not None:
             return any([n for n in activeMtl.node_tree.nodes if isVrayNode(n)])
-        
+
         return False
-        
+
 
 class VRAY_OT_add_new_material(VRayOperatorBase):
     """ Add a new vray material to the active object's material slot """
@@ -144,11 +160,11 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
     bl_idname      = "vray.add_new_material"
     bl_label       = "Add New V-Ray Material"
     bl_description = "Add a new V-Ray material"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         if ob := getattr(context, 'active_object'):
-            if ob.type in blender_utils.NonGeometryTypes:
+            if (ob.type in blender_utils.NonGeometryTypes) and (not ob.vray.isVRayFur):
                 self.report({'ERROR'}, "Object type doesn't support materials!")
                 return {'CANCELLED'}
 
@@ -162,7 +178,7 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
             # We cannot export these nodes, so we remove them here and leave only V-Ray nodes in 
             # the newly created tree.
             tree_defaults.removeNonVRayNodes(newMtl.node_tree)
-            
+
             if len(ob.material_slots) == 0:
                 # Object has no material slots, add the new material to a new slot
                 ob.data.materials.append(newMtl)
@@ -183,12 +199,12 @@ class VRAY_OT_copy_material(VRayOperatorBase):
     bl_idname      = "vray.copy_material"
     bl_label       = "Add New V-Ray Material"
     bl_description = "Copy the active V-Ray material to a new one"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         if ((ob := getattr(context, 'active_object')) is None) or (not ob.material_slots):
             return {'CANCELLED'}
-        
+
         if ob.type in blender_utils.NonGeometryTypes:
             self.report({'ERROR'}, "Object type doesn't support materials!")
             return {'CANCELLED'}
@@ -206,18 +222,18 @@ class VRAY_OT_copy_world(VRayOperatorBase):
     bl_idname      = "vray.copy_world"
     bl_label       = "Copy V-Ray World"
     bl_description = "Copy V-Ray world"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         if not (context.scene.world and  context.scene.world.vray.is_vray_class):
             # No world tree, or the tree is not a V-Ray tree
             return {'CANCELLED'}
-        
+
         context.scene.world = context.scene.world.copy()
-        
+
         _redrawNodeEditor()
         return {'FINISHED'}
-    
+
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
@@ -233,6 +249,7 @@ def getRegClasses():
         VRAY_OT_add_nodetree_light,
         VRAY_OT_add_nodetree_object,
         VRAY_OT_add_nodetree_object_lamp,
+        VRAY_OT_add_nodetree_fur,
         VRAY_OT_replace_nodetree_material,
         VRAY_OT_convert_nodetree_material,
         VRAY_OT_add_new_material,

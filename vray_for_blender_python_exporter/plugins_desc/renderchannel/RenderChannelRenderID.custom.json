@@ -12,6 +12,7 @@
     "Widget": {
         "widgets": [
             {
+                "layout": "COLUMN",
                 "attrs": [
                     {
                         "name": "channelType",

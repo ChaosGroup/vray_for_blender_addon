@@ -20,7 +20,7 @@ def drawHeightProp(context, layout, propGroup, widgetAttr):
 
 def _exportEnvFogMeshGizmoFromObject(nodeCtx: NodeContext, objectName: str):
     # Export EnvFogMeshGizmo plugin by getting geometry of object
-    sceneObjects = nodeCtx.scene.objects
+    sceneObjects = nodeCtx.exporterCtx.dg.objects
 
     if objectName in sceneObjects:
         domainObj = sceneObjects[objectName]
@@ -55,7 +55,8 @@ def _exportEnvFogMeshGizmosList(nodeCtx: NodeContext):
     context = nodeCtx.exporterCtx.ctx
     selectedObjects = _getSelectedObjects(context, node, "gizmos", "gizmo_selector")
 
-    return [_exportEnvFogMeshGizmoFromObject(nodeCtx, obj.name) for obj in selectedObjects]
+    exportedGizmos = [_exportEnvFogMeshGizmoFromObject(nodeCtx, obj.name) for obj in selectedObjects]
+    return [g for g in exportedGizmos if g is not None]
 
 
 def _exportEnvFogMeshLightsList(nodeCtx: NodeContext):

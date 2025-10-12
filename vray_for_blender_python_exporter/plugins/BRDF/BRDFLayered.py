@@ -1,4 +1,3 @@
-
 import bpy
 import mathutils
 
@@ -104,7 +103,7 @@ class VRAY_OT_node_add_brdf_layered_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_add_brdf_layered_sockets'
     bl_label       = "Add Coat Material"
     bl_description = "Add a new coat material"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         node = context.node
@@ -128,7 +127,7 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_del_brdf_layered_sockets'
     bl_label       = "Remove Coat Material"
     bl_description = "Removes the last coat material (only if there are no links to it)"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         node = context.node

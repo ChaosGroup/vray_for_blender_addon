@@ -196,7 +196,7 @@ void RenderImage::cropTo(int width, int height)
 	int t_height = height < this->h ? height : this->h;
 
 	if (t_width == this->w && t_height == this->h) {
-		Logger::warning("Failed to crop image to [{}x{}] from [{}x{}]", width, height, w, h);
+		Logger::warning("Failed to crop image to [%1%x%2%] from [%3%x%4%]", width, height, w, h);
 		return;
 	}
 
@@ -237,7 +237,7 @@ void jpegErrorExit(j_common_ptr cinfo) {
 	JpegErrorManager * myerr = (JpegErrorManager*)cinfo->err;
 	char jpegErrMsg[JMSG_LENGTH_MAX + 1];
 	(*cinfo->err->format_message) (cinfo, jpegErrMsg);
-	Logger::warning("Error in jpeg decompress [{}]!", jpegErrMsg);
+	Logger::warning("Error in jpeg decompress [%1%]!", jpegErrMsg);
 	longjmp(myerr->setjmp_buffer, 1);
 }
 

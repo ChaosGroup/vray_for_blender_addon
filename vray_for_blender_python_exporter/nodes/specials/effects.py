@@ -1,4 +1,3 @@
-
 import bpy
 
 from vray_blender.lib.mixin import VRayOperatorBase, VRayNodeBase
@@ -17,7 +16,7 @@ class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, VRayOper
     bl_idname      = 'vray.node_effects_add'
     bl_label       = "Add Effect Socket"
     bl_description = "Adds Effect sockets"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -29,8 +28,8 @@ class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, VRayOper
     bl_idname      = 'vray.node_effects_del'
     bl_label       = "Remove Effect Socket"
     bl_description = "Removes Effect socket (only not linked sockets will be removed)"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketEffect'
@@ -67,7 +66,7 @@ class VRayNodeEffectsHolder(VRayNodeBase):
         # Nothing to show here, but keep the method because draw_buttons
         # will be called instead to draw the side bar
         pass
-        
+
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
 ##     ## ##       ##         ##  ##          ##    ##     ##  ##   ##     ##     ##  ##     ## ####  ##

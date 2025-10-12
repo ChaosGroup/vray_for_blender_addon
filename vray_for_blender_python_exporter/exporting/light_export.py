@@ -4,6 +4,7 @@ from vray_blender.exporting.tools import *
 from vray_blender.exporting.plugin_tracker import getObjTrackId, getNodeTrackId, TrackObj, log as trackerLog
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget 
 from vray_blender.exporting.node_export import exportNodeTree
+from vray_blender.lib.blender_utils import getFirstAvailableView3D
 from vray_blender.lib.lib_utils import  LightVrayTypeToBlender, getLightPropGroup, getLightPluginType
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
@@ -46,12 +47,6 @@ def syncLightMeshInfo(exporterCtx: ExporterContext):
     exporterCtx.updatedMeshLightsInfo = updatedPairs
 
 
-def syncLightMeshInfoPostExport(exporterCtx: ExporterContext):
-    # Save a snapshot of the currently active mesh light gizmos to be used during the next update
-    # cachedMeshLightsInfo is not owned by ExporterContext, so make sure to not redirect the reference.
-    exporterCtx.cachedMeshLightsInfo.clear()
-    exporterCtx.cachedMeshLightsInfo.update(exporterCtx.activeMeshLightsInfo)
-
 
 def collectLightMixInfo(exporterCtx: ExporterContext):
     """ At the start of an export, collect information required to correctly export LightMix """
@@ -74,7 +69,7 @@ def collectLightMixInfo(exporterCtx: ExporterContext):
                 registeredLights.extend(lights)
         
         # Store a special list of all lights not part of any collection
-        freeLights = [o for o in exporterCtx.sceneObjects if (o.type == 'LIGHT') and (o not in registeredLights)]
+        freeLights = [o for o in exporterCtx.dg.objects if (o.type == 'LIGHT') and (o.original not in registeredLights)]
         exporterCtx.lightCollections[""] = freeLights
 
 
@@ -93,7 +88,7 @@ def linkLightToRenderChannel(exporterCtx: ExporterContext, objLight: bpy.types.O
     if objLight.data.vray.light_type == 'MESH':
         # A LightMesh 'lamp' object is exported as multiple instances of the LightMesh plugin, 
         # one for each object referenced by the lamp.
-        for gizmoObjTrackId in [li.gizmoObjTrackId for li in exporterCtx.activeMeshLightsInfo if li.lightName == lightPluginName]:
+        for gizmoObjTrackId in [li.gizmoObjTrackId for li in exporterCtx.activeMeshLightsInfo if li.parentName == lightPluginName]:
             lightMeshPluginName = getLightMeshPluginName(lightPluginName, gizmoObjTrackId)
             exporterCtx.linkPluginToRenderChannel(lightMeshPluginName, channelPropName, lightSelectPlugin)
     else:
@@ -228,23 +223,33 @@ class LightExporter(ExporterBase):
             with self.objectContext.push(obj):
                 self._exportLight(obj)
 
+    
 
     def _exportScene(self):
-        updates = [ u.id.original for u in self.dg.updates ]
-
-        sceneLightObjs = [o for o in self.sceneObjects if o.type == 'LIGHT']
+        updates = [u.id for u in self.dg.updates]
+        sceneLightObjs = [o for o in self.dg.objects if o.type == 'LIGHT']
         
         updatedTextures       = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
         updatedTextureLights  = _getLightsOfTextures(updatedTextures)
-        updatedMeshLights     = {p.lightObj for p in self.updatedMeshLightsInfo}
+        updatedMeshLights     = {p.parentObj for p in self.updatedMeshLightsInfo}
 
         # Updates registered in UpdateTracker
         trackerUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.LIGHT, UpdateFlags.ALL)
         updatedTrackerLightSIDs = {m[0] for m in trackerUpdates}
         
-        updatedLights = {o for o in sceneLightObjs if self.fullExport or    (o in updates) or \
-                                                                            (o.data in updates) or \
-                                                                            (getObjTrackId(o.data) in updatedTrackerLightSIDs)}
+        dgUpdates = self.dgUpdates['transform'].union(self.dgUpdates['geometry'])
+
+        def lightIsUpdated(ob: bpy.types.Object):
+            return (getObjTrackId(ob) in dgUpdates) or \
+                    (getObjTrackId(ob.data) in dgUpdates) or \
+                    (getObjTrackId(ob.data) in updatedTrackerLightSIDs) or \
+                    (getObjTrackId(ob) not in self.persistedState.processedObjects)
+
+        # For any change affecting the light itself, the 'transform' and/or 'geometry' update flag of its object 
+        # or data will be set The 'shading' flag is set when any changes in the scene affect the light 
+        # ( e.g. might be caused by changes to the world), this is why we do not check it here.
+        updatedLights = {o for o in sceneLightObjs if self.fullExport or lightIsUpdated(o)}
+
         
         updatedLights = updatedLights.union(updatedTextureLights).union(updatedMeshLights)
 
@@ -255,11 +260,11 @@ class LightExporter(ExporterBase):
 
         # All plugins for lights which should not be exported have been removed from VRay and the tracker
         # by the prune procedure. From the rest, export only the updated visible nodes. 
-        for obj in  [o for o in lightsForExport() if getObjTrackId(o) in self.visibleObjects]:
+        for obj in  [o.evaluated_get(self.dg) for o in lightsForExport()]:
             with self.objectContext.push(obj):
                 self._exportLight(obj)
 
-        self._fixLightVisibility(sceneLightObjs)
+        self._syncLightVisibility(sceneLightObjs)
         self._exportLightMix()
 
 
@@ -269,15 +274,16 @@ class LightExporter(ExporterBase):
             Parameters:
             @channelName - The name of the channel to show in VFB's UI
             @selectMode -  Select mode (one of settings_defs.LightSelectMode items)
-        """    
+        """
         pluginType = "RenderChannelLightSelect"
         pluginName = Names.pluginObject(pluginType, channelName)
-                
+
         pluginDesc = PluginDesc(pluginName, pluginType)
 
         pluginDesc.setAttribute("name", channelName)
         pluginDesc.setAttribute("color_mapping", True)
         pluginDesc.setAttribute("light_select_mode", selectMode)
+        pluginDesc.setAttribute("light_select_in_lightmix", True)
 
         return export_utils.exportPlugin(self, pluginDesc)
 
@@ -286,6 +292,10 @@ class LightExporter(ExporterBase):
     def _exportLight(self, obj: bpy.types.Object):
         light = obj.data
         vrayLight = light.vray
+
+        # Mark the object as processed, even if it is not exported.
+        # This ensures we can differentiate between objects already handled and new additions to the depsgraph.
+        self.persistedState.processedObjects.add(getObjTrackId(obj))
 
         if not vrayLight.is_vray_class:
             return
@@ -358,8 +368,8 @@ class LightExporter(ExporterBase):
 
         # Applying the 'transform' attribute. It can be overwritten by plugin description or node.
         if (transMat := pluginDesc.getAttribute("transform")) \
-            and (type(transMat) is Matrix) and (not transMat.is_identity):
-            
+                and (type(transMat) is Matrix) and (not transMat.is_identity):
+
             # Upscaling the matrix to 4x4. This happens when VRayNodeMatrix is attached.
             if len(transMat.col) == len(transMat.row) == 3 :
                 transMat = transMat.to_4x4()
@@ -398,14 +408,29 @@ class LightExporter(ExporterBase):
         return plugin
 
 
-    def _fixLightVisibility(self, sceneLights: list[bpy.types.Object]):
+    def _syncLightVisibility(self, sceneLights: list[bpy.types.Object]):
         """ Sets the visibility of all light in the scene regardless of the update status. We don't receive light-specific 
             update notifications when the visibility changes, so we must do this for all the lights. 
         """
-        if not self.interactive:
-            return
         
-        for obj in sceneLights:
+        def isVisibleInLocalView(obj: bpy.types.Object, dg:bpy.types.Depsgraph, view3d: bpy.types.SpaceView3D):
+            if not self.interactive:
+                # In production, the local view selection is not respected
+                return True
+            
+            evalObj = obj.evaluated_get(dg)
+            return evalObj.local_view_get(view3d)
+        
+        view3d = getFirstAvailableView3D()
+        localView = view3d if (view3d and view3d.local_view) else None
+        
+        for obj in self.sceneObjects:
+            objTrackId = getObjTrackId(obj)
+
+            # Skip non-processed objects as they are not exported
+            if obj.type != 'LIGHT' or (objTrackId not in self.persistedState.processedObjects):
+                continue
+
             pluginName = getPluginName(obj)  
             pluginType = getLightPluginType(obj.data)
 
@@ -418,8 +443,8 @@ class LightExporter(ExporterBase):
                 propGroup = getattr(obj.data.vray, pluginType)
                 isEnabled = propGroup.enabled
 
-            isVisibleLight = getObjTrackId(obj) in self.visibleObjects
-            
+            isVisibleLight = (objTrackId in self.visibleObjects) and ((not localView) or isVisibleInLocalView(obj, self.dg, view3d))
+
             plugin_utils.updateValue(self.renderer, pluginName, "enabled",  isEnabled and isVisibleLight)
 
 
@@ -511,15 +536,15 @@ class LightExporter(ExporterBase):
 
     def _pruneDisconnected(self):
         """ Delete plugins for LightMeshes for which the gizmo has been disconnected. """
-        disconnectedMeshLights = [p for p in self.cachedMeshLightsInfo.difference(self.activeMeshLightsInfo)]
+        disconnectedMeshLights = [p for p in self.persistedState.activeMeshLightsInfo.difference(self.activeMeshLightsInfo)]
 
         for l in disconnectedMeshLights:
-            lightPluginName = getLightMeshPluginName(l.lightName, l.gizmoObjTrackId)
+            lightPluginName = getLightMeshPluginName(l.parentName, l.gizmoObjTrackId)
             vray.pluginRemove(self.renderer, lightPluginName)
 
     
     def _exportLightMix(self):
-        if not (lightMix := self._getLightMix()):
+        if not (lightMix := self._getLightMix()) or not self.fullExport:
             return
 
         # Environment and Self-Illumination LightSelect plugins are needed for the Light Mix
@@ -534,17 +559,17 @@ class LightExporter(ExporterBase):
 
         if lightMix.mode == 'grouped':
             self._exportGroupedLightMix()
-        
+
 
     def _exportGroupedLightMix(self):
-        """ For 'grouped' light select mode, export one light select channel for each collecrion
+        """ For 'grouped' light select mode, export one light select channel for each collection
             containing lights.
         """
         if not (self.production or self.iprVFB):
             return
-        
+
         for coll in bpy.data.collections:
-            if not (lightObjects := ([o for o in coll.objects if o.type == 'LIGHT'])):
+            if not (lightObjects := ([o for o in coll.all_objects if o.type == 'LIGHT'])):
                 continue
 
             lsPlugin = self._exportLightSelect(coll.name, LightSelectMode.Full)
@@ -557,28 +582,26 @@ class LightExporter(ExporterBase):
     def _exportIndividualLightInLightMix(self, objLight: bpy.types.Object, lightPlugin: PluginDesc):
         """ Export the light as a separate LightSelect render channel.
 
-            This is done when LightMix is in a mode other than 'manual'. An nndividual LightSelect 
+            This is done when LightMix is in a mode other than 'manual'. An individual LightSelect 
             render channel is exported for each light and assinged to the 'channels_full' property of the light.
         """
-        if not (self.production or self.iprVFB):
+        if not (self.production or self.iprVFB) or not self.fullExport:
             return
-        
+
         if not (lightMix := self._getLightMix()):
             return
-        
+
         isFreeLight = (lightMix.mode == 'grouped') and (objLight in self.lightCollections[""])
 
         if (lightMix.mode != 'individual') and (not isFreeLight):
             return
-        
+
         if objLight.data.vray.light_type == 'MESH':
-            for gizmoObjTrackId in [li.gizmoObjTrackId for li in self.activeMeshLightsInfo if li.lightName == lightPlugin.name]:
+            for gizmoObjTrackId in [li.gizmoObjTrackId for li in self.activeMeshLightsInfo if li.parentName == lightPlugin.name]:
                 lightMeshPluginName = getLightMeshPluginName(lightPlugin.name, gizmoObjTrackId)
-                lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)    
+                lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
                 self.linkPluginToRenderChannel(lightMeshPluginName, 'channels_full', lsPlugin)
         else:
             lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
             self.linkPluginToRenderChannel(lightPlugin.name, 'channels_full', lsPlugin)
 
-
-        

@@ -19,7 +19,7 @@ class VRaySocketMtlMulti(VRayValueSocket):
 
     value: bpy.props.IntProperty(
         name = "ID",
-        description = "ID",
+        description = "This is the value used to loop the texture through the list of materials.",
         update = selectedObjectTagUpdate
     )
 
@@ -58,7 +58,7 @@ class VRAY_OT_node_mtlmulti_socket_add(VRayOperatorBase):
     bl_idname      = 'vray.node_mtlmulti_socket_add'
     bl_label       = "Add MtlMulti Socket"
     bl_description = "Adds MtlMulti sockets"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         if not (node := _getMtlNodeFromOperatorContext(context)):
@@ -67,13 +67,13 @@ class VRAY_OT_node_mtlmulti_socket_add(VRayOperatorBase):
 
         node.addMaterial()
         return {'FINISHED'}
-    
+
 
 class VRAY_OT_node_mtlmulti_socket_del(VRayOperatorBase):
     bl_idname      = 'vray.node_mtlmulti_socket_del'
     bl_label       = "Remove MtlMulti Socket"
     bl_description = "Removes MtlMulti socket (only not linked sockets will be removed)"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         if not (node := _getMtlNodeFromOperatorContext(context)):
@@ -88,11 +88,11 @@ class VRAY_OT_node_mtlmulti_socket_del(VRayOperatorBase):
 
         humanIndex = node.materials
         sockName = f"Material {humanIndex}"
-        
+
         if removeInputs(node, [sockName], removeLinked=False):
             node.materials -= 1
             return {'FINISHED'}
-        
+
         self.report({'WARNING'}, "Cannot remove linked materials. Unlink and try again.")
         return {'CANCELLED'}
 
@@ -132,8 +132,8 @@ class VRayNodeMtlMulti(VRayNodeBase):
         sockMtl = addInput(self, 'VRaySocketMtlMulti', sockName)
         sockMtl.setValue(humanIndex)
         sockMtl.enabled = True
-        self.materials += 1 
-        
+        self.materials += 1
+
 
     def draw_buttons(self, context, layout):
         """ Draw node """
@@ -156,14 +156,14 @@ class VRayNodeMtlMulti(VRayNodeBase):
         row = layout.row(align=True)
         row.operator('vray.node_mtlmulti_socket_add', icon="ADD", text="Add")
         row.operator('vray.node_mtlmulti_socket_del', icon="REMOVE", text="")
-        
+
         mtlsPanel = draw_utils.subPanel(layout)
 
         for i in range(self.materials):
             humanIndex = i + 1
             sockLabel = f'Material {humanIndex}'
             uniqueID = f"{self.as_pointer()}_{sockLabel}"
-            
+
             if panelBody := draw_utils.rollout(mtlsPanel, uniqueID, sockLabel):
                 sockMtl = self.inputs[sockLabel]
                 sockMtl.draw_property(context, draw_utils.subPanel(panelBody), self, text="")
@@ -174,7 +174,7 @@ class VRAY_OT_osl_node_update(VRayOperatorBase):
     bl_label       = "Update"
     bl_description = ""
     bl_options     = {'INTERNAL'}
-    
+
     def execute(self, context):
         errs = []
         osl.update_script_node(context.node, lambda e, m: errs.append((e, m)))

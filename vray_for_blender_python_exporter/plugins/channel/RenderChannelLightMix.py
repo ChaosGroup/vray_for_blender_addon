@@ -1,6 +1,7 @@
 from vray_blender import debug
 from vray_blender.lib.defs import ExporterContext, PluginDesc, RendererMode
 from vray_blender.lib import  export_utils, plugin_utils
+from vray_blender.nodes.tools import isSameNode
 
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -13,7 +14,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         assert ctx.activeLightMixNode is not None
 
         node = ctx.activeLightMixNode 
-        if  node != pluginDesc.node:
+        if not isSameNode(node, pluginDesc.node):
             debug.report('WARNING', f"More than one active LightMix nodes found in the scene. '{node.name}' node will not be exported.")
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)

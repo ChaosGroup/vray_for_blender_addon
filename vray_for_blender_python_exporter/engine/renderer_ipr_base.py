@@ -1,4 +1,4 @@
-import bpy 
+import bpy
 import time
 from typing import Dict
 
@@ -8,7 +8,7 @@ from vray_blender import debug
 from vray_blender.lib import gl_draw, defs
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
-from vray_blender.lib.defs import ExporterContext, RendererMode, AttrPlugin
+from vray_blender.lib.defs import ExporterContext, RendererMode, AttrPlugin, PersistedState, getObjTrackId
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.exporting.instancer_export import InstancerExporter
@@ -16,7 +16,7 @@ from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker
 from vray_blender.exporting.settings_export import SettingsExporter
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget
-from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export
+from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export, hair_export
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -29,7 +29,7 @@ from vray_blender.engine.zmq_process import ZMQ
 
 def _exportObjects(ctx: ExporterContext):
     ctx.ts.timeThis("export_objects", lambda: obj_export.run(ctx)) 
-    
+
 
 def _exportMaterials(ctx: ExporterContext):
     stats: defs.SceneStats = ctx.ts.timeThis("export_materials", lambda: mtl_export.run(ctx))
@@ -64,7 +64,7 @@ def _prunePlugins(self, exporterCtx: ExporterContext):
         light_export.LightExporter(context).prunePlugins()
         view_export.ViewExporter(context).prunePlugins()
         world_export.WorldExporter(context).prunePlugins()
-        InstancerExporter.pruneInstances(self.activeInstancers, exporterCtx)
+        InstancerExporter.pruneInstances(context)
         
         # Persist the new snaphot
         self.activeInstancers = exporterCtx.activeInstancers
@@ -92,6 +92,7 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
     UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.worlds, UpdateTarget.WORLD)
 
     light_export.syncLightMeshInfo(exporterCtx)
+    hair_export.syncFurInfo(exporterCtx)
     mtl_export.calculateMatExportCache(exporterCtx)
     
     if exporterCtx.rendererMode == RendererMode.Interactive:
@@ -99,11 +100,19 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
         # are not exported.
         light_export.collectLightMixInfo(exporterCtx)
 
-       
+    # NOTE: just to be safe, remove objects that have been processed but not in the current scene
+    allObjectIds = { getObjTrackId(o) for o in exporterCtx.sceneObjects }
+    for objTrackId in self.persistedState.processedObjects.difference(allObjectIds):
+        self.persistedState.processedObjects.discard(objTrackId)
 
-def _syncPluginsPostExport(self, exporterCtx: ExporterContext):
-    """ Perform synchronization of plugin data after an export has completed """
-    light_export.syncLightMeshInfoPostExport(exporterCtx)
+
+def _persistState(self, exporterCtx: ExporterContext):
+    self.persistedState.visibleObjects = exporterCtx.visibleObjects
+    self.persistedState.activeInstancers = exporterCtx.activeInstancers
+    self.persistedState.activeGizmos = exporterCtx.activeGizmos
+    self.persistedState.exportedMtls = exporterCtx.exportedMtls
+    self.persistedState.activeFurInfo = exporterCtx.activeFurInfo
+    self.persistedState.activeMeshLightsInfo = exporterCtx.activeMeshLightsInfo
 
 
 def _syncView(ctx: ExporterContext):
@@ -194,6 +203,7 @@ class VRayRendererIprBase:
         self.visibleObjects     = set()
         self.activeInstancers   = set()
         self.meshLightInfo      = set()
+        self.furInfo            = set()
         self.activeGizmos       = set()
         self.miscCache          = {}
         self.lastExportedFrame  = None
@@ -207,7 +217,13 @@ class VRayRendererIprBase:
 
 
         # Used to store ExporterCtx.exportedMtls between update calls.
-        self.exportedMtls: Dict[bpy.types.Material, AttrPlugin] = {}
+        self.exportedMtls: dict[bpy.types.Material, AttrPlugin] = {}
+
+        # State to carry on to the next render cycle
+        self.persistedState = PersistedState()
+
+        # Time when last export has finished. Uset for rate-limiting updates to the veiwport.
+        self.tmLastExport = 0.0
 
 
     def _clearSceneOnReset(self, isFullExport, renderer):
@@ -232,6 +248,8 @@ class VRayRendererIprBase:
         success = True
 
         try:
+            exporterCtx.calculateObjectVisibility()
+
             _syncNames(exporterCtx)
 
             commonSettings = CommonSettings(exporterCtx.dg.scene, engine, isInteractive = True)
@@ -265,7 +283,7 @@ class VRayRendererIprBase:
                 if exporterCtx.rendererMode == RendererMode.Interactive:
                     self._linkRenderChannels(exporterCtx)
 
-                _syncPluginsPostExport(self, exporterCtx)
+                _persistState(self, exporterCtx)
 
             success = True
         except Exception as ex:
@@ -280,20 +298,11 @@ class VRayRendererIprBase:
         # might have been scheduled for asynchronous processing.
         __class__._clearTempState(exporterCtx)
 
-
-        # VRay experiences frequent crashes when successive updates are made to 
-        # the scene in rapid succession, e.g. when the user drags a slider that 
-        # continuously fires updates. This is especially pronounced when the lights
-        # are being updated. To mitigate the issue, rate-limit the updates.
-        # NOTE: The value of 50 ms used here is arbitrary and may need tweaking
-        # on differet machines / scenes. It has been chosen because it gives a good
-        # ratio of user experience and stability, but does not guarantee crash-free
-        # operation.
-        # TODO: investigate further and replace with a reliable solution  
-        time.sleep(0.05)
+        # Rate-limit the updates we process as too many updates will result in unresponsive viewport.
+        self._limitFrameRate(20)
 
         return success
-    
+
 
     def _getExporterContext(self, ctx: bpy.types.Context, rendererMode: RendererMode, dg: bpy.types.Depsgraph, isFullExport: bool):
         context = ExporterContext()
@@ -302,27 +311,43 @@ class VRayRendererIprBase:
         context.objTrackers      = self.objTrackers
         context.nodeTrackers     = self.nodeTrackers
         context.visibleObjects   = self.visibleObjects
-        context.cachedMeshLightsInfo = self.meshLightInfo
         context.activeGizmos     = self.activeGizmos
         context.ctx              = ctx or bpy.context
         context.dg               = dg or bpy.context.evaluated_depsgraph_get()
         context.fullExport       = isFullExport
         context.ts               = tools.TimeStats("Python export code")
         context.exportedMtls     = self.exportedMtls
-
-        context.calculateObjectVisibility()
+        context.persistedState   = self.persistedState
 
         return context
 
     def _createRenderer(self, exporterType):
+        from vray_blender.lib.export_utils import setupDistributedRendering
+
         exporter = bpy.context.scene.vray.Exporter
 
         settings = vray.ExporterSettings()
+        setupDistributedRendering(settings, exporterType, True)
         settings.exporterType  = exporterType
         settings.renderThreads = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
 
         self.renderer = vray.createRenderer(settings)
-    
+
+
+    def _limitFrameRate(self, fps: int):
+        """ If updates come too fast, sleep for some time in order to limit the 
+            max number of rendered images to the specified frame rate.
+        """
+        
+        if self.tmLastExport != 0.0:
+            frameTime = 1.0 / fps
+            elapsed = time.time() - self.tmLastExport
+            
+            if elapsed < frameTime:
+                time.sleep(frameTime - elapsed)
+
+        self.tmLastExport = time.time()
+
 
     @staticmethod
     def _clearTempState(exporterCtx: ExporterContext):

@@ -1,0 +1,41 @@
+if (DEFINED WITH_DR2 AND WITH_DR2)
+	# For now hard code a separate (stable/7.2) DR2 xpak.
+	set(APPSDK_XPAK_VERSION "72010.20250813.1" )
+elseif(APPLE)
+	# Temporary (stable/7.2) appsdk macos xpak that was uploaded by hand.
+	set(APPSDK_XPAK_VERSION "72010.20250906")
+else()
+	set(APPSDK_XPAK_VERSION "70010.20251002" )
+endif()
+
+set(QT_XPAK "AppSDKQT6")
+if (WIN32)
+	set(QT_XPAK_VERSION "6.5.3.1002" )
+else()
+	set(QT_XPAK_VERSION "6.5.3.1001" )
+endif()
+set(RAPIDJSON_XPAK_VERSION "1.1.0.1001" )
+set(COMMANDLINE_TOOLS_XPAK_VERISON "15.3.0.1000" )
+set(MACSDK14_XPAK_VERSION "14.4.1000" )
+
+set(COMMANDLINE_TOOLS_XPAK "CommandLineTools15" )
+set(MACSDK14_XPAK "MacSDK14" )
+
+# BLENDER_SDK_XPAK_VERSION is the version of the Blender_SDK xpak
+# BLENDER_SDK_VER is the version of the Blender SDK files included in the Blender_SDK pack (corresponding to the 'blender_x.y' folder)
+
+if (BLENDER_VER STREQUAL "4.2")
+	set(BLENDER_SDK_XPAK "Blender_SDK_4_2" )
+	set(BLENDER_SDK_XPAK_VERSION "1000" )
+elseif(BLENDER_VER STREQUAL "4.3")
+	set(BLENDER_SDK_XPAK "Blender_SDK_4_2" )
+	set(BLENDER_SDK_XPAK_VERSION "1000" )
+elseif(BLENDER_VER STREQUAL "4.4")
+	set(BLENDER_SDK_XPAK "Blender_SDK_4_4" )
+	set(BLENDER_SDK_XPAK_VERSION "1000" )
+elseif(BLENDER_VER STREQUAL "4.5")
+	set(BLENDER_SDK_XPAK "Blender_SDK_4_4" )
+	set(BLENDER_SDK_XPAK_VERSION "1000" )
+else()
+	message(FATAL_ERROR "Invalid BLENDER_VER '${BLENDER_VER}'")
+endif()

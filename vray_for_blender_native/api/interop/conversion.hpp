@@ -18,6 +18,39 @@ namespace VRayForBlender
 {
 
 void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& listElemTypes, const py::list& list);
+
+/// Convert AttrList to boost::python::list.
+template<typename T>
+py::list toPyList(const vray::AttrList<T>& attrList)
+{
+	WithGIL gil;
+	py::list pyList = py::list();
+	const typename vray::AttrList<T>::DataArrayPtr attrListData = attrList.getData();
+
+	for (const auto& elem : *attrListData)
+		pyList.append(elem);
+
+	return pyList;
+}
+
+/// Convert boost::python::list to AttrList.
+template<typename T>
+vray::AttrList<T> toAttrList(const py::list &pyList)
+{
+	WithGIL gil;
+	vray::AttrList<T> attrList;
+	
+	for (auto i = 0; i < py::len(pyList); i++) {
+		py::api::const_object_item elem = pyList[i];
+		T extractedVal = py::extract<T>(elem);
+		attrList.append(extractedVal);
+	}
+	
+	return attrList;
+}
+
+
+
 proto::RenderSizes fromRenderSizes (const py::object& obj);
 
 

@@ -10,8 +10,7 @@
                 "default_closed": false,
                 "attrs": [
                     {
-                        "name": "tiling_factor",
-                        "cond": {"evaluated": "plugins.BRDF.BRDFScanned:test"}
+                        "name": "tiling_factor"
                     },
                     {
                         "name": "twoside",

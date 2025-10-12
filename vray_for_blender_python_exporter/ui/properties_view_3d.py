@@ -32,30 +32,25 @@ class VRAY_PT_View_3D_Options(classes.VRayPanel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "V-Ray Options"
+    bl_ui_units_x = 12
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True 
-        
+        layout.use_property_split = True
+
         layout.label(text="V-Ray Options")
         layout.separator(factor = 1)
-        layout.scale_x = 0.1 # This scale that makes all the labels visible
+        layout.scale_x = 0.05 # This scale that makes all the labels visible
 
         world = context.scene.world
-        # Indication that there isn't a node tree created
-        if (world is None) or (world.node_tree is None):
-            layout.column().label(icon="ERROR", text="Denoiser requires World Tree.")
-            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree")
-            return
-        
-        # Drawing the property for node creation
-        channelsDenoiserPropGroup = world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser
-        layout.prop(channelsDenoiserPropGroup, "enabled", text="Enable Denoiser")
+
+        channelsDenoiserPropGroup = world.vray.RenderChannelDenoiser
+        layout.prop(channelsDenoiserPropGroup, "viewport_enabled", text="Viewport Denoiser")
 
         # Drawing RenderChannelDenoiser property
         denoiserColumn = layout.column()
-        denoiserColumn.active = channelsDenoiserPropGroup.enabled
-        denoiserColumn.prop(world.vray.RenderChannelDenoiser, "engine", text="Denoiser Type")
+        denoiserColumn.active = channelsDenoiserPropGroup.viewport_enabled
+        denoiserColumn.prop(world.vray.RenderChannelDenoiser, "viewport_engine", text="Engine")
 
 
 

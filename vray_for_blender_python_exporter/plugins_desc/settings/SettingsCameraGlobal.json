@@ -53,16 +53,23 @@
                 "label": "Camera",
                 "attrs": [
                     {
-                        "name": "auto_white_balance",
-                        "label": "Auto White Balance"
-                    },
-                    {
-                        "name": "auto_exposure",
-                        "label": "Auto Exposure"
-                    },
-                    {
-                        "name": "auto_corrections_mode",
-                        "label": "Auto Corrections Mode"
+                        "layout": "COLUMN",
+                        "active": {"cond": "plugins.camera.SettingsCamera.areCameraAutoCorrectionsEnabled"},
+                        "attrs": [
+                            {
+                                "name": "auto_white_balance",
+                                "label": "Auto White Balance"
+                            },
+                            {
+                                "name": "auto_exposure",
+                                "label": "Auto Exposure"
+                            },
+                            {
+                                "name": "auto_corrections_mode",
+                                "label": "Auto Corrections Mode",
+                                "active": {"cond": "::auto_exposure!=0;::auto_white_balance!=0"}
+                            }
+                        ]
                     }
                 ]
             }

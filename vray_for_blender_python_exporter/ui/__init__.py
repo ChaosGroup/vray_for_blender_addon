@@ -18,6 +18,7 @@ def _get_physics_panels():
 def _getRegPackages():
     from vray_blender.ui import classes
     from vray_blender.ui import icons
+    from vray_blender.ui import properties_data_fur
     from vray_blender.ui import properties_data_geometry
     from vray_blender.ui import properties_data_camera
     from vray_blender.ui import properties_data_lamp
@@ -36,6 +37,7 @@ def _getRegPackages():
     return (
         icons,
         classes,
+        properties_data_fur,
         properties_data_geometry,
         properties_data_camera,
         properties_data_lamp,

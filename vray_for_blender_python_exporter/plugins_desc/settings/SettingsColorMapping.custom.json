@@ -25,9 +25,6 @@
             "attr": "input_gamma",
             "default": 1,
             "desc": "Input gamma for textures",
-            "available": [
-                "BLENDER"
-            ],
             "type": "FLOAT",
             "ui": {
                 "max": 1048576,
@@ -44,9 +41,6 @@
             "desc": "Use global \"Input Gamma\" for textures",
             "type": "BOOL",
             "default": false,
-            "available": [
-                "BLENDER"
-            ],
             "options": {
                 "derived": true
             }
@@ -56,9 +50,6 @@
             "desc": "Set Blender \"Color Management\" Gamma to (1.0 / ColorMapping.Gamma)",
             "type": "BOOL",
             "default": false,
-            "available": [
-                "BLENDER"
-            ],
             "options": {
                 "derived": true
             }
@@ -69,9 +60,6 @@
             "desc": "Use current scene \"Color Mapping\" settings",
             "type": "BOOL",
             "default": true,
-            "available": [
-                "BLENDER"
-            ],
             "options": {
                 "derived": true
             }
@@ -92,7 +80,6 @@
                 "attrs": [
                     {
                         "name": "type"
-                        
                     },
                     {
                         "name": "dark_mult",

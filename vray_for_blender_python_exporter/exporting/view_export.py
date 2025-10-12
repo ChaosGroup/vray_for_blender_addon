@@ -14,7 +14,6 @@ from vray_blender.plugins.settings.SettingsOutput import SettingsOutputExporter
 from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
 from vray_blender.utils.utils_bake import VRayBatchBakeItem
 
-
 from vray_blender.bin import VRayBlenderLib as vray
 
 # In production, multiple cameras can be exported but only one can be active at any given time.
@@ -23,7 +22,6 @@ from vray_blender.bin import VRayBlenderLib as vray
 # are taken from the active camera for each frame. This camera is also used for interactive jobs
 # as we cannot have more than one camera in IPR.
 RENDER_CAMERA_BASE_NAME = 'renderCamera'
-
 
 VISIBLE_TO_WHOLE_VIEW_RATIO = 1.66257 # The ratio of the whole view to the visible area of 3d viewport in camera mode.
 # Example:
@@ -70,9 +68,23 @@ def getActiveCamera(ctx: ExporterContext):
 
     if view3D and (view3dCamera := view3D.camera):
         return view3dCamera
-    
+
     return ctx.dg.scene.camera
 
+def _exportCameraDefaultUVWGen(ctx: ExportedContext):
+    """ Export a UVWGenChannel plugin for use in camera aperture/distortion.
+
+        @returns A newly exported plugin on the first invocation, a cached copy after that.
+    """
+
+    DEFAULT_PLUGIN_TYPE = 'UVWGenChannel_camera'
+    if not (plugin := ctx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
+        uvwGenChannel = PluginDesc('cameraDefaultUVWGenChannel', 'UVWGenChannel')
+        uvwGenChannel.setAttribute('uvw_channel', 0)
+        plugin = export_utils.exportPlugin(ctx, uvwGenChannel)
+        ctx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
+
+    return plugin
 
 class ViewExporter(ExporterBase):
     """ Export all view-related settings
@@ -122,7 +134,7 @@ class ViewExporter(ExporterBase):
 
         perCameraViewParams: dict[str, ViewParams] = {}
 
-        for cameraObj in cameras:
+        for cameraObj in (c.evaluated_get(self.dg) for c in cameras):
             cameraName = cameraObj.name_full
             viewParams = prevPerCameraViewParams.get(cameraName)
             perCameraViewParams[cameraName] = self._exportProdCamera(cameraObj, viewParams)
@@ -279,8 +291,6 @@ class ViewExporter(ExporterBase):
     def _exportSettingsCamera(self, isRenderCamera: bool, viewParams: ViewParams):
         cameraObj = viewParams.cameraObject
 
-        assert cameraObj is not None, "Invalid camera object"
-
         settingsCameraGlobal = self.scene.vray.SettingsCameraGlobal
 
         pluginName = self._getCameraPluginUniqueName(cameraObj, "SettingsCamera", isRenderCamera)
@@ -318,8 +328,10 @@ class ViewExporter(ExporterBase):
                 # it should match the camera type set in Blender.
                 plDesc.resetAttribute('type')
             
+            # Only camera object plugins are getting tracked and pruned.
+            self.cameraTracker.trackPlugin(getObjTrackId(cameraObj), pluginName)
+
         export_utils.exportPlugin(self, plDesc)
-        self.cameraTracker.trackPlugin(getObjTrackId(cameraObj), pluginName)
         
 
     def _exportCameraDefault(self, viewParams: ViewParams):
@@ -339,7 +351,7 @@ class ViewExporter(ExporterBase):
 
         pluginType = "CameraPhysical"
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, pluginType, isRenderCamera)
-        
+
         plDesc = PluginDesc(pluginName, pluginType)
         plDesc.vrayPropGroup = vrayCamera.CameraPhysical
         self._fillPhysicalCameraSettings(plDesc, viewParams)
@@ -347,21 +359,30 @@ class ViewExporter(ExporterBase):
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.setAttribute("fov", viewParams.renderView.fov)
 
+        aperturePath = vrayCamera.CameraPhysical.bmpaperture_tex_path
+        distortionPath = vrayCamera.CameraPhysical.distortion_tex_path
+        if aperturePath or distortionPath:
+            uvwgen = _exportCameraDefaultUVWGen(self)
+        apertureTex = export_utils.exportRenderMaskBitmap(self, aperturePath, uvwgen, pluginName+"|aperture") if aperturePath else AttrPlugin()
+        plDesc.setAttribute("bmpaperture_tex", apertureTex)
+        distortionTex = export_utils.exportRenderMaskBitmap(self, distortionPath, uvwgen, pluginName+"|distortion") if distortionPath else AttrPlugin()
+        plDesc.setAttribute("distortion_tex", distortionTex)
+
         export_utils.exportPlugin(self, plDesc)
         self.cameraTracker.trackPlugin(getObjTrackId(viewParams.cameraObject), pluginName)
-    
+
 
     def _exportCameraDome(self, viewParams: ViewParams, isRenderCamera: bool):
         assert (viewParams.cameraObject is not None) and (viewParams.cameraObject.type == 'CAMERA'), "ViewParams should have a valid camera object"
 
         pluginType = "CameraDome"
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, pluginType, isRenderCamera)
-        
+
         plDesc = PluginDesc(pluginName, pluginType)
         plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject, isRenderCamera))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.vrayPropGroup = viewParams.cameraObject.data.vray.CameraDome
-        
+
         export_utils.exportPlugin(self, plDesc)
         self.cameraTracker.trackPlugin(getObjTrackId(viewParams.cameraObject), pluginName)
 
@@ -372,18 +393,18 @@ class ViewExporter(ExporterBase):
             by VRay but are safe to be exported. 
         """
         assert (cameraObj is not None) and (cameraObj.type == 'CAMERA'), "Invalid camera object"
-        
+
         plDesc = PluginDesc(Names.singletonPlugin("SettingsMotionBlur"), "SettingsMotionBlur")
         plDesc.vrayPropGroup = self.scene.vray.SettingsMotionBlur
 
         export_utils.exportPlugin(self, plDesc)
-        
+
 
     def _exportBakeView(self, viewParams: ViewParams):
         plUVWChannelDesc = PluginDesc("bakeUvwGenChannel", "UVWGenChannel")
         plUVWChannelDesc.setAttribute("uvw_channel", self.vrayScene.BakeView.uv_channel)
         plUVWChannelDesc.setAttribute("uvw_transform",Matrix())
-        
+
         pluginUVWChannel = export_utils.exportPlugin(self, plUVWChannelDesc)
 
         activeBakeItem: VRayBatchBakeItem = self.vrayScene.BatchBake.active_item
@@ -868,9 +889,7 @@ class ViewExporter(ExporterBase):
         viewParams.renderView.clip_end   = camera.clip_end
 
         viewParams.renderView.tm = cameraObject.matrix_world
-        Matrix(viewParams.renderView.tm).normalize()
         viewParams.cameraObject = cameraObject
-        
 
 
     @staticmethod
@@ -878,18 +897,18 @@ class ViewExporter(ExporterBase):
         """ Fill parameters for an object that is not a camera but has some camera-like settings ( e.g. cone light )
         """
         assert not isCamera(obj)
-        
+
         viewParams.cameraParams.setFromObject(obj)
         viewParams.renderView.fov = ct.fov(viewParams.cameraParams.sensorX, viewParams.cameraParams.lens)
-        
+
         tm = obj.matrix_world.copy()
-        
+
         if obj.type == 'LIGHT' and obj.data.type == 'AREA':
             # When looking through a V-Ray  Rect light, the camera is z-fighting with the light gizmo
             # and may render the gizmo itself. Move the camera along its forward axis by an epsilon
             # in order to prevent the z-fight.
             tm = ct.fixLookThroughObjectCameraZFight(tm)
-            
+
         viewParams.renderView.tm = tm
         Matrix(viewParams.renderView.tm).normalize()
         viewParams.cameraObject = obj

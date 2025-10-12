@@ -123,7 +123,7 @@ static DeserializerStream& operator&& (DeserializerStream& s, Type& msg) {\
 
 
 /// Adds a serializable field to a SERIALIZE_MESSAGE or SERIALIZE_STRUCT macro.
-#define PARAM(param) && msg.##param
+#define PARAM(param) && msg.param
 
 
 /// Serialize a protocol message including its type.

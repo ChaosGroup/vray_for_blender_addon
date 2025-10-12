@@ -74,11 +74,9 @@ def getPluginAttr(pluginModule, attrName):
     return next((p for p in pluginModule.Parameters if p['attr'] == attrName), None)
 
 
-def getPluginInputNodeDesc(pluginModule, attrName):
+def getInputSocketDesc(pluginModule, attrName):
     """ Return input socket definition from the plugin description or None if not found """
-    if not (inputSockets := pluginModule.Node.get('input_sockets')):
-        return None
-    return next((s for s in inputSockets if s['name'] == attrName), None)
+    return next((s for s in pluginModule.Node.get('input_sockets', []) if s['name'] == attrName), None)
 
 
 ##        #######     ###    ########  #### ##    ##  ######
@@ -435,6 +433,12 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
         default     = 0
     )
 
+    isVRayFur: bpy.props.BoolProperty(
+        name = "Is V-Ray Fur Object",
+        description = "True if this is a fur object.",
+        default = False
+    )
+
 
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}
@@ -603,6 +607,7 @@ class VRayWindowManager(bpy.types.PropertyGroup):
 
     
 class VRayFur(VRayEntity, bpy.types.PropertyGroup):
+
     width: bpy.props.FloatProperty(
         name        = "Width",
         description = "Hair thickness",
@@ -649,7 +654,7 @@ class VRayRenderNode(VRayEntity, bpy.types.PropertyGroup):
         description = "Distributed rendering port",
         min = 0,
         max = 65535,
-        default = 20207
+        default = 20209
     )
 
     use: bpy.props.BoolProperty(
@@ -666,45 +671,16 @@ class VRayDR(VRayEntity, bpy.types.PropertyGroup):
         default = False
     )
 
-    port: bpy.props.IntProperty(
-        name = "Distributed Rendering Port",
-        description = "Distributed rendering port",
-        min = 0,
-        max = 65535,
-        default = 20207
+    use_remote_dispatcher: bpy.props.BoolProperty(
+        name = "Use Remote Dispatcher",
+        description = "Use a remote dispatcher server for distributed rendering.",
+        default = False
     )
 
-    shared_dir: bpy.props.StringProperty(
-        name = "Shared Directory",
-        subtype = 'DIR_PATH',
-        description = "Distributed rendering shader directory"
-    )
-
-    share_name: bpy.props.StringProperty(
-        name = "Share Name",
-        default = "VRAYDR",
-        description = "Share name"
-    )
-
-    assetSharing: bpy.props.EnumProperty(
-        name        = "Asset Sharing",
-        description = "Asset sharing for distributed rendering",
-        items = (
-            ('TRANSFER', "V-Ray Transfer",   "V-Ray will transfer assets itself"),
-            ('SHARE',    "Shared Directory", "Share assets via shared directory"),
-            ('ABSOLUTE', "Absolute Paths",   "Use paths as is"),
-        ),
-        default = 'TRANSFER'
-    )
-
-    networkType: bpy.props.EnumProperty(
-        name = "Network Type",
-        description = "Distributed rendering network type",
-        items = (
-            ('WW', "Windows", "Window master & Windows nodes"),
-            ('UU', "Unix",    "Unix master & Unix nodes"),
-        ),
-        default = 'WW'
+    dispatcher: bpy.props.PointerProperty(
+        name="Dispatcher",
+        type = VRayRenderNode,
+        description = "V-Ray remote dispatcher node"
     )
 
     nodes: bpy.props.CollectionProperty(
@@ -721,24 +697,22 @@ class VRayDR(VRayEntity, bpy.types.PropertyGroup):
     )
 
     renderOnlyOnNodes: bpy.props.BoolProperty(
-        name        = "Render Only On Nodes",
+        name        = "Don't Use Local Macinhe",
         description = "Use distributed rendering excluding the local machine",
         default     = False
     )
 
-    checkAssets: bpy.props.BoolProperty(
-        name        = "Check Asset Cache",
-        description = "Check for assets in the asset cache folder before transferring them",
+    ignoreInInteractive: bpy.props.BoolProperty(
+        name        = "Ignore in Interactive",
+        description = "Disable Distributed Rendering during interactive rendering",
         default     = False
     )
 
-    limitHosts: bpy.props.IntProperty(
-        name        = "Limit Hosts",
-        description = "Limit the number of render hosts used for distributed rendering to the first N idle hosts",
-        min         = 0,
-        default     = 0
+    transferAssets: bpy.props.BoolProperty(
+        name        = "Transfer Assets",
+        description = "Transfer missing assets when using DR",
+        default     = True
     )
-
 
 class VRayCollection(VRayEntity, bpy.types.PropertyGroup):
     __annotations__ = {}
@@ -991,6 +965,12 @@ def register():
         name = "VRay Node Tree Settings",
         type = VRayNodeTreeSettings,
         description = "VRay Node Tree Settings"
+    )
+
+    bpy.types.PointCloud.vray = bpy.props.PointerProperty(
+        name = "V-Ray Point Cloud Settings",
+        type =  VRayParticleSettings,
+        description = "V-Ray Point Cloud settings"
     )
 
     VRayObject.VRayAsset = bpy.props.PointerProperty(

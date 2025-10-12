@@ -38,13 +38,15 @@
             },
             {
                 "name": "random_by_strand"
+            },
+            {
+                "name": "hair_color"
             }
         ]
     },
     "Options": {
         "animatable": true,
         "excluded_parameters": [
-            "hair_color",
             "hair_incandescence",
             "hair_transparency"
         ]

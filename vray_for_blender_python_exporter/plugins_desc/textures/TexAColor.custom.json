@@ -9,9 +9,6 @@
         }
     ],
     "Options": {
-        "excluded_parameters": []
-    },
-    "excluded_parameters": [
-        "uvwgen"
-    ]
+        "excluded_parameters": [ "uvwgen" ]
+    }
 }

@@ -11,7 +11,7 @@ class VRAY_OT_node_list_plugin_add(SocketOperators.VRayNodeAddCustomSocket, VRay
     bl_idname      = 'vray.node_list_plugin_add'
     bl_label       = "Add Plugin Socket"
     bl_description = "Adds Plugin sockets"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -23,8 +23,8 @@ class VRAY_OT_node_list_plugin_del(SocketOperators.VRayNodeDelCustomSocket, VRay
     bl_idname      = 'vray.node_list_plugin_del'
     bl_label       = "Remove Plugin Socket"
     bl_description = "Removes Plugin socket (only not linked sockets will be removed)"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketObject'

@@ -1,7 +1,16 @@
 {
     "ID": "BRDFHair4",
     "Name": "V-Ray Hair Next Mtl",
-    "Parameters": [],
+    "Parameters": [
+        {
+            "attr": "subdivs",
+            "desc": "Determines the number of subdivisions done when calculating the scattering."
+        },
+        {
+            "attr": "compensate_energy",
+            "desc": "When enabled, V-Ray will try to compensate energy loss due to insufficient ray bounces. Use when hair is denser, and light cannot pass sufficiently."
+        }
+    ],
     "Widget": {
         "widgets": [
             {

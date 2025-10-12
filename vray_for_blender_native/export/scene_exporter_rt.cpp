@@ -13,6 +13,8 @@ InteractiveExporter::InteractiveExporter(const ExporterSettings& settings)
 
 void InteractiveExporter::setupCallbacks()
 {
+	if (m_settings.exporterType == int(proto::ExporterType::VANTAGE_LIVE_LINK))
+		return;
 	m_exporter->set_callback_on_image_ready([this]() {
 		imageReadyReceived = true;
 	});

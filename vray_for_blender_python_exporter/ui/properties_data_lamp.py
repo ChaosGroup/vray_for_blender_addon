@@ -88,11 +88,6 @@ class VRAY_PT_include_exclude(classes.VRayLampPanel):
         layout = self.layout
 
         vrayLight: VRayLight= context.light.vray
-
-        if vrayLight.light_type == 'MESH':
-            layout.label(text="Not applicable to V-Ray Light Mesh")
-            layout.active = False
-            return
         
         layout.prop(vrayLight, 'include_exclude', text="Type", expand=True)
 

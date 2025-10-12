@@ -189,10 +189,8 @@
     },
     "Options": {
         "excluded_parameters": [
-            "use_global_light_level"
+            "use_global_light_level",
+            "shadowColor_tex"
         ]
-    },
-    "excluded_parameters": [
-        "shadowColor_tex"
-    ]
+    }
 }

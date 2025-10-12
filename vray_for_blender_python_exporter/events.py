@@ -35,7 +35,7 @@ def _onSavePre(e):
     scene = bpy.context.scene
     
     if scene.vray.Exporter.get('vrayAddonUpgradeNumber', None) != UPGRADE_NUMBER:
-        debug.printAlways(f"[V-Ray] Scene version updated to {getAddonUpgradeNumber()}")
+        debug.printAlways(f"Scene version updated to {getAddonUpgradeNumber()}")
     
     # Use the dictionary access syntax here in order to avoid updates to the scene
     scene.vray.Exporter['vrayAddonVersion'] = getBuildVersionString() 
@@ -58,6 +58,11 @@ def _onLoadPost(e):
     from vray_blender import engine, debug
     from vray_blender.plugins.texture.TexRemap import registerCurvesNodes as registerTexRemapCurves
     engine.ensureRunning()
+
+    if bpy.app.background == False:
+        # Request compute devices update as they may have been changed.
+        # Skip in headless mode since UI updates are unnecessary.
+        vray.requestComputeDevices()
 
     # Reset the global unique ID generator. This will keep the generated IDs to a 
     # decent size and will also ensure that on reload, given that no changes have been
@@ -96,6 +101,7 @@ def _onLoadPost(e):
 
     # Remove any images from the previous scene explicitly saved by the plugin.
     image_utils.clearSavedImages()
+
 
 
 @bpy.app.handlers.persistent

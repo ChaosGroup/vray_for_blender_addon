@@ -20,7 +20,7 @@
                     "args": {
                         "collection": "objects",
                         "bound_property": "objects",
-                        "filter_function": "filters.filterGeometries"
+                        "filter_function": "filters.filterTexDistanceTargets"
                     }
                 }
             }
@@ -30,7 +30,7 @@
             "options": {
                 "link_info": {
                     "link_type": "OBJECTS",
-                    "filter_function": "filters.filterGeometries"
+                    "filter_function": "filters.filterTexDistanceTargets"
                 }
             }
         },

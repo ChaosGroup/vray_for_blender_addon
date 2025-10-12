@@ -12,14 +12,14 @@ class VRAY_OT_node_texsampler_sockets(VRayOperatorBase):
     bl_idname      = 'vray.node_texsampler_sockets'
     bl_label       = "Add/Remove Sampler"
     bl_description = "Adds/removes the selected sampler"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     isAdd: bpy.props.BoolProperty()
 
     @classmethod
     def poll(cls, context):
         return True
-    
+
     def execute(self, context):
         node = context.node
         selectedSampler = node.TexSampler.samplers
@@ -38,7 +38,7 @@ def nodeDraw(context, layout, node):
     propGroup = node.TexSampler
     selectedSampler = node.TexSampler.samplers
     outSock = getOutputSocketByAttr(node, selectedSampler)
-    
+
     row = layout.row()
     row.prop(propGroup, 'samplers', text="Samplers")
 
@@ -46,12 +46,11 @@ def nodeDraw(context, layout, node):
         row.operator('vray.node_texsampler_sockets', icon="REMOVE", text="").isAdd = False
     else:
         row.operator('vray.node_texsampler_sockets', icon="ADD", text="").isAdd = True
-    
 
 
 def widgetDrawUVSetName(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup: bpy.types.PropertyGroup, widgetAttr):
     attrName = widgetAttr['name']
-    
+
     if obj := context.active_object:
         layout.prop_search(propGroup, 'uv_set_name', obj.data, 'uv_layers', text=widgetAttr.get('label', attrName))
 

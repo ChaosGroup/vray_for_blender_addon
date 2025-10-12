@@ -101,7 +101,7 @@ function(cgr_moc)
 	# Execute moc on file changes
 	add_custom_command(
 		OUTPUT ${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME}
-		COMMAND ${_moc_compiler} ${PAR_DEFINITIONS} -o${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME} ${PAR_FILE_IN} 
+		COMMAND ${_moc_compiler} ${PAR_DEFINITIONS} -o${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME} ${PAR_FILE_IN}
 		DEPENDS	${PAR_FILE_IN}
 		COMMENT	"Using ${_moc_compiler} to compile ${PAR_FILE_IN} to ${PAR_FILE_OUT_NAME}"
 		VERBATIM
@@ -152,7 +152,7 @@ function(cgr_rcc)
 	)
 
 	set_source_files_properties(${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME} GENERATED)
-	
+
 	# Add dependency
 	set_source_files_properties(${PAR_FILE_IN} PROPERTIES OBJECT_DEPENDS ${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME})
 	set(${PAR_FILE_OUT_VAR} "${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME}" PARENT_SCOPE)
@@ -173,9 +173,6 @@ macro(use_zmq _zmq_root)
 		string(REPLACE "/MTd" "/MDd" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
 		string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
 		string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
-	else()
-		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x -L/usr/lib64")
-		link_directories(/usr/lib64)
 	endif()
 
 	add_definitions(-DZMQ_STATIC)
@@ -189,8 +186,8 @@ endmacro()
 macro(link_with_zmq _name)
 
 	set(visibility "") # Linkage visibility
-    
-    # If optional argument is given to link_with_zmq() assign it to the 
+
+    # If optional argument is given to link_with_zmq() assign it to the
 	# visibility variable
 	set (extra_args ${ARGN})
     list(LENGTH extra_args extra_count)
@@ -199,10 +196,7 @@ macro(link_with_zmq _name)
     endif ()
 
 	if(UNIX)
-		target_link_libraries(${PROJECT_NAME} ${visibility}
-			${LIBS_ROOT}/${CMAKE_SYSTEM_NAME}/zmq/lib/Release/libzmq.a
-			${LIBS_ROOT}/${CMAKE_SYSTEM_NAME}/sodium/lib/Release/libsodium.a
-			)
+		target_link_libraries(${PROJECT_NAME} ${visibility} libzmq.a)
 	elseif(WIN32)
 		if (MSVC_VERSION EQUAL 1800)
 			set(MSVC_DIR_NAME "v120")
@@ -233,7 +227,10 @@ macro(use_vray_appsdk _appsdk_root)
 
 	include_directories(${_appsdk_root}/cpp/include)
 	link_directories(${_appsdk_root}/bin)
-	link_directories(${_appsdk_root}/cpp/lib)
+	if (WIN32)
+		link_directories(${_appsdk_root}/cpp/lib)
+	endif()
+
 endmacro()
 
 macro(use_vraysdk _appsdk_root _sdk_root)
@@ -245,6 +242,7 @@ macro(use_vraysdk _appsdk_root _sdk_root)
 	set(_vray_sdk_libs
 		plugman_s # for PluginBase
 		putils_s
+		openexr_s
 		vutils_s
 		cosmos_client_s
 		pll_s # for uuid
@@ -257,27 +255,120 @@ macro(use_vraysdk _appsdk_root _sdk_root)
 	link_directories(${_sdk_root}/GRPC/lib)
 	link_directories(${_sdk_root}/GRPC/bin)
 
-	set(_grpc_lib_dir ${_sdk_root}/GRPC/lib)
-	set(_grpc_libs
-		${_grpc_lib_dir}/cares.lib
-		${_grpc_lib_dir}/libprotobuf.lib
-		${_grpc_lib_dir}/libprotoc.lib
-		${_grpc_lib_dir}/address_sorting.lib
-		${_grpc_lib_dir}/gpr.lib
-		${_grpc_lib_dir}/grpc.lib
-		${_grpc_lib_dir}/grpcpp_channelz.lib
-		${_grpc_lib_dir}/grpc_plugin_support.lib
-		${_grpc_lib_dir}/grpc_unsecure.lib
-		${_grpc_lib_dir}/grpc++.lib
-		${_grpc_lib_dir}/grpc++_error_details.lib
-		${_grpc_lib_dir}/grpc++_reflection.lib
-		${_grpc_lib_dir}/grpc++_unsecure.lib
-		${_grpc_lib_dir}/zlib_s.lib
-	)
+	set(XPAK_GRPC_LIB_DIR ${_sdk_root}/GRPC/lib)
+	if (WIN32)
+		set(XPAK_GRPC_LIBS
+			${XPAK_GRPC_LIB_DIR}/cares.lib
+			${XPAK_GRPC_LIB_DIR}/libprotobuf.lib
+			${XPAK_GRPC_LIB_DIR}/libprotoc.lib
+			${XPAK_GRPC_LIB_DIR}/address_sorting.lib
+			${XPAK_GRPC_LIB_DIR}/gpr.lib
+			${XPAK_GRPC_LIB_DIR}/grpc.lib
+			${XPAK_GRPC_LIB_DIR}/grpcpp_channelz.lib
+			${XPAK_GRPC_LIB_DIR}/grpc_plugin_support.lib
+			${XPAK_GRPC_LIB_DIR}/grpc_unsecure.lib
+			${XPAK_GRPC_LIB_DIR}/grpc++.lib
+			${XPAK_GRPC_LIB_DIR}/grpc++_error_details.lib
+			${XPAK_GRPC_LIB_DIR}/grpc++_reflection.lib
+			${XPAK_GRPC_LIB_DIR}/grpc++_unsecure.lib
+			${XPAK_GRPC_LIB_DIR}/zlib_s.lib
+			ws2_32.lib
+		)
+	elseif(UNIX)
+		set(XPAK_GRPC_LIBS
+			${XPAK_GRPC_LIB_DIR}/libcares.a
+			${XPAK_GRPC_LIB_DIR}/libprotobuf.a
+			${XPAK_GRPC_LIB_DIR}/libprotoc.a
+			${XPAK_GRPC_LIB_DIR}/libaddress_sorting.a
+			${XPAK_GRPC_LIB_DIR}/libgpr.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc.a
+			${XPAK_GRPC_LIB_DIR}/libgrpcpp_channelz.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc_plugin_support.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc_unsecure.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc++.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc++_error_details.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc++_reflection.a
+			${XPAK_GRPC_LIB_DIR}/libgrpc++_unsecure.a
+		)
+		if (APPLE)
+			list(APPEND XPAK_GRPC_LIBS ${XPAK_GRPC_LIB_DIR}/libz.a)
+			list(APPEND XPAK_GRPC_LIBS
+				${XPAK_GRPC_LIB_DIR}/libabsl_bad_any_cast_impl.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_bad_optional_access.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_bad_variant_access.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_base.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_city.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_civil_time.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_cord.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_debugging_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_demangle_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_examine_stack.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_exponential_biased.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_failure_signal_handler.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_commandlineflag.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_commandlineflag_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_config.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_marshalling.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_parse.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_private_handle_accessor.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_program_name.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_reflection.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_usage.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_flags_usage_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_graphcycles_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_hash.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_hashtablez_sampler.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_int128.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_leak_check.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_leak_check_disable.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_log_severity.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_malloc_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_periodic_sampler.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_distributions.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_distribution_test_util.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_platform.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_pool_urbg.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_randen.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_randen_hwaes.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_randen_hwaes_impl.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_randen_slow.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_internal_seed_material.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_seed_gen_exception.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_random_seed_sequences.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_raw_hash_set.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_raw_logging_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_scoped_set_env.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_spinlock_wait.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_stacktrace.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_status.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_statusor.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_str_format_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_strerror.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_strings.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_strings_internal.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_symbolize.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_synchronization.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_throw_delegate.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_time.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_time_zone.a
+				${XPAK_GRPC_LIB_DIR}/libabsl_wyhash.a
+				${XPAK_GRPC_LIB_DIR}/libcrypto.a
+				${XPAK_GRPC_LIB_DIR}/libgrpc++_alts.a
+				${XPAK_GRPC_LIB_DIR}/libre2.a
+				${XPAK_GRPC_LIB_DIR}/libssl.a
+				${XPAK_GRPC_LIB_DIR}/libupb.a
+			)
+		endif()
+	endif()
+	target_link_libraries(${PROJECT_NAME} ${XPAK_GRPC_LIBS})
 
-	target_link_libraries(${PROJECT_NAME} ${_grpc_libs})
+	if (APPLE)
+		set (SYSTEM_LIBS "-framework CoreServices" "-framework Foundation" "-framework IOKit" "-framework ApplicationServices" "-framework Cocoa" "-framework Carbon")
+		target_link_libraries(${PROJECT_NAME} ${SYSTEM_LIBS})
+	endif()
 endmacro()
-
 
 macro(link_with_vray_appsdk _name)
 	set(APPSDK_LIBS
@@ -297,7 +388,7 @@ endmacro()
 
 # Limit build configurations to a selected set
 macro(set_build_configurations)
-	set(BUILD_TYPES Release RelWithDebInfo)
+	set(BUILD_TYPES Debug Release RelWithDebInfo)
 	get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 	if(multi_config)
 	  set(CMAKE_CONFIGURATION_TYPES "${BUILD_TYPES}" CACHE STRING "list of supported configuration types" FORCE)

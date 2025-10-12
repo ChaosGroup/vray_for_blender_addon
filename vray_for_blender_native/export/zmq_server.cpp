@@ -15,6 +15,8 @@
 #include <boost/python/dict.hpp>
 #include <boost/process.hpp>
 
+#include "api/interop/conversion.hpp"
+
 namespace fs = std::filesystem;
 namespace bp = boost::process;
 
@@ -24,16 +26,17 @@ using namespace VRayForBlender;
 using namespace VrayZmqWrapper;
 using namespace VRayBaseTypes;
 
+#define ZMQ_SERVER_ALLOW_ATTACH 0
 
 #define SAFE_CALL(exp) \
 	try{\
 		exp;\
 	}\
 	catch (const std::exception& exc) {\
-		Logger::error("Exception in {}: {}", #exp, exc.what());\
+		Logger::error("Exception in %1%: %2%", #exp, exc.what());\
 	}\
 	catch (...) {\
-		Logger::error("Unknown exception in {}", #exp);\
+		Logger::error("Unknown exception in %1%", #exp);\
 	}
 
 
@@ -47,6 +50,10 @@ namespace {
 	static const auto		ZMQ_SERVER_ENDPOINT_READ_TIMEOUT = 1s;	// Timeout for reading the ZmqServer listen port number after it has been published
 
 }
+
+const int ZmqServer::SERVER_INACTIVITY_INTERVAL;
+const int ZmqServer::RENDERER_INACTIVITY_INTERVAL;
+const int ZmqServer::HANDSHAKE_TIMEOUT;
 
 
 void ZmqServer::start(const ZmqServerArgs& args) {
@@ -63,7 +70,7 @@ void ZmqServer::start(const ZmqServerArgs& args) {
 void ZmqServer::stop() {
 	Logger::info("Blender: Stopping communication channel ...");
 	
-	m_processRunner.request_stop();
+	m_stopSource.request_stop();
 	
 	{
 		std::scoped_lock lock(m_lockConn);
@@ -88,10 +95,6 @@ bool ZmqServer::isRunning() const {
 	return (m_zmqServerPID != 0) && !!m_conn && !m_conn->isStopped();
 }
 
-void ZmqServer::setPythonCallback(const std::string &name, py::object callback)
-{
-	m_pyCallbacks[name] = callback;
-}
 
 void ZmqServer::sendMessage(zmq::message_t &&msg, bool allowServerToStealFocus)
 {
@@ -99,19 +102,29 @@ void ZmqServer::sendMessage(zmq::message_t &&msg, bool allowServerToStealFocus)
 
 	if (isRunning()) {
 		if (allowServerToStealFocus) {
-			platform::allowSetForegroundWindow(static_cast<platform::ProcessIdType>(m_zmqServerPID));	
+			platform::allowSetForegroundWindow(static_cast<platform::ProcessIdType>(m_zmqServerPID));
 		}
 		m_conn->send(std::move(msg));
 	}
 }
 
+
+void ZmqServer::setPythonCallback(const std::string &name, py::object callback)
+{
+	std::scoped_lock lock(m_lock);
+	m_pyCallbacks[name] = callback;
+}
+
+
 py::object ZmqServer::getPythonCallback(const std::string &name)
 {
+	std::scoped_lock lock(m_lock);
+
 	if(m_pyCallbacks.find(name) != m_pyCallbacks.end()) {
 		return m_pyCallbacks[name];
 	}
-	
-	Logger::warning("No python callback with name '{}'", name);
+
+	Logger::warning("No python callback with name '%1%'", name);
 	return py::object();
 }
 
@@ -150,16 +163,21 @@ bool ZmqServer::licenseAcquired() const
 
 void ZmqServer::runServer() {
 
-	m_processRunner = std::jthread([this](std::stop_token stopToken) {
+	m_processRunner = std::thread([this](std::stop_token stopToken) {
 
 		while(!stopToken.stop_requested()) {
+#ifndef _WIN32
+			// On Unix systems in case the server crashes we need to manually remove the old shared file,
+			// otherwise we would instantly read the old zmq server port in obtainServerEndpointInfo(...).
+			SharedMemoryWriter::remove(std::to_string(m_args.blenderPID), SHARED_PORT_MAPPING_ID);
+#endif
+
 			bp::child zmqServer = startServerProcess();
 			bool started = false;
-
 			if (zmqServer.running()) {
 				if (obtainServerEndpointInfo()) {
 					m_zmqServerPID = zmqServer.id();
-					Logger::info("ZmqServer started. Process ID: {}. Port: {}", m_zmqServerPID.load(), m_zmqServerPort.load());
+					Logger::info("ZmqServer started. Process ID: %1%. Port: %2%", m_zmqServerPID.load(), m_zmqServerPort.load());
 
 					startControlConn();
 					started = true;
@@ -177,7 +195,11 @@ void ZmqServer::runServer() {
 				std::this_thread::sleep_for(ZMQ_SERVER_RESTART_TIMEOUT);
 			}
 
-			while(zmqServer.running() && !stopToken.stop_requested()) {
+			while (
+#if not ZMQ_SERVER_ALLOW_ATTACH
+				zmqServer.running() &&
+#endif
+				!stopToken.stop_requested()) {
 
 				// Server process is running. Check periodically whether the control connection
 				// is still alive.
@@ -200,7 +222,7 @@ void ZmqServer::runServer() {
 				int exitCode = zmqServer.exit_code();
 				std::string retCodeStr = VrayZmqWrapper::getServerReturnCodeStr(exitCode);
 
-				Logger::error("ZmqServer process exited with code {}: {}", exitCode, retCodeStr);
+				Logger::error("ZmqServer process exited with code %1%: %2%", exitCode, retCodeStr);
 				if (exitCode == (int)VrayZmqWrapper::ServerReturnCode::NO_LICENSE) {
 					break;
 				}
@@ -219,18 +241,23 @@ void ZmqServer::runServer() {
 				zmqServer.terminate();
 			}
 		}
-	});
+	}, m_stopSource.get_token());
 }
 
 bp::child ZmqServer::startServerProcess() {
 
 	// Add environment variables VRayZmqServer process needs to the current environment.
 	auto env = boost::this_process::environment();
-
 	env["VRAY_ZMQSERVER_APPSDK_PATH"] = m_args.vrayLibPath;
-	env["PATH"] = m_args.appSDKPath;
 	env["QT_PLUGIN_PATH"] = m_args.appSDKPath;
+
+#ifdef _WIN32
+	env["PATH"] = m_args.appSDKPath;
 	env["QT_QPA_PLATFORM_PLUGIN_PATH"] = (fs::path(m_args.appSDKPath) / "platforms").string();
+#else
+	env["QTWEBENGINE_RESOURCES_PATH"] = (fs::path(m_args.appSDKPath) / "resources").string();
+	env["QTWEBENGINE_LOCALES_PATH"] = (fs::path(m_args.appSDKPath) / "translations" / "qtwebengine_locales").string();
+#endif
 
 	auto args = std::vector<std::string>({
 		"-p",              std::to_string(m_args.port),
@@ -255,7 +282,6 @@ bp::child ZmqServer::startServerProcess() {
 
 bool ZmqServer::obtainServerEndpointInfo() {
 
-
 	if (m_args.port != EPHEMERAL_PORT_NUM) {
 		m_zmqServerPort = m_args.port;
 		return true;
@@ -269,12 +295,11 @@ bool ZmqServer::obtainServerEndpointInfo() {
 
 	if ( reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT)) && 
 			reader.read(ZMQ_SERVER_ENDPOINT_READ_TIMEOUT, &zmqServerPort)) {
-		
 		m_zmqServerPort = zmqServerPort;
 		return true;
 	}
 	
-	Logger::error("Failed to obtain endpoint info from ZmqServer, error: {}, Reconnecting.", reader.getLastError());
+	Logger::error("Failed to obtain endpoint info from ZmqServer, error: %1%, Reconnecting.", reader.getLastError());
 	return false;
 }
 
@@ -283,7 +308,7 @@ void ZmqServer::startControlConn() {
 
 	const std::string endpoint = m_args.getAddress(m_zmqServerPort);
 
-	Logger::info("Blender: Starting control client for {}", endpoint);
+	Logger::info("Blender: Starting control client for %1%", endpoint);
 
 	auto newConn = std::make_unique<ZmqAgent>(m_ctx, ID_CONTROL_CONN, ExporterType::FIRST_TYPE, ZmqAgent::Client);
 
@@ -292,12 +317,12 @@ void ZmqServer::startControlConn() {
 		});
 
 	newConn->setErrorCallback([this, connPtr = newConn.get()](const std::string& err) {
-			Logger::error("Blender: control connection error: '{}', reconnecting.", err);
+			Logger::error("Blender: control connection error: '%1%', reconnecting.", err);
 			connPtr->stop();
 		});
 
 	newConn->setTraceCallback([](const std::string& msg) {
-			Logger::debug("Blender: control connection: {}", msg);
+			Logger::debug("Blender: control connection: %1%", msg);
 		});
 
 	ZmqTimeouts timeouts;
@@ -357,22 +382,14 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 
 
 void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlOnCosmosDownloadedAssets& message) {
-	WithGIL gil;
-	py::list relinkedPaths = py::list();
-	const AttrListString::DataArrayPtr relinkedData=message.relinkedPaths.getData();
-	for (const std::string &path : *relinkedData)
-		relinkedPaths.append(path);
+	py::list relinkedPaths = toPyList(message.relinkedPaths);
 	invokePythonCallback("setCosmosDownloadAssets", getPythonCallback("setCosmosDownloadAssets"), int(message.downloadStatus), relinkedPaths);
 }
 
 
 void ZmqServer::processControlOnScannedEncodedParameters(const MsgControlOnScannedEncodedParameters& message) {
 	if (message.licensed) {
-		WithGIL gil;
-		boost::python::list paramBlock;
-		const AttrListInt::DataArrayPtr paramData=message.encodedParams.getData();
-		for (int param : *paramData)
-			paramBlock.append(param);
+		py::list paramBlock = toPyList(message.encodedParams);
 		invokePythonCallback("scannedParamBlock", getPythonCallback("scannedParamBlock"), message.materialId, message.nodeName, paramBlock);
 	}
 }
@@ -449,13 +466,20 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 		}
 		case MsgType::ControlOnLogMessage: {
 			const auto& message = deserializeMessage<MsgControlOnLogMessage>(stream);
-			Logger::get().log(static_cast<Logger::LogLevel>(message.logLevel), true, message.logMessage, 0);
+			Logger::get().log(static_cast<Logger::LogLevel>(message.logLevel), true, message.logMessage);
 			break;
 		}
 		case MsgType::ControlOnRendererStatus: {
 			const auto& message = deserializeMessage<MsgControlOnRendererStatus>(stream);
 			processControlOnRendererStatus(message);
 			break;
+		}
+		case MsgType::ControlOnGetComputeDevices:{
+			const auto& message = deserializeMessage<MsgControlOnGetComputeDevices>(stream);
+			int deviceType = static_cast<int>(message.deviceType);
+			py::list computeDevices = toPyList(message.computeDevices);
+			py::list defaultDeviceStates = toPyList(message.defaultDeviceStates);
+			invokePythonCallback("updateComputeDevices", getPythonCallback("updateComputeDevices"), deviceType, computeDevices, defaultDeviceStates);
 		}
 		default:
 			break;

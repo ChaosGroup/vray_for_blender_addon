@@ -1,14 +1,16 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Mapping, TypeVar, Dict
+from typing import Mapping, Set, TypeVar, Dict
 import bpy, mathutils
 from numpy import ndarray
 
 from vray_blender import debug
-from vray_blender.exporting.tools import isObjectVisible, TimeStats, FakeTimeStats
+from vray_blender.exporting.tools import TimeStats, FakeTimeStats, isObjectVisible
 from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
-from vray_blender.lib.blender_utils import getGeomAnimationRange, geometryObjectIt
 from vray_blender.lib.motion_blur import MotionBlurBuilder
+
+from collections import defaultdict
+from vray_blender.lib.names import Names
 
 class RendererMode:
     Invalid     = 0
@@ -17,6 +19,7 @@ class RendererMode:
     Preview     = 3
     Bake        = 4
     Viewport    = 5
+    Vantage     = 6
 
 
 class ExporterType:
@@ -25,12 +28,32 @@ class ExporterType:
     PROD = 2
     PREVIEW = 3
     ANIMATION = 4
+    VANTAGE_LIVE_LINK = 5
 
 class ProdRenderMode:
     EXPORT_VRSCENE = 0
     RENDER = 1
     CLOUD_SUBMIT = 2
 
+
+
+class PersistedState:
+    def __init__(self):
+        self.visibleObjects   = set()
+        self.activeInstancers = set()
+        self.activeGizmos     = set()
+        self.exportedMtls: Dict[int, AttrPlugin] = {}
+        self.activeFurInfo = set()
+        self.activeMeshLightsInfo = set()
+        
+        # Tracks objects that have been processed during any of the export procedures.
+        # Its use is to distinguish between objects already handled on previous update cycles and those newly added to the depsgraph.
+        self.processedObjects = set()
+
+        # Points Names.object(obj, instance) to geom plugin name.
+        # It is used for easy access to the geom plugin name of already exported objects.
+        # it is set during the export of node plugins.
+        self.objToGeomPluginName: dict[str, str] = {}
 
 
 class ExporterContext:
@@ -56,6 +79,7 @@ class ExporterContext:
 
         def __exit__(self, *args):
             self._objectsStack.pop()
+
 
     ##### Properties accessible in any context #####
 
@@ -104,7 +128,20 @@ class ExporterContext:
 
         # A snapshot of the active instancer objects in the scene
         self.activeInstancers = set() # set of objTrackId
+
+        # A dictionary of (parentObjTrackId, geomName, dataName) => list of (instancedObj, geomName, dataName)
+        # This is used to export fur for instanced objects
+        self.instancesOfInstancer: dict[int, list[tuple[bpy.types.Object, str, str]]] = defaultdict(dict)
         
+        # All objects in the scene, inlcuding those from linked collections
+        self.allObjects = set()
+
+        # State to carry over to the next rendering cycle
+        self.persistedState = PersistedState()
+
+        # Depsgraph updates split by type. 
+        self.dgUpdates: dict[str, set[int]] = {}    #   dict[update_type, set[objTrackId]]
+
         self.ctx: bpy.types.Context      = None
         self.dg: bpy.types.Depsgraph     = None 
         self.ts: TimeStats|FakeTimeStats = None
@@ -118,8 +155,11 @@ class ExporterContext:
         # Currently active LightMesh:gizmo pairs
         self.activeMeshLightsInfo = set()  # set[LightMesh.ActiveMeshLightInfo]
 
-        # LightMesh:gizmo pairs active during the previous update cycle
-        self.cachedMeshLightsInfo = set() # set[LightMesh.ActiveMeshLightInfo]
+        # VRayFur:gizmo pairs that have been updated during the current update cycle
+        self.updatedFurInfo = set()
+        
+        # Currently active VRayFur:gizmo pairs
+        self.activeFurInfo = set()
 
          # A snapshot of the active environment fog gizmo objects in the scene
         self.activeGizmos = set() # set of objTrackId
@@ -137,14 +177,12 @@ class ExporterContext:
         # e.g. mapping etc. We only need one copy of those.
         self.defaultPlugins = {}  # plugin_type: attrPlugin
 
-        # [Prod only] Animation ranges for mesh data edits. Will be used to choose for which frames 
-        # of the animation to export values. The format is {object: mathutils.Vector(X, Y)}
-        self.geomAnimationRanges = {} # {Object(not ID!): Vector(start, end)
-
         # A list of all objects for which temp meshes have beem created with the to_mesh method. 
         # to_mesh_clear() must be called on these objects after the export is complete. 
         # Currently, temp meshes are only created for objects in edit mode.
         self.objectsWithTempMeshes = []
+
+        self.objectsWithUpdatedVisibility: dict[int, bool] = {}
 
         # A dictionary of (pluginName, attrName) => list of render channels. It will be filled up during the export
         # procedure. When all other plugins have already been exported, the render channel names will be
@@ -177,13 +215,19 @@ class ExporterContext:
         self.nodeTrackers           = other.nodeTrackers
         self.visibleObjects         = other.visibleObjects
         self.activeInstancers       = other.activeInstancers
+        self.instancesOfInstancer   = other.instancesOfInstancer
+        self.persistedState         = other.persistedState
+        self.allObjects             = other.allObjects
+        self.dgUpdates              = other.dgUpdates
+        self.objectsWithUpdatedVisibility  = other.objectsWithUpdatedVisibility
         self.commonSettings         = other.commonSettings
         self.ctx                    = other.ctx
         self.dg                     = other.dg
         self.ts                     = other.ts
         self.updatedMeshLightsInfo  = other.updatedMeshLightsInfo
-        self.cachedMeshLightsInfo   = other.cachedMeshLightsInfo
         self.activeMeshLightsInfo   = other.activeMeshLightsInfo
+        self.updatedFurInfo         = other.updatedFurInfo
+        self.activeFurInfo          = other.activeFurInfo
         self.activeGizmos           = other.activeGizmos
         self.fullExport             = other.fullExport
         self.exportOnly             = other.exportOnly
@@ -191,7 +235,6 @@ class ExporterContext:
         self.stats                  = other.stats
         self.exportedMtls           = other.exportedMtls
         self.defaultPlugins         = other.defaultPlugins
-        self.geomAnimationRanges    = other.geomAnimationRanges
         self.objectsWithTempMeshes  = other.objectsWithTempMeshes
         self.pluginRenderChannels   = other.pluginRenderChannels
         self.lightCollections       = other.lightCollections
@@ -209,8 +252,12 @@ class ExporterContext:
         return self.rendererMode == RendererMode.Interactive
 
     @property
+    def vantage(self):
+        return self.rendererMode == RendererMode.Vantage
+
+    @property
     def interactive(self):
-        return self.viewport or self.iprVFB
+        return self.viewport or self.iprVFB or self.vantage
 
     @property
     def production(self):
@@ -223,7 +270,7 @@ class ExporterContext:
     @property
     def bake(self):
         return self.rendererMode == RendererMode.Bake
-    
+
     @property
     def isAnimation(self):
         return self.commonSettings.animation.use
@@ -231,31 +278,62 @@ class ExporterContext:
     @property
     def sceneObjects(self):
         return self.ctx.scene.objects
+
+
     
     def calculateObjectVisibility(self):
-        """ Fill the visibility and actiuve instancers info into ExporterContext """ 
+        """ Fill the visibility and active instancers info into ExporterContext """ 
 
-        if not self.interactive:
-            # In interactive mode, visibility is calculated elsewhere
-            self.visibleObjects = set([getObjTrackId(o) for o in self.dg.scene.objects if isObjectVisible(self, o)])
+        # Compile a list of the active instancers in the scene. There are two types of instancers:
+        #   1. Legacy, set through Data Properties -> Instancing
+        #   2. Objects made instancers through e.g. geometry nodes
+        #   3. V-Ray Fur Objects (they are also instancers if they have instancers selected)
+        # The depsgraph only includes the visible instancers. We need however a list of all instancers 
+        # in the scene in order to determine which ones to delete and which to only hide.
+        legacyInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.is_instancer))
+        instancers = set((getObjTrackId(i.parent) for i in self.dg.object_instances if i.is_instance and (i.parent is not None)))   
+        furInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.vray.isVRayFur))
             
-        if self.interactive:
-            # In interactive, instancers are shown and hidden by manipulating the visibility flag on the corresponding
-            # plugins. Include all in the activeInstancers collection.
-            self.activeInstancers = set([getObjTrackId(o) for o in self.dg.scene.objects if o.is_instancer])
-        else:
-            # In production, the instancers that are hidden should not be exported at all.
-            self.activeInstancers = set([getObjTrackId(o) for o in self.dg.scene.objects if o.is_instancer and not o.hide_render])
+        self.activeInstancers = instancers.union(legacyInstancers).union(furInstancers)
+
+        
+        for inst in self.dg.object_instances:
+            if not inst.is_instance:
+                continue
+
+            obj = inst.object.original
+            objName = Names.object(obj, inst)
+            
+            parentId = getObjTrackId(inst.parent)
+            objId = id(obj.data)
+
+            # Avoid adding duplicates
+            if objId not in self.instancesOfInstancer[parentId]:
+                # Store the instance object and its geometry/data names,
+                # since DepsgraphObjectInstance will be invalidated when accessed later
+                self.instancesOfInstancer[parentId][objId] = (obj, objName)
+
+        
+        # Obtain the list of visible objects from the scene. The depsgraph does not include collections.
+        self.visibleObjects = set([getObjTrackId(o) for o in self.ctx.scene.objects if isObjectVisible(self, o)])
+
+        # Get a list of all objects in the scene, including objects from linked collections. We will
+        # need it in order to determine which objects can be deleted from the scene vs only be hidden.
+        self.allObjects = set([o for o in self.ctx.scene.objects])
+        
+        # Add objects from linked collections as they are not included in scene's depsgraph
+        linkedCollections = [c for c in bpy.data.collections if c.library is not None]
+        for c in linkedCollections:
+            self.allObjects.update(c.all_objects)
 
 
-    def calculateObjectAnimationRanges(self):
-        """ Calculate the effective animation ranges for all objects in the scene. 
+        self.dgUpdates = {
+            'geometry':  set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_geometry)),
+            'transform': set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_transform)),
+            'shading':   set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_shading))
+        }
 
-            These are the ranges between the first and the last keyframe for an object. 
-        """
-        self.geomAnimationRanges = {o.data.session_uid: getGeomAnimationRange(o) for o in geometryObjectIt(self.dg.scene.objects)}
 
-   
     def linkPluginToRenderChannel(self, pluginName: str, channelLinkAttr: str, renderChannelPlugin: AttrPlugin):
         """ Store information about a link from a plugin to a render channel, i.e. that the plugin
             output should be visible in a render channel.

@@ -15,8 +15,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
     vrayScene = scene.vray
     vrayDR    = vrayScene.VRayDR
 
-    if vrayDR.on and vrayDR.assetSharing == 'TRANSFER':
-        pluginDesc.setAttribute('misc_transferAssets', True)
+    pluginDesc.setAttribute('misc_transferAssets', vrayDR.transferAssets)
 
     # TODO: The mtl_override processing has been removed from the C++ implementation,
     # do we still need it?

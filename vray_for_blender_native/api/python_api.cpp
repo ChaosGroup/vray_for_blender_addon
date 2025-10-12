@@ -44,10 +44,16 @@ inline VRayForBlender::SceneExporter* getExporter(const py::object& renderer)
 void init(const std::string& logFile)
 {
 	Logger::get().addWriter(std::make_unique<ConsoleLogger>());
-	
+#ifdef __APPLE__
+#if defined(__x86_64__)
+    ConsoleLogger().write(LogLevel::Always, "Running VRayBlenderLib in x86_64 mode\n");
+#elif defined(__arm64__) || defined(__aarch64__)
+    ConsoleLogger().write(LogLevel::Always, "Running VRayBlenderLib in arm64 mode\n");
+#endif
+#endif
 	if (!logFile.empty()) {
 		auto fileLogger = std::make_unique<FileLogger>(logFile);
-		
+
 		if (fileLogger->good()) {
 			Logger::get().addWriter(std::move(fileLogger));
 		}
@@ -68,8 +74,8 @@ void exit()
 // Indicates that rendering job could be started
 bool isInitialized()
 {
-	// This is a temporary workaround until proper tracking of the status is implemented in 
-	// the server. 
+	// This is a temporary workaround until proper tracking of the status is implemented in
+	// the server.
 	return true;
 	// return ZmqServer::get().vrayInitialized();
 }
@@ -77,8 +83,8 @@ bool isInitialized()
 // Indicates that V-Ray has assigned license
 bool hasLicense()
 {
-	// This is a temporary workaround until proper tracking of the status is implemented in 
-	// the server. 
+	// This is a temporary workaround until proper tracking of the status is implemented in
+	// the server.
 	return true;
 	// return ZmqServer::get().licenseAcquired();
 }
@@ -86,8 +92,9 @@ bool hasLicense()
 size_t createRenderer(const ExporterSettings& settings)
 {
 	return settings.getExporterType() == proto::ExporterType::IPR_VIEWPORT ||
-	               settings.getExporterType() == proto::ExporterType::IPR_VFB ? 
-		reinterpret_cast<size_t>(new InteractiveExporter(settings)) : 
+	               settings.getExporterType() == proto::ExporterType::IPR_VFB ||
+				   settings.getExporterType() == proto::ExporterType::VANTAGE_LIVE_LINK ?
+		reinterpret_cast<size_t>(new InteractiveExporter(settings)) :
 		reinterpret_cast<size_t>(new ProductionExporter(settings));
 }
 
@@ -107,12 +114,7 @@ void clearScene(py::object renderer)
 
 void log(const std::string& message, int level, bool raw = false)
 {
-	// Escape the curly braces as thay are format specifiers in std::vformat 
-	// used by the log() method
-	const auto tmpMsg = boost::replace_all_copy(message, "{", "{{");
-	const auto escapedMsg = boost::replace_all_copy(tmpMsg, "}", "}}");
-	
-	Logger::get().log(static_cast<Logger::LogLevel>(level), raw, escapedMsg);
+	Logger::get().log(static_cast<Logger::LogLevel>(level), raw, message);
 }
 
 
@@ -469,7 +471,7 @@ int writeVrscene(py::object renderer, const ExportSceneSettings& exportSettings)
 }
 
 
-py::list getOslScriptParameters(const std::string &script)
+py::list getOslScriptParameters(const std::string& script)
 {
 	OSL::OSLQuery query;
 	py::list paramList;
@@ -479,7 +481,7 @@ py::list getOslScriptParameters(const std::string &script)
 			// Working around linking issues of the OSLQuery::getparam() function
 			// TODO: Fix linking so that getparam() could be used
 			const OSL::OSLQuery::Parameter *param = query.getparam(static_cast<size_t>(c));
-	
+
 			PyOSLParam pyParam;
 			if (pyParam.init(param)) {
 				paramList.append<PyOSLParam>(pyParam);
@@ -505,7 +507,7 @@ py::object getImageImpl(py::object renderer, const std::string& renderPassName =
 		boost::python::object ownerCapsule(hCapsule);
 
 		if (image.w <= 0 || image.h <= 0 || image.channels != 4) {
-			Logger::error("Wrong image format {}x{}  {}", image.w, image.h, image.channels);
+			Logger::error("Wrong image format %1%x%2%x%3%", image.w, image.h, image.channels);
 		}
 		auto shape = py::make_tuple(image.w, image.h, image.channels);
 		// Strides, one per dimension
@@ -699,6 +701,10 @@ void setRenderFrame(py::object renderer, float frame)
 	exporter->setRenderFrame(frame);
 }
 
+bool isAborted(py::object renderer) {
+	return getExporter(renderer)->getPluginExporter()->isAborted();
+}
+
 // Starting an render sequence
 void renderSequenceStart(py::object renderer, int start, int end, int step)
 {
@@ -734,6 +740,25 @@ void abortRender(py::object renderer)
 {
 	getExporter(renderer)->abortRender();
 }
+
+void requestComputeDevices()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlGetComputeDevices{}));
+}
+
+void setUpdateComputeDevicesCallback(py::object computeUpdateDevicesCallback)
+{
+	ZmqServer::get().setPythonCallback("updateComputeDevices", weakRefFromObj(computeUpdateDevicesCallback));
+}
+
+void setComputeDevices(py::list computeDeviceIds, int computeDeviceType)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlSetComputeDevices{
+		toAttrList<int>(computeDeviceIds),
+		static_cast<proto::ComputeDeviceType>(computeDeviceType)
+	}));
+}
+
 
 BOOST_PYTHON_MODULE(VRayBlenderLib)
 {
@@ -830,30 +855,34 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(renderFrame),				(py::args("renderer")));
 	py::def(FUN(setRenderFrame),			(py::args("renderer", "frame")));
 	py::def(FUN(renderSequenceStart),		(py::args("renderer", "start", "end")));
+	py::def(FUN(isAborted),                 (py::args("renderer")));
 	py::def(FUN(renderJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(exportJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(getLastRenderedFrame),		(py::args("renderer")));
 	py::def(FUN(continueRenderSequence),			(py::args("renderer")));
 	py::def(FUN(abortRender),				(py::args("renderer")));
-
-
+	py::def(FUN(requestComputeDevices));
+	py::def(FUN(setUpdateComputeDevicesCallback),	(py::args("updateComputeDevicesCallback")));
+	py::def(FUN(setComputeDevices),			(py::args("computeDeviceIds", "computeDeviceType")));
 
 	py::class_<PyOSLParam>("OSLParam")
 		.add_property("name", &PyOSLParam::name)
 		.add_property("socketType", &PyOSLParam::socketType)
 		.add_property("socketDefaultValue", &PyOSLParam::socketDefaultValue)
 		.add_property("isOutputSocket", &PyOSLParam::isOutputSocket);
-	
+
 
 	py::class_<ExporterSettings>("ExporterSettings")
 		.ADD_RW_PROPERTY(ExporterSettings, closeVfbOnStop)
 		.ADD_RW_PROPERTY(ExporterSettings, exporterType)
 		.ADD_RW_PROPERTY(ExporterSettings, drUse)
 		.ADD_RW_PROPERTY(ExporterSettings, drRenderOnlyOnHosts)
+		.ADD_RW_PROPERTY(ExporterSettings, remoteDispatcher)
 		.ADD_RW_PROPERTY(ExporterSettings, separateFiles)
 		.ADD_RW_PROPERTY(ExporterSettings, previewDir)
 		.ADD_RW_PROPERTY(ExporterSettings, drHosts)
-		.ADD_RW_PROPERTY(ExporterSettings, renderThreads);
+		.ADD_RW_PROPERTY(ExporterSettings, renderThreads)
+		.def("setDRHosts", &ExporterSettings::setDRHosts, py::args("hosts"));
 
 
 	py::class_<ViewSettings>("ViewSettings")
@@ -906,7 +935,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(ExportSceneSettings, pluginTypes)
 		.ADD_RW_PROPERTY(ExportSceneSettings, hostAppString)
 		.ADD_RW_PROPERTY(ExportSceneSettings, filePath);
-	
+
 	py::class_<HostInfo>("HostInfo")
 		.ADD_RW_PROPERTY(HostInfo, vrayVersion)
 		.ADD_RW_PROPERTY(HostInfo, buildVersion)
@@ -924,10 +953,12 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, revisionId)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap);
+#ifdef WITH_DR2
+	py::scope().attr("withDR2") = true;
+#else
+	py::scope().attr("withDR2") = false;
+#endif
 }
 
 
-
 } // VRayForBlender
-
-

@@ -10,8 +10,10 @@ class RenderMode:
     RtCpu               = 0
     RtGpuCUDA           = 4
     RtGpuOptiX          = 7
+    RtGpuMetal          = 8
     ProductionGpuCUDA   = 104
     ProductionGpuOptiX  = 107
+    ProductionGpuMetal  = 108
 
 class ImageType:
     NoImage   = 0

@@ -9,6 +9,7 @@ from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.plugins import getPluginAttr
 from vray_blender.plugins.templates import common
 
+from vray_blender.bin import VRayBlenderLib as vray
 
 class TemplateMultiObjectSelect(common.VRayObjectSelector):
 
@@ -22,7 +23,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
            bound_property (optional): the name of the property to receive the resulting list of objects
     """     
 
-    # VRayObjectSelectot callback
+    # VRayObjectSelector callback
     def onFilterObject(self, obj):
         # Return the poll (filter) function for the Object Select field
         if filterFn := getFilterFunction(self.vray_plugin, self.getTemplateAttr('filter_function', '')):
@@ -92,6 +93,13 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         collectionName = self.getTemplateAttr('collection', '')
         selectedObjects = self.getSelectedItems(exporterCtx.ctx, collectionName)
         pluginList = [objectToAttrPlugin(o) for  o in selectedObjects]
+        
+        # Forward-create all referenced plugins. This is necessary because the materials for each object are exported as
+        # part of the object's export. Materials may refer to objects other than the ones they are attached to which may
+        # not have been exported yet.
+        for attrPlugin in pluginList:
+            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, attrPlugin.pluginType)
+
         pluginDesc.setAttribute(boundProperty, pluginList)
         return True
 

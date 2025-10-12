@@ -87,6 +87,10 @@ _NewlyCreatedLinks: list[_NewLinkInfo] = []
 def _pollObjectNodeTreeSelected(context):
     return context.scene.vray.ActiveNodeEditorType == "OBJECT"
 
+def _pollFurNodeTreeSelected(context):
+    return _pollObjectNodeTreeSelected(context) and _pollObjectOfContextIsFur(context)
+
+
 def _pollMaterialNodeTreeSelected(context):
     return context.object and \
         context.object.type in blender_utils.TypesThatSupportMaterial and \
@@ -94,6 +98,9 @@ def _pollMaterialNodeTreeSelected(context):
 
 def _pollWorldNodeTreeSelected(context):
     return context.scene.vray.ActiveNodeEditorType == "WORLD"
+
+def _pollObjectOfContextIsFur(context):
+    return context.object and hasattr(context.object, "vray") and context.object.vray.isVRayFur
 
 class VRayNodeCategory(nodeitems_utils.NodeCategory):
     @classmethod
@@ -108,7 +115,17 @@ class VRayMaterialNodeCategory(nodeitems_utils.NodeCategory):
 class VRayObjectNodeCategory(nodeitems_utils.NodeCategory):
     @classmethod
     def poll(cls, context):
-        return classes.pollTreeType(cls, context) and _pollObjectNodeTreeSelected(context)
+        return classes.pollTreeType(cls, context)
+
+class VRayObjectNodeCategoryForMesh(VRayObjectNodeCategory):
+    @classmethod
+    def poll(cls, context):
+        return super().poll(context) and not _pollObjectOfContextIsFur(context)
+
+class VRayObjectNodeCategoryForFur(VRayObjectNodeCategory):
+    @classmethod
+    def poll(cls, context):
+        return super().poll(context) and _pollObjectOfContextIsFur(context)
 
 class VRayWorldNodeCategory(nodeitems_utils.NodeCategory):
     @classmethod
@@ -286,7 +303,7 @@ def getCategories():
                 nodeitems_utils.NodeItem("VRayNodeUVWGenRandomizer"),
             ]
         ),
-        VRayObjectNodeCategory(
+        VRayObjectNodeCategoryForMesh(
             'VRAY_GEOMETRY',
             "Geometry",
             items = [
@@ -319,6 +336,7 @@ def getCategories():
                 nodeitems_utils.NodeItem("VRayNodeOutputMaterial", poll=_pollMaterialNodeTreeSelected),
                 nodeitems_utils.NodeItem("VRayNodeWorldOutput", poll=_pollWorldNodeTreeSelected),
                 nodeitems_utils.NodeItem("VRayNodeObjectOutput", poll=_pollObjectNodeTreeSelected),
+                nodeitems_utils.NodeItem("VRayNodeFurOutput", poll=_pollFurNodeTreeSelected)
             ],
         ),
         VRayNodeCategory(

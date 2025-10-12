@@ -18,14 +18,14 @@
         },
         {
             "attr": "radius",
+            "desc": "Rounding radius. Large values here may produce undesirable effects.",
             "default": 0.01,
             "ui": {
                 "quantityType": "distance",
                 "max" : 100.0,
                 "min" : 0.0
             }
-        }
-    ],
+        }    ],
     "Widget": {
         "widgets": [
             {

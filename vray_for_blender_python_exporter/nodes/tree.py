@@ -35,11 +35,13 @@ def _getVRayObjectNTreeData(context):
     if ob and ob.type not in blender_utils.NonGeometryTypes:
         if ob.vray.ntree:
             return ob.vray.ntree, ob, None
+
     return (None, None, None)
 
-class VRayNodeTreeObject(VRayEntity, bpy.types.NodeTree):
-    bl_label  = "V-Ray Object Node Tree"
-    bl_idname = 'VRayNodeTreeObject'
+
+class VRayNodeTreeObjectBase(VRayEntity, bpy.types.NodeTree):
+    bl_label  = "V-Ray Node Tree"
+    bl_idname = 'VRayNodeTreeObjectBase'
     bl_icon   = 'OBJECT_DATA'
 
     bl_update_preview = True
@@ -68,8 +70,20 @@ class VRayNodeTreeObject(VRayEntity, bpy.types.NodeTree):
         for obj in bpy.data.objects:
             if hasattr(obj, "vray") and obj.vray and obj.vray.ntree == self:
                 obj.update_tag()
+    
+
+class VRayNodeTreeObject(VRayNodeTreeObjectBase):
+    bl_label  = "V-Ray Object Node Tree"
+    bl_idname = 'VRayNodeTreeObject'
 
 
+
+class VRayNodeTreeFur(VRayNodeTreeObjectBase):
+    bl_label  = "V-Ray Fur Node Tree"
+    bl_idname = 'VRayNodeTreeFur'
+    
+    
+    
 
 
 ######## ########  #### ########  #######  ########
@@ -140,6 +154,7 @@ class VRayNodeTreeEditor(bpy.types.NodeTree):
 def getRegClasses():
     return (
         VRayNodeTreeObject,
+        VRayNodeTreeFur,
         VRayNodeTreeEditor
     )
 

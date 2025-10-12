@@ -35,7 +35,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         _purgeRenderMaskTexturePlugins(ctx)
         export_utils.removePlugin(ctx, pluginDesc.name)
         propGroup['dirtyRenderMaskMode'] = False
-    
+
     if propGroup.type == "1":
         pluginDesc.setAttribute('dmc_minSubdivs', propGroup.dmc_minSubdivs)
         if propGroup.lock_subdivs:
@@ -66,7 +66,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         case '2': # Objects
             renderMaskObjectsCollection = propGroup.render_mask_collection_selector
             renderMaskObjectPlugins = plugin_utils.collectionToPluginList(renderMaskObjectsCollection, GEOMETRY_OBJECT_TYPES)
-            
+
             if renderMaskObject := propGroup.render_mask_object_selector:
                 objPlugin = plugin_utils.objectToAttrPlugin(renderMaskObject)
                 if not any([pl for pl in renderMaskObjectPlugins if pl.name == objPlugin.name]):
@@ -98,50 +98,22 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     return export_utils.exportPluginCommon(ctx, pluginDesc)
 
 
-def _exportRenderMaskTexture(ctx: ExporterContext, imageFileName):
+def _exportRenderMaskTexture(ctx: ExporterContext, imageFileName, allowNegativeColors=True):
     """ Export the plugin chain for a render mask of type 'texture' read from an external file """
 
-    counter = NamedCounter("settingsImageSampler")
-
-    bitmapBufferName = Names.nextFromCounter(counter, 'BitmapBuffer')
-    bitmapBuffer = PluginDesc(bitmapBufferName, 'BitmapBuffer')
-    bitmapBuffer.setAttributes({
-            "file": imageFileName,
-            "rgb_color_space": "",
-            "transfer_function": 2 # sRGB
-        })
-    pluginBitmapBuffer = export_utils.exportPlugin(ctx, bitmapBuffer)
-
-    uvwGenName = Names.nextFromCounter(counter, 'UVWGenEnvironment')
-    uvwGen = PluginDesc(uvwGenName,'UVWGenEnvironment')
+    uvwGenName = "settingsImageSampler|uvwgen"
+    uvwGen = PluginDesc(uvwGenName, 'UVWGenEnvironment')
     uvwGen.setAttribute("mapping_type", "screen")
     pluginUVWGen = export_utils.exportPlugin(ctx, uvwGen)
 
-    texBitmapName = Names.nextFromCounter(counter, 'TexBitmap')
-    texBitmap = PluginDesc(texBitmapName, 'TexBitmap')
-    texBitmap.setAttributes({
-        "bitmap": pluginBitmapBuffer,
-        "uvwgen": pluginUVWGen
-    })
-    pluginTexBitmap = export_utils.exportPlugin(ctx, texBitmap)
-
-    texColorToFloatName = Names.nextFromCounter(counter, 'TexColorToFloat')
-    texColorToFloat = PluginDesc(texColorToFloatName, 'TexColorToFloat')
-    texColorToFloat.setAttribute("input", pluginTexBitmap)
-
-    return export_utils.exportPlugin(ctx, texColorToFloat)
+    bitmap = export_utils.exportRenderMaskBitmap(ctx, imageFileName, pluginUVWGen, "settingsImageSampler", False)
+    bitmap.output = "out_intensity"
+    return bitmap
 
 
 def _purgeRenderMaskTexturePlugins(ctx: ExporterContext):
-    counter = NamedCounter("settingsImageSampler")
-    
     # Keep name creation in the same order as in _exportRenderMaskTexture
-    bitmapBufferName = Names.nextFromCounter(counter, 'BitmapBuffer')
-    uvwGenName = Names.nextFromCounter(counter, 'UVWGenEnvironment')
-    texBitmapName = Names.nextFromCounter(counter, 'TexBitmap')
-    texColorToFloatName = Names.nextFromCounter(counter, 'TexColorToFloat')
+    uvwGenName = "settingsImageSampler|uvwgen"
 
-    export_utils.removePlugin(ctx, bitmapBufferName)
     export_utils.removePlugin(ctx, uvwGenName)
-    export_utils.removePlugin(ctx, texBitmapName)
-    export_utils.removePlugin(ctx, texColorToFloatName)
+    export_utils.removeBitmapMaskPlugins(ctx, "settingsImageSampler")

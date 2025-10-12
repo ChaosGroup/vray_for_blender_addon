@@ -1,4 +1,5 @@
 import bpy
+import sys
 from pathlib import Path
 
 from vray_blender.lib import blender_utils
@@ -16,7 +17,7 @@ class AnimationSettings:
         self.frameEnd     = 0
         self.frameCurrent = 0
         self.frameStep    = 0
-    
+
 class FileOutputSettings:
     def __init__(self):
         self.useSeparate    = False
@@ -37,7 +38,7 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
         string: error message, if any. If both return values are None, file should not be exported.
     """
     from vray_blender.version import getHostAppVersionString
-    
+
     def fixPath(filePath):
         """"
             Returns:
@@ -45,7 +46,7 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
         """
         if not filePath:
             return None, "The path to the .vrscene is empty."
-        
+
         if filePath.startswith("//"):
             # This is a path relative to the Blender scene, convert to regular path
             if bpy.context.blend_data.filepath:
@@ -55,32 +56,32 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
 
         if not Path(filePath).is_absolute():
             return None, "Path to the .vrscene file should be absolute."
-            
+
         if not Path(filePath).suffix:
             filePath = f"{filePath}.vrscene"
-        
+
         return filePath, None
 
 
     exporter = scene.vray.Exporter
-    
+
     if (not exporter.export_scene_file_path) and (not scenePath):
         return None, None
-    
+
     settings = vray.ExportSceneSettings()
-    
+
     settings.compressed    = exporter.export_scene_compressed
     settings.hexArrays     = exporter.export_scene_hex_meshes
     settings.hexTransforms = exporter.export_scene_hex_transforms
     settings.separateFiles = exporter.export_scene_separate_files
     settings.pluginTypes   = exporter.export_scene_plugin_types
     settings.hostAppString = getHostAppVersionString()
-    
+
     filePath, errMsg = fixPath(scenePath if scenePath else exporter.export_scene_file_path)
 
     if errMsg:
         return None, errMsg
-    
+
     settings.filePath = filePath
     return settings, None
 
@@ -89,24 +90,23 @@ class CommonSettings:
     """ This class is used to gather, once per update cycle, the UI settings that are  
         used by different exporters but not necessarily exported by them. 
     """
-    def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine, isInteractive):
+    def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine, isInteractive, exportOnly: bool = False):
 
         # renderEngine will be None in case of interactive rendering.
         self.renderEngine = renderEngine
         self.isPreview = renderEngine and renderEngine.is_preview
-        
+
         # Viewport and Interactive renders are both "interactive",
         # so isInteractive will be true on both cases
         self._interactive = isInteractive
         self.scene = scene
         self.vrayScene = self.scene.vray
         self.vrayExporter = self.vrayScene.Exporter
-        
+
+        self.exportOnly   = exportOnly
         self.animation   = AnimationSettings()
         self.files       = FileOutputSettings()
-        
-        # settingsDR = []
-        
+
     def updateFromScene(self, cameraObjs = None):
         vrayExporter = self.vrayExporter
 
@@ -127,7 +127,7 @@ class CommonSettings:
         if self.isPreview:
             # force zip for preview so it can be faster if we are writing to file
             self.exportFileFormat = defs.ExportFormat.ZIP
-                            
+
         self._updateFileOutput()
         self._updateAnimation()
         self._updateRenderMode()
@@ -143,22 +143,22 @@ class CommonSettings:
         # if settingsOptions.mtl_override_on:
         #     overrideName = settingsOptions.mtl_override
 
-        
+
     def _updateRenderMode(self):
         self.renderMode = self._getRenderMode()
         self.isGpu = self.renderMode not in (defs.RenderMode.Production, defs.RenderMode.RtCpu)
-        
+
         self.vfbFlags = defs.VfbFlags.NoFlags
         self.displayVfbOnTop = self.vrayExporter.display_vfb_on_top
 
         if self.displayVfbOnTop:
             self.vfbFlags |= defs.VfbFlags.AlwaysOnTop
-                           
+
 
     def _updateFileOutput(self):
         self.useSeparate  = self.vrayExporter.useSeparateFiles
         self.projectPath  = bpy.data.filepath
-    
+
 
     def _updateViewport(self):
         self.viewportResolution     = 1.0
@@ -168,16 +168,29 @@ class CommonSettings:
 
     def _updateAnimation(self):
         isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
-        if not isProductionRendering:
-            self.animation.mode = defs.AnimationMode.SingleFrame
-        else:
-            self.animation.mode = self.vrayExporter.animation_mode
         
-        self.animation.use = (self.animation.mode != defs.AnimationMode.SingleFrame)
         self.animation.frameStart   = self.scene.frame_start
         self.animation.frameEnd     = self.scene.frame_end
         self.animation.frameCurrent = self.scene.frame_current
         self.animation.frameStep    = self.scene.frame_step
+        
+        if not isProductionRendering:
+            self.animation.mode = defs.AnimationMode.SingleFrame
+            
+        elif self.exportOnly:
+            animExportOnlySettings = self.vrayExporter.animationSettingsVrsceneExport
+
+            if animExportOnlySettings.exportAnimation:
+                self.animation.mode = defs.AnimationMode.Animation
+                if animExportOnlySettings.frameRangeMode == 'CUSTOM_RANGE':
+                    self.animation.frameStart = animExportOnlySettings.customFrameStart
+                    self.animation.frameEnd = animExportOnlySettings.customFrameEnd
+            else:
+                self.animation.mode = defs.AnimationMode.SingleFrame
+        else:
+            self.animation.mode = self.vrayExporter.animation_mode
+
+        self.animation.use = (self.animation.mode != defs.AnimationMode.SingleFrame)
         
         # scene.render.fps is of type int. In order to have non-int fps, Blender uses 
         # the float divisor fps_base. E.g. FPS 20.5 may be represented as
@@ -205,7 +218,7 @@ class CommonSettings:
 
             if physCamera.use:
                 cameraType = int(physCamera.type)
-                
+
                 frameDuration = 1.0 / self.animation.fps
 
                 match cameraType:
@@ -257,8 +270,8 @@ class CommonSettings:
 
     def _updateLogLevels(self):
         self.verbosityLevel = self.vrayExporter.verbose_level
-        
-   
+
+
     def _getRenderMode(self):
 
         deviceType = self.vrayExporter.device_type
@@ -268,11 +281,14 @@ class CommonSettings:
             case 'CPU':
                 renderMode = defs.RenderMode.RtCpu if self._interactive else defs.RenderMode.Production
             case 'GPU':
-                if self.vrayExporter.use_gpu_rtx:
-                    # OPTIX
-                    renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
+                if sys.platform == "darwin":
+                    return defs.RenderMode.RtGpuMetal if self._interactive else defs.RenderMode.ProductionGpuMetal
                 else:
-                    # CUDA
-                    renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
+                    if self.vrayExporter.use_gpu_rtx:
+                        # OPTIX
+                        renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
+                    else:
+                        # CUDA
+                        renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
 
         return renderMode

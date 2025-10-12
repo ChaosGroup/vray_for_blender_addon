@@ -108,7 +108,7 @@
                 "value_conv_factor": 0.017453292519943295
             },
             "ui": {
-                "spin_step": 5.72958,
+                "spin_step": 57.2958,
                 "min": -360,
                 "max": 360
             }
@@ -122,7 +122,7 @@
                 "value_conv_factor": 0.017453292519943295
             },
             "ui": {
-                "spin_step": 5.72958,
+                "spin_step": 57.2958,
                 "min": -360,
                 "max": 360
             }
@@ -194,16 +194,12 @@
                     {
                         "name": "tile_blend",
                         "active": {"cond": "::random_by_uv_tile=1"}
-                    }
-                ],
-                "layout": "COLUMN"
-            },
-            {
-                "attrs": [
+                    },
                     {
                         "name": "seed"
                     }
-                ]
+                ],
+                "layout": "COLUMN"
             },
             {
                 "layout": "ROLLOUT",

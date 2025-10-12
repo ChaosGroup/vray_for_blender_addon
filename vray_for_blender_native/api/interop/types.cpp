@@ -6,6 +6,10 @@ namespace VRayForBlender::Interop
 {
 using ExporterType = VrayZmqWrapper::ExporterType;
 
+void ExporterSettings::setDRHosts(py::object hosts) {
+	drHosts = toVector<std::string>(hosts);
+}
+
 ExporterType ExporterSettings::getExporterType() const
 {
 	return static_cast<ExporterType>(get_exporterType());
@@ -99,7 +103,7 @@ SmokeData::SmokeData(const py::object& obj) :
 
 std::string ZmqServerArgs::getAddress(int serverPort) const 
 {
-	return std::format("tcp://127.0.0.1:{}", serverPort);
+	return "tcp://127.0.0.1:" + std::to_string(serverPort);
 }
 
 

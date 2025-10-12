@@ -119,9 +119,8 @@ def createDirectoryFromFilepath(filepath):
 
 
 # @srcFilepath - full absolute path
-#
+# Used for copying assets accros DR machines. Currently unused. 
 def copyDRAsset(scene, srcFilepath):
-
     VRayScene = scene.vray
     VRayDR    = VRayScene.VRayDR
 

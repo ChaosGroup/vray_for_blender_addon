@@ -54,14 +54,15 @@ void SceneExporter::init() {
 				break;
 
 			default:
-				vassert("Invalid async operation type."); 
+				vassert("Invalid async operation type.");
 			}
 
 			if (!success) {
-				Logger::error("Asyncronous operation {} failed: {}", static_cast<char>(op), message);
+				Logger::error("Asyncronous operation %1% failed: %2%", static_cast<char>(op), message);
 			}
 		});
 
+	// Set up any callbacks specific to the derived classes
 	setupCallbacks();
 
 	m_threadManager = ThreadManager::make(2);

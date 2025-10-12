@@ -1,11 +1,11 @@
 #pragma once
 
-#include <memory>
-#include <span>
-#include <string>
 #include <boost/python.hpp>
 #include <boost/python/numpy.hpp>
 #include <pyport.h>
+#include <memory>
+#include <span>
+#include <string>
 
 #include "export/assets/blender_types.h"
 #include "utils.hpp"
@@ -24,14 +24,16 @@ struct ExporterSettings
 
 	VrayZmqWrapper::ExporterType getExporterType() const;
 
-	PROPERTY(int,  exporterType       , static_cast<int>(VrayZmqWrapper::ExporterType::PROD))  // Render type
-	PROPERTY(int,  renderThreads      , -1)
-	PROPERTY(bool, closeVfbOnStop     , false)
-	PROPERTY(bool, drUse              , false)	// Distributed rendering
-	PROPERTY(bool, drRenderOnlyOnHosts, false)  // Distributed rendering
-	PROPERTY(bool, separateFiles      , false)  // Export to separate files
-	PROPERTY(std::string, previewDir  , "")		// Folder for .exr material preview files
-	PROPERTY_NO_DEFAULT(StrList, drHosts)
+	PROPERTY(int,  exporterType           , static_cast<int>(VrayZmqWrapper::ExporterType::PROD))  // Render type
+	PROPERTY(int,  renderThreads          , -1)
+	PROPERTY(bool, closeVfbOnStop         , false)
+	PROPERTY(bool, drUse                  , false)	// Distributed rendering
+	PROPERTY(bool, drRenderOnlyOnHosts    , false)  // Distributed rendering
+	PROPERTY(std::string, remoteDispatcher, "")     // Distributed rendering
+	PROPERTY_NO_DEFAULT(StrList, drHosts)           // Distributed rendering
+	PROPERTY(bool, separateFiles          , false)  // Export to separate files
+	PROPERTY(std::string, previewDir      , "")		// Folder for .exr material preview files
+	void setDRHosts(py::object hosts);
 };
 
 

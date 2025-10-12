@@ -10,7 +10,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2023;
+static const int ZMQ_PROTOCOL_VERSION = 2024;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -28,11 +28,17 @@ inline int shorten(const RoutingId& id) {
 /// Exception generated or rethrown by custom ZMQ code
 class ZmqException : public std::exception {
 public:
-	explicit ZmqException(const std::string& msg) : std::exception(msg.c_str())
+	explicit ZmqException(const std::string& msg) : m_message(msg.c_str())
 	{}
 
-	explicit ZmqException(const char* msg) : std::exception(msg)
+	explicit ZmqException(const char* msg) : m_message(msg)
 	{}
+
+	const char* what() const noexcept override {
+		return m_message.c_str();
+	}
+private:
+	std::string m_message;
 };
 
 
@@ -99,6 +105,7 @@ enum class ExporterType {
 	PROD,
 	PREVIEW,
 	ANIMATION,
+	VANTAGE_LIVE_LINK,
 	TYPES_COUNT
 };
 
@@ -137,9 +144,9 @@ inline std::string Msg(TArgs&&... args) {
 
 // The ids of the memory mappings between the server and the host.
 // These should be the same in both client and server.
-static const std::string SHARED_PORT_MAPPING_ID       = "endpoint";    // Listening endpoint info
-static const std::string SHARED_IMG_BUFFER_MAPPING_ID = "img_buffer";  // Image transfer buffer
-static const std::string SHARED_IMG_ID_MAPPING_ID	  = "img_buffer_id"; // The ID of the image transfer buffer
+static const std::string SHARED_PORT_MAPPING_ID       = "endp";    // Listening endpoint info
+static const std::string SHARED_IMG_BUFFER_MAPPING_ID = "imgbuf";  // Image transfer buffer
+static const std::string SHARED_IMG_ID_MAPPING_ID	  = "imgid"; // The ID of the image transfer buffer
 
 inline std::string getImageBufferID(int imgID) {
 	return SHARED_IMG_ID_MAPPING_ID + "_" + std::to_string(imgID);

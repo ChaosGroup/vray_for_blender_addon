@@ -42,11 +42,16 @@
         {
             "attr": "denoise",
             "desc": "Enables the render element's denoising, provided the Denoiser render element is present."
+        },
+        {
+            "attr": "tag_lightmix",
+            "default": true
         }
     ],
     "Widget": {
         "widgets": [
             {
+                "layout": "COLUMN",
                 "attrs": [
                     {
                         "name": "channelType",

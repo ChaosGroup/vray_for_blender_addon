@@ -1,6 +1,3 @@
-#pragma once
-
-
 #include "ipc.h"
 #include <thread>
 #include <chrono>
@@ -10,23 +7,23 @@
 
 namespace ipc = boost::interprocess;
 
-namespace VrayZmqWrapper{
+namespace VrayZmqWrapper {
 
-const std::string MAPPING_BASE_NAME = "data_block";
+const std::string MAPPING_BASE_NAME = "db";
 
 
 SharedMemoryBase::SharedMemoryBase(const std::string& id, const std::string& name) :
 	m_id (id),
 	m_name(name),
-	m_lock(std::make_unique<NamedLock>(ipc::open_or_create, createUniqueName("lock").c_str()))
+	m_lock(std::make_unique<NamedLock>(ipc::open_or_create, createUniqueName("l").c_str()))
 {
 	// After creation, the mutex is in locked state. Unlock to allow operation.
 	m_lock->unlock();
 }
-	
+
 
 std::string SharedMemoryBase::getLastError() const{
-	return m_lastError;	
+	return m_lastError;
 }
 
 
@@ -42,10 +39,9 @@ SharedMemoryBase::Payload& SharedMemoryBase::getPayload() const {
 
 
 std::string SharedMemoryBase::createUniqueName(const std::string& objName) const {
-	return std::string("vray-zmq-") + m_id + "-" + m_name + "-" + objName;
+	const std::string name = std::string("vray-zmq-") + m_id + "-" + m_name + "-" + objName;
+	return name;
 }
-
-
 
 
 ////////////////////////////////////////////
@@ -57,22 +53,39 @@ SharedMemoryWriter::SharedMemoryWriter(const std::string& id, const std::string&
 {
 }
 
+SharedMemoryWriter::~SharedMemoryWriter() {
+#ifndef _WIN32
+	ipc::scoped_lock lock(*m_lock);
+	SharedMem::remove(createUniqueName(MAPPING_BASE_NAME).c_str());
+#endif
+}
+
+void SharedMemoryWriter::remove(const std::string& id, const std::string& name) {
+	// Creating a dummy SharedMemoryWriter which will go through the destructor
+	// and clean up and left-over shared files.
+	SharedMemoryWriter tempWriterDeleter(id, name);
+}
 
 bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullptr */) {
 
 	SharedMemPtr    shm;
 	MappedRegionPtr region;
 
-	// Acquire the lock so that the creation of the mapping and the initialization of the 
-	// payload data could be seen as atomic by the reader. 
+	// Acquire the lock so that the creation of the mapping and the initialization of the
+	// payload data could be seen as atomic by the reader.
 	ipc::scoped_lock lock(*m_lock);
-	
-	
+
 	try {
 		const SizeType blockSize = size + sizeof(SizeType);
 		const std::string mappingName = createUniqueName(MAPPING_BASE_NAME);
-
+#if USE_WIN_SHARED_MEM
 		shm    = std::make_unique<SharedMem>(ipc::create_only, mappingName.c_str(), ipc::read_write, blockSize);
+#else
+		// On Unix system we have to manually clean up the writers, so if the server crashes it's possible
+		// that the shared file is still there so we use open_or_create.
+		shm    = std::make_unique<SharedMem>(ipc::open_or_create, mappingName.c_str(), ipc::read_write);
+		shm->truncate(blockSize);
+#endif
 		region = std::make_unique<MappedRegion>(*shm, ipc::read_write);
 	}
 	catch (const ipc::interprocess_exception& e) {
@@ -85,14 +98,13 @@ bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullp
 
 	// Initialize the payload
 	getPayload().size = size;
-	
+
 	if (nullptr != initialData) {
 		writeImpl(initialData);
 	}
 
 	return true;
 }
-
 
 
 void SharedMemoryWriter::write(const void* data) {
@@ -108,7 +120,7 @@ void SharedMemoryWriter::write(const std::vector<Buffer> buffers) {
 
 	auto& block = getPayload();
 	auto writePtr = block.data;
-	
+
 	for( const auto& buf : buffers) {
 		::memcpy(writePtr, buf.data, buf.size);
 		writePtr += buf.size;
@@ -138,30 +150,28 @@ bool SharedMemoryReader::open(std::chrono::milliseconds timeout) {
 
 	using namespace std::chrono_literals;
 	using Clock = std::chrono::steady_clock;
-	
+
 	const auto deadline = Clock::now() + timeout;
 
 	while(Clock::now() < deadline) {
-		
 		SharedMemPtr    shm;
 		MappedRegionPtr region;
 
 		try {
 			const std::string mappingName = createUniqueName(MAPPING_BASE_NAME);
-
 			shm    = std::make_unique<SharedMem>(ipc::open_only, mappingName.c_str(), ipc::read_only);
 			region = std::make_unique<MappedRegion>(*shm, ipc::read_only);
 		}
 		catch(const ipc::interprocess_exception& e) {
 			// The shared memory still not created. Try again in a while.
 			std::this_thread::sleep_for(1ms);
-			m_lastError = e.what(); 
+			m_lastError = e.what();
 			continue;
 		}
-	
+
 		m_shm    = std::move(shm);
 		m_region = std::move(region);
-		
+
 		return true;
 	}
 
@@ -230,11 +240,11 @@ ImageReader::ImageBuffer ImageReader::read(std::chrono::milliseconds timeout, co
 		// The image data format differs from that of the buffer. Allocate a new buffer.
 		auto data = std::make_unique<char[]>(size);
 		::memcpy(data.get(), img.data, size);
-		
+
 		return ImageBuffer{img.width, img.height, data.release()};
 	}
 
 	return ImageBuffer();
 }
 
-};  // end VrayZmqWrapper namespace 
+};  // end VrayZmqWrapper namespace

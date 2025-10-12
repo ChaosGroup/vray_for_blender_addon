@@ -60,7 +60,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
     @staticmethod
     def getLastActiveSpace(context):
-        """ Try to find the space the last active V-Rau viewport renderer was invoked in.
+        """ Try to find the space the last active V-Ray viewport renderer was invoked in.
             @return last active space or None if it has been destroyed.
         """
         return next((  space  

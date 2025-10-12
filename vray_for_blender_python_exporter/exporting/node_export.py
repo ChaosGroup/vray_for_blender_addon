@@ -86,7 +86,11 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     # Currently the list of compatible nodes contains only cycles nodes and
     # group/re-route which are skipped by the export anyways.
     if not isVrayNode(node) and (node.bl_idname in CompatibleNonVrayNodes):
-        return cycles_export.exportCyclesNode(nodeCtx, nodeLink)
+        try:
+            return cycles_export.exportCyclesNode(nodeCtx, nodeLink)
+        except Exception as e:
+            debug.printExceptionInfo(e)
+            return AttrPlugin()
 
     # TODO Move all of the custom export functions into 'exportTreeNode' members of their plugin modules
     match node.bl_idname:
@@ -234,7 +238,7 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
             sock.exportUnlinked(nodeCtx, plDesc, pluginParam)
         
     
-def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object):
+def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object, instance: bpy.types.DepsgraphObjectInstance = None):
     from vray_blender.exporting.mtl_export import MtlExporter
     mtlExporter = MtlExporter(exporterCtx)
         
@@ -278,7 +282,7 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object):
     if len(exportedMtls) > 1:
         # For objects with mutliple materials in different slots, export MtlMulti plugin which 
         # holds references to all object's materials
-        mtlPlugin = _exportMtlMulti(exporterCtx, obj, exportedMtls)
+        mtlPlugin = _exportMtlMulti(exporterCtx, obj, exportedMtls, instance)
     else:
         mtlPlugin = exportedMtls[0]
     
@@ -334,8 +338,8 @@ def _exportMtlOption(exporterCtx: ExporterContext,
         return mtlPlugin
 
 
-def _exportMtlMulti(exporterCtx: ExporterContext, obj: bpy.types.Object, mtlPlugins: list[AttrPlugin]):
-    matPluginName = Names.pluginObject("multi_mtl", Names.object(obj))
+def _exportMtlMulti(exporterCtx: ExporterContext, obj: bpy.types.Object, mtlPlugins: list[AttrPlugin], instance: bpy.types.DepsgraphObjectInstance=None):
+    matPluginName = Names.pluginObject("multi_mtl", Names.object(obj, instance))
     
     mtlMultiDesc = PluginDesc(matPluginName, "MtlMulti")
     mtlMultiDesc.setAttribute("mtls_list", [AttrPlugin(mtl.name) for mtl in mtlPlugins])
@@ -355,17 +359,24 @@ def exportNodePlugin(exporterCtx: ExporterContext,
                      obj: bpy.types.Object, 
                      geomPlugin: AttrPlugin,
                      objectName: str,
+                     objTracker: ObjTracker,
                      isInstancer = False,
+                     instance: bpy.types.DepsgraphObjectInstance = None,
                      visible = True,
-                     tmOverride: Matrix = None):
+                     tmOverride = None):
         """ Exports a V-Ray Node plugin for the specified geometry """
-        tm = mathutils.Matrix() if isInstancer else (obj.matrix_world if not tmOverride else tmOverride)
+        
+        if tmOverride is None:
+            tmOverride = obj.matrix_world
+
+        isInstance = (instance is not None)
+        tm = mathutils.Matrix() if (isInstancer or isInstance) else tmOverride
+        
 
         # Proxy objects must be rendered at the location of their preview meshes.
         if isObjectVrayProxy(obj) and \
-            (geomMeshFile := obj.data.vray.GeomMeshFile) and \
-                (geomMeshFile.previewType != 'None') and \
-                    tmOverride is None:
+                (geomMeshFile := obj.data.vray.GeomMeshFile) and \
+                not (isInstance or isInstancer):
 
             proxyPreviewScale = getProxyPreviewScale(obj)
 
@@ -386,13 +397,15 @@ def exportNodePlugin(exporterCtx: ExporterContext,
 
         pluginName = Names.vrayNode(objectName)
         nodeDesc = PluginDesc(pluginName, "Node")
+
         if isInstancer:
             geomPlugin.forceUpdate = True
+
+        
         nodeDesc.setAttribute("geometry", geomPlugin)
         nodeDesc.setAttribute("objectID", obj.pass_index)
         nodeDesc.setAttribute("transform", tm)
         nodeDesc.setAttribute("visible", visible)
-
       
         if exporterCtx.commonSettings.useMotionBlur:
             objProperties = obj.vray.VRayObjectProperties
@@ -403,9 +416,12 @@ def exportNodePlugin(exporterCtx: ExporterContext,
     
         # Export empty material plugin(s) for the node. They will be filled in later by the 
         # material export procedure
-        matPlugin = _exportObjMaterials(exporterCtx, obj)
-        nodeDesc.setAttribute("material", matPlugin)
-
+        if matPlugin := _exportObjMaterials(exporterCtx, obj, instance):
+            objTracker.trackPlugin(getObjTrackId(obj), matPlugin.name)
+            nodeDesc.setAttribute("material", matPlugin)
+        else:
+            nodeDesc.resetAttribute("material")
+            
         scene = exporterCtx.dg.scene
         
         if isInstancer:
@@ -422,6 +438,9 @@ def exportNodePlugin(exporterCtx: ExporterContext,
 
         nodePlugin = export_utils.exportPlugin(exporterCtx, nodeDesc)
         nodePlugin.auxData['material'] = matPlugin
+        
+        objTracker.trackPlugin(getObjTrackId(obj), nodePlugin.name, isInstance)
+        
         return nodePlugin
 
 

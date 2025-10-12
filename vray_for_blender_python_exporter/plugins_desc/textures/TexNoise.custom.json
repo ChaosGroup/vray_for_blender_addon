@@ -287,11 +287,5 @@
             "color2",
             "color2_tex"
         ]
-    },
-    "excluded_parameters": [
-        "color1_tex",
-        "color2",
-        "color2_tex",
-        "color1"
-    ]
+    }
 }

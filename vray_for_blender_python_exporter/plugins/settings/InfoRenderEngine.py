@@ -22,6 +22,8 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             deviceType='cuda'
         case RenderMode.ProductionGpuOptiX | RenderMode.RtGpuOptiX:
             deviceType='rtx'
+        case RenderMode.ProductionGpuMetal | RenderMode.RtGpuMetal:
+            deviceType='metal'
         case _:
             debug.printError("Unknown engine type!")
     pluginDesc.setAttribute("engine_type", deviceType)

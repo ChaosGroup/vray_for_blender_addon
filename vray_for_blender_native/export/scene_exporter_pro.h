@@ -34,13 +34,13 @@ public:
 	// Callbacks
 	void              cb_on_image_ready();
 	void              cb_on_rt_image_updated();
+	void              cb_on_vfb_layers_updated(const std::string& layersJson);
 	void              cb_on_bucket_ready(const VRayBaseTypes::AttrImage & image);
 
 private:
 	void              updateImage();
 
 	std::atomic_bool  m_renderFinished    = false;  // Used to signal a frame has been rendered
-	std::mutex        m_callback_mtx;
 
 	py::object		  m_imageUpdateCallback;
 	time_point        m_lastImageUpdate;

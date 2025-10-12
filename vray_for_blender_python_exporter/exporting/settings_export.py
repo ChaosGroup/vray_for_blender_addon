@@ -22,7 +22,7 @@ class SettingsExporter(ExporterBase):
 
         toExport = [pl for pl in PLUGINS['SETTINGS'] if pl not in IGNORED_PLUGINS.union(skipSettings)]
 
-        for pluginType in toExport: 
+        for pluginType in toExport:
             self.exportPlugin(pluginType)
 
         return self.stats
@@ -34,15 +34,15 @@ class SettingsExporter(ExporterBase):
 
         if pluginType.startswith('Filter') and vrayScene.SettingsImageSampler.filter_type != pluginType:
             return
-        
+
         propGroup = getattr(vrayScene, pluginType)
         if not propGroup:
             return
-        
+
         # Set plugin name the camelCase version of plugin type
         pluginName = Names.singletonPlugin(pluginType)
-       
+
         plDesc = PluginDesc(pluginName, pluginType)
         plDesc.vrayPropGroup = propGroup
         export_utils.exportPlugin(self, plDesc)
-        
+

@@ -15,12 +15,12 @@ class TemplateListItem(bpy.types.PropertyGroup):
 
     enabled: bpy.props.BoolProperty(default=True)
 
-    
+
 class VRAY_UL_SimpleList(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row()
         row.enabled = item.enabled
-        
+
         iconID = ''
 
         # Set the icon of the list item corresponding to the object's type.
@@ -37,7 +37,7 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
             iconID = f'{item.objectPtr.type}_DATA' if item.objectPtr.name in context.scene.objects else 'X'
         elif isinstance(item.objectPtr, bpy.types.Material):
             iconID = f'{item.objectPtr.id_type.upper()}_DATA' if item.objectPtr.name in bpy.data.materials else 'X'
-        
+
         if iconID == 'X':
             _UPDATED_OBJECT_SELECTORS.add(data)
             data.id_data.update_tag()
@@ -51,14 +51,13 @@ class VRAY_OT_simple_button(VRayOperatorBase):
 
     # Dynamic replacement for bl_description
     description: bpy.props.StringProperty(default=bl_label)
-    
+
     # The name of the function to call on the node when the button is pressed
     callbackName: bpy.props.StringProperty()
-    
+
     # Arbitrary string, identifier of the selector element when multuple selectors
-    # are shown for the same host 
-    selectorID: bpy.props.StringProperty()    
-    
+    # are shown for the same host
+    selectorID: bpy.props.StringProperty()
 
     def execute(self, context: bpy.types.Context):
         assert getattr(context, 'buttonHost'), "Button callback function should be set using UILayout's context_pointer_set() method"
@@ -66,14 +65,14 @@ class VRAY_OT_simple_button(VRayOperatorBase):
         callbackFn = getattr(context.buttonHost, self.callbackName)
         callbackFn(context, self.selectorID)
         return {'FINISHED'}
-    
+
 
     @staticmethod
     def create(layout: bpy.types.UILayout, label: str, description: str, host: bpy.types.AnyType, callbackName: str, selectorID=''):
         # Context data must be set before the operator is created
         layout.context_pointer_set(name='buttonHost', data=host)
         opButton = layout.operator('vray.simple_button', text=label)
-        
+
         opButton.callbackName = callbackName
         opButton.description = description
         opButton.selectorID = selectorID
@@ -82,12 +81,12 @@ class VRAY_OT_simple_button(VRayOperatorBase):
     @classmethod
     def description(cls, context, properties):
         return properties.description
-    
+
 
 
 class VRayUITemplate(bpy.types.PropertyGroup):
     """ Base class for UI templates implementing common access to template properties 
-    
+
         Properties:
            vray_plugin: the name of the plugin hosting the property
            vray_attr:   the name of the template property
@@ -106,11 +105,11 @@ class VRayUITemplate(bpy.types.PropertyGroup):
         except Exception as ex:
             debug.printExceptionInfo(ex, f"Failed to get template property {self.vray_plugin}::{self.vray_attr}::{templateAttr}")
             raise ex
-        
+
 
 class VRayObjectSelector(VRayUITemplate):
     """ Base class for object selector templates. Provides uniform UI and filtering.
-        
+
         This selector can be placed (hosted) on either a node, or a property page of a node.
         Before it can be used, it should be bound to the host by calling its init() method.
 
@@ -152,8 +151,8 @@ class VRayObjectSelector(VRayUITemplate):
 
     # The 0-based index of the currently selected list item, -1 for no selection
     activeItem : bpy.props.IntProperty(default = -1)
-   
-   
+
+
     @staticmethod
     def registerProperties(pluginModule, attrDesc, templateMembers):
         # Set object selector field properties based on the type of collection
@@ -168,15 +167,14 @@ class VRayObjectSelector(VRayUITemplate):
             fieldType = bpy.types.Material
             fieldName = 'Selected Materials'
             fieldDescription = 'Select material'
-        
+
             templateMembers['objectSelector'] = bpy.props.PointerProperty(
                                                 type = fieldType,
                                                 name = fieldName,
                                                 description = fieldDescription,
                                                 update = VRayObjectSelector._onSelectObject,
                                                 poll = VRayObjectSelector._filterObject)
-        
-    
+
     def drawSelectorUI(self, context: bpy.types.Context, layout: bpy.types.UILayout, 
                        dataProvider: bpy.types.Collection, dataProperty: str, listLabel='Object List'):
         """ Draw the UI for the object selector.
@@ -189,33 +187,31 @@ class VRayObjectSelector(VRayUITemplate):
             listLabel (str, optional): the label to use for the object list. Defaults to 'Object List'.
         """
         layout.prop_search( self, 'objectSelector', dataProvider, dataProperty, text='')
-        
+
         if isinstance(dataProvider, bpy.types.Scene):
             # NOTE: Currently, we support selection only from the top-level scene collections. bpy.types.Scene has
             # a children_recursive property, but its type is list, not bpy.types.Collection, so it cannot
             # be used in the prop_search template. 
             layout.prop_search(self, 'collectionSelector', dataProvider.collection, 'children', text='')
-        
+
         layout.label(text=listLabel)
         layout.template_list('VRAY_UL_SimpleList', self.name, self, 'selectedItems', self, 'activeItem')
-        
+
         buttonBox = layout.column()
         buttonBox.enabled = (self.activeItem >= 0)
-        
+
         VRAY_OT_simple_button.create(buttonBox, 'Remove', 'Remove the selected item from the list', self, 'onRemoveListItem')
-        
+
 
     def getSelectedItems(self, context: bpy.types.Context, searchCollection: str):
         """ Return a list of all selected objects (flattening the collections and recursing any child collections) 
             filtered by the supplied object filter function. 
         """
         dataProvider = context.scene.objects if searchCollection in( '', 'objects') else getattr(bpy.data, searchCollection)
-        
+
         selected = set()
 
-        for i in self.selectedItems:
-            if not i.objectPtr:
-                continue
+        for i in [i for i in self.selectedItems if i.enabled and (i.objectPtr is not None)]:
             obj = i.objectPtr.original
             if isCollection(obj):
                 selected.update([o for o in obj.all_objects if o in dataProvider.values() and self._filterObject(o)])
@@ -224,7 +220,7 @@ class VRayObjectSelector(VRayUITemplate):
                 selected.add(obj)
 
         return list(selected)
-    
+
 
     def copy(self, dest: VRayObjectSelector):
         dest.activeItem = self.activeItem
@@ -240,7 +236,7 @@ class VRayObjectSelector(VRayUITemplate):
             newItem = self.selectedItems.add()
             newItem.objectPtr = selected
             newItem.name = selected.name
-        
+
             if fnUpdate := getattr(self, 'onSelectionChanged', None):
                 fnUpdate(context)
 
@@ -282,7 +278,7 @@ class VRayObjectSelector(VRayUITemplate):
         if removed != 0:
             self.activeItem -= activeItemShift
             self.id_data.update_tag()
-        
+
 
     def _clearSelectorFields(self):
         if self.objectSelector is not None:
@@ -316,12 +312,12 @@ def cleanupObjectSelectorLists():
 
     if not _UPDATED_OBJECT_SELECTORS:
         return
-    
+
     for selector in _UPDATED_OBJECT_SELECTORS:
         selector.removeDeletedItems(bpy.context)
 
     _UPDATED_OBJECT_SELECTORS = set()
-    
+
     tagRedrawNodeEditor()
     tagRedrawPropertyEditor()
 
@@ -339,7 +335,7 @@ def getRegClasses():
 
 def register():
     from vray_blender.lib.class_utils import registerClass
-    
+
     for regClass in getRegClasses():
         registerClass(regClass)
 

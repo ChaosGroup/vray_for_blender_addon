@@ -1,7 +1,3 @@
-from vray_blender.plugins import PLUGINS
-from vray_blender.lib     import class_utils
-import bpy
-
 # Plugins which are not skipped for import/conversion purposes or plugins that were simply hidden from
 # the menus but should still remain active and just not show up in node creation menus.
 HIDDEN_PLUGINS = (
@@ -14,7 +10,8 @@ HIDDEN_PLUGINS = (
     "TexUVW",
     "UVWGenObjectBBox",
     "TexNormalMapFlip",
-    "TexBlendBumpNormal"
+    "TexBlendBumpNormal",
+    "TexCondition2"
 )
 
 # Plugins for which node generation and
@@ -181,7 +178,6 @@ SKIPPED_PLUGINS = (
 
     # Could be used in future
     "TexCondition",
-    "TexCondition2",
     "TexSnow",
     "PhxShaderOceanTex",
     "PhxShaderTex",
@@ -228,9 +224,9 @@ SKIPPED_PLUGINS = (
 
 
 MANUALLY_CREATED_PLUGINS = (
-    'TexLayeredMax', 
-    'TexOSL', 
-    'MtlOSL', 
+    'TexLayeredMax',
+    'TexOSL',
+    'MtlOSL',
     'MtlMulti',
     'RenderChannelColor',
     'RenderChannelDenoiser'

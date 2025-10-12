@@ -67,6 +67,66 @@
             "ui": {
                 "quantityType": "distance"
             }
+        },
+        {
+            "attr": "opacity",
+            "desc": "The opacity value, where 1 is opaque and 0 is transparent."
+        },
+        {
+            "attr": "diffuse",
+            "desc": "The color of the material. It also depends on the reflection and refraction colors."
+        },
+        {
+            "attr": "diffuse_strength",
+            "desc": "Multiplier for the diffuse color."
+        },
+        {
+            "attr": "diffuse_bump_amount",
+            "desc": "Multiplier for the diffuse bump map effect."
+        },
+        {
+            "attr": "reflect1",
+            "desc": "The first specular color. The reflection color dims the diffuse surface color."
+        },
+        {
+            "attr": "reflect1_roughness",
+            "desc": "The roughness of the first specular component. Used to simulate rough surfaces or surfaces covered with dust."
+        },
+        {
+            "attr": "reflect1_distribution",
+            "desc": "The BRDF distribution type for the first specular component (0 - Beckmann, 1 - GGX). The GGX distribution has a longer 'tail' compared to the Beckmann distribution."
+        },
+        {
+            "attr": "reflect2_strength",
+            "desc": "The strength of the second specular component. If this value is left at 0, the second reflection layer is not applied."
+        },
+        {
+            "attr": "reflect2",
+            "desc": "The second specular color. The reflection color dims the diffuse surface color."
+        },
+        {
+            "attr": "reflect2_roughness",
+            "desc": "The roughness of the first specular component. Used to simulate rough surfaces or surfaces covered with dust."
+        },
+        {
+            "attr": "reflect2_distribution",
+            "desc": "The BRDF distribution type for the first specular component (0 - Beckmann, 1 - GGX). The GGX distribution has a longer 'tail' compared to the Beckmann distribution."
+        },
+        {
+            "attr": "sss_mode",
+            "desc": "The diffusion method spreads light more uniformly. The directional method propagates more light in the direction of the light."
+        },
+        {
+            "attr": "sss1_weight",
+            "desc": "The relative contribution of the SSS layer to the material."
+        },
+        {
+            "attr": "sss2_weight",
+            "desc": "The relative contribution of the SSS layer to the material."
+        },
+        {
+            "attr": "sss3_weight",
+            "desc": "The relative contribution of the SSS layer to the material."
         }
     ],
     "Options": {

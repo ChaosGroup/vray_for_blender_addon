@@ -57,11 +57,11 @@ from vray_blender.nodes.tools import isVrayNode
    Instancer object for 'Cube' -> Circle ( e.g. cubes positioned at the vertices of a circle )
  Object type       | Naming template              | Example plugin name
  -------------------------------------------------------------------------
- Object            | objectName                            | Cube@15, Circle@17  
- Data object       | dataObjectName                        | mesh_CubeMesh@21
- Modified object   | dataObjectName|Modifier               | mesh_CubeMesh@21|ParticleSystem   ( for modifiers hat add geometry, like particle systems)   
- VRay node         | node@objectName                       | node@Cube@15
- Instanced         | instancer@instancerName|vrayNodeName  | instancer@Circle@17|node@Cube@15
+ Object            | objectName                 | Cube@15, Circle@17  
+ Data object       | dataObjectName             | mesh_CubeMesh@21
+ Modified object   | dataObjectName|Modifier    | mesh_CubeMesh@21|ParticleSystem   ( for modifiers hat add geometry, like particle systems)   
+ VRay node         | node@objectName            | node@Cube@15
+ Instanced         | instancer@instancerName    | instancer@Circle@17|node@Cube@15
 
  Deeper levels follow recursively the same rules, each level being separated by a '|' 
 
@@ -77,17 +77,38 @@ from vray_blender.nodes.tools import isVrayNode
 class Names:
 
     @staticmethod
-    def object(obj: bpy.types.ID):
-        """ Return the unique name for an object """
+    def _object(obj: bpy.types.ID):
+        """ Return the unique vray name for an object """
         # Use the original object, not the evaluated one, because the unique ID 
         # has only been set on the original
         return obj.original.vray.unique_id
 
-    @staticmethod
-    def instanceObject(originalName: str, instanceID: str):
-        """ Return a name that can be used for instance export. """
-        return originalName + instanceID
 
+    @staticmethod
+    def object(obj: bpy.types.Object, inst: bpy.types.DepsgraphObjectInstance= None):
+        """ Return the unique name of an object. """
+        if inst is None:
+            # This is a non-instanced object
+            return Names._object(obj)
+        
+        # This is an instanced object. Data objects created by the GN tree
+        # don't have vray unique id so use the name of the data object itself.
+        return f"{Names._object(inst.parent)}_i{Names._object(obj)}_{inst.random_id}"
+        
+        
+    @staticmethod
+    def objectData(obj: bpy.types.Object, inst: bpy.types.DepsgraphObjectInstance= None):
+        """ Return the unique name of a data object. """
+        assert isinstance(obj, bpy.types.Object) 
+        
+        if inst is None:
+            # This is a non-instanced object
+            return Names._object(obj.original.data) 
+        
+        # This is an instanced object. Data objects created by the GN tree
+        # don't have vray unique id so use the name of the data object itself.
+        return f"{Names.object(inst.parent)}_i{Names.objectData(obj)}_{inst.random_id}"
+    
     @staticmethod
     def struct(obj: bpy.types.Struct):
         """ Return the unique name for an object that is not a subclass of bpy.types.ID, e.g. bpy.types.Node. """
@@ -104,12 +125,6 @@ class Names:
         """ Return the unique name of a node. """
         return Names.struct(obj) 
 
-    @staticmethod
-    def objectData(obj: bpy.types.Object):
-        """ Return the unique name of the .data member of a bpy.types.Object. """
-        assert isinstance(obj, bpy.types.Object), "Only concrete data objects accepted." 
-        return Names.object(obj.original.data) 
-    
 
     @staticmethod
     def treeNode(nodeCtx: NodeContext):
@@ -158,15 +173,10 @@ class Names:
 
     @staticmethod
     def instancer(inst: bpy.types.DepsgraphObjectInstance):
-        if inst.parent.instance_type == 'COLLECTION':
-            instancerObj = inst.parent.instance_collection
-        else:
-            instancerObj = inst.parent
-        
-        instancedObj = inst.object
+        instancerObj = inst.parent
 
         try:
-            name =  f"instancer@{Names.object(instancerObj)}|{Names.vrayNode(Names.object(instancedObj))}"
+            name =  f"instancer@{Names.object(inst.parent)}"
         except Exception as ex:
             debug.printError(f"Failed to construct name for instancer object {instancerObj.name}")
             raise ex

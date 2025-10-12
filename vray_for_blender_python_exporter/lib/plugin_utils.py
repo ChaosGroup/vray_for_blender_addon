@@ -6,14 +6,15 @@ import json
 import mathutils
 from pathlib import Path
 import os
-import types
 
-from vray_blender.external.pyparsing import Forward, Word, alphanums, Suppress, Group, infixNotation, oneOf, opAssoc
-from vray_blender.lib import sys_utils
-from vray_blender.lib.names import Names
-from vray_blender.lib.defs import AttrPlugin, AttrListValue, AColor, ExporterContext, PluginDesc
 from vray_blender import debug
+from vray_blender.lib import sys_utils
+from vray_blender.lib.defs import AttrPlugin, AttrListValue, AColor, ExporterContext, PluginDesc
 from vray_blender.exporting import tools
+from vray_blender.lib.names import Names
+from vray_blender.lib.condition_processor import UIConditionCompiler
+from vray_blender.lib.lib_utils import getLightPluginType
+
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -94,7 +95,7 @@ def loadPluginDescriptions():
                 'SocketPanels' : {}
             }
 
-            _generateUIConditionEvaluators(pluginDesc)
+            UIConditionCompiler(pluginDesc).generateEvaluators()
             _loadSocketPanels(pluginDesc)
 
             PLUGINS_DESC[pluginID] = pluginDesc
@@ -246,11 +247,6 @@ def _getActiveWidgetElements(pluginModule):
 
     return rollouts
 
-def _generateUIConditionEvaluators(pluginDesc: dict):
-    """ Generates evaluation functions for the conditions in all widgets of the plugin. """
-    for widget in pluginDesc['Widget']['widgets']:
-        _generateWidgetConditionEvaluators(widget, pluginDesc)
-
 
 def _loadSocketPanels(pluginDesc: dict):
     """ Load the information about how sockets are grouped into panels on the node """
@@ -270,44 +266,6 @@ def _loadSocketPanels(pluginDesc: dict):
     if panelSockets is not None:
         pluginDesc['SocketPanels'][panelSockets[0]] = panelSockets[1]
 
-
-def _compileConditionForProperty(propName: str, propCond: str, translator: UIConditionConverter, pluginDesc):
-    """ Return the compiled evaluation function for the condition """
-    try:
-        funcCode = translator.toPython(propCond)
-        compiledMethod = compile(funcCode, '<string>', 'exec')
-        return types.FunctionType(compiledMethod.co_consts[1], globals(), "evaluate")
-    except Exception as ex:
-        debug.printError(f"Failed to compile condition for {pluginDesc['ID']}::{propName}: {propCond}, exception: {ex}")
-        return None
-
-
-def _generateWidgetConditionEvaluators(widget, pluginDesc):
-    """ Compiles an evaluation function for each condition set on a widget's attribute.
-        The compiled function is stored in attribute's 'evaluate' field and can be 
-        invoked later with a plugin data object as its parameter. 
-    """
-    translator = UIConditionConverter(pluginDesc)
-
-    # Compile conditions for widget's own properties as any property may have a condition attached
-    widgetConditions = [propName for propName in widget if (type(widget[propName]) is dict) and ('cond' in widget[propName])]
-    for propName in widgetConditions:
-        if compiledFn := _compileConditionForProperty(propName, widget[propName]['cond'], translator, pluginDesc):
-            widget[propName]['evaluate'] = compiledFn
-
-    # Compile conditions for widget's attributes
-    if not (attrs := widget.get('attrs')):
-        return
-   
-    for attr in attrs:
-        if 'layout' in attr:
-            # This is a nested widget
-            _generateWidgetConditionEvaluators(attr, pluginDesc)
-        else:
-            for prop in [attr[p] for p in attr if type(attr[p]) is dict and 'cond' in attr[p]]:
-                if compiledFn := _compileConditionForProperty(attr['name'], prop['cond'], translator, pluginDesc):
-                    prop['evaluate'] = compiledFn
-                
 
 
 def getUIFlagName(pluginModule, widget):
@@ -409,10 +367,10 @@ def objectToAttrPlugin(obj: bpy.types.Object):
     match obj.type:
         case 'LIGHT':
             # Lights are represented by a LightXXX plugin in the V-Ray scenes
-            return AttrPlugin(Names.object(obj))
+            return AttrPlugin(Names.object(obj), pluginType=getLightPluginType(obj.data))
         case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
             # Geometry objects are represented by a Node plugin in the V-Ray scene
-            return AttrPlugin(Names.vrayNode(Names.object(obj)))   
+            return AttrPlugin(Names.vrayNode(Names.object(obj)), pluginType='Node')   
         case _:
             debug.printWarning(f"Creating AttrPlugin struct for an unknown object type: {obj.type} [{obj.name}]")
             return AttrPlugin()
@@ -441,145 +399,6 @@ def setIncludeExcludeList(exporterCtx: ExporterContext, pluginDesc: PluginDesc, 
         fnExport(exporterCtx, pluginDesc)
 
 
-
-###################################################################
-## UI condition parser
-###################################################################
-
-class UIConditionGrammar:     
-    """ Grammar for parsing UI condition expressions """
-
-    identifier = Word("::" + alphanums + "_")
-    equalityOperator = oneOf("!= = < > <= >=")
-    value = Word(alphanums)
-    comparisonExpr = identifier + equalityOperator + value
-
-    LPAR,RPAR = map(Suppress, '()')     # Don't generate tokens for the paregtheses
-    expr = Forward()                    # Enable recursive patterns
-    operand = comparisonExpr
-    factor = operand | Group(LPAR + expr + RPAR)
-
-    parser = infixNotation(operand,
-            [
-                (oneOf(','), 2, opAssoc.LEFT),
-                (oneOf(';'), 2, opAssoc.LEFT),
-            ])
     
-    @staticmethod
-    def parse(s: str):
-        return UIConditionGrammar.parser.parseString(s)
-    
-
-class UIConditionConverter:
-    """ Parser for translation of V-Ray UI condition format to Python expression """
-    
-    def __init__(self, pluginDesc: dict):
-        """ @param pluginDesc - description read from a json file """
-        self.pluginDesc = pluginDesc
-        
-
-    def toPython(self, cond: str):
-        syntaxTree = UIConditionGrammar.parse(cond).as_list()
-        
-        if len(syntaxTree) == 1:
-            # If there are no nested conditions (no parentheses), the list will have just one element 
-            # which itself is the list with the expression's tokens.
-            syntaxTree = syntaxTree[0]
-
-        expr = self._parseCompoundExpression(iter(syntaxTree))
-        paramNames = [p[len("param_"):] for p in expr.split(" ") if p.startswith('param_')]
-        
-        funcCode = "def evaluate(plugin, node=None):\n"
-        tab = "  "
-
-        # Generate accessor function code for each parameter in the conditional expression. Currently, this
-        # is not optimal because conditions for different parameters won't share the accessor function, but will
-        # compile their own. 
-        for p in paramNames:
-            paramCode = ( ""
-                f"{tab}result = None\n"
-                f"{tab}if node:\n"
-                f"{tab}{tab}sock = next((s for s in node.inputs if hasattr(s, 'vray_attr') and (s.vray_attr=='{p}')), None)\n"
-                f"{tab}{tab}if sock:\n"
-                f"{tab}{tab}{tab}result = sock.value\n"
-                f"{tab}if not result:\n"
-                f"{tab}{tab}result = plugin.{p}\n"      
-                f"{tab}param_{p} = result\n"      
-            )
-
-            funcCode += paramCode
-
-        funcCode += f"{tab}return {expr}"
-        return funcCode
-
-
-    def _buildSimpleExpression(self, propNameToken: str, op: str, value: str):
-        # The property name is designated in the expression by prepending '::' to it. Get the original name. 
-        propName = propNameToken[2:]
-        prop = next((p for p in self.pluginDesc['Parameters'] if p['attr'] == propName))
-
-        if not prop:
-            raise Exception(f"Error while parsing condition: no such property {self.pluginDesc['ID']}::{propName}")
-        
-        # All tokens are strings, we need to convert to the actual type for proper evaluation.
-        if prop['type'] in ('INT'):
-            value = int(value)
-        if prop['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
-            value = float(value)
-        elif prop['type'] == 'BOOL':
-            value = bool(int(value))
-        else:
-            value = f'"{value}"' if value != 'NONE' else None
-
-        if op == "=":
-            op = "=="
-
-        # 'plugin' is the name of the variable with the plugin property data.
-        return f"param_{propName} {op} {value}"
-            
-
-    def _buildLogicExpression(self, lhs: bool, op, rhs: bool):
-        match op:
-            case ",":
-                return f"{lhs} and {rhs}"
-            case ";":
-                return f"{lhs} or {rhs}"
-            
-
-    def _parseSimpleExpression(self, it):
-        """ Parse an expression of type 'parameter op value' """
-        lhs = next(it)
-        if type(lhs) is list:
-            # NOTE IMPORTANT: The spaces around the parentheses are essential. They will be used to 
-            # split the resulting string into tokens when replacing the parameter names.
-            return f"( {self._parseCompoundExpression(iter(lhs))} )"
-        
-        operator = next(it)
-        value = next(it)
-        
-        return self._buildSimpleExpression(lhs, operator, value)
-
-
-    def _parseCompoundExpression(self, it):
-        """ Parse a compound expression of type 'condition and/or condition' with possible
-            nesting using parentheses.
-        """
-        lhs = None
-
-        while it:
-            if lhs is None:
-                lhs = self._parseSimpleExpression(it)
-
-            logicOp = next(it, None)
-            if not logicOp:
-                # No more data
-                return lhs
-
-            rhs = self._parseSimpleExpression(it)
-            lhs = self._buildLogicExpression(lhs, logicOp, rhs)
-
-        return lhs
-    
-
 
 

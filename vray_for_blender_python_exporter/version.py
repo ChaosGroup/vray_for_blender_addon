@@ -127,18 +127,15 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     from vray_blender.events import isDefaultScene
     from vray_blender.lib.sys_utils import importModule
 
-    if isDefaultScene():
-        debug.printAlways(f"Updating default scene version")
-    else:
-        debug.printAlways(f"Updating scene version of {bpy.data.filepath}")
-
+    sceneName = "default scene" if isDefaultScene() else f"'{bpy.data.filepath}'"
+    debug.printAlways(f"Update scene from v{int(fromUpgradeNum)} to v{int(toUpgradeNum)}: {sceneName}")
+    
     scriptInfos = findUpgradeScripts(fromUpgradeNum, toUpgradeNum)
 
     # Run in succession all scripts needed to upgrade from the scene version to the
     # current addon version. Any error will abort the procedure and alert the user.
     for scriptInfo in scriptInfos:
         upgradeNum    = scriptInfo[0]
-        toVer         = scriptInfo[2].replace('_', '.')
         upgradeScript = scriptInfo[3]
 
         upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
@@ -148,10 +145,12 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
             debug.reportError(f'Scene version update failed. See console log for details.')
             return False
             
-        debug.printAlways(f"Running version update script {upgradeScriptModule}")
+        debug.printDebug(f"Running version update script {upgradeScriptModule}")
         
         try:
-            upgradeModule.run()
+            # Not all upgrades in the range may affect the current scene, run only the ones that do
+            if upgradeModule.check():
+                upgradeModule.run()
 
             # Set the new upgrade number to the scene
             setSceneUpgradeNumber(int(upgradeNum))
@@ -159,7 +158,7 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
             debug.reportError(f'Scene version update failed. See console log for details.', exc=e)
             return False
 
-    debug.report('INFO', f"Scene updated to current VRay for Blender version.")
+    debug.printAlways("Scene successfully updated to current VRay for Blender version.")
 
     return True
 

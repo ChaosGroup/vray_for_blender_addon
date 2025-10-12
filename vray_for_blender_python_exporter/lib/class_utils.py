@@ -26,13 +26,13 @@ def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.Property
     dynPropGroup = TYPES.get(typeName)
 
     if (not dynPropGroup) or overridePropGroup:
-        classMembers = dict()
+        attrContext = attribute_utils.AttributeContext(pluginModule, _getActiveSocketAttributes(pluginModule))
 
         for param in pluginModule.Parameters:
             attrName = param['attr']
 
             try:
-                attribute_utils.generateAttribute(classMembers, pluginModule, param)
+                attribute_utils.generateAttribute(attrContext, param)
             except KeyError as ex:
                 debug.printExceptionInfo(ex, f"Failed to generate attribute {pluginModule.ID}::{attrName}. " + \
                                  f"Missing required property: {ex}. Plugin registration skipped.")
@@ -43,14 +43,14 @@ def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.Property
                 return
 
         if hasattr(pluginModule, 'registerCustomProperties'):
-            pluginModule.registerCustomProperties(classMembers)
+            pluginModule.registerCustomProperties(attrContext.classMembers)
 
-        classMembers['parent_node_id'] = bpy.props.StringProperty()
-
+        attrContext.classMembers['parent_node_id'] = bpy.props.StringProperty()
+    
         dynPropGroup = type(
             typeName,
             (bpy.types.PropertyGroup,),
-            { '__annotations__' : classMembers }
+            { '__annotations__' : attrContext.classMembers }
         )
 
         bpy.utils.register_class(dynPropGroup)
@@ -95,3 +95,17 @@ def registerClass(regClass):
 
     bpy.utils.register_class(regClass)
 
+
+def _getActiveSocketAttributes(pluginModule):
+    """ Get all attributes fo a plugin for which an implcit update callback should be registered """
+    from vray_blender.lib.condition_processor import UIConditionConverter, isCondition
+
+    attributes = set()
+    inputSockets = pluginModule.Node.get('input_sockets', [])
+    
+    for sockDesc in inputSockets:
+        if (visible := sockDesc.get('visible', None)) and isCondition(visible):
+            attributes.update(UIConditionConverter.getActiveProperties(visible))
+
+
+    return attributes

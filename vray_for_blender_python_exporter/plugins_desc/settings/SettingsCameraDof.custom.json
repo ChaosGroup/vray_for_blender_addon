@@ -47,13 +47,11 @@
     "Options": {
         "excluded_parameters": [
             "dont_affect_settings",
-            "focal_dist"
+            "focal_dist",
+            "subdivs"
         ],
         "animatable": false
     },
-    "excluded_parameters": [
-        "subdivs"
-    ],
     "Widget": {
         "widgets": [
             {

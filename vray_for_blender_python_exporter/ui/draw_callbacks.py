@@ -7,6 +7,7 @@ from mathutils import Matrix
 
 from vray_blender.lib import lib_utils
 from vray_blender.lib.blender_utils import getSpaceView3D
+from vray_blender.engine.renderer_vantage import drawCallbackVantage
 
 
 handlers = []
@@ -267,6 +268,7 @@ def register():
         bpy.utils.register_class(regClass)
 
     vrayDrawHandlerAdd(vrayDrawLightShape)
+    vrayDrawHandlerAdd(drawCallbackVantage)
 
 
 def unregister():

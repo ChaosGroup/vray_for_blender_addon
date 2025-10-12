@@ -1,16 +1,18 @@
-
-import os
+import bpy
 import contextlib
 import mathutils
+import os
 
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib import attribute_utils, plugin_utils, attribute_types, path_utils
-from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin, NodeContext
+from vray_blender.lib.defs import ExporterContext, ExporterType, PluginDesc, AttrPlugin, NodeContext
 from vray_blender.lib.names import Names
-from vray_blender.nodes.utils import getNonExportablePluginProperties
+from vray_blender.nodes.utils import getNonExportablePluginProperties, getNodeByType, getObjectsFromSelector
 from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
+from vray_blender.exporting.plugin_tracker import getObjTrackId
+from vray_blender.exporting.tools import getLinkedFromSocket, getNodeLinkToNode
 
 def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     mode = "PRODUCTION"
@@ -39,7 +41,12 @@ def _convertEnumValue(value):
     return str(value)
 
 
-def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
+def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
+    """ Export plugin from a pre-filled PluginDesc object.
+
+    Returns:
+        AttrPlugin: The exported plugin.
+    """
     overriddenParams = _getOverridesFor(ctx, pluginDesc.type)
     pluginModule = getPluginModule(pluginDesc.type)
 
@@ -111,7 +118,6 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
                 if subtype == 'FILE_PATH':
                     value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
-                    _copyDrAsset(ctx, value)
                 elif subtype == 'DIR_PATH':
                     # Add a trailing slash to directory paths
                     value = os.path.normpath(value) + os.sep
@@ -121,7 +127,7 @@ def _exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
                 attrName = attrDesc['tex_prop'] if type(value) == AttrPlugin else attrDesc['color_prop']
 
                 # Resetting the 'tex_prop' because most plugins will use it instead of 'color_prop'.
-                if attrName == attrDesc['color_prop']: 
+                if attrName == attrDesc['color_prop']:
                     plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrDesc['tex_prop'], AttrPlugin())
 
         plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrName, attribute_utils.convertUIValueToVRay(attrDesc, value))
@@ -148,12 +154,12 @@ def _exportTemplates(ctx: ExporterContext, pluginDesc: PluginDesc):
 
 # Export plugin parameters that do not require special handling
 # NOTE: You could use this function from inside module's 'exportCustom'
-# @param overrideParams - override the default param export 
+# @param overrideParams - override the default param export
 def exportPluginCommon(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
     vray.pluginCreate(ctx.renderer, pluginDesc.name, pluginDesc.type)
 
     _exportTemplates(ctx, pluginDesc)
-    return _exportPluginParams(ctx, pluginDesc)
+    return exportPluginParams(ctx, pluginDesc)
 
 
 def exportPlugin(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
@@ -194,13 +200,204 @@ def wrapAsTexture(nodeCtx: NodeContext, listItem: mathutils.Color | AttrPlugin):
     else:
         return listItem
 
-def _copyDrAsset( ctx: ExporterContext, filePath: str):
-    scene = ctx.dg.scene
-    vrayDR = scene.vray.VRayDR
-    if vrayDR.on:
-        if vrayDR.assetSharing == 'SHARE':
-            value = path_utils.copyDRAsset(scene, filePath)
+def _getMaskTexturePluginNames(pluginBaseName: str):
+    return (pluginBaseName + "|buffer", pluginBaseName + "|bitmap")
 
+def exportRenderMaskBitmap(ctx: ExporterContext, imageFileName: str, uvwgen: AttrPlugin, pluginBaseName: str, allowNegativeColors=True):
+    """
+    Export a TexBitmap and BitmapBuffer that can be used for a texture mask.
+    """
+
+    bufferName, texBitmapName = _getMaskTexturePluginNames(pluginBaseName)
+    bitmapBufferDesc = PluginDesc(bufferName, 'BitmapBuffer')
+    bitmapBufferDesc.setAttributes({
+        "file": path_utils.formatResourcePath(imageFileName, ctx.exportOnly),
+        "gamma": 1,
+        "allow_negative_colors": allowNegativeColors,
+        "rgb_color_space": "raw",
+        "transfer_function": 0 # linear
+    })
+    bitmapBuffer = exportPlugin(ctx, bitmapBufferDesc)
+
+    texBitmap = PluginDesc(texBitmapName, 'TexBitmap')
+    texBitmap.setAttributes({
+        "bitmap": bitmapBuffer,
+        "uvwgen": uvwgen
+    })
+
+    return exportPlugin(ctx, texBitmap)
+
+def removeBitmapMaskPlugins(ctx: ExporterContext, pluginBaseName: str):
+    """
+    Remove TexBitmap and BitmapBuffer plugins that were exported for a texture mask.
+    """
+    bufferName, texBitmapName = _getMaskTexturePluginNames(pluginBaseName)
+    removePlugin(ctx, bufferName)
+    removePlugin(ctx, texBitmapName)
 
 def removePlugin(exporterCtx: ExporterContext, pluginName):
     vray.pluginRemove(exporterCtx.renderer, pluginName)
+
+
+def setupDistributedRendering(settings, exporterType: ExporterType, isInteractive=False):
+    """
+    Export the necessary parameters used for distributed rendering i.e. hosts, dispatcher, in process rendering.
+    Args:
+        settings (ExporterSettings): An existing ExporterSettings instance where the parameters will be set.
+        exporterType (ExporterType): The type of export, used to disable DR.
+        isInteractive (bool): Flag indicating if the current export is for interactive.
+    """
+    vrayDR = bpy.context.scene.vray.VRayDR
+    # Previews should never use DR, Vantage uses DR but it's enabeld interanlly by V-Ray.
+    NON_DR_EXPORTERS = [ ExporterType.PREVIEW, ExporterType.VANTAGE_LIVE_LINK ]
+    if exporterType not in NON_DR_EXPORTERS and (not isInteractive or not vrayDR.ignoreInInteractive):
+        settings.drUse = vrayDR.on
+        settings.drRenderOnlyOnHosts = vrayDR.renderOnlyOnNodes
+        if vrayDR.use_remote_dispatcher:
+            settings.remoteDispatcher = vrayDR.dispatcher.address + ":" + str(vrayDR.dispatcher.port)
+        hosts = []
+        for node in vrayDR.nodes:
+            if node.use:
+                port = node.port if node.port_override else 20209
+                hosts.append(node.address + ":" + str(port))
+        settings.setDRHosts(hosts)
+
+
+from dataclasses import dataclass
+@dataclass
+class ActiveConnectedMeshInfo:
+    """ Used to track active parent object / gizmo pairs   """
+    parentName: str
+    parentObjTrackId: int
+
+    gizmoObjName: str
+    gizmoObjTrackId: int
+
+    def __hash__(self):
+        # Do not include parentName in the hash as it may change without the object 
+        # being otherwize modified.
+        return hash((self.parentObjTrackId, self.gizmoObjTrackId))
+
+@dataclass
+class UpdatedConnectedMeshInfo:
+    """ Used to track updated connected parent object / gizmo pairs """
+    parentObj: bpy.types.Object
+    gizmoObjTrackId: int
+    
+    def __hash__(self):
+        return hash((self.parentObj, self.gizmoObjTrackId))
+
+
+def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[bpy.types.Object],
+    pluginType: str, socketName: str, treePath: str, outputNodeType: str):
+    """ Collect info about the visible and updated objects selected by the output node.
+
+        LightMesh and VRayFur combine a light|fur object and a geometry object, which are exported by LightExporter
+        and GeometryExporter respectively. Both exporters need to know about the existing links in order
+        to stay in sync about what is exported by each of them. This function will collect two lists
+        of (light|fur)/geometry object tuples - one for all currently visible in the scene, and one for 
+        which depsgraph updates have been generated.
+
+        Returns:
+        set[ActiveConnectedMeshInfo]: currently active connected mesh gizmos
+        set[UpdatedConnectedMeshInfo]: list of updated connected meshes/gizmos
+        pluginType: plugin type as which the output node is exported
+        socketName: socket name of the output node
+        treePath: path to the data property group of the object
+        outputNodeType: type of the output node
+    """
+    
+    if not parentObjects:
+        return set(), set()
+    
+    activeConnectedMeshes = set()
+    updatedConnectedMeshes = set()
+
+    def isUpdatedPair(updatedObjId, parentObj, geomObj, ntree):
+        return exporterCtx.fullExport or (updatedObjId == parentObj) or (updatedObjId == ntree) or (updatedObjId == geomObj)
+    
+    def registerPair(parentObj, geomObj, ntree=None):
+        activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), getObjTrackId(parentObj), Names.object(geomObj), getObjTrackId(geomObj)))
+        
+        if exporterCtx.fullExport:
+            updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
+            return
+        
+        for u in exporterCtx.dg.updates:
+            updatedObjId = u.id.original
+            if isUpdatedPair(updatedObjId, parentObj, geomObj, ntree):
+                updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
+    
+    def getNodeTree(obj: bpy.types.Object, treePath: str):
+        props = obj
+        for name in treePath.split("."):
+            if not (props := getattr(props, name)):
+                return None
+        return props
+
+    for parentObj in parentObjects:
+        usesSelectorNode = False
+        propGroup = getattr(parentObj.data.vray, pluginType)
+
+        if ntree := getNodeTree(parentObj, treePath):
+            # If the mesh light has a node tree, we need to obtain the names of the 
+            # target objects from an object selector node attached to its 'Geometry' socket
+            if outputNode := getNodeByType(ntree, outputNodeType):
+                propGroup = getattr(outputNode, pluginType)
+                if fromSock := getLinkedFromSocket(outputNode.inputs[socketName]):
+                    targetObjects = getObjectsFromSelector(fromSock.node, exporterCtx.ctx)
+
+                    for o in targetObjects:
+                        registerPair(parentObj, o, ntree)
+                    
+                    usesSelectorNode = True
+
+        if not usesSelectorNode:
+            # If a selector node is not connected to the 'geometry' socket, take the list from the
+            # template in the property page. Note that the property group will be different depending
+            # on whether the light uses nodes or not.
+            for targetObject in propGroup.object_selector.getSelectedItems(exporterCtx.ctx, 'objects'):
+                registerPair(parentObj, targetObject)
+
+    return activeConnectedMeshes, updatedConnectedMeshes
+
+
+def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker, nodeOutput, nodePluginNames):
+    """ Exports the nodes connected in the "Matte", "Surface" and "Visibility" sockets of 
+        object output node
+    """
+
+    pluginType = "VRayObjectProperties"
+    objProps = obj.vray.VRayObjectProperties
+    objPropsPluginName = Names.pluginObject(pluginType, Names.object(obj))
+    objPropsPlDesc = PluginDesc(objPropsPluginName, pluginType)
+    objPropsPlDesc.vrayPropGroup = objProps
+
+    pluginModule = getPluginModule(pluginType)
+
+    # Reset all attributes to their default values first.
+    # This ensures that attributes are always initialized to defaults,
+    # and then selectively overridden by node connections if present.
+    for attrDesc in pluginModule.Parameters:
+        objPropsPlDesc.setAttribute(attrDesc['attr'], attrDesc.get('default', None))
+
+    for objProp in ("Matte", "Surface", "Visibility"):
+        nodeLink = getNodeLinkToNode(nodeOutput, objProp, f"VRayNodeObject{objProp}Props")
+        if nodeLink:
+            # Only the attributes of connected object property nodes should be exported
+            node = nodeLink.from_node
+            for attr in node.visibleAttrs:
+                objPropsPlDesc.setAttribute(attr, getattr(objProps, attr))
+
+            if objProp == "Visibility":
+                node.fillReflectAndRefractLists(nodeCtx.exporterCtx, objPropsPlDesc)
+
+    objId = getObjTrackId(obj)
+
+    objPropsAttrPlugin = exportPlugin(nodeCtx.exporterCtx, objPropsPlDesc)
+
+    objTracker.trackPlugin(objId, objPropsPluginName)
+
+    # The fur objects have multiple node plugins, so we need to update the object properties for each of them
+    for nodePluginName in nodePluginNames:
+        plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin)

@@ -89,7 +89,7 @@ enum class MsgType : char {
 	RendererReset,
 	RendererAbort,
 	RendererInit,
-	RendererResetHosts,
+	RendererEnableDistributedRendering,
 	RendererLoadScene,
 	RendererAppendScene,
 	RendererExportScene,
@@ -143,7 +143,9 @@ enum class MsgType : char {
 	ControlUpdateVfbLayers,
 	ControlShowVfb,
 	ControlResetVfbToolbar,
-	LastControlMessage = ControlResetVfbToolbar,
+	ControlGetComputeDevices,
+	ControlSetComputeDevices,
+	LastControlMessage = ControlSetComputeDevices,
 
 	// Control events
 	FirstControlEvent,
@@ -154,12 +156,15 @@ enum class MsgType : char {
 	ControlOnLogMessage,
 	ControlOnImportAsset,
 	ControlOnRendererStatus,
-	LastControlEvent = ControlOnLogMessage
+	ControlOnGetComputeDevices,
+	LastControlEvent = ControlOnRendererStatus,
+
+	// Compute devices
 };
 
 
 
-enum class DRFlags : char {
+enum DRFlags : char {
 	None              = 0,
 	EnableDr          = 1 << 1,
 	RenderOnlyOnHosts = 1 << 2,
@@ -208,6 +213,13 @@ enum class VRayStatusType : char {
 	LicenseAcquired,
 	LicenseDropped
 
+};
+
+enum class ComputeDeviceType : int {
+	CUDA = 0,
+	Optix = 1,
+	Metal = 2,
+	LastDevice = Metal
 };
 
 
@@ -487,14 +499,12 @@ SERIALIZE_EMPTY_MESSAGE(RendererAbort);
 /// MsgRendererInit
 PROTO_MESSAGE(RendererInit,
 	RendererType rendererType;
-	DRFlags drFlags;
 	int renderThreads;
 	vray::AttrValue value;
 );
 
 SERIALIZE_MESSAGE(RendererInit,
 	PARAM(rendererType)
-	PARAM(drFlags)
 	PARAM(renderThreads)
 );
 
@@ -509,13 +519,17 @@ SERIALIZE_MESSAGE(RendererResize,
 );
 
 
-/// MsgRendererResetHosts
-PROTO_MESSAGE(RendererResetHosts,
+/// MsgRendererEnableDistributedRendering
+PROTO_MESSAGE(RendererEnableDistributedRendering,
 	std::string hosts;
+	DRFlags drFlags;
+	std::string remoteDispatcher;
 );
 
-SERIALIZE_MESSAGE(RendererResetHosts,
+SERIALIZE_MESSAGE(RendererEnableDistributedRendering,
 	PARAM(hosts)
+	PARAM(drFlags)
+	PARAM(remoteDispatcher)
 );
 
 
@@ -996,6 +1010,35 @@ PROTO_MESSAGE(ControlOnLogMessage,
 SERIALIZE_MESSAGE(ControlOnLogMessage,
 	PARAM(logLevel)
 	PARAM(logMessage)
+);
+
+
+//ControlRequestComputeDevices,
+EMPTY_PROTO_MESSAGE(ControlGetComputeDevices);
+
+SERIALIZE_EMPTY_MESSAGE(ControlGetComputeDevices);
+
+PROTO_MESSAGE(ControlOnGetComputeDevices,
+	ComputeDeviceType deviceType;
+	vray::AttrListString computeDevices;
+	vray::AttrListInt defaultDeviceStates;
+);
+
+SERIALIZE_MESSAGE(ControlOnGetComputeDevices,
+	PARAM(deviceType)
+	PARAM(computeDevices)
+	PARAM(defaultDeviceStates)
+);
+
+
+PROTO_MESSAGE(ControlSetComputeDevices,
+	vray::AttrListInt computeDeviceIndices;
+	ComputeDeviceType deviceType;
+);
+
+SERIALIZE_MESSAGE(ControlSetComputeDevices,
+	PARAM(computeDeviceIndices)
+	PARAM(deviceType)
 );
 
 };  // end VrayZmqWrapper namespace

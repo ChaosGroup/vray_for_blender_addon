@@ -97,14 +97,13 @@ class VRAY_OT_proxy_generate_preview(VRayOperatorBase):
         if not (os.path.exists(previewFilePath)):
             debug.reportError(f"File not found: {previewFilePath}", self)
             return {'CANCELLED'}
-        
+
         if err := vray_proxy.loadVRayProxyPreviewMesh(ob, previewFilePath, geomMeshFile.anim_type,
                                             geomMeshFile.anim_offset, geomMeshFile.anim_speed, context.scene.frame_current):
             debug.reportError(err, self)
             return {'CANCELLED'}
-        
+
         return {'FINISHED'}
-    
 
 
 class VRAY_OT_vrayscene_generate_preview(VRayOperatorBase):
@@ -115,11 +114,11 @@ class VRAY_OT_vrayscene_generate_preview(VRayOperatorBase):
     regenerate: bpy.props.BoolProperty(
         default=True,
         description="True if operator is called to regenerate an existing scene preview")
-    
+
     def execute(self, context):
         ob  = context.object
         vrayScene = ob.data.vray.VRayScene
-        
+
         if not (sceneFilepath := bpy.path.abspath(vrayScene.filepath)):
             self.report({'ERROR'}, "Scene filepath is not set!")
             return {'CANCELLED'}

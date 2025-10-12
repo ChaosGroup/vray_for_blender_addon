@@ -8,32 +8,9 @@ from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.nodes.tools import isInputSocketLinked
-from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
 from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
-
-
-@dataclass
-class ActiveMeshLightInfo:
-    """ Used to track active mesh light / gizmo pairs   """
-    lightName: str
-    lightObjTrackId: int
-    gizmoObjTrackId: int
-
-    def __hash__(self):
-        # Do not include lightName in the hash as it may change without the object 
-        # being otherwize modified.
-        return hash((self.lightObjTrackId, self.gizmoObjTrackId))
-
-@dataclass
-class UpdatedMeshLightInfo:
-    """ Used to track updated mesh light / gizmo pairs """
-    lightObj: bpy.types.Object
-    gizmoObjTrackId: int
-    
-    def __hash__(self):
-        return hash((self.lightObj, self.gizmoObjTrackId))
 
 
 def onUpdateAttribute(src, context, attrName):
@@ -101,65 +78,21 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
     """ Collect info about the visible and updated objects associated with LightMesh exports.
 
         LightMesh combines a light object and a geometry object, which are exported by LightExporter
-        and GeometryExporter resepctively. Both exporters need to know about the existing links in order
+        and GeometryExporter respectively. Both exporters need to know about the existing links in order
         to stay in sync about what is exported by each of them. This function will collect two lists
         of light/geometry object tuples - one for all currently visible in the scene, and one for 
-        which depsgraph updates have been generted.
+        which depsgraph updates have been generated.
 
         Returns:
-        set[ActiveMeshLightInfo]: currently active mesh light gizmos
-        set[UpdatedMeshLightInfo]: list of updated lights/gizmos
+        set[ActiveConnectedMeshInfo]: currently active mesh light gizmos
+        set[UpdatedConnectedMeshInfo]: list of updated lights/gizmos
     """
+
     meshLightObjects = [o for o in exporterCtx.sceneObjects if (o.type == 'LIGHT') \
                     and (o.data.vray.light_type == 'MESH') and (getObjTrackId(o) in exporterCtx.visibleObjects)]
-    
-    if not meshLightObjects:
-        return set(), set()
-    
-    activeMeshLights = set()
-    updatedMeshLights = set()
 
-    def isUpdatedPair(updatedObjId, lightObj, geomObj):
-        return exporterCtx.fullExport or (updatedObjId == lightObj) or (updatedObjId == lightObj.data.node_tree) or (updatedObjId == geomObj)
-    
-    def registerPair(lightObj, geomObj):
-        activeMeshLights.add(ActiveMeshLightInfo(Names.object(lightObj), getObjTrackId(lightObj), getObjTrackId(geomObj)))
-        
-        if exporterCtx.fullExport:
-            updatedMeshLights.add(UpdatedMeshLightInfo(lightObj, getObjTrackId(geomObj)))
-            return
-        
-        for u in exporterCtx.dg.updates:
-            updatedObjId = u.id.original
-            if isUpdatedPair(updatedObjId, lightObj, geomObj):
-                updatedMeshLights.add(UpdatedMeshLightInfo(lightObj, getObjTrackId(geomObj)))
-
-
-    for lightObj in meshLightObjects:
-        usesSelectorNode = False
-        propGroup = lightObj.data.vray.LightMesh
-
-        if ntree := lightObj.data.node_tree:
-            # If the mesh light has a node tree, we need to obtain the names of the 
-            # target objects from an object selector node attached to its 'Geometry' socket
-            if outputNode := getNodeByType(ntree, "VRayNodeLightMesh"):
-                propGroup = outputNode.LightMesh
-                if fromSock := getLinkedFromSocket(outputNode.inputs['Geometry']):
-                    targetObjects = getObjectsFromSelector(fromSock.node, exporterCtx.ctx)
-
-                    for o in targetObjects:
-                        registerPair(lightObj, o)
-                    
-                    usesSelectorNode = True
-
-        if not usesSelectorNode:
-            # If a selector node is not connected to the 'geometry' socket, take the list from the
-            # template in the property page. Note that the property group will be different depending
-            # on whether the light uses nodes or not.
-            for targetObject in propGroup.object_selector.getSelectedItems(exporterCtx.ctx, 'objects'):
-                registerPair(lightObj, targetObject)
-
-    return activeMeshLights, updatedMeshLights
+    return export_utils.collectConnectedMeshInfo(
+        exporterCtx, meshLightObjects, 'LightMesh', 'Geometry', 'data.node_tree', 'VRayNodeLightMesh')   
 
 
 def getLightMeshPluginName(lightName: str, gizmoObjTrackId):

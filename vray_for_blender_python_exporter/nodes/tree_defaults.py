@@ -3,6 +3,7 @@ import bpy
 
 from vray_blender.lib import lib_utils
 from vray_blender.lib.attribute_types import MetaPropertyTypes
+from vray_blender.lib.attribute_utils import copyPropGroupValues
 from vray_blender.plugins import getPluginModule
 from vray_blender.nodes import tools as NodeTools
 from vray_blender.nodes import utils as NodeUtils
@@ -88,18 +89,7 @@ def addLightNodeTree(light: bpy.types.Light):
 
     pluginModule = getPluginModule(lightPluginType)
 
-    for attrName, attrType in [(a['attr'], a['type']) for a in pluginModule.Parameters]:
-        if attrName not in propGroup.__annotations__:
-            continue
-        
-        if (attrType == 'TEMPLATE'):
-            srcAttr = getattr(propGroup, attrName)
-            destAttr = getattr(nodePropGroup, attrName)
-            srcAttr.copy(destAttr)
-            continue
-
-        val = getattr(propGroup, attrName)
-        setattr(nodePropGroup, attrName, val)
+    copyPropGroupValues(propGroup, nodePropGroup, pluginModule)
 
     light.vray.is_vray_class = True
     
@@ -118,6 +108,23 @@ def addObjectNodeTree(ob):
     NodeTools.deselectNodes(ntree)
 
     VRayObject.ntree = ntree
+
+def addFurNodeTree(ob):
+    ntree = bpy.data.node_groups.new(ob.name, type='VRayNodeTreeFur')
+    ntree.use_fake_user = True
+    
+    NodeTools.addVRayNodeTreeSettings(ntree, 'FUR')
+    
+    objOutputNode = ntree.nodes.new('VRayNodeObjectOutput')
+    
+    furOutputNode = ntree.nodes.new('VRayNodeFurOutput')
+    furOutputNode.location.y = objOutputNode.location.y - objOutputNode.height - 150
+    copyPropGroupValues(ob.data.vray.GeomHair, furOutputNode.GeomHair, getPluginModule('GeomHair'))
+    
+
+    NodeTools.deselectNodes(ntree)
+    
+    ob.vray.ntree = ntree
 
 
 def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):

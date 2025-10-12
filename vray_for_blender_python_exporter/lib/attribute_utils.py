@@ -10,6 +10,32 @@ from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMeter
 from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES
 from vray_blender.nodes.tools import getLinkInfo
 
+
+class AttributeContext:
+    """ Context for single attribute generation """
+    def __init__(self, pluginModule, activeAttributes: list[str]) :
+        # A list of attribute names for which an implicit update callback must be registered
+        self.pluginModule = pluginModule
+        self.classMembers = dict()
+        self.activeAttributes = activeAttributes
+
+
+
+def copyPropGroupValues(srcPropGroup, destPropGroup, pluginModule):
+    # Copy property values from  the source PropGroup to the destination PropGroup 
+    for attrName, attrType in [(a['attr'], a['type']) for a in pluginModule.Parameters]:
+        if attrName not in srcPropGroup.__annotations__:
+            continue
+        
+        if (attrType == 'TEMPLATE'):
+            srcAttr = getattr(srcPropGroup, attrName)
+            destAttr = getattr(destPropGroup, attrName)
+            srcAttr.copy(destAttr)
+            continue
+
+        val = getattr(srcPropGroup, attrName)
+        setattr(destPropGroup, attrName, val)
+
 # Create an additional pointer property to be used for property search UI.
 # It updates the original string property with the object name when changed.
 # This is needed because the result from property searches in ID collections
@@ -164,9 +190,9 @@ def scaleToSceneLengthUnit(attrValue, lengthUnit):
 
 
 
-def generateAttribute(classMembers, pluginModule, attrDesc):
+def generateAttribute(ctx: AttributeContext, attrDesc):
     """ Generate Blender Property based on attribute description
-        and add it to 'classMembers' dict.
+        and add it to 'AttributeContext.classMembers' dict.
     """
     attrName = attrDesc['attr']
     attrType = attrDesc['type']
@@ -175,7 +201,7 @@ def generateAttribute(classMembers, pluginModule, attrDesc):
         return
 
     if attrType == 'TEMPLATE':
-        _generateTemplate(classMembers, pluginModule, attrDesc)
+        _generateTemplate(ctx.classMembers, ctx.pluginModule, attrDesc)
         return
 
     attrArgs = {
@@ -187,28 +213,28 @@ def generateAttribute(classMembers, pluginModule, attrDesc):
     setAttrSubtype(attrArgs, attrDesc)
     setAttrPrecision(attrArgs, attrDesc)
     setAttrLimits(attrArgs, attrDesc)
-    setAttrOptions(attrArgs, attrDesc, pluginModule)
-    setAttrUpdateCallback(attrArgs, attrDesc, pluginModule)
-    _setAttrValueCallbacks(attrArgs, attrDesc, pluginModule)
+    setAttrOptions(attrArgs, attrDesc, ctx.pluginModule)
+    setAttrUpdateCallback(attrArgs, attrDesc, ctx)
+    _setAttrValueCallbacks(attrArgs, attrDesc, ctx.pluginModule)
     _setAttrSize(attrArgs, attrDesc)
-    _setAttrDefault(attrArgs, attrDesc, pluginModule)
+    _setAttrDefault(attrArgs, attrDesc, ctx.pluginModule)
 
     if attrType == 'ENUM':
         # JSON parser returns lists but EnumProperty types expects tuples
         attrArgs['items'] = (tuple(item) for item in attrDesc['items'])
 
-    _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
+    _addAttrToClassMembers(attrArgs, attrDesc, ctx.classMembers, ctx.pluginModule.ID)
 
     if attrDesc.get('options', {}).get('shadowed', False):
         # Add a 'shadow' for the current attribute
-        _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginModule.ID)
+        _addShadowAttrToClassMembers(attrArgs, attrDesc, ctx.classMembers, ctx.pluginModule.ID)
 
     if attrName in {'render_mask_objects', 'exclusion_nodes'}:
         # Attribute has a collection prop search UI - add an additional pointer property
         # which updates the original property with the object name when changed.
         origAttr = attrName
         propSearchAttr = origAttr + '_ptr'
-        classMembers[propSearchAttr] = createPropSearchPointerProp(
+        ctx.classMembers[propSearchAttr] = createPropSearchPointerProp(
             origAttr,
             propSearchAttr,
             bpy.types.Collection,
@@ -421,7 +447,8 @@ def setAttrOptions(attrArgs, attrDesc, pluginModule):
     # In Blender 4.5 a new flag was added for FILE_PATH subtypes that has to be set to enable relative paths.
     if bpy.app.version >= (4, 5, 0):
         attrType = attrDesc['type']
-        if (attrType == 'STRING') and ('ui' in attrDesc) and ('file_extensions' in attrDesc['ui']):
+        subType = attrDesc.get("subtype", "")
+        if (attrType == 'STRING') and ('file_extensions' in attrDesc.get('ui', {}) or subType in ("FILE_PATH", "DIR_PATH")):
             attrOptions.add('PATH_SUPPORTS_BLEND_RELATIVE')
 
     # Cross-dependencies - properties that depend on a scene object. The property
@@ -439,23 +466,34 @@ def setAttrOptions(attrArgs, attrDesc, pluginModule):
         if optionalKey in attrDesc:
             attrArgs[optionalKey] = attrDesc[optionalKey]
 
-def setAttrUpdateCallback(attrArgs, attrDesc, pluginModule):
-    from vray_blender.nodes.utils import selectedObjectTagUpdate, selectedObjectTagUpdateWrapper
+
+def setAttrUpdateCallback(attrArgs, attrDesc, attrCtx: AttributeContext):
+    from vray_blender.nodes.utils import selectedObjectTagUpdate, selectedObjectTagUpdateWrapper, activeAttributeUpdateCallback, customAttributeUpdateCallback
 
     attrName = attrDesc['attr']
+    
+    customUpdateFunctions = []
 
-    # Changes to custom node trees do not result in updates, so we need to manually
-    # tag the updated objects and the property editor for redraw. 
-    updateFunc = selectedObjectTagUpdate
+    if attrName in attrCtx.activeAttributes:
+        # Register callbacks for 'active' socket attributes
+        customUpdateFunctions.append(lambda propGroup_, ctx_, pluginModule_, attrName_: activeAttributeUpdateCallback(propGroup_, pluginModule_, attrName_))
 
     if 'update' in attrDesc:
-        # Call the custom update function as part of the update callback
-        updateFunc = lambda s, ctx: selectedObjectTagUpdateWrapper(s, ctx, pluginModule, attrName, attrDesc['update'])
+        # Register callback for a custom update function of the attribute
+        customUpdateFunctions.append(lambda propGroup_, ctx_, pluginModule_, attrName_, : customAttributeUpdateCallback(propGroup_, ctx_, pluginModule_, attrName_, attrDesc['update']))
+
+    if customUpdateFunctions:
+        updateFunc = lambda s, ctx: selectedObjectTagUpdateWrapper(s, ctx, attrCtx.pluginModule, attrName, customUpdateFunctions)
+    else:
+        # Changes to custom node trees do not result in updates, so we need to manually
+        # tag the updated objects and the property editor for redraw. 
+        updateFunc = selectedObjectTagUpdate
+
 
     attrArgs['update'] = updateFunc
 
     if attrDesc.get('poll', None):
-        if pollFunc := getattr(pluginModule, attrDesc['poll'], None):
+        if pollFunc := getattr(attrCtx.pluginModule, attrDesc['poll'], None):
             attrArgs['poll'] = pollFunc
 
 

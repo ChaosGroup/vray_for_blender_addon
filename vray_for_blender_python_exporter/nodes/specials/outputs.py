@@ -5,8 +5,9 @@ from vray_blender.ui import classes
 from vray_blender.lib import class_utils, draw_utils
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
-from vray_blender.nodes.utils import findDataObjFromNode
-from vray_blender.plugins import PLUGINS, getPluginModule
+from vray_blender.nodes.utils import findDataObjFromNode, addInputs
+from vray_blender.plugins import getPluginModule, addAttributes
+from vray_blender.nodes.nodes import vrayNodeUpdate
 
  #######  ########        ## ########  ######  ########
 ##     ## ##     ##       ## ##       ##    ##    ##
@@ -26,8 +27,11 @@ class VRayNodeObjectOutput(VRayNodeBase):
     vray_plugin = 'NONE'
 
     def init(self, context):
-        addInput(self, 'VRaySocketGeom', "Displacement", 'displacement')
-        addInput(self, 'VRaySocketGeom', "Subdivision", 'geometry')
+        # Note: Displacement and Subdivision nodes are not supported for fur objects
+        if (ntree := self.id_data) and (ntree.vray.tree_type == 'OBJECT'):
+            addInput(self, 'VRaySocketGeom', "Displacement", 'displacement')
+            addInput(self, 'VRaySocketGeom', "Subdivision", 'geometry')
+
         addInput(self, 'VRaySocketObjectProps', "Matte")
         addInput(self, 'VRaySocketObjectProps', "Surface")
         addInput(self, 'VRaySocketObjectProps', "Visibility")
@@ -42,6 +46,24 @@ class VRayNodeObjectOutput(VRayNodeBase):
 
     def draw_buttons_ext(self, context, layout):
         self._drawObjectID(context, layout)
+
+class VRayNodeFurOutput(VRayNodeBase):
+    bl_idname = 'VRayNodeFurOutput'
+    bl_label  = 'V-Ray Fur Output'
+    bl_width_default  = 180
+
+    vray_type  : bpy.props.StringProperty(default='GEOMETRY')
+    vray_plugin: bpy.props.StringProperty(default='GeomHair')
+
+    def init(self, context):
+        addInputs(self, getPluginModule('GeomHair'))
+
+    def draw_buttons_ext(self, context, layout):
+        classes.drawPluginUI(context, layout, self.GeomHair, getPluginModule('GeomHair'), self)
+    
+    def update(self):
+        vrayNodeUpdate(self)
+
 
 
 ##     ##    ###    ######## ######## ########  ####    ###    ##
@@ -117,10 +139,12 @@ def getRegClasses():
 
         VRayNodeOutputMaterial,
         VRayNodeObjectOutput,
+        VRayNodeFurOutput
     )
 
 
 def register():
+    addAttributes(getPluginModule("GeomHair"), VRayNodeFurOutput)
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
 

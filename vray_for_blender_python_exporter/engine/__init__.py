@@ -62,6 +62,10 @@ def resetActiveIprRendering():
     for iprRenderer in (VRayRendererIprViewport, VRayRendererIprVfb):
         iprRenderer.reset()
 
+def resetViewportIprRendering():
+    from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+
+    VRayRendererIprViewport.reset()
 
 def register():
     import atexit

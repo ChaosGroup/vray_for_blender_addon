@@ -48,10 +48,10 @@ void  getStrandAttributes(const Interop::HairData& hair, std::vector<int>& point
 		pointCounts.assign(strands, vertsPerStrand);
 	} else {
 		strands = static_cast<int>(hair.strandSegments.size());
-		pointCounts.assign(hair.strandSegments.data(), hair.strandSegments.data() + pts);
+		pointCounts.assign(hair.strandSegments.data(), hair.strandSegments.data() + strands);
 	}
 	
-	if (!hair.pointRadii.empty()){
+	if (!hair.pointRadii.empty()) {
 		// We have 'custom' strand radii per point
 		pointRadii.assign(hair.pointRadii.data(), hair.pointRadii.data() + pts);
 	} else {

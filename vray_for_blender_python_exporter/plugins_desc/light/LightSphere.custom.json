@@ -239,10 +239,7 @@
                     },
                     {
                         "name": "lpe_label",
-                        "label": "LPE Label",
-                        "show": {
-                            "prop": "0"
-                        }
+                        "label": "LPE Label"
                     }
                 ]
             },

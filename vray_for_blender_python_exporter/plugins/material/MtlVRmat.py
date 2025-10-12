@@ -1,4 +1,3 @@
-
 import os
 import bpy
 import pathlib
@@ -35,7 +34,7 @@ class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
     bl_idname      = "vray.set_vrscene_material_name"
     bl_label       = "Set Material Name"
     bl_description = "Set material name from *.vrscene file"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     name: bpy.props.StringProperty()
 
@@ -50,7 +49,7 @@ class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
         MtlVRmat.mtlname = self.name
 
         return {'FINISHED'}
-     
+
 
 def _getMaterialNamesFromMtlXFile(matlxFile):
     # Returns a list of material names from .mtlx file
@@ -78,16 +77,16 @@ def _getMaterialNamesFromMtlFile(fileName):
                 return _getMaterialNamesFromMtlXFile(filePath)
     else:
         debug.printError(f"Mtl File '{filePath}' doesn't exist!")
-    
+
     return []
-    
+
 
 class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
     bl_idname      = "vray.get_vrscene_material_name"
     bl_label       = "Get Material Name"
     bl_description = "Get material name from *.vrscene file"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     node = None
 
     def execute(self, context):

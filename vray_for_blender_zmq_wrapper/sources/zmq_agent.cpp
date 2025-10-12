@@ -6,7 +6,6 @@
 
 #include "cppzmq/zmq.hpp"
 #include "cppzmq/zmq_addon.hpp"
-
 #include "vassert.h"
 
 using namespace std::chrono_literals;
@@ -25,6 +24,9 @@ zmq::multipart_t createMsg(ControlMessage msgType, zmq::message_t&& payload) {
 
 	return msg;
 }
+
+const bool ZmqAgent::Worker;
+const bool ZmqAgent::Client;
 
 ZmqAgent::ZmqAgent(zmq::context_t& ctx, const RoutingId& id, ExporterType workerType, bool isClient)
 	: ctx(ctx)
@@ -178,7 +180,7 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 		}
 	}
 	catch (const ZmqException& e) {
-		reportError(Msg("ZmqException in poller loop:", e.what()));
+		trace(Msg("ZmqException in poller loop:", e.what()));
 	}
 	catch (const std::exception& e) {
 		reportError(Msg("std::exception in poller loop:", e.what()));

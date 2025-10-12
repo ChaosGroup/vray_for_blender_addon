@@ -8,7 +8,7 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
 def onUpdateAttribute(src, context, attrName):
-    onUpdateColorTemperature(src, 'SunLight', attrName, colorModeAttrName='color_temp_mode')
+    onUpdateColorTemperature(src, 'SunLight', attrName, colorModeAttrName='color_temp_mode', colorAttrName='filter_color', combinedColorAttrName='filter_color')
 
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):

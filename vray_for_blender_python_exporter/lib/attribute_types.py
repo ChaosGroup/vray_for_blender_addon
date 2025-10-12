@@ -233,6 +233,7 @@ CompatibleNonVrayNodes = {
     'ShaderNodeBsdfSheen', # full
     'ShaderNodeAddShader', # full
     'ShaderNodeMixShader', # full
+    'ShaderNodeBsdfTranslucent', # full
 
     'ShaderNodeTexChecker', # partial
     "ShaderNodeNormal", # full

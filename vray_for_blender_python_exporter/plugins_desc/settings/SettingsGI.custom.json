@@ -6,9 +6,6 @@
             "default": true
         },
         {
-            "available": [
-                "BLENDER"
-            ],
             "attr": "spherical_harmonics",
             "desc": "Bake or render spherical harmonics",
             "type": "ENUM",

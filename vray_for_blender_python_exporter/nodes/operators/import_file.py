@@ -265,7 +265,7 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
 
     geomMeshFile = previewMesh.vray.GeomMeshFile
 
-    # Store the scale at which the model was imported. If it's  preview has to be regenerated, this value will be used to scale it.
+    # Store the scale at which the model was imported. If its preview has to be regenerated, this value will be used to scale it.
     # The scale will be reset to 1 if the path to the mesh file is changed by the user and the new model will always be imported
     # with scale 1.0 due to the fact that there is no scale information in the mesh file itself.
     geomMeshFile['scale'] = scaleUnit / context.scene.unit_settings.scale_length

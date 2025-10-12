@@ -253,6 +253,8 @@ def assetImportTimerFunction():
 
                 case "HDRI":
                     importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+
+            bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
     except Exception as e:
         debug.printExceptionInfo(e, "cosmos_handler.assetImportTimerFunction")
 

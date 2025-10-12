@@ -1,11 +1,9 @@
-
 import bpy
 
-from vray_blender.exporting import update_tracker
 from vray_blender.lib import class_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput
-from vray_blender.nodes.utils import UpdateTracker, getMaterialFromNode, selectedObjectTagUpdate
+from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui import classes
 
@@ -96,14 +94,14 @@ class VRAY_OT_node_texlayered_layer_add(VRayOperatorBase):
     bl_idname      = 'vray.node_texlayered_layer_add'
     bl_label       = "Add Texture Layer"
     bl_description = "Adds Texture Layer to V-Ray Layered texture"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         node = context.node
 
         humanIndex = node.layers + 1
         VRayNodeTexLayeredMax.addLayer(node, humanIndex)
-        
+
         return {'FINISHED'}
 
 
@@ -111,7 +109,7 @@ class VRAY_OT_node_texlayered_layer_del(VRayOperatorBase):
     bl_idname      = 'vray.node_texlayered_layer_del'
     bl_label       = "Remove Texture Layer"
     bl_description = "Removes Texture layer from V-Ray Layered texture"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         node = context.node
@@ -129,13 +127,10 @@ class VRAY_OT_node_texlayered_layer_del(VRayOperatorBase):
 
         if removeInputs(node, [sockNameTexture, sockNameMask], removeLinked=False):
             node.layers -= 1
-            mtl = getMaterialFromNode(node)
-            UpdateTracker.tagUpdate(mtl, update_tracker.UpdateTarget.MATERIAL, update_tracker.UpdateFlags.DATA)
             return {'FINISHED'}
-        
+
         self.report({'WARNING'}, "Cannot remove linked layers. Unlink and try again")
         return {'CANCELLED'}
-        
 
 
 ######## ######## ##     ##    ##          ###    ##    ## ######## ########  ######## ########  
@@ -161,7 +156,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
     @classmethod
     def poll(cls, context):
         return cls.bl_idname.startswith('VRayNode') and bpy.context.engine == 'VRAY_RENDER_RT'
-    
+
     def init(self, context):
         for i in range(2):
             VRayNodeTexLayeredMax.addLayer(self, humanIndex = i + 1)
@@ -228,8 +223,8 @@ class VRAY_OT_pack_image(VRayOperatorBase):
     bl_idname      = 'vray.pack_image'
     bl_label       = "Pack image"
     bl_description = "Packs the image into the .blend file."
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     nodeID : bpy.props.StringProperty()
     nodeTreeType : bpy.props.StringProperty()
 
@@ -254,11 +249,11 @@ class VRAY_OT_pack_image(VRayOperatorBase):
 
             # The check for 'unique_id' ensures we only process V-Ray nodes.
             node = next((n for n in nodes if getattr(n, "unique_id", None) == self.nodeID), None)
-        
+
         if node and (image := node.texture.image):
             if not image.packed_file:
                 node.texture.image.pack()
-        
+
         return {'FINISHED'}
 
 

@@ -19,7 +19,6 @@
 // Forward declarations
 struct PluginDesc;
 
-
 namespace VRayForBlender {
 
 using namespace Interop;
@@ -111,13 +110,13 @@ public:
 
 	AttrPlugin  exportPlugin(const PluginDesc &pluginDesc);
 
-	void        set_callback_on_image_ready(ExporterCallback cb)      { callback_on_image_ready = cb; }
-	void        set_callback_on_rt_image_updated(ExporterCallback cb) { callback_on_rt_image_updated = cb; }
-	void        set_callback_on_message_updated(UpdateMessageCb cb)   { callback_on_message_update = cb; }
-	void        set_callback_on_bucket_ready(BucketReadyCb cb)        { callback_on_bucket_ready = cb; }
-	void		set_callback_on_vfb_layers_updated(UpdateMessageCb cb){ callback_on_vfb_layers_updated = cb; }
-	void		set_callback_on_render_stopped(ExporterCallback cb)	  { callback_on_render_stopped = cb; }
-	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { callback_on_async_op_complete = cb; }
+	void        set_callback_on_image_ready(ExporterCallback cb)        { std::scoped_lock l(m_callbacksMutex); callback_on_image_ready = cb; }
+	void        set_callback_on_rt_image_updated(ExporterCallback cb)   { std::scoped_lock l(m_callbacksMutex); callback_on_rt_image_updated = cb; }
+	void        set_callback_on_message_updated(UpdateMessageCb cb)     { std::scoped_lock l(m_callbacksMutex); callback_on_message_update = cb; }
+	void        set_callback_on_bucket_ready(BucketReadyCb cb)          { std::scoped_lock l(m_callbacksMutex); callback_on_bucket_ready = cb; }
+	void		set_callback_on_vfb_layers_updated(UpdateMessageCb cb)  { std::scoped_lock l(m_callbacksMutex); callback_on_vfb_layers_updated = cb; }
+	void		set_callback_on_render_stopped(ExporterCallback cb)	    { std::scoped_lock l(m_callbacksMutex); callback_on_render_stopped = cb; }
+	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_async_op_complete = cb; }
 
 private:
 	bool readViewportImage  ();
@@ -125,7 +124,8 @@ private:
 	void handleMsg(const zmq::message_t& msg);
 	void handleError(const std::string& err);
 
-	void processControlOnLogMessage(const proto::MsgControlOnLogMessage& message);
+	void processControlOnLogMessage(proto::DeserializerStream& stream);
+	void processControlOnUpdateVfbLayers(proto::DeserializerStream& stream);
 	void processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& message);
 	void processRendererOnImage(const proto::MsgRendererOnImage& message);
 	void processRendererOnChangeState(const proto::MsgRendererOnChangeState& message);
@@ -148,8 +148,9 @@ private:
 	std::atomic<bool> m_isAborted = false;
 	std::atomic<int>  m_exportedCount = 0;  // Number of exported plugins
 
-	std::mutex        m_imgMutex;  // Ensures the image is not changed while it is read
+	std::mutex        m_imgMutex;        // Ensures the image is not changed while it is read
 	std::mutex        m_zmqClientMutex;
+	std::mutex		  m_callbacksMutex;  // Guards (de)registering of callbacks
 
 	ImageMap          m_layerImages;
 	ImgIdReaderPtr    m_imgIdReader;

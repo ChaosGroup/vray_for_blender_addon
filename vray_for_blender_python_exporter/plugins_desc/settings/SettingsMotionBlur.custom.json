@@ -46,9 +46,6 @@
         ],
         "animatable": false
     },
-    "excluded_parameters": [
-        "subdivs"
-    ],
     "Widget": {
         "widgets": [
             {

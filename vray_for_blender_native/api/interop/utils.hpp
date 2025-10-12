@@ -1,6 +1,6 @@
 #pragma once
 
-#include <python.h>
+#include <Python.h>
 #include <boost/python.hpp>
 #include "utils/synchronization.hpp"
 #include "utils/logger.hpp"
@@ -130,14 +130,14 @@ bool invokePythonCallback(const std::string& callbackName, const py::object& cbW
 		return true;
 	}
 	catch (const py::error_already_set&) {
-		Logger::error("Python exception in '{}' callback", callbackName);
+		Logger::error("Python exception in '%1%' callback", callbackName);
 		Logger::always(getLastPyError());
 	}
 	catch (const std::exception& exc) {
-		Logger::error("Exception in {} callback: {}", callbackName, exc.what());
+		Logger::error("Exception in %1% callback: %2%", callbackName, exc.what());
 	}
 	catch (...) {
-		Logger::error("Unknown exception in {} callback", callbackName);
+		Logger::error("Unknown exception in %1% callback", callbackName);
 	}
 
 	return false;

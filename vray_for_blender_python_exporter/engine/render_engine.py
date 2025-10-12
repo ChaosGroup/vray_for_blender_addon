@@ -1,10 +1,9 @@
-
 import time
-import os
 from pathlib import PurePath
 import sys
 import bpy
 
+from vray_blender.lib.defs import ExporterType
 from vray_blender.engine.renderer_prod import VRayRendererProd
 from vray_blender.engine.renderer_preview import VRayRendererPreview
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
@@ -15,6 +14,28 @@ from vray_blender.nodes.utils import tagRedrawPropertyEditor
 from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
+
+def setupDistributedRendering(settings, exporterType: ExporterType, isInteractive=False):
+    """
+    Export the necessary parameters used for distributed rendering i.e. hosts, dispatcher, in process rendering.
+    Args:
+        settings (ExporterSettings): An existing ExporterSettings instance where the parameters will be set.
+        exporterType (ExporterType): The type of export, used to disable DR.
+        isInteractive (bool): Flag indicating if the current export is for interactive.
+    """
+    vrayDR = bpy.context.scene.vray.VRayDR
+    NON_DR_EXPORTERS = [ ExporterType.PREVIEW ]
+    if exporterType not in NON_DR_EXPORTERS and (not isInteractive or not vrayDR.ignoreInInteractive):
+        settings.drUse = vrayDR.on
+        settings.drRenderOnlyOnHosts = vrayDR.renderOnlyOnNodes
+        if vrayDR.use_remote_dispatcher:
+            settings.remoteDispatcher = vrayDR.dispatcher.address + ":" + str(vrayDR.dispatcher.port)
+        hosts = []
+        for node in vrayDR.nodes:
+            if node.use:
+                port = node.port if node.port_override else 20209
+                hosts.append(node.address + ":" + str(port))
+        settings.setDRHosts(hosts)
 
 class VRayRenderEngine(bpy.types.RenderEngine):
     bl_idname = 'VRAY_RENDER_RT'
@@ -113,6 +134,19 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             VRayRenderEngine.iprRenderer = None
             tagRedrawPropertyEditor()
 
+    @staticmethod
+    def startVantageLiveLink():
+        from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
+        VRayRenderEngine.iprRenderer = VRayRendererVantageLiveLink()
+        VRayRenderEngine.iprRenderer.start()
+        VRayRenderEngine.iprRenderer.exportScene()
+
+    @staticmethod
+    def stopVantageLiveLink():
+        if VRayRenderEngine.iprRenderer:
+            VRayRenderEngine.iprRenderer.stop()
+            VRayRenderEngine.iprRenderer = None
+
     def _stopViewportRenderer(self):
         # Enabling "Solid" viewport mode triggers blender to stop the viewport rendering instance
         VfbEventHandler.stopViewportRender()
@@ -124,7 +158,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         while VRayRendererIprViewport.isActive() and viewPortRunningChecks > 0:
             time.sleep(viewPortCheckSleepTime)
             viewPortRunningChecks -= 1
-         
+
         if viewPortRunningChecks == 0:
             debug.printError(f'Waiting more than {float(viewPortRunningChecks) * viewPortCheckSleepTime} seconds'
                              ' for the viewport bpy.types.RenderEngine instance to be destroyed')

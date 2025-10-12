@@ -25,7 +25,7 @@ class VRAY_OT_node_renderchannels_socket_add(SocketOperators.VRayNodeAddCustomSo
     bl_idname      = 'vray.node_renderchannels_socket_add'
     bl_label       = "Add Render Channel Socket"
     bl_description = "Adds Render Channel sockets"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,8 +37,8 @@ class VRAY_OT_node_renderchannels_socket_del(SocketOperators.VRayNodeDelCustomSo
     bl_idname      = 'vray.node_renderchannels_socket_del'
     bl_label       = "Remove Render Channel Socket"
     bl_description = "Removes Render Channel socket (only not linked sockets will be removed)"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketRenderChannel'
@@ -121,13 +121,18 @@ class VRayNodeRenderChannelDenoiser(VRayNodeBase):
     def init(self, context):
         updateRenderChannelsState(self, True)
         addOutput(self, 'VRaySocketRenderChannelOutput', "Channel")
-    
+
     def free(self):
         updateRenderChannelsState(self, False)
 
+    def draw_buttons(self, context, layout):
+        pluginModule = plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser']
+        painter = draw_utils.UIPainter(context, pluginModule, context.scene.world.vray.RenderChannelDenoiser, self)
+        painter.renderWidgets(layout, pluginModule.Node['widgets'])
+
     def draw_buttons_ext(self, context, layout):
         pluginModule = plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser']
-        
+
         uiPainter = draw_utils.UIPainter(context, pluginModule, context.scene.world.vray.RenderChannelDenoiser, self)
         layout.use_property_split = True
         uiPainter.renderPluginUI(layout)

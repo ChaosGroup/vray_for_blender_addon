@@ -1,5 +1,5 @@
 from vray_blender.lib import plugin_utils, export_utils
-from vray_blender.lib.defs import PluginDesc
+from vray_blender.lib.defs import PluginDesc, AttrPlugin
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.nodes import tree_defaults
 
@@ -15,7 +15,10 @@ def _propSetter(propGroup, pluginName, locationY, useProp):
 
     if obj := propGroup.id_data:
         if not obj.vray.ntree:
-            tree_defaults.addObjectNodeTree(obj)
+            if obj.vray.isVRayFur:
+                tree_defaults.addFurNodeTree(obj)
+            else:
+                tree_defaults.addObjectNodeTree(obj)
         
         objTree = obj.vray.ntree
         objOutput = NodesUtils.getNodeByType(objTree, 'VRayNodeObjectOutput')
@@ -73,13 +76,22 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     # Forward-create all referenced node objects
     # NOTE: This is not an ideal solution and it will not work for types that are not exported as 
     # Node (e.g. lights).
-    if propGroup.reflection_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
-        for attrPlugin in pluginDesc.getAttribute('reflection_exclude'):
-            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
-
-    if propGroup.refraction_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
-        for attrPlugin in pluginDesc.getAttribute('refraction_exclude'):
-            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
-
-    return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
+    if propGroup.use_visibility:
+        if propGroup.reflection_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
+            for attrPlugin in pluginDesc.getAttribute('reflection_exclude'):
+                vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+    
+        if propGroup.refraction_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
+            for attrPlugin in pluginDesc.getAttribute('refraction_exclude'):
+                vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+        
+        return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
+    else:
+        pluginDesc.setAttribute('reflection_exclude', [])
+        pluginDesc.setAttribute('refraction_exclude', [])
+        
+        # export_utils.exportPluginCommon will also export templates. We don't want this here, as it will
+        # override the reflection/refraction exlude lists. 
+        vray.pluginCreate(exporterCtx.renderer, pluginDesc.name, pluginDesc.type)
+        return export_utils.exportPluginParams(exporterCtx, pluginDesc)
 

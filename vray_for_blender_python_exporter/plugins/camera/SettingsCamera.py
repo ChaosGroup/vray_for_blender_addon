@@ -31,3 +31,13 @@ def onUpdateOverrideCameraSettings(propGroup, context: bpy.types.Context, attrNa
     ExporterContext.pluginsToRecreate.add(Names.singletonPlugin("SettingsCamera"))
     ExporterContext.pluginsToRecreate.add(Names.singletonPlugin("RenderView"))
 
+
+def areCameraAutoCorrectionsEnabled(propGroup, node):
+    settingsGI = bpy.context.scene.vray.SettingsGI
+    lightCache = bpy.context.scene.vray.SettingsLightCache
+    
+    lightCacheOn = settingsGI.primary_engine == '3' or settingsGI.secondary_engine == '3'
+    lightCacheSingleFrameMode = lightCache.mode == '0'
+
+    return settingsGI.on and lightCacheOn and lightCacheSingleFrameMode
+    

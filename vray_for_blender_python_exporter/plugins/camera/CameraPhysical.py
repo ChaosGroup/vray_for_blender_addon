@@ -1,7 +1,7 @@
 
-from vray_blender.lib.blender_utils import setShadowAttr, hasShadowedAttrChanged, getShadowAttr
+from vray_blender.lib.blender_utils import setShadowAttr, getShadowAttr
 from vray_blender.lib import plugin_utils, export_utils
-from vray_blender.lib.defs import PluginDesc
+from vray_blender.lib.defs import PluginDesc, ExporterContext
 from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -38,12 +38,14 @@ def getSensorSizeProp(propGroup):
     verticalFit = camPropertyGet(propGroup, "sensor_fit") == 'VERTICAL'
     return "sensor_height" if verticalFit else "sensor_width"
 
+
 def filmWidthGet(propGroup, attrName):
     if propGroup.specify_fov:
         return getShadowAttr(propGroup, attrName)
 
     return camPropertyGet(propGroup, getSensorSizeProp(propGroup))
-    
+
+
 def filmWidthSet(propGroup, attrName, value):
     if propGroup.specify_fov:
         setShadowAttr(propGroup, attrName, value)
@@ -51,13 +53,14 @@ def filmWidthSet(propGroup, attrName, value):
         camPropertySet(propGroup, getSensorSizeProp(propGroup), value)
 
 
+def onUpdateUseDof(propGroup, context, attrName):
+    # Toggling of DoF cannot be animated. Re-export the whole plugin in order to apply 
+    # the changes in interactive.
+    ExporterContext.pluginsToRecreate.add("_cameraPhysical")
+
+
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup
-
-    if hasShadowedAttrChanged(propGroup, 'use_dof'):
-        setShadowAttr(propGroup, 'use_dof', propGroup.use_dof)
-        # DOF enable/disable cannot be animated so we need to re-export the whole plugin.
-        vray.pluginRemove(exporterCtx.renderer, pluginDesc.name)
 
     if not propGroup.enable_vignetting:
         pluginDesc.setAttribute("vignetting", 0)

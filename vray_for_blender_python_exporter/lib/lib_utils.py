@@ -170,3 +170,8 @@ def getPropGroup(parentID, propGroupPath):
     for p in path:
         propGroup = getattr(propGroup, p)
     return propGroup
+
+
+def isRestrictedContext(ctx: bpy.types.Context):
+    """ Return True if this is a restricted context. """
+    return type(ctx).__name__ == '_RestrictContext'

@@ -1,7 +1,7 @@
 
 import bpy
 
-from vray_blender.exporting.tools import getInputSocketByAttr, removeInputSocketLinks
+from vray_blender.exporting.tools import getInputSocketByAttr, removeSocketLinks
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
@@ -22,8 +22,8 @@ def onUpdateInnerLine(updateSource, context: bpy.types.Context, attrName: str ):
     sockLineWidth.enabled = drawInnerLine
     
     if not drawInnerLine:
-        removeInputSocketLinks(sockLineColor)
-        removeInputSocketLinks(sockLineWidth)
+        removeSocketLinks(sockLineColor)
+        removeSocketLinks(sockLineWidth)
 
 
 _CURVE_NODES_TREE_NAME = ".volumeVRayToonTree" # name for hidden node tree containing ShaderNodeRGBCurve nodes

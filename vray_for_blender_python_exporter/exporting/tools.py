@@ -161,7 +161,14 @@ def getInputSocketByAttr(node, attrName):
         debug.printError(f"{node.bl_idname}::{attrName} is not a V-Ray socket")
         return None
         
-
+def getNodeLinkToNode(nodeOutput, sockName, nodeType):
+    # Returns node link connecting socket to node with specific type
+    if sock := getInputSocketByName(nodeOutput, sockName):
+        # The output node of the tree is not connected to anything
+        nodeLink = getFarNodeLink(sock)
+        if nodeLink and nodeLink.from_node.bl_idname == nodeType:
+            return nodeLink
+    return None
 
 def getOutputSocketByAttr(node, attrName):
     """ Search for output socket by its 'vray_attr' field.
@@ -178,14 +185,18 @@ def getOutputSocketByAttr(node, attrName):
 
 
 def getGroupNode(node):
-    """ Get the parent tree node of another group node.
+    """ Get parent group node.
 
         Return:
-        The parent tree node when nested groups are used.
+            The parent group node of 'node' or None if the node is not in a group.
     """
-    res = None
-    users = bpy.context.blend_data.user_map(subset={node.id_data})
-    for group in users[node.id_data]:
+
+    # Node trees of evaluated objects are also 'evaluated'. The node objects in them are
+    # different from the 'original' ones. 
+    nodeTree = node.id_data.original
+    users = bpy.context.blend_data.user_map(subset={nodeTree})
+
+    for group in users[nodeTree]:
         nodes = []
         if isinstance(group, bpy.types.Material):
             nodes = group.node_tree.nodes
@@ -193,14 +204,16 @@ def getGroupNode(node):
             nodes = group.nodes
         elif isinstance(group, bpy.types.ShaderNodeTree):
             nodes = group.nodes
-        for parentTreeNode in nodes:
-            if parentTreeNode.bl_idname == 'ShaderNodeGroup':
-                for groupNode in parentTreeNode.node_tree.nodes:
-                    if groupNode == node:
-                        res = parentTreeNode
-                        break
+        
+        for groupNode in [n for n in nodes if n.bl_idname == 'ShaderNodeGroup']:
+            groupNodeTree = groupNode.node_tree
+            
+            if groupNodeTree.session_uid == nodeTree.session_uid:
+                # The name is guaranteed to be unique within the node tree.
+                if any(n for n in groupNodeTree.nodes if n.name == node.name):
+                    return groupNode
 
-    return res
+    return None
 
 
 def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
@@ -228,6 +241,7 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
         elif fromNode.bl_idname == "NodeGroupInput":
             groupNode = getGroupNode(fromNode)
             if not groupNode:
+                # This might happen if a GroupInput node was copied outside a group.
                 return None
             for idx, inSocket in enumerate(fromNode.outputs):
                 if inSocket == toSocket.links[0].from_socket:
@@ -290,14 +304,10 @@ def getLinkedFromSocket(toSock: bpy.types.NodeSocket):
     return None
 
 
-def removeInputSocketLinks(sock: bpy.types.NodeSocket):
-    """ Remove all links to an input socket """
-    assert not sock.is_output
-
-    if fromSock := getLinkedFromSocket(sock):
-        if link := next((l for l in fromSock.links if l in sock.links), None):
-            ntree: bpy.types.NodeTree = sock.node.id_data
-            ntree.links.remove(link)
+def removeSocketLinks(sock: bpy.types.NodeSocket):
+    """ Remove all links to/from an input/output socket """
+    for l in sock.links:
+        sock.node.id_data.links.remove(l)    
 
 
 def removeOutputSocketLinks(sock: bpy.types.NodeSocket):
@@ -359,14 +369,18 @@ def isObjectOrphaned(obj: bpy.types.ID):
 
 
 def isObjectVisible(exporterCtx, obj: bpy.types.Object):
-        """ Return the visibility of an object taking into account the current rendering mode """
+        """ Return the visibility of an object taking into account the current rendering mode.
+            Note that the visibility of the objects used as instancers may diiffer from the 
+            visibility of the instancer itself. The first is determined by the 
+            show_instancer_for_viewport/render propperty, the second is returned by the
+            visible_get() fnuction for the viewport and hide_render property for prod renders. 
+        """
         def visibleInViewport(obj: bpy.types.Object):
             return obj.visible_get() and ((not obj.is_instancer) or obj.show_instancer_for_viewport)
 
-        def visibleInProd(obj: bpy.types.Object):
-            return  not obj.hide_render \
-                    and ((not obj.is_instancer) or obj.show_instancer_for_render) \
-                    and obj.evaluated_get(exporterCtx.dg).is_evaluated
+        def visibleInProd(evalObj: bpy.types.Object):
+            evalObj = obj.evaluated_get(exporterCtx.dg)
+            return  not evalObj.hide_render and ((not obj.is_instancer) or obj.show_instancer_for_render)
 
         if exporterCtx.interactive:
             return visibleInViewport(obj)

@@ -40,7 +40,7 @@ def renderMaterialOptionsPanel(mtl, context, layout):
 
 def renderMaterialSelector(layout: bpy.types.UILayout, obj: bpy.types.Object):
     mtl = obj.active_material
-    
+
     if mtl:
         if mtl.vray.is_vray_class:
             if NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL') is not None:

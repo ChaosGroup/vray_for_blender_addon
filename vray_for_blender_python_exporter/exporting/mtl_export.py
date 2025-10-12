@@ -12,7 +12,7 @@ def _getMtlsOfTextures(textureNames: list[str]):
          
           NOTE: This is hackish, but for the moment we don't know how to make Blender generate 
           depsgraph updates for the node tree.
-        """
+    """
         result = set()
 
         for mtl in [m for m in bpy.data.materials if hasattr(m, 'vray') and m.node_tree]:
@@ -27,14 +27,13 @@ def _tagForUpdateMtlWithSelectorNode(exporterCtx: ExporterContext):
     """ Tag for update object's material if it has and object selector node,
         referencing object with updated transform
     """
-    transformUpdates = (u.id.original.session_uid for u in exporterCtx.dg.updates if u.is_updated_transform)
     for mtl in [m for m in bpy.data.materials if m.node_tree]:
         if not mtl.node_tree:
             continue
 
         for node in mtl.node_tree.nodes:
             if node.bl_idname == "VRayNodeSelectObject":
-                if node.objectPtr and (node.objectPtr.original.session_uid in transformUpdates):
+                if node.objectPtr and (node.objectPtr.original.session_uid in exporterCtx.dgUpdates['transform']):
                     UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.DATA)
                     return
 
@@ -51,7 +50,7 @@ def calculateMatExportCache(exporterCtx: ExporterContext):
     else:
         _tagForUpdateMtlWithSelectorNode(exporterCtx)
         mtlUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.ALL)
-        updates = [u.id.original for u in exporterCtx.dg.updates]
+        updates = [u.id.original for u in exporterCtx.dg.updates if u.is_updated_geometry or u.is_updated_shading or u.is_updated_transform]
 
         updatedVrayMtlSIDs = {m[0] for m in mtlUpdates}
         updatedVrayMtls = {m for m in bpy.data.materials if (getObjTrackId(m) in updatedVrayMtlSIDs) or (m and (m.node_tree in updates))}
@@ -83,8 +82,11 @@ class MtlExporter(ExporterBase):
             tuple(AttrPlugin, SceneStats): the exported plugin and the update to the export statistics
         """
         mtlId = getObjTrackId(mtl)
-        if mtlId in self.exportedMtls:
-            return self.exportedMtls[mtlId], SceneStats()
+
+        if (mtlId in self.exportedMtls):
+            isCachedCopyDirty = not self.fullExport and (mtlId in self.dgUpdates['shading'])
+            if not isCachedCopyDirty:
+                return self.exportedMtls[mtlId], SceneStats()
 
         assert mtl.use_nodes and mtl.node_tree, f"Material has no node tree: {mtl.name}"
 
@@ -170,7 +172,9 @@ class MtlExporter(ExporterBase):
             if not mtlIsExportable(mtl):
                 continue
 
-            _, mtlStats = self.exportMtl(mtl)
+            # NOTE: The is_evaluated property of the evaluated material will be False for materials 
+            # which do not need evaluation
+            _, mtlStats = self.exportMtl(mtl.evaluated_get(self.dg))
 
             if mtlStats:
                 stats += mtlStats
@@ -247,7 +251,7 @@ class MtlExporter(ExporterBase):
     def prunePlugins(self):
         """ Delete all plugins associated with removed, orphaned or updated materials """
         assert(self.interactive)
-
+        
         def forgetNodes(mtlId, nodeIds):
              if not nodeIds:
                  return

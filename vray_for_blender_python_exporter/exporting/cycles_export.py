@@ -65,8 +65,8 @@ def _getResolvedSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType)
     """
     value = socket.default_value
     if type == SocketValueType.Float:
-        if socket.type == 'VALUE':
-            return value
+        if socket.type in ('VALUE', 'INT', 'BOOLEAN'):
+            return float(value)
         elif socket.type == 'RGBA':
             return value[0] * 0.2126 + value[1] * 0.7152 + value[2] * 0.0722
         elif socket.type == 'VECTOR' or socket.type == 'ROTATION':
@@ -76,8 +76,8 @@ def _getResolvedSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType)
     elif type == SocketValueType.Color:
         if socket.type == 'RGBA' or socket.type == 'ROTATION' or socket.type == "VECTOR":
             return toColor(value)
-        elif socket.type == 'VALUE':
-            return Color((value, value, value))
+        elif socket.type in ('VALUE', 'INT', 'BOOLEAN'):
+            return Color((float(value), float(value), float(value)))
         else:
             assert False, "Unsupported socket type"
     return value if type == SocketValueType.Float else toColor(value)
@@ -288,6 +288,8 @@ def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
             return _exportCyclesSheenBsdf(nodeCtx)
         case "ShaderNodeBsdfAnisotropic":
             return _exportCyclesGlossyBsdf(nodeCtx)
+        case "ShaderNodeBsdfTranslucent":
+            return _exportCyclesTranslucentBsdf(nodeCtx)
         case "ShaderNodeAddShader":
             return _exportCyclesBlendShaderNode(nodeCtx, isMix=False)
         case "ShaderNodeMixShader":
@@ -689,6 +691,25 @@ def _exportCyclesGlossyBsdf(nodeCtx: NodeContext):
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
 
+def _exportCyclesTranslucentBsdf(nodeCtx: NodeContext):
+    pluginName = Names.treeNode(nodeCtx)
+    mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
+
+    _exportCyclesColorAttribute(nodeCtx, mtlDesc, "Color", "fog_color")
+    _exportCyclesColorAttribute(nodeCtx, mtlDesc, "Normal", "bump_map")
+
+    mtlDesc.setAttribute("diffuse", BLACK_COLOR)
+    mtlDesc.setAttribute("refract", WHITE_COLOR)
+    mtlDesc.setAttribute("fog_mult", 0.0)
+    mtlDesc.setAttribute("roughness_model", 1) # oren-nayar
+    mtlDesc.setAttribute("bump_type", 6) # explicit normal
+    mtlDesc.setAttribute("gtr_energy_compensation", 2)
+    mtlDesc.setAttribute("option_shading_model", 1)
+    mtlDesc.setAttribute("fog_unit_scale_on", True)
+    mtlDesc.setAttribute("refract_affect_shadows", False)
+
+    return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
+
 def _exportCyclesRefractiveBsdf(nodeCtx: NodeContext, isGlass: bool):
     if not isGlass:
         NodeContext.registerError("V-Ray Refractive BSDF will render different")
@@ -824,66 +845,114 @@ def _exportCyclesNormalMap(nodeCtx: NodeContext):
 def _exportCyclesMathNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeMath = nodeCtx.node
     op = node.operation
-    if op in ['SIGN', 'LESS_THAN', 'GREATER_THAN', 'COMPARE', 'SMOOTH_MIN', 'SMOOTH_MAX', 'FLOORED_MODULO', 'WRAP', 'SNAP', 'PINGPONG', 'SINH', 'COSH', 'TANH', 'MULTIPLY_ADD']:
+    if op in ['SIGN', 'SMOOTH_MIN', 'SMOOTH_MAX', 'FLOORED_MODULO', 'WRAP', 'SNAP', 'PINGPONG', 'SINH', 'COSH', 'TANH']:
         NodeContext.registerError(f"Math node operation {op} is not supported by V-Ray")
         return None
 
     pluginName = Names.treeNode(nodeCtx)
-    texDesc = PluginDesc(pluginName, "TexFloatOp")
+    if op in ['GREATER_THAN', 'LESS_THAN']:
+        texDesc = PluginDesc(pluginName, "TexCondition2")
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value", "first_term")
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value_001", "second_term")
+        texop = 2 if op == 'GREATER_THAN' else 4
+        texDesc.setAttribute("operation", texop)
+        texDesc.setAttribute("color_if_true", WHITE_COLOR)
+        texDesc.setAttribute("color_if_false", BLACK_COLOR)
 
-    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value", "float_a")
-    if "Value_001" in nodeCtx.node.inputs:
-        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value_001", "float_b")
+        attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
+        attrPlugin = _exportIntensityOutput(nodeCtx, attrPlugin)
+    elif op == 'COMPARE':
+        # 1 if abs(A-B)<C else 0
+        texDifferenceName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
+        texDifferenceDesc = PluginDesc(texDifferenceName, "TexFloatOp")
+        texDifferenceDesc.setAttribute("mode", 3) # difference
+        _exportCyclesFloatAttribute(nodeCtx, texDifferenceDesc, "Value", "float_a")
+        _exportCyclesFloatAttribute(nodeCtx, texDifferenceDesc, "Value_001", "float_b")
+        texDifference = _exportCyclesPluginWithStats(nodeCtx, texDifferenceDesc)
+        texAbsName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
+        texAbsDesc = PluginDesc(texAbsName, "TexFloatOp")
+        texAbsDesc.setAttribute("mode", 9) # abs
+        texAbsDesc.setAttribute("float_a", texDifference)
+        texAbs = _exportCyclesPluginWithStats(nodeCtx, texAbsDesc)
 
-    # Note that using the outpus is slightly faster than using the parameter but it's currently not trivial to do so.
-    mode = 0
-    match op:
-        case 'ADD' | 'MULTIPLY_ADD': mode = 2
-        case 'SUBTRACT': mode = 3
-        case 'MULTIPLY': mode = 0
-        case 'DIVIDE': mode = 1
-        case 'POWER': mode = 4
-        case 'LOGARITHM': mode = 13 # no base log
-        case 'SQRT': mode = 15
-        case 'ABSOLUTE': mode = 9
-        case 'EXPONENT': mode = 11
-        case 'MINIMUM': mode = 7
-        case 'MAXIMUM': mode = 8
-        case 'FLOOR' | 'TRUNCATE': mode = 12
-        case 'CEIL' | 'ROUND': mode = 10
-        case 'SINE': mode = 4
-        case 'COSINE': mode = 6
-        case 'TANGENT': mode = 18
-        case 'ARCSINE': mode = 19
-        case 'ARCCOSINE': mode = 20
-        case 'ARCTANGENT': mode = 21
-        case 'ARCTAN2 ': mode = 22
-        case 'MODULO': mode = 17
+        texDesc = PluginDesc(pluginName, "TexCondition2")
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value_002", "second_term")
+        texDesc.setAttribute("first_term", texAbs)
+        texDesc.setAttribute("operation", 5) # less than or equals
+        texDesc.setAttribute("color_if_true", WHITE_COLOR)
+        texDesc.setAttribute("color_if_false", BLACK_COLOR)
+        attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
+        attrPlugin = _exportIntensityOutput(nodeCtx, attrPlugin)
+    elif op == 'MULTIPLY_ADD':
+        # (A*B)+C
+        texABName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
+        texABDesc = PluginDesc(texABName, "TexFloatOp")
+        _exportCyclesFloatAttribute(nodeCtx, texABDesc, "Value", "float_a")
+        _exportCyclesFloatAttribute(nodeCtx, texABDesc, "Value_001", "float_b")
+        texABDesc.setAttribute("mode", 0) # product
+        texAB = _exportCyclesPluginWithStats(nodeCtx, texABDesc)
+        texDesc = PluginDesc(pluginName, "TexFloatOp")
+        texDesc.setAttribute("mode", 2) # sum
+        texDesc.setAttribute("float_a", texAB)
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value_002", "float_b")
 
-        case 'FRACT':
-            mode = 16
-            texDesc.setAttribute("float_b", 1.0)
-        case 'RADIANS':
-            mode = 0
-            DEG_TO_RAD = math.pi / 180.0
-            texDesc.setAttribute("float_b", DEG_TO_RAD)
-        case 'DEGREES':
-            mode = 0
-            RAD_TO_DEG = 180.0 / math.pi
-            texDesc.setAttribute("float_b", RAD_TO_DEG)
-        case 'INVERSE_SQRT':
-            mode = 15
+        attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
+    else:
+        texDesc = PluginDesc(pluginName, "TexFloatOp")
 
-    texDesc.setAttribute("mode", mode)
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value", "float_a")
+        if "Value_001" in nodeCtx.node.inputs:
+            _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value_001", "float_b")
 
-    attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc)
+        # Note that using the outpus is slightly faster than using the parameter but it's currently not trivial to do so.
+        mode = 0
+        match op:
+            case 'ADD' | 'MULTIPLY_ADD': mode = 2
+            case 'SUBTRACT': mode = 3
+            case 'MULTIPLY': mode = 0
+            case 'DIVIDE': mode = 1
+            case 'POWER': mode = 4
+            case 'LOGARITHM': mode = 13 # no base log
+            case 'SQRT': mode = 15
+            case 'ABSOLUTE': mode = 9
+            case 'EXPONENT': mode = 11
+            case 'MINIMUM': mode = 7
+            case 'MAXIMUM': mode = 8
+            case 'FLOOR' | 'TRUNCATE': mode = 12
+            case 'CEIL' | 'ROUND': mode = 10
+            case 'SINE': mode = 4
+            case 'COSINE': mode = 6
+            case 'TANGENT': mode = 18
+            case 'ARCSINE': mode = 19
+            case 'ARCCOSINE': mode = 20
+            case 'ARCTANGENT': mode = 21
+            case 'ARCTAN2 ': mode = 22
+            case 'MODULO': mode = 17
 
-    if mode == 'INVERSE_SQRT':
-        pluginName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
-        texInvertDesc = PluginDesc(pluginName, "TexInvertFloat")
-        texInvertDesc.setAttribute("texture", attrPlugin)
+            case 'FRACT':
+                mode = 16
+                texDesc.setAttribute("float_b", 1.0)
+            case 'RADIANS':
+                mode = 0
+                DEG_TO_RAD = math.pi / 180.0
+                texDesc.setAttribute("float_b", DEG_TO_RAD)
+            case 'DEGREES':
+                mode = 0
+                RAD_TO_DEG = 180.0 / math.pi
+                texDesc.setAttribute("float_b", RAD_TO_DEG)
+            case 'INVERSE_SQRT':
+                mode = 15
 
-        attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texInvertDesc)
+        texDesc.setAttribute("mode", mode)
+
+        attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
+
+        if mode == 'INVERSE_SQRT':
+            pluginName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
+            texInvertDesc = PluginDesc(pluginName, "TexInvertFloat")
+            texInvertDesc.setAttribute("texture", attrPlugin)
+
+            attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texInvertDesc)
 
     if node.use_clamp:
         return _wrapClampPlugin01(nodeCtx, attrPlugin)
@@ -1433,7 +1502,7 @@ def _exportCyclesMappingNode(nodeCtx: NodeContext):
         nodeCtx.pushUVWTransform(transform)
         sockValue = _exportCyclesLinkedSocket(nodeCtx, vectorSocket)
         nodeCtx.popUVWTransform()
-        if "UVWGen" in sockValue.pluginType:
+        if isinstance(sockValue, AttrPlugin) and "UVWGen" in sockValue.pluginType:
             return sockValue
     else:
         return Vector(_getSocketValue(vectorSocket, SocketValueType.Color)) @ transform

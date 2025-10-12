@@ -1,11 +1,10 @@
 #include "scene_exporter_pro.h"
 
 #include "zmq_exporter.h"
+#include "zmq_server.h"
 #include "api/interop/utils.hpp"
 #include "utils/logger.hpp"
 #include "utils/synchronization.hpp"
-
-
 
 namespace py = boost::python;
 
@@ -22,16 +21,22 @@ ProductionExporter::ProductionExporter(const ExporterSettings& settings)
 
 void ProductionExporter::setupCallbacks()
 {
+	// This method is only called from SceneExporter::init()
+	
 	m_exporter->set_callback_on_image_ready([this]() {
 		cb_on_image_ready();
 	});
-	
+
 	m_exporter->set_callback_on_bucket_ready([this](const VRayBaseTypes::AttrImage & img){
 		cb_on_bucket_ready(img);
 	});
 
 	m_exporter->set_callback_on_rt_image_updated([this]() {
 		cb_on_rt_image_updated();
+	});
+
+	m_exporter->set_callback_on_vfb_layers_updated([this](const std::string& layersJson) {
+		cb_on_vfb_layers_updated(layersJson);
 	});
 }
 
@@ -49,8 +54,7 @@ void ProductionExporter::cb_on_bucket_ready(const VRayBaseTypes::AttrImage& img)
 		return;
 	}
 
-	std::lock_guard<std::mutex> l(m_callback_mtx);
-	
+
 	auto now = high_resolution_clock::now();
 
 	// Rate-limit screen updates
@@ -63,10 +67,18 @@ void ProductionExporter::cb_on_bucket_ready(const VRayBaseTypes::AttrImage& img)
 
 void ProductionExporter::cb_on_rt_image_updated()
 {
-	std::lock_guard<std::mutex> l(m_callback_mtx);
 	updateImage();
 }
 
+
+void ProductionExporter::cb_on_vfb_layers_updated(const std::string& layersJson)
+{
+	auto callback = ZmqServer::get().getPythonCallback("vfbLayersUpdate");
+	
+	if (!callback.is_none()) {
+		invokePythonCallback("vfbLayersUpdate", callback, layersJson);
+	}
+}
 
 void ProductionExporter::renderStart(RenderPass *renderPass, py::object cbImageUpdated)
 {
@@ -83,8 +95,6 @@ void ProductionExporter::renderStart(RenderPass *renderPass, py::object cbImageU
 
 void ProductionExporter::renderEnd()
 {
-	std::lock_guard<std::mutex> l(m_callback_mtx);
-
 	if (m_settings.closeVfbOnStop) {
 		m_exporter->free();
 	}
@@ -92,10 +102,16 @@ void ProductionExporter::renderEnd()
 		m_exporter->stop();
 	}
 
-	m_exporter->set_callback_on_image_ready(nullptr);
-	m_exporter->set_callback_on_bucket_ready(nullptr);
-	m_exporter->set_callback_on_rt_image_updated(nullptr);
-	m_exporter->set_callback_on_vfb_layers_updated(nullptr);
+	{
+		// This method is called from Python. Unlock the GIL to avoid a deadlock from 
+		// trying to acquire the callbacks mutex here and in Python callbacks invoked
+		// from server events.
+		WithNoGIL noGIL;
+		m_exporter->set_callback_on_image_ready(nullptr);
+		m_exporter->set_callback_on_bucket_ready(nullptr);
+		m_exporter->set_callback_on_rt_image_updated(nullptr);
+		m_exporter->set_callback_on_vfb_layers_updated(nullptr);
+	}
 
 	m_renderFinished = true;
 	m_renderPass = nullptr;
@@ -105,7 +121,7 @@ void ProductionExporter::renderEnd()
 void ProductionExporter::renderFrame()
 {
 	WithNoGIL noGIL;
-		
+
 	m_renderFinished = false;
 
 	m_exporter->commitChanges();
@@ -170,7 +186,7 @@ void ProductionExporter::updateImage()
 		auto layerImg = m_exporter->getImage();
 		if (layerImg.channels != m_renderPass->channels){
 			// TODO: figure out when RenderPass might not be RGBA
-			Logger::error("Rendered image ({} channles) not in the same format as RenderPass ({} channels)", 
+			Logger::error("Rendered image (%1% channles) not in the same format as RenderPass (%2% channels)",
 								layerImg.channels, m_renderPass->channels);
 			return;
 		}
@@ -186,7 +202,7 @@ void ProductionExporter::updateImage()
 			(std::abs(layerImg.w - m_renderPass->rectx) > ALLOWED_SIZE_DIFF) ||
 			(std::abs(layerImg.h - m_renderPass->recty) > ALLOWED_SIZE_DIFF) )
 		{
-			Logger::error("Rendered image: invalid image size {} x {}, expected {} {}",	
+			Logger::error("Rendered image: invalid image size %1%x%2%, expected %3%x%4%",
 				layerImg.w, layerImg.h, m_renderPass->rectx, m_renderPass->recty);
 			return;
 		}

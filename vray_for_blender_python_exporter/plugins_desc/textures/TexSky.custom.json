@@ -56,7 +56,7 @@
                 "value_conv_factor": 0.017453292519943295
             },
             "ui": {
-                "spin_step": 5.72958,
+                "spin_step": 57.2958,
                 "min": 0,
                 "max": 90
             }

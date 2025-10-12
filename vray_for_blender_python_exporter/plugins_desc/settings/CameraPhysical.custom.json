@@ -42,8 +42,11 @@
             "subtype": "ANGLE",
             "desc": "Blade rotation",
             "precision": 7,
+            "options": {
+                "value_conv_factor": 0.017453292519943295
+            },
             "ui": {
-                "spin_step": 0.1
+                "spin_step": 57.2958
             }
         },
         {
@@ -76,8 +79,8 @@
                 "value_conv_factor": 0.017453292519943295
             },
             "ui": {
-                "spin_step": 5.72958,
-                "min": 0,
+                "spin_step": 57.2958,
+                "min": 10,
                 "max": 360
             }
         },
@@ -89,7 +92,7 @@
                 "value_conv_factor": 0.017453292519943295
             },
             "ui": {
-                "spin_step": 5.72958,
+                "spin_step": 57.2958,
                 "min": -360,
                 "max": 360
             }
@@ -132,9 +135,7 @@
         },
         {
             "attr": "use_dof",
-            "options": {
-                "shadowed": true
-            }
+            "update": "onUpdateUseDof"
         },
         {
             "attr": "film_width",
@@ -152,6 +153,32 @@
             "options": {
                 "shadowed": true
             }
+        },
+        {
+            "attr": "bmpaperture_tex_path",
+            "type": "STRING",
+            "desc": "Texture to use as aperture.",
+            "default": "",
+            "subtype": "FILE_PATH",
+            "options": {
+                "derived": true
+            },
+            "ui": {
+                "display_name": "Texture"
+            }
+        },
+        {
+            "attr": "distortion_tex_path",
+            "type": "STRING",
+            "desc": "Texture to use as distortion map.",
+            "default": "",
+            "subtype": "FILE_PATH",
+            "options": {
+                "derived": true
+            },
+            "ui": {
+                "display_name": "Distortion Texture"
+            }
         }
     ],
     "Type": "CAMERA",
@@ -161,15 +188,11 @@
             "enable_thin_lens_equation",
             "subdivs",
             "dof_display_threshold",
-            
             "targeted",
             "target_distance"
         ],
         "animatable": true
     },
-    "excluded_parameters": [
-        "subdivs"
-    ],
     "Widget": {
         "widgets": [
             {
@@ -351,10 +374,12 @@
                             },
                             {
                                 "name": "blades_num",
+                                "active": { "cond": "::blades_enable=1" },
                                 "label": "Blades Number"
                             },
                             {
                                 "name": "blades_rotation",
+                                "active": { "cond": "::blades_enable=1" },
                                 "label": "Rotation"
                             },
                             {
@@ -374,8 +399,7 @@
                                 "default_closed": false,
                                 "attrs": [
                                     {
-                                        "name": "bmpaperture_tex",
-                                        "label": "File"
+                                        "name": "bmpaperture_tex_path"
                                     },
                                     {
                                         "name": "bmpaperture_resolution"
@@ -424,15 +448,24 @@
                             },
                             {
                                 "name": "distortion",
-                                "label": "Amount"
+                                "label": "Amount",
+                                "visible": {
+                                    "cond": "::distortion_type=0;::distortion_type=1"
+                                }
                             }
                         ]
                     },
                     {
-                        "name": "distortion_tex"
+                        "name": "distortion_tex_path",
+                        "visible": {
+                            "cond": "::distortion_type=3"
+                        }
                     },
                     {
-                        "name": "lens_file"
+                        "name": "lens_file",
+                        "visible": {
+                            "cond": "::distortion_type=2"
+                        }
                     }
                 ]
             }

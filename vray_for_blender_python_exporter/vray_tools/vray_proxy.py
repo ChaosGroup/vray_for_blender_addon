@@ -170,6 +170,7 @@ def _getDimsOfProxyPreview(filePath, geomMeshFile):
     return (maxVec - minVec) * geomMeshFile.scale
 
 
+
 def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffset, animSpeed, animFrame):
     """ Load the preview voxel from a .vrmesh file, if any.
     
@@ -182,34 +183,33 @@ def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffse
     
     geomMeshFile = ob.data.vray.GeomMeshFile
 
-    if geomMeshFile.previewType == 'None':
+    meshData = None
+    if geomMeshFile.previewType == 'Point':
         # Replace with empty mesh
         mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
         blender_utils.replaceObjectMesh(ob, mesh)
         bpy.data.meshes.remove(mesh)
         geomMeshFile['num_preview_faces'] = 0
-
-        geomMeshFile.initial_preview_mesh_pos = Vector((0.0, 0.0, 0.0))
-        geomMeshFile.initial_preview_dims = _getDimsOfProxyPreview(filePath, geomMeshFile)
-
-        return
-
-    meshData, err = _getDataFromMeshFile(filePath, geomMeshFile.previewType,
+        meshData = {
+            'vertices': [(0.0, 0.0, 0.0)],
+            'faces': []
+        }
+    else:
+        meshData, err = _getDataFromMeshFile(filePath, geomMeshFile.previewType,
                                          geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
-    if not meshData:
-        return err
+        if not meshData:
+            return err
     
     mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
 
-    if geomMeshFile.initial_preview_mesh_pos != Vector((0.0, 0.0, 0.0)):
-        offset = blender_utils.getGeomCenter(ob) - geomMeshFile.initial_preview_mesh_pos 
-        if (offset != Vector((0.0, 0.0, 0.0))) and \
-            (geomMeshFile.scale != 0): # If scale is zero, all vertices collapse to (0,0,0), so no offset is needed.
-            
-            offset /= geomMeshFile.scale  # Apply scaling to the object offset.
-            vertices = np.array(meshData['vertices']) # Convert the list of tuple vertices to an (N,3) array
-            offset_array = np.array([offset.x, offset.y, offset.z]) 
-            meshData['vertices'] = (vertices + offset_array).tolist()
+    offset = blender_utils.getGeomCenter(ob) - geomMeshFile.initial_preview_mesh_pos 
+    if (offset != Vector((0.0, 0.0, 0.0))) and \
+        (geomMeshFile.scale != 0): # If scale is zero, all vertices collapse to (0,0,0), so no offset is needed.
+        
+        offset /= geomMeshFile.scale  # Apply scaling to the object offset.
+        vertices = np.array(meshData['vertices']) # Convert the list of tuple vertices to an (N,3) array
+        offset_array = np.array([offset.x, offset.y, offset.z]) 
+        meshData['vertices'] = (vertices + offset_array).tolist()
 
     mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
     mesh.update()
@@ -227,23 +227,24 @@ def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffse
 
 
     # Depending on the source of the model, scaling may be necessary. E.g. Cosmos assets are in 
-    # cm. Scale the model gometry without affecting any currently set scale value for the object.
-    if geomMeshFile.scale != 1.0:
-        oldScale = ob.scale.copy()
-        ob.scale = Vector((1.0, 1.0, 1.0))
-        ob.scale *= geomMeshFile.scale
-        # Apply the selected object's scale. This will apply the transform to the mesh and 
-        # reset the 'scale' field to 1.0.
-        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True) 
-        ob.scale = oldScale
+    # cm. Scale the model geometry without affecting any currently set scale value for the object.
+    oldScale = ob.scale.copy()
+    ob.scale = Vector((1.0, 1.0, 1.0))
+    ob.scale *= geomMeshFile.scale
+    # Apply the selected object's scale. This will apply the transform to the mesh and 
+    # reset the 'scale' field to 1.0.
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True) 
 
     # Setting initial dimensions of the preview mesh. They are needed for the preview scale calculations.
     # No need for calculating the dimensions of the preview mesh, they are set in ob.dimensions from Blender
     geomMeshFile.initial_preview_dims = ob.dimensions
 
+    ob.scale = oldScale # Restoring the original scale of the object.
+
     # Set the initial position of the preview mesh to the center of the bounding box of the mesh.
     # This position can't be obtained from the mesh itself, as it may be offset by the object's transform.
-    geomMeshFile.initial_preview_mesh_pos = _getCenterOfProxyPreview(filePath, geomMeshFile)
+    geomMeshFile.initial_preview_mesh_pos = (0,0,0) if geomMeshFile.previewType == 'Point' else \
+        _getCenterOfProxyPreview(filePath, geomMeshFile)
 
 
 def loadVRayScenePreviewMesh(sceneFilepath, ob: bpy.types.Object):
@@ -431,15 +432,14 @@ def flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
 
 def getProxyPreviewScale(obj: bpy.types.Object):
     assert isObjectVrayProxy(obj)
-
     geomMeshFile = obj.data.vray.GeomMeshFile
+
+    # The dimensions of the point preview are always 0,0,0 and can't be scaled.
+    if geomMeshFile.previewType == 'Point':
+        return Vector((1.0, 1.0, 1.0))
+
     initialPreviewDims = geomMeshFile.initial_preview_dims
     curObjDims = obj.dimensions
-
-    # If the preview type is None, the preview mesh is empty, so use the initial dimensions of the object.
-    # Otherwise in that case the calculation of the scale will be incorrect.
-    if geomMeshFile.previewType == "None":
-        curObjDims = initialPreviewDims
 
     # (curObjDims / initialPreviewDims) / obj.scale
     return Vector(((a / b) / c if b != 0 and c != 0 else 0 \

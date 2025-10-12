@@ -129,6 +129,17 @@ def isCompatibleNode(node: bpy.types.Node):
     return isVrayNode(node) or (node.bl_idname in CompatibleNonVrayNodes)
 
 
+def isSameNode(node1: bpy.types.Node, node2: bpy.types.Node):
+    nodeTree1 = node1.id_data.original
+    nodeTree2 = node2.id_data.original
+
+    if (nodeTree1 is None) or (nodeTree2 is None):
+        return False
+    
+    return  nodeTree1.session_uid == nodeTree2.session_uid and \
+            node1.name == node2.name
+
+
 def getFilterFunction(pluginType: str, filterFnName: str):
     """ Get a filter function by its name.
 

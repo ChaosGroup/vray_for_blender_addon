@@ -1,15 +1,16 @@
 #include "logger.hpp"
 
-#include <array>
 #include <chrono>
-#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <mutex>
+#include <thread>
+#include "utils/platform.h"
 
 #include "vassert.h"
 
-namespace 
+namespace
 {
 
 const std::string COLOR_RED      = "\033[0;31m";
@@ -25,7 +26,7 @@ const std::string COLOR_DEFAULT  = "\033[0m";
 const std::vector<std::string> LEVEL_NAMES = {"", "ERROR", "WARNING", "INFO", "DEBUG"};
 const std::vector<std::string> LEVEL_COLORS = {COLOR_DEFAULT, COLOR_RED, COLOR_YELLOW, COLOR_CYAN, COLOR_DEFAULT};
 
-} 
+}
 
 
 const std::string& levelColor(Logger::LogLevel logLevel) {
@@ -48,8 +49,7 @@ void ConsoleLogger::write(Logger::LogLevel level, const std::string& msg) {
 
 
 // FileLogger
-FileLogger::FileLogger(const std::string& filePath) :
-	m_file(filePath)
+FileLogger::FileLogger(const std::string& filePath) : m_file(filePath)
 {
 }
 
@@ -72,6 +72,9 @@ Logger& Logger::get()
 
 Logger::~Logger()
 {
+	if (m_logThread.joinable()) {
+		m_logThread.join();
+	}
 	vassert(!m_isRunning && "Logger must be stopped before being destroyed");
 }
 
@@ -111,7 +114,7 @@ void Logger::flush()
 
 
 	std::scoped_lock lock(m_writersLock);
-	
+
 	for (auto& writer : m_writers) {
 		for (const LogItem& item : logBatch) {
 			writer->write(item.level, item.msg);
@@ -123,7 +126,7 @@ void Logger::flush()
 void Logger::startLogging()
 {
 	m_isRunning = true;
-	m_logThread = std::jthread(&Logger::run, this);
+	m_logThread = std::thread(&Logger::run, this);
 }
 
 
@@ -136,7 +139,7 @@ void Logger::stopLogging()
 
 	flush();
 
-	// When the plugin is disabled and then enabled again,  
+	// When the plugin is disabled and then enabled again,
 	// a new writer will be added, causing the log to be published twice.
 	std::scoped_lock lock(m_writersLock);
 	m_writers.clear();
@@ -155,14 +158,15 @@ std::string Logger::formatTime() {
 	// Get duration in milliseconds
 	auto ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
 
-	const time_t timeNow = system_clock::to_time_t(now);
+	const std::time_t timeNow = system_clock::to_time_t(now);
+	std::stringstream ss;
 
 	// get printable result:
-	tm tmNow = {};
-	gmtime_s(&tmNow, &timeNow);
+	std::tm gmt;
+	if (platform::gmtime(timeNow, gmt)) {
+		ss << std::put_time(&gmt, "%d-%m-%Y %H:%M:%S:") << std::setw(3) << std::setfill('0') << ms;
+	}
 
-	std::stringstream ss;
-	ss << std::put_time(&tmNow, "%d-%m-%Y %H:%M:%S:") << std::setw(3) << std::setfill('0') << ms;
 	return ss.str();
 }
 

@@ -1,4 +1,3 @@
-
 import random
 
 import bpy
@@ -27,7 +26,7 @@ class VRAY_OT_user_attribute_assign_to_selected(VRayOperatorBase):
     bl_idname      = 'vray.user_attribute_assign_to_selected'
     bl_label       = "Assign to Selected Objects"
     bl_description = "Copy the currently selected user attribute from the active object to all other selected objects"
-    bl_options     = {'INTERNAL'}
+    bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
         activeObject    = context.active_object
@@ -128,9 +127,9 @@ class VRayUserAttributeItem(bpy.types.PropertyGroup):
     def asString(self):
         if not self.use:
             return ""
-        
+
         value = ""
-        
+
         match self.value_type:
             case '0':   value = str(self.value_int)
             case '1':   value = str(self.value_float)
@@ -144,10 +143,10 @@ class VRAY_UL_UserAttributes(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         row = layout.row(align=True)
         split = row.split(factor=0.05)
-        
+
         rowHeader = split.column()
         rowHeader.label(text='*')
-        
+
         splitCol2 = split.column()
         rowItem = splitCol2.row(align=True)
         rowItem.prop(item, 'name', text='')
@@ -183,7 +182,7 @@ class VRayUserAttributes(bpy.types.PropertyGroup):
         for item in self.user_attributes:
             if itemStr := item.asString():
                 items.append(itemStr)
-                      
+
         return ";".join(items)
 
 
@@ -191,8 +190,8 @@ class VRAY_OT_user_attribute_add(VRayOperatorBase):
     bl_idname      = 'vray.user_attribute_add'
     bl_label       = "Add User Attribute"
     bl_description = "Add user attribute"
-    bl_options     = {'INTERNAL'} 
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         Node = context.object.vray.UserAttributes
 
@@ -206,8 +205,8 @@ class VRAY_OT_user_attribute_del(VRayOperatorBase):
     bl_idname      = 'vray.user_attribute_del'
     bl_label       = "Delete User Attribute"
     bl_description = "Delete user attribute"
-    bl_options     = {'INTERNAL'}
-    
+    bl_options     = {'INTERNAL', 'UNDO'}
+
     def execute(self, context):
         ua = context.object.vray.UserAttributes
 

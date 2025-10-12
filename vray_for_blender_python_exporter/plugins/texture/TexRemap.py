@@ -129,7 +129,7 @@ def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, pr
     
     if propGroup.type == '1':
         attrName = widgetAttr['name']
-        attrLabel = getAttrLabel(getPluginModule('TexRemap'), widgetAttr)
+        attrLabel = getAttrLabel(getPluginModule('TexRemap'), widgetAttr, propGroup, node=None)
         layout.prop(propGroup, attrName, text=attrLabel)
     
     layout.separator()

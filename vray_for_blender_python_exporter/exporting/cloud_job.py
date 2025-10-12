@@ -1,7 +1,7 @@
 
 import bpy
 import subprocess
-import webbrowser
+import os
 import json
 
 from vray_blender.lib import lib_utils
@@ -118,13 +118,15 @@ class VCloudJob:
         """
         VRayPreferences = bpy.context.preferences.addons['vray_blender'].preferences
         if VRayPreferences.detect_vray_cloud:
-            createProjectResult = subprocess.call(self.createProjectCmd())
+            cmd = self.createProjectCmd()
+            createProjectResult = subprocess.call(cmd, env=os.environ)
 
             if createProjectResult != 0:
                 debug.report("ERROR","Chaos Cloud failed to create project")
                 return
 
-            result = subprocess.run(self.submitCmd(), capture_output=True, text=True)
+            cmd = self.submitCmd()
+            result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ)
             if result.returncode != 0:
                 debug.report("ERROR", "Chaos Cloud failed to submit job, check the console")
 

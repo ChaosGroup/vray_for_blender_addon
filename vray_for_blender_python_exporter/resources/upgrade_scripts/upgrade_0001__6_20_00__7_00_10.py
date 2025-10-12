@@ -224,7 +224,7 @@ def run():
     debug.printDebug("\n")
 
 
-    debug.printAlways("Scene conversion complete!\n")
+    debug.printDebug("Scene conversion complete!\n")
 
 
 def check():

@@ -146,13 +146,8 @@
         }
     ],
     "Options": {
-        "excluded_parameters": [],
+        "excluded_parameters": [
+        ],
         "animatable": true
-    },
-    "excluded_parameters": [
-        "cell_color",
-        "cell_color_tex_mult",
-        "crease_color",
-        "crease_color_tex_mult"
-    ]
+    }
 }

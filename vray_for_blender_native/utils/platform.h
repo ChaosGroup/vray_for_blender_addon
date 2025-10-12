@@ -2,18 +2,12 @@
 
 #pragma once
 
-#ifdef _WIN32 // Windows
-	#include <Windows.h>
-#endif
 
-
+#include <ctime>
 
 namespace platform
 {
-
-#ifdef _WIN32 // Windows
-	using ProcessIdType = DWORD;
-#endif
-
+	using ProcessIdType = unsigned long;
 	void allowSetForegroundWindow(ProcessIdType processId);
+	bool gmtime(const std::time_t& time, std::tm& out);
 }

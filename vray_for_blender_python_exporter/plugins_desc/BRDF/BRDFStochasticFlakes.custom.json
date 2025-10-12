@@ -14,6 +14,18 @@
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"
+        },
+        {
+            "attr": "hilight_glossiness",
+            "desc": "Controls the distribution of the flakes to create sharper or more diffuse highlights."
+        },
+        {
+            "attr": "flake_scale",
+            "desc": "When Mapping Type is set to Mapping channel, a value of 1.0 is recommended. For Triplanar mapping, the Number of Flakes is distributed in each square unit of local object space. For this, lower the Flake Scale to below 0.05, and increase the Number of Flakes value depending on the object size."
+        },
+        {
+            "attr": "brdf_type",
+            "desc": "The BRDF guides the distribution of the flakes. The GGX distribution has a longer 'tail' compared to Beckmann."
         }
     ],
     "Options": {

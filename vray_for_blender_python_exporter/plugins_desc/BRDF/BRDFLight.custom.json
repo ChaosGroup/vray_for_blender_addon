@@ -31,6 +31,10 @@
         {
             "attr": "multiplyByOpacity",
             "default": true
+        },
+        {
+            "attr": "compensateExposure",
+            "desc": "Used when rendering with the V-Ray Physical Camera. When enabled, the intensity of the material is adjusted to compensate for the camera exposure."
         }
     ],
     "Widget": {

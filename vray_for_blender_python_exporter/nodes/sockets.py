@@ -6,13 +6,12 @@ import sys
 
 from vray_blender import debug
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import removeInputSocketLinks
-from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getPluginInputNodeDesc, getPluginModule
+from vray_blender.exporting.tools import removeSocketLinks
+from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getInputSocketDesc, getPluginModule
 from vray_blender.lib import attribute_types, attribute_utils
-from vray_blender.lib.attribute_utils import toAColor
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
 from vray_blender.nodes.tools import isCompatibleNode, getSocketPanelName, getSocketPanel, isInputSocketLinked
-from vray_blender.nodes.utils import selectedObjectTagUpdate
+from vray_blender.nodes.utils import selectedObjectTagUpdate, getPropGroupOfNode
 
 
 DYNAMIC_SOCKET_OVERRIDES = {}
@@ -225,10 +224,10 @@ def addInput(node, socketType, socketName, attrName='', pluginType='', visible=T
     
     if createdSocket.name != socketName:
         # Blender might change the name if a socket with the same name already exists.
-        debug.printError(f"Socket name was changed during creation, probably due to a name conflict: {socketType}::{socketName}")
+        debug.printError(f"Socket name was changed during creation, probably due to a name conflict: {socketType}::{socketName} => {createdSocket.name}")
 
     # Socket has to be disabled in order to not participate in the
-    # 'Show/Hide Unconnected Sockets' operartion. All other functionality is unaffected.
+    # 'Show/Hide Unconnected Sockets' operation. All other functionality is unaffected.
     createdSocket.enabled = visible
 
     createdSocket.hide = not visible
@@ -260,7 +259,7 @@ def _configureInPanel(sock: bpy.types.NodeSocket, node: bpy.types.Node):
 
 def addOutput(node: bpy.types.Node, socketType: str, socketName: str, attrName: str=None, description: str=None):
     if socketName in node.outputs:
-        return
+        return node.outputs[socketName]
 
     createdSocket = node.outputs.new(socketType, socketName)
 
@@ -291,7 +290,7 @@ def removeInputs(node, sockNames:list[str], removeLinked=False):
         for s in sockets:
             # Remove links before deleting the socket,
             # as nodes connected to it will also be affected
-            removeInputSocketLinks(s)
+            removeSocketLinks(s)
 
             node.inputs.remove(s)
 
@@ -415,6 +414,23 @@ class VRaySocket(bpy.types.NodeSocket):
         if fnDraw := getattr(self, 'draw_impl'):
             fnDraw(context, layout, node, text)
 
+    def _sockLabel(self):
+        from vray_blender.lib.condition_processor import evaluateCondition, isCondition
+        from vray_blender.lib.attribute_utils import formatAttributeName
+        
+        node = self.node
+        pluginModule = getPluginModule(node.vray_plugin)
+        sockDesc = getInputSocketDesc(pluginModule, self.vray_attr)
+        
+        if (sockDesc is not None) and ((label := sockDesc.get('label')) is not None):
+            if isCondition(label):
+                return evaluateCondition(getattr(node, node.vray_plugin), node, label)
+            else:
+                return label
+        
+        # No label definition was found, draw using the original socket name
+        return formatAttributeName(self.name)
+        
 
 class VRayValueSocket(VRaySocket):
     def setValue(self, value):
@@ -457,10 +473,11 @@ class VRaySocketRollout(VRaySocket):
 
 
     def exportLinked(self, pluginDesc, attrDesc, linkValue):
-        assert False, "Rollouts cannot be exported"
+        assert False, "Rollouts sockets should not be linked"
 
     def exportUnlinked(self, nodeCtx: NodeContext, pluginDesc, attrDesc):
-        assert False, "Rollouts cannot be exported"
+        # Rollout sockets have nothing to export.
+        pass
 
     @classmethod
     def draw_color_simple(cls):
@@ -469,7 +486,7 @@ class VRaySocketRollout(VRaySocket):
     def draw_impl(self, context, layout, node, text):
         layout.alignment = 'LEFT'
         icon = 'DOWNARROW_HLT' if self.is_open else 'RIGHTARROW'
-        layout.prop(self, 'is_open', text=self.name[:-1], emboss = False, icon = icon)
+        layout.prop(self, 'is_open', text=self._sockLabel(), emboss = False, icon = icon)
         
 
 class VRaySocketMult(VRayValueSocket):
@@ -518,9 +535,9 @@ class VRaySocketMult(VRayValueSocket):
         elif type(self.value) is mathutils.Color:
             split = layout.split(factor=0.4)
             split.prop(self, 'value', text="")
-            split.label(text=text)
+            split.label(text=self._sockLabel())
         else:
-            layout.prop(self, 'value', text=text)
+            layout.prop(self, 'value', text=self._sockLabel())
 
     def copy(self, dest):
         dest.multiplier = self.multiplier
@@ -1058,13 +1075,18 @@ class VRaySocketPluginUse(VRaySocketUse):
         """ Draw as property in a property page, not as a socket.
             This method is used to show socket values on property pages.
         """
-        # Show the description for the 'use' property as a label, not the one for the
+        # Show the name of the 'use' property as a label, not the one of the
         # meta property.
         pluginModule = getPluginModule(node.vray_plugin)
         metaAttr = getPluginAttr(pluginModule, self.vray_attr)
-        targetAttr = getPluginAttr(pluginModule, metaAttr['bound_props']['use_prop'])
-        attrLabel = targetAttr.get('desc', text)
-        
+        useAttrName = metaAttr['bound_props']['use_prop']
+
+        if (sockDesc := getInputSocketDesc(pluginModule, self.vray_attr)) is not None and (label := sockDesc.get('label')):
+            attrLabel = label
+        else:
+            useAttrDesc = attribute_utils.getAttrDesc(pluginModule, useAttrName)
+            attrLabel = attribute_utils.getAttrDisplayName(useAttrDesc)
+
         layout.prop(self, 'use', text=attrLabel, expand=expand, slider=slider)
 
 
@@ -1629,7 +1651,7 @@ DYNAMIC_SOCKET_OVERRIDES = {
             'soft_max': 1.0,
             'size': 4,
             'set': _wrapperSocketSetItem,
-            'get': lambda s: _wrapperSocketGetItemWithConv(s, toAColor)
+            'get': lambda s: _wrapperSocketGetItemWithConv(s, attribute_utils.toAColor)
         }
     ),
     'VRaySocketPluginUse': (
@@ -1697,7 +1719,7 @@ def initDynamicSocketTypes():
             paramSubtype = param.get('subtype', None)
             
             # If there is a custom definition for the node in the plugin description, get the type from there.
-            if (node := getPluginInputNodeDesc(pluginModule, attrName)) and (nodeType := node.get('type', None)):
+            if (node := getInputSocketDesc(pluginModule, attrName)) and (nodeType := node.get('type', None)):
                 paramType = nodeType
                 
             if paramSocketType := attribute_types.getSocketType(paramType, paramSubtype):

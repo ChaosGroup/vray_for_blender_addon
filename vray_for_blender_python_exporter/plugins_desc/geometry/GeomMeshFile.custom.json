@@ -7,7 +7,7 @@
             "desc" : "The type of the generated preview",
             "items" : 
             [
-                [ "None", "None", "" ],
+                [ "Point", "Point", "" ],
                 [ "Full", "Full", "" ],
                 [ "Preview", "Preview", "" ],
                 [ "Boxes", "Boxes", "" ]

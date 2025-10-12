@@ -41,6 +41,9 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     from vray_blender.lib.defs import ExporterContext, AttrPlugin, ExporterContext, RendererMode, NodeContext, ExporterType, PluginDesc
     from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
+    syncObjectUniqueName(material, reset=False)
+    syncObjectUniqueName(material.original, reset=False)
+
     # Remove any pre-existing V-Ray nodes from the tree to avoid confusion.
     # It is the responsibility of the caller of this function to notify the user
     # that existing nodes will be deleted.
@@ -167,15 +170,20 @@ def fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
                 # Upgrade from the older version, set to the new default
                 vrayMtl['Attributes']['gtr_energy_compensation'] = '2'
 
-        if (opacity := attrs.get('opacity', None)) and (type(opacity) is str):
-            # The VRayMtl node shows only the 'opacity_color' to which both color and float
-            # inputs can be attached. The export code then determines whether to export 
-            # 'opacity' or 'opacity_color' based on the type of the connected socket.
-            # If the 'opacity' socket is connected in the imported material, reconnect the
-            # link to the 'opacity_color' socket.
-            attrs['opacity_color'] = opacity
-            attrs['opacity_source'] = 1 # set opacity_color as the valid opacity source
-            del attrs['opacity']
+        if (opacity := attrs.get('opacity', None)) != None:
+            if (type(opacity) is str):
+                # The VRayMtl node shows only the 'opacity_color' to which both color and float
+                # inputs can be attached. The export code then determines whether to export
+                # 'opacity' or 'opacity_color' based on the type of the connected socket.
+                # If the 'opacity' socket is connected in the imported material, reconnect the
+                # link to the 'opacity_color' socket.
+                attrs['opacity_color'] = opacity
+                attrs['opacity_source'] = 1 # set opacity_color as the valid opacity source
+                del attrs['opacity']
+            elif isinstance(opacity, (int, float)):
+                attrs['opacity_color'] = Color((opacity, opacity, opacity))
+                attrs['opacity_source'] = 1 # set opacity_color as the valid opacity source
+                del attrs['opacity']
 
         if fogMult := attrs.get("fog_mult", None):
             # Invert the fog_mult during import too similar to the logic in the exporter.
@@ -1126,9 +1134,9 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
 
             origAttrName = attrName
             # Handling attributes that are represented as COLOR_TEXTURE
-            if attrDesc['type'] in ("COLOR", "TEXTURE"):
+            if attrDesc['type'] in ("COLOR", "ACOLOR", "TEXTURE"):
                 for clrTex in colorTexPlugins:
-                    if clrTex["color_prop" if attrDesc['type'] == "COLOR" else "tex_prop"] == attrName:
+                    if clrTex["color_prop" if (attrDesc['type'] == "COLOR" or attrDesc['type']=="ACOLOR") else "tex_prop"] == attrName:
                         attrName = clrTex["attr"]
                         attrSocketName = getSocketName(pluginModule, attrName)
 

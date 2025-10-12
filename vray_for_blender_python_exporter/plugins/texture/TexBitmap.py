@@ -1,4 +1,3 @@
-
 import bpy
 
 from vray_blender.lib.names import Names
@@ -28,7 +27,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     bitmapBufferPluginDesc.vrayPropGroup = node.BitmapBuffer
 
     commonNodesExport.exportNodeTree(nodeCtx, bitmapBufferPluginDesc)
-    
+
     allowRelativePaths = nodeCtx.exporterCtx.exportOnly
 
     if node.BitmapBuffer.use_external_image:
@@ -66,7 +65,7 @@ def _shouldExportEnvironmentUVW(node: bpy.types.Node):
         if (toNode.bl_idname in ('VRayNodeLightDome', 'VRayNodeEnvironment')) or \
             (toNode.bl_idname == "NodeReroute" and _shouldExportEnvironmentUVW(toNode)): # Handling Reroute nodes
             return True
-       
+
     return False
 
 def getImageFilePath(image: bpy.types.Image):
@@ -101,11 +100,10 @@ def _getExternalImagePath(filePath: str, allowRelativePaths: bool):
         formattedPath = filePath[2:]
         if not allowRelativePaths:
             # We want any relative paths to be absolute, but there might be user attributes in the path
-            # which will break abspath(). 
+            # which will break abspath().
             formattedPath =  bpy.path.abspath('//') + formattedPath
     else:
         formattedPath = bpy.path.abspath(filePath)
 
     assert formattedPath != ''
     return formattedPath
-    
