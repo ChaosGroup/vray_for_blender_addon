@@ -231,9 +231,12 @@ if (INSTALL_LOCAL)
         endif()
 
 
-        set(COPY_TOOLS
-            ${SDK_ROOT}/tools/vrmatconvert.exe
-        )
+		if(FULL_BUILD)
+			set(COPY_TOOLS
+				${SDK_ROOT}/tools/vrmatconvert.exe
+			)
+		endif()
+
     elseif(APPLE)
         if (BLENDER_VER VERSION_GREATER_EQUAL "4.4")
             set (COPY_LIBS

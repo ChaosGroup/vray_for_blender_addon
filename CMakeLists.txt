@@ -25,8 +25,6 @@ else()
 	set(FULL_BUILD OFF)
 endif()
 
-get_filename_component(BINTOOLS_PATH ${BINTOOLS_PATH} ABSOLUTE)
-
 fix_separators(ADDON_PATH)
 
 if (APPLE)
@@ -111,8 +109,8 @@ if (FULL_BUILD)
 		message(STATUS "Skipping project generation for VRayTools")
 	endif()
 
-	if(INSTALL_LOCAL AND ADDON_PATH)
-		install(DIRECTORY "vray_for_blender_python_exporter/" DESTINATION "${ADDON_PATH}")
-	endif()
 endif()
 
+if(INSTALL_LOCAL AND ADDON_PATH)
+	install(DIRECTORY "vray_for_blender_python_exporter/" DESTINATION "${ADDON_PATH}")
+endif()
