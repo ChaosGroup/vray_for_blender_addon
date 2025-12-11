@@ -105,7 +105,7 @@
         {
             "attr" : "geom_tesselation_mult",
             "default" : 4.0,
-            "desc" : "Manual control over the number of subdivisions when intersecting the spline based hairs",
+            "desc" : "Manual control over tesselation of spline-based hairs. Maximum length in pixels for dynamic tesselation (geom_splines=1), or constant factor for static tesselation (when xgen_generated=1)",
             "type" : "FLOAT",
             "ui" : {}
         },

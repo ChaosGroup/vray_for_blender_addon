@@ -465,7 +465,8 @@
             {
                 "display_name" : "Max distance",
                 "max" : 10000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

@@ -2,12 +2,9 @@ import bpy
 
 from vray_blender.exporting.tools import getInputSocketByAttr, getLinkedFromSocket
 from vray_blender.lib import  export_utils, plugin_utils
-from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
+from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.lib.lib_utils import  getLightPluginType
 from vray_blender.nodes.tools import isInputSocketLinked
-from vray_blender.nodes.utils import getNodeOfPropGroup
-
-from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -36,8 +33,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
                 sunAttr = next((i for i in sunAttr if i.pluginType == 'SunLight'), None)
 
     if not hasObjSelector:
-        sunAttr = plugin_utils.objectToAttrPlugin(pluginDesc.vrayPropGroup.sun)
-        pluginDesc.setAttribute('sun', sunAttr)
+        pluginDesc.vrayPropGroup.sun_select.exportToPluginDesc(ctx, pluginDesc)
     elif (sunAttr is None) or sunAttr.isEmpty():
         # If object selector has no sun(s), reset the attribute in order to not 
         # use any sun object set directly in the TexSky node.

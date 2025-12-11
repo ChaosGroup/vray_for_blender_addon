@@ -5,19 +5,19 @@ import sys
 import time
 
 from vray_blender import debug
-from vray_blender.lib import sys_utils
+from vray_blender.lib import blender_utils, sys_utils
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender import bl_info
 
 # Update the compute devices in the UI in the main thread.
 def _updateComputeDevicesCallback(deviceType: int, deviceNames: list[str], defaultDeviceStates: list[bool]):
     def _updateComputeDevices():
-        computeDevices = bpy.context.scene.vray.Exporter.computeDevices
+        computeDevices = blender_utils.getVRayPreferences().compute_devices
         computeDevices.updateComputeDeviceSelectors(deviceType, deviceNames, defaultDeviceStates)
     bpy.app.timers.register(_updateComputeDevices)
 
 class ZMQProcess:
-    """ The ZMQ server process is started on the local machine and uses the Blender 
+    """ The ZMQ server process is started on the local machine and uses the Blender
         console for its output.
     """
 
@@ -27,7 +27,7 @@ class ZMQProcess:
         """ Start VRayZmqServer process if not already running and establish
             the control connection to it.
         """
-        # Reset 
+        # Reset
         if not ZMQProcess._started:
             self._start()
             ZMQProcess._started = True
@@ -91,7 +91,6 @@ class ZMQProcess:
 
         self._updateComputeDevices = lambda deviceType, deviceNames, defaultDeviceStates: _updateComputeDevicesCallback(deviceType, deviceNames, defaultDeviceStates)
         vray.setUpdateComputeDevicesCallback(self._updateComputeDevices)
-        
 
 
     def stop(self):
@@ -99,13 +98,13 @@ class ZMQProcess:
         if ZMQProcess._started:
             debug.printDebug('Stopping VRayZmqServer control connection. VRayZmqServer may not stop ' +
                                 'immediately if there are pending production jobs.' )
-            vray.ZmqControlConn.stop()
+            vray.stop()
             ZMQProcess._started = False
 
 
     @staticmethod
     def isRunning():
-        return vray.ZmqControlConn.check()
+        return vray.isRunning()
 
 
     def _startServerProcess(self):
@@ -117,6 +116,7 @@ class ZMQProcess:
             debug.printError(f"Can't find V-Ray ZMQ Server at path {executablePath}")
             return
 
+        prefs = blender_utils.getVRayPreferences()
         if hasattr(bpy.context, 'scene'):
             settings = bpy.context.scene.vray.Exporter
         else:
@@ -127,7 +127,6 @@ class ZMQProcess:
 
             settings = SimpleNamespace()
             setattr(settings, 'zmq_port', -1)                     # Efemeral port
-            setattr(settings, 'verbose_level', sys_utils.StartupConfig.logLevel)
 
         args = vray.ZmqServerArgs()
 
@@ -138,7 +137,8 @@ class ZMQProcess:
 
         args.exePath             = executablePath
         args.port                = settings.zmq_port
-        args.logLevel            = int(settings.verbose_level)
+        args.logLevel            = int(prefs.verbose_level)
+        args.enableQtLogs        = prefs.enable_qt_logs
         args.headlessMode        = bpy.app.background  # Do not try to show VFB and agreements dialog in headless mode
         args.noHeartbeat         = True
         args.blenderPID          = os.getpid()
@@ -164,7 +164,7 @@ class ZMQProcess:
                 debug.printError("Cannot run ZmqServer: another instance is running. Rendering in V-Ray will not be available.")
                 return
 
-        vray.ZmqControlConn.start(args)
+        vray.start(args)
 
         if bpy.app.background:
             # In headless mode, we need to wait for the ZmqServer to start before attempting any rendering

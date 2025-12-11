@@ -8,6 +8,7 @@ from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes.utils import findDataObjFromNode, addInputs
 from vray_blender.plugins import getPluginModule, addAttributes
 from vray_blender.nodes.nodes import vrayNodeUpdate
+from vray_blender.exporting.update_tracker import UpdateTracker
 
  #######  ########        ## ########  ######  ########
 ##     ## ##     ##       ## ##       ##    ##    ##
@@ -35,13 +36,14 @@ class VRayNodeObjectOutput(VRayNodeBase):
         addInput(self, 'VRaySocketObjectProps', "Matte")
         addInput(self, 'VRaySocketObjectProps', "Surface")
         addInput(self, 'VRaySocketObjectProps', "Visibility")
-    
+
     def _drawObjectID(self, context, layout):
         if obj := context.active_object:
             layout.use_property_split = True
             layout.prop(obj.vray.VRayObjectProperties, 'objectID')
 
     def draw_buttons(self, context, layout):
+        layout.use_property_decorate = False
         self._drawObjectID(context, layout)
 
     def draw_buttons_ext(self, context, layout):
@@ -60,7 +62,7 @@ class VRayNodeFurOutput(VRayNodeBase):
 
     def draw_buttons_ext(self, context, layout):
         classes.drawPluginUI(context, layout, self.GeomHair, getPluginModule('GeomHair'), self)
-    
+
     def update(self):
         vrayNodeUpdate(self)
 
@@ -74,7 +76,7 @@ class VRayNodeFurOutput(VRayNodeBase):
 ##     ## ##     ##    ##    ##       ##    ##   ##  ##     ## ##
 ##     ## ##     ##    ##    ######## ##     ## #### ##     ## ########
 
-            
+
 class VRayNodeOutputMaterial(VRayNodeBase):
     bl_idname = 'VRayNodeOutputMaterial'
     bl_label  = 'V-Ray Material Output'
@@ -86,21 +88,33 @@ class VRayNodeOutputMaterial(VRayNodeBase):
 
 
     def _updateNode(self, context: bpy.types.Context):
-        # For custom nodes, updates to their properties are not automatically tagged by Blender. 
-        # The updates to sockets are processed by a dedicated hook attached when the socket is 
-        # created. This property however does not have a socket, this is why we need this update hook. 
-        if ob := context.active_object:
-            if ma := ob.active_material:
-                ma.update_tag()
+        # For custom nodes, updates to their properties are not automatically tagged by Blender.
+        # The updates to sockets are processed by a dedicated hook attached when the socket is
+        # created. This property however does not have a socket, this is why we need this update hook.
+        if (ob := context.active_object) and (mtl := ob.active_material) and mtl.node_tree:
+            mtl.update_tag()
+            UpdateTracker.tagMtlTopology(context, mtl)
+
+    dontOverride: bpy.props.BoolProperty(
+        name        = "Don't Override",
+        description = "Don't override material",
+        default     = False,
+        update      = _updateNode,
+        options     = set()
+    )
 
     MtlMaterialID: bpy.props.PointerProperty(
         type = class_utils.TYPES['VRayMtlMaterialID']
     )
 
+    def draw_buttons(self, context, layout):
+        layout.prop(self, 'dontOverride')
+
     def draw_buttons_ext(self, context, layout):
-        # Draw material option properties in the sidebar 
+        layout.prop(self, 'dontOverride')
+        # Draw material option properties in the sidebar
         mtl = findDataObjFromNode(bpy.data.materials, self)
-        
+
         self._drawMaterialOption(context, layout, mtl.vray.MtlMaterialID, 'MtlMaterialID', 'Material ID')
         self._drawMaterialOption(context, layout, mtl.vray.MtlRenderStats, 'MtlRenderStats', 'Render Stats')
         self._drawMaterialOption(context, layout, mtl.vray.MtlWrapper, 'MtlWrapper', 'Wrapper')
@@ -114,18 +128,18 @@ class VRayNodeOutputMaterial(VRayNodeBase):
         panelUniqueId = f'{self.as_pointer()}_{pluginType}'
 
         if panel := draw_utils.rollout(layout, panelUniqueId, label, usePropDataSrc=propGroup, usePropName='use'):
-            
+
             split = panel.split(factor=0.05, align=True)
-            
+
             enabled = propGroup.use
             split.enabled = enabled
-            split.active = enabled 
+            split.active = enabled
 
             split.column()
             col = split.column()
             classes.drawPluginUI(context, col, propGroup, getPluginModule(pluginType), self)
 
-    
+
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
 ##     ## ##       ##         ##  ##          ##    ##     ##  ##   ##     ##     ##  ##     ## ####  ##

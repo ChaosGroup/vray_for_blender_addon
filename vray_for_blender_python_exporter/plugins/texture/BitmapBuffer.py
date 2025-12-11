@@ -31,7 +31,7 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
         split = layout.split(factor=0.2)
 
         col1 = split.column()
-        col1.label(text="Image:")
+        col1.label(text="Image")
 
         col2 = split.column()
         row = col2.row(align=True)

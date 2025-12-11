@@ -52,7 +52,8 @@
             {
                 "display_name" : "Focus distance",
                 "max" : 1000000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

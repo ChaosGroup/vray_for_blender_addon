@@ -45,7 +45,7 @@ namespace {
 	static const RoutingId   ID_CONTROL_CONN                      = 1;
 	static const int		 EPHEMERAL_PORT_NUM                   = -1; // A special value indicating ZmqServer should listen on an ephemeral port
 	static const int         EXIT_CODE_IRRECOVERABLE_ERROR        = 2;	// Do not relaunch ZmqServer if it has exited with this code
-	
+
 	static const auto		ZMQ_SERVER_RESTART_TIMEOUT = 2s;		// Time between restarts when ZmqServer process exits
 	static const auto		ZMQ_SERVER_ENDPOINT_READ_TIMEOUT = 1s;	// Timeout for reading the ZmqServer listen port number after it has been published
 
@@ -56,6 +56,11 @@ const int ZmqServer::RENDERER_INACTIVITY_INTERVAL;
 const int ZmqServer::HANDSHAKE_TIMEOUT;
 
 
+ZmqServer::~ZmqServer() {
+	stop();
+}
+
+
 void ZmqServer::start(const ZmqServerArgs& args) {
 	assert(!m_conn && "ZmqServer::start() method can only be called once.");
 	assert(nullptr != m_ctx.handle());
@@ -63,15 +68,19 @@ void ZmqServer::start(const ZmqServerArgs& args) {
 	m_args = args;
 	m_ctx = zmq::context_t(1);
 
+	// Reset the stop token as this function may be called multiple times
+	std::stop_source fresh; 
+	m_stopSource.swap(fresh);
+
 	runServer();
 }
 
 
 void ZmqServer::stop() {
 	Logger::info("Blender: Stopping communication channel ...");
-	
+
 	m_stopSource.request_stop();
-	
+
 	{
 		std::scoped_lock lock(m_lockConn);
 		m_conn.reset();
@@ -82,7 +91,8 @@ void ZmqServer::stop() {
 	if (m_processRunner.joinable()) {
 		m_processRunner.join();
 	}
-	
+	m_stopSource = std::stop_source();
+
 	Logger::info("Blender: communication channel stopped.");
 }
 
@@ -140,6 +150,11 @@ const ZmqServerArgs& ZmqServer::getArgs() const {
 }
 
 
+int ZmqServer::getProcessID() const {
+	return m_zmqServerPID;
+}
+
+
 ZmqServer& ZmqServer::get() {
 	static ZmqServer svr;
 	return svr;
@@ -169,16 +184,19 @@ void ZmqServer::runServer() {
 #ifndef _WIN32
 			// On Unix systems in case the server crashes we need to manually remove the old shared file,
 			// otherwise we would instantly read the old zmq server port in obtainServerEndpointInfo(...).
-			SharedMemoryWriter::remove(std::to_string(m_args.blenderPID), SHARED_PORT_MAPPING_ID);
+			if (m_zmqServerPID != 0) {
+				SharedMemoryWriter::remove(std::to_string(m_zmqServerPID), SHARED_PORT_MAPPING_ID);
+			}
 #endif
 
 			bp::child zmqServer = startServerProcess();
 			bool started = false;
+			
 			if (zmqServer.running()) {
-				if (obtainServerEndpointInfo()) {
-					m_zmqServerPID = zmqServer.id();
+				if (obtainServerEndpointInfo(zmqServer.id())) {
 					Logger::info("ZmqServer started. Process ID: %1%. Port: %2%", m_zmqServerPID.load(), m_zmqServerPort.load());
-
+					m_zmqServerPID = zmqServer.id();
+					
 					startControlConn();
 					started = true;
 				}
@@ -207,7 +225,7 @@ void ZmqServer::runServer() {
 
 				std::scoped_lock lock(m_lockConn);
 				if (!!m_conn && m_conn->isStopped() && zmqServer.running()) {
-					// An error has occurred on the connection and it has been stopped. 
+					// An error has occurred on the connection and it has been stopped.
 					// The server is still running, try to reconnect.
 					startControlConn();
 				}
@@ -228,16 +246,14 @@ void ZmqServer::runServer() {
 				}
 
 				invokePythonCallback("zmqServerAbortCallback", getPythonCallback("zmqServerAbort"), retCodeStr);
-				startControlConn();
 				if (zmqServer.exit_code() == EXIT_CODE_IRRECOVERABLE_ERROR) {
 					stop();
 					return;
 				}
 			}
-			else
-			{
-				// Terminating the ZMQ server if a stop is requested.  
-				// Otherwise, it will continue running with no way to stop it while Blender is running.  
+			else {
+				// Terminating the ZMQ server if a stop is requested.
+				// Otherwise, it will continue running with no way to stop it while Blender is running.
 				zmqServer.terminate();
 			}
 		}
@@ -267,7 +283,8 @@ bp::child ZmqServer::startServerProcess() {
 		"-pluginVersion",  m_args.pluginVersion,
 		"-blenderVersion", m_args.blenderVersion,
 		"-noHeartbeat",
-		m_args.headlessMode ? "-headlessMode" : ""
+		m_args.headlessMode ? "-headlessMode" : "",
+		m_args.enableQtLogs ? "-enableQtLogging" : ""
 	});
 
 	if (!m_args.dumpLogFile.empty()) {
@@ -280,25 +297,25 @@ bp::child ZmqServer::startServerProcess() {
 }
 
 
-bool ZmqServer::obtainServerEndpointInfo() {
+bool ZmqServer::obtainServerEndpointInfo(int zmqServerPID) {
 
 	if (m_args.port != EPHEMERAL_PORT_NUM) {
 		m_zmqServerPort = m_args.port;
 		return true;
 	}
 
-	// ZmqServer is listening on an ephemeral port. Once the port is open, ZmqServer 
+	// ZmqServer is listening on an ephemeral port. Once the port is open, ZmqServer
 	// will publish it to shared memory with an ID set to SHARED_PORT_MAPPING_ID.
 	int zmqServerPort = 0;
 
-	SharedMemoryReader reader(std::to_string(m_args.blenderPID), SHARED_PORT_MAPPING_ID);
+	SharedMemoryReader reader(std::to_string(zmqServerPID), SHARED_PORT_MAPPING_ID);
 
-	if ( reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT)) && 
+	if ( reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT)) &&
 			reader.read(ZMQ_SERVER_ENDPOINT_READ_TIMEOUT, &zmqServerPort)) {
 		m_zmqServerPort = zmqServerPort;
 		return true;
 	}
-	
+
 	Logger::error("Failed to obtain endpoint info from ZmqServer, error: %1%, Reconnecting.", reader.getLastError());
 	return false;
 }
@@ -329,7 +346,7 @@ void ZmqServer::startControlConn() {
 	timeouts.handshake  = HANDSHAKE_TIMEOUT;
 	timeouts.inactivity = SERVER_INACTIVITY_INTERVAL;
 	timeouts.ping       = NO_PING;
-	
+
 	{
 		std::scoped_lock lock(m_lockConn);
 
@@ -480,12 +497,9 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 			py::list computeDevices = toPyList(message.computeDevices);
 			py::list defaultDeviceStates = toPyList(message.defaultDeviceStates);
 			invokePythonCallback("updateComputeDevices", getPythonCallback("updateComputeDevices"), deviceType, computeDevices, defaultDeviceStates);
+			break;
 		}
 		default:
 			break;
 	}
 }
-
-
-
-

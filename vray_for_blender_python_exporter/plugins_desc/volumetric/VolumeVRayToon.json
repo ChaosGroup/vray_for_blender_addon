@@ -332,7 +332,8 @@
             {
                 "display_name" : "Minimum Depth",
                 "max" : 100000.0,
-                "min" : 9.999999747378752e-05
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
             }
         },
         
@@ -345,7 +346,8 @@
             {
                 "display_name" : "Maximum Depth",
                 "max" : 100000.0,
-                "min" : 9.999999747378752e-05
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
             }
         },
         
@@ -478,12 +480,18 @@
         
         {
             "attr" : "toonMaterialOnly",
-            "default" : 0,
-            "desc" : "Apply only for objects object with a material implementing ToonEdgeParamsInterface (e.g. BRDFToonOverride, BRDFToonMtl)",
-            "type" : "INT",
+            "default" : "0",
+            "desc" : "0:Apply to all materials in the scene; 1:Apply only for objects object with a material implementing ToonEdgeParamsInterface (e.g. BRDFToonOverride, BRDFToonMtl); 2:Apply only for objects with a BRDFToonOverride material",
+            "items" : 
+            [
+                [ "0", "All", "All" ],
+                [ "1", "Toon materials", "Toon materials" ],
+                [ "2", "Toon override only", "Toon override only" ]
+            ],
+            "type" : "ENUM",
             "ui" : 
             {
-                "display_name" : "Toon  Material Only"
+                "display_name" : "Toon Materials Only"
             }
         }
     ],

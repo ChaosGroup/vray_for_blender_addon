@@ -21,15 +21,17 @@ def exportTreeNode(nodeCtx: NodeContext):
         pluginDesc.setAttribute("normal_uvwgen_auto", True)
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
-    plugin = commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
     if propGroup := pluginDesc.vrayPropGroup:
         if propGroup.flip_red or propGroup.flip_green or propGroup.swap_red_green:
             flipName = pluginDesc.name+"|flip"
-            plDesc = PluginDesc(flipName, "TexNormalMapFlip")
-            plDesc.setAttribute('flip_red', propGroup.flip_red)
-            plDesc.setAttribute('flip_green', propGroup.flip_green)
-            plDesc.setAttribute('swap_redgreen', propGroup.swap_red_green)
-            plDesc.setAttribute("texmap", plugin)
+            flipPluginDesc = PluginDesc(flipName, "TexNormalMapFlip")
+            flipPluginDesc.setAttribute('flip_red', propGroup.flip_red)
+            flipPluginDesc.setAttribute('flip_green', propGroup.flip_green)
+            flipPluginDesc.setAttribute('swap_redgreen', propGroup.swap_red_green)
+            flipPluginDesc.setAttribute("texmap", pluginDesc.getAttribute("bump_tex_color"))
 
-            return commonNodesExport.exportPluginWithStats(nodeCtx, plDesc)
-    return plugin
+            # We want to end up with the following: TexBitmap->TexNormalMapFlip->TexNormalBump->BRDFVRayMtl
+            # so swap the flip's texmap with the bump input and the bump_tex_color with the flip plugin.
+            flipPlugin = commonNodesExport.exportPluginWithStats(nodeCtx, flipPluginDesc)
+            pluginDesc.setAttribute("bump_tex_color", flipPlugin)
+    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)

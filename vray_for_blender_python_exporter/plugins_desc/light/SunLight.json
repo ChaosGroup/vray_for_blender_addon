@@ -192,6 +192,7 @@
             "ui" : 
             {
                 "display_name" : "Shadow bias",
+                "quantityType" : "distance",
                 "soft_max" : 0.1000000014901161,
                 "soft_min" : -0.1000000014901161
             }
@@ -351,6 +352,7 @@
             {
                 "display_name" : "Near Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -365,6 +367,7 @@
             {
                 "display_name" : "Near Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -390,6 +393,7 @@
             {
                 "display_name" : "Far Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -404,6 +408,7 @@
             {
                 "display_name" : "Far Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "<EndRollout>",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
@@ -628,6 +633,18 @@
         },
         
         {
+            "attr" : "night_blueness",
+            "default" : 0.0,
+            "desc" : "Specifies how blue the sky is for low solar elevations. Used by the PRG Clear Sky New model",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
             "attr" : "color_mode",
             "default" : "0",
             "desc" : "This option affects the way the color in the Filter color parameter affects the color of the sun (0 - Filter, 1 - Direct, 2 - Override)",
@@ -665,7 +682,9 @@
             "ui" : 
             {
                 "max" : 90.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -677,7 +696,9 @@
             "ui" : 
             {
                 "max" : 90.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -724,6 +745,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "distance",
                 "rollout" : "Photon emission"
             }
         },
@@ -792,7 +814,9 @@
             {
                 "display_name" : "Clouds Longitude Offset",
                 "max" : 1000000.0,
-                "min" : -1000000.0
+                "min" : -1000000.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -805,7 +829,9 @@
             {
                 "display_name" : "Clouds Latitude Offset",
                 "max" : 1000000.0,
-                "min" : -1000000.0
+                "min" : -1000000.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -817,7 +843,9 @@
             "ui" : 
             {
                 "max" : 5000.0,
-                "min" : 500.0
+                "min" : 500.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -829,7 +857,9 @@
             "ui" : 
             {
                 "max" : 1000.0,
-                "min" : 10.0
+                "min" : 10.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -944,7 +974,9 @@
             {
                 "display_name" : "Contrails Longitude Offset",
                 "max" : 1000000.0,
-                "min" : -1000000.0
+                "min" : -1000000.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -957,7 +989,9 @@
             {
                 "display_name" : "Contrails Latitude Offset",
                 "max" : 1000000.0,
-                "min" : -1000000.0
+                "min" : -1000000.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -974,10 +1008,336 @@
         },
         
         {
-            "attr" : "is_instance_prototype",
-            "default" : 0,
-            "desc" : "If light is an instance prototype its \"enabled\" parameter value is ignored (light is treated as disabled when processing the plugin instance itself), but is taken into account when generating instances of this light",
+            "attr" : "moon_on",
+            "default" : false,
+            "desc" : "Enables the moon",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Moon"
+            }
+        },
+        
+        {
+            "attr" : "moon_size_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the visible size of the moon. Affects the appearance of the moon disc as seen by the camera and reflections, as well as the blurriness of the moon shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_direct_intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the brightness of the directly visible moon disc",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_indirect_intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the brightness of the scene illumination caused by the moon",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_glow_multiplier",
+            "default" : 0.0,
+            "desc" : "Controls the brightness of the moon glow",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_filter_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Controls the moonlight color",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moon_override_azimuth",
+            "default" : false,
+            "desc" : "Overrides the azimuth of the moon",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moon_azimuth",
+            "default" : 0.0,
+            "desc" : "Controls the azimuth of the moon",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_override_elevation",
+            "default" : false,
+            "desc" : "Overrides the elevation of the moon",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moon_elevation",
+            "default" : 0.0,
+            "desc" : "Controls the elevation of the moon",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_override_phase",
+            "default" : false,
+            "desc" : "Overrides the moon phase",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moon_phase",
+            "default" : 0.0,
+            "desc" : "Controls the moon phase",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "moon_override_rotation",
+            "default" : false,
+            "desc" : "Overrides the rotation of the moon disc",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "moon_rotation",
+            "default" : 0.0,
+            "desc" : "Controls the rotation of the moon disc",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_on",
+            "default" : false,
+            "desc" : "Enables the stars",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Stars"
+            }
+        },
+        
+        {
+            "attr" : "stars_size_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the size of the stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_size_difference",
+            "default" : 0.0,
+            "desc" : "Controls the size difference between faint and bright stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_direct_intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the brightness of the directly visible stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_indirect_intensity_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the brightness of the scene illumination caused by the stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_milkyway_multiplier",
+            "default" : 1.0,
+            "desc" : "Controls the brightness of the Milky Way",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "stars_latitude",
+            "default" : 1.0,
+            "desc" : "Latitude of the location used to position the stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 90.0,
+                "min" : -90.0
+            }
+        },
+        
+        {
+            "attr" : "stars_longitude",
+            "default" : 1.0,
+            "desc" : "Longitude of the location used to position the stars",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 180.0,
+                "min" : -180.0
+            }
+        },
+        
+        {
+            "attr" : "stars_date_day",
+            "default" : 1,
+            "desc" : "Day part of the date used to position the stars",
             "type" : "INT",
+            "ui" : 
+            {
+                "max" : 31,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "stars_date_month",
+            "default" : 1,
+            "desc" : "Month part of the date used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 12,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "stars_date_year",
+            "default" : 2025,
+            "desc" : "Year part of the date used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 3000,
+                "min" : 1583
+            }
+        },
+        
+        {
+            "attr" : "stars_time_hours",
+            "default" : 0,
+            "desc" : "Hours part of the time used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 23,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "stars_time_minutes",
+            "default" : 0,
+            "desc" : "Minutes part of the time used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 59,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "stars_time_seconds",
+            "default" : 0,
+            "desc" : "Seconds part of the time used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 59,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "stars_time_zone",
+            "default" : 0,
+            "desc" : "Time zone applied to the time used to position the stars",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 12,
+                "min" : -12
+            }
+        },
+        
+        {
+            "attr" : "stars_time_dst",
+            "default" : false,
+            "desc" : "Whether DST applies to the time used to position the stars",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "stars_north_vector",
+            "default" : [ 0.0, 1.0, 0.0 ],
+            "desc" : "Specifies the direction to the north",
+            "type" : "VECTOR",
             "ui" : {}
         }
     ],

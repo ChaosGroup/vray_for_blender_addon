@@ -10,7 +10,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2024;
+static const int ZMQ_PROTOCOL_VERSION = 2027;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -76,6 +76,7 @@ enum class ServerReturnCode : int {
 	ENV_ERROR = 4,
 	STD_EXCEPT = 5,
 	VR_EXCEPT = 6,
+	OPERATION_TIMEOUT = 7,
 	LAST
 };
 
@@ -99,6 +100,7 @@ struct HandshakeMsg{
 
 // Indicates render procedure type
 enum class ExporterType {
+	INVALID = -1,
 	FIRST_TYPE = 0,
 	IPR_VIEWPORT = 0,
 	IPR_VFB,

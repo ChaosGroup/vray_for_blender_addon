@@ -5,7 +5,6 @@ from pathlib import PurePath
 
 from vray_blender import debug
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
-from vray_blender.events import isDefaultScene
 from vray_blender.lib import blender_utils, lib_utils
 from vray_blender.nodes.operators.import_file import importProxyFromMeshFile
 from vray_blender.nodes import tree_defaults
@@ -240,6 +239,10 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
         self.lightName = "VRaySunLight"
 
     def execute(self, context):
+        if not context.scene.world:
+            debug.report("ERROR", "Cannot add a V-Ray Sky without an active world")
+            return {'CANCELLED'}
+
         _, lightObject = self._createSunAndTarget("VRaySunSky")
 
         if not context.scene.world.vray.is_vray_class:
@@ -249,7 +252,8 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
         envNode = NodesUtils.getNodeByType(worldTree, 'VRayNodeEnvironment')
 
         skyTexNode = worldTree.nodes.new("VRayNodeTexSky")
-        skyTexNode.TexSky.sun = lightObject
+        skyTexNode.TexSky.sun_select.boundPropObj = lightObject
+        skyTexNode.TexSky.sun_select.boundPropObjName = lightObject.name
 
         if envNode:
             skyTexNode.location.y = envNode.location.y - 20
@@ -397,7 +401,7 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
         layout = self.layout
         
         # If the scene has not been saved yet, we cannot use relative paths
-        if not isDefaultScene():
+        if not blender_utils.isDefaultScene():
             layout.prop(self, 'relpath')
         
         layout.prop(self, "unit_scale", text='Unit scale')
@@ -434,10 +438,7 @@ class VRAY_OT_add_object_fur(VRayOperatorBase):
         # Add all selected objects to the fur object.
         for obj in context.selected_objects:
             if obj.type in MESH_OBJECT_TYPES:
-                newItem = furData.vray.GeomHair.object_selector.selectedItems.add()
-                newItem.objectPtr = obj
-                newItem.enabled = True
-                newItem.name = obj.name
+                furData.vray.GeomHair.object_selector.addListItem(context, obj)
 
         # Deselect all, select only the new object
         blender_utils.selectObject(furObj)

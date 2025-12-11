@@ -101,6 +101,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -240,6 +241,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },

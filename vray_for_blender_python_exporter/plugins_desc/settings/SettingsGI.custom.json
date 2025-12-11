@@ -97,18 +97,6 @@
             "options": {
                 "derived": true
             }
-        },
-        {
-            "attr": "ray_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "ao_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

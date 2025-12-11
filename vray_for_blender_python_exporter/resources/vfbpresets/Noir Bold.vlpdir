@@ -1,0 +1,135 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Noir_Bold",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 3,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 1.0,
+                "hejl_dawson_highlights": 1.0,
+                "hable_shoulder_strength": 0.4000000059604645,
+                "hable_linear_strength": 0.25999999046325686,
+                "hable_linear_angle": 0.20000000298023225,
+                "hable_toe_strength": 0.4000000059604645,
+                "white_point": 11.199999809265137,
+                "pc_toe_length": 0.800000011920929,
+                "pc_toe_strength": 0.20000000298023225,
+                "pc_contrast": 0.5,
+                "pc_shoulder_length": 1.0,
+                "pc_shoulder_strength": 0.0,
+                "pc_white_point": 4.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.hueSatLight",
+            "properties": {
+                "version": 1,
+                "name": "Hue / Saturation - Saturation",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "hue": 0.0,
+                "sat": -1.0,
+                "lightness": 0.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves - Contrast",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.003000000026077032],
+                                "left_vector": [-0.2530461847782135, -0.008716159500181675],
+                                "right_vector": [0.25304633378982546, 0.008716164156794548]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.5, 0.5],
+                                "left_vector": [-0.1666666567325592, -0.2222222089767456],
+                                "right_vector": [0.1666666865348816, 0.222222238779068]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.17977529764175416, -0.11095505952835083],
+                                "right_vector": [0.30508896708488467, 0.1882971078157425]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }]
+}

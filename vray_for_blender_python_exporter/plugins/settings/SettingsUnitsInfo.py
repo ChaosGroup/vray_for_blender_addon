@@ -14,6 +14,8 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     if unit_settings.system != 'NONE':
         pluginDesc.setAttribute('meters_scale', unit_settings.scale_length)
+        photometricScale = pluginDesc.vrayPropGroup.photometric_scale * unit_settings.scale_length ** 2
+        pluginDesc.setAttribute('photometric_scale', photometricScale)
 
 
     sceneFps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base

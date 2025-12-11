@@ -1,0 +1,33 @@
+
+{
+    "Desciption" : "TexVolumeFloatSampler",
+    "ID" : "TexVolumeFloatSampler",
+    "Name" : "Volume Float Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "channel",
+            "default" : "",
+            "desc" : "The name of the volume channel to sample",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Channel"
+            }
+        },
+        
+        {
+            "attr" : "out_float",
+            "default" : 0.0,
+            "desc" : "The sampled float value",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

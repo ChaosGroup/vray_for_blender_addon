@@ -19,7 +19,6 @@
         {
             "attr": "focal_dist",
             "ui": {
-                "quantityType": "distance",
                 "soft_max": 1000.0,
                 "spin_step": 0.5
             }
@@ -49,8 +48,7 @@
             "dont_affect_settings",
             "focal_dist",
             "subdivs"
-        ],
-        "animatable": false
+        ]
     },
     "Widget": {
         "widgets": [

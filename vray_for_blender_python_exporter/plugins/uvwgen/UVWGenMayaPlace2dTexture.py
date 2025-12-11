@@ -11,7 +11,7 @@ def nodeDraw(context, layout, node):
     ob = context.object
 
     split = layout.split(factor=0.3)
-    split.label(text="UV Layer:")
+    split.label(text="UV Layer")
     if ob and ob.type == 'MESH':
         split.prop_search(propGroup, 'uv_set_name', ob.data, 'uv_layers', text="")
     else:
@@ -19,4 +19,4 @@ def nodeDraw(context, layout, node):
 
     pluginModule = getPluginModule('UVWGenMayaPlace2dTexture')
     painter = UIPainter(context, pluginModule, propGroup, node)
-    painter.renderWidgets(layout, pluginModule.Node['widgets'])
+    painter.renderWidgets(layout, pluginModule.Node['widgets'], True)

@@ -47,7 +47,7 @@ struct ImageRegion {
 void updateImageRegion(
 	void * __restrict dest, ImageSize destSize, ImageRegion destRegion,
 	const void * __restrict source, ImageSize sourceSize, ImageRegion sourceRegion,
-	ImageRegion::Options options = ImageRegion::Options::FROM_RENDERER
+	ImageRegion::Options options = ImageRegion::Options::NONE
 );
 
 
@@ -65,8 +65,8 @@ struct RenderImage {
 
 	static RenderImage deepCopy(const RenderImage& source);
 
-	RenderImage(RenderImage&& other);
-	RenderImage& operator=(RenderImage&& other);
+	RenderImage(RenderImage&& other) noexcept;
+	RenderImage& operator=(RenderImage&& other) noexcept;
 
 	virtual ~RenderImage();
 
@@ -77,7 +77,6 @@ struct RenderImage {
 
 
 	void   updateRegion(const float* source, ImageRegion destRegion);
-	void   flip();
 	void   clamp(float max = 1.0f, float val = 1.0f);
 	void   resetAlpha();
 	// gets the center width X height image out of the original, if target is bigger - does nothings

@@ -273,7 +273,10 @@
             "default" : true,
             "desc" : "",
             "type" : "BOOL",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Use Wind"
+            }
         },
         
         {
@@ -281,7 +284,12 @@
             "default" : 3.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "min" : 0.001000000047497451,
+                "soft_max" : 6.0,
+                "spin_step" : 0.05000000074505806
+            }
         },
         
         {
@@ -289,7 +297,12 @@
             "default" : 10,
             "desc" : "",
             "type" : "INT",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Level of Detail",
+                "min" : 1,
+                "soft_max" : 50
+            }
         },
         
         {
@@ -297,7 +310,11 @@
             "default" : 0.8999999761581421,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
         },
         
         {
@@ -305,7 +322,12 @@
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Rate of Change",
+                "min" : 0.0,
+                "soft_max" : 10.0
+            }
         },
         
         {
@@ -313,7 +335,12 @@
             "default" : 0.2000000029802322,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Velocity Coherence",
+                "max" : 1.0,
+                "min" : 0.0
+            }
         },
         
         {
@@ -321,7 +348,13 @@
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Wave Height",
+                "min" : 0.0,
+                "soft_max" : 6.0,
+                "spin_step" : 0.05000000074505806
+            }
         },
         
         {
@@ -329,6 +362,19 @@
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Vertical Offset",
+                "soft_max" : 1.0,
+                "soft_min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "auto_meter_scale",
+            "default" : false,
+            "desc" : "Automatically use the scene scale from SettingsUnitsInfo.meters_scale",
+            "type" : "BOOL",
             "ui" : {}
         },
         
@@ -342,9 +388,14 @@
         
         {
             "attr" : "up_vector",
-            "default" : 1,
+            "default" : "1",
             "desc" : "",
-            "type" : "INT",
+            "items" : 
+            [
+                [ "1", "Y", "Y" ],
+                [ "2", "Z", "Z" ]
+            ],
+            "type" : "ENUM",
             "ui" : {}
         },
         
@@ -361,14 +412,25 @@
             "default" : 0.2000000029802322,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Wave Crest",
+                "max" : 1.0,
+                "min" : 0.0
+            }
         },
         
         {
             "attr" : "animmode",
-            "default" : 0,
+            "default" : "0",
             "desc" : "",
-            "type" : "INT",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Direct Time", "Direct Time" ],
+                [ "2", "Loop", "Loop" ]
+            ],
+            "type" : "ENUM",
             "ui" : {}
         },
         
@@ -377,7 +439,12 @@
             "default" : 0.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 120.0,
+                "spin_step" : 1.0
+            }
         },
         
         {
@@ -385,7 +452,12 @@
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 120.0,
+                "spin_step" : 1.0
+            }
         },
         
         {
@@ -393,7 +465,10 @@
             "default" : [ 1.0, 1.0, 1.0, 1.0 ],
             "desc" : "Displacement Scale",
             "type" : "TEXTURE",
-            "ui" : {}
+            "ui" : 
+            {
+                "display_name" : "Displacement Scale"
+            }
         }
     ],
     "Type" : "TEXTURE",

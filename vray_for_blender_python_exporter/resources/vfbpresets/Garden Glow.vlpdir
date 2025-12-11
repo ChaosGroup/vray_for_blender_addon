@@ -1,0 +1,72 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Garden_Glow",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 2,
+                "all_red": 0.0,
+                "all_green": 0.0,
+                "all_blue": 0.0,
+                "shadows_red": 0.08024691790342331,
+                "shadows_green": 0.03896104171872139,
+                "shadows_blue": 0.07407407462596894,
+                "mid_red": 0.12987013161182404,
+                "mid_green": -0.055555559694767,
+                "mid_blue": 0.025974027812480928,
+                "high_red": 0.4135802686214447,
+                "high_green": 0.0,
+                "high_blue": -0.42592594027519228
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 3,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 1.0,
+                "hejl_dawson_highlights": 1.0,
+                "hable_shoulder_strength": 0.4814305603504181,
+                "hable_linear_strength": 0.24071528017520905,
+                "hable_linear_angle": 0.18156810104846955,
+                "hable_toe_strength": 0.3686382472515106,
+                "white_point": 17.5433292388916,
+                "pc_toe_length": 0.2993827164173126,
+                "pc_toe_strength": 0.38651996850967409,
+                "pc_contrast": 0.5625860095024109,
+                "pc_shoulder_length": 0.05639615282416344,
+                "pc_shoulder_strength": 6.018518924713135,
+                "pc_white_point": 7.548830986022949
+            },
+            "sub-layers": []
+        }]
+}

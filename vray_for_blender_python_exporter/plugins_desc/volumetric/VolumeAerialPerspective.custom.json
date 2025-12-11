@@ -26,20 +26,6 @@
                     }
                 }
             }
-        },
-        {
-            "attr": "distance",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "atm_height",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
         }
     ],
     "Node": {

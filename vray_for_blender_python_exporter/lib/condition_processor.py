@@ -69,8 +69,9 @@ class UIConditionCompiler:
     def generateEvaluators(self):
         """ Generates evaluation functions for the conditions in all widgets of the plugin. """
 
-        for widget in self.pluginDesc['Widget']['widgets']:
-            self._generateWidgetConditionEvaluators(widget)
+        for widgetsList in self.pluginDesc['Widget'].values():
+            for widget in widgetsList:
+                self._generateWidgetConditionEvaluators(widget)
         
         for sockDesc in self.pluginDesc.get('Node', {}).get('input_sockets', []):
             self._generateSocketConditionEvaluators(sockDesc)

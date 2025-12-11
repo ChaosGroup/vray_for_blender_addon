@@ -1,0 +1,551 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "VBlender json schema",
+    "type": "object",
+    "additionalProperties": false,
+    "$defs": {
+        "paramType": {
+            "type": "string",
+            "enum": [
+                "INT",
+                "BOOL",
+                "FLOAT",
+                "ENUM",
+                "STRING",
+                "TRANSFORM",
+                "GEOMETRY",
+                "MATRIX",
+                "MATRIX_TEXTURE",
+                "INCLUDE_EXCLUDE_LIST",
+                "TEMPLATE",
+                "PLUGIN_LIST",
+                "ROLLOUT",
+                "BRDF",
+                "UVWGEN",
+                "VECTOR",
+                "BRDF_USE",
+                "COLOR_TEXTURE",
+                "PLUGIN",
+                "EFFECT",
+                "OBJECT",
+                "COLOR",
+                "OUTPUT_PLUGIN",
+                "OUTPUT_TEXTURE",
+                "OUTPUT_FLOAT_TEXTURE",
+                "INT_LIST"
+            ]
+        },
+        "multiRuleCondition": {
+            "description": "A multi-rule condition.",
+            "type": "object",
+            "properties": {
+                "cond": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": ["cond"]
+        },
+        "singleRuleCondition": {
+            "description": "A single-rule condition.",
+            "type": "object",
+            "properties": {
+                "cond": {
+                    "type": "string"
+                }
+            },
+            "required": ["cond"]
+        },
+        "widgetsArray": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "comment": {
+                        "type": "string"
+                    },
+                    "use_prop": {
+                        "type": "string"
+                    },
+                    "layout": {
+                        "type": "string",
+                        "enum": [ "ROLLOUT", "COLUMN", "SEPARATOR", "ROW", "BOX" ]
+                    },
+                    "search_bar_for": {"type": "string"},
+                    "align": {
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "label": {
+                        "oneOf": [
+                            { "type": "string" },
+                            { "$ref": "#/$defs/multiRuleCondition" }
+                        ]
+                    },
+                    "default_closed": {
+                        "type": "boolean"
+                    },
+                    "active": {
+                        "type": "object",
+                        "additionalProps": false,
+                        "properties": {
+                            "cond1": "string"
+                        }
+                    },
+                    "visible": {
+                        "oneOf": [
+                            {"type": "boolean"},
+                            {"$ref": "#/$defs/singleRuleCondition" }
+                        ]
+                    },
+                    "expand": {
+                        "type": "boolean"
+                    },
+                    "custom_draw": {
+                        "type": "string"
+                    },
+                    "list_label": {
+                        "type": "string"
+                    },
+                    "draw_container": {
+                        "type": "string",
+                        "enum": [
+                            "ROLLOUT"
+                        ]
+                    },
+                    "slider": {
+                        "type": "boolean"
+                    },
+                    "attrs": {
+                        "$ref": "#/$defs/widgetsArray"
+                    }
+                },
+                "additionalProperties": false
+            }
+        }
+    },
+    "properties": {
+        "Type": {
+            "type": "string",
+            "enum": [
+                "OBJECT",
+                "MISC",
+                "EFFECT",
+                "SETTINGS",
+                "TEXTURE",
+                "CAMERA",
+                "UVWGEN",
+                "SYSTEM",
+                "GEOMETRY"
+            ]
+        },
+        "BASE": {
+            "type": "string"
+        },
+        "ID": {
+            "type": "string"
+        },
+        "Desciption": {
+            "type": "string"
+        },
+        "Name": {
+            "type": "string"
+        },
+        "Category": {
+            "type": "string",
+            "enum": [ "FLOAT_TEXTURE" ]
+        },
+        "Subtype": {
+            "type": "string",
+            "enum": [
+                "SPECIAL",
+                "ADVANCED",
+                "GEOMETRY",
+                "MATTE",
+                "UTILITY"
+            ]
+        },
+        "Parameters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "attr": {
+                        "type": "string"
+                    },
+                    "default": {},
+                    "subtype": {
+                        "type": "string",
+                        "enum": [
+                            "FACTOR",
+                            "ANGLE",
+                            "FILE_PATH",
+                            "DIR_PATH",
+                            "COLOR",
+                            "PERCENTAGE",
+                            "DISTANCE",
+                            "DISTANCE_CAMERA",
+                            "VRAY_ROTATION",
+                            "VRAY_OFFSET"
+                        ]
+                    },
+                    "precision": {
+                        "type": "integer"
+                    },
+                    "type": {
+                        "$ref": "#/$defs/paramType"
+                    },
+                    "inclusion_mode_prop": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "desc": {
+                        "type": "string"
+                    },
+                    "elements_count": {
+                        "type": "integer"
+                    },
+                    "update": {
+                        "type": "string"
+                    },
+                    "color_prop": {
+                        "type": "string"
+                    },
+                    "tex_prop": {
+                        "type": "string"
+                    },
+                    "use_tex_prop": {
+                        "type": "string"
+                    },
+                    "bound_props": {
+                        "type": "object",
+                        "additionalProps": false,
+                        "properties": {
+                            "target_prop": {
+                                "type": "string"
+                            },
+                            "use_prop": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "get": {
+                        "type": "string"
+                    },
+                    "set": {
+                        "type": "string"
+                    },
+                    "comment": {
+                        "type": "string"
+                    },
+                    "ui": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "gpuSupport": {
+                                "type": "string",
+                                "enum": [ "full", "none" ]
+                            },
+                            "rollout": {
+                                "type": "string"
+                            },
+                            "tab": {
+                                "type": "string"
+                            },
+                            "display_name": {
+                                "type": "string"
+                            },
+                            "attributes": {
+                                "type": "array"
+                            },
+                            "quantityType": {
+                                "type": "string",
+                                "enum": [
+                                    "distance",
+                                    "angle"
+                                ]
+                            },
+                            "units": {
+                                "type": "string",
+                                "enum": [
+                                    "radians",
+                                    "degrees",
+                                    "meters",
+                                    "centimeters",
+                                    "millimeters"
+                                ]
+                            },
+                            "soft_min": {
+                                "type": "number"
+                            },
+                            "soft_max": {
+                                "type": "number"
+                            },
+                            "min": {
+                                "type": "number"
+                            },
+                            "max": {
+                                "type": "number"
+                            },
+                            "spin_step": {
+                                "type": "number"
+                            }
+                        }
+                    },
+                    "filter_type": {
+                        "type": "string",
+                        "enum": [ "geometry" ]
+                    },
+                    "options": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "value_conv_factor": {
+                                "type": "number"
+                            },
+                            "linked_only": {
+                                "type": "boolean"
+                            },
+                            "shadowed": {
+                                "type": "boolean"
+                            },
+                            "derived": {
+                                "type": "boolean"
+                            },
+                            "cross_dependency": {
+                                "type": "boolean"
+                            },
+                            "animatable": {
+                                "type": "boolean"
+                            },
+                            "visible": {
+                                "type": "boolean"
+                            },
+                            "link_info": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "link_type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "OBJECTS"
+                                        ]
+                                    },
+                                    "filter_function": {
+                                        "type": "string"
+                                    }
+                                }
+                            },
+                            "template": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "templateIncludeExclude",
+                                            "templateMultiObjectSelect",
+                                            "templateSingleObjectSelect"
+                                        ]
+                                    },
+                                    "custom_exporter": {
+                                        "type": "boolean"
+                                    },
+                                    "args": {
+                                        "type": "object",
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "bound_property": {
+                                                "type": "string"
+                                            },
+                                            "mode_bound_property": {
+                                                "type": "string"
+                                            },
+                                            "filter_function": {
+                                                "type": "string"
+                                            },
+                                            "collection": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "array",
+                            "items": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "string"
+                                }
+                            ],
+                            "minItems": 3,
+                            "maxItems": 3
+                        }
+                    }
+                },
+                "required": [
+                    "attr"
+                ],
+                "additionalProperties": false
+            }
+        },
+        "Widget": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "widgets": {
+                    "$ref": "#/$defs/widgetsArray"
+                },
+                "sidebar": {
+                    "$ref": "#/$defs/widgetsArray"
+                }
+            },
+            "required": [
+                "widgets"
+            ]
+        },
+        "Node": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "widgets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "layout": {
+                                "type": "string",
+                                "enum": [ "ROLLOUT", "COLUMN", "SEPARATOR", "ROW" ]
+                            },
+                            "align": {
+                                "type": "boolean"
+                            },
+                            "attrs": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "name"
+                                    ]
+                                }
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "output_sockets": {
+                    "type": "array",
+                    "additionalItems": false,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "label": {
+                                "type": "string"
+                            },
+                            "type": {
+                                "$ref": "#/$defs/paramType"
+                            },
+                            "visible": {
+                                "type": "boolean"
+                            },
+                            "desc": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
+                "input_sockets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "name": {
+                                "type": "string"
+                            },
+                            "label": {
+                                "oneOf": [
+                                    { "type": "string" },
+                                    { "$ref": "#/$defs/multiRuleCondition" }
+                                ]
+                            },
+                            "type": {
+                                "$ref": "#/$defs/paramType"
+                            },
+                            "visible": {
+                                "oneOf": [
+                                    { "type": "boolean" },
+                                    { "$ref": "#/$defs/singleRuleCondition" }
+                                ]
+                            },
+                            "desc": {
+                                "type": "string"
+                            },
+                            "default_closed": {
+                                "type": "boolean"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "Options": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "animatable": {
+                    "type": "boolean"
+                },
+                "use_factor_subtype": {
+                    "type": "boolean"
+                },
+                "excluded_parameters": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "use_animation_layout": {
+                    "type": "boolean"
+                },
+                "default_output": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "label": {
+                            "type": "string"
+                        },
+                        "type": {
+                            "$ref": "#/$defs/paramType"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

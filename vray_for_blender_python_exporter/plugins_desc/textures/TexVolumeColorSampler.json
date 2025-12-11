@@ -1,0 +1,33 @@
+
+{
+    "Desciption" : "TexVolumeColorSampler",
+    "ID" : "TexVolumeColorSampler",
+    "Name" : "Volume Color Sampler",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "channel",
+            "default" : "",
+            "desc" : "The name of the volume channel to sample or comma separeted list of three (single valued) channel names comprising RGB or vector field",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Channel"
+            }
+        },
+        
+        {
+            "attr" : "out_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The sampled color value",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

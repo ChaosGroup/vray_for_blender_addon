@@ -1,8 +1,6 @@
 #pragma once
 
 #include <boost/python.hpp>
-#include <boost/python/numpy.hpp>
-#include <pyport.h>
 #include <memory>
 #include <span>
 #include <string>
@@ -11,7 +9,6 @@
 #include "utils.hpp"
 
 #include "zmq_common.hpp"
-#include <zmq_message.hpp>
 
 namespace VRayForBlender::Interop
 {
@@ -53,6 +50,7 @@ struct ZmqServerArgs
 	PROPERTY(std::string, exePath        , "")
 	PROPERTY(int, port				     , -1) // A special value which means 'use ephemeral port'
 	PROPERTY(int, logLevel               , 2)
+	PROPERTY(bool, enableQtLogs          , false)
 	PROPERTY(bool, headlessMode          , false)
 	PROPERTY(bool, noHeartbeat           , true)
 	PROPERTY(int64_t, blenderPID         , 0)
@@ -67,26 +65,47 @@ struct ZmqServerArgs
 };
 
 
-/// Actions to control ZMQ Server control operation.
-struct ZmqControlConn
+struct UVAttrLayer
 {
-	static void start (const ZmqServerArgs& args);
-	static void stop  ();
-	static bool check ();
-
-	/// Set ZmqServer level for console logs.
-	static void setLogLevel(int level);
+	const std::string name;
+	const std::span<const float[2]> data;
 };
 
 
-template<class T>
-struct AttrLayer
-{
-	std::string name;
-	std::span<T> data;
+struct AttrLayer {
+	enum DataType {
+		Byte,
+		Float,
+	};
 
+	enum Domain {
+		Point,
+		Corner,
+	};
+
+	const std::string name;
+	const DataType dataType = DataType::Float;
+	const Domain domain = Domain::Point;
+	const uint8_t * const data = nullptr;
+	const size_t elementCount = 0;
+
+	static inline float colorByteToFloat(uint8_t v)
+	{
+		static const float mult = 1.0f / 255.f;
+		return static_cast<float>(v) * mult;
+	}
+
+	inline VRayBaseTypes::AttrVector getAttrVector(unsigned int idx) const {
+		if (dataType == DataType::Byte) {
+			const MLoopCol& color = reinterpret_cast<const MLoopCol*>(data)[idx];
+			return VRayBaseTypes::AttrVector(colorByteToFloat(color.r), colorByteToFloat(color.g), colorByteToFloat(color.b));
+		} else {
+			using Vec4f = float[4];
+			const auto& color = reinterpret_cast<const Vec4f*>(data)[idx];
+			return VRayBaseTypes::AttrVector(color);
+		}
+	}
 };
-
 
 struct Subdiv
 {
@@ -98,7 +117,7 @@ struct Subdiv
 
 
 
-struct MeshExportOptions 
+struct MeshExportOptions
 {
 	PROPERTY(bool, mergeChannelVerts, false)
 	PROPERTY(bool, forceDynamicGeometry, false)
@@ -127,8 +146,8 @@ struct MeshData
 	std::span<const unsigned int>    polyMtlIndices;	// Material index per polygon
 	std::span<const float[3]>        normals;			// Normals
 
-	std::vector<AttrLayer<const float[2]>> uvLayers;
-	std::vector<AttrLayer<const MLoopCol>> colorLayers;
+	std::vector<UVAttrLayer> uvLayers;
+	std::vector<AttrLayer> colorLayers;
 
 	Subdiv subdiv;
 	MeshExportOptions options;
@@ -140,7 +159,7 @@ public:
 using MeshDataPtr = std::shared_ptr<MeshData>;
 
 
-struct HairData 
+struct HairData
 {
 	explicit HairData(boost::python::object obj);
 
@@ -156,15 +175,15 @@ struct HairData
 	std::span<const float[3]> points;           // Array of strand points, float[3] per point
 	std::span<const float>    pointRadii;       // Array of float per point
 	std::span<const int>      strandSegments;   // Array of int per point
-	std::span<const float[2]> uvs;              // Array of UVs, float[2] per point 
-	std::span<const float[3]> vertColors;       // Array of colors, float[3] per point 
+	std::span<const float[2]> uvs;              // Array of UVs, float[2] per point
+	std::span<const float[3]> vertColors;       // Array of colors, float[3] per point
 	boost::python::object ref;                  // Lifetime ref
 };
 
 using HairDataPtr = std::shared_ptr<HairData>;
 
 
-struct PointCloudData 
+struct PointCloudData
 {
 	explicit PointCloudData(boost::python::object obj);
 

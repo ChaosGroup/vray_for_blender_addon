@@ -67,13 +67,6 @@ def reportError(message, engine: bpy.types.RenderEngine = None, exc: Exception =
     """ Show the error message in Blender UI. In addition, print the message
         and the exception info to the console.
     """
-
-    errMsg = f"{message} Error: {exc}" if exc else message
-    printError(f"{errMsg}")
-    
-    if exc:
-        printExceptionInfo(exc)
-
     from vray_blender.lib.lib_utils import isRestrictedContext
 
     # The function may be called in a restricted context (e.g. during Blender startup).
@@ -83,12 +76,16 @@ def reportError(message, engine: bpy.types.RenderEngine = None, exc: Exception =
             engine.report({'ERROR'}, message)
         else:
             report('ERROR', message)
+    else:
+        errMsg = f"{message} Error: {exc}" if exc else message
+        printError(f"{errMsg}")
 
+    if exc:
+        printExceptionInfo(exc)
 
-def setLogLevel(level: int):
+def setLogLevel(level: int, qtLog: bool):
     """ Change the log verbosity level of VRayBlenderLib and ZmqServer """
-    vray.setLogLevel(level)
-    vray.ZmqControlConn.setLogLevel(level)
+    vray.setLogLevel(level, qtLog)
 
 
 def printExceptionInfo(e, source: str = ""):

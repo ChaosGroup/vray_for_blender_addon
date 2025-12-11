@@ -171,7 +171,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -190,7 +191,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

@@ -580,6 +580,14 @@
         },
         
         {
+            "attr" : "uv_channel_name",
+            "default" : "",
+            "desc" : "uv channel name",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
             "attr" : "auto",
             "default" : "5",
             "desc" : "auto scaling",
@@ -738,6 +746,14 @@
                 "max" : 99,
                 "min" : 1
             }
+        },
+        
+        {
+            "attr" : "center_channel_name",
+            "default" : "",
+            "desc" : "center channel name",
+            "type" : "STRING",
+            "ui" : {}
         },
         
         {

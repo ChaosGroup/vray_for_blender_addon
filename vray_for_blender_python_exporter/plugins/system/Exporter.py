@@ -1,16 +1,7 @@
-
 import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
-
-import os
-import json
-import sys
-
-from vray_blender import version
-from vray_blender.lib import sys_utils
 from vray_blender.lib import camera_utils as ct
-
 from vray_blender.plugins.system.compute_devices import ComputeDevices, ComputeDeviceSelector
 
 TYPE = 'SYSTEM'
@@ -47,211 +38,6 @@ def _displayVfbOnTopUpdate(self, context):
     vray.setVfbOnTop(self.display_vfb_on_top)
 
 
-def getVRayCloudPath():
-    """
-    If Chaos Cloud is installed on the system returns the path to it, else - None.
-    """
-
-    # check whether vcloud JSON file exists
-    vcloudJsonDir = '%APPDATA%/Chaos/Cloud/client/' if bpy.app.build_platform == b'Windows' else '$HOME/.ChaosGroup/vcloud/client/'
-    vcloudJsonDir = os.path.expandvars(vcloudJsonDir)
-    vcloudJsonFilename = vcloudJsonDir + 'vcloud.json'
-    if not os.path.exists(vcloudJsonFilename):
-        return None
-
-    # check whether the vcloud executable file exists via the "executable" field in the JSON file
-    vcloudFullPath = ''
-    with open(vcloudJsonFilename, 'r') as jsonFileId:
-        jsonData = json.load(jsonFileId)
-        vcloudFullPath = os.path.expandvars(jsonData['executable'])
-
-    return vcloudFullPath if os.path.exists(vcloudFullPath) else None
-
-def _getTelemetry(keyName):
-    if keyName in os.environ:
-        envVal = os.environ[keyName]
-        if envVal in ["0", "1"]:
-            return envVal != "0"
-
-    if sys.platform == "win32":
-        import winreg
-        # Telemetry settings are stored in three places:
-        # 1. 'keyName' envvar
-        # 2. HKEY_CURRENT_USER\Environment\'keyName' for the current user
-        # 3. HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment for the system
-        # User setting takes precedence and is the one we can set from Blender w/o admin privileges
-        userPath = "Environment"
-        systemPath = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
-        userVal = sys_utils.getWinRegistry(userPath, keyName)
-        if userVal != None and userVal != "-1":
-            return userVal != "0"
-        else:
-            systemVal = sys_utils.getWinRegistry(systemPath, keyName, winreg.HKEY_LOCAL_MACHINE)
-            return systemVal == "1"
-    else:
-        telemetryConfigPath = os.path.expandvars('$HOME/.Chaos/telemetry/config.ini')
-        telemetryConfig = sys_utils.parseIni(telemetryConfigPath)
-        if keyName in telemetryConfig:
-            return telemetryConfig[keyName] == "1"
-
-    return False
-
-def _getAnonymizedTelemetry(self):
-    return _getTelemetry("VRAY_SEND_ANONYMIZED_FEEDBACK")
-
-def _getPersonalizedTelemetry(self):
-    return _getTelemetry("VRAY_SEND_PERSONALIZED_FEEDBACK")
-
-def _setTelemetry(self, keyName, value):
-    def _getNewTeleemtryValue(value):
-        return "1" if value == True else "0"
-
-    # Update envvar if it was present
-    newValue = _getNewTeleemtryValue(value)
-    if keyName in os.environ:
-        os.environ[keyName] = newValue
-
-    if sys.platform == "win32":
-        pathToKey = "Environment"
-        # Update registry value here too, so it works even if ZMQ server isn't running
-        sys_utils.setWinRegistry(pathToKey, keyName, newValue)
-    else:
-        anonymizedTelemetry = newValue if keyName == "VRAY_SEND_ANONYMIZED_FEEDBACK" else _getNewTeleemtryValue(self.anonymized_telemetry)
-        personalizedTelemetry = newValue if keyName == "VRAY_SEND_PERSONALIZED_FEEDBACK" else _getNewTeleemtryValue(self.personalized_telemetry)
-        telemetryConfigPath = os.path.expandvars('$HOME/.Chaos/telemetry/config.ini')
-        telemetryConfig = f"""; Configuration variable for controlling the Chaos anonymized telemetry.
-VRAY_SEND_ANONYMIZED_FEEDBACK={anonymizedTelemetry}
-
-; Configuration variable for controlling the Chaos personalized telemetry.
-VRAY_SEND_PERSONALIZED_FEEDBACK={personalizedTelemetry}
-"""
-        with open(telemetryConfigPath, "w", encoding="utf-8") as file:
-            file.write(telemetryConfig)
-
-def _setAnonymizedTelemetry(self, value):
-    _setTelemetry(self, "VRAY_SEND_ANONYMIZED_FEEDBACK", value)
-    if not value and self.personalized_telemetry:
-        self.personalized_telemetry = value
-
-    # Send a message to ZMQ server to change the registry value, otherwise it won't pick up the change
-    vray.setTelemetryState(value, self.personalized_telemetry)
-
-def _setPersonalizedTelemetry(self, value):
-    _setTelemetry(self, "VRAY_SEND_PERSONALIZED_FEEDBACK", value)
-
-    # Send a message to ZMQ server to change the registry value, otherwise it won't pick up the change
-    vray.setTelemetryState(self.anonymized_telemetry, value)
-
-class VRayExporterPreferences(bpy.types.AddonPreferences):
-    bl_idname = "vray_blender"
-
-    vray_cloud_binary = getVRayCloudPath()
-    detect_vray_cloud = vray_cloud_binary is not None
-
-    anonymized_telemetry: bpy.props.BoolProperty(
-        default = False,
-        name="Enable anonymized Telemetry",
-        description="Includes the most used Product functionality and/or parameter values. The data is not personally identifiable and is not tied to the user's individual account",
-        get=_getAnonymizedTelemetry,
-        set=_setAnonymizedTelemetry
-    )
-
-    personalized_telemetry: bpy.props.BoolProperty(
-        default = False,
-        name="Enable personalized Telemetry",
-        description="Same as anonymized telemetry, but contains personally identifiable information tied to an individual user's license to help Chaos tailor and optimize the Product for better personal use",
-        get=_getPersonalizedTelemetry,
-        set=_setPersonalizedTelemetry
-    )
-
-    def _drawTelemetryPanel(self, layout):
-        box = layout.box()
-        header, subLayout = box.panel(idname="Usage statistics sharing", default_closed=True)
-        header.label(text="Usage statistics")
-        if subLayout:
-            split = subLayout.split(factor=0.05, align=True)
-            split.column()
-
-            panel = split.column(align=True)
-            panel.separator()
-
-            telemetryTextLabelCol = panel.column()
-            telemetryTextLabelCol.label(text="The Improvement Program of Chaos Software (Chaos)")
-            telemetryTextLabelCol.label(text="helps improve the Product by tracking general usage statistics")
-            telemetryTextLabelCol.label(text="and to automatically collect crash information.")
-
-            panel.separator(factor=2)
-            panel.label(text="You can choose to enable (and change your choice at any time):")
-
-            telemetryCol = panel.column()
-            telemetryCol.separator(type="LINE")
-            telemetryCol.prop(self, "anonymized_telemetry", text="Anonymized Telemetry")
-            telemetryCol.label(text="Includes the most used Product functionality and/or parameter values.")
-            telemetryCol.label(text="The data is not personally identifiable and is not tied")
-            telemetryCol.label(text="to the user's individual account")
-            telemetryCol.separator(type="LINE")
-
-            personalTelemetryCol = telemetryCol.column()
-            personalTelemetryCol.enabled = self.anonymized_telemetry
-            personalTelemetryCol.prop(self, "personalized_telemetry", text="Personalized Telemetry")
-            personalTelemetryCol.label(text="Same as anonymized telemetry, but contains personally identifiable")
-            personalTelemetryCol.label(text="information tied to an individual user's license to help Chaos tailor")
-            personalTelemetryCol.label(text="and optimize the Product for better personal use")
-
-            telemetryCol.separator(type="LINE")
-            telemetryCol.operator("wm.url_open", text="Learn more", icon='HELP',).url = "https://documentation.chaos.com/space/VBLD/117637472/Chaos+Telemetry"
-
-    def _drawComputeDevicesPanel(self, layout, context):
-        scene = context.scene
-        vrayExporter = scene.vray.Exporter
-        computeDevices = vrayExporter.computeDevices
-
-        header, subLayout = layout.box().panel(idname="Compute Devices", default_closed=True)
-        header.label(text="V-Ray GPU Compute Devices")
-        if subLayout:
-            subLayout = subLayout.column()
-            subLayout.use_property_split = True
-            subLayout.use_property_decorate = False
-            if sys.platform == "win32":
-                subLayout.prop(computeDevices, "gpuDeviceType")
-                subLayout.separator()
-
-                deviceType = computeDevices.gpuDeviceType
-                if devicesList := getattr(computeDevices, "devicesCUDA" if deviceType == "0" else "devicesOptix"):
-                    for device in devicesList:
-                        deviceRow = subLayout.row()
-                        deviceRow.prop(device, "deviceEnabled", text=device.deviceName)
-                else:
-                    noDevicesRow = subLayout.row()
-                    noDevicesRow.label(text="No compute devices available")
-            else:
-                if devicesList := getattr(computeDevices, "devicesMetal"):
-                    for device in devicesList:
-                        deviceRow = subLayout.row()
-                        deviceRow.prop(device, "deviceEnabled", text=device.deviceName)
-
-    def draw(self, context):
-        from vray_blender.menu import VRAY_OT_show_account_status
-
-        layout = self.layout
-    
-        rowVersion = layout.row()
-        rowVersion.label(text=f"Version: {version.getBuildVersionString()}")
-
-        rowAccount = layout.row()
-        rowAccount.label(text="Chaos Account settings")
-        rowAccount.operator(VRAY_OT_show_account_status.bl_idname, text="Open")
-
-        rowCloudBinary = layout.row()
-        if self.detect_vray_cloud:
-            rowCloudBinary.label(text="Chaos Cloud binary: {0}".format(self.vray_cloud_binary))    
-        else:
-            rowCloudBinary.label(text="Chaos Cloud binary is not detected on your system!")
-
-        self._drawComputeDevicesPanel(layout, context)
-        self._drawTelemetryPanel(layout)
-
-
 # Custom export animation settings as a separate property group
 class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
     customFrameStart: bpy.props.IntProperty(
@@ -260,9 +46,9 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         default = 1,
         min = 0
     )
-    
+
     customFrameEnd: bpy.props.IntProperty(
-        name = "End Frame", 
+        name = "End Frame",
         description = "End frame for export (overrides scene frame end during VRScene export only)",
         default = 250,
         min = 0
@@ -483,7 +269,7 @@ class VRayExporter(bpy.types.PropertyGroup):
 
     def _updateLogLevel(self, context):
         from vray_blender import debug
-        debug.setLogLevel(int(self.verbose_level))
+        debug.setLogLevel(int(self.verbose_level), False)
 
 
     verbose_level: bpy.props.EnumProperty(
@@ -497,10 +283,10 @@ class VRayExporter(bpy.types.PropertyGroup):
             ('4', "All",            "All output"),
         ),
         default = '2',
-        update = _updateLogLevel
+        update = _updateLogLevel,
+        options = set()
     )
 
-    
     log_window: bpy.props.BoolProperty(
         name = "Show Log Window",
         description = "Show log window (Linux)",
@@ -530,7 +316,8 @@ class VRayExporter(bpy.types.PropertyGroup):
         name = "Display Always On Top",
         description = "Display VFB on top of the other windows",
         default = True,
-        update=_displayVfbOnTopUpdate
+        update=_displayVfbOnTopUpdate,
+        options = set()
     )
 
     use_custom_thread_count: bpy.props.EnumProperty(
@@ -540,7 +327,8 @@ class VRayExporter(bpy.types.PropertyGroup):
             ('AUTO',  "Auto",  "Use all system threads."),
             ('FIXED', "Fixed", "Use a fixed number of threads. In some cases it can be beneficial to leave one or more threads for third-party applications.")
         ),
-        default = 'AUTO'
+        default = 'AUTO',
+        options = set()
     )
 
     custom_thread_count: bpy.props.IntProperty(
@@ -548,13 +336,15 @@ class VRayExporter(bpy.types.PropertyGroup):
         description = "The maximum number of CPU threads V-Ray is allowed to use",
         default = 1,
         min = 1,
-        max = 256
+        max = 256,
+        options = set()
     )
 
     lower_thread_priority: bpy.props.BoolProperty(
         name = "Lower Thread Priority",
         description = "Use lower thread priority for rendering. Helps reduce Windows issues (like freezing) during CPU-intensive tasks.",
-        default = True
+        default = True,
+        options = set()
     )
 
     detect_vray: bpy.props.BoolProperty(
@@ -572,7 +362,8 @@ class VRayExporter(bpy.types.PropertyGroup):
     auto_save_render: bpy.props.BoolProperty(
         name = "Save Render",
         description = "Save render automatically",
-        default = False
+        default = False,
+        options = set()
     )
 
     subsurf_to_osd: bpy.props.BoolProperty(
@@ -632,12 +423,12 @@ class VRayExporter(bpy.types.PropertyGroup):
         default = "$F"
     )
 
-
-    # Compute Devices Selection
+    # Unused, left for compatibility reasons and should be removed in a later release.
     computeDevices: bpy.props.PointerProperty(
         name = "Compute Devices",
         description = "Select compute devices for rendering",
-        type = ComputeDevices
+        type = ComputeDevices,
+        options = set()
     )
 
     device_type: bpy.props.EnumProperty(
@@ -647,14 +438,15 @@ class VRayExporter(bpy.types.PropertyGroup):
             ('CPU', "V-Ray", ""),
             ('GPU', "V-Ray GPU", ""),
         ),
-        default = 'CPU'
+        default = 'CPU',
+        options = set()
     )
 
     use_gpu_rtx: bpy.props.BoolProperty(
         name = "Use RTX (no CPU, Slower start)",
-        default = False
+        default = False,
+        options = set()
     )
-  
 
 def getRegClasses():
     return (
@@ -662,7 +454,6 @@ def getRegClasses():
         ComputeDevices,
         AnimationSettingsVrsceneExport,
         VRayExporter,
-        VRayExporterPreferences
     )
 
 

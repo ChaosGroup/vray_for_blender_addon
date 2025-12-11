@@ -11,5 +11,8 @@
                 "layout": "COLUMN"
             }
         ]
+    },
+    "Options": {
+        "animatable": false
     }
 }

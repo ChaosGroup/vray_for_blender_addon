@@ -8,7 +8,7 @@ from numpy import ndarray
 from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase, exportViewportView
 
 from vray_blender import debug
-from vray_blender.lib import gl_draw, blender_utils, plugin_utils, image_utils
+from vray_blender.lib import gl_draw, blender_utils
 from vray_blender.lib.camera_utils import Size
 from vray_blender.lib.defs import RendererMode, ExporterType
 from vray_blender.exporting.update_tracker import UpdateTracker
@@ -74,13 +74,18 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         if VRayRendererIprViewport.isActive():
             VRayRendererIprBase._resetRenderer = True
 
-    def stop(self):
-        if self.renderer is not None:
-            vray.deleteRenderer(self.renderer)
+    def stop(self, block=True):
+        if self.renderer:
+            vray.renderEnd(self.renderer)
+
+            if block:
+                while vray.renderJobIsRunning(self.renderer):
+                    time.sleep(0.01)
+            
             self.renderer = None
             VRayRendererIprViewport._activeRenderer = None
-            # Do not reset _space3D. It will be used by the VFB event handler to 
-            # route events to the same 3D view.
+        # Do not reset _space3D. It will be used by the VFB event handler to 
+        # route events to the same 3D view.
 
         
     def _startDrawPoller(self):
@@ -97,7 +102,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         # For viewport renders, do a full export the first time only. Subsequent exports will be partial.  
         isFullExport = not self.renderer
         engine.update_stats("", "View_update start")
-        
+
         startTime = time.perf_counter()
 
         if not self.renderer:
@@ -110,9 +115,9 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
         if context.scene.vray.Exporter.debug_log_times:
             vray.startStatsCollection(self.renderer)
-        
+
         exporterCtx = self._getExporterContext(context, RendererMode.Viewport, depsgraph, isFullExport)
-        
+
         if isFullExport:
             # Updates may have accumulated from a previous renderer session.
             UpdateTracker.clear()
@@ -121,8 +126,8 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
         # Total scene export time
         endTime = time.perf_counter()
-        
-        
+
+
         if context.scene.vray.Exporter.debug_log_times:
             vray.endStatsCollection(self.renderer, printStats=True, title="C++ exporter")
             exporterCtx.ts.printSummary()
@@ -138,6 +143,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         if not (view3D := blender_utils.getSpaceView3D(context)):
             # Update may be called for spaces other that 3DView (e.g. the FileOpen dialog). Skip rendering.
             return
+
         if self.renderer:
             if vray.isRenderReady(self.renderer):
                 # We are not stopping to check for image here
@@ -147,21 +153,35 @@ class VRayRendererIprViewport(VRayRendererIprBase):
             try:
                 # Blender does not send a separate notification when the viewport camera changes.
                 # This is why we have to export the view on each draw request
-                ctx  = self._getExporterContext(ctx = context, rendererMode=RendererMode.Viewport, dg = depsgraph, isFullExport = False)
-                
-                self.viewParams = exportViewportView(ctx, view3D, self.viewParams)
+                renderSizesOnly = view3D.region_3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
+
+                ctx = self._getExporterContext(ctx = context, rendererMode=RendererMode.Viewport, dg = depsgraph, isFullExport = False)
+                self.viewParams = exportViewportView(ctx, view3D, self.viewParams, renderSizesOnly)
+
                 engine.update_stats("", vray.getEngineUpdateMessage(self.renderer))
+
                 self._drawViewport(context)
+                self.persistedState.prevRegion3dViewMatrix = view3D.region_3d.view_matrix.copy()
+
             except Exception as ex:
                 engine.error_set(f"Add-on error: {str(ex)}")
                 debug.printExceptionInfo(ex, "VRayRendererIprViewport::view_draw()")
-    
+
             vray.finishExport(self.renderer, interactive=True)
 
     def _initRenderer(self, engine: bpy.types.RenderEngine):
         self._createRenderer(ExporterType.IPR_VIEWPORT)
+
+        if self.renderer == 0:
+            # ZmqServer still starting
+            return
         
-        self.cbRenderStopped = lambda: VfbEventHandler.stopViewportRender()
+        def onStoped(isAborted: bool):
+            if isAborted:
+                bpy.app.timers.register(lambda: debug.reportError("Connection to renderer lost. Restart viewport rendering."))
+                VfbEventHandler.stopViewportRender()
+
+        self.cbRenderStopped = lambda isAborted: onStoped(isAborted)
         vray.setRenderStoppedCallback(self.renderer, self.cbRenderStopped)
 
         # 'renderer' member of engine is only used by the draw polling thread  

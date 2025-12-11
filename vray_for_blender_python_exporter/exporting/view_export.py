@@ -1,6 +1,7 @@
 from __future__ import annotations
 import bpy
 import math
+import sys
 from mathutils import Matrix
 
 from vray_blender import debug
@@ -13,6 +14,7 @@ from vray_blender.lib.names import Names
 from vray_blender.plugins.settings.SettingsOutput import SettingsOutputExporter
 from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
 from vray_blender.utils.utils_bake import VRayBatchBakeItem
+
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -71,7 +73,7 @@ def getActiveCamera(ctx: ExporterContext):
 
     return ctx.dg.scene.camera
 
-def _exportCameraDefaultUVWGen(ctx: ExportedContext):
+def _exportCameraDefaultUVWGen(ctx: ExporterContext):
     """ Export a UVWGenChannel plugin for use in camera aperture/distortion.
 
         @returns A newly exported plugin on the first invocation, a cached copy after that.
@@ -105,11 +107,7 @@ class ViewExporter(ExporterBase):
             Parameters:
             perCameraViewParams: camera object full name => last evaluated ViewParams
         """
-        from vray_blender.engine.renderer_prod import VRayRendererProd
-
         assert self.production or self.preview, "Method should only be called for prod and preview renders"
-
-        exportOnly = self.production and (VRayRendererProd.renderMode == ProdRenderMode.EXPORT_VRSCENE)
 
         cameras = []
 
@@ -117,51 +115,44 @@ class ViewExporter(ExporterBase):
         # This is necessary for subsequent renderings with V-Ray Standalone
         # where the user can select which one of the exported cameras to use.
         # During production rendering, only the active camera is needed (or the marked cameras, if any, in animation mode).
-        if exportOnly or self.preview:
+        if self.exportOnly or self.preview:
             cameras = list([inst.object for inst in self.dg.object_instances if inst.object.type == 'CAMERA'])
             assert (not self.preview) or len(cameras) == 1, "Exactly 1 camera should exist in the material preview scene"
-        elif self.isAnimation:
-            # Camera objects marked in the timeline
-            markedCameras = set(m.camera.name for m in self.scene.timeline_markers if m.camera and (m.frame <= self.scene.frame_end))
-            
-            # Evaluated marked camera objects
-            cameras = list([inst.object for inst in self.dg.object_instances if inst.object.name in markedCameras])
-
-        # If an object other than a camera has been set as the active camera, add it to the cameras' list.
-        # A camera with suitable parameters will be exported for it.
-        if self.activeCamera and ((not blender_utils.isCamera(self.activeCamera)) or (not cameras)):
-            cameras.append(self.activeCamera)
+        else:
+            cameras = [self.activeCamera]
 
         perCameraViewParams: dict[str, ViewParams] = {}
 
         for cameraObj in (c.evaluated_get(self.dg) for c in cameras):
             cameraName = cameraObj.name_full
-            viewParams = prevPerCameraViewParams.get(cameraName)
-            perCameraViewParams[cameraName] = self._exportProdCamera(cameraObj, viewParams)
-        
-        if self.isAnimation and prevPerCameraViewParams:
-            self._checkForIncompatibleCameras(prevPerCameraViewParams, perCameraViewParams)
+            viewParams = prevPerCameraViewParams.get(cameraName, None)
+            if exportedViewParams := self._exportProdCamera(cameraObj, viewParams):
+                perCameraViewParams[cameraName] = exportedViewParams
 
-        # The active camera settings have been exported to a dedicated set of 
-        # camera plugins with the RENDER_CAMERA_BASE_NAME scene name. Tell V-Ray 
-        # to use it for the actual rendering.
-        vray.setCameraName(self.renderer, RENDER_CAMERA_BASE_NAME)
+        if not self.exportOnly:
+            # The active camera settings have been exported to a dedicated set of
+            # camera plugins with the RENDER_CAMERA_BASE_NAME scene name. Tell V-Ray
+            # to use it for the actual rendering.
+            vray.setCameraName(self.renderer, RENDER_CAMERA_BASE_NAME)
+
         return perCameraViewParams
-    
 
-    def exportViewportView(self, view3D: bpy.types.SpaceView3D, prevViewParams: ViewParams = None):
-        assert self.interactive, "Method should only be called for viewport renders"
-        assert view3D, "view3D parameter should not be empty"
+
+    def exportViewportView(self, view3D: bpy.types.SpaceView3D, prevViewParams: ViewParams = None, renderSizesOnly = False):
+        assert self.interactive, "Method should only be called for interactive renders"
+        assert (view3D and self.viewport) or not self.viewport, "view3D parameter shouldn't be empty for viewport renders"
         self.view3D = view3D
 
-        viewParams: ViewParams = self._getInteractiveViewParams()
+        # Use production view params if there aren't any 3d viewports in the scene.
+        viewParams: ViewParams = self._getInteractiveViewParams() if view3D else self._getProdViewParams(self.activeCamera)
 
         # Some plugins depend on SettingsOutput and have to be exported AFTER it, so export
         # it before anything else
         SettingsOutputExporter(self, viewParams, prevViewParams).export()
 
-        self._exportCamera(viewParams, prevViewParams, isRenderCamera=True)
-        
+        if not renderSizesOnly or viewParams.renderView.fov != prevViewParams.renderView.fov  or viewParams.renderView.ortho_width != prevViewParams.renderView.ortho_width:
+            self._exportCamera(viewParams, prevViewParams, isRenderCamera=True)
+
         return viewParams
 
 
@@ -170,10 +161,10 @@ class ViewExporter(ExporterBase):
 
         viewParams: ViewParams = self._getBakeViewParams()
         SettingsOutputExporter(self, viewParams, prevViewParams=None).export()
-        
+
         self._exportBakeView(viewParams)
         self._exportCameraDefault(viewParams)
-        
+
         return viewParams
 
 
@@ -198,22 +189,14 @@ class ViewExporter(ExporterBase):
         assert not self.viewport, "Method shouldn't be called for viewport renders"
 
         viewParams: ViewParams = self._getProdViewParams(camera)
-        
+
         if self._isActiveCamera(viewParams.cameraObject):
             # Some plugins depend on SettingsOutput and have to be exported AFTER it, so export
             # it before anything else
             SettingsOutputExporter(self, viewParams, prevViewParams=None).export()
             viewParams.isActiveCamera = True
         
-        if self._useCamera(viewParams.cameraObject):
-            # This is the active render camera. Export as a dedicated set of plugins with fixed names
-            # and mark all of them as active (dont_affect_settings = False)
-            self._exportCamera(viewParams, prevViewParams, isRenderCamera=True)
-        
-        # Regardless of whether this is the active render camera, export current camera settings in its own 
-        # set of plugins and mark them as inactive (dont_affect_settings = True). This will allow the camera 
-        # to be selected as the render camera in V-Ray Standalone. 
-        self._exportCamera(viewParams, prevViewParams, isRenderCamera=False)
+        self._exportCamera(viewParams, prevViewParams, isRenderCamera=viewParams.isActiveCamera)
 
         return viewParams
 
@@ -226,7 +209,7 @@ class ViewExporter(ExporterBase):
         """
         if self.interactive and prevViewParams:
             self._removeIncompatibleCameras(viewParams, prevViewParams, isRenderCamera)
-        
+
 
         if blender_utils.isCamera(viewParams.cameraObject):
             if viewParams.usePhysicalCamera:
@@ -238,7 +221,7 @@ class ViewExporter(ExporterBase):
                 if self._isActiveCamera(viewParams.cameraObject):
                     self._exportCameraDefault(viewParams)
 
-            
+
         self._exportSettingsCamera(isRenderCamera, viewParams)
         self._exportRenderView(viewParams, isRenderCamera)
 
@@ -260,7 +243,7 @@ class ViewExporter(ExporterBase):
         viewDesc = PluginDesc(pluginName, "RenderView")
 
         cameraOverridesEnabled = isCamera(cameraObj) and cameraObj.data.vray.SettingsCamera.override_camera_settings
-        
+
         viewDesc.setAttribute("transform", viewParams.renderView.tm)
         viewDesc.setAttribute("fov", viewParams.renderView.fov)
         viewDesc.setAttribute("clipping", viewParams.renderView.clipping if cameraOverridesEnabled else False)
@@ -273,9 +256,9 @@ class ViewExporter(ExporterBase):
             settingsDof = self.ctx.scene.vray.SettingsCameraDof
             focalDistance = ct.getCameraDofDistance(cameraObj) if settingsDof.use_camera_focus else settingsDof.focal_dist
             viewDesc.setAttribute("focalDistance", focalDistance)
-        
-        viewDesc.setAttribute("scene_name", self._getCameraBaseName(cameraObj, isRenderCamera))
-        
+
+        viewDesc.setAttribute("scene_name", self._getCameraBaseName(cameraObj))
+
         viewDesc.setAttribute("use_scene_offset", not self.interactive)
         viewDesc.setAttribute("dont_affect_settings", not isRenderCamera)
 
@@ -298,7 +281,7 @@ class ViewExporter(ExporterBase):
         
 
         plDesc.setAttributes({
-            'scene_name'            : self._getCameraBaseName(cameraObj, isRenderCamera),
+            'scene_name'            : self._getCameraBaseName(cameraObj),
             'dont_affect_settings'  : not isRenderCamera,
             'fov'                   : -1, # Special value to indicate that FOV from RenderView should be used instead
             "auto_exposure"         : settingsCameraGlobal.auto_exposure,
@@ -355,7 +338,7 @@ class ViewExporter(ExporterBase):
         plDesc = PluginDesc(pluginName, pluginType)
         plDesc.vrayPropGroup = vrayCamera.CameraPhysical
         self._fillPhysicalCameraSettings(plDesc, viewParams)
-        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject, isRenderCamera))
+        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.setAttribute("fov", viewParams.renderView.fov)
 
@@ -379,7 +362,7 @@ class ViewExporter(ExporterBase):
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, pluginType, isRenderCamera)
 
         plDesc = PluginDesc(pluginName, pluginType)
-        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject, isRenderCamera))
+        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.vrayPropGroup = viewParams.cameraObject.data.vray.CameraDome
 
@@ -388,9 +371,9 @@ class ViewExporter(ExporterBase):
 
 
     def _exportSettingsMotionBlur(self, cameraObj: bpy.types.Camera):
-        """ SettingsMotionBlur plugin is exported for all camera types. 
+        """ SettingsMotionBlur plugin is exported for all camera types.
             In case of a physical or a dome camera, only some of its members are used
-            by VRay but are safe to be exported. 
+            by VRay but are safe to be exported.
         """
         assert (cameraObj is not None) and (cameraObj.type == 'CAMERA'), "Invalid camera object"
 
@@ -426,15 +409,15 @@ class ViewExporter(ExporterBase):
 
     def _exportCameraStereoscopic(self, viewParams: ViewParams):
         pluginName = Names.singletonPlugin("VRayStereoscopicSettings")
-        
+
         plDesc = PluginDesc(pluginName, "VRayStereoscopicSettings")
         plDesc.vrayPropGroup = self.vrayScene.VRayStereoscopicSettings
-        
+
         export_utils.exportPlugin(self, plDesc)
 
 
     def _removeIncompatibleCameras(self, viewParams: ViewParams, prevViewParams: ViewParams, isRenderCamera: bool):
-        """ If the type of camera has been changed, remove the plugins associated 
+        """ If the type of camera has been changed, remove the plugins associated
             with the old camera type. Used in interactive mode only.
         """
         assert self.interactive, "Camera type cannot change during non-interactive rendering"
@@ -443,23 +426,23 @@ class ViewExporter(ExporterBase):
                 and viewParams.useDomeCamera == prevViewParams.useDomeCamera:
             # No change from the current state, nothing more to do
             return
-        
+
         # Generally, the enabling/disabling of cameras cannot be animated and are not applied correctly
         # to the IPR unless the plugins associated with them are recreated.
         vray.pluginRemove(self.renderer, Names.singletonPlugin("CameraDefault"))
         vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraDome", isRenderCamera))
         vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "CameraPhysical", isRenderCamera))
         vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "SettingsCameraDof", isRenderCamera))
-        
-        # When the type of camera has changed (specifically when a dome camera is removed from the scene), 
-        # VRay does not always apply the correct view settings until either SettingsOutput of RenderView plugins 
+
+        # When the type of camera has changed (specifically when a dome camera is removed from the scene),
+        # VRay does not always apply the correct view settings until either SettingsOutput of RenderView plugins
         # are re-exported. We are exporting SettingsOutput before everything else because the order of export for it
         # is important for some scenarions (e.g. stereoscopic cameras). That leaves us with RenderView to re-export
         vray.pluginRemove(self.renderer, self._getCameraPluginUniqueName(prevViewParams.cameraObject, "RenderView", isRenderCamera))
 
 
     def _checkForIncompatibleCameras(self, prevPerCameraViewParams: dict[str, ViewParams], perCameraViewParams: dict[str, ViewParams]):
-        """ When animating a switch between cameras, all the cameras must be of the same type. """ 
+        """ When animating a switch between cameras, all the cameras must be of the same type. """
         assert self.isAnimation
 
         vp  = next((vp for vp in perCameraViewParams.values() if vp.isActiveCamera), None)
@@ -480,12 +463,12 @@ class ViewExporter(ExporterBase):
     def _useCamera(self, cameraObj: bpy.types.Object):
         """ Return True if the camera should be used to render the scene """
         # Camera object isn't set to ViewParams when the default scene camera is used, or when 
-        # a non-camera object is used as a camera  
+        # a non-camera object is used as a camera
         return (cameraObj is None) or self._isActiveCamera(cameraObj)
 
 
     def _getViewFromViewport(self):
-        """ Create ViewParams for the currently active viewport. This may be 
+        """ Create ViewParams for the currently active viewport. This may be
             either the 'Camera' view, or the default leayout view.
         """
         viewParams = ViewParams()
@@ -503,23 +486,47 @@ class ViewExporter(ExporterBase):
         else:
             self._fillViewFromScene(viewParams, region3d)
 
+        if self.viewport:
+            resMult = 1.0
+            if self.scene.vray.viewport_resolution_override == 'auto':
+                if sys.platform == 'darwin':
+                    resolutions = [
+                        (0, 0, 1.0),
+                        (1920, 1080, 0.75),
+                        (2560, 1440, 0.5),
+                    ]
+                else:
+                    resolutions = [
+                        (0, 0, 1.0),
+                        (2560, 1440, 0.75),
+                    ]
+                for (width, height, mult) in resolutions:
+                    if width * height > self.ctx.region.width * self.ctx.region.height:
+                        break
+                    resMult = mult
+            else:
+                resMult = float(self.scene.vray.viewport_resolution_override)
+            viewParams.resolutionMult = float(resMult)
+        else:
+            viewParams.resolutionMult = 1.0
+
         return viewParams
 
 
     def _getInteractiveViewParams(self):
-        """ Return a ViewParams struct, filled from either the camera selected in the 
+        """ Return a ViewParams struct, filled from either the camera selected in the
             camera view or, if no camera is selected, from the viewport settings.
         """
-        
+
         viewParams = self._getViewFromViewport()
         viewParams.calcRenderSizes()
-        
+
         return viewParams
 
 
-    def _getProdViewParams(self, cameraObj: bpy.types.Object): 
+    def _getProdViewParams(self, cameraObj: bpy.types.Object):
         viewParams = ViewParams()
-        
+
         if blender_utils.isCamera(cameraObj):
             viewParams.usePhysicalCamera = ct.isPhysicalCamera(cameraObj)
             viewParams.useDomeCamera = ct.isDomeCamera(cameraObj)
@@ -530,23 +537,23 @@ class ViewExporter(ExporterBase):
             viewParams.calcRenderSizes()
 
         return viewParams
-    
 
-    def _getBakeViewParams(self): 
+
+    def _getBakeViewParams(self):
         viewParams: ViewParams = self._getViewFromBakeSettings()
         viewParams.usePhysicalCamera = False
         viewParams.useDomeCamera = False
         viewParams.cameraObject = None
 
         return viewParams
-    
+
     def _fillRenderSizeFromScene(self, viewParams: ViewParams):
-        """ Fill ViewParams.renderSize, ViewParams.viewportW and ViewParams.viewportH 
-            from the scene view settings, not from a specific camera object 
+        """ Fill ViewParams.renderSize, ViewParams.viewportW and ViewParams.viewportH
+            from the scene view settings, not from a specific camera object
         """
         if self.viewport:
             region = self.ctx.region
-            
+
             viewParams.renderSize.w = region.width
             viewParams.renderSize.h = region.height
 
@@ -831,18 +838,6 @@ class ViewExporter(ExporterBase):
 
         lensShift = blender_utils.getLensShift(viewParams.cameraObject) if physicalCamera.auto_lens_shift else physicalCamera.lens_shift
 
-        # Orthographic view doesn't work with DoF and for that "focus_distance"
-        # is calculated only when its disabled.
-        focusDist = 1
-        if not viewParams.renderView.ortho:
-            focusDist = ct.getCameraDofDistance(viewParams.cameraObject)
-            
-            if self.viewport:
-                # In viewport rendering, 'fov' includes a zoom factor.  
-                # Adjust the focus distance based on the ratio of the production FOV to the viewport FOV  
-                # to ensure the depth of field matches the one generated by production render.
-                prodFov = ct.fov(cameraParams.sensorX, cameraParams.lens)
-                focusDist *= prodFov / viewParams.renderView.fov
 
         filmWidth = physicalCamera.film_width # The same as cameraParams.sensorX/Y and camera.sensor_width/height
         if self.viewport: # Applying viewport corrections
@@ -855,6 +850,14 @@ class ViewExporter(ExporterBase):
                 filmWidth *= VISIBLE_TO_WHOLE_VIEW_RATIO * cameraToViewportRatio
 
             filmWidth *= cameraParams.zoom # Applying the viewport zoom factor.
+        else:
+            aspect = float(viewParams.renderSize.w) / float(viewParams.renderSize.h)
+            if aspect < 1.0:
+                filmWidth *= aspect
+
+        # Orthographic view doesn't work with DoF and for that "focus_distance"
+        # is calculated only when its disabled.
+        focusDist = 1 if viewParams.renderView.ortho else ct.getCameraDofDistance(viewParams.cameraObject)
 
         plDesc.setAttributes({
             # Matching the FOV calculated by V-Ray with Blender's is really difficult.
@@ -910,7 +913,6 @@ class ViewExporter(ExporterBase):
             tm = ct.fixLookThroughObjectCameraZFight(tm)
 
         viewParams.renderView.tm = tm
-        Matrix(viewParams.renderView.tm).normalize()
         viewParams.cameraObject = obj
         viewParams.usePhysicalCamera = False
         viewParams.useDomeCamera = False
@@ -923,17 +925,20 @@ class ViewExporter(ExporterBase):
         """
 
         if (cameraObj is not None) and (not self.interactive):
-            cameraName = self._getCameraBaseName(cameraObj, isRenderCamera)
+            cameraName = self._getCameraBaseName(cameraObj)
             return Names.pluginObject(pluginType, cameraName)
         else:
             return Names.singletonPlugin(pluginType)
 
 
-    def _getCameraBaseName(self, cameraObj, isRenderCamera: bool):
-        # Non-camera object may be exported as a cameras only when it is the active selected camera, hence
-        # the current render camera.
-        return RENDER_CAMERA_BASE_NAME if isRenderCamera or not isCamera(cameraObj) else Names.object(cameraObj)
+    def _getCameraBaseName(self, cameraObj):
+        # During rendering, only the active camera is being exported with its unique name.
+        # Otherwise, export the camera with its Blender object name.
+        if not self.exportOnly:
+            return RENDER_CAMERA_BASE_NAME
+        return Names.object(cameraObj)
         
+
 
 def run(ctx: ExporterContext):
     return ViewExporter(ctx).export()

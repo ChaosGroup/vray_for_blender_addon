@@ -1,6 +1,18 @@
 {
     "ID": "TexEdges",
     "Name": "V-Ray Edges",
+    "Parameters": [
+        {
+            "attr": "world_width",
+            "default": 0.01
+        },
+        {
+            "attr": "pixel_width",
+            "options": {
+                "visible": false
+            }
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -35,15 +47,14 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "world_width",
-            "default": 0.01,
-            "ui": {
-                "quantityType": "distance"
-            }
-        }
-    ],
+    "Node": {
+        "input_sockets": [
+            { "name": "edges_tex" },
+            { "name": "bg_tex" },
+            { "name": "world_width", "visible": { "cond": "::width_type=0" } },
+            { "name": "pixel_width", "visible": { "cond": "::width_type=1" } }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [

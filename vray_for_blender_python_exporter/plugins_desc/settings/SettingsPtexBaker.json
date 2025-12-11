@@ -84,7 +84,8 @@
             "ui" : 
             {
                 "display_name" : "Length U",
-                "min" : 9.999999747378752e-05
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
             }
         },
         
@@ -96,7 +97,8 @@
             "ui" : 
             {
                 "display_name" : "Length V",
-                "min" : 9.999999747378752e-05
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
             }
         },
         
@@ -131,7 +133,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -318,7 +321,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "display_name" : "Ray offset"
+                "display_name" : "Ray offset",
+                "quantityType" : "distance"
             }
         },
         
@@ -329,7 +333,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "display_name" : "Max depth"
+                "display_name" : "Max depth",
+                "quantityType" : "distance"
             }
         },
         

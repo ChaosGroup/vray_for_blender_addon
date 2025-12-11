@@ -63,7 +63,10 @@
         },
         {
             "attr": "shadowRadius",
-            "subtype": "ANGLE"
+            "subtype": "ANGLE",
+            "ui": {
+                "display_name": "Shadow Radius"
+            }
         },
         {
             "attr": "shadowRadius_tex",
@@ -93,28 +96,19 @@
             "ui": {
                 "soft_min": -0.1,
                 "soft_max": 0.1,
-                "spin_step": 0.001,
-                "quantityType": "distance"
+                "spin_step": 0.001
             }
         },
         {
             "attr": "intensity",
             "default": 1.0,
             "ui": {
-                "soft_min": 0.0,
-                "soft_max": 10.0,
                 "spin_step": 0.1
             }
         },
         {
             "attr": "bumped_below_surface_check",
             "default": true
-        },
-        {
-            "attr": "shadowRadius",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

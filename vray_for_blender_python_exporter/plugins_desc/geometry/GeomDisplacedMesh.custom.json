@@ -42,8 +42,7 @@
         {
             "attr": "displacement_amount",
             "ui": {
-                "display_name": "Amount",
-                "quantityType": "distance"
+                "display_name": "Amount"
             },
             "options": {
                 "animatable": true
@@ -52,8 +51,7 @@
         {
             "attr": "displacement_shift",
             "ui": {
-                "display_name": "Shift",
-                "quantityType": "distance"
+                "display_name": "Shift"
             },
             "options": {
                 "animatable": true
@@ -71,9 +69,6 @@
         {
             "attr": "water_level",
             "default": -1.0,
-            "ui": {
-                "quantityType": "distance"
-            },
             "options": {
                 "animatable": true
             }
@@ -280,6 +275,7 @@
         ]
     },
     "Options": {
+        "use_factor_subtype": true,
         "animatable": false,
         "use_animation_layout": true,
         "excluded_parameters": [

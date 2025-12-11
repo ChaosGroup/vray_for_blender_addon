@@ -36,13 +36,28 @@
             }
         },
         {
+            "attr": "sun_select",
+            "type": "TEMPLATE",
+            "desc": "Specifies which sun will be affected by the effect",
+            "options": {
+                "template": {
+                    "type": "templateSingleObjectSelect",
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "sun",
+                        "filter_function": "filters.filterSuns"
+                    }
+                }
+            }
+        },
+        {
             "attr" : "sun_dir_only",
             "type" : "BOOL",
             "ui" : { "display_name": "Sun Direction Only" }
         },
         {
             "attr": "horiz_illum",
-            "ui" : 
+            "ui":
             {
                 "min": 0,
                 "spin_step": 1000
@@ -51,12 +66,9 @@
         {
             "attr": "blend_angle",
             "subtype": "ANGLE",
-            "precision": 7,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
-                "spin_step": 57.2958,
+                "spin_step": 1,
                 "min": 0,
                 "max": 90
             }
@@ -129,8 +141,8 @@
                 "label": "Options",
                 "attrs": [
                     {
-                        "name": "sun",
-                        "search_bar_for": "objects"
+                        "name": "sun_select",
+                        "label": "Sun"
                     },
                     {
                         "name": "sun_dir_only"

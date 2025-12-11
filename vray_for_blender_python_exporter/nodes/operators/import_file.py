@@ -4,11 +4,11 @@ from pathlib import PurePath
 
 from vray_blender.nodes import importing as NodesImport
 from vray_blender.nodes import tools     as NodesTools
+from vray_blender.nodes.utils import getOutputNode, getLightOutputNode
 from vray_blender.nodes.tree_defaults import addMaterialNodeTree, createNodeTreeForLightObject, removeNonVRayNodes
 
 from vray_blender.vray_tools.vrscene_parser import parseVrscene
 from vray_blender.vray_tools.vrmat_parser     import parseVrmat
-
 
 from vray_blender import debug
 from vray_blender.vray_tools import vray_proxy
@@ -131,24 +131,26 @@ def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str
 
         ntree = mtl.node_tree
         importContext = NodesImport.ImportContext(ntree, vrsceneDict, locationsMap = locationsMap)
-        outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
 
         mtlNode = None
         matOutputKey = 'Material'
         if  pluginDesc['ID'] == 'MtlSingleBRDF':
             brdfName = pluginDesc['Attributes']['brdf']
             matPlugin = NodesImport.getPluginByName(vrsceneDict, brdfName)
-            mtlNode = NodesImport.createNode(importContext, outputNode, matPlugin)
+            mtlNode = NodesImport.createNode(importContext, matPlugin)
 
             if 'BRDF' in mtlNode.outputs:
                 matOutputKey = 'BRDF'
         else:
-            mtlNode = NodesImport.createNode(importContext, outputNode, pluginDesc)
+            mtlNode = NodesImport.createNode(importContext, pluginDesc)
 
+        outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
         ntree.links.new(mtlNode.outputs[matOutputKey], outputNode.inputs['Material'])
 
         NodesTools.rearrangeTree(ntree, outputNode)
         NodesTools.deselectNodes(ntree)
+
+        _checkNodeTree(mtl.node_tree, f"Material {mtl.name}")
 
         if not objectForMatAssign:
             debug.report('INFO', f"Cosmos material imported: {mtlName}")
@@ -177,7 +179,7 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
             lightData.vray.light_type = vrayType
             lightData.vray.cosmos_package_id = packageId
             lightData.vray.cosmos_revision_id = revisionId
-
+            
             # Scale area light
             if lightData.type == 'AREA':
                 for vrAttr, blAttr in (("u_size", "size"), ("v_size", "size_y")):
@@ -189,12 +191,16 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
 
             context.collection.objects.link(lightObj)
 
-            # Applying the transformation from the .vrmat file
+            # Apply the transformation from the .vrmat file
             lightObj.matrix_world = lightObj.matrix_world @ attribute_utils.attrValueToMatrix(plgAttrs['transform'], True)
 
-            localPos, _, _ = lightObj.matrix_local.decompose()  # Decomposing the matrix to get the position of the light in local space
-            lightData.vray.initial_proxy_light_pos = localPos
-            lightData.vray.initial_proxy_light_scale = parentObj.data.vray.GeomMeshFile.scale
+            geomMeshFile = parentObj.data.vray.GeomMeshFile
+            objScale = geomMeshFile.scale
+            localPos, _, _ = lightObj.matrix_local.decompose()  # Get position of the light in local space
+
+            # Store the offset of light's center to the parent object's center in original scale units
+            lightData.vray.initial_proxy_light_pos = localPos / objScale - geomMeshFile.initial_preview_mesh_pos
+            lightData.vray.initial_proxy_light_scale = objScale
 
             # Assigning parent to the light object.
             # During cosmos import the parent will be the object from the package's .vrmesh file.
@@ -205,10 +211,12 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
             # The transformation is applied directly to the object, no need  for transform node generation
             del plgAttrs['transform']
             importContext = NodesImport.ImportContext(lightNtree, lightDict, locationsMap = locationsMap)
-            lightNode = NodesImport.createNode(importContext, None, plgDesc)
+            lightNode = NodesImport.createNode(importContext, plgDesc)
 
             NodesTools.rearrangeTree(lightNtree, lightNode)
             NodesTools.deselectNodes(lightNtree)
+
+            _checkNodeTree(lightNtree, f"Light {plgName}")
 
 
 def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str, locationsMap: dict[str, str]):
@@ -238,8 +246,8 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
 
     domeContext = NodesImport.ImportContext(ntree, domeDict, locationsMap=locationsMap)
     textureContext = NodesImport.ImportContext(ntree, textureDict, locationsMap=locationsMap)
-    lightDomeNode = NodesImport.createNode(domeContext, None, lightDesc)
-    textureNode = NodesImport.createNode(textureContext, None, texDesc)
+    lightDomeNode = NodesImport.createNode(domeContext, lightDesc)
+    textureNode = NodesImport.createNode(textureContext, texDesc)
 
     ntree.links.new(textureNode.outputs["Color"], lightDomeNode.inputs['Dome Color'])
     NodesTools.rearrangeTree(ntree, lightDomeNode)
@@ -264,6 +272,7 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     ob.location = context.scene.cursor.location
 
     geomMeshFile = previewMesh.vray.GeomMeshFile
+    proxyFilePath = bpy.path.relpath(filePath) if useRelativePath else filePath
 
     # Store the scale at which the model was imported. If its preview has to be regenerated, this value will be used to scale it.
     # The scale will be reset to 1 if the path to the mesh file is changed by the user and the new model will always be imported
@@ -273,11 +282,12 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     context.collection.objects.link(ob)
     vrayAsset = ob.vray.VRayAsset
 
-    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, filePath, 0, 0.0, 1.0, 0.0):
+    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, proxyFilePath, animFrame=0.0):
         return None, err
 
     vrayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Proxy"]
-    geomMeshFile['file'] = bpy.path.relpath(filePath) if useRelativePath else filePath
+    geomMeshFile['file'] = proxyFilePath
+
     blender_utils.setShadowAttr(geomMeshFile, 'file', geomMeshFile.file)
 
     return ob, None
@@ -323,3 +333,29 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
     blender_utils.selectObject(objProxy)
 
     return objProxy, ""
+
+
+def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
+    # Check that all imported nodes are linked
+    if ntree.vray.tree_type == 'LIGHT':
+        outputNode = getLightOutputNode(ntree)
+    else:
+        outputNode = getOutputNode(ntree)
+
+    if outputNode is None:
+        debug.printWarning(f"{locatorName} does not have an output node")
+        return
+    
+    def getConnectedNodes(node: bpy.types.Node, nodes: set):
+        # Walk the node tree and make sure that all nodes are connected
+        for s in node.inputs:
+            for l in s.links:
+                nodes.add(l.from_node)
+                getConnectedNodes(l.from_node, nodes)
+
+
+    treeNodes = {outputNode,}
+    getConnectedNodes(outputNode, treeNodes)
+    
+    if len(treeNodes) != len(ntree.nodes):
+        debug.printWarning(f"{locatorName} was imported with some non-connected nodes")

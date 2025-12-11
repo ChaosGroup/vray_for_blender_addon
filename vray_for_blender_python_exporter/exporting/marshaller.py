@@ -30,4 +30,4 @@ class Marshaller:
 
     def dumpVector3(self, v: Vector):
         self.l.extend(struct.pack('3f', *v.to_tuple()))
-        
+

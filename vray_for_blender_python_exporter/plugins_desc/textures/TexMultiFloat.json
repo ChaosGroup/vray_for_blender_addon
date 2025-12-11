@@ -164,6 +164,15 @@
         },
         
         {
+            "attr" : "random_weights",
+            "default" : 100.0,
+            "desc" : "The weight of each slot used when generating the random texture ID. Thus, for a given slot its probability [0, 1] is <its weight>/<the sum of all slots' weights>",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : {}
+        },
+        
+        {
             "attr" : "textures_list",
             "default" : null,
             "desc" : "A list of the sub-float-textures",

@@ -1,11 +1,13 @@
 
 import bpy
+from bpy_extras import anim_utils
 import bmesh
 import math
 import mathutils
 
-from vray_blender.lib import lib_utils, path_utils
 from vray_blender import debug
+from vray_blender.lib import lib_utils, path_utils
+from vray_blender.ui.preferences import VRayExporterPreferences
 
 VRAY_ASSET_TYPE = {
     "Proxy": "1",
@@ -36,16 +38,10 @@ def geometryObjectIt(objects):
 
 def getGeomCenter(ob: bpy.types.Object) -> mathutils.Vector:
     """ Returns the local-space center of object's mesh. """
-
     assert ob.type not in NonGeometryTypes, "Object must be a geometry type"
 
     corners = [mathutils.Vector(c) for c in ob.bound_box]
     return sum(corners, mathutils.Vector()) / len(corners)
-
-
-def vecElemMult(v1, v2):
-    """ Elem-wise multiplication of two vectors """
-    return  mathutils.Vector((v1.x * v2.x, v1.y * v2.y, v1.z * v2.z))
 
 
 def getObjectList(object_names_string=None, group_names_string=None):
@@ -235,7 +231,7 @@ def selectObject(ob):
     # When an active object is in 'EDIT' mode, execution of bpy.ops.object.select_all(action='DESELECT') raises an error.
     # Clearing the active object before such call prevents this problem.
     bpy.context.view_layer.objects.active = None
-    
+
     bpy.ops.object.select_all(action='DESELECT')
     bpy.context.view_layer.objects.active = ob
     ob.select_set(True)
@@ -246,7 +242,7 @@ def isPreviewWorld(scene):
 
 
 def getSceneCamera(exporterCtx):
-    """ Returns the active scene camera. """ 
+    """ Returns the active scene camera. """
     scene: bpy.types.Scene = bpy.context.scene if exporterCtx.preview else exporterCtx.dg.scene
     return scene.camera
 
@@ -259,7 +255,7 @@ def _getActiveScreen():
     for win in wm.windows:
         if win.scene is bpy.context.scene:# window showing the scene that triggered the handler
             return win.screen
-    
+
     return None
 
 def getActiveView3D():
@@ -304,7 +300,7 @@ def getRegion3D(context : bpy.types.Context):
                     quadViewId += 1
                     if context.region == region:
                         return context.space_data.region_quadviews[quadViewId]
-                   
+
     return None
 
 def getFirstAvailableRegion3D():
@@ -326,7 +322,6 @@ def generateVfbTheme(filepath):
 
     back   = rgbToHex(themeProp.space.back)
     text   = rgbToHex(themeProp.space.text)
-    header = rgbToHex(themeProp.space.header)
 
     buttonColorTuple = themeUI.wcol_tool.inner
     buttonColor = mathutils.Color((buttonColorTuple[0], buttonColorTuple[1], buttonColorTuple[2]))
@@ -397,7 +392,21 @@ def replaceObjectMesh(ob: bpy.types.Object, newMesh: bpy.types.Mesh):
     # Remove temp object
     bm.free()
 
+def markPreferencesDirty(context: bpy.types.Context):
+    """ Used to mark the preferences as dirty so auto save will work. This should be called
+        on update by any preferences properties that are nested in some way. See compute_devices
+        where the device enable state isn't auto-saved and VRayRenderNode where the name and
+        address don't work with auto save.
+    """
+    context.preferences.is_dirty = True
 
+def getVRayPreferences(context: bpy.types.Context = None) -> VRayExporterPreferences:
+    if context is None:
+        context = bpy.context
+    return context.preferences.addons[VRayExporterPreferences.bl_idname].preferences
+
+def showVRayPreferences():
+    bpy.ops.preferences.addon_show(module=VRayExporterPreferences.bl_idname)
 
 # Shadowing is used to determine whether the value of an attribute has changed between
 # successive exports. The so called 'shadow' attribute is a dupicate of the original attribute
@@ -424,8 +433,8 @@ def getShadowAttr(data, attrName: str):
 def setShadowAttr(data, attrName: str, value):
     """ Set the value of a shadow attribute given the main attribute's name """
     setattr(data, getShadowAttrName(attrName), value)
-    
-    
+
+
 def hasShadowedAttrChanged(data, attrName):
     """ Return True if the value of the attribute is not the same as the value of its shadow """
     return getShadowAttr(data, attrName) != getattr(data, attrName)
@@ -433,7 +442,7 @@ def hasShadowedAttrChanged(data, attrName):
 
 def updateShadowAttr(data, attrName):
     """ Update the value of a shadow attribute with the value of the main attribute """
-    data[getShadowAttrName(attrName)] = getShadowAttr(data, attrName)
+    setattr(data, getShadowAttrName(attrName), getattr(data, attrName))
 
 
 def printDepsgraphUpdates(dg: bpy.types.Depsgraph):
@@ -448,5 +457,52 @@ def printDepsgraphUpdates(dg: bpy.types.Depsgraph):
             print(f"== ID: {u.id.name:<20} [{u.id.rna_type.bl_rna.name:<20}] Shading: {u.is_updated_shading:<5} Transform: {u.is_updated_transform:<5} Geo: {u.is_updated_geometry}")
     finally:
         pass
-    
+
     print(f"======= DEPSGRAPH UPDATE END ======\n")
+
+
+def tagUsersForUpdate(data: bpy.types.ID):
+    """ Tags the V-Ray-related users of a data for update. """
+    from vray_blender.nodes.tree import VRayNodeTreeObjectBase
+    if not hasattr(bpy.data, 'user_map'):
+        return
+    users = bpy.data.user_map(subset={data})
+
+    for user in users.get(data, []):
+        if isinstance(user, bpy.types.Texture) or \
+            isinstance(user, bpy.types.Light) or \
+            isinstance(user, VRayNodeTreeObjectBase):
+            # 1) V-Ray nodes uses the image only through a texture (check if that texture has a V-Ray user).
+            # 2) Light data update tag doesn't initiate a light export, for this reason its parent object is tagged for update.
+            # 3) "update_tag()" doesn't call "VRayNodeTreeObjectBase.update()", so we need to tag its users manually.
+            tagUsersForUpdate(user)
+        elif isinstance(user, bpy.types.Object) and (objUser := bpy.data.objects.get(user.name, None)):
+            # Very often bpy.data.user_map points an invalid object, so we get it from the data directly just to be safe.
+            objUser.update_tag()
+        elif isinstance(user, bpy.types.Material):
+            user.update_tag()
+        # Note: No need to tag the world node tree for update, as it is always exported on depsgraph update.
+
+
+def getFCurves(obj):
+    anim = obj.animation_data
+    if not anim or not anim.action:
+        return []
+    action = anim.action
+    if bpy.app.version >= (5, 0, 0):
+        actionSlot = obj.animation_data.action_slot
+        channelbag = anim_utils.action_get_channelbag_for_slot(action, actionSlot)
+        return channelbag.fcurves
+    else:
+        return action.fcurves
+
+
+def isDefaultScene():
+    return not bpy.data.filepath
+
+
+def deleteOperatorHasBeenCalled():
+    """ Checks if the delete operator has been called since the last depsgraph update"""
+
+    deleteOperators = ('OUTLINER_OT_delete', 'OBJECT_OT_delete')
+    return any(op.bl_idname in deleteOperators for op in bpy.context.window_manager.operators)

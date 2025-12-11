@@ -1,0 +1,192 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Gold_Rush",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 3,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 1.0,
+                "hejl_dawson_highlights": 1.0,
+                "hable_shoulder_strength": 0.5350756645202637,
+                "hable_linear_strength": 0.26960110664367678,
+                "hable_linear_angle": 0.2888583242893219,
+                "hable_toe_strength": 0.40302616357803347,
+                "white_point": 20.0,
+                "pc_toe_length": 0.800000011920929,
+                "pc_toe_strength": 0.20000000298023225,
+                "pc_contrast": 0.5,
+                "pc_shoulder_length": 1.0,
+                "pc_shoulder_strength": 0.0,
+                "pc_white_point": 4.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.constant",
+            "properties": {
+                "version": 1,
+                "name": "Constant",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 9,
+                "opacity": 1.0,
+                "show_preview": true,
+                "multiplier": 0.054999999701976779,
+                "color": [1.0, 0.8552071452140808, 0.3472800850868225]
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.whiteBalance",
+            "properties": {
+                "version": 1,
+                "name": "White Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "temp": 7248.0,
+                "tint": 0.11999999731779099,
+                "color_tint": [1.0, 1.0, 1.0]
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 3,
+                "all_red": 0.0,
+                "all_green": 0.0,
+                "all_blue": 0.0,
+                "shadows_red": 0.2297111451625824,
+                "shadows_green": 0.03988996148109436,
+                "shadows_blue": 0.0,
+                "mid_red": 0.7496561408042908,
+                "mid_green": 0.44154059886932375,
+                "mid_blue": 0.0,
+                "high_red": 0.24621734023094178,
+                "high_green": 0.48555710911750796,
+                "high_blue": 0.35075655579566958
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves - Contrast",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.004999999888241291],
+                                "left_vector": [-0.08706705272197724, -0.0031911085825413467],
+                                "right_vector": [0.060393258929252627, 0.002213482977822423]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.5, 0.5],
+                                "left_vector": [-0.11376404762268067, -0.23033708333969117],
+                                "right_vector": [0.11123581230640412, 0.22521817684173585]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.125, -0.004213452339172363],
+                                "right_vector": [0.18323864042758943, 0.006176538299769163]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.hueSatLight",
+            "properties": {
+                "version": 1,
+                "name": "Hue / Saturation - Saturation",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "hue": 0.0,
+                "sat": 0.10000000149011612,
+                "lightness": 0.0
+            },
+            "sub-layers": []
+        }]
+}

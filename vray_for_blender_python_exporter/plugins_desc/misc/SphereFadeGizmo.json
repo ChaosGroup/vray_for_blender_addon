@@ -16,7 +16,7 @@
         {
             "attr" : "radius",
             "default" : 1.0,
-            "desc" : "Radius of the sphere/cylinder or side of the box (according to 'shape' type)",
+            "desc" : "Radius of the sphere/cylinder or side of the box (according to 'shape' type). For box shape, if height/length are valid, this is box width",
             "type" : "FLOAT"
         },
         
@@ -29,9 +29,29 @@
         
         {
             "attr" : "shape",
-            "default" : 0,
+            "default" : "0",
             "desc" : "Determines the shape of the gizmo (0 - Sphere, 1 - Box, 2 - Cylinder with the Y-axis as height)",
-            "type" : "INT"
+            "items" : 
+            [
+                [ "0", "Sphere", "Sphere" ],
+                [ "1", "Box", "Box" ],
+                [ "2", "Cylinder", "Cylinder" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "length",
+            "default" : 0.0,
+            "desc" : "Length parameter for the box. If zero, the 'radius' parameter will be used to set the length. Note this parameter is not used if SphereFade::legacy_mode is 1",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "height",
+            "default" : 0.0,
+            "desc" : "Height parameter for the cylinder/box. If zero, the 'radius' parameter will be used to set the height. Note this parameter is not used if SphereFade::legacy_mode is 1",
+            "type" : "FLOAT"
         }
     ],
     "Type" : "MISC",

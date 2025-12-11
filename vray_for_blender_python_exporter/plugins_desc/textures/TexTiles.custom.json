@@ -155,6 +155,39 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "color_mortar"
+            },
+            {
+                "name": "color_tiles"
+            },
+            {
+                "name": "uvwgen"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Parameters": [
         {
             "attr": "horizontal_count",
@@ -257,10 +290,24 @@
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
         }
     ],
     "Options": {
         "animatable": true,
-        "excluded_parameters": []
+        "excluded_parameters": [ "compatibility_with" ]
     }
 }

@@ -2,14 +2,6 @@
     "Name": "V-Ray Hair Sampler",
     "Subtype": "UTILITY",
     "Type": "TEXTURE",
-    "Parameters": [
-        {
-            "attr": "hair_max_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        }
-    ],
     "Widget": {
         "widgets": [
             {

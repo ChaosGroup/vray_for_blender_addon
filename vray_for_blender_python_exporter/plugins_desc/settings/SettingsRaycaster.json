@@ -27,7 +27,8 @@
             {
                 "display_name" : "Min leaf size",
                 "max" : 100.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

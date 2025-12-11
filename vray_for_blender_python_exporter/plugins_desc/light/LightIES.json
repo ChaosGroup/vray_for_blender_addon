@@ -192,6 +192,7 @@
             "ui" : 
             {
                 "display_name" : "Shadow bias",
+                "quantityType" : "distance",
                 "soft_max" : 0.1000000014901161,
                 "soft_min" : -0.1000000014901161
             }
@@ -355,6 +356,7 @@
             {
                 "display_name" : "Near Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -369,6 +371,7 @@
             {
                 "display_name" : "Near Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -394,6 +397,7 @@
             {
                 "display_name" : "Far Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -408,6 +412,7 @@
             {
                 "display_name" : "Far Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "<EndRollout>",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
@@ -570,7 +575,9 @@
             {
                 "display_name" : "Width",
                 "max" : 40.0,
-                "min" : -40.0
+                "min" : -40.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -583,7 +590,9 @@
             {
                 "display_name" : "Length",
                 "max" : 40.0,
-                "min" : -40.0
+                "min" : -40.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -596,7 +605,9 @@
             {
                 "display_name" : "Height",
                 "max" : 40.0,
-                "min" : -40.0
+                "min" : -40.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -609,7 +620,9 @@
             {
                 "display_name" : "Diameter",
                 "max" : 40.0,
-                "min" : -40.0
+                "min" : -40.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         

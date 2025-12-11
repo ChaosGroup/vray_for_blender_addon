@@ -33,6 +33,26 @@
             "default" : 0.2000000029802322,
             "desc" : "Falloff factor for smooth transition between the inside and outside volume",
             "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "falloff_type",
+            "default" : "0",
+            "desc" : "Determine how the falloff parameter is interpreted. (0: Min dimension, 1: Max dimension, 2: Absolute)",
+            "items" : 
+            [
+                [ "0", "Min dimension", "Min dimension" ],
+                [ "1", "Max dimension", "Max dimension" ],
+                [ "2", "World units", "World units" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "legacy_mode",
+            "default" : true,
+            "desc" : "The legacy mode is used for full compatibility with pre-falloff-type support'. In this mode the falloff value is a percentage of the radius.\n For box gizmo : \n    legacy mode==1 --> 'radius' = half the side dimension and all sides are equal (i.e. w==h==l). Length or height parameter on the gizmo are discarded. \n    legacy mode==0 --> 'radius' = box width (x axis), 'length' = box length (y axis), 'height' = box height (z axis). \n For cylinder gizmo :     legacy mode==1 --> height = diameter (i.e. 2*radius). The cylinder height is oriented toward the Y axis. \n    legacy mode==0 --> 'radius' = cylinder radius, 'height' = cylinder height. The cylinder height is oriented toward the Z axis. \n",
+            "type" : "BOOL"
         }
     ],
     "Type" : "VOLUMETRIC",

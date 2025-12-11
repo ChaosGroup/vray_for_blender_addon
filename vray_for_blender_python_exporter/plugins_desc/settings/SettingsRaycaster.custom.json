@@ -9,12 +9,6 @@
                 "min": 0,
                 "soft_max": 64000
             }
-        },
-        {
-            "attr": "minLeafSize",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

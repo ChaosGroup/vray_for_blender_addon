@@ -37,15 +37,26 @@ class VRaySocketTexMulti(VRaySocketColorMult):
         update = selectedObjectTagUpdate
     )
 
+    def draw_impl(self, context, layout, node, text):
+        split = layout.split(factor=0.6)
+        left = split.column()
 
-    def draw(self, context, layout, node, text):
-        split = layout.split(factor=0.9)
+        texSplit = left.split(factor=0.4)
+        texSplit.prop(self, 'value', text='')
+        if isInputSocketLinked(self):
+            texSplit.prop(self, 'multiplier', text='')
+        elif type(self.value) is mathutils.Color:
+            texSplit.label(text=self.name)
 
-        col1 = split.column().row(align=True)
+        row = split.row(align=True)
+        row.alignment = 'RIGHT'
 
-        super().draw(context, col1, node, text)
-        col2 = split.column()
-        col2.prop(self, 'use', text='')
+        col2 = row.column()
+        col2.prop(self, 'id', text='')
+        row.separator(factor=1)
+        col3 = row.column()
+        col3.prop(self, 'use', text='')
+
 
     @classmethod
     def draw_color_simple(cls):
@@ -53,6 +64,11 @@ class VRaySocketTexMulti(VRaySocketColorMult):
 
     def shouldExportLink(self):
         return self.use and super().shouldExportLink()
+
+    def copy(self, dest):
+        dest.id = self.id
+        dest.use = self.use
+        super().copy(dest)
 
 
 class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, VRayOperatorBase):
@@ -112,7 +128,7 @@ def nodeInit(node: bpy.types.Node):
         clr = 1.0 - (1.0 / DEFAULT_SOCKETS) * i
         texSock.value = mathutils.Color((clr, clr, clr))
 
-    getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != "30")   
+    getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != "30")
 
 
 def nodeDraw(context: bpy.types.Context, layout: bpy.types.UILayout, node: bpy.types.Node):
@@ -136,7 +152,7 @@ def widgetDrawTexMap(context, layout, propGroup, widgetAttr):
         row.prop(s, 'value', text="Color")
         if isInputSocketLinked(s):
             row.prop(s, 'multiplier', text='')
-        
+
         row = panel.row()
         row.prop(s, 'id', text="ID")
         row.prop(s, 'use', text="Use")
@@ -161,7 +177,7 @@ def exportTreeNode(nodeCtx: NodeContext):
         if sock.shouldExportLink():
             nodeLink = getFarNodeLink(sock)
             assert nodeLink is not None
-            
+
             texPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, nodeLink.to_socket)
             textures.append(texPlugin)
         else:
@@ -209,7 +225,7 @@ def onRemoveTexture(node: bpy.types.Node, context: bpy.types.Context, selectorID
         sockID += 1
 
     selectedObjectTagUpdate(node, context)
-            
+
 
 def _getRandomMode(node):
     propNames = {
@@ -222,8 +238,7 @@ def _getRandomMode(node):
         'random_mode_object_id'         : 64,
         'random_mode_mesh_element'      : 128,
         'random_mode_user_attribute'    : 256,
-        'random_mode_scene_name'        : 512,
-        'random_mode_tile'              : 1024
+        'random_mode_scene_name'        : 512
     }
 
     result = 0

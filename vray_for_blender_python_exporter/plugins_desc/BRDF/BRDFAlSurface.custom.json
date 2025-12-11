@@ -27,48 +27,6 @@
             }
         },
         {
-            "attr": "bump_amount",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "diffuse_bump_amount",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "reflect1_bump_amount",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "reflect2_bump_amount",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "sss1_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "sss2_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "sss3_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
             "attr": "opacity",
             "desc": "The opacity value, where 1 is opaque and 0 is transparent."
         },
@@ -129,13 +87,6 @@
             "desc": "The relative contribution of the SSS layer to the material."
         }
     ],
-    "Options": {
-        "excluded_parameters": [
-            "reflect_subdivs",
-            "sss_subdivs"
-        ],
-        "animatable": true
-    },
     "Widget": {
         "widgets": [
             {
@@ -304,5 +255,81 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "input_sockets": [
+            { "name": "diffuse" },
+            { "name": "opacity" },
+            { "name": "sss_density_scale" },
+            { "name": "sss_mix" },
+            {
+                "name": "panel_diffuse",
+                "label": "Diffuse",
+                "type": "ROLLOUT"
+            },
+            { "name": "diffuse_strength" },
+            { "name": "diffuse_bump_map" },
+            { "name": "diffuse_bump_amount" },
+            {
+                "name": "panel_Bump",
+                "label": "Bump",
+                "type": "ROLLOUT"
+            },
+            { "name": "bump_map" },
+            { "name": "bump_amount" },
+            {
+                "name": "panel_sss1",
+                "label": "Subsurface 1",
+                "type": "ROLLOUT"
+            },
+            { "name": "sss1_color" },
+            { "name": "sss1_weight" },
+            { "name": "sss1_radius" },
+            {
+                "name": "panel_sss2",
+                "label": "Subsurface 2",
+                "type": "ROLLOUT"
+            },
+            { "name": "sss2_color" },
+            { "name": "sss2_weight" },
+            { "name": "sss2_radius" },
+            {
+                "name": "panel_sss3",
+                "label": "Subsurface 3",
+                "type": "ROLLOUT"
+            },
+            { "name": "sss3_color" },
+            { "name": "sss3_weight" },
+            { "name": "sss3_radius" },
+            {
+                "name": "panel_reflect1",
+                "label": "Reflection 1",
+                "type": "ROLLOUT"
+            },
+            { "name": "reflect1" },
+            { "name": "reflect1_strength" },
+            { "name": "reflect1_roughness" },
+            { "name": "reflect1_ior" },
+            { "name": "reflect1_bump_map" },
+            { "name": "reflect1_bump_amount" },
+            {
+                "name": "panel_reflect2",
+                "label": "Reflection 2",
+                "type": "ROLLOUT"
+            },
+            { "name": "reflect2" },
+            { "name": "reflect2_strength" },
+            { "name": "reflect2_roughness" },
+            { "name": "reflect2_ior" },
+            { "name": "reflect2_bump_map" },
+            { "name": "reflect2_bump_amount" }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "reflect_subdivs",
+            "sss_subdivs"
+        ],
+        "animatable": true
     }
 }

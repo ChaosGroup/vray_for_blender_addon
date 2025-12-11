@@ -92,8 +92,10 @@
         {
             "attr": "rotate_frame",
             "subtype": "ANGLE",
-            "precision": 7,
-            "ui": { 
+            "precision": 3,
+            "ui": {
+                "soft_min": 0,
+                "soft_max": 360,
                 "display_name": "Rotate Frame",
                 "spin_step": 1
             }
@@ -101,8 +103,10 @@
         {
             "attr": "rotate_uv",
             "subtype": "ANGLE",
-            "precision": 7,
-            "ui": { 
+            "precision": 3,
+            "ui": {
+                "soft_min": 0,
+                "soft_max": 360,
                 "display_name": "Rotate UV",
                 "spin_step": 1
             }

@@ -92,13 +92,14 @@ SKIPPED_PLUGINS = (
     'BitmapBuffer',
 
     # Manually handled
-    'TexBezierCurve',
     'GeomMayaHair',
     'GeomStaticMesh',
     'VRayScene',
     'EnvFogMeshGizmo',
 
     # Unused
+    'TexBezierCurve',
+    'TexBezierCurveColor',
     'MtlBump',
     'GeomImagePlane',
     'GeomInfinitePlane',
@@ -120,6 +121,8 @@ SKIPPED_PLUGINS = (
 
     # Not yet implemented
     'TexRamp',
+    'TexVolumeColorSampler',
+    'TexVolumeFloatSampler',
 
     # Not useful
     "TexAColor",

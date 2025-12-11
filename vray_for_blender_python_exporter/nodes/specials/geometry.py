@@ -42,7 +42,7 @@ class VRayNodeDisplacement(VRayNodeBase):
     def draw_buttons(self, context, layout):
         pluginModule = getPluginModule('GeomDisplacedMesh')
         painter = UIPainter(context, pluginModule, self.GeomDisplacedMesh, self)
-        painter.renderWidgets(layout, pluginModule.Node['widgets'])
+        painter.renderWidgets(layout, pluginModule.Node['widgets'], True)
 
     def draw_buttons_ext(self, context, layout):
         geomDisplacedMeshDesc = getPluginModule('GeomDisplacedMesh')

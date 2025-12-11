@@ -1,7 +1,9 @@
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
+from vray_blender.lib.attribute_utils import getAttrDesc
 from vray_blender.exporting.tools import *
+from vray_blender.plugins import getPluginModule
 from vray_blender.nodes.tools import isInputSocketLinked
 
 # Flags for the different UVWGenRandomizer modes
@@ -104,4 +106,13 @@ def exportVRayNodeUVWMapping(nodeCtx: NodeContext):
     uvwPluginDesc.vrayPropGroup = getattr(node, uvwPluginType)
 
     commonNodesExport.exportNodeTree(nodeCtx, uvwPluginDesc)
+
+    # In some quite old scenes the mapping_type can be exported as an integer causes V-Ray to crash on MacOS.
+    # So set spherical as default to ensure we always have a valid string mapping_type.
+    if uvwPluginType == 'UVWGenEnvironment':
+        pluginModule = getPluginModule('UVWGenEnvironment')
+        mappingItems = getAttrDesc(pluginModule, 'mapping_type')['items']
+        if uvwPluginDesc.getAttribute('mapping_type') not in [k[0] for k in mappingItems]:
+            uvwPluginDesc.setAttribute('mapping_type', 'spherical', True)
+
     return commonNodesExport.exportPluginWithStats(nodeCtx, uvwPluginDesc)

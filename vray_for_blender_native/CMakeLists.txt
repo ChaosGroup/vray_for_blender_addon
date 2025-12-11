@@ -25,13 +25,7 @@ if(PROJECT_IS_TOP_LEVEL)
     set(BLENDER_VER      ""  CACHE STRING  "Blender version in format major.minor, e.g. 4.2")
     set(INSTALL_LOCAL    ON  CACHE BOOL    "Configure Install step")
     set(INSTALL_PREFIX   ""  CACHE PATH    "Path to the installation folder")
-    set(WITH_DR2         OFF CACHE BOOL    "Enable DR2")
 endif()
-
-if (WITH_DR2)
-    add_compile_definitions(WITH_DR2)
-endif()
-
 
 if (NOT BINTOOLS_PATH)
     set(BOOST_LIBDIR    "./boost"               CACHE PATH    "Path to Boost libs")
@@ -142,6 +136,17 @@ endif()
 
 link_with_zmq(${PROJECT_NAME} PRIVATE)
 
+
+set(RENDER_PASS_CHAN_ID_SIZE 8)
+if(BLENDER_VER VERSION_GREATER_EQUAL "5.0")
+    set(RENDER_PASS_CHAN_ID_SIZE 24)
+endif()
+
+target_compile_definitions(${PROJECT_NAME} 
+    PRIVATE
+    "RENDER_PASS_CHAN_ID_SIZE=${RENDER_PASS_CHAN_ID_SIZE}"
+)
+
 if(WIN32)
     if(BLENDER_VER STREQUAL "4.2" OR  BLENDER_VER STREQUAL "4.3")
         # For these versions, the lib files for OSL are not matched with the dlls provided in the SDK. This manifest will force
@@ -175,7 +180,7 @@ if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_WIN32})
 
     if (MSVC)
-        target_link_options(${PROJECT_NAME} PRIVATE 
+        target_link_options(${PROJECT_NAME} PRIVATE
             "$<$<CONFIG:Release>:/DEBUG:FULL>"
             "$<$<CONFIG:Release>:/OPT:REF>"
             "$<$<CONFIG:Release>:/OPT:ICF>"
@@ -183,7 +188,8 @@ if(WIN32)
     endif()
 
 elseif (APPLE)
-    add_compile_options(-Wno-enum-constexpr-conversion)
+    # Neccessary for std::stop_source in clang15...
+    target_compile_options(${PROJECT_NAME} PRIVATE -fexperimental-library -Wno-enum-constexpr-conversion)
 
     include_directories(${BLENDER_SDK_ROOT}/python/include/python3.11)
     target_link_directories( ${PROJECT_NAME} PRIVATE
@@ -231,11 +237,11 @@ if (INSTALL_LOCAL)
         endif()
 
 
-		if(FULL_BUILD)
-			set(COPY_TOOLS
-				${SDK_ROOT}/tools/vrmatconvert.exe
-			)
-		endif()
+        if(FULL_BUILD)
+            set(COPY_TOOLS
+                ${SDK_ROOT}/tools/vrmatconvert.exe
+            )
+        endif()
 
     elseif(APPLE)
         if (BLENDER_VER VERSION_GREATER_EQUAL "4.4")
@@ -270,16 +276,19 @@ if (INSTALL_LOCAL)
         install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${INSTALL_PREFIX})
     else()
         install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${INSTALL_PREFIX})
+        install(FILES "${CMAKE_CURRENT_LIST_DIR}/vray.icns" DESTINATION ${INSTALL_PREFIX}/VRayZmqServer)
     endif()
+
     install(FILES ${COPY_LIBS} DESTINATION ${INSTALL_PREFIX})
     install(FILES ${COPY_TOOLS} DESTINATION ${INSTALL_PREFIX})
+    install(FILES "${CMAKE_CURRENT_LIST_DIR}/VRayBlenderLib.pyi" DESTINATION ${INSTALL_PREFIX})
 
     if(MSVC)
-      # Install the PDB file
-      install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}>
-          DESTINATION ${INSTALL_PREFIX}
-          CONFIGURATIONS Release RelWithDebInfo
-      )
+        # Install the PDB file
+        install(FILES $<TARGET_PDB_FILE:${PROJECT_NAME}>
+            DESTINATION ${INSTALL_PREFIX}
+            CONFIGURATIONS Release RelWithDebInfo
+        )
     endif()
 
     # set(STUB_FILE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${PROJECT_NAME})

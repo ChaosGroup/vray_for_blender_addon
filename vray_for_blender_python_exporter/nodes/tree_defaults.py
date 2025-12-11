@@ -149,9 +149,9 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
 
         if not NodeTools.isInputSocketLinked(outputNode.inputs[0]):    
             brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
-            brdfNode.location.x  = outputNode.location.x - brdfNode.width - 50
-            brdfNode.location.y += 50
-
             ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
+
+        bounds = NodeTools.calculateTreeBounds(ntree)
+        NodeTools.rearrangeTree(ntree, outputNode, bounds=bounds)
 
     NodeTools.deselectNodes(ntree)

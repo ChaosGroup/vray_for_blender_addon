@@ -1,0 +1,171 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Cozy_Reds",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 4,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 1.0,
+                "hejl_dawson_highlights": 1.0,
+                "hable_shoulder_strength": 0.23984773457050324,
+                "hable_linear_strength": 0.2893401086330414,
+                "hable_linear_angle": 0.048223353922367099,
+                "hable_toe_strength": 0.22081218659877778,
+                "white_point": 18.842639923095704,
+                "pc_toe_length": 0.1421319842338562,
+                "pc_toe_strength": 0.455583781003952,
+                "pc_contrast": 0.796954333782196,
+                "pc_shoulder_length": 1.0,
+                "pc_shoulder_strength": 1.6370558738708497,
+                "pc_white_point": 4.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.09041686356067658, -0.20213603973388673],
+                                "right_vector": [0.050452783703804019, 0.11279229819774628]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.48253557085990908, 0.4883081316947937],
+                                "left_vector": [-0.1487710177898407, -0.13480055332183839],
+                                "right_vector": [0.16543644666671754, 0.14990101754665376]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.17550668120384217, -0.17550668120384217],
+                                "right_vector": [0.2828427255153656, 0.2828427255153656]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.20511499047279359, -0.15151749551296235],
+                                "right_vector": [0.12289780378341675, 0.09078404307365418]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.5394566655158997, 0.5584594011306763],
+                                "left_vector": [-0.054333727806806567, -0.07152680307626724],
+                                "right_vector": [0.05433374643325806, 0.07152682542800904]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.16386374831199647, -0.16386374831199647],
+                                "right_vector": [0.2828427255153656, 0.2828427255153656]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.009999999776482582],
+                                "left_vector": [-0.18240618705749513, -0.20357631146907807],
+                                "right_vector": [0.16601984202861787, 0.18528816103935243]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.48900389671325686, 0.4896836280822754],
+                                "left_vector": [-0.20795272290706635, -0.20473209023475648],
+                                "right_vector": [0.20957309007644654, 0.2063273787498474]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.16731350123882295, -0.14722765982151032],
+                                "right_vector": [0.18758079409599305, 0.16506187617778779]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 2,
+                "all_red": 0.0,
+                "all_green": 0.0,
+                "all_blue": 0.0,
+                "shadows_red": 0.08375634998083115,
+                "shadows_green": -0.07614213228225708,
+                "shadows_blue": 0.0,
+                "mid_red": 0.055837567895650867,
+                "mid_green": -0.005076142493635416,
+                "mid_blue": 0.017766498029232026,
+                "high_red": 0.10659898817539215,
+                "high_green": 0.09898477792739868,
+                "high_blue": 0.1624365597963333
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.whiteBalance",
+            "properties": {
+                "version": 1,
+                "name": "White Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 0.5,
+                "show_preview": true,
+                "temp": 8000.0,
+                "tint": 0.19543148577213288,
+                "color_tint": [1.0, 1.0, 1.0]
+            },
+            "sub-layers": []
+        }]
+}

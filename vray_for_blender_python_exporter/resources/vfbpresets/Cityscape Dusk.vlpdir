@@ -1,0 +1,234 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Cityscape_Dusk",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.4152641296386719, -0.2558452785015106],
+                                "right_vector": [0.10306166857481003, 0.06349653750658035]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.3027167022228241, 0.5158184170722961],
+                                "left_vector": [-0.07758574187755585, -0.13913314044475556],
+                                "right_vector": [0.17335057258605958, 0.3108665347099304]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.23027166724205018, -0.0542910136282444],
+                                "right_vector": [1.785254716873169, 0.4209084212779999]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.291073739528656, -0.4869326055049896],
+                                "right_vector": [0.0970245823264122, 0.1623108685016632]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.32341527938842776, -0.354883074760437],
+                                "right_vector": [0.9702453017234802, 1.0646486282348633]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 3,
+                "all_red": 0.0,
+                "all_green": 0.0,
+                "all_blue": 0.0,
+                "shadows_red": -0.15700000524520875,
+                "shadows_green": 0.20000000298023225,
+                "shadows_blue": 0.5199999809265137,
+                "mid_red": 0.1899999976158142,
+                "mid_green": 0.10000000149011612,
+                "mid_blue": -0.10000000149011612,
+                "high_red": 0.20000000298023225,
+                "high_green": -0.1599999964237213,
+                "high_blue": -0.4000000059604645
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 4,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 0.85406094789505,
+                "hejl_dawson_highlights": 0.10152284801006317,
+                "hable_shoulder_strength": 0.4951857328414917,
+                "hable_linear_strength": 0.20082531869411469,
+                "hable_linear_angle": 0.3259972631931305,
+                "hable_toe_strength": 0.42503440380096438,
+                "white_point": 18.6409912109375,
+                "pc_toe_length": 0.03301238268613815,
+                "pc_toe_strength": 0.15955984592437745,
+                "pc_contrast": 0.6932600140571594,
+                "pc_shoulder_length": 0.015130674466490746,
+                "pc_shoulder_strength": 5.171939849853516,
+                "pc_white_point": 9.3562593460083
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.hueSatLight",
+            "properties": {
+                "version": 1,
+                "name": "Hue / Saturation",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "hue": 0.0,
+                "sat": 0.20000000298023225,
+                "lightness": 0.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves - Contrast",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.009999999776482582],
+                                "left_vector": [-0.0921824499964714, -0.002253349404782057],
+                                "right_vector": [0.05056179687380791, 0.0012359553948044777]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.4592696726322174, 0.5252808928489685],
+                                "left_vector": [-0.10955052077770233, -0.14325839281082154],
+                                "right_vector": [0.10955056548118592, 0.1432584524154663]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.1772315502166748, -0.10041266679763794],
+                                "right_vector": [27.71538734436035, 15.702486038208008]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }]
+}

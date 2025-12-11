@@ -179,7 +179,7 @@
         {
             "attr" : "preserve_map_borders",
             "default" : "-1",
-            "desc" : "The valid values are: -1 - not set; 0 - none; 1 - internal; 2 - all; 3 - corners",
+            "desc" : "The valid values are: -1 - not set; 0 - smooth subdivision everywhere; 1 - no subdivision on internal UV face boundaries; 2 - no subdivision on internal UV and geometry face boundaries; 3 - no subdivision on boundary vertices with exactly 2 incident edges",
             "items" : 
             [
                 [ "0", "None", "None" ],

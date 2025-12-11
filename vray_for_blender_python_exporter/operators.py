@@ -3,13 +3,17 @@ import re
 
 import bpy
 from bpy.props import *
-from vray_blender.engine  import vfb_event_handler
-from vray_blender.lib     import blender_utils, color_utils, sys_utils, common_settings
+from vray_blender.engine   import vfb_event_handler
+from vray_blender.lib      import blender_utils, color_utils, sys_utils, common_settings
 from vray_blender.lib.defs import ProdRenderMode
-from vray_blender         import debug
+from vray_blender          import debug
 
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.ui.classes import pollEngine, pollTreeType
+from vray_blender.nodes.tools import deselectNodes
+from vray_blender.nodes.utils import createNode
 
+from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber, checkIfSceneNeedsUpgrade
@@ -32,11 +36,11 @@ class VRAY_OT_node_add(VRayOperatorBase):
     bl_options        = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        vs= context.scene.vray
-        module= vs.VRayDR
+        preferences = blender_utils.getVRayPreferences(context)
 
-        module.nodes.add()
-        module.nodes[-1].name= "Render Node"
+        preferences.nodes.add()
+        preferences.nodes[-1].name= "Render Node"
+        preferences.nodes_selected = len(preferences.nodes) - 1
 
         return {'FINISHED'}
 
@@ -48,12 +52,11 @@ class VRAY_OT_node_del(VRayOperatorBase):
     bl_options        = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        vs= context.scene.vray
-        module= vs.VRayDR
+        preferences = blender_utils.getVRayPreferences(context)
 
-        if module.nodes_selected >= 0:
-           module.nodes.remove(module.nodes_selected)
-           module.nodes_selected-= 1
+        if preferences.nodes_selected >= 0:
+           preferences.nodes.remove(preferences.nodes_selected)
+           preferences.nodes_selected = max(0, preferences.nodes_selected - 1)
 
         return {'FINISHED'}
 
@@ -65,8 +68,7 @@ class VRAY_OT_dr_nodes_load(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        VRayScene = context.scene.vray
-        VRayDR = VRayScene.VRayDR
+        preferences = blender_utils.getVRayPreferences(context)
 
         nodesFilepath = os.path.join(sys_utils.getUserConfigDir(), "render_nodes.txt")
 
@@ -74,34 +76,24 @@ class VRAY_OT_dr_nodes_load(VRayOperatorBase):
             return {'CANCELLED'}
 
         with open(nodesFilepath, 'r') as nodesFile:
-            VRayDR.nodes.clear()
+            preferences.nodes.clear()
 
             for line in nodesFile.readlines():
                 l = line.strip()
                 if not l:
                     continue
 
-                item = VRayDR.nodes.add()
+                item = preferences.nodes.add()
 
                 nodeSetup = l.split(":")
+                if len(nodeSetup) == 4:
+                    item.name     = nodeSetup[0]
+                    item.nodeName = nodeSetup[0]
+                    item.address  = nodeSetup[1]
+                    item.use      = int(nodeSetup[2])
+                    item.port     = int(nodeSetup[3])
 
-                # Initial format
-                if len(nodeSetup) == 2:
-                    item.name, item.address = nodeSetup
-                # "Use" added
-                elif len(nodeSetup) == 3:
-                    item.name    = nodeSetup[0]
-                    item.address = nodeSetup[1]
-                    item.use     = int(nodeSetup[2])
-                # Port override added
-                elif len(nodeSetup) == 5:
-                    item.name = nodeSetup[0]
-                    item.address = nodeSetup[1]
-                    item.use = int(nodeSetup[2])
-                    item.port_override = int(nodeSetup[3])
-                    item.port = int(nodeSetup[4])
-
-        VRayDR.nodes_selected = 0
+        preferences.nodes_selected = 0
 
         return {'FINISHED'}
 
@@ -113,16 +105,43 @@ class VRAY_OT_dr_nodes_save(VRayOperatorBase):
     bl_options     = {'INTERNAL'}
 
     def execute(self, context):
-        VRayScene = context.scene.vray
-        VRayDR = VRayScene.VRayDR
+        preferences = blender_utils.getVRayPreferences(context)
 
         nodesFilepath = os.path.join(sys_utils.getUserConfigDir(), "render_nodes.txt")
 
         with open(nodesFilepath, 'w') as nodesFile:
-            for item in VRayDR.nodes:
-                item_data = "{item.name}:{item.address}:{item.use:d}:{item.port_override:d}:{item.port:d}".format(item=item)
+            for item in preferences.nodes:
+                item_data = "{item.nodeName}:{item.address}:{item.use:d}:{item.port:d}".format(item=item)
                 nodesFile.write("%s\n" % item_data)
 
+        return {'FINISHED'}
+
+
+class VRAY_OT_open_preferences(VRayOperatorBase):
+    bl_idname = "vray.open_preferences"
+    bl_label = "Open V-Ray Preferences"
+    bl_description = ("Open the V-Ray preferences menu")
+
+    menu_tab: bpy.props.StringProperty(default="NONE")
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
+    def invoke(self, context, event):
+        valid_view_modes = [
+            'PREFERENCES_MENU_GENERAL',
+            'PREFERENCES_MENU_GPU_DEVICES',
+            'PREFERENCES_MENU_DR'
+        ]
+        if self.menu_tab in valid_view_modes:
+            prefs = blender_utils.getVRayPreferences(context)
+            prefs.preferences_menu = self.menu_tab
+            if self.menu_tab == 'PREFERENCES_MENU_GPU_DEVICES':
+                useRtx = bpy.context.scene.vray.Exporter.use_gpu_rtx
+                prefs.compute_devices.gpuDeviceType = '1' if useRtx else '0'
+
+        blender_utils.showVRayPreferences()
         return {'FINISHED'}
 
 
@@ -300,18 +319,6 @@ class VRAY_OT_message_box_base(VRayOperatorBase):
         context.window.cursor_warp(int(context.window.width / 2), int(context.window.height / 2))
 
 
-    def modal(self, context, event):
-        match event.type:
-            case 'RET':
-                # User has confirmed the operation. The execute() will be invoked by Blender
-                # when this method returns.
-                return {'FINISHED'}
-            case 'ESC':
-                return {'CANCELLED'}
-            case _:
-                return {"PASS_THROUGH"}
-
-
     def _cursorWrap(self, context: bpy.types.Context):
         if not self.mouseMoved:
             # Move the cursor back to where the user expects it to be
@@ -473,14 +480,14 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         if not context.scene.vray.Exporter.auto_save_render:
             # The Output rollout is disabled, no images will be written to disk
             return True
-        
+
         settingsOutput = context.scene.vray.SettingsOutput
 
         # Validate the output folder and try to create it
         if not (imgDir := expandPathVariables(context, settingsOutput.img_dir)):
             self.errorType = __class__._ErrorType.InvalidFolderName
             return False
-                
+
         if not settingsOutput.img_file or \
             not is_valid_filename(expandPathVariables(context, settingsOutput.img_file)):
             self.errorType = __class__._ErrorType.InvalidFileName
@@ -492,11 +499,11 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         except Exception as exc:
             self.errorType = __class__._ErrorType.InvalidFolderName
             self.errorMsg = str(exc)
-            return False   
+            return False
 
         if not settingsOutput.output_overwrite_warn:
             return True
-        
+
         imgFiles = [] # When rendering multiple view layers and animations the output images will be more than one
         imgFmt = int(settingsOutput.img_format)
         viewLayers = [layer for layer in context.scene.view_layers if layer.use]
@@ -520,17 +527,17 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
         if any( any(re.match(imgFile, file) for imgFile in imgFiles) for file in os.listdir(imgDir)):
             self.errorType = __class__._ErrorType.FileExists
-            
+
         return not self.errorType
 
-        
+
     def invoke(self, context, event):
         if not self._checkOutputInfo(context):
             # Invoking props dialog that warns the user that the new render job will 
             # overwrite the render result
             self._centerDialog(context, event)
             return context.window_manager.invoke_props_dialog(self, width=400)
-        
+
         return self.execute(context)
 
 
@@ -541,18 +548,18 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
             case __class__._ErrorType.InvalidFolderName | __class__._ErrorType.InvalidFileName:
                 alias = 'folder' if self.errorType == __class__._ErrorType.InvalidFolderName else 'file'
                 layout.label(text=f"The output {alias} name for the rendered image(s) is empty or invalid.")
-                
+
                 if self.errorMsg:
                     layout.label(text=f"    {self.errorMsg}.")
-                
+
                 layout.label(text="Render output will not be saved.")
                 layout.label(text="Do you still want to render?")
-            
+
             case __class__._ErrorType.FileExists:
                 layout.label(text="An output image with the same name already exists.")
                 layout.label(text="Overwrite it?")
                 layout.prop(context.scene.vray.SettingsOutput, "output_overwrite_warn", text="Always ask me.")
-            
+
             case _:
                 assert not f'Invalid message selector: {self.errorType}'
 
@@ -577,28 +584,40 @@ class VRAY_OT_render_interactive(VRayOperatorBase):
     bl_label = "Start Interactive Render"
     bl_description = "Render scene using the interactive V-Ray renderer"
 
+    @classmethod
+    def poll(cls, context):
+        return VRayOperatorBase.poll(context) and \
+                (   not VRayRenderEngine.iprRenderer or  \
+                    type(VRayRenderEngine.iprRenderer) is not VRayRendererIprVfb)
+
+
     def execute(self, context):
         # The order of the following commands to ZmqServer is important. Opening VFB
         # first might lead to an irrecoverable V-Ray Core error.
         vfb_event_handler.VfbEventHandler.stopViewportRender()
+        vfb_event_handler.VfbEventHandler.stopVantageLiveLink()
         vfb_event_handler.VfbEventHandler.startInteractiveRender()
 
         # This operator is only invoked from the main menu and this is the only case
         # in which we want to open the VFB for an interactive rendering session.
         vray.openVFB()
         return {'FINISHED'}
-    
+
 
 class VRAY_OT_render_interactive_stop(VRayOperatorBase):
     bl_idname = "vray.render_interactive_stop"
     bl_label = "Stop Interactive Render"
     bl_description = "Stop render of scene using the interactive V-Ray renderer"
 
+    @classmethod
+    def poll(cls, context):
+        return VRayOperatorBase.poll(context) and \
+                VRayRenderEngine.iprRenderer and  \
+                type(VRayRenderEngine.iprRenderer) is VRayRendererIprVfb
+    
     def execute(self, context):
         vfb_event_handler.VfbEventHandler.stopInteractiveRender()
         return {'FINISHED'}
-
-
 
 
 class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
@@ -667,7 +686,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
             if self.exportRenderChannels:   fileTypes.append('render_elements')
 
         vrayExporter.export_scene_plugin_types = ','.join(fileTypes)
-        
+
         if self.synchronous:
             vfb_event_handler.VfbEventHandler.startProdRenderSync(renderMode=ProdRenderMode.EXPORT_VRSCENE)
         else:
@@ -676,7 +695,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        
+
         vrayExporter = context.scene.vray.Exporter
         fileCategories = vrayExporter.export_scene_plugin_types.split(',')
 
@@ -691,42 +710,42 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
             if category == 'render_elements':   self.exportRenderChannels = True
 
         self._centerDialog(context, event)
-        
+
         return context.window_manager.invoke_props_dialog(self, width=400, title="Export V-Ray .vrscene file", confirm_text="Export")
-    
+
     def draw(self, context: bpy.types.Context):
         layout = self.layout.box()
         layout.use_property_decorate = False
 
         vrayExporter = context.scene.vray.Exporter
-        
+
         row = layout.row(align=True)
         row.prop(vrayExporter, 'export_scene_file_path')
         row.operator('vray.select_vrscene_export_file', text='', icon='FILE_FOLDER')
-       
+
         layout.separator()
-        
+
         layoutCompressed = layout.column(align=True)
         layoutCompressed.enabled = vrayExporter.export_scene_hex_meshes
         layoutCompressed.prop(vrayExporter, 'export_scene_compressed')
-        
+
         layout.prop(vrayExporter, 'export_scene_hex_meshes')
         layout.prop(vrayExporter, 'export_scene_hex_transforms')
         layout.prop(vrayExporter, 'export_scene_separate_files')
-        
+
         splitOuter = layout.split(factor=0.1)
         splitOuter.column()
         splitOuter.enabled = splitOuter.active = vrayExporter.export_scene_separate_files
 
         boxOuter = splitOuter.column()
         splitInner = boxOuter.split()
-      
+
         col1 = splitInner.column()
         col1.prop(self, 'exportView')
         col1.prop(self, 'exportLights')
         col1.prop(self, 'exportGeometry')
         col1.prop(self, 'exportNodes')
-        
+
         col2 = splitInner.column()
         col2.prop(self, 'exportMaterials')
         col2.prop(self, 'exportTextures')
@@ -736,15 +755,15 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         # Animation export options
         layout.separator()
         animationRow = layout.box().row(align=True)
-        
+
         animSettings = vrayExporter.animationSettingsVrsceneExport
         animationRow.prop(animSettings, 'exportAnimation')
-        
+
         animationRangeCol = animationRow.column()
         animationRangeCol.use_property_split = False
         animationRangeCol.enabled = animSettings.exportAnimation
         animationRangeCol.prop(animSettings, 'frameRangeMode', text="")
-        
+
         customRangeCol = animationRangeCol.column()
         customRangeCol.use_property_split = False
         customRangeCol.enabled = animSettings.exportAnimation and animSettings.frameRangeMode == 'CUSTOM_RANGE'
@@ -754,17 +773,15 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         else:
             customRangeCol.prop(context.scene, 'frame_start')
             customRangeCol.prop(context.scene, 'frame_end')
-        
 
         self._cursorWrap(context)
-
 
 
 class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
     bl_idname = "vray.cloud_submit"
     bl_label = "Submit to Cloud"
     bl_description = "Submit scene for Cloud rendering using V-Ray production renderer"
- 
+
     originalMouseX : bpy.props.IntProperty(default = 0)
     originalMouseY: bpy.props.IntProperty(default = 0)
     mouseMoved: bpy.props.BoolProperty(default=False)
@@ -777,13 +794,13 @@ class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
     def invoke(self, context, event):
         self._centerDialog(context, event)
         return context.window_manager.invoke_props_dialog(self, width=400, title="Submit to Cloud", confirm_text="Submit")
-    
+
     def draw(self, context: bpy.types.Context):
         VRayExporter = context.scene.vray.Exporter
 
         self.layout.prop(VRayExporter, 'vray_cloud_project_name')
-        self.layout.prop(VRayExporter, 'vray_cloud_job_name')     
-        
+        self.layout.prop(VRayExporter, 'vray_cloud_job_name')
+
         self._cursorWrap(context)
 
 
@@ -791,12 +808,12 @@ class VRAY_OT_copy_plugin_version(VRayOperatorBase):
     bl_idname       = "vray.copy_plugin_version"
     bl_label        = "Copy V-Ray plugin version to clipboard"
     bl_description  = "Copy to clipboard the version of the V-Ray plugin with which the scene was last saved."
-    
+
     def execute(self, context):
         version = getSceneVersionString()
         debug.printAlways(f">>> Scene was created with VRay for Blender version [{version}]")
         sys_utils.copyToClipboard(version)
-        
+
         debug.report('INFO', 'Plugin version copied to clipboard.')
         return {'FINISHED'}
 
@@ -805,19 +822,41 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
     bl_idname       = "vray.upgrade_scene"
     bl_label        = "Update Blender scene to the current version of the V-Ray plugin"
     bl_description  = "If the opened scene has been created with a previous version of the V-Ray plugin, update it to the current version."
-    
+
+    # We don't want to show multiple upgrade dialogs at the same time. This will
+    # happen because the upgrade may be started on several conditions some of which
+    # may happen simultaneously. While this flag is True, all other attempts to
+    # show the dialog will be cancelled.
+
+    _executing = False
+
+    dont_ask_again: bpy.props.BoolProperty(
+        name="Don't ask again",
+        default=False,
+        update=lambda self, context: setattr(blender_utils.getVRayPreferences(), 'ask_for_upgrade_confirm', not self.dont_ask_again)
+    )
+
+    @staticmethod
+    def cancel(self, context):
+        __class__._executing = False
+
+
     def execute(self, context):
-        from vray_blender.version import getSceneUpgradeNumber, getAddonUpgradeNumber, upgradeScene
+        try:
+            from vray_blender.version import getSceneUpgradeNumber, getAddonUpgradeNumber, upgradeScene
 
-        sceneUpgradeNum = getSceneUpgradeNumber()
-        addonUpgradeNum = getAddonUpgradeNumber()
+            sceneUpgradeNum = getSceneUpgradeNumber()
+            addonUpgradeNum = getAddonUpgradeNumber()
 
-        # invoke() won't be called in headless mode so perform the same version number checks here
-        if sceneUpgradeNum != addonUpgradeNum:
-            if upgradeScene(sceneUpgradeNum, addonUpgradeNum):
-                return {'FINISHED'}
-        
-        return {'CANCELLED'}
+            # invoke() won't be called in headless mode so perform the same version number checks here
+            if sceneUpgradeNum != addonUpgradeNum:
+                if upgradeScene(sceneUpgradeNum, addonUpgradeNum):
+                    self.report({ 'INFO' }, "Your scene has been upgraded")
+                    return {'FINISHED'}
+
+            return {'CANCELLED'}
+        finally:
+            __class__._executing = False
 
 
     def invoke(self, context, event):
@@ -828,37 +867,92 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
             # Scene was produced by Blender with no V-Ray installed, no need to upgrade.
             # The latest version will be set to the scene when it is saved.
             return {'CANCELLED'}
-        
+
         # Often the scene will not need to be upgarded because it does not contain data that needs
         # to be upgraded. Do a precheck and spare the user the upgrade dialog.
         if not checkIfSceneNeedsUpgrade(sceneUpgradeNum, addonUpgradeNum):
             return {'CANCELLED'}
-        
+
         if sceneUpgradeNum != addonUpgradeNum:
-            self._centerDialog(context, event)
-            return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Version Update", confirm_text="OK")
-        
+            if not __class__._executing:
+                __class__._executing = True
+            else:
+                return {'CANCELLED'}
+            if blender_utils.getVRayPreferences(context).ask_for_upgrade_confirm:
+                self._centerDialog(context, event)
+                return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Version Update", confirm_text="OK")
+            else:
+                return self.execute(context)
+
         return {'CANCELLED'}
-    
+
 
     def draw(self, context: bpy.types.Context):
-        from vray_blender.events import isDefaultScene
-        
+        from vray_blender.lib.blender_utils import isDefaultScene
+
         sceneAlias = "default scene" if isDefaultScene() else "scene"
 
         self.layout.label(text = f"The {sceneAlias} was created with an older version of V-Ray for Blender.")
-        
+
         self.layout.separator()
         self.layout.label(text="Click OK to run the update procedure.")
         self.layout.label(text="If everything goes well, save the .blend file.")
         self.layout.label(text="If you encounter any problems, look in the console for error messages.")
         self._cursorWrap(context)
 
+        self.layout.prop(self, 'dont_ask_again')
+
     @classmethod
     def poll(cls, context):
         # The operator vray.upgrade_scene should be callable even if the default engine is not V-Ray.
         return True
 
+def _pollImageDragDrop(cls, context: bpy.types.Context):
+    return pollEngine(context) and context.space_data and context.space_data.type == 'NODE_EDITOR' and pollTreeType(cls, context)
+
+class VRAY_OT_import_drop_image(bpy.types.Operator):
+    bl_idname = "vray.import_drop_image"
+    bl_label = "Add V-Ray Bitmap"
+    options = { 'INTERNAL', 'UNDO' }
+
+    directory: bpy.props.StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE', 'HIDDEN'})
+    files: bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'SKIP_SAVE', 'HIDDEN'})
+
+    @classmethod
+    def poll(cls, context: bpy.types.Context):
+        return _pollImageDragDrop(cls, context)
+
+    def invoke(self, context, event):
+        context.space_data.cursor_location_from_region(event.mouse_region_x, event.mouse_region_y)
+
+        return self.execute(context)
+
+    def execute(self, context):
+        ntree = bpy.context.space_data.edit_tree
+        deselectNodes(ntree)
+        for file in self.files:
+            filepath = os.path.join(self.directory, file.name)
+            if not os.path.exists(filepath):
+                continue
+            imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
+            imageBlockName = bpy.path.display_name_from_filepath(filepath)
+            imageNode.texture.image = bpy.data.images.load(filepath)
+            imageNode.texture.image.name = imageBlockName
+            imageNode.select = True
+            imageNode.location = context.space_data.cursor_location
+            context.space_data.cursor_location.y -= 350.0
+
+        return {'FINISHED'}
+
+class VRAY_FH_image_handler(bpy.types.FileHandler):
+    bl_idname = "VRAY_FH_image_handler"
+    bl_import_operator = "vray.import_drop_image"
+    bl_file_extensions = ".png;.bmp;.tga;.hdr;.sgi;.rgb;.rgba;.jpg;.jpeg;.jpe;.exr;.pic;.tif;.tiff;.tx;.tex;.psd"
+    bl_label = "V-Ray Image handler"
+
+    @classmethod
+    def poll_drop(cls, context):
+        return _pollImageDragDrop(cls, context)
 
 def getRegClasses():
     return (
@@ -866,6 +960,7 @@ def getRegClasses():
         VRAY_OT_node_del,
         VRAY_OT_dr_nodes_load,
         VRAY_OT_dr_nodes_save,
+        VRAY_OT_open_preferences,
         VRAY_OT_flip_resolution,
         VRAY_OT_set_kelvin_color,
         VRAY_OT_add_sky,
@@ -883,6 +978,9 @@ def getRegClasses():
 
         VRAY_OT_copy_plugin_version,
         VRAY_OT_upgrade_scene,
+
+        VRAY_OT_import_drop_image,
+        VRAY_FH_image_handler,
     )
 
 

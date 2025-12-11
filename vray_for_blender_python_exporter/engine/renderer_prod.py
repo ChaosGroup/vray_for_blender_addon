@@ -1,4 +1,3 @@
-import functools
 import threading
 import time
 import bpy
@@ -30,16 +29,16 @@ class VRayRendererProd(VRayRendererProdBase):
     # thread, this is why synchronization is necessary.
     _instanceLock = threading.Lock()
     _instance = None  # a reference to the VRayRendererProd instance
-    
+
     renderMode = ProdRenderMode.RENDER # Type of job ("Scene export", "Render" or "Cloud submit")
 
     def __init__(self):
         super().__init__(isPreview=False)
         VRayRendererProd._instance = self
-        
+
         self.exporterCtx: ExporterContext = None
         self.cbRenderStopped = None
-        self.aborted = False  # True if the render job was aborted vs completed normally.
+        self.aborted = False
 
 
     @staticmethod
@@ -61,6 +60,7 @@ class VRayRendererProd(VRayRendererProdBase):
                 # has finished.
                 self.aborted = True
                 vray.renderEnd(self.renderer)
+
 
 
     def render(self, engine: bpy.types.RenderEngine, depsgraph: bpy.types.Depsgraph):
@@ -94,8 +94,7 @@ class VRayRendererProd(VRayRendererProdBase):
 
 
     def _render(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine):
-       
-        if self.exporterCtx.isAnimation:            
+        if self.exporterCtx.isAnimation:
             self.exporterCtx.commonSettings.updateFromScene()
             animationExported = True
 
@@ -106,7 +105,9 @@ class VRayRendererProd(VRayRendererProdBase):
             # Note: Don't replace it with "frame == self.exporterCtx.commonSettings.animation.startFrame" if-statement,
             # because in 'Single Frame' render mode with motion blur enabled, this statement won't be valid.
             renderingStarted = False
+
             for frame in self._getFrameRange(scene):
+
                 if not self._exportAnimationFrame(engine, frame):
                     animationExported = False
                     break
@@ -116,14 +117,12 @@ class VRayRendererProd(VRayRendererProdBase):
                     # During motion blur animation export rendering is started only when
                     # the entire interval of required frames is exported.
                     if self.exporterCtx.motionBlurBuilder.isLastFrame():
-                        # First frame of the interval required for motion blur calculation.
-                        # Previous frames are no longer needed.
-                        settingsMotionBlur = scene.vray.SettingsMotionBlur
-                        frameForClearing = frame - settingsMotionBlur.duration
+                        # The frames before the maximum motion blur duration are no longer needed.
+                        frameForClearing = frame - self.exporterCtx.commonSettings.maxMBlurDuration
                         self._clearFrameData(upToTime=frameForClearing)
 
                         # Setting the frame to be the original one from which the interval is calculated.
-                        frame  = frame - (settingsMotionBlur.interval_center + settingsMotionBlur.duration / 2)
+                        frame = self.exporterCtx.motionBlurBuilder.getFrameReadyForRender()
                         vray.setRenderFrame(self.renderer, frame)
                     else:
                         continue
@@ -158,10 +157,10 @@ class VRayRendererProd(VRayRendererProdBase):
         """ Export the full animation sequence to V-Ray and write a .vrscene file """
         self._exportFullScene(scene, engine)
         exportSettings, errMsg = collectExportSceneSettings(scene, scenePath)
-        
+
         if exportSettings:
             exportSettings.cloudExport = isCloudExport
-            
+
             if not vray.writeVrscene(self.renderer, exportSettings):
                 self._reportError(engine, "Scene export failed")
                 return
@@ -181,8 +180,10 @@ class VRayRendererProd(VRayRendererProdBase):
 
         commonSettings = CommonSettings(scene, engine,
                                         isInteractive = False,
-                                        exportOnly = __class__.renderMode == ProdRenderMode.EXPORT_VRSCENE)
+                                        exportOnly = __class__._exportOnly())
+        
         commonSettings.updateFromScene()
+
 
         with VRayRendererProd._instanceLock:
             if not self.renderer:
@@ -190,7 +191,10 @@ class VRayRendererProd(VRayRendererProdBase):
                 exporterType =  ExporterType.ANIMATION if commonSettings.animation.use else ExporterType.PROD
                 self.renderer = self._createRenderer(exporterType)
 
-                self.cbRenderStopped = functools.partial(__class__._cbRenderStopped, self)
+                def onStopped():
+                    self.aborted = True
+
+                self.cbRenderStopped = lambda isAborted: onStopped()
                 vray.setRenderStoppedCallback(self.renderer, self.cbRenderStopped)
 
         # In production mode we always perform a full export which only adds data to the scene. 
@@ -200,7 +204,7 @@ class VRayRendererProd(VRayRendererProdBase):
 
         self.exporterCtx = self._getExporterContext(self.renderer, depsgraph, commonSettings)
         syncUniqueNames()
-        
+
         VRayRendererProdBase._syncView(self.exporterCtx)
 
 
@@ -208,7 +212,7 @@ class VRayRendererProd(VRayRendererProdBase):
         """ Export and render а single frame. """
         vray.setRenderFrame(self.renderer, frame)
         self._export(engine, self.exporterCtx)
-        
+
         debug.printDebug("Start single-frame render.")
 
         self._renderStart(self.exporterCtx)
@@ -222,17 +226,16 @@ class VRayRendererProd(VRayRendererProdBase):
             else:
                 progress = vray.getRenderProgress(self.renderer)
                 engine.update_progress(progress)
-                
+
             time.sleep(FRAME_EXPORT_SLEEP_TIME)
 
         debug.printDebug("End single-frame render.")
-    
+
 
     def _submitToCloud(self, engine):
         from vray_blender.lib.path_utils import getV4BTempDir
         from vray_blender.exporting.cloud_job import VCloudJob
         import os
-        import pathlib
 
         # Create temporary vrscene file used only for cloud submissions
         scenePath = os.path.join(getV4BTempDir(), f"cloud{os.getpid()}.vrscene").replace("\\", "/")
@@ -241,16 +244,14 @@ class VRayRendererProd(VRayRendererProdBase):
         job = VCloudJob(bpy.context.scene, scenePath)
         job.submitToCloud() # This function waits for the submission to finish
 
-        pathlib.Path.unlink(scenePath)
-
 
     def _startRenderSequence(self, engine: bpy.types.RenderEngine):
         if self._checkRenderJobCancelled(engine):
             debug.printDebug("Render job cancelled.")
             return False
-        
+
         debug.printDebug("Start animation render.")
-        
+
         # Obtain a rendering target from Blender and set it to the C++ renderer
         self._renderStart(self.exporterCtx)
 
@@ -258,7 +259,7 @@ class VRayRendererProd(VRayRendererProdBase):
 
         # No need for sequence rendering, when there is only a single frame for rendering
         if (bpy.context.scene.vray.Exporter.animation_mode == 'FRAME') \
-                or (anim.frameStart == anim.frameEnd):   
+                or (anim.frameStart == anim.frameEnd):
 
             vray.renderFrame(self.renderer) # Rendering only the current frame
         else:
@@ -266,14 +267,13 @@ class VRayRendererProd(VRayRendererProdBase):
 
         return True
 
+
     def _waitFrameToBeRendered(self, engine: bpy.types.RenderEngine, currentFrame: float):
         """ Waits until rendering of the current frame is complete or the render job finishes """
-        scene = bpy.context.scene
-
         # The next frame in the sequence. When vray.getLastRenderedFrame() returns this value,
         # it indicates that rendering of "currentFrame" has completed.
         nextFrame = currentFrame + self.exporterCtx.commonSettings.animation.frameStep
-        
+
         while vray.renderJobIsRunning(self.renderer):
             if self._checkRenderJobCancelled(engine):
                 # The mechanism for checking for aborted jobs assumes that this could be done using a signal 
@@ -307,20 +307,14 @@ class VRayRendererProd(VRayRendererProdBase):
         engine.frame_set(int(whole), frac)
 
         vray.setRenderFrame(self.renderer, frame)
-        
+
         # TODO: ideally this should go to _getExporterContext()
         self.exporterCtx.currentFrame    = frame
         self.exporterCtx.persistedState  = self.persistedState
         self.exporterCtx.objTrackers     = self.objTrackers
-        
-        # When exporting a .vrscene, settings from all cameras must be considered to ensure all frames
-        # required for motion blur are exported.
-        cameraObjs = []
-        if __class__.renderMode == ProdRenderMode.EXPORT_VRSCENE:
-            cameraObjs = [inst.object for inst in self.exporterCtx.dg.object_instances if inst.object.type == 'CAMERA']
 
-        self.exporterCtx.commonSettings.updateFromScene(cameraObjs)
-        
+        self.exporterCtx.commonSettings.updateFromScene()
+
         self._export(engine, self.exporterCtx)
 
         # Clear per-frame caches.
@@ -331,10 +325,9 @@ class VRayRendererProd(VRayRendererProdBase):
 
     def _getFrameRange(self, scene):
         if self.exporterCtx.commonSettings.useMotionBlur:
-            settingsMotionBlur = scene.vray.SettingsMotionBlur
-            self.exporterCtx.motionBlurBuilder.initialize(settingsMotionBlur, scene, self.exporterCtx.commonSettings)
+            self.exporterCtx.motionBlurBuilder.initialize(scene, self.exporterCtx.commonSettings, self.exporterCtx.exportOnly)
             return self.exporterCtx.motionBlurBuilder.getFrames()
-        
+
         anim = self.exporterCtx.commonSettings.animation
         return range(anim.frameStart, anim.frameEnd + 1, anim.frameStep)
 
@@ -343,9 +336,8 @@ class VRayRendererProd(VRayRendererProdBase):
         """ Export the complete frame sequence. This is only called in order to export a .vrscene 
             file. Normal render jobs will be exported frame by frame.
         """
-        if __class__.renderMode == ProdRenderMode.EXPORT_VRSCENE:
-            self.exporterCtx.exportOnly = True
-            
+        self.exporterCtx.exportOnly = __class__._exportOnly()
+
         if not self.exporterCtx.isAnimation:
             # When animation mode is off, the procedure for exporting animation will not work
             # because Blender will not generate depsgraph updates when the frame is changed.
@@ -368,12 +360,12 @@ class VRayRendererProd(VRayRendererProdBase):
 
     def _finalizeRenderJob(self, engine: bpy.types.RenderEngine, success: bool):
         """ Free the resources associated with a render job """
-        
+
         debug.printInfo("Finalize render job.")
-       
+
         if self.aborted:
             self._reportInfo(engine, "Render job aborted. Check console log for details.")
-    
+
         # Let Blender know that we are finished using the renderResult object
         with VRayRendererProd._instanceLock:
             self._renderEnd(engine, success)
@@ -384,7 +376,7 @@ class VRayRendererProd(VRayRendererProdBase):
             self._reportInfo(engine, "Render job cancelled.")
             return True
         return False
-    
+
 
     def _exportSceneAdjustments(self, exporterCtx: ExporterContext):
         # No adjustments to export
@@ -409,31 +401,6 @@ class VRayRendererProd(VRayRendererProdBase):
 
         vray.clearFrameData(self.renderer, upToTime=clearUpTo)
 
-
-    def _getExportFrameRange(self, frame: int):
-        """ Return the frame range that has to be exproted in order to render an animation frame.
-            The range will be longer than 1 if motion blur is on.
-        Args:
-            frame (int): the animation frame for which to calculate the range
-
-        Returns:
-            (range): the range that has to be exported
-        """
-        commonSettings = self.exporterCtx.commonSettings
-        anim = commonSettings.animation
-
-        if commonSettings.useMotionBlur:
-            # Compute the number of frames before the current whose data is needed in order to render the 
-            # current frame with motion blur.
-            leadingFrames = int(commonSettings.mbDuration)
-            frameStart = max(frame - leadingFrames, anim.frameStart)
-            frameEnd = frame + anim.frameStep
-            return range(frameStart, frameEnd, anim.frameStep)
-        else:
-            # No motion blur, return a 1-frame range
-            return range(frame, frame + 1, anim.frameStep)
-
-
     @staticmethod
     def _shouldRenderJob():
         if not bpy.app.background:
@@ -441,10 +408,12 @@ class VRayRendererProd(VRayRendererProdBase):
 
         # In headless mode, Blender will create a new renderer for each animation frame. We are rendering
         # the whole animation using just 1 renderer, so skip all render requests after the first one
-        scene = bpy.context.scene 
+        scene = bpy.context.scene
         return scene.vray.Exporter.animation_mode == 'FRAME' or (scene.frame_current == scene.frame_start)
 
 
     @staticmethod
-    def _cbRenderStopped(self):
-        self.aborted = True
+    def _exportOnly():
+        return __class__.renderMode in (ProdRenderMode.EXPORT_VRSCENE, ProdRenderMode.CLOUD_SUBMIT)
+
+        

@@ -17,7 +17,18 @@
             }
         ]
     },
-    "Node":{
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "label": "attribute",
+                        "name": "user_attribute"
+                    }
+                ]
+            }
+        ],
         "output_sockets": [
             {
                 "name": "_default_",

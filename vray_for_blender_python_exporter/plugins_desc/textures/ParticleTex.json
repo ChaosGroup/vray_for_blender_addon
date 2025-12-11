@@ -306,13 +306,6 @@
         },
         
         {
-            "attr" : "color",
-            "default" : [ 1.0, 1.0, 1.0 ],
-            "desc" : "",
-            "type" : "COLOR"
-        },
-        
-        {
             "attr" : "map",
             "default" : [ 1.0, 1.0, 1.0, 1.0 ],
             "desc" : "",

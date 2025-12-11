@@ -7,6 +7,7 @@ from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isCompatibleNode
 from vray_blender.plugins.templates import common
+from vray_blender import debug
 
 
 class VRayNodeSelectNodeTree(VRayNodeBase):
@@ -173,6 +174,10 @@ class VRayNodeSelectObject(VRayNodeBase):
         poll = onFilterObject
     )
 
+    def _clearIncorrectObjectPtr(self, context: bpy.types.Context):
+        """ Checks if the not in the scene collection. If so, clears the object pointer. """
+        if self.objectPtr and self.objectPtr.name not in context.scene.objects:
+            self.objectPtr = None
     
     def init(self, context):
         addOutput(self, 'VRaySocketObject', "Object")
@@ -182,9 +187,18 @@ class VRayNodeSelectObject(VRayNodeBase):
                            context.scene, 'objects',
                            text="")
 
+    def removeDeletedItems(self, context: bpy.types.Context):
+        if self.objectName and self.objectName not in context.scene.objects:
+            self.objectPtr = None
+            self.objectName = ""
+            return True
+
+        return False
+
     def getSelected(self, context: bpy.types.Context):
-        if not self.objectPtr:
+        if not self.objectName:
             return None
+        
         return self.objectPtr.original if self.objectPtr.original in context.scene.objects.values() else None
 
 

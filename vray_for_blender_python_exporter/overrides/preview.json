@@ -22,10 +22,5 @@
     {
         "primary_engine": 2,
         "secondary_engine": 2
-    },
-
-    "TexDirt":
-    {
-        "subdivs_as_samples" : true
     }
 }

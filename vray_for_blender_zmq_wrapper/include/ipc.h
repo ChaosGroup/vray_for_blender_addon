@@ -6,12 +6,10 @@
 #include <string>
 
 #ifdef _WIN32
-#define USE_WIN_SHARED_MEM 1
-#else
-#define USE_WIN_SHARED_MEM 0
+#define USE_WIN_SHARED_MEM
 #endif
 
-#if USE_WIN_SHARED_MEM
+#ifdef USE_WIN_SHARED_MEM
 #include <boost/interprocess/windows_shared_memory.hpp>
 #else
 #include <boost/interprocess/shared_memory_object.hpp>
@@ -35,7 +33,7 @@ public:
 	using SizeType		 = uint32_t;
 
 protected:
-#if USE_WIN_SHARED_MEM
+#ifdef USE_WIN_SHARED_MEM
 	using SharedMem      = boost::interprocess::windows_shared_memory;
 #else
 	using SharedMem      = boost::interprocess::shared_memory_object;
@@ -54,6 +52,8 @@ protected:
 	};
 
 public:
+	bool isValid() const;
+
 	/// Get the description of the last error that has occurred.
 	/// This method is NOT thread safe and can only be called from the
 	/// thread on which the last operation has been invoked.
@@ -127,7 +127,7 @@ private:
 
 
 /// The consumer of shared memory producer-consumer pair.
-class SharedMemoryReader : public SharedMemoryBase 
+class SharedMemoryReader : public SharedMemoryBase
 {
 public:
 	SharedMemoryReader(const std::string& id, const std::string& name);
@@ -146,7 +146,7 @@ public:
 
 
 
-// A specialized implementation for reading image data that helps handle changing buffer sizes.   
+// A specialized implementation for reading image data that helps handle changing buffer sizes.
 class ImageReader : public SharedMemoryReader
 {
 public:
@@ -178,15 +178,15 @@ private:
 public:
 	ImageReader(const std::string& id, const std::string& name);
 
-	/// Read image data into a buffer. If the format of the supplied buffer is the same 
-	/// as the format of the image, the image data will be copied into the existing buffer. 
+	/// Read image data into a buffer. If the format of the supplied buffer is the same
+	/// as the format of the image, the image data will be copied into the existing buffer.
 	/// Otherwise, a new buffer will be allocated to fit the new size requirements.
 	//
 	/// @param timeout - abort operation if the lock could not be acquired within this interval
-	/// @param buffer  - a valid buffer to hold the image data. 
+	/// @param buffer  - a valid buffer to hold the image data.
 	/// @return - an initialized buffer on success, uninitailized on failure
 	ImageBuffer read(std::chrono::milliseconds timeout, const ImageBuffer& buffer);
 
 };
 
-};  // end VrayZmqWrapper namespace 
+};  // end VrayZmqWrapper namespace

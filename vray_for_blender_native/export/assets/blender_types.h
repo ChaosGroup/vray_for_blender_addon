@@ -73,7 +73,7 @@ struct ImBuf {
 	 */
 	ImBufFloatBuffer float_buffer;
 
-	// TRUNCATED HERE 
+	// TRUNCATED HERE
 };
 
 
@@ -82,7 +82,9 @@ struct RenderPass {
 	struct RenderPass* next, * prev;
 	int channels;
 	char name[64];   /* amount defined in IMB_openexr.h */
-	char chan_id[8]; /* amount defined in IMB_openexr.h */
+
+	// Note: The size of chan_id differs between Blender versions.
+	char chan_id[RENDER_PASS_CHAN_ID_SIZE]; /* amount defined in IMB_openexr.h*/
 
 	/* Image buffer which contains data of this pass.
 	 *
@@ -115,8 +117,3 @@ struct RenderPass {
 typedef struct MLoopCol {
 	unsigned char r, g, b, a;
 } MLoopCol;
-
-
-
-
-

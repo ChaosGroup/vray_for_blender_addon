@@ -7,7 +7,7 @@
         },
         {
             "attr": "auto_save_file",
-            "default": "//auto_save_cache.vrlamp",
+            "default": "//auto_save_cache.vrlmap",
             "subtype": "FILE_PATH"
         },
         {

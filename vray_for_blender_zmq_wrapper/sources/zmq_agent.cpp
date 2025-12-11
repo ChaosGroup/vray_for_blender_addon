@@ -103,7 +103,7 @@ void ZmqAgent::run(const std::string& endpoint, const ZmqTimeouts& timeoutSettin
 	vassert(state == State::Idle && "Cannot run the same ZmqAgent twice");
 
 	timeouts = timeoutSettings;
-	state.exchange(State::Running);
+	state = State::Running;
 	pollerThread = std::move(std::thread(&ZmqAgent::pollerLoop, this, endpoint));
 }
 
@@ -117,12 +117,12 @@ void ZmqAgent::stop(bool block) {
 	}
 
 	if (block){
-		if (state != State::Idle) {
+		if (state == State::Stopping) {
 			vassert(std::this_thread::get_id() != pollerThread.get_id() && "Calling blocking stop() from callback thread, deadlocked.");
 			trace("Waiting for poller thread to exit");
 
-			while (!isStopped()) {
-				std::this_thread::sleep_for(10ms);
+			if (pollerThread.joinable()) {
+				pollerThread.join();
 			}
 		}
 		else {
@@ -180,15 +180,25 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 		}
 	}
 	catch (const ZmqException& e) {
-		trace(Msg("ZmqException in poller loop:", e.what()));
+		trace(Msg("ZmqException in agent poller loop:", e.what()));
 	}
 	catch (const std::exception& e) {
-		reportError(Msg("std::exception in poller loop:", e.what()));
+		if (state == State::Running) {
+			reportError(Msg("std::exception in agent poller loop:", e.what()));
+		}
+		else {
+			trace(Msg("std::exception in agent poller loop:", e.what()));
+		}
 	}
 
 	trace("Exit poller loop");
 
 	state = State::Stopped;
+
+	msgCallback   = nullptr;
+	errorCallback = nullptr;
+	traceCallback = nullptr;
+
 }
 
 

@@ -73,7 +73,6 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
             self
         )
 
-
 def register():
     for pluginType in VRayNodeMetaImageTexture.vray_plugins_list:
         pluginDesc = plugins.PLUGIN_MODULES[pluginType]

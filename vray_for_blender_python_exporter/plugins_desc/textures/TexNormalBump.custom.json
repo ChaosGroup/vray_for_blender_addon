@@ -114,6 +114,11 @@
                 [ "0", "Blue to Z[0, 1]", "Blue to Z[0, 1]" ],
                 [ "1", "Blue to Z[-1, 1]", "Blue to Z[-1, 1]" ]
             ]
+        },
+        {
+            "attr": "bump_object_space",
+            "type": "BOOL",
+            "default": true
         }
     ],
     "Widget": {
@@ -142,6 +147,10 @@
                     },
                     {
                         "name": "bump_delta_scale"
+                    },
+                    {
+                        "name": "bump_object_space",
+                        "active": {"cond": "::map_type=0"}
                     },
                     {
                         "name": "bump_tex_mult"

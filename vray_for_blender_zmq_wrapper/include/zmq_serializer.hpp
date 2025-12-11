@@ -100,8 +100,8 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 
 inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrMapChannels & map) {
 	stream << static_cast<int>(map.data.size());
-	for (auto & pair : map.data) {
-		stream << pair.first << pair.second.vertices << pair.second.faces << pair.second.name;
+	for (auto & channel : map.data) {
+		stream << channel.vertices << channel.faces << channel.name;
 	}
 	return stream;
 }

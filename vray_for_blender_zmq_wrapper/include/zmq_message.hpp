@@ -242,7 +242,7 @@ struct RenderSizes {
 	RenderSizes() = default;
 
 	bool operator==(const RenderSizes rhs) const {
-		return 
+		return
 			imgWidth      == rhs.imgWidth &&
 			imgHeight     == rhs.imgHeight &&
 			bmpWidth      == rhs.bmpWidth &&
@@ -265,7 +265,7 @@ struct RenderSizes {
 	int imgHeight = 0;
 
 	// Framebuffer size that VRay uses for the actual rendering. The image is scaled
-	// to imgWidth/Height to produce the actual output. If scaling is disproportional, 
+	// to imgWidth/Height to produce the actual output. If scaling is disproportional,
 	// the output image will be stretched.
 	// Usually this is the same as imgWidth/Height for mono and double that in one of
 	// the directions for stereo rendering.
@@ -408,8 +408,21 @@ PROTO_MESSAGE(PluginUpdate,
 	std::string pluginName;
 	std::string propertyName;
 	vray::AttrValue propertyValue;
-	bool asString;
-	bool forceUpdate = false;
+
+	uint32_t flags = 0;
+	inline void setAnimatable(bool animatable) {
+		if (animatable) {
+			flags |= vray::PluginUpdateFlags::PluginValueAnimatable;
+		}
+	}
+	inline void setForceUpdate(bool forceUpdate) {
+		if (forceUpdate) {
+			flags |= vray::PluginUpdateFlags::PluginValueForceUpdate;
+		}
+	}
+	inline bool getForceUpdate() const { return (flags & vray::PluginUpdateFlags::PluginValueForceUpdate) != 0; }
+	inline bool getAsString() const { return (flags & vray::PluginUpdateFlags::PluginValueAsString) != 0; }
+	inline bool getAnimatable() const { return (flags & vray::PluginUpdateFlags::PluginValueAnimatable) != 0; }
 );
 
 
@@ -417,8 +430,7 @@ SERIALIZE_MESSAGE(PluginUpdate,
 	PARAM(pluginName)
 	PARAM(propertyName)
 	PARAM(propertyValue)
-	PARAM(asString)
-	PARAM(forceUpdate)
+	PARAM(flags)
 );
 
 
@@ -500,12 +512,13 @@ SERIALIZE_EMPTY_MESSAGE(RendererAbort);
 PROTO_MESSAGE(RendererInit,
 	RendererType rendererType;
 	int renderThreads;
-	vray::AttrValue value;
+	int exporterType;
 );
 
 SERIALIZE_MESSAGE(RendererInit,
 	PARAM(rendererType)
 	PARAM(renderThreads)
+	PARAM(exporterType)
 );
 
 
@@ -763,10 +776,12 @@ SERIALIZE_MESSAGE(RendererOnProgress,
 /// MsgControlSetLogLevel
 PROTO_MESSAGE(ControlSetLogLevel,
 	int logLevel;
+	bool enableQtLogs;
 );
 
 SERIALIZE_MESSAGE(ControlSetLogLevel,
 	PARAM(logLevel)
+	PARAM(enableQtLogs)
 );
 
 
@@ -783,8 +798,13 @@ SERIALIZE_MESSAGE(ControlOpenCollaboration,
 /////////////////////// /////////////////////// /////////////////////// ///////////////////////
 
 /// MsgControlOnOpenCosmos
-EMPTY_PROTO_MESSAGE(ControlOnOpenCosmos);
-SERIALIZE_EMPTY_MESSAGE(ControlOnOpenCosmos);
+PROTO_MESSAGE(ControlOnOpenCosmos,
+	int browserPage;
+);
+
+SERIALIZE_MESSAGE(ControlOnOpenCosmos,
+	PARAM(browserPage)
+);
 
 /// MsgControlOnCosmosCalculateDownloadSize
 PROTO_MESSAGE(ControlOnCosmosCalculateDownloadSize,
@@ -976,8 +996,14 @@ SERIALIZE_MESSAGE(ControlOnRendererStatus,
 
 
 /// MsgControlShowVfb
-EMPTY_PROTO_MESSAGE(ControlShowVfb);
-SERIALIZE_EMPTY_MESSAGE(ControlShowVfb);
+PROTO_MESSAGE(ControlShowVfb,
+	bool show;
+);
+
+SERIALIZE_MESSAGE(ControlShowVfb,
+	PARAM(show)
+);
+
 
 /// MsgControlResetVfbToolbar
 EMPTY_PROTO_MESSAGE(ControlResetVfbToolbar);

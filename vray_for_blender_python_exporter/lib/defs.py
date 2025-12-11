@@ -6,7 +6,7 @@ from numpy import ndarray
 
 from vray_blender import debug
 from vray_blender.exporting.tools import TimeStats, FakeTimeStats, isObjectVisible
-from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
+from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, ObjDataTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
 from vray_blender.lib.motion_blur import MotionBlurBuilder
 
 from collections import defaultdict
@@ -35,7 +35,20 @@ class ProdRenderMode:
     RENDER = 1
     CLOUD_SUBMIT = 2
 
+class RenderMaskState:
+    def __init__(self, mode: str, clearMask: bool,  renderMaskData: list):
+        self.mode = mode
+        self.clearMask = clearMask
+        self.renderMaskData = renderMaskData
 
+    def __eq__(self, other: RenderMaskState):
+        assert isinstance(self.renderMaskData, list)
+               
+        if (self.mode != other.mode) or (self.clearMask != other.clearMask):
+            return False
+        if len(self.renderMaskData) != len(other.renderMaskData):
+            return False
+        return all(obj in other.renderMaskData for obj in self.renderMaskData) and all(obj in self.renderMaskData for obj in other.renderMaskData)
 
 class PersistedState:
     def __init__(self):
@@ -45,24 +58,36 @@ class PersistedState:
         self.exportedMtls: Dict[int, AttrPlugin] = {}
         self.activeFurInfo = set()
         self.activeMeshLightsInfo = set()
-        
+
         # Tracks objects that have been processed during any of the export procedures.
         # Its use is to distinguish between objects already handled on previous update cycles and those newly added to the depsgraph.
         self.processedObjects = set()
 
+        # This variable holds the value of view3D.region_3d.view_matrix before calling of self.exportViewport()
+        # It is used to ensure that there is a change in the 3D viewport, indicating that the scene should be redrawn.
+        self.prevRegion3dViewMatrix = None
+
         # Points Names.object(obj, instance) to geom plugin name.
         # It is used for easy access to the geom plugin name of already exported objects.
         # it is set during the export of node plugins.
-        self.objToGeomPluginName: dict[str, str] = {}
+        self.objDataTracker = ObjDataTracker()
+
+        # Stores the render mask state for the current export.
+        self.renderMaskState = RenderMaskState(-1, True, [])
+
+        # Stores the prevous state of the material override settings to ensure
+        # we know when to re-export all materials in the scene when it changes.
+        self.materialOverrideMode = '-1'
+        self.overrideMaterial = None
 
 
 class ExporterContext:
-    
+
     class _CurrentObjectContext:
         # This class manages a stack of the currently exported objects so that the exporting
         # code could obtain the last pushed object. This is necessary e.g. when custom code 
         # is exporting V-Ray properties created directly on the object.
-        
+
         def __init__(self):
             self._objectsStack: list[bpy.types.Object] = []
 
@@ -91,24 +116,24 @@ class ExporterContext:
 
     def __init__(self, exporterCtx: ExporterContext = None):
         from vray_blender.lib.common_settings import CommonSettings
-        
+
         if exporterCtx:
             self._copyConstruct(exporterCtx)
             return
-        
-        # A raw pointer to the VRayBlenderLib's exporter(renderer) object associated with the current export
-        self.renderer = None                  
-        self.rendererMode: RendererMode  = RendererMode.Invalid 
-        
-        # If true, export everything regardless of the depsgraph update status. Otherwise, 
-        # only export changes. This flag has meaning for interactive renderer mode only. 
-        # For all other modes, the value should always be True
-        self.fullExport: bool = True 
 
-        # True if this is an export-only job. 
+        # A raw pointer to the VRayBlenderLib's exporter(renderer) object associated with the current export
+        self.renderer = None
+        self.rendererMode: RendererMode  = RendererMode.Invalid
+
+        # If true, export everything regardless of the depsgraph update status. Otherwise,
+        # only export changes. This flag has meaning for interactive renderer mode only.
+        # For all other modes, the value should always be True
+        self.fullExport: bool = True
+
+        # True if this is an export-only job.
         self.exportOnly: bool = False
 
-        # The number of the frame being currently exported. This may be outside the animation 
+        # The number of the frame being currently exported. This may be outside the animation
         # range if motion blur is active.
         self.currentFrame: float = 0.0
 
@@ -116,14 +141,14 @@ class ExporterContext:
         self.commonSettings: CommonSettings = None
 
         # Track VRay plugins associated with scene objects. The same plugins may be referenced
-        # by multiple objects. 
-        self.objTrackers: Mapping[str, ObjTracker|FakeObjTracker]  = {} 
-        
+        # by multiple objects.
+        self.objTrackers: Mapping[str, ObjTracker|FakeObjTracker]  = {}
+
         # Track VRay plugins assosiated with nodes in a nodetree.
         self.nodeTrackers: Mapping[str, ScopedNodeTracker|FakeScopedNodeTracker]  = {}
-        
+
         # A snapshot of scene objects' visibility. Blender does not provide updates when the visibility
-        # of an object changes, so we need to track it ourselves.  
+        # of an object changes, so we need to track it ourselves.
         self.visibleObjects = set() # set of objTrackId
 
         # A snapshot of the active instancer objects in the scene
@@ -132,32 +157,32 @@ class ExporterContext:
         # A dictionary of (parentObjTrackId, geomName, dataName) => list of (instancedObj, geomName, dataName)
         # This is used to export fur for instanced objects
         self.instancesOfInstancer: dict[int, list[tuple[bpy.types.Object, str, str]]] = defaultdict(dict)
-        
+
         # All objects in the scene, inlcuding those from linked collections
         self.allObjects = set()
 
         # State to carry over to the next rendering cycle
         self.persistedState = PersistedState()
 
-        # Depsgraph updates split by type. 
+        # Depsgraph updates split by type.
         self.dgUpdates: dict[str, set[int]] = {}    #   dict[update_type, set[objTrackId]]
 
         self.ctx: bpy.types.Context      = None
-        self.dg: bpy.types.Depsgraph     = None 
+        self.dg: bpy.types.Depsgraph     = None
         self.ts: TimeStats|FakeTimeStats = None
-        
+
         # LightMesh and target meshes are exported by geometry and light exporters respectively.
         # Both need to know about any updates to the other. In updatedMeshLightsInfo, all pairs of
-        # LightMesh and Gizmo Object for which either object has been updated will be stored 
-        # at the beginning of each update cycle for later reference. 
+        # LightMesh and Gizmo Object for which either object has been updated will be stored
+        # at the beginning of each update cycle for later reference.
         self.updatedMeshLightsInfo = set() # set[LightMesh.UpdatedMeshLightInfo]
-        
+
         # Currently active LightMesh:gizmo pairs
         self.activeMeshLightsInfo = set()  # set[LightMesh.ActiveMeshLightInfo]
 
         # VRayFur:gizmo pairs that have been updated during the current update cycle
         self.updatedFurInfo = set()
-        
+
         # Currently active VRayFur:gizmo pairs
         self.activeFurInfo = set()
 
@@ -199,7 +224,7 @@ class ExporterContext:
         self.emissiveMaterials = [] 
 
         # A stack of the objects that are being currently exported.
-        self.objectContext = __class__._CurrentObjectContext() 
+        self.objectContext = __class__._CurrentObjectContext()
 
 
         self.motionBlurBuilder = MotionBlurBuilder()
@@ -273,7 +298,7 @@ class ExporterContext:
 
     @property
     def isAnimation(self):
-        return self.commonSettings.animation.use
+        return self.production and self.commonSettings.animation.use
 
     @property
     def sceneObjects(self):
@@ -305,13 +330,13 @@ class ExporterContext:
             objName = Names.object(obj, inst)
             
             parentId = getObjTrackId(inst.parent)
-            objId = id(obj.data)
+            dataName = Names.objectData(inst.object, inst)
 
             # Avoid adding duplicates
-            if objId not in self.instancesOfInstancer[parentId]:
+            if dataName not in self.instancesOfInstancer[parentId]:
                 # Store the instance object and its geometry/data names,
                 # since DepsgraphObjectInstance will be invalidated when accessed later
-                self.instancesOfInstancer[parentId][objId] = (obj, objName)
+                self.instancesOfInstancer[parentId][dataName] = (obj, objName)
 
         
         # Obtain the list of visible objects from the scene. The depsgraph does not include collections.
@@ -330,7 +355,8 @@ class ExporterContext:
         self.dgUpdates = {
             'geometry':  set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_geometry)),
             'transform': set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_transform)),
-            'shading':   set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_shading))
+            'shading':   set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_shading)),
+            'all':       set(u.id.original.session_uid for u in self.dg.updates)
         }
 
 
@@ -353,11 +379,9 @@ class ExporterBase(ExporterContext):
         but this leads to confusion of the names with the Blender's context object and 
         also makes accessing ExporterContext's properties unnecessarily verbose ( one more
         indirection )
-    """    
+    """
     def __init__(self, exporterCtx: ExporterContext):
         super().__init__(exporterCtx)
-        
-    
 
 class DataArray:
     def __init__(self, ptr = 0, count = 0, name = ""):
@@ -371,6 +395,14 @@ class DataArray:
         if attribute := data.attributes.get(attributeName, None):
             return DataArray(attribute.data[0].as_pointer(), len(attribute.data))
         return DataArray(0, 0) # Return an empty DataArray if the attribute is missing
+
+class AttrDataLayer:
+    def __init__(self, ptr, count: int, name: str, dataType: str, domain: str):
+        self.ptr = ptr
+        self.count = count
+        self.name = name
+        self.dataType = dataType
+        self.domain = domain
 
 @dataclass
 class NdDataArray:
@@ -431,10 +463,10 @@ class PluginDesc:
         self.name = name    # unique name of the plugin
         self.type = type    # type of the plugin
         self.attrs = {}
-        
+
         # VRay extension of the Blender's underlying object for a plugin.
-        # It will have the state set through the UI 
-        self.vrayPropGroup = {} 
+        # It will have the state set through the UI
+        self.vrayPropGroup = {}
 
         # 'node' should be set if the plugin is being exported as part of
         # a nodetree. It will be used by the final export procedure to determine

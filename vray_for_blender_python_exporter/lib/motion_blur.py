@@ -1,4 +1,8 @@
-from vray_blender.lib.blender_utils import geometryObjectIt
+from vray_blender.lib.blender_utils import geometryObjectIt, isCamera
+from vray_blender.lib import camera_utils
+import bpy
+
+UNDEFINED_FRAME = -1
 
 class FrameType:
     # Frame for rendering, all of the objects in the scene should be exported.
@@ -13,9 +17,11 @@ class FrameType:
     FROM_GLOBAL_SAMPLES = 2
 
 class MbFrameData:
-    frameType = FrameType.FROM_OBJECT_SAMPLES  # type of the frame
-    objects = set() # Objects that have to be exported at that frame
-    lastInInterval = False # Indicates if the frame is the last one from motion blur interval
+    def __init__(self):
+        self.frameType = FrameType.FROM_OBJECT_SAMPLES  # type of the frame
+        self.objects = set() # Objects that have to be exported at that frame
+        self.frameForRenderRef = UNDEFINED_FRAME # The frame to be rendered at the end of an motion blur interval
+
 
 # Class that calculates which frames should be exported for motion blur and
 # holds additional information for them.
@@ -30,8 +36,62 @@ class MotionBlurBuilder:
         self._firstFrame = 0   # The first frame in the sequence
         self._objsWithOverriddenSamples = set() # Objects with overridden "nsamples"
 
-    def initialize(self, settingsMotionBlur, scene, commonSettings):
-        anim = commonSettings.animation
+    def _calculateMBInterval(self, cameraObj: bpy.types.Object, baseFrame: int, commonSettings, objectSamples: dict[int, str]):
+        """
+            Motion blur requires additional interval of frames to be exported for its calculations.
+            The interval is defined by: duration, interval center, and number of samples.
+            The formula for the start and end of the interval is:
+            frameStart | frameEnd = renderFrame + interval_center -|+ (duration / 2)
+        
+            For example when we have 6 motion blur samples the interval will look like this:
+
+                    |<---------------duration-------------->|
+                    |                                       |
+                sample0 sample1 sample2 sample3 sample4 sample5
+                    |       |       |       |       |       |
+            ----||-------|-|-----|---||--|-------|-------||----> timeline
+                ||         |         ||                  ||
+                start      for     interval              end
+                            render    center
+            
+            Every sample[i] is the time frame that have to be exported and the formula for its calculation is:
+            sample[i] = frameStart + i * (duration / numSamples)
+        """
+        mbSamples = commonSettings.mbSamples
+        mbSettings = commonSettings.scene.vray.SettingsMotionBlur
+        camera: bpy.types.Camera = cameraObj.data
+        
+        # Tagging the frame for rendering
+        self._getFrameData(baseFrame).frameType = FrameType.FOR_RENDERING
+
+        # There could me a mix of cameras with and without motion blur to be considered in the calculations.
+        if not camera_utils.camObjUsesMotionBlur(cameraObj, mbSettings):
+            # If the camera does not use motion blur, the frame is the last one in the interval.
+            self._getFrameData(baseFrame).frameForRenderRef = baseFrame
+            return
+
+        intervalCenter, mbDuration = camera_utils.getMBlurIntCenterAndDuration(camera, commonSettings)
+
+        frameStart = baseFrame + intervalCenter - mbDuration / 2
+
+        mBlurStep = mbDuration / mbSamples
+        for i in range(0, mbSamples + 1):
+            frameData = self._getFrameData(frameStart + i * mBlurStep)
+            frameData.frameType = FrameType.FROM_GLOBAL_SAMPLES
+
+        # Calculating any other additional subframes for objects with overridden number of samples
+        for objsMbSamples, objects in objectSamples.items():
+            objsMbStep = mbDuration / objsMbSamples
+            for i in range(0, objsMbSamples + 1):
+                self._getFrameData(frameStart + i * objsMbStep).objects = objects 
+    
+        # The last frame must be identified to signal that rendering can begin once it is reached.
+        frameEnd = baseFrame + intervalCenter + mbDuration / 2
+        self._getFrameData(frameEnd).frameForRenderRef = baseFrame
+
+
+    def initialize(self, scene, commonSettings, exportOnly: bool = True):
+        assert scene.camera and isCamera(scene.camera), "Motion blur interval cannot be calculated without a camera"
         
         # Filling a dictionary with all objects with overridden motion blur samples
         # different from the default ones.
@@ -43,53 +103,26 @@ class MotionBlurBuilder:
                 objectSamples.setdefault(objMbSamples, set()).add(obj.vray.unique_id)
                 self._objsWithOverriddenSamples.add(obj.vray.unique_id)
 
+        allCameras = [o for o in scene.objects if o.type == 'CAMERA']
+
+        currentCamera = scene.camera
+        anim = commonSettings.animation
+        for baseFrame in range(anim.frameStart, anim.frameEnd + 1, anim.frameStep):
+            # If the scene is not going to be rendered (when writing to a .vrscene file), interval frames are calculated for all cameras.
+            # This ensures that all of them have the necessary frames for motion blur generation.
+            if exportOnly:
+                for camera in allCameras:
+                    self._calculateMBInterval(camera, baseFrame, commonSettings, objectSamples)
+                continue
+
+            if markedCamera:= next((m.camera for m in scene.timeline_markers if m.frame == baseFrame), None):
+                currentCamera = markedCamera
+
+            self._calculateMBInterval(currentCamera, baseFrame, commonSettings, objectSamples)
 
         # Save the number of the first frame. It will be used as the first keyframe for exporting the geometry data.
-        self._firstFrame = anim.frameStart + settingsMotionBlur.interval_center - settingsMotionBlur.duration / 2
+        self._firstFrame = min(self._frameData.keys())
 
-        # Calculating the interval of frames needed for rendering a frame with motion blur.
-        for baseFrame in range(anim.frameStart, anim.frameEnd + 1, anim.frameStep):
-            """
-                The interval is defined by: duration = "settingsMotionBlur.duration", 
-                center = "settingsMotionBlur.interval_center", and number of samples = "commonSettings.mbSamples".
-                The formula for the start and end of the interval is:
-                frameStart | frameEnd = renderFrame + interval_center -|+ (duration / 2)
-            
-                For example when we have 6 motion blur samples the interval will look like this:
-
-                     |<---------------duration-------------->|
-                     |                                       |
-                  sample0 sample1 sample2 sample3 sample4 sample5
-                     |       |       |       |       |       |
-                ----||-------|-|-----|---||--|-------|-------||----> timeline
-                    ||         |         ||                  ||
-                   start      for     interval              end
-                             render    center
-                
-                Every sample[i] is the time frame that have to be exported and the formula for its calculation is:
-                sample[i] = frameStart + i * (duration / numSamples)
-                            
-            """
-            frameStart = baseFrame + settingsMotionBlur.interval_center - settingsMotionBlur.duration / 2
-            
-            mBlurStep = settingsMotionBlur.duration / commonSettings.mbSamples
-            for i in range(0, commonSettings.mbSamples + 1):
-                frameData = self._getFrameData(frameStart + i * mBlurStep)
-                frameData.frameType = FrameType.FROM_GLOBAL_SAMPLES
-
-            # Calculating any other additional subframes for objects with overridden number of samples
-            for objsMbSamples, objects in objectSamples.items():
-                objsMbStep = settingsMotionBlur.duration / objsMbSamples
-                for i in range(0, objsMbSamples + 1):
-                    self._getFrameData(frameStart + i * objsMbStep).objects = objects
-
-            # Tagging the frame for rendering
-            self._getFrameData(baseFrame).frameType = FrameType.FOR_RENDERING
-            
-            # The last frame must be identified to signal that rendering can begin once it is reached.
-            frameEnd = baseFrame + settingsMotionBlur.interval_center + settingsMotionBlur.duration / 2
-            self._getFrameData(frameEnd).lastInInterval = True
-    
     def getFrames(self):
         for frame in sorted(self._frameData):
             self._currentFrame = frame
@@ -99,7 +132,13 @@ class MotionBlurBuilder:
         return self._firstFrame == frame
     
     def isLastFrame(self):
-        return self._getFrameData(self._currentFrame).lastInInterval
+        """ Checks if the current frame is the last one in the motion blur interval. """
+        return self._getFrameData(self._currentFrame).frameForRenderRef != UNDEFINED_FRAME # If the frame refers to a frame ready for render, it is the last one in the interval.
+
+    def getFrameReadyForRender(self):
+        """ Returns the frame that is ready for render. """
+        assert self.isLastFrame(), "MotionBlurBuilder.getFrameReadyForRender() returns invalid frame if MotionBlurBuilder.isLastFrame() is False"
+        return self._getFrameData(self._currentFrame).frameForRenderRef
 
     def getObjectsForExport(self, allObjects):
         currentFrameData = self._getFrameData(self._currentFrame)

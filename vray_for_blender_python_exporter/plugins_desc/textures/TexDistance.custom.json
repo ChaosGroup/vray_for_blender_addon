@@ -33,12 +33,6 @@
                     "filter_function": "filters.filterTexDistanceTargets"
                 }
             }
-        },
-        {
-            "attr": "distance",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

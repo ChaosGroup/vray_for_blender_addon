@@ -21,6 +21,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -30,7 +31,10 @@
             "default" : 1.0,
             "desc" : "Focus distance in scene units",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -48,6 +52,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -73,7 +78,10 @@
             "default" : 0.0,
             "desc" : "The near clipping plane",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -81,7 +89,10 @@
             "default" : 9.999999843067494e+17,
             "desc" : "The far clipping plane",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -105,7 +116,10 @@
             "default" : 1.0,
             "desc" : "",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -235,6 +249,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -246,6 +261,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },

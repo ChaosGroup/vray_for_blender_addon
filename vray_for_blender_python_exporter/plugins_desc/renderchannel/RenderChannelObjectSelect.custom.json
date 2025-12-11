@@ -1,6 +1,6 @@
 {
     "ID": "RenderChannelObjectSelect",
-    "Name" : "Object Select",
+    "Name" : "Object Select Channel",
     "Subtype" : "MATTE",
     "Parameters": [
         {

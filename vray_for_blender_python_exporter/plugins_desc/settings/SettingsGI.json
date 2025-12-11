@@ -164,6 +164,7 @@
                 "display_name" : "Ray Distance",
                 "max" : 100000.0,
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "spin_step" : 1.0
             }
         },
@@ -202,6 +203,7 @@
                 "display_name" : "AO Radius",
                 "max" : 100000000.0,
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "spin_step" : 0.1000000014901161
             }
         },

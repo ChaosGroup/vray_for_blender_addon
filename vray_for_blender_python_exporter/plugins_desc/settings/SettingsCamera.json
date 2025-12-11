@@ -9,7 +9,7 @@
         {
             "attr" : "type",
             "default" : "0",
-            "desc" : "Camera type: 0 - default, 1 - spherical, 2 - cylindrical point, 3 - cylindrical ortho, 4 - box, 5 - fish-eye, 6 - warped spherical, 7 - orthogonal, 8 - pinhole, 9 - spherical panorama, 10 - cube 6x1",
+            "desc" : "Camera type: 0 - default, 1 - spherical, 2 - cylindrical point, 3 - cylindrical ortho, 4 - box, 5 - fish-eye, 6 - warped spherical, 7 - orthogonal, 8 - pinhole, 9 - spherical panorama, 10 - cube 6x1, 11 - cylindrical w/ vertical FOV",
             "items" : 
             [
                 [ "0", "Standard", "Standard" ],
@@ -22,7 +22,13 @@
                 [ "7", "Orthogonal", "Orthogonal" ],
                 [ "8", "Pinhole", "Pinhole" ],
                 [ "9", "Spherical panorama", "Spherical panorama" ],
-                [ "10", "Cube 6x1", "Cube 6x1" ]
+                [ "10", "Cube 6x1", "Cube 6x1" ],
+                
+                [
+                    "11",
+                    "Cylindrical with vertical FOV",
+                    "Cylindrical with vertical FOV"
+                ]
             ],
             "type" : "ENUM",
             "ui" : 
@@ -34,11 +40,11 @@
         {
             "attr" : "height",
             "default" : 400.0,
-            "desc" : "Height of the cylindrical (ortho) camera",
+            "desc" : "Height of the cylindrical (ortho) camera / vertical FOV (in degrees) for cylindrical and spherical panorama",
             "type" : "FLOAT",
             "ui" : 
             {
-                "display_name" : "Height",
+                "display_name" : "Height/Vertical FOV",
                 "max" : 1000000000.0,
                 "min" : 0.0
             }

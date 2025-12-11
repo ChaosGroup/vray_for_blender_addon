@@ -327,7 +327,7 @@ class UIPainter:
                     self._renderItem(container, widgetAttr)
 
 
-    def renderWidget(self, layout: bpy.types.UILayout, widget: dict):
+    def renderWidget(self, layout: bpy.types.UILayout, widget: dict, nodeWidget=False):
         """ Render a single widget onto the supplied layout """
         # If the widget has a 'visible' condition, check it first
 
@@ -349,7 +349,7 @@ class UIPainter:
         animatable = self.pluginModule.Options.get('animatable', True)
         if not animatable:
             animatable = self.pluginModule.Options.get('use_animation_layout', False)
-        container.use_property_decorate = animatable
+        container.use_property_decorate = not nodeWidget and animatable
 
         self.renderWidgetAttributes(widget, container)
 
@@ -384,12 +384,12 @@ class UIPainter:
             self._renderDefault(layout)
 
 
-    def renderWidgets(self, layout: bpy.types.UILayout, widgets):
+    def renderWidgets(self, layout: bpy.types.UILayout, widgets: dict, nodeWidgets=False):
         """ Render a list of widgets onto the supplied layout. This need not be a the complete
             list for a plugin, so this function allows for drawing the UI in pieces.
         """
         for widget in widgets:
-            self.renderWidget(layout, widget)
+            self.renderWidget(layout, widget, nodeWidgets)
 
     
     def renderWidgetsSection(self, layout: bpy.types.UILayout, sectionName: str):

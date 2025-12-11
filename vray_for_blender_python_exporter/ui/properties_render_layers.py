@@ -1,8 +1,8 @@
-
 import bpy
+import os
 
 from vray_blender.ui import classes
-from vray_blender.lib import lib_utils, draw_utils
+from vray_blender.lib import lib_utils, draw_utils, plugin_utils
 
 
 class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
@@ -25,30 +25,32 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
             # be shown are a property of the world.
             self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree.")
             return
-        
+
         vrayRenderChannels = context.scene.world.vray.VRayRenderChannels
-        
+
         # LightMix and Denoiser channels are displayed separately
         # until a better solution for their representation is found.
         split = self.layout.split(factor=0.02)
         split.column()
         col = split.column()
-        for channel in ("LightMix", "Denoiser"):
+
+        specialChannels = [ "LightMix", "Denoiser" ]
+        if not plugin_utils.DISABLE_GEN_AI:
+            specialChannels.append("Enhancer")
+        for channel in specialChannels:
             col.prop(getattr(vrayRenderChannels, f"VRayNodeRenderChannel{channel}"), "enabled")
 
         for menuType in VRayChannelNodeSubtypes:
             menuName = menuType.title()
-            
+
             if panelBody := draw_utils.rollout(self.layout, f"RenderChannel_{menuName}", menuName):
                 panelBody.active = hasWorldNodeTree
                 col = panelBody.column()
-                
+
                 for t in VRayNodeTypes["RENDERCHANNEL"]:
                     if getattr(t, "vray_menu_subtype","") == menuType:
                         elemType = t.bl_rna.identifier
                         col.prop(getattr(vrayRenderChannels, elemType), "enabled")
-                
-
 
 
 # View Layer settings that lets the user choose which layer should be rendered
@@ -60,6 +62,7 @@ class VRAY_PT_Viewlayer(classes.VRayRenderLayersPanel):
         layout = self.layout
 
         layout.use_property_split = True
+        layout.use_property_decorate = False
 
         scene = context.scene
         rd = scene.render
@@ -69,6 +72,22 @@ class VRAY_PT_Viewlayer(classes.VRayRenderLayersPanel):
         col.prop(layer, "use", text="Use for Rendering")
         col.prop(rd, "use_single_layer", text="Render Single Layer")
 
+
+class VRAY_PT_MaterialOverride(classes.VRayRenderLayersPanel):
+    bl_label = "Material Override"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        layer = context.view_layer
+
+        col = layout.column()
+        col.prop(layer.vray, 'material_override_mode')
+        row = col.row()
+        row.enabled = layer.vray.material_override_mode == '2'
+        row.prop(layer, "material_override", text="Material Override")
 
 class VRAY_PT_Materials(classes.VRayRenderLayersPanel):
     bl_label   = "Scene Materials"
@@ -214,10 +233,11 @@ class VRAY_PT_Includer(classes.VRayRenderLayersPanel):
 def getRegClasses():
     return (
         VRAY_PT_RenderChannels,
+        VRAY_PT_MaterialOverride,
         VRAY_PT_Viewlayer,
         # TODO: Fix the functionality of the following panels
         # VRAY_PT_Materials,
-        # VRAY_PT_LightLister,
+        # VRAY_PT_LightLister
         # VRAY_PT_Includer,
     )
 

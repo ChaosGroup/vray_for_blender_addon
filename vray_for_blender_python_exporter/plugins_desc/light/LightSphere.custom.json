@@ -78,29 +78,25 @@
         {
             "attr": "decay_near_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_near_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
@@ -109,27 +105,19 @@
             "ui": {
                 "soft_min": -0.1,
                 "soft_max": 0.1,
-                "spin_step": 0.001,
-                "quantityType": "distance"
+                "spin_step": 0.001
             }
         },
         {
             "attr": "intensity",
             "default": 30.0,
             "ui": {
-                "soft_max": 500.0,
                 "spin_step": 0.1
             }
         },
         {
             "attr": "bumped_below_surface_check",
             "default": true
-        },
-        {
-            "attr": "radius",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

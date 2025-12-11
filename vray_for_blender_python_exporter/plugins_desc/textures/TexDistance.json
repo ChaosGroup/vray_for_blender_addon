@@ -137,7 +137,8 @@
             "type" : "FLOAT_TEXTURE",
             "ui" : 
             {
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

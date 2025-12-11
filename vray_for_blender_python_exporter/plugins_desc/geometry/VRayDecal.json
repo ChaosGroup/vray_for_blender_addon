@@ -1,0 +1,263 @@
+
+{
+    "Desciption" : "VRayDecal",
+    "ID" : "VRayDecal",
+    "Name" : "V Ray Decal",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "exclusion_nodes",
+            "default" : null,
+            "desc" : "List of node plugins to consider for inclusion/exclusion",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "objectSet", 1 ]
+                ],
+                "display_name" : "Exclude",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "exclusion_mode",
+            "default" : false,
+            "desc" : "true to include the nodes listed, false to exclude the nodes listed",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "As Exclusive list"
+            }
+        },
+        
+        {
+            "attr" : "enabled",
+            "default" : true,
+            "desc" : "true enable the plugin, false to disable it",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enabled"
+            }
+        },
+        
+        {
+            "attr" : "transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transformation for the decal box",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "material",
+            "default" : null,
+            "desc" : "Material for shading the decal",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "width",
+            "default" : 0.0,
+            "desc" : "The width of the decal box",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "length",
+            "default" : 0.0,
+            "desc" : "The length of the decal box",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "height",
+            "default" : 0.0,
+            "desc" : "The height of the decal box",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "height_offset",
+            "default" : 0.0,
+            "desc" : "Offset of the decal projection in percent relative to the decal height",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "mask",
+            "default" : null,
+            "desc" : "The texture to evaluate for the opacity mask",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "normal_angle",
+            "default" : 90.0,
+            "desc" : "The angle between the decal normal and the geometry normal before fading starts",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "angle",
+                "units" : "degrees"
+            }
+        },
+        
+        {
+            "attr" : "z_order",
+            "default" : 1,
+            "desc" : "The z order of the decal. Highest order is on top",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fade_on",
+            "default" : 0,
+            "desc" : "Whether fading by normal angle is enabled",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "fade_angle",
+            "default" : 90.0,
+            "desc" : "The normal angle to fade to",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "angle",
+                "units" : "degrees"
+            }
+        },
+        
+        {
+            "attr" : "project_on_back",
+            "default" : true,
+            "desc" : "Whether to project the decal on the backs of surfaces",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement_tex_color",
+            "default" : null,
+            "desc" : "The texture to evaluate for the displacement",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement_ignore_original",
+            "default" : false,
+            "desc" : "Whether to ignore the original surface displacement",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "override_user_attributes",
+            "default" : true,
+            "desc" : "Whether the decal should override the user attributes of the surfaces it's projected on",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "decal_only_bump",
+            "default" : true,
+            "desc" : "True if the decal should override the original surface's bump, false if it should preserve it",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "orig_bump_amount",
+            "default" : 1.0,
+            "desc" : "The amount of the surface's original bump that should be preserved",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "bend",
+            "default" : 0.0,
+            "desc" : "The bend angle in degrees from 0 to 360",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "nsamples",
+            "default" : 0,
+            "desc" : "Number of transform samples for motion blur",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attributes",
+            "default" : "",
+            "desc" : "A list of user defined attributes in the form \"attrName1=value1;attrName2=value2\" where values are usually numbers, strings or R,G,B triplets",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "user_attributes_bin",
+            "default" : 0,
+            "desc" : "Serialized user attributes (refer to BinUserAttributesWriter)",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "objectID",
+            "default" : 0,
+            "desc" : "Object ID for the rendering",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "scene_name",
+            "default" : "",
+            "desc" : "A list of string identifying the original scene node name for which this VRay Plugin was generated. The first string is directly the node name",
+            "elements_count" : 0,
+            "type" : "STRING_LIST",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

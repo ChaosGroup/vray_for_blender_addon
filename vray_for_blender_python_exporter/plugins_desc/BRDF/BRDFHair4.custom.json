@@ -147,6 +147,35 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            { "name": "melanin" },
+            { "name": "pheomelanin" },
+            { "name": "dye_color" },
+            { "name": "transparency" },
+            { "name": "diffuse_color" },
+            { "name": "diffuse_amount" },
+            {
+                "name": "glossiness_rollout",
+                "type": "ROLLOUT",
+                "label": "Glossiness"
+            },
+            { "name": "glossiness" },
+            { "name": "primary_glossiness_boost" },
+            { "name": "softness" },
+            { "name": "highlight_shift" },
+            { "name": "ior" },
+            { "name": "gray_hair_density" },
+            {
+                "name": "tint_rollout",
+                "type": "ROLLOUT",
+                "label": "Tint"
+            },
+            { "name": "primary_tint" },
+            { "name": "secondary_tint" },
+            { "name": "transmission_tint" }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": []

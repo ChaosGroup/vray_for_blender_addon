@@ -6,12 +6,33 @@ from vray_blender.nodes.utils import tagRedrawNodeEditor, tagRedrawPropertyEdito
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.plugins import getPluginAttr, getPluginModule
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.lib.plugin_utils import TEMPLATE_ATTRIBUTES
+from enum import StrEnum
 
+class ObjectType(StrEnum):
+    COLLECTION = "COLLECTION"
+    OBJECT = "OBJECT"
+    MATERIAL = "MATERIAL"
+    UNKNOWN = ""
+
+def _getObjectType(obj: bpy.types.ID):
+    if obj is not None:
+        if isCollection(obj):
+            return ObjectType.COLLECTION
+        elif isinstance(obj, bpy.types.Object):
+            return ObjectType.OBJECT
+        elif isinstance(obj, bpy.types.Material):
+            return ObjectType.MATERIAL
+    return ObjectType.UNKNOWN
 
 class TemplateListItem(bpy.types.PropertyGroup):
     objectPtr: bpy.props.PointerProperty(
         type = bpy.types.ID
     )
+
+    # Save the object type separately from the object pointer, because the object pointer may refer to a deleted object.
+    # For example, we want to avoid calling isinstance(objectPtr, bpy.types.Object) on a deleted object in order to get its type.
+    objectType: bpy.props.StringProperty(default="")
 
     enabled: bpy.props.BoolProperty(default=True)
 
@@ -28,19 +49,16 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
         # set the icon to 'X'. Strictly speaking, the user should never see an item with an 'X' icon
         # if the scene is updated and the UI  is redrawn correctly. However ATM we are not sure that all use
         # cases have been covered so the X icon will make it easier to identify the items
-        # whose objects have been deleted in case removal of list items does not work as expected. 
-        if item.objectPtr is None:
-            iconID = 'X'
-        elif isCollection(item.objectPtr): 
-            iconID = 'COLLECTION_NEW' if item.objectPtr.name in bpy.data.collections else 'X'
-        elif isinstance(item.objectPtr, bpy.types.Object): 
-            iconID = f'{item.objectPtr.type}_DATA' if item.objectPtr.name in context.scene.objects else 'X'
-        elif isinstance(item.objectPtr, bpy.types.Material):
-            iconID = f'{item.objectPtr.id_type.upper()}_DATA' if item.objectPtr.name in bpy.data.materials else 'X'
-
-        if iconID == 'X':
-            _UPDATED_OBJECT_SELECTORS.add(data)
-            data.id_data.update_tag()
+        # whose objects have been deleted in case removal of list items does not work as expected.
+        match item.objectType:
+            case ObjectType.COLLECTION:
+                iconID = 'COLLECTION_NEW'
+            case ObjectType.OBJECT:
+                iconID = f'{item.objectPtr.type}_DATA'
+            case ObjectType.MATERIAL:
+                iconID = f'{item.objectPtr.id_type.upper()}_DATA'
+            case _:
+                iconID = 'X'
 
         row.label(text=item.name, icon=iconID)
 
@@ -126,9 +144,9 @@ class VRayObjectSelector(VRayUITemplate):
 
     def _onSelectObject(self, context):
         if self.objectSelector:
-            self._onAddListItem(context, self.objectSelector)
+            self.addListItem(context, self.objectSelector)
         elif self.collectionSelector:
-            self._onAddListItem(context, self.collectionSelector)
+            self.addListItem(context, self.collectionSelector)
 
     objectSelector: bpy.props.PointerProperty(
         type = bpy.types.Object,
@@ -226,23 +244,24 @@ class VRayObjectSelector(VRayUITemplate):
         dest.activeItem = self.activeItem
 
         for item in self.selectedItems:
-            dest._onAddListItem(bpy.context, item.objectPtr)
+            dest.addListItem(bpy.context, item.objectPtr)
 
 
-    def _onAddListItem(self, context: bpy.types.Context, selected: bpy.types.Object):
-        self.removeDeletedItems(context)
+    def addListItem(self, context: bpy.types.Context, selected: bpy.types.Object):
 
         if selected and (selected.name not in self.selectedItems):
             newItem = self.selectedItems.add()
             newItem.objectPtr = selected
             newItem.name = selected.name
 
+            newItem.objectType = _getObjectType(selected)
+
             if fnUpdate := getattr(self, 'onSelectionChanged', None):
                 fnUpdate(context)
 
         # After adding the item to the list, the object selector field has to be cleared so that 
         # a new object could be selected. We however cannot reset the value of objectSelector here, 
-        # because Bledner will check for the value at the end of the Eyedropper operator execution
+        # because Blender will check for the value at the end of the Eyedropper operator execution
         # and show an error status message if nothing has been selected. To work around this, use
         # a one-time timer to delay resetting the field.
         bpy.app.timers.register(self._clearSelectorFields)
@@ -259,7 +278,7 @@ class VRayObjectSelector(VRayUITemplate):
 
 
     def removeDeletedItems(self, context):
-        """ Remove all deleted items from the selectedItems list. 
+        """ Remove all deleted items from the selectedItems list and return True if any items were removed. 
 
             When a scene object is deleted, the item associated with it remains on the selectedItem list.
             This function will delete all such no longer valid items.
@@ -279,6 +298,8 @@ class VRayObjectSelector(VRayUITemplate):
             self.activeItem -= activeItemShift
             self.id_data.update_tag()
 
+        return removed != 0
+
 
     def _clearSelectorFields(self):
         if self.objectSelector is not None:
@@ -288,38 +309,77 @@ class VRayObjectSelector(VRayUITemplate):
 
     def _isItemValid(self, context: bpy.types.Context, item: TemplateListItem):
         """ Return whether the list item points to a valid object. """ 
-        if item.objectPtr is None:
-            return False
-        elif isCollection(item.objectPtr): 
-            return item.objectPtr.name in bpy.data.collections
-        elif isinstance(item.objectPtr, bpy.types.Object): 
-            return item.objectPtr.name in context.scene.objects
-        elif isinstance(item.objectPtr, bpy.types.Material):
-            return item.objectPtr.name in bpy.data.materials
+
+        if not item.objectType:
+            # Try to fix unknown items to allow backward compatibility with old scenes.
+            item.objectType = _getObjectType(item.objectPtr)
+
+        match item.objectType:
+            case ObjectType.COLLECTION:
+                return item.name in bpy.data.collections
+            case ObjectType.OBJECT:
+                return item.name in context.scene.objects
+            case ObjectType.MATERIAL:
+                return item.name in bpy.data.materials
+
+        return False
 
 
 ############  ABANDONED LIST ITEMS CLEANUP  ############
 
-_UPDATED_OBJECT_SELECTORS: set[VRayObjectSelector] = set()
-
 def cleanupObjectSelectorLists():
     """ Depending on the way objects are deleted from the scene, the items in the VRayObjectSelector may
-        not get their objectPointer reset to None. This function uses a global list of the updated selectors
-        which is populated in the list item draw function to call the cleanup function for such abandoned
-        items in the affected selectors.
+        not get their objectPointer reset to None. This function goes through all the object selectors and
+        cleans up the abandoned list items.
     """
-    global _UPDATED_OBJECT_SELECTORS
 
-    if not _UPDATED_OBJECT_SELECTORS:
-        return
+    needRedraw = False
 
-    for selector in _UPDATED_OBJECT_SELECTORS:
-        selector.removeDeletedItems(bpy.context)
+    def cleanSelectorsOfPropGroup(pluginName: str, data):
+        nonlocal needRedraw
+        propGroup = getattr(data, pluginName)
+        for attrName in TEMPLATE_ATTRIBUTES.get(pluginName, []):
+            needRedraw |= getattr(propGroup, attrName).removeDeletedItems(bpy.context)
 
-    _UPDATED_OBJECT_SELECTORS = set()
 
-    tagRedrawNodeEditor()
-    tagRedrawPropertyEditor()
+    def cleanSelectorsOfNodeTree(ntree: bpy.types.NodeTree):
+        nonlocal needRedraw
+        if not ntree:
+            return
+        
+        for node in ntree.nodes:
+            match node.bl_idname:
+                case 'VRayNodeMultiSelect' | 'VRayNodeSelectObject':
+                    needRedraw |= node.removeDeletedItems(bpy.context)
+                case _:
+                    if (not hasattr(node, 'vray_plugin')) or node.vray_plugin == 'NONE':
+                        continue
+                    cleanSelectorsOfPropGroup(node.vray_plugin, node)
+
+    for material in bpy.data.materials:
+        cleanSelectorsOfNodeTree(material.node_tree)
+
+    for world in bpy.data.worlds:
+        cleanSelectorsOfNodeTree(world.node_tree)
+
+    for object in bpy.data.objects:
+        if object.vray.isVRayFur and not object.vray.ntree:
+            cleanSelectorsOfPropGroup('GeomHair', object.data.vray)
+        cleanSelectorsOfNodeTree(object.vray.ntree)
+
+    for light in bpy.data.lights:
+        vrayLight = light.vray
+        if vrayLight.light_type == "MESH" and not light.node_tree:
+            cleanSelectorsOfPropGroup('LightMesh', vrayLight)
+
+        needRedraw |= vrayLight.objectList.removeDeletedItems(bpy.context) # Include/Exclude list
+        cleanSelectorsOfNodeTree(light.node_tree)
+
+    cleanSelectorsOfPropGroup('SettingsImageSampler', bpy.context.scene.vray)
+
+    if needRedraw:
+        tagRedrawNodeEditor()
+        tagRedrawPropertyEditor()
 
 
 ############  REGISTRATION  ############

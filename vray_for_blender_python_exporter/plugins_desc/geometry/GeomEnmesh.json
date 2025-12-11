@@ -1,0 +1,230 @@
+
+{
+    "Desciption" : "GeomEnmesh",
+    "ID" : "GeomEnmesh",
+    "Name" : "Geom Enmesh",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "source_mesh",
+            "default" : null,
+            "desc" : "Geometry to be textured",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "ref_nodes",
+            "default" : null,
+            "desc" : "The list of reference nodes",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "obj_scale",
+            "default" : 1.0,
+            "desc" : "Scale coefficient of the reference geometry",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "rep_u",
+            "default" : 1.0,
+            "desc" : "Repetition of the reference geometry within the texture in U",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "rep_v",
+            "default" : 1.0,
+            "desc" : "Repetition of the reference geometry within the texture in V",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "flip_u",
+            "default" : false,
+            "desc" : "True if U coordinates of the source mesh should be flipped",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "flip_v",
+            "default" : false,
+            "desc" : "True if V coordinates of the source mesh should be flipped",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "height",
+            "default" : -1.0,
+            "desc" : "Height of the layer",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "rotation",
+            "default" : 0.0,
+            "desc" : "The angle of rotation in degrees to apply to the reference geometry",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 360.0,
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
+            }
+        },
+        
+        {
+            "attr" : "offset_u",
+            "default" : 0.0,
+            "desc" : "The general offset along the U axis",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "offset_v",
+            "default" : 0.0,
+            "desc" : "The general offset along the V axis",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "height_offset",
+            "default" : 0.0,
+            "desc" : "The offset along the surface normals based on the height in percent",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "random_offset_u",
+            "default" : 0.0,
+            "desc" : "The random offset to apply along the U axis in the range [0, 1]",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "random_offset_v",
+            "default" : 0.0,
+            "desc" : "The random offset to apply along the V axis in the range [0, 1]",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "cropbox_x",
+            "default" : 0.0,
+            "desc" : "Cropbox size along X axis",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "cropbox_y",
+            "default" : 0.0,
+            "desc" : "Cropbox size along Y axis",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "cropbox_z",
+            "default" : 0.0,
+            "desc" : "Cropbox size along Z axis",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "gizmo_center",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The center of the ref mesh gizmo",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "gizmo_rotate",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The rotation applied to the ref mesh gizmo",
+            "type" : "MATRIX"
+        },
+        
+        {
+            "attr" : "gizmo_scale",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The scale applied to the ref mesh gizmo",
+            "type" : "MATRIX"
+        },
+        
+        {
+            "attr" : "map_channel",
+            "default" : 1,
+            "desc" : "Mapping channel index",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "map_channel_name",
+            "default" : "",
+            "desc" : "Mapping channel name. Overrides \"map_channel\" if not empty",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "use_mesh_uvw_mapping",
+            "default" : false,
+            "desc" : "True if ref mesh UVW mapping should be used, false - if source mesh uvw mapping should be used",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_mesh_ids",
+            "default" : true,
+            "desc" : "True if ref mesh face ids should be used for shading in cases like multi subtex, false - if source mesh ids should be used",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_rotation_step",
+            "default" : false,
+            "desc" : "True if random rotation should be done in steps, false - if randRotation should be treated as a random angle",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "random_rotation",
+            "default" : 0.0,
+            "desc" : "The random rotation to apply, either rotation steps or a rotation angle both in the range [0, 360] based on useRotationStep parameter",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "1",
+            "desc" : "Determine which axis is Up for the reference geometry",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Automatic", "Automatic" ],
+                [ "2", "Z up", "Z up" ],
+                [ "3", "Y up", "Y up" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

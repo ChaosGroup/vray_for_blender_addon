@@ -1,14 +1,12 @@
 #include "mesh_exporter.h"
 
 #include <array>
-#include <thread>
 #include <unordered_set>
 #include <unordered_map>
 #include <base_types.h>
 
 #include "api/interop/types.h"
 #include "utils/mmh3.h"
-
 
 
 using namespace VRayBaseTypes;
@@ -27,13 +25,13 @@ struct ChanVertex
 {
 	ChanVertex() { }
 
+	ChanVertex(const AttrVector& vec) : v(vec) {}
+
 	template <std::size_t size>
 	ChanVertex(const std::array<float, size> &data)
 	{
-		float *dest = &v.x;
-		for (int c = 0; c < std::min(std::size_t(3), size); c++) {
-			dest[c] = data[c];
-		}
+		static_assert(std::min(std::size_t(3), size) * sizeof(float) <= sizeof(AttrVector));
+		std::memcpy(&v, data.data(), std::min(std::size_t(3), size) * sizeof(float));
 	}
 
 	template <int size>
@@ -44,61 +42,48 @@ struct ChanVertex
 		return ChanVertex(a);
 	}
 
-	static inline ChanVertex fromRGBbytes(char r, char g, char b)
-	{
-		const float clr[3] = { clrByteToFlt(r), clrByteToFlt(g), clrByteToFlt(b) };
-		return ChanVertex::fromArray(clr);
-	}
-
 	inline bool operator==(const ChanVertex &other) const {
 		return (v.x == other.v.x) && (v.y == other.v.y) && (v.z == other.v.z);
 	}
 
-	static inline float clrByteToFlt(char v)
-	{
-		static const float mult = 1.0f / 255.f;
-		return static_cast<float>(v) * mult;
-	}
-
 	AttrVector  v;
-	mutable int index = 0;
+	mutable unsigned int index = 0;
 };
 
 
 struct MapVertexHash {
-	std::size_t operator () (const ChanVertex &mv) const {
+	inline std::size_t operator () (const ChanVertex &mv) const {
 		MHash hash;
 		MurmurHash3_x86_32(&mv.v, sizeof(AttrVector), 42, &hash);
 		return static_cast<std::size_t>(hash);
 	}
 };
 
-typedef HashSet<ChanVertex, MapVertexHash>  ChanSet;
-typedef HashMap<std::string, ChanSet>       ChanMap;
-
+typedef HashSet<ChanVertex, MapVertexHash> ChannelSet;
+typedef std::vector<ChannelSet>   ChannelMapList;
 
 
 struct MapChannelBase {
-	MapChannelBase(const MeshData& mesh, int numFaces):
-		mesh(mesh),
-		num_faces(numFaces)
+	MapChannelBase(const MeshData& meshParameter, int numFacesParameter):
+		mesh(meshParameter),
+		numFaces(numFacesParameter),
+		numChannels(boost::numeric_cast<int>(mesh.uvLayers.size() + mesh.colorLayers.size()))
 	{
-		num_channels = boost::numeric_cast<int>(mesh.uvLayers.size() + mesh.colorLayers.size());
 	}
 
-	virtual void init()=0;
-	virtual void initAttributes(AttrListString &map_channels_names, AttrMapChannels &map_channels)=0;
+	virtual void init() {}
+	virtual void initAttributes(AttrListString &mapChannelsNames, AttrMapChannels &mapChannels)=0;
 	virtual bool needProcessFaces() const { return false; }
-	virtual int  getMapFaceVertexIndex(const std::string&, const ChanVertex&) { return -1; }
+	virtual int  getMapFaceVertexIndex(int, const ChanVertex&) { return -1; }
 
-	int numChannels() const {
-		return num_channels;
+	int getNumChannels() const {
+		return numChannels;
 	}
 
 protected:
-	const MeshData&  mesh;
-	int       num_channels;
-	int       num_faces;
+	const MeshData&  mesh; //< The mesh data passesd from python
+	const int        numChannels; //< The number of map channels(uv maps and attributes)
+	const int        numFaces; //< The number of faces in the mesh
 
 };
 
@@ -108,144 +93,154 @@ struct MapChannelRaw: MapChannelBase
 		MapChannelBase(mesh, numFaces)
 	{}
 
-	virtual void init() override {}
-	virtual void initAttributes(AttrListString &map_channels_names, AttrMapChannels &map_channels) override {
-
-		if (num_channels) {
-
-			// UV 
+	virtual void initAttributes(AttrListString &mapChannelsNames, AttrMapChannels &mapChannels) override {
+		if (numChannels) {
+			// UV
 			for (const auto& uvLayer : mesh.uvLayers) {
 
-				AttrMapChannels::AttrMapChannel &map_channel = map_channels.data[uvLayer.name];
-				map_channel.name = uvLayer.name;
-				map_channel.vertices.resize(num_faces * 3);
-				map_channel.faces.resize(num_faces * 3);
+				AttrMapChannels::AttrMapChannel &mapChannel = mapChannels.data.emplace_back();
+				mapChannel.name = uvLayer.name;
+				mapChannel.vertices.reserve(numFaces * 3);
+				mapChannel.faces.resize(numFaces * 3);
 
-				// Fill data
-				size_t chanVertIndex = 0;
-				for( const auto& face : mesh.loopTris ) {
-					for(size_t vi = 0; vi < 3; ++vi){
+				// Fill vertex data
+				std::vector<AttrVector>& vertsVec = *mapChannel.vertices.getData();
+				for (const auto& face : mesh.loopTris) {
+					for (int vi = 0; vi < 3; ++vi){
 						const float *uv = uvLayer.data[face[vi]];
-						(*map_channel.vertices)[chanVertIndex++] = AttrVector(uv[0], uv[1], 0.f);
+						vertsVec.emplace_back(uv[0], uv[1], 0.f);
 					}
-				}			
+				}
+
+				// Fill faces
+				std::vector<int>& facesVec = *mapChannel.faces.getData();
+				const int numFaceIds = static_cast<int>(facesVec.size());
+				for (int i = 0; i < int(numFaceIds); ++i) {
+					facesVec[i] = i;
+				}
 			}
 
 			// COLOR
 			for (const auto& colorLayer : mesh.colorLayers) {
+				AttrMapChannels::AttrMapChannel &mapChannel = mapChannels.data.emplace_back();
+				mapChannel.name = colorLayer.name;
+				mapChannel.vertices.reserve(int(colorLayer.elementCount));
+				mapChannel.faces.reserve(numFaces * 3);
 
-				AttrMapChannels::AttrMapChannel &map_channel = map_channels.data[colorLayer.name];
-				map_channel.name = colorLayer.name;
-				map_channel.vertices.resize(num_faces * 3);
-				map_channel.faces.resize(num_faces * 3);
+				std::vector<AttrVector>& vertexData = *mapChannel.vertices.getData();
+				for (int i = 0; i < int(colorLayer.elementCount); i++) {
+					vertexData.push_back(colorLayer.getAttrVector(i));
+				}
 
-				// Fill data
-				size_t chanVertIndex = 0;
-				for( const auto& face : mesh.loopTris ) {
-					for(size_t vi = 0; vi < 3; ++vi){
-						const MLoopCol& loop = colorLayer.data[face[vi]];
-						(*map_channel.vertices)[chanVertIndex++] = AttrVector(	ChanVertex::clrByteToFlt(loop.r), 
-																				ChanVertex::clrByteToFlt(loop.g), 
-																				ChanVertex::clrByteToFlt(loop.b));
+				// Fill faces
+				if (colorLayer.domain == Interop::AttrLayer::Corner) {
+					std::vector<int>& facesData = *mapChannel.faces.getData();
+					for (int fi = 0; fi < static_cast<int>(mesh.loopTris.size()); ++fi) {
+						const auto& ltri = mesh.loopTris[fi];
+						facesData.push_back(ltri[0]);
+						facesData.push_back(ltri[1]);
+						facesData.push_back(ltri[2]);
 					}
-				}	
-			}
-
-
-			// Setup face data
-			for (auto &mcIt : map_channels.data) {
-				for (int i = 0; i < int(mcIt.second.faces.getData()->size()); ++i) {
-					(*mcIt.second.faces)[i] = i;
+				} else {
+					std::vector<int>& facesData = *mapChannel.faces.getData();
+					for (const auto& face : mesh.loopTris) {
+						const unsigned int fvi0 = mesh.loops[face[0]];
+						const unsigned int fvi1 = mesh.loops[face[1]];
+						const unsigned int fvi2 = mesh.loops[face[2]];
+						facesData.push_back(fvi0);
+						facesData.push_back(fvi1);
+						facesData.push_back(fvi2);
+					}
 				}
 			}
 
 			// Store channel names
-			map_channels_names.resize(static_cast<int>(map_channels.data.size()));
+			mapChannelsNames.resize(static_cast<int>(mapChannels.data.size()));
 			int i = 0;
-			for (const auto &mcIt : map_channels.data) {
-				(*map_channels_names)[i++] = mcIt.second.name;
+			for (const auto &mapChannel : mapChannels.data) {
+				(*mapChannelsNames)[i++] = mapChannel.name;
 			}
 		}
 	}
 };
 
-
-
-
-struct MapChannelMerge : MapChannelBase
-{
+// An implementation for exporting merged map_channels(only used for production renders).
+// Vertices which are exactly the same(have the same hash) are merged into one and
+// exported with their respective face ids. The export will be a lot slower but sending
+// the data over to the server, rendering and tree building will potentially be faster.
+struct MapChannelMerge : MapChannelBase {
 	MapChannelMerge(const MeshData& mesh, int numFaces) :
 		MapChannelBase(mesh, numFaces)
 	{}
 
 	virtual void init() override {
-		if (num_channels) {
-			for (const auto& face : mesh.loopTris) {
-				for (const auto& uvLayer : mesh.uvLayers) {
-					ChanSet& uvSet = chan_data[uvLayer.name];
-
-					for (size_t vi = 0; vi < 3; ++vi) {
+		if (numChannels) {
+			for (const Interop::UVAttrLayer& uvLayer : mesh.uvLayers) {
+				ChannelSet& uvSet = channelsData.emplace_back();
+				for (const auto& face : mesh.loopTris) {
+					for (int vi = 0; vi < 3; vi++) {
 						// Use auto reference so it doesn't decay to float*(because then we can't
 						// call fromArray(...). This should probably be reworked...
 						const auto& uv = uvLayer.data[face[vi]];
 						uvSet.insert(ChanVertex::fromArray(uv));
 					}
 				}
+			}
+			for (const Interop::AttrLayer& colorLayer : mesh.colorLayers) {
+				ChannelSet& colorSet = channelsData.emplace_back();
 
-				for (const auto& colorLayer : mesh.colorLayers) {
-					ChanSet& colSet = chan_data[colorLayer.name];
-
-					for (size_t vi = 0; vi < 3; ++vi) {
-						const MLoopCol& loop = colorLayer.data[face[vi]];
-						colSet.insert(ChanVertex::fromRGBbytes(loop.r, loop.g, loop.b));
-					}
+				for (int i = 0; i < int(colorLayer.elementCount); i++) {
+					colorSet.insert(colorLayer.getAttrVector(i));
 				}
 			}
 		}
 	}
 
-	virtual void initAttributes(AttrListString& map_channels_names, AttrMapChannels& map_channels) override {
-		if (num_channels) {
-			for (ChanMap::iterator setsIt = chan_data.begin(); setsIt != chan_data.end(); ++setsIt) {
-				const std::string& chanName = setsIt->first;
-				ChanSet& chanData = setsIt->second;
+	virtual void initAttributes(AttrListString& mapChannelNames, AttrMapChannels& mapChannels) override {
+		if (numChannels) {
+			auto processMapList = [&](const std::string& channelName, int channelIdx) {
+				AttrMapChannels::AttrMapChannel& mapChannel = mapChannels.data.emplace_back();
+				mapChannel.name = channelName;
+				ChannelSet &channelSet=channelsData[channelIdx];
+				mapChannel.vertices.reserve(static_cast<int>(channelSet.size()));
+				mapChannel.faces.resize(numFaces * 3);
 
-				// Setup channel data storage
-				AttrMapChannels::AttrMapChannel& map_channel = map_channels.data[chanName];
-				map_channel.name = chanName;
-				map_channel.vertices.resize(static_cast<int>(chanData.size()));
-				map_channel.faces.resize(num_faces * 3);
-
-				int f = 0;
-				for (ChanSet::iterator setIt = chanData.begin(); setIt != chanData.end(); ++setIt, ++f) {
-					const ChanVertex& map_vertex = *setIt;
-
+				unsigned int face = 0;
+				std::vector<AttrVector>& vertexData = *mapChannel.vertices.getData();
+				for (const ChanVertex& mapVertex : channelSet) {
 					// Set vertex index for lookup from faces
-					map_vertex.index = f;
+					mapVertex.index = face++;
 
 					// Store channel vertex
-					(*map_channel.vertices)[f] = map_vertex.v;
+					vertexData.push_back(mapVertex.v);
 				}
+			};
+
+			int mapChannelIndex = 0;
+			for (const Interop::UVAttrLayer& uvLayer : mesh.uvLayers) {
+				processMapList(uvLayer.name, mapChannelIndex++);
+			}
+			for (const Interop::AttrLayer& colorLayer : mesh.colorLayers) {
+				processMapList(colorLayer.name, mapChannelIndex++);
 			}
 
 			// Store channel names
-			map_channels_names.resize(num_channels);
+			mapChannelNames.resize(numChannels);
 			int i = 0;
-			for (const auto& mcIt : map_channels.data) {
-				(*map_channels_names)[i++] = mcIt.second.name;
+			for (const auto& mapChannel : mapChannels.data) {
+				(*mapChannelNames)[i++] = mapChannel.name;
 			}
 		}
 	}
 
 	virtual bool needProcessFaces() const override { return true; }
 
-	virtual int getMapFaceVertexIndex(const std::string& layerName, const ChanVertex& cv) override {
-		return chan_data[layerName].find(cv)->index;
+	virtual int getMapFaceVertexIndex(int layerIndex, const ChanVertex& cv) override {
+		return channelsData[layerIndex].find(cv)->index;
 	}
 
 private:
-	ChanMap  chan_data;
-
+	ChannelMapList channelsData;
 };
 
 
@@ -255,9 +250,7 @@ namespace VRayForBlender::Assets
 /// @brief Export all geometry and data layers/channels for a single Blender object of type 'MESH'
 /// as a 'GeomStaticMesh' pugin
 /// @param mesh - mesh data
-/// @param options 
 /// @param pluginDesc - GeomStaticMesh plugin descriptor
-/// @return TODO - remove if not used
 void fillMeshData(const MeshData& mesh, PluginDesc &pluginDesc)
 {
 	pluginDesc.add("osd_subdiv_enable", mesh.subdiv.enabled);
@@ -275,80 +268,74 @@ void fillMeshData(const MeshData& mesh, PluginDesc &pluginDesc)
 }
 
 
-
-void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& face_mtlIDs) {
-	// fi - current face index 
+void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& faceMtlIDs) {
+	// fi - current face index
 	// vi - current vertex index
-	for (size_t fi = 0, vi = 0; fi < mesh.loopTris.size(); ++fi, vi += 3) {
-
+	int* facesPtr = *faces;
+	for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
 		// Face
 		const auto& ltri = mesh.loopTris[fi];
 
 		// Face vertex indices
-		const auto fvi0 = mesh.loops[ltri[0]];
-		const auto fvi1 = mesh.loops[ltri[1]];
-		const auto fvi2 = mesh.loops[ltri[2]];
+		const unsigned int fvi0 = mesh.loops[ltri[0]];
+		const unsigned int fvi1 = mesh.loops[ltri[1]];
+		const unsigned int fvi2 = mesh.loops[ltri[2]];
 
 		// Faces as 3 vertex indices each
-		(*faces)[vi] = fvi0;
-		(*faces)[vi + 1] = fvi1;
-		(*faces)[vi + 2] = fvi2;
-
-
-		// Polygon index
-		const auto pi = mesh.loopTriPolys[fi];
-
-		// Face material ID
-		if( !mesh.polyMtlIndices.empty())
-			(*face_mtlIDs)[fi] = mesh.polyMtlIndices[pi];
-		
-
+		*facesPtr++ = fvi0;
+		*facesPtr++ = fvi1;
+		*facesPtr++ = fvi2;
+	}
+	int* faceMtlIdsPtr = *faceMtlIDs;
+	if (!mesh.polyMtlIndices.empty()) {
+		for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
+			// Polygon index
+			const unsigned int polyIdx = mesh.loopTriPolys[fi];
+			// Face material ID
+			faceMtlIdsPtr[fi] = mesh.polyMtlIndices[polyIdx];
+		}
 	}
 }
 
 
 void fillFaceNormalsFromFaces(const MeshData& mesh, AttrListInt& faceNormals) {
+	int* normalsFacePtr = *faceNormals;
+	for (int fi = 0; fi < mesh.loopTris.size(); fi++) {
+		const unsigned int polyIdx = mesh.loopTriPolys[fi];
 
-	for (size_t fi = 0, vi = 0; fi < mesh.loopTris.size(); ++fi, vi += 3) {
-
-		const auto pi = mesh.loopTriPolys[fi];
-
-		(*faceNormals)[vi] = pi;
-		(*faceNormals)[vi + 1] = pi;
-		(*faceNormals)[vi + 2] = pi;
+		*normalsFacePtr++ = polyIdx;
+		*normalsFacePtr++ = polyIdx;
+		*normalsFacePtr++ = polyIdx;
 	}
 }
 
 
 void fillFaceNormalsFromVertices(const MeshData& mesh, AttrListInt& faceNormals) {
-	for (size_t fi = 0, vi = 0; fi < mesh.loopTris.size(); ++fi, vi += 3) {
+	int* normalsFacePtr = *faceNormals;
+	for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
 
 		// Face
 		const auto& ltri = mesh.loopTris[fi];
 
 		// Face vertex indices
-		const auto fvi0 = mesh.loops[ltri[0]];
-		const auto fvi1 = mesh.loops[ltri[1]];
-		const auto fvi2 = mesh.loops[ltri[2]];
+		const unsigned int fvi0 = mesh.loops[ltri[0]];
+		const unsigned int fvi1 = mesh.loops[ltri[1]];
+		const unsigned int fvi2 = mesh.loops[ltri[2]];
 
-		(*faceNormals)[vi] = fvi0;
-		(*faceNormals)[vi + 1] = fvi1;
-		(*faceNormals)[vi + 2] = fvi2;
+		*normalsFacePtr++ = fvi0;
+		*normalsFacePtr++ = fvi1;
+		*normalsFacePtr++ = fvi2;
 	}
 }
 
 
 void fillFaceNormalsFromCorners(const MeshData& mesh, AttrListInt& faceNormals) {
-	
-	for (size_t fi = 0, vi = 0; fi < mesh.loopTris.size(); ++fi, vi += 3) {
-
-		// Face
-		const auto& ltri = mesh.loopTris[fi];
-
+	int* normalsFacePtr = *faceNormals;
+	for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
+		const auto& face = mesh.loopTris[fi];
 		// Corner normals are ordered the same way as the face vertices
-		(*faceNormals)[vi]     = ltri[0];
-		(*faceNormals)[vi + 1] = ltri[1];
-		(*faceNormals)[vi + 2] = ltri[2];
+		std::memcpy(normalsFacePtr, face, sizeof(face));
+		normalsFacePtr+=3;
 	}
 }
 
@@ -357,34 +344,15 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 
 	const auto numFaces = static_cast<int>(mesh.loopTris.size());
 	AttrListVector  vertices(static_cast<int>(mesh.vertices.size()));
-	AttrListVector  normals(static_cast<int>(mesh.normals.size())); // Normals pool
-	AttrListInt     faces(numFaces*3);					// Face vertex indices
-	AttrListInt     faceNormals(numFaces * 3);			// Normals per face vertex - indices
-	AttrListInt     face_mtlIDs(numFaces);				// Material index per face
+	AttrListVector  normals(static_cast<int>(mesh.normals.size())); // Normals list
+	AttrListInt     faces(numFaces * 3);					        // Face vertex indices
+	AttrListInt     faceNormals(numFaces * 3);			            // Normals per face vertex - indices
+	AttrListInt     faceMtlIDs(numFaces);				            // Material index per face
 
-	{
-		size_t i = 0;
-		for (const auto& v : mesh.vertices) {
+	std::memcpy(*vertices, mesh.vertices.data(), mesh.vertices.size() * sizeof(float) * 3);
+	std::memcpy(*normals, mesh.normals.data(), mesh.normals.size() * sizeof(float) * 3);
 
-			(*vertices)[i].x = v[0];
-			(*vertices)[i].y = v[1];
-			(*vertices)[i].z = v[2];
-			++i;
-		}
-	}
-
-	{
-		size_t i = 0;
-		for (const auto& n : mesh.normals) {
-
-			(*normals)[i].x = n[0];
-			(*normals)[i].y = n[1];
-			(*normals)[i].z = n[2];
-			++i;
-		}
-	}
-
-	fillFaces(mesh, faces, face_mtlIDs);
+	fillFaces(mesh, faces, faceMtlIDs);
 
 	switch (mesh.normalsDomain){
 		case MeshData::NormalsDomain::Face:
@@ -407,74 +375,87 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 	pluginDesc.add("faces", faces);
 	pluginDesc.add("normals", normals);
 	pluginDesc.add("faceNormals", faceNormals);
-	pluginDesc.add("face_mtlIDs", face_mtlIDs);
+	pluginDesc.add("face_mtlIDs", faceMtlIDs);
 }
 
 
-void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc)
-{
-	const auto numFaces = static_cast<int>(mesh.loopTris.size());
+void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc) {
+	const int numFaces = static_cast<int>(mesh.loopTris.size());
 
-	AttrListString  map_channels_names;
-	AttrMapChannels map_channels;
+	AttrListString  mapChannelNames;
+	AttrMapChannels mapChannels;
 	MapChannelMerge mergeMapChannel(mesh, numFaces);
 	MapChannelRaw rawMapChannel(mesh, numFaces);
 
-	MapChannelBase *channels_data = nullptr;
+	MapChannelBase *channelsData = nullptr;
 	if (mesh.options.mergeChannelVerts) {
-		channels_data = &mergeMapChannel;
+		channelsData = &mergeMapChannel;
 	} else {
-		channels_data = &rawMapChannel;
+		channelsData = &rawMapChannel;
 	}
 
-	// Init channels with the actual per-vertex values of uvs and colors 
-	channels_data->init();
-	channels_data->initAttributes(map_channels_names, map_channels);
+	// Init channels with the actual per-vertex values of uvs and colors
+	channelsData->init();
+	channelsData->initAttributes(mapChannelNames, mapChannels);
 
-	if (channels_data->numChannels() && channels_data->needProcessFaces()) {
-		// Now that we have all per-vertex values stored, set indices into the created lists 
+	if (channelsData->getNumChannels() && channelsData->needProcessFaces()) {
+		// Now that we have all per-vertex values stored, set indices into the created lists
 		// to the face(tris) vertices
-
+		int mapChannelIndex = 0;
 		for (const auto& uvLayer : mesh.uvLayers) {
 			// Store tris' UVs as indices into the UV map for each UV layer
-			int channel_vert_index = 0;
-			AttrListInt &uvData = map_channels.data[uvLayer.name].faces;
-			for( const auto& face : mesh.loopTris ) {
-
+			int channelVertIndex = 0;
+			vassert(mapChannelIndex < int(mapChannels.data.size()));
+			vassert(uvLayer.name == mapChannels.data[mapChannelIndex].name);
+			int* uvFaces = *mapChannels.data[mapChannelIndex].faces;
+			for (const auto& face : mesh.loopTris) {
 				for (size_t vi = 0; vi < 3; ++vi) {
 					// Use auto reference so it doesn't decay to float*(because then we can't
 					// call fromArray(...). This should probably be reworked...
 					const auto& uv = uvLayer.data[face[vi]];
-					const int v = channels_data->getMapFaceVertexIndex(uvLayer.name, ChanVertex::fromArray(uv));
-					(*uvData)[channel_vert_index++] = v;
+					const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, ChanVertex::fromArray(uv));
+					uvFaces[channelVertIndex++] = faceId;
 				}
 			}
-			vassert(channel_vert_index == uvData.getCount() && "Vertex index of UV layer is out of range");
+			vassert(channelVertIndex == mapChannels.data[mapChannelIndex].faces.getCount() && "Vertex index of UV layer is out of range");
+			mapChannelIndex++;
 		}
 
 		for (const auto& colorLayer : mesh.colorLayers) {
 			// Store tris' vertex colors as indices into the vertex colors map for each color layer
-			int channel_vert_index = 0;
-			AttrListInt& colorData = map_channels.data[colorLayer.name].faces;
-			for (const auto& face : mesh.loopTris) {
-
-				for (size_t vi = 0; vi < 3; ++vi) {
-					const MLoopCol& loop = colorLayer.data[face[vi]];
-					const int v = channels_data->getMapFaceVertexIndex(colorLayer.name, ChanVertex::fromRGBbytes(loop.r, loop.g, loop.b));
-					(*colorData)[channel_vert_index++] = v;
+			int channelVertIndex = 0;
+			vassert(mapChannelIndex < int(mapChannels.data.size()));
+			vassert(colorLayer.name == mapChannels.data[mapChannelIndex].name);
+			AttrListInt& colorData = mapChannels.data[mapChannelIndex].faces;
+			if (colorLayer.domain == Interop::AttrLayer::Corner) {
+				auto& facesData = *colorData.getData();
+				for (const auto& face : mesh.loopTris) {
+					for (size_t vi = 0; vi < 3; ++vi) {
+						const AttrVector& vertexColor = colorLayer.getAttrVector(face[vi]);
+						const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, vertexColor);
+						facesData[channelVertIndex++] = faceId;
+					}
+				}
+			} else {
+				auto& facesData = *colorData.getData();
+				for (const auto& face : mesh.loopTris) {
+					for (size_t vi = 0; vi < 3; ++vi) {
+						const unsigned int faceVertexIdx = mesh.loops[face[vi]];
+						const AttrVector& vertexColor = colorLayer.getAttrVector(faceVertexIdx);
+						const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, vertexColor);
+						facesData[channelVertIndex++] = faceId;
+					}
 				}
 			}
-			vassert(channel_vert_index == colorData.getCount() && "Vertex index of color layer is out of range");
+			mapChannelIndex++;
+			vassert(channelVertIndex == colorData.getCount() && "Vertex index of color layer is out of range");
 		}
 	}
 
-	if (channels_data->numChannels() ) {
-		pluginDesc.add("map_channels_names", map_channels_names);
-		pluginDesc.add("map_channels", map_channels);
+	if (channelsData->getNumChannels() ) {
+		pluginDesc.add("map_channels_names", mapChannelNames);
+		pluginDesc.add("map_channels", mapChannels);
 	}
 }
 
 } // end namespace VRayForBlender::Assets
-
-
-

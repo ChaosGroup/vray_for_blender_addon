@@ -131,6 +131,60 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "color1_tex"
+            },
+            {
+                "name": "color2_tex"
+            },
+            {
+                "name": "color3_tex"
+            },
+            {
+                "name": "filler_color_tex"
+            },
+            {
+                "name": "cell_size"
+            },
+            {
+                "name": "density"
+            },
+            {
+                "name": "mix_ratio"
+            },
+            {
+                "name": "spottyness"
+            },
+            {
+                "name": "randomness"
+            },
+            {
+                "name": "threshold"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Parameters": [
         {
             "attr": "uvwgen",
@@ -142,6 +196,6 @@
     ],
     "Options": {
         "animatable": true,
-        "excluded_parameters": []
+        "excluded_parameters": [ "compatibility_with" ]
     }
 }

@@ -5,6 +5,8 @@
         {
             "attr": "base_mult",
             "ui": {
+                "min": 0,
+                "soft_min": 0.0,
                 "soft_max": 10.0,
                 "spin_step": 0.05
             }
@@ -12,6 +14,8 @@
         {
             "attr": "base_gamma",
             "ui": {
+                "min": 0.0,
+                "soft_min": 0,
                 "soft_max": 2.2,
                 "spin_step": 0.05
             }
@@ -19,6 +23,8 @@
         {
             "attr": "spots_mult",
             "ui": {
+                "min": 0.0,
+                "soft_min": 0,
                 "soft_max": 10.0,
                 "spin_step": 0.05
             }

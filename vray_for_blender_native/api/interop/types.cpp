@@ -18,18 +18,18 @@ ExporterType ExporterSettings::getExporterType() const
 
 
 MeshData::MeshData(py::object obj) :
-	name            (py::extract<std::string>(obj.attr("name"))),
-	normalsDomain   (static_cast<NormalsDomain>(static_cast<int>(py::extract<int>(obj.attr("normalsDomain"))))),
-	vertices        (fromDataArray<float[3]>(obj.attr("vertices"))),
-	loops           (fromDataArray<unsigned int>(obj.attr("loops"))),
-	loopTris        (fromDataArray<unsigned int[3]>(obj.attr("loopTris"))),
-	loopTriPolys    (fromDataArray<unsigned int>(obj.attr("loopTriPolys"))),
-	polyMtlIndices  (fromDataArray<unsigned int>(obj.attr("polyMtlIndices"))),
-	normals			(fromDataArray<float[3]>(obj.attr("normals"))),
-	uvLayers        (fromAttrLayersArr<float[2]>(obj.attr("loopUVs"))),
-	colorLayers     (fromAttrLayersArr<MLoopCol>(obj.attr("loopColors"))),
-	options			(py::extract<MeshExportOptions>(obj.attr("options"))),
-	ref				(obj)
+	name               (py::extract<std::string>(obj.attr("name"))),
+	normalsDomain      (static_cast<NormalsDomain>(static_cast<int>(py::extract<int>(obj.attr("normalsDomain"))))),
+	vertices           (fromDataArray<float[3]>(obj.attr("vertices"))),
+	loops              (fromDataArray<unsigned int>(obj.attr("loops"))),
+	loopTris           (fromDataArray<unsigned int[3]>(obj.attr("loopTris"))),
+	loopTriPolys       (fromDataArray<unsigned int>(obj.attr("loopTriPolys"))),
+	polyMtlIndices     (fromDataArray<unsigned int>(obj.attr("polyMtlIndices"))),
+	normals			   (fromDataArray<float[3]>(obj.attr("normals"))),
+	uvLayers           (fromUVAttrLayersArr(obj.attr("loopUVs"))),
+	colorLayers        (fromAttrLayersArr(obj.attr("loopColors"))),
+	options			   (py::extract<MeshExportOptions>(obj.attr("options"))),
+	ref				   (obj)
 {
 	const auto& subdivAttr = obj.attr("subdiv");
 	subdiv.enabled = py::extract<bool>(subdivAttr.attr("enabled"));
@@ -104,35 +104,6 @@ SmokeData::SmokeData(const py::object& obj) :
 std::string ZmqServerArgs::getAddress(int serverPort) const 
 {
 	return "tcp://127.0.0.1:" + std::to_string(serverPort);
-}
-
-
-void ZmqControlConn::start(const ZmqServerArgs& args)
-{
-	VRayForBlender::ZmqServer::get().start(args);
-}
-
-
-void ZmqControlConn::stop()
-{
-	VRayForBlender::ZmqServer::get().stop();
-}
-
-
-bool ZmqControlConn::check()
-{
-	return VRayForBlender::ZmqServer::get().isRunning();
-}
-
-
-// ZmqServer logs in two ways : the logs from VRay are sent on the wire, ZMQ server own logs
-// are printed directly to the console used by Blender. The first kind gets its log level
-// from the VRay message and are filtered on the client. The level for the messages printed
-// to the console is set by the following call.
-void ZmqControlConn::setLogLevel(int level)
-{
-	using namespace VrayZmqWrapper;
-	return VRayForBlender::ZmqServer::get().sendMessage(serializeMessage(MsgControlSetLogLevel{level}));
 }
 
 

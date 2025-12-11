@@ -1,13 +1,13 @@
 import bpy
 
 from vray_blender.exporting.tools import getInputSocketByAttr
-from vray_blender.lib.defs import ExporterContext, PluginDesc
+from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
 from vray_blender.lib.plugin_utils import objectToAttrPlugin
 from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.plugins import getPluginAttr
 from vray_blender.plugins.templates import common
-
+from vray_blender.nodes.tools import getFilterFunction
 
 class TemplateSingleObjectSelect(common.VRayUITemplate):
 
@@ -19,9 +19,35 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         Template arguments:
            bound_property: the name of the property to receive the resulting object reference
            filter_function (optional): the name of the filter function for the object search field
-    """     
+    """
+    
+    def _onUpdateName(self, context):
+        if self.boundPropObj:
+            self.boundPropObjName = self.boundPropObj.name
+        else:
+            self.boundPropObjName = ""
+    
+    
+    def _onFilterObject(self, obj):
+        # Return the poll (filter) function for the Object Select field
+        if filterFn := getFilterFunction(self.vray_plugin, self.getTemplateAttr('filter_function', '')):
+            return filterFn(obj)
+        return True
 
-   
+    # Property for the name of the selected object, used to check if the object is still valid
+    boundPropObjName: bpy.props.StringProperty(
+        options     = {'HIDDEN'}
+    )
+
+    # Object selector for the "bound_property". We are not using the property directly, because
+    # we are adding additional poll and update functions to the selector.
+    boundPropObj: bpy.props.PointerProperty(
+        type = bpy.types.Object,
+        update = _onUpdateName,
+        poll = _onFilterObject
+    )
+
+
     def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context, 
                     pluginModule, propGroup, widgetAttr: dict, text, nested=False):
         
@@ -41,7 +67,7 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         collectionName = self.getTemplateAttr('collection', '')
         data, prop = TemplateSingleObjectSelect._getSearchCollectionProvider(context, collectionName)
     
-        panel.prop_search( propGroup, boundProperty, data, prop, text=label)
+        panel.prop_search( self, "boundPropObj", data, prop, text=label)
         
         
 
@@ -61,8 +87,12 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
                 # If the socket is linked, it will be exported as part of the tree export
                 return False
 
-        selectedObject = getattr(pluginDesc.vrayPropGroup, boundProperty)
-        pluginDesc.setAttribute(boundProperty, objectToAttrPlugin(selectedObject))
+        if not self.boundPropObjName:
+            pluginDesc.setAttribute(boundProperty, AttrPlugin())
+            return True
+
+        pluginDesc.setAttribute(boundProperty, objectToAttrPlugin(self.boundPropObj))
+
         return True
 
 
@@ -72,6 +102,14 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
             return (context.scene, 'objects')
         else:
             return (bpy.data, collName)
+
+    def removeDeletedItems(self, context: bpy.types.Context):
+        if self.boundPropObjName and self.boundPropObjName not in context.scene.objects:
+            self.boundPropObjName = ""
+            self.boundPropObj = None
+            return True
+
+        return False
 
 
 def getRegClasses():

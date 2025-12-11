@@ -90,8 +90,6 @@
             "attr": "intensity",
             "default": 1.0,
             "ui": {
-                "soft_min": 0.0,
-                "soft_max": 10.0,
                 "spin_step": 0.1
             }
         },
@@ -101,40 +99,7 @@
         },
         {
             "attr": "shadowBias",
-            "default" : 0.005,
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_near_start",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_near_end",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_far_start",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_far_end",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "shadowRadius",
-            "ui": {
-                "quantityType": "distance"
-            }
+            "default" : 0.005
         }
     ],
     "Widget": {

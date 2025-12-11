@@ -35,9 +35,12 @@
         },
         {
             "attr": "shadowBias",
-            "default" : 0.005,
-            "ui": {
-                "quantityType": "distance"
+            "default" : 0.005
+        },
+        {
+            "attr": "intensity",
+            "options" : {
+                "spin_step": 0.1
             }
         }
     ],

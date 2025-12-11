@@ -130,15 +130,15 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 	return stream;
 }
 
-inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrMapChannels & map) {
-	map.data.clear();
+inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrMapChannels & mapChannels) {
 	int size = 0;
 	stream >> size;
+	mapChannels.data.clear();
+	mapChannels.data.reserve(size);
 	for (int c = 0; c < size; ++c) {
-		std::string key;
 		VRayBaseTypes::AttrMapChannels::AttrMapChannel channel;
-		stream >> key >> channel.vertices >> channel.faces >> channel.name;
-		map.data.emplace(key, channel);
+		stream >> channel.vertices >> channel.faces >> channel.name;
+		mapChannels.data.push_back(std::move(channel));
 	}
 	return stream;
 }

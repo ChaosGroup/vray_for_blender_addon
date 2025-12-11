@@ -21,10 +21,9 @@ using namespace VrayZmqWrapper;
 using namespace VRayBaseTypes;
 
 
-SceneExporter::SceneExporter(const ExporterSettings& settings)
-		: m_settings(settings)
-		, m_wg(std::make_unique<CondWaitGroup>(0))
-		, imageReadyReceived(false)
+SceneExporter::SceneExporter() :
+		m_wg(std::make_unique<CondWaitGroup>(0)),
+		m_threadManager(ThreadManager::make(2)) 
 {
 }
 
@@ -35,13 +34,19 @@ SceneExporter::~SceneExporter()
 }
 
 
-void SceneExporter::init() {
-	m_exporter.reset(new ZmqExporter(m_settings));
+void SceneExporter::init(ExporterBase* policy, const ExporterSettings& settings) {
+	m_settings = settings;
 
-	vassert(m_exporter && "Failed to create exporter!");
-	m_exporter->init();
+	if (!m_exporter || !m_exporter->isStopped()) {
+		const auto exporterType = static_cast<VrayZmqWrapper::ExporterType>(settings.exporterType);
+		m_exporter.reset(new ZmqExporter(exporterType));
+	}
+	
+	m_policy.reset(policy);
+	m_policy->init(m_exporter.get());
+	
+	m_exporter->init(m_settings);
 
-	// directly bind to the engine
 	m_exporter->set_callback_on_message_updated([this](const std::string& info){
 				std::lock_guard<std::mutex> grd(engineUpdateMsgMtx);
 				engineUpdateMessage = info;
@@ -65,7 +70,7 @@ void SceneExporter::init() {
 	// Set up any callbacks specific to the derived classes
 	setupCallbacks();
 
-	m_threadManager = ThreadManager::make(2);
+	m_threadManager->stop();
 }
 
 
@@ -78,38 +83,39 @@ std::string SceneExporter::getEngineUpdateMessage()
 
 bool SceneExporter::isRenderReady()
 {
-	if (imageReadyReceived) {
-		// Clearing the render ready flag,
-		// so the checking for image and tagging for redrawing
-		// in the python render engine implementation could start
-		imageReadyReceived = false;
-		return true;
-	}
-
-	return false;
+	return m_policy->isRenderReady();
 }
 
 
 bool SceneExporter::imageWasUpdated()
 {
-	if (imageUpdated) {
-		imageUpdated = false;
-		return true;
-	}
-	return false;
+	return m_policy->imageWasUpdated();
+}
+
+bool SceneExporter::vrsceneExportRunning()
+{
+	WithNoGIL noGIL;
+	return m_vrsceneExportInProgress;
 }
 
 void SceneExporter::setRenderStoppedCallback(py::object cbRenderStopped)
 {
 	m_cbRenderStopped = cbRenderStopped;
-	m_exporter->set_callback_on_render_stopped([this]() {
-		invokePythonCallback("renderStoppedCallback", m_cbRenderStopped);
+	m_exporter->set_callback_on_render_stopped([this](bool isAborted) {
+		invokePythonCallback("renderStoppedCallback", m_cbRenderStopped, isAborted);
 	});
 
 }
 
 void SceneExporter::free()
 {
+	// Stop all activity on ZmqExportet before deleting it or the policy which uses it
+	m_exporter->stop();
+	m_exporter->detach();
+	
+	m_policy.reset();
+	m_exporter.reset();
+	
 	if (m_threadManager) {
 		m_threadManager->stop();
 	}
@@ -173,23 +179,6 @@ RenderImage SceneExporter::getRenderPassImage(const std::string& passName)
 float SceneExporter::getRenderProgress() const
 {
 	return m_exporter->getRenderProgress();
-}
-
-
-void SceneExporter::onImageUpdated()
-{
-	if (!m_tmStartExport.has_value()){
-		return;
-	}
-
-	const auto now = std::chrono::high_resolution_clock::now();
-	const auto totalMs = std::chrono::duration_cast<std::chrono::microseconds>((now - m_tmStartExport.value()) / 1000.f).count();
-
-	std::ostringstream os;
-    os  << "Time to first frame: " << totalMs << " ms" << std::endl;
-	std::cout << os.str();
-
-	m_tmStartExport.reset();
 }
 
 

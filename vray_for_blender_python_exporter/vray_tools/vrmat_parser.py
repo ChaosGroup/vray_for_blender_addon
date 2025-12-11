@@ -93,6 +93,10 @@ def parseVrmat(filePath):
                  (float(v1[0].text), float(v1[1].text), float(v1[2].text)),
                  (float(v2[0].text), float(v2[1].text), float(v2[2].text)))
 
+    def _isNumeric(text):
+        value = text.replace('.', '', 1)
+        return value.isdigit() or (text[0] == '-' and value[1:].isdigit())
+
     from pathlib import Path
 
     sceneDesc = []
@@ -145,7 +149,7 @@ def parseVrmat(filePath):
 
                     case 'float texture':
                         if rawValue.text:
-                            if rawValue.text.replace('.','',1).isdigit():
+                            if _isNumeric(rawValue.text):
                                 attrValue = float(rawValue.text)
                             else:
                                 attrValue = rawValue.text
@@ -159,7 +163,7 @@ def parseVrmat(filePath):
 
                     case 'int texture':
                         if rawValue.text:
-                            if rawValue.text.replace('.','',1).isdigit():
+                            if _isNumeric(rawValue.text):
                                 attrValue = int(rawValue.text)
                             else:
                                 attrValue = rawValue.text

@@ -192,6 +192,7 @@
             "ui" : 
             {
                 "display_name" : "Shadow bias",
+                "quantityType" : "distance",
                 "soft_max" : 0.1000000014901161,
                 "soft_min" : -0.1000000014901161
             }
@@ -507,6 +508,7 @@
             {
                 "display_name" : "Photon target radius",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "Photon emission"
             }
         },
@@ -519,7 +521,8 @@
             "ui" : 
             {
                 "display_name" : "Photon emit radius",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -558,6 +561,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "distance",
                 "rollout" : "<EndRollout>"
             }
         },
@@ -607,7 +611,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -618,7 +623,8 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "display_name" : "Projection height"
+                "display_name" : "Projection height",
+                "quantityType" : "distance"
             }
         },
         

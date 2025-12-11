@@ -33,6 +33,7 @@ def _getRegPackages():
     from vray_blender.ui import properties_world
     from vray_blender.ui import properties_view_3d
     from vray_blender.ui import menus
+    from vray_blender.ui import preferences
 
     return (
         icons,
@@ -51,7 +52,8 @@ def _getRegPackages():
         properties_texture,
         properties_world,
         properties_view_3d,
-        menus
+        menus,
+        preferences
     )
 
 def register():
@@ -73,7 +75,7 @@ def register():
 
 
 def unregister():
-    
+
     # draw_callbacks can't be imported when using blender's background mode because of the blender gpu api limitations
     import bpy
     if bpy.app.background == False:
@@ -90,4 +92,3 @@ def unregister():
         for vrayEngine in classes.VRayEngines:
             if vrayEngine in panel.COMPAT_ENGINES:
                 panel.COMPAT_ENGINES.remove(vrayEngine)
-  

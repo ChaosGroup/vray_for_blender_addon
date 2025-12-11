@@ -10,6 +10,7 @@
 #include "interop/conversion.hpp"
 #include "interop/utils.hpp"
 #include "export/zmq_server.h"
+#include "export/scene_exporter.h"
 #include "export/scene_exporter_pro.h"
 #include "export/scene_exporter_rt.h"
 #include "utils/logger.hpp"
@@ -27,6 +28,12 @@ namespace VRayForBlender
 
 using namespace Interop;
 
+// Forward declarations
+void deleteMainRenderer();
+
+using ExporterPtr = std::unique_ptr<SceneExporter>;
+ExporterPtr mainExporter;
+std::list<ExporterPtr> previewExporters;
 
 
 /// Check renderer parameter and return the exporter object 
@@ -65,10 +72,36 @@ void init(const std::string& logFile)
 	Logger::get().startLogging();
 }
 
-void exit()
-{
+
+
+void start(const ZmqServerArgs& args) {
+	VRayForBlender::ZmqServer::get().start(args);
+}
+
+
+void stopImpl(bool stopLogging) {
+	// Unlock the GIL otherwize we will deadlock on any currently
+	// executing Python callback.
+	WithNoGIL noGIL;
+
+	deleteMainRenderer();
+	previewExporters.clear();
+
 	ZmqServer::get().stop();
-	Logger::get().stopLogging();
+
+	if (stopLogging) {
+		Logger::get().stopLogging();
+	}
+}
+
+
+void stop() {
+	stopImpl(false);
+}
+
+
+void exit() {
+	stopImpl(true);
 }
 
 // Indicates that rendering job could be started
@@ -80,6 +113,11 @@ bool isInitialized()
 	// return ZmqServer::get().vrayInitialized();
 }
 
+bool isRunning() {
+	return VRayForBlender::ZmqServer::get().isRunning();
+}
+
+
 // Indicates that V-Ray has assigned license
 bool hasLicense()
 {
@@ -89,20 +127,71 @@ bool hasLicense()
 	// return ZmqServer::get().licenseAcquired();
 }
 
-size_t createRenderer(const ExporterSettings& settings)
-{
-	return settings.getExporterType() == proto::ExporterType::IPR_VIEWPORT ||
-	               settings.getExporterType() == proto::ExporterType::IPR_VFB ||
-				   settings.getExporterType() == proto::ExporterType::VANTAGE_LIVE_LINK ?
-		reinterpret_cast<size_t>(new InteractiveExporter(settings)) :
-		reinterpret_cast<size_t>(new ProductionExporter(settings));
+
+void initializeRenderer(SceneExporter& exporter, ExporterSettings& settings) {
+	const bool isInteractive = 
+		settings.getExporterType() == proto::ExporterType::IPR_VIEWPORT ||
+		settings.getExporterType() == proto::ExporterType::IPR_VFB ||
+		settings.getExporterType() == proto::ExporterType::VANTAGE_LIVE_LINK;
+		
+	ExporterBase* renderPolicy = isInteractive ? 
+			static_cast<ExporterBase*>(new InteractiveExporter(settings)) :
+			static_cast<ExporterBase*>(new ProductionExporter(settings));
+
+	exporter.init(renderPolicy, settings);
+}
+
+size_t getMainRenderer(ExporterSettings& settings) {
+	vassert(settings.exporterType != (int)VrayZmqWrapper::ExporterType::PREVIEW);
+	static int zmqProcessID = 0;
+	
+	// Zmq protocol may not generate an error when ZmqSever process crashes 
+	// as it will try to re-establish the connection. This is actually a feature that
+	// we are using in order to not have to deal with networking errors. This means 
+	// however that the exproter needs to be reinitailized after a ZmqServer restart.
+	const int zmqCurrentProcessID = ZmqServer::get().getProcessID();
+	
+	if (zmqCurrentProcessID == 0) {
+		// ZmqServer has not started yet or is currently being restarted
+		return 0;
+	}
+	const bool zmqServerRestarted = zmqCurrentProcessID != zmqProcessID;
+
+	if (!mainExporter || zmqServerRestarted || !mainExporter->getPluginExporter()->isStopped()) {
+		mainExporter.reset(new SceneExporter());
+		zmqProcessID = zmqCurrentProcessID;
+	}
+	
+	initializeRenderer(*mainExporter, settings);
+	return reinterpret_cast<size_t>(mainExporter.get());
 }
 
 
-void deleteRenderer(py::object renderer)
-{
+void deleteMainRenderer()  {
+	mainExporter.reset();
+}
+
+
+size_t createPreviewRenderer(ExporterSettings& settings) {
+	
+	auto exporter = new SceneExporter();
+	previewExporters.emplace_back(std::unique_ptr<SceneExporter>(exporter));
+
+	initializeRenderer(*exporter, settings);
+	return reinterpret_cast<size_t>(exporter);
+}
+
+
+void deletePreviewRenderer(py::object renderer) {
+	WithNoGIL noGIL;
 	auto* exporter = getExporter(renderer);
-	delete(exporter);
+	auto itExporter = std::find_if(previewExporters.begin(), previewExporters.end(), [exporter](ExporterPtr& e) {
+		return e.get() == exporter;
+	});
+
+	vassert( itExporter != previewExporters.end());
+
+	previewExporters.erase(itExporter);
 }
 
 void clearScene(py::object renderer)
@@ -118,10 +207,15 @@ void log(const std::string& message, int level, bool raw = false)
 }
 
 
-void setLogLevel(int level)
+void setLogLevel(int level, bool enableQtLogs)
 {
-	// Set local log level
+	// ZmqServer logs in two ways : the logs from VRay are sent on the wire, ZMQ server own logs
+	// are printed directly to the console used by Blender. The first kind gets its log level
+	// from the VRay message and are filtered on the client. The level for the messages printed
+	// to the console is set by the following call.
+	
 	Logger::get().setLogLevel(static_cast<Logger::LogLevel>(level));
+	VRayForBlender::ZmqServer::get().sendMessage(proto::serializeMessage(proto::MsgControlSetLogLevel{level, enableQtLogs}));
 }
 
 
@@ -133,9 +227,9 @@ void openCollaboration(const HostInfo& hi)
 }
 
 /// Opens Cosmos Asset Browser
-void openCosmos()
+void openCosmos(int browserPage)
 {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnOpenCosmos{}), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnOpenCosmos{browserPage}), true);
 }
 
 void calculateDownloadSize(py::object packageIds, py::object revisionIds, py::object missingTextures)
@@ -160,8 +254,15 @@ void downloadMissingAssets() {
 // Opens VFB through control connection
 void openVFB()
 {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowVfb{}), true);
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowVfb{true}), true);
 }
+
+// Closes VFB through control connection
+void closeVFB()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlShowVfb{false}), true);
+}
+
 
 // Resets toggleable VFB toolbar buttons (Render Region and Track Mouse)
 void resetVfbToolbar()
@@ -215,51 +316,51 @@ void pluginRemove(py::object renderer, std::string name)
 }
 
 
-void pluginUpdateInt(py::object renderer, std::string name, std::string attrName, int value)
+void pluginUpdateInt(py::object renderer, std::string name, std::string attrName, int value, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
 }
 
 
-void pluginUpdateFloat(py::object renderer, std::string name, std::string attrName, float value)
+void pluginUpdateFloat(py::object renderer, std::string name, std::string attrName, float value, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
 }
 
 
-void pluginUpdateString(py::object renderer, std::string name, std::string attrName, std::string value)
+void pluginUpdateString(py::object renderer, std::string name, std::string attrName, std::string value, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
 }
 
 
-void pluginUpdateColor(py::object renderer, std::string name, std::string attrName, float r, float g, float b)
+void pluginUpdateColor(py::object renderer, std::string name, std::string attrName, float r, float g, float b, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrColor(r, g, b));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrColor(r, g, b), animatable);
 }
 
 
-void pluginUpdateAColor(py::object renderer, std::string name, std::string attrName, float r, float g, float b, float a)
+void pluginUpdateAColor(py::object renderer, std::string name, std::string attrName, float r, float g, float b, float a, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrAColor(vray::AttrColor(r, g, b), a));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrAColor(vray::AttrColor(r, g, b), a), animatable);
 }
 
-void pluginUpdateIntVector(py::object renderer, std::string name, std::string attrName, int x, int y, int z)
+void pluginUpdateIntVector(py::object renderer, std::string name, std::string attrName, int x, int y, int z, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>{x, y, z});
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>{x, y, z}, animatable);
 }
 
 
-void pluginUpdateVector(py::object renderer, std::string name, std::string attrName, float x, float y, float z)
+void pluginUpdateVector(py::object renderer, std::string name, std::string attrName, float x, float y, float z, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrVector{x, y, z});
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrVector{x, y, z}, animatable);
 }
 
 
@@ -268,10 +369,10 @@ void pluginUpdateStringList(py::object renderer, std::string name, std::string a
 	auto* exporter = getExporter(renderer);
 	std::vector<std::string> vec = toVector<std::string>(list);
 
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<std::string>(std::move(vec)));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<std::string>(std::move(vec)), false);
 }
 
-void pluginUpdatePluginList(py::object renderer, std::string name, std::string attrName, py::object list)
+void pluginUpdatePluginList(py::object renderer, std::string name, std::string attrName, py::object list, bool animatable=true)
 {
 	auto *exporter = getExporter(renderer);
 	vray::AttrListPlugin plugin_list;
@@ -280,75 +381,76 @@ void pluginUpdatePluginList(py::object renderer, std::string name, std::string a
 		plugin_list.append(*it);
 	}
 
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, plugin_list);
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, plugin_list, animatable);
 }
 
 
-void pluginUpdateList(py::object renderer, std::string name, std::string attrName, py::list list, std::string listElemTypes)
+void pluginUpdateList(py::object renderer, std::string name, std::string attrName, py::list list, std::string listElemTypes, bool animatable=true)
 {
 	auto *exporter = getExporter(renderer);
 	vray::AttrListValue attrList;
-	
+
 	auto listElemTypesIt = listElemTypes.begin();
 	pyListToAttrList(attrList, listElemTypesIt, list);
 
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, attrList);
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, attrList, animatable);
 }
 
 
 void pluginResetValue(py::object renderer, std::string name, std::string attrName)
 {
 	auto *exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrPlugin());
+	// Somewhat unclear what to use for animatable here... We use this for way too many things...
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrPlugin(), true);
 }
 
 
-void pluginUpdateIntList(py::object renderer, std::string name, std::string attrName, py::object list)
+void pluginUpdateIntList(py::object renderer, std::string name, std::string attrName, py::object list, bool animatable=true)
 {
 	auto *exporter = getExporter(renderer);
 	std::vector<int> vec = toVector<int>(list);
 
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>(std::move(vec)));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>(std::move(vec)), animatable);
 }
 
 
-void pluginUpdateFloatList(py::object renderer, std::string name, std::string attrName, py::object list)
+void pluginUpdateFloatList(py::object renderer, std::string name, std::string attrName, py::object list, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
 	std::vector<float> vec = toVector<float>(list);
 
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<float>(std::move(vec)));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<float>(std::move(vec)), animatable);
 }
 
 
-void pluginUpdateMatrix(py::object renderer, std::string name, std::string attrName, py::object mat)
+void pluginUpdateMatrix(py::object renderer, std::string name, std::string attrName, py::object mat, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	
+
 	const auto& vec = fromMat<3>(mat);
 
 	typedef float Matrix3[3][3];
 	const Matrix3* m = reinterpret_cast<const Matrix3*>(vec.data());
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrMatrix(*m));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrMatrix(*m), animatable);
 }
 
 
-void pluginUpdateTransform(py::object renderer, std::string name, std::string attrName, py::object mat)
+void pluginUpdateTransform(py::object renderer, std::string name, std::string attrName, py::object mat, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	
+
 	const auto& vec = fromMat<4>(mat);
 
 	typedef float Matrix4[4][4];
 	const Matrix4* m = reinterpret_cast<const Matrix4*>(vec.data());
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrTransform(*m));
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrTransform(*m), animatable);
 }
 
 
-void pluginUpdatePluginDesc(py::object renderer, std::string name, std::string attrName, const vray::AttrPlugin& valuePlugin, bool forceUpdate)
+void pluginUpdatePluginDesc(py::object renderer, std::string name, std::string attrName, const vray::AttrPlugin& valuePlugin, bool animatable=true, bool forceUpdate=false)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, valuePlugin, forceUpdate);
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, valuePlugin, animatable, forceUpdate);
 }
 
 
@@ -381,7 +483,6 @@ void exportHair(const py::object& renderer, py::object hairData)
 	HairDataPtr hair = std::make_shared<HairData>(hairData);
 	exporter->exportHair(hair);
 }
-
 
 
 void exportPointCloud(const py::object& renderer, py::object pcData)
@@ -701,10 +802,6 @@ void setRenderFrame(py::object renderer, float frame)
 	exporter->setRenderFrame(frame);
 }
 
-bool isAborted(py::object renderer) {
-	return getExporter(renderer)->getPluginExporter()->isAborted();
-}
-
 // Starting an render sequence
 void renderSequenceStart(py::object renderer, int start, int end, int step)
 {
@@ -714,7 +811,7 @@ void renderSequenceStart(py::object renderer, int start, int end, int step)
 // Checks if there is an active render job
 bool renderJobIsRunning(py::object renderer)
 {
-	return getExporter(renderer)->renderSequenceRunning();
+	return getExporter(renderer)->isRendering();
 }
 
 
@@ -767,21 +864,25 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 
 	py::def(FUN(init),						(py::args("logFile")));
 	py::def(FUN(exit));
+	py::def(FUN(start),						py::args("zmqServerArgs"));
+	py::def(FUN(stop));
 	py::def(FUN(isInitialized));
+	py::def(FUN(isRunning));
 	py::def(FUN(hasLicense));
 
-	py::def(FUN(createRenderer),			(py::args("settings")));
-	py::def(FUN(deleteRenderer),			(py::args("renderer")));
+	py::def(FUN(getMainRenderer),			(py::args("settings")));
+	py::def(FUN(createPreviewRenderer),		(py::args("settings")));
+	py::def(FUN(deletePreviewRenderer),		(py::args("renderer")));
 	py::def(FUN(clearScene),				(py::args("renderer")));
 	py::def(FUN(log),						(py::args("message", "level"), py::arg("raw") = false));
-	py::def(FUN(setLogLevel),				(py::args("level")));
+	py::def(FUN(setLogLevel),				(py::args("level", "enableQtLogs")));
 	py::def(FUN(openCollaboration),			(py::args("hostInfo")));
 
 	py::def(FUN(openCosmos));
 	py::def(FUN(setCosmosImportCallback),	(py::args("assetImportCallback")));
 	py::def(FUN(setCosmosDownloadSize),	    (py::args("setCosmosDownloadSize")));
 	py::def(FUN(setCosmosDownloadAssets),	(py::args("setCosmosDownloadAssets")));
-	py::def(FUN(calculateDownloadSize),		(py::args("packageId", "revisionId", "textureFile")));
+	py::def(FUN(calculateDownloadSize),		(py::args("packageId", "revisionId", "missingTextures")));
 	py::def(FUN(downloadMissingAssets));
 	py::def(FUN(updateCosmosSceneName),     (py::args("sceneName")));
 
@@ -791,6 +892,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(encodeScannedParameters),   (py::args("paramsJson")));
 
 	py::def(FUN(openVFB));
+	py::def(FUN(closeVFB));
 	py::def(FUN(resetVfbToolbar));
 	py::def(FUN(setVfbOnTop),				(py::args("alwaysOnTop")));
 	py::def(FUN(showUserDialog),			(py::args("json")));
@@ -809,21 +911,21 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 
 	py::def(FUN(pluginCreate),				(py::arg("renderer"), py::arg("pluginName"), py::arg("pluginType"), py::arg("allowTypeChanges") = false));
 	py::def(FUN(pluginRemove),				(py::args("renderer", "pluginName")));
-	py::def(FUN(pluginUpdateInt),			(py::args("renderer", "pluginName", "attrName", "attrValue")));
-	py::def(FUN(pluginUpdateFloat),			(py::args("renderer", "pluginName", "attrName", "attrValue")));
-	py::def(FUN(pluginUpdateString),		(py::args("renderer", "pluginName", "attrName", "attrValue")));
-	py::def(FUN(pluginUpdateColor),			(py::args("renderer", "pluginName", "attrName", "r", "g", "b")) );
-	py::def(FUN(pluginUpdateAColor),		(py::args("renderer", "pluginName", "attrName", "r", "g", "b", "a")));
-	py::def(FUN(pluginUpdateIntVector),		(py::args("renderer", "pluginName", "attrName", "x", "y", "z")));
-	py::def(FUN(pluginUpdateVector),	    (py::args("renderer", "pluginName", "attrName", "x", "y", "z")));
+	py::def(FUN(pluginUpdateInt),			(py::args("renderer", "pluginName", "attrName", "attrValue"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateFloat),			(py::args("renderer", "pluginName", "attrName", "attrValue"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateString),		(py::args("renderer", "pluginName", "attrName", "attrValue"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateColor),			(py::args("renderer", "pluginName", "attrName", "r", "g", "b"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateAColor),		(py::args("renderer", "pluginName", "attrName", "r", "g", "b", "a"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateIntVector),		(py::args("renderer", "pluginName", "attrName", "x", "y", "z"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateVector),	    (py::args("renderer", "pluginName", "attrName", "x", "y", "z"), py::arg("animatable")=true));
 	py::def(FUN(pluginUpdateStringList),	(py::args("renderer", "pluginName", "attrName", "list")));
-	py::def(FUN(pluginUpdateIntList),		(py::args("renderer", "pluginName", "attrName", "list")));
-	py::def(FUN(pluginUpdateFloatList),		(py::args("renderer", "pluginName", "attrName", "list")));
-	py::def(FUN(pluginUpdatePluginList),	(py::args("renderer", "pluginName", "attrName", "list")));
-	py::def(FUN(pluginUpdateMatrix),		(py::args("renderer", "pluginName", "attrName", "mat")));
-	py::def(FUN(pluginUpdateTransform),		(py::args("renderer", "pluginName", "attrName", "mat")));
-	py::def(FUN(pluginUpdatePluginDesc),	(py::args("renderer", "pluginName", "attrName", "pluginValue", "forceUpdate")));
-	py::def(FUN(pluginUpdateList),			(py::args("renderer", "name", "attrName", "list", "elemTypes")));
+	py::def(FUN(pluginUpdateIntList),		(py::args("renderer", "pluginName", "attrName", "list"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateFloatList),		(py::args("renderer", "pluginName", "attrName", "list"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdatePluginList),	(py::args("renderer", "pluginName", "attrName", "list"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateMatrix),		(py::args("renderer", "pluginName", "attrName", "mat"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdateTransform),		(py::args("renderer", "pluginName", "attrName", "mat"), py::arg("animatable")=true));
+	py::def(FUN(pluginUpdatePluginDesc),	(py::args("renderer", "pluginName", "attrName", "pluginValue"), py::arg("animatable")=true, py::arg("forceUpdate")=false));
+	py::def(FUN(pluginUpdateList),			(py::args("renderer", "name", "attrName", "list", "elemTypes"), py::arg("animatable")=true));
 	py::def(FUN(pluginResetValue),			(py::args("renderer", "name", "attrName")));
 
 	py::def(FUN(exportGeometry),			(py::args("renderer", "meshData", "asyncExport")));
@@ -855,7 +957,6 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(renderFrame),				(py::args("renderer")));
 	py::def(FUN(setRenderFrame),			(py::args("renderer", "frame")));
 	py::def(FUN(renderSequenceStart),		(py::args("renderer", "start", "end")));
-	py::def(FUN(isAborted),                 (py::args("renderer")));
 	py::def(FUN(renderJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(exportJobIsRunning),		(py::args("renderer")));
 	py::def(FUN(getLastRenderedFrame),		(py::args("renderer")));
@@ -903,11 +1004,11 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(Subdiv, enabled)
 		.ADD_RW_PROPERTY(Subdiv, useCreases);
 
-
 	py::class_ <ZmqServerArgs>("ZmqServerArgs")
 		.ADD_RW_PROPERTY(ZmqServerArgs, exePath)
 		.ADD_RW_PROPERTY(ZmqServerArgs, port)
 		.ADD_RW_PROPERTY(ZmqServerArgs, logLevel)
+		.ADD_RW_PROPERTY(ZmqServerArgs, enableQtLogs)
 		.ADD_RW_PROPERTY(ZmqServerArgs, headlessMode)
 		.ADD_RW_PROPERTY(ZmqServerArgs, noHeartbeat)
 		.ADD_RW_PROPERTY(ZmqServerArgs, blenderPID)
@@ -917,14 +1018,6 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(ZmqServerArgs, appSDKPath)
 		.ADD_RW_PROPERTY(ZmqServerArgs, pluginVersion)
 		.ADD_RW_PROPERTY(ZmqServerArgs, blenderVersion);
-
-
-	py::class_ <ZmqControlConn>("ZmqControlConn")
-		.def("start", &ZmqControlConn::start, py::args("zmqServerArgs"))
-		.def("stop", &ZmqControlConn::stop)
-		.def("check", &ZmqControlConn::check)
-		.def("setLogLevel", &ZmqControlConn::setLogLevel, py::args("level"));
-
 
 	py::class_<ExportSceneSettings>("ExportSceneSettings")
 		.ADD_RW_PROPERTY(ExportSceneSettings, compressed)
@@ -954,9 +1047,9 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap);
 #ifdef WITH_DR2
-	py::scope().attr("withDR2") = true;
+    py::scope().attr("withDR2") = true;
 #else
-	py::scope().attr("withDR2") = false;
+    py::scope().attr("withDR2") = false;
 #endif
 }
 

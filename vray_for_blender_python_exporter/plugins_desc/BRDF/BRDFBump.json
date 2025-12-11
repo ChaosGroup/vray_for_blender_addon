@@ -113,6 +113,18 @@
         },
         
         {
+            "attr" : "bump_object_space",
+            "default" : 0,
+            "desc" : "Interpret bump_delta_scale in object space (default: screen-space)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "display_name" : "Resolution-Independent Bump"
+            }
+        },
+        
+        {
             "attr" : "normal_map_mult",
             "default" : 1.0,
             "desc" : "Multiplier applied to the normal map",

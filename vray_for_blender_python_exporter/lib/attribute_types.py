@@ -153,13 +153,13 @@ def getSocketType(type: str, subtype: str = None, linkedOnly = False) -> str:
 
     sockType = _SubtypeToSocket.get(type, {}).get(subtype, None)
 
-    if not sockType: 
+    if not sockType:
         sockType = _TypeToSocket.get(type, None)
 
     if linkedOnly:
         # If the socket is linked only, we need to use the NoValue version of the socket if it exists
         sockType = _TypeToSocketNoValue.get(sockType, sockType)
-    
+
     return sockType
 
 
@@ -175,6 +175,9 @@ bpy.props.TransformProperty = bpy.props.FloatVectorProperty(
 def propertyMatrix(mtr):
     # There is no property for Matrix for that we use FloatVectorProperty
     return bpy.props.FloatVectorProperty(size=16, default=mtr)
+
+def propertyVectorInt(size: int):
+    return lambda v: bpy.props.IntVectorProperty(size=size, default=v)
 
 TypeToProp = {
     'BOOL'                  : bpy.props.BoolProperty,
@@ -206,6 +209,8 @@ TypeToProp = {
     'FLOAT_TEXTURE'         : bpy.props.FloatProperty,
     'TEXTURE'               : bpy.props.FloatVectorProperty,
     'VECTOR_TEXTURE'        : bpy.props.FloatVectorProperty,
+
+    'INDEX_VECTOR_4'        : propertyVectorInt(4),
 
     'OUTPUT_COLOR'             : bpy.props.FloatVectorProperty,
     'OUTPUT_PLUGIN'            : bpy.props.StringProperty,

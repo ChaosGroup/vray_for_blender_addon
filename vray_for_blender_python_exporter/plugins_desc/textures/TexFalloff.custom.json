@@ -38,16 +38,59 @@
             ]
         },
         {
-            "attr": "dist_near",
+            "attr": "color1",
             "ui": {
-                "quantityType": "distance"
+                "display_name": "Front Color"
             }
         },
         {
-            "attr": "dist_far",
+            "attr": "color2",
             "ui": {
-                "quantityType": "distance"
+                "display_name": "Side Color"
             }
+        },
+        {
+            "attr": "explicit_dir",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "blend_input",
+            "options": {
+                "visible": false
+            }
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr" : "direction_type",
+            "desc" : "Direction type (0 - viewZ, 1 - viewX, 2 - viewY, 3 - explicit, 4 - localX, 5 - localY, 6 - localZ, 7 - worldX, 8 - worldY, 9 - worldZ)",
+            "items" :
+            [
+                [ "0", "View Z", "View Z" ],
+                [ "1", "View X", "View X" ],
+                [ "2", "View Y", "View Y" ],
+                [ "3", "Explicit", "Explicit" ],
+                [ "4", "Local X", "Local X" ],
+                [ "5", "Local Y", "Local Y" ],
+                [ "6", "Local Z", "Local Z" ],
+                [ "7", "World X", "World X" ],
+                [ "8", "World Y", "World Y" ],
+                [ "9", "World Z", "World Z" ]
+            ]
         }
     ],
     "Node": {
@@ -66,6 +109,36 @@
                     }
                 ]
             }
+        ],
+        "input_sockets": [
+            {
+                "name": "color1"
+            },
+            {
+                "name": "color2"
+            },
+            {
+                "name": "explicit_dir",
+                "visible": { "cond": "::direction_type=3" }
+            },
+            {
+                "name": "blend_input",
+                "visible": { "cond": "::use_blend_input=1" }
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            }
         ]
     },
     "Widget": {
@@ -73,24 +146,10 @@
             {
                 "attrs": [
                     {
-                        "name": "alpha_mult",
-                        "label": "Output Amount"
+                        "name": "color1"
                     },
                     {
-                        "name": "color_offset",
-                        "label": "RGB Offset"
-                    },
-                    {
-                        "name": "color_mult",
-                        "label": "RGB Level"
-                    },
-                    {
-                        "name": "color1",
-                        "label": "Front Color"
-                    },
-                    {
-                        "name": "color2",
-                        "label": "Side Color"
+                        "name": "color2"
                     },
                     {
                         "name": "type",
@@ -129,6 +188,31 @@
                         "active": {
                             "cond": "::direction_type=3"
                         }
+                    },
+                    {
+                        "name": "use_blend_input"
+                    },
+                    {
+                        "name": "blend_input",
+                        "active": {
+                            "cond": "::use_blend_input=1"
+                        }
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "texture_rollout",
+                        "label": "Output",
+                        "attrs": [
+                            {
+                                "name": "alpha_mult"
+                            },
+                            {
+                                "name": "color_offset"
+                            },
+                            {
+                                "name": "color_mult"
+                            }
+                        ]
                     }
                 ],
                 "layout": "COLUMN"

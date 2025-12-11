@@ -50,7 +50,6 @@ RenderPanelGroups = {
         'VRAY_PT_Exporter',
         'VRAY_PT_SceneExporter',
         'VRAY_PT_Performance',
-        'VRAY_PT_SettingsSystem',
         'VRAY_PT_DR',
     ),
 }
@@ -512,10 +511,23 @@ class VRAY_UL_ListBase(bpy.types.UIList):
 
 class VRAY_UL_DR(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        port_override = ":%s" % item.port if item.port_override else ""
+        row = layout.row(align=True)
+        split = row.split(factor=0.05)
 
-        layout.label(text="%s [%s%s]" % (item.name, item.address, port_override))
-        layout.prop(item, 'use', text="")
+        rowHeader = split.column()
+        rowHeader.label(text='*')
+        split = split.split(factor=0.45)
+        row = split.column().row(align=True)
+        row.prop(item, 'use', text='')
+        row = row.row()
+        row.enabled = item.use
+        row.prop(item, 'nodeName', text='')
+        split = split.split(factor=0.65)
+        split.enabled = item.use
+        col = split.column()
+        col.prop(item, 'address', text='')
+        col = split.column()
+        col.prop(item, 'port', text='')
 
 
 class VRAY_UL_MaterialSlots(bpy.types.UIList):
@@ -546,8 +558,8 @@ class VRAY_UL_Materials(bpy.types.UIList):
         split.column().prop(item, 'diffuse_color', text="")
         split.column().label(text=item.name, translate=False)
         if hasattr(item, 'vray'):
-            icon = item.node_tree.bl_icon if item.node_tree else 'NONE'
-            split.column().prop(item, 'node_tree', text="", icon=icon)
+            treeIcon = item.node_tree.bl_icon if item.node_tree else 'NONE'
+            split.column().prop(item, 'node_tree', text="", icon=treeIcon)
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##

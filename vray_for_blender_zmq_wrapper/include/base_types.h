@@ -7,7 +7,6 @@
 #include <cstring>
 #include <unordered_map>
 #include <memory>
-
 #include <initializer_list>
 #include "vassert.h"
 
@@ -160,6 +159,13 @@ enum ValueType {
 
 	ValueTypeInstancer,
 	ValueTypeMapChannels,
+};
+
+// Enum used when updating plugin parameter values.
+enum PluginUpdateFlags : uint32_t {
+	PluginValueForceUpdate = 1 << 0,
+	PluginValueAsString    = 1 << 1,
+	PluginValueAnimatable  = 1 << 2,
 };
 
 /// Empty value type used to block export of a attribute
@@ -354,11 +360,11 @@ struct AttrAColor {
 		return ValueType::ValueTypeAColor;
 	}
 
-	AttrAColor():
+	inline AttrAColor():
 	    alpha(1.0f)
 	{}
 
-	AttrAColor(const AttrColor &c, const float &a=1.0f):
+	inline AttrAColor(const AttrColor &c, const float &a=1.0f):
 	    color(c),
 	    alpha(a)
 	{}
@@ -374,43 +380,43 @@ struct AttrVector {
 		return ValueType::ValueTypeVector;
 	}
 
-	AttrVector():
+	inline AttrVector():
 	    x(0.0f),
 	    y(0.0f),
 	    z(0.0f)
 	{}
 
-	AttrVector(const float vector[3]):
+	inline AttrVector(const float vector[3]):
 		x(vector[0]),
 		y(vector[1]),
 		z(vector[2])
 	{}
 
-	AttrVector(const float &_x, const float &_y, const float &_z):
+	inline AttrVector(float _x, float _y, float _z):
 		x(_x),
 		y(_y),
 		z(_z)
 	{}
 
-	AttrVector operator - (const AttrVector &other) const {
+	inline AttrVector operator - (const AttrVector &other) const {
 		return AttrVector(x - other.x, y - other.y, z - other.z);
 	}
 
-	bool operator == (const AttrVector &other) const {
+	inline bool operator == (const AttrVector &other) const {
 		return (x == other.x) && (y == other.y) && (z == other.z);
 	}
 
-	float len() const {
+	inline float len() const {
 		return sqrtf(x * x + y * y + z * z);
 	}
 
-	void set(const float &_x, const float &_y, const float &_z) {
+	inline void set(const float &_x, const float &_y, const float &_z) {
 		x = _x;
 		y = _y;
 		z = _z;
 	}
 
-	void set(float vector[3]) {
+	inline void set(float vector[3]) {
 		x = vector[0];
 		y = vector[1];
 		z = vector[2];
@@ -552,8 +558,12 @@ struct AttrList {
 		m_Ptr = DataArrayPtr(new DataType);
 	}
 
-	void resize(const int &cnt) {
+	void resize(int cnt) {
 		m_Ptr.get()->resize(cnt);
+	}
+
+	void reserve(int cnt) {
+		m_Ptr.get()->reserve(cnt);
 	}
 
 	void append(const T &value) {
@@ -573,15 +583,15 @@ struct AttrList {
 		return getCount() * sizeof(T);
 	}
 
-	T* operator * () {
-		return &m_Ptr.get()->at(0);
+	inline T* operator * () {
+		return m_Ptr.get()->data();
 	}
 
-	const T* operator * () const {
-		return &m_Ptr.get()->at(0);
+	inline const T* operator * () const {
+		return m_Ptr.get()->data();
 	}
 
-	operator bool () const {
+	inline operator bool () const {
 		return m_Ptr && m_Ptr.get()->size();
 	}
 
@@ -589,11 +599,11 @@ struct AttrList {
 		return !m_Ptr || (m_Ptr.get()->size() == 0);
 	}
 
-	const DataArrayPtr getData() const {
+	inline const DataArrayPtr getData() const {
 		return m_Ptr;
 	}
 
-	DataArrayPtr getData() {
+	inline DataArrayPtr getData() {
 		return m_Ptr;
 	}
 
@@ -669,9 +679,9 @@ struct AttrMapChannels {
 		AttrListInt    faces;
 		std::string    name;
 	};
-	typedef std::unordered_map<std::string, AttrMapChannel> MapChannelsMap;
+	typedef std::vector<AttrMapChannel> MapChannelsList;
 
-	MapChannelsMap data;
+	MapChannelsList data;
 };
 
 

@@ -1,6 +1,39 @@
 {
     "ID": "TexCellular",
     "Name": "V-Ray Cellular",
+    "Parameters": [
+        {
+            "attr": "size",
+            "default": 0.1,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "spread",
+            "default": 0.1,
+            "ui": {
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "density",
+            "default": 1.0,
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -49,39 +82,22 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "size",
-            "default": 0.1,
-            "ui": {
-                "soft_max": 1.0,
-                "spin_step": 0.01
-            }
-        },
-        {
-            "attr": "spread",
-            "default": 0.1,
-            "ui": {
-                "soft_max": 1.0,
-                "spin_step": 0.01
-            }
-        },
-        {
-            "attr": "density",
-            "default": 1.0,
-            "ui": {
-                "soft_max": 10.0,
-                "spin_step": 0.1
-            }
-        },
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "center_color"
             },
-            "type": "UVWGEN"
-        }
-    ],
+            {
+                "name": "edge_color"
+            },
+            {
+                "name": "bg_color"
+            },
+            {
+                "name": "uvwgen"
+            }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [

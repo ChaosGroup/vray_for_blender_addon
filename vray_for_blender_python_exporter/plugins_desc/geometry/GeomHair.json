@@ -23,6 +23,7 @@
             {
                 "display_name" : "Length",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "Basic"
             }
         },
@@ -35,7 +36,8 @@
             "ui" : 
             {
                 "display_name" : "Thickness",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -183,7 +185,8 @@
             "ui" : 
             {
                 "display_name" : "Curl radius",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -243,7 +246,8 @@
             "ui" : 
             {
                 "display_name" : "LOD start distance",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -255,7 +259,8 @@
             "ui" : 
             {
                 "display_name" : "LOD rate",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

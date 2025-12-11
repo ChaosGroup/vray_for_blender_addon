@@ -1,6 +1,36 @@
 {
     "ID": "TexChecker",
     "Name": "V-Ray Checker",
+    "Parameters": [
+        {
+            "attr": "jitter",
+            "ui": {
+                "soft_min": -1.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -138,22 +168,42 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "jitter",
-            "ui": {
-                "soft_min": -1.0,
-                "soft_max": 1.0
-            }
-        },
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "white_color"
             },
-            "type": "UVWGEN"
-        }
-    ],
+            {
+                "name": "black_color"
+            },
+            {
+                "name": "contrast"
+            },
+            {
+                "name": "uvwgen"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [

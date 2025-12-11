@@ -2,8 +2,8 @@ import bpy
 from vray_blender.ui import classes
 from vray_blender.ui.icons import getIcon
 from vray_blender import operators as ops
-from vray_blender.nodes import utils as NodesUtils
 from vray_blender.engine.render_engine import VRayRenderEngine
+from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
 from vray_blender.bin import VRayBlenderLib as vray
 
 
@@ -13,7 +13,8 @@ def drawVRayInteractiveRenderMenu(self, context):
 
         iprRow = self.layout.row(align=True)
         iprRow.enabled = vray.isInitialized()
-        if not VRayRenderEngine.iprRenderer:
+        isVFBIpr = VRayRenderEngine.iprRenderer and not isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink)
+        if not isVFBIpr:
             op = ops.VRAY_OT_render_interactive
             iprRow.operator(op.bl_idname, text='', icon_value=getIcon("RENDER_IPR_START"))
         else:
@@ -32,26 +33,33 @@ class VRAY_PT_View_3D_Options(classes.VRayPanel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
     bl_label = "V-Ray Options"
-    bl_ui_units_x = 12
+    bl_ui_units_x = 16
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
+        layout.use_property_decorate = False
 
         layout.label(text="V-Ray Options")
         layout.separator(factor = 1)
-        layout.scale_x = 0.05 # This scale that makes all the labels visible
+        layout.scale_x = 0.05 # This scale makes all the labels visible
+
+        layout.prop(context.scene.vray, "viewport_resolution_override", expand=True)
 
         world = context.scene.world
+
+        # Indication that there isn't a node tree created
+        if (world is None) or (world.node_tree is None):
+            layout.column().label(icon="ERROR", text="Denoiser requires World Tree.")
+            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree")
+            return
 
         channelsDenoiserPropGroup = world.vray.RenderChannelDenoiser
         layout.prop(channelsDenoiserPropGroup, "viewport_enabled", text="Viewport Denoiser")
 
-        # Drawing RenderChannelDenoiser property
         denoiserColumn = layout.column()
         denoiserColumn.active = channelsDenoiserPropGroup.viewport_enabled
         denoiserColumn.prop(world.vray.RenderChannelDenoiser, "viewport_engine", text="Engine")
-
 
 
 def getRegClasses():

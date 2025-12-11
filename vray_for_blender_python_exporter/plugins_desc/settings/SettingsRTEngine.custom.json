@@ -44,6 +44,7 @@
         },
         {
             "attr": "gpu_bundle_size",
+            "default": 192,
             "ui" : {
                 "display_name": "Ray Bundle Size"
             }

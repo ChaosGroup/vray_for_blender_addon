@@ -42,6 +42,8 @@ IGNORED_PLUGINS = {
     "OutputTest",
     # Deprecated
     "SettingsPhotonMap",
+    # "SettingsColorMapping",
+    # "SettingsIrradianceMap",
     "RTEngine",
     "EffectLens",
 }
@@ -378,7 +380,7 @@ def isObjectVisible(exporterCtx, obj: bpy.types.Object):
         def visibleInViewport(obj: bpy.types.Object):
             return obj.visible_get() and ((not obj.is_instancer) or obj.show_instancer_for_viewport)
 
-        def visibleInProd(evalObj: bpy.types.Object):
+        def visibleInProd(obj: bpy.types.Object):
             evalObj = obj.evaluated_get(exporterCtx.dg)
             return  not evalObj.hide_render and ((not obj.is_instancer) or obj.show_instancer_for_render)
 
@@ -458,7 +460,10 @@ def matrixLayoutToMatrix(value: list[float] | tuple[float]):
                     (value[2], value[6], value[10], value[14]),
                     (value[3], value[7], value[11], value[15])))
 
-        
+
+def flattenMatrix(mat: Matrix):
+    return [val for row in mat for val in row]
+
 def foreachGetAttr(coll: bpy.types.bpy_prop_collection, attrName: str, shape: tuple, dtype ):
     # 'foreach_get' does not work with multudimensional arrays. 
     # Get data as a flat array and then reshape

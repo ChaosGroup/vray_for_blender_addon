@@ -60,10 +60,9 @@ class HairExporter(ExporterBase):
     def exportFromCurves(self, evaluatedObjCurves: bpy.types.Object, exportGeometry: bool):
         curves: bpy.types.Curves = evaluatedObjCurves.data
         uniqueName = Names.objectData(evaluatedObjCurves)
-        objName = Names.object(evaluatedObjCurves)
 
         if not exportGeometry:
-            return AttrPlugin(self.persistedState.objToGeomPluginName.get(objName, ""))
+            return AttrPlugin(uniqueName)
 
         if (totalPoints := len(curves.points)) == 0:
             # Curves without points (the curves object is empty), nothing to export
@@ -90,7 +89,7 @@ class HairExporter(ExporterBase):
         sameLength = np.all(strandSegments == strandSegments[0])
 
         data = HairData(uniqueName, HairData.TYPE_CURVES)
-        data.segments       = strandSegments[0] - 1 if sameLength else 0
+        data.segments       = strandSegments[0] - np.int32(1) if sameLength else np.int32(0)
         data.matWorld       = tools.mat4x4ToTuple(mathutils.Matrix())
         data.width          = pointRadiuses[0] if sameRadius else 0.0
         data.fadeWidth      = True
@@ -105,8 +104,6 @@ class HairExporter(ExporterBase):
         vray.exportHair(self.renderer, data)
 
         self.objTracker.trackPlugin(getObjTrackId(evaluatedObjCurves), data.name)
-
-        self.persistedState.objToGeomPluginName[objName] = data.name
 
         return AttrPlugin(data.name)
 
@@ -230,7 +227,7 @@ class HairExporter(ExporterBase):
         vray.exportHair(self.renderer, data)
         self.objTracker.trackPlugin(getObjTrackId(evaluatedObj), data.name)
 
-        self.persistedState.objToGeomPluginName[Names.object(evaluatedObj)] = uniqueName
+        self.persistedState.objDataTracker.trackParticlePluginOfData(Names.objectData(evaluatedObj), psys.name, uniqueName)
 
         return AttrPlugin(data.name)
 

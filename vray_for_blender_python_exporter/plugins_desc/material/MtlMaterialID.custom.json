@@ -37,14 +37,14 @@
     },
     "Node": {
         "input_sockets": [
-        {
-            "name": "material_id_color"
-        },    
-        {
-            "name": "base_mtl",
-            "type": "BRDF",
-            "label": "Base material"
-        }
+            {
+                "name": "material_id_color"
+            },
+            {
+                "name": "base_mtl",
+                "type": "BRDF",
+                "label": "Base material"
+            }
         ]
     },
     "Options": {

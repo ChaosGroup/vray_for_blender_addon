@@ -52,6 +52,20 @@
                 "min": 0.0,
                 "max": 1.0
             }
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
         }
     ],
     "Widget": {
@@ -197,14 +211,29 @@
     },
     "Node": {
         "input_sockets": [
-            { "name": "color_mult" },
-            { "name": "color_offset" },
-            { "name": "alpha_mult" },
-            { "name": "alpha_offset" },
-            { "name": "nouvw_color" },
             { "name": "gradient_position" },
             { "name": "texture_map" },
-            { "name": "uvwgen" }
+            { "name": "uvwgen" },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
         ]
     },
     "Options": {

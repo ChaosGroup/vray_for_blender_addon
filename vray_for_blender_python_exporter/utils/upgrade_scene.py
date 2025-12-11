@@ -1,6 +1,7 @@
 import bpy
 from dataclasses import dataclass
-from collections.abc import Callable
+from vray_blender.lib import blender_utils
+from vray_blender.nodes.sockets import VRaySocketUse, VRaySocketMult
 
 from vray_blender import debug
 
@@ -14,7 +15,7 @@ class UpgradeContext:
     nodeTree: bpy.types.NodeTree
     nodeTreeName: str
     nodeTreeType: str
-    
+
     # The whole "nodes" section of the upgrade info dict
     nodesUpgradeInfo: dict
 
@@ -28,7 +29,7 @@ class UpgradeContext:
     def nodeUpgradeInfo(self):
         assert self.currentNodeType != ''
         return self.nodesUpgradeInfo[self.currentNodeType]
-    
+
 
 @dataclass
 class NodeLink:
@@ -38,8 +39,6 @@ class NodeLink:
     toNodeName: str
     toSockName: str
     toSockAttr: str
-
-
 
 # Logging functions are intentionally left public so that they can be used by 
 # custom upgrade code.
@@ -62,7 +61,7 @@ def _getNodeLinksInfo(node: bpy.types.Node):
 
     for socketGroup in (node.inputs, node.outputs):
         for sock in [s for s in socketGroup if s.is_linked]:
-            nodeLinks.extend([NodeLink( link.from_node.name, link.from_socket.name, link.from_socket.vray_attr, 
+            nodeLinks.extend([NodeLink( link.from_node.name, link.from_socket.name, link.from_socket.vray_attr,
                                         link.to_node.name, link.to_socket.name, link.to_socket.vray_attr )
                                 for link in sock.links])
     return nodeLinks
@@ -77,20 +76,20 @@ def _upgradeNodeTree(ctx: UpgradeContext):
     # Make a copy of the collection because the original one will be modified while
     # we are processing the list.
     nodesList = list(ctx.nodeTree.nodes)
-    
+
     for node in nodesList:
         if node.bl_idname in ctx.nodesUpgradeInfo.keys():
             _upgradeNode(ctx, node)
 
 
 def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
-    """ Upgrade a single node by creating a new node of the same type, copying 
-        properties and links from the old node and then deleting the old node. 
+    """ Upgrade a single node by creating a new node of the same type, copying
+        properties and links from the old node and then deleting the old node.
         Custom upgrade functions are invoked at specific points of the upgrade.
     """
 
     from vray_blender.nodes.nodes import vrayNodeCopy
-    
+
     assert ctx is not None
     assert node is not None
 
@@ -117,9 +116,18 @@ def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
     nodeName     = node.name
     nodeLabel    = node.label
 
-    # Call the custom copy procedure AFTER the properties have been copied so that it could 
+    # Call the custom copy procedure AFTER the properties have been copied so that it could
     # override any values if necessary.
     vrayNodeCopy(newNode, node)
+
+    # Transfer all animation f-curves from the old to the new node. We need to map old sockets
+    # to new ones and replace the socket index in the f-curve data path.
+    _transferAnimations(ctx.nodeTree, node, newNode)
+
+    # F-curves data paths directly use the name of the node to store animations so they are first
+    # change to point to the new node's name and then brough back to point back to the original node.
+    # Without doing so they will just be deleted when we remove the old node.
+    newTmpNodeName = newNode.name
 
     nodeTree.nodes.remove(node)
     newNode.name     = nodeName
@@ -127,7 +135,11 @@ def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
 
     # Recreate node links on the new node
     failedLinks = _createNodeLinks(ctx, nodeLinks)
-    
+
+    # Change back the f-curve data paths to use the original node's name.
+    for fcurve in blender_utils.getFCurves(ctx.nodeTree):
+        fcurve.data_path = fcurve.data_path.replace(newTmpNodeName, nodeName)
+
     # Run custom script to process any data that is not part of the plugin properties
     if ctx.nodeUpgradeInfo and (fnPostCopyNode := ctx.nodeUpgradeInfo.get('node_post_copy', None)):
         fnPostCopyNode(ctx, nodeLinks, newNode)
@@ -137,7 +149,6 @@ def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
         logMsg("Failed to create some links:")
         for l in failedLinks:
             logMsg(f"  {l}")
-
 
 
 def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.types.Node):
@@ -170,12 +181,20 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
     sourcePropertyNames = list(sourceProps.__annotations__.keys())
     pluginModule = getPluginModule(srcNode.vray_plugin)
 
+    # Copy meta sockets (the ones not directly backed by vray properties)
+    for srcSocket in [s for s in srcNode.inputs if hasattr(s, 'vray_attr')]:
+        if srcSocket.vray_attr not in sourcePropertyNames or isinstance(srcSocket, (VRaySocketUse, VRaySocketMult)):
+            if fnCopy := getattr(srcSocket, 'copy', None):
+                if targetSocket := next((s for s in targetNode.inputs if (not s.is_linked) and (s.name.lower() == srcSocket.name.lower())), None):
+                    logVerboseMsg(f"Copy socket: {srcNode.name} => {targetNode.name} {srcSocket.vray_attr}")
+                    fnCopy(targetSocket)
+
     # Iterate over old node's properties. Due to backward compatibility requirements
-    # for V-Ray plugins, the old node's properties must be a strict subset of 
+    # for V-Ray plugins, the old node's properties must be a strict subset of
     # the old node's properties. Any newly added properties can be handled in the
     # node's post-process callback.
     for propName in sourcePropertyNames:
-        
+
         try:
             if ctx.nodeUpgradeInfo and (fnUpgrade := ctx.nodeUpgradeInfo.get('attributes', {}).get(propName, None)):
                 # A custom upgrade function is defined for this attribute, call it instead of the generic upgrade.
@@ -184,10 +203,10 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
             elif not(isOutputAttribute(pluginModule, propName)): # Outputs don't have a value that can be copied
                 if (attrDesc := getPluginAttr(pluginModule, propName)) and (attrDesc['type'] == 'TEMPLATE'):
                     logVerboseMsg(f"Copy template: {srcNode.name} => {targetNode.name} {propName}")
-                    
+
                     srcProp    = getattr(sourceProps, propName)
                     targetProp = getattr(targetProps, propName, None)
-                    
+
                     assert targetProp is not None
 
                     # Call the optional 'copy' method of the template
@@ -199,14 +218,22 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
         except Exception as ex:
             debug.printError(f"Failed to copy property {ctx.nodeTreeType} :: {ctx.nodeTreeName} :: {srcNode.name} :: {propName}: {ex}")
             pass
-        
-    # Copy meta sockets (the ones not directly backed by vray properties)
-    for srcSocket in [s for s in srcNode.inputs if hasattr(s, 'vray_attr')]:
-        if srcSocket.vray_attr not in sourcePropertyNames:
-            if fnCopy := getattr(srcSocket, 'copy', None):
-                if targetSocket := next((s for s in targetNode.inputs if (not s.is_linked) and (s.name.lower() == srcSocket.name.lower())), None):
-                    logVerboseMsg(f"Copy socket: {srcNode.name} => {targetNode.name} {propName}")
-                    fnCopy(targetSocket)
+
+
+def _transferAnimations(obj, oldNode, newNode):
+    fcurves = blender_utils.getFCurves(obj)
+    if not fcurves:
+        return
+    for i, oldSock in enumerate(oldNode.inputs):
+        for j, newSock in enumerate(newNode.inputs):
+            if oldSock.vray_attr and oldSock.vray_attr == newSock.vray_attr:
+                for fcurve in fcurves:
+                    if oldNode.name in fcurve.data_path and f'inputs[{i}]' in fcurve.data_path:
+                        fcurve.data_path = fcurve.data_path.replace(
+                            f'inputs[{i}]',
+                            f'inputs[{j}]'
+                        ).replace(oldNode.name, newNode.name)
+                break
 
 
 def _createNodeLinks(ctx: UpgradeContext, nodeLinks: list[bpy.types.NodeLink]):
@@ -220,10 +247,10 @@ def _createNodeLinks(ctx: UpgradeContext, nodeLinks: list[bpy.types.NodeLink]):
             fromNode = ctx.nodeTree.nodes[link.fromNodeName]
             toNode = ctx.nodeTree.nodes[link.toNodeName]
             if toNode and fromNode:
-                
+
                 # Search first by vray attribute name and then by lowercase socket name (meta sockets don't have an underlying  vray attribute)
                 toSocket = next((s for s in toNode.inputs if s.vray_attr and (s.vray_attr == link.toSockAttr) or (s.name.lower() == link.toSockName.lower())), None)
-                
+
                 if len(fromNode.outputs) > 1:
                     fromSocket = next((s for s in fromNode.outputs if s.vray_attr and (s.vray_attr == link.toSockAttr) or (s.name.lower() == link.fromSockName.lower())), None)
                 else:
@@ -257,15 +284,15 @@ def upgradeScene(upgradeInfo: dict):
     """ Upgrade the scene according to the upgrade configuration data provided.
 
         The upgrade consists of walking all node trees in the scene, locating the nodes
-        of types included in the upgradeInfo list, recreating them while optionally 
-        running custom upgrade actions for each node/property, and finally recreating 
-        all links to other nodes in the tree. 
-        
-        NOTE: There may be upgrade scenarios currently not covered by this algorithm. 
+        of types included in the upgradeInfo list, recreating them while optionally
+        running custom upgrade actions for each node/property, and finally recreating
+        all links to other nodes in the tree.
+
+        NOTE: There may be upgrade scenarios currently not covered by this algorithm.
         We will evolve the procedure as the need arises.
 
         Structure of upgradeInfo (pseudocode):
-        
+
         {
             "nodes": {
                 "Node1.bl_idname": {
@@ -281,13 +308,13 @@ def upgradeScene(upgradeInfo: dict):
             }
         }
     """
-    
-    
+
+
     logVerboseMsg("Updating scene materials ...")
     for material in bpy.data.materials:
-        if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):       
+        if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):
             logVerboseMsg(f"Updating material '{material.name}'")
-            _upgradeNodeTree(UpgradeContext(nodeTree     = material.node_tree, 
+            _upgradeNodeTree(UpgradeContext(nodeTree     = material.node_tree,
                                             nodeTreeName = material.name,
                                             nodeTreeType = 'Material',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
@@ -297,7 +324,7 @@ def upgradeScene(upgradeInfo: dict):
     for light in bpy.data.lights:
         if _hasUpgradeableNodes(light, upgradeInfo):
             logVerboseMsg(f"Updating light '{light.name}'")
-            _upgradeNodeTree(UpgradeContext(nodeTree     = light.node_tree, 
+            _upgradeNodeTree(UpgradeContext(nodeTree     = light.node_tree,
                                             nodeTreeName = light.name,
                                             nodeTreeType = 'Light',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
@@ -307,7 +334,7 @@ def upgradeScene(upgradeInfo: dict):
     for world in bpy.data.worlds:
         if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
             logVerboseMsg(f"Updating world '{world.name}'")
-            _upgradeNodeTree(UpgradeContext(nodeTree     = world.node_tree, 
+            _upgradeNodeTree(UpgradeContext(nodeTree     = world.node_tree,
                                             nodeTreeName = world.name,
                                             nodeTreeType = 'World',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
@@ -316,18 +343,18 @@ def upgradeScene(upgradeInfo: dict):
     for group in bpy.data.node_groups:
         if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
             logVerboseMsg(f"Updating object node tree '{group.name}'")
-            _upgradeNodeTree(UpgradeContext(nodeTree     = group, 
+            _upgradeNodeTree(UpgradeContext(nodeTree     = group,
                                             nodeTreeName = group.name,
                                             nodeTreeType = 'Node tree',
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
-            
+
     logMsg("Update complete")
 
 
 def sceneNeedsUpgrade(upgradeInfo: dict):
     """ Return True if the scene contains data that need to be upgraded. """
     for material in bpy.data.materials:
-        if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):       
+        if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):
             return True
 
     for light in bpy.data.lights:
@@ -337,7 +364,8 @@ def sceneNeedsUpgrade(upgradeInfo: dict):
     for world in bpy.data.worlds:
         if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
            return True
-        
+
     for group in bpy.data.node_groups:
         if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
             return True
+    return False

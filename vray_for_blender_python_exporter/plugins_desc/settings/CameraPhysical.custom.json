@@ -41,12 +41,9 @@
             "attr": "blades_rotation",
             "subtype": "ANGLE",
             "desc": "Blade rotation",
-            "precision": 7,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
-                "spin_step": 57.2958
+                "spin_step": 1
             }
         },
         {
@@ -54,17 +51,11 @@
             "default": 1.0
         },
         {
-            "attr": "target_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
             "attr": "fov",
             "desc" : "The FOV value to use when specify_fov is true",
             "subtype": "ANGLE",
             "ui": {
-                "spin_step": 0.1,
+                "spin_step": 1,
                 "min": 0.00017453292519943295,
                 "max": 3.141592653589793
             },
@@ -73,26 +64,20 @@
         },
         {
             "attr": "shutter_angle",
-            "subtype": "ANGLE",
-            "precision": 7,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
-                "spin_step": 57.2958,
+                "units": "degrees",
+                "spin_step": 1,
                 "min": 10,
                 "max": 360
             }
         },
         {
             "attr": "shutter_offset",
-            "subtype": "ANGLE",
-            "precision": 7,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
-                "spin_step": 57.2958,
+                "units": "degrees",
+                "spin_step": 1,
                 "min": -360,
                 "max": 360
             }
@@ -184,7 +169,6 @@
     "Type": "CAMERA",
     "Options": {
         "excluded_parameters": [
-            "dont_affect_settings",
             "enable_thin_lens_equation",
             "subdivs",
             "dof_display_threshold",

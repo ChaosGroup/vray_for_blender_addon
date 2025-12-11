@@ -192,6 +192,7 @@
             "ui" : 
             {
                 "display_name" : "Shadow bias",
+                "quantityType" : "distance",
                 "soft_max" : 0.1000000014901161,
                 "soft_min" : -0.1000000014901161
             }
@@ -355,6 +356,7 @@
             {
                 "display_name" : "Near Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -369,6 +371,7 @@
             {
                 "display_name" : "Near Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 10.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -394,6 +397,7 @@
             {
                 "display_name" : "Far Decay Start",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
             }
@@ -408,6 +412,7 @@
             {
                 "display_name" : "Far Decay End",
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "<EndRollout>",
                 "soft_max" : 30.0,
                 "spin_step" : 0.009999999776482582
@@ -473,6 +478,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "distance",
                 "rollout" : "Shadows"
             }
         },
@@ -541,6 +547,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -552,6 +559,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -582,6 +590,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -593,6 +602,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -604,6 +614,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -615,6 +626,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "angle",
                 "units" : "radians"
             }
         },
@@ -635,7 +647,10 @@
             "default" : 1.0,
             "desc" : "Start of first decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -643,7 +658,10 @@
             "default" : 2.0,
             "desc" : "End of first decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -651,7 +669,10 @@
             "default" : 3.0,
             "desc" : "Start of second decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -659,7 +680,10 @@
             "default" : 6.0,
             "desc" : "End of second decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -667,7 +691,10 @@
             "default" : 8.0,
             "desc" : "Start of third decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -675,7 +702,10 @@
             "default" : 10.0,
             "desc" : "End of third decay region",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         }
     ],
     "Type" : "LIGHT",

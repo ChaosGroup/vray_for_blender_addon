@@ -4,9 +4,12 @@ from pathlib import Path
 
 from vray_blender.lib import blender_utils
 from vray_blender.lib import settings_defs as defs
+from vray_blender.lib.defs import ProdRenderMode
 
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
+
+from vray_blender.lib import camera_utils
 
 
 class AnimationSettings:
@@ -107,7 +110,8 @@ class CommonSettings:
         self.animation   = AnimationSettings()
         self.files       = FileOutputSettings()
 
-    def updateFromScene(self, cameraObjs = None):
+
+    def updateFromScene(self):
         vrayExporter = self.vrayExporter
 
         self.backgroundScene              = self.scene
@@ -116,12 +120,6 @@ class CommonSettings:
         self.autoSaveRender               = vrayExporter.auto_save_render
         self.exportMeshes                 = True
         self.selectedObjects              = set()
-        self.cameraObjs                   = cameraObjs if cameraObjs is not None else [] # Cameras needed for settings calculation.
-
-
-        # Add the active camera if the 'cameraObjs' list is empty.
-        if (not cameraObjs) and (activeCamObj := self.scene.camera) and blender_utils.isCamera(activeCamObj):
-            self.cameraObjs.append(activeCamObj)
 
         self.exportFileFormat  = vrayExporter.data_format
         if self.isPreview:
@@ -166,6 +164,10 @@ class CommonSettings:
         self.viewportImageType      = defs.ImageType.RgbaReal
 
 
+    def _isCloudSubmit(self):
+        prodRenderer = self.renderEngine.prodRenderer
+        return prodRenderer and prodRenderer.renderMode == ProdRenderMode.CLOUD_SUBMIT
+
     def _updateAnimation(self):
         isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
         
@@ -177,7 +179,7 @@ class CommonSettings:
         if not isProductionRendering:
             self.animation.mode = defs.AnimationMode.SingleFrame
             
-        elif self.exportOnly:
+        elif self.exportOnly and not self._isCloudSubmit():
             animExportOnlySettings = self.vrayExporter.animationSettingsVrsceneExport
 
             if animExportOnlySettings.exportAnimation:
@@ -198,40 +200,24 @@ class CommonSettings:
         self.animation.fps = self.scene.render.fps / self.scene.render.fps_base
 
         self.useStereoCamera    = False
-        self.useMotionBlur      = False
-        self.usePhysicalCamera  = False
-
-        self.mbDuration = 0
 
         mbSettings = self.scene.vray.SettingsMotionBlur
         self.mbSamples = mbSettings.geom_samples
+        self.maxMBlurDuration = 0 # The biggest motion blur duration of all cameras
+        self.useMotionBlur = False
 
-        # Multiple cameras may exist in the scene, and their individual motion blur settings
-        # must be taken into account to ensure all necessary frames are exported.
-        for cameraObject in self.cameraObjs:
-            camera: bpy.types.Camera = cameraObject.data
+        if self.exportOnly:
+            allCameras = [obj for obj in self.scene.objects if obj.type == 'CAMERA']
+        else:
+            markerCameras = [marker.camera for marker in self.scene.timeline_markers if marker.camera]
+            allCameras = markerCameras if markerCameras else [self.scene.camera]
 
-            vrayCamera = camera.vray
-            physCamera = vrayCamera.CameraPhysical
+        self.useMotionBlur = any(camera_utils.camObjUsesMotionBlur(camObj, mbSettings) for camObj in allCameras)
 
-            self.useMotionBlur |= physCamera.use_moblur if physCamera.use else mbSettings.on
-
-            if physCamera.use:
-                cameraType = int(physCamera.type)
-
-                frameDuration = 1.0 / self.animation.fps
-
-                match cameraType:
-                    case defs.PhysicalCameraType.Still:
-                        self.mbDuration = max(1.0 / (physCamera.shutter_speed * frameDuration), self.mbDuration)
-                    case defs.PhysicalCameraType.Cinematic:
-                        self.mbDuration =  max(physCamera.shutter_angle / 360.0, self.mbDuration)
-                    case defs.PhysicalCameraType.Video:
-                        self.mbDuration = max(1.0 + physCamera.latency / frameDuration, self.mbDuration)
-                    case _:
-                        self.useMotionBlur = False
-            else:
-                self.mbDuration = max(self.mbDuration, mbSettings.duration)
+        if self.useMotionBlur and not self.exportOnly:
+            for camObj in allCameras:
+                _, mbDuration = camera_utils.getMBlurIntCenterAndDuration(camObj.data, self)
+                self.maxMBlurDuration = max(mbDuration, self.maxMBlurDuration)
 
         # Disable motion blur for bake render
         self.useMotionBlur = self.useMotionBlur and not self.vrayExporter.isBakeMode and not self.isPreview
@@ -269,7 +255,7 @@ class CommonSettings:
 
 
     def _updateLogLevels(self):
-        self.verbosityLevel = self.vrayExporter.verbose_level
+        self.verbosityLevel = blender_utils.getVRayPreferences().verbose_level
 
 
     def _getRenderMode(self):

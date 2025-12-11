@@ -33,7 +33,9 @@
             "ui" : 
             {
                 "display_name" : "Visibility Range",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         
@@ -45,7 +47,9 @@
             "ui" : 
             {
                 "display_name" : "Atmosphere Height",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "units" : "meters"
             }
         },
         

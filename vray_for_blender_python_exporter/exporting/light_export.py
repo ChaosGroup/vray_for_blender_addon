@@ -42,9 +42,19 @@ def syncLightMeshInfo(exporterCtx: ExporterContext):
     from vray_blender.plugins.light.LightMesh import collectLightMeshInfo
     
     # Collect the info for the current update 
-    activePairs, updatedPairs = collectLightMeshInfo(exporterCtx)
+    activePairs, updatedPairs, activePairsUpdateInfo = collectLightMeshInfo(exporterCtx)
     exporterCtx.activeMeshLightsInfo = activePairs
     exporterCtx.updatedMeshLightsInfo = updatedPairs
+
+    # Add to the list of updated lights all active lights that were not active on the previous
+    # update cycle. This will handle the case when a light has been hidded (and so deleted from the
+    # V-Ray scene) and then shown again. Blender will not put in on the depsgraph updates list,
+    # so we need to compare against the previous state.
+    prevActiveLightMeshes = {m.parentObjTrackId for m in exporterCtx.persistedState.activeMeshLightsInfo}
+
+    for updateInfo in activePairsUpdateInfo:
+        if getObjTrackId(updateInfo.parentObj) not in prevActiveLightMeshes:
+            exporterCtx.updatedMeshLightsInfo.add(updateInfo)
 
 
 

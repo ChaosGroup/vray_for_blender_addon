@@ -3,7 +3,6 @@ import bpy
 
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import addInput, addOutput
-from vray_blender.nodes.nodes import updateRenderChannelsState
 from vray_blender.nodes.operators import sockets as SocketOperators
 from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender import plugins
@@ -119,16 +118,12 @@ class VRayNodeRenderChannelDenoiser(VRayNodeBase):
         return None
 
     def init(self, context):
-        updateRenderChannelsState(self, True)
         addOutput(self, 'VRaySocketRenderChannelOutput', "Channel")
-
-    def free(self):
-        updateRenderChannelsState(self, False)
 
     def draw_buttons(self, context, layout):
         pluginModule = plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser']
         painter = draw_utils.UIPainter(context, pluginModule, context.scene.world.vray.RenderChannelDenoiser, self)
-        painter.renderWidgets(layout, pluginModule.Node['widgets'])
+        painter.renderWidgets(layout, pluginModule.Node['widgets'], True)
 
     def draw_buttons_ext(self, context, layout):
         pluginModule = plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser']

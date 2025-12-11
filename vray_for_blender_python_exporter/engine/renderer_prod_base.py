@@ -25,15 +25,15 @@ _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
 
 class VRayRendererProdBase:
     """ Final (or 'production' in VRay lingo) renderer implementation.
-        It is used for non-interactive rendering - e.g. production and material previews 
+        It is used for non-interactive rendering - e.g. production and material previews
     """
-    
+
     def __init__(self, isPreview: bool):
         # An opaque pointer to the VRay renderer object owned by the C++ library
-        self.renderer = None 
+        self.renderer = None
         self.isPreview = isPreview
-        self.viewParams: dict[str, ViewParams] = {}    # Per-camera ViewParams from the latest evaluation. 
-        
+        self.viewParams: dict[str, ViewParams] = {}    # Per-camera ViewParams from the latest evaluation.
+
         # RenderResult will be passed to the C++ library to be updated with the image data
         # as it is received from VRay, so we need to keep it alive between render
         # methods invocations
@@ -54,7 +54,7 @@ class VRayRendererProdBase:
 
     def _reportError(self, engine: bpy.types.RenderEngine, msg: str):
         debug.printError(msg)
-        
+
 
     def _renderStart(self, exporterCtx: ExporterContext):
         """ Start the rendering sequence in vray. This method must be matched by 
@@ -74,13 +74,13 @@ class VRayRendererProdBase:
 
         # For the moment, we only support one render result and one pass - 'Combined'
         self.renderResult = renderResult
-        
+
         renderPass = self.renderResult.layers[viewLayerName].passes["Combined"]
 
         # VRay will keep a weakref to the callback, so make sure we keep it alive
         # after the end of this function
         self.cbUpdateImage = None if exporterCtx.bake else (lambda: self._updateImage(engine))
-        
+
         # This call will return only after the rendering job is finished, i.e. all frames
         # have been rendered. The vray class will
         vray.renderStart(self.renderer, renderPass.as_pointer(), self.cbUpdateImage)
@@ -101,7 +101,8 @@ class VRayRendererProdBase:
 
         if self.renderer:
             vray.renderEnd(self.renderer)
-            vray.deleteRenderer(self.renderer)
+            if self.isPreview:
+                vray.deletePreviewRenderer(self.renderer)
             self.renderer = None
             self.renderResult = None
 
@@ -202,20 +203,23 @@ class VRayRendererProdBase:
 
     def _createRenderer(self, exporterType):
         from vray_blender.lib.export_utils import setupDistributedRendering
+        from vray_blender.engine.render_engine import VRayRenderEngine
 
         exporter = bpy.context.scene.vray.Exporter
 
         settings = vray.ExporterSettings()
         settings.exporterType     = exporterType
-        settings.closeVfbOnStop   = True
         settings.renderThreads    = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
 
         setupDistributedRendering(settings, exporterType)
 
         if self.isPreview:
             settings.previewDir = path_utils.getPreviewDir()
-
-        return vray.createRenderer(settings)
+            return vray.createPreviewRenderer(settings)
+        else:
+            from vray_blender.plugins.system.compute_devices import updateEnabledComputeDevices
+            updateEnabledComputeDevices(bpy.context)
+            return vray.getMainRenderer(settings)
 
 
     def _linkRenderChannels(self, exporterCtx: ExporterContext):
@@ -224,11 +228,11 @@ class VRayRendererProdBase:
             the relevant plugin properties.
         """
         for pluginData, channelsList in exporterCtx.pluginRenderChannels.items():
-            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList) 
+            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList)
 
 
     def _exportObjects(self, exporterCtx: ExporterContext):
-        obj_export.run(exporterCtx) 
+        obj_export.run(exporterCtx)
 
 
     def _exportLights(self, exporterCtx: ExporterContext):
@@ -253,4 +257,4 @@ class VRayRendererProdBase:
 
     def _exportWorld(self, exporterCtx: ExporterContext):
         world_export.WorldExporter(exporterCtx).export()
-        
+

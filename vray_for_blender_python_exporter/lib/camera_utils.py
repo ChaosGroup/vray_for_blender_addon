@@ -9,6 +9,8 @@ from vray_blender import debug
 from vray_blender.lib import blender_utils
 from vray_blender.lib.settings_defs import StereoOutputLayout, StereoViewMode
 
+from vray_blender.lib.settings_defs import PhysicalCameraType
+
 # Values copied from Blender source
 DEFAULT_SENSOR_WIDTH = 36.0 # This value is hardcoded in Blender
 CAMERA_PARAM_ZOOM_INIT_CAMOB = 1.0
@@ -81,6 +83,7 @@ class ViewParams:
         self.cameraParams       = CameraParams()
         self.renderSizes        = RenderSizes()
         self.isActiveCamera     = False         # Set to true if this is the active scene camera which should be rendered
+        self.resolutionMult     = 1.0
 
 
     def calcRenderSizes(self):
@@ -95,10 +98,12 @@ class ViewParams:
 
         isCropped = self.crop
 
-        # Img size is the size of the output image - may be less than camera viewplane quad if 
-        # a crop region is active. Output img boundaries always map to the crop region boundaries. 
+        # Img size is the size of the output image - may be less than camera viewplane quad if
+        # a crop region is active. Output img boundaries always map to the crop region boundaries.
         rs.imgWidth = round(self.regionSize.w) if isCropped else rs.bmpWidth
         rs.imgHeight = round(self.regionSize.h) if isCropped else rs.bmpHeight
+        rs.imgWidth *= self.resolutionMult
+        rs.imgHeight *= self.resolutionMult
 
         # The crop region specifies which part of the full view to actually render.
         # The crop quad from the rendered image is 'projected' onto the output img, possibly
@@ -108,19 +113,18 @@ class ViewParams:
         rs.cropRgnWidth = self.regionSize.w if isCropped else self.renderSize.w
         rs.cropRgnHeight = self.regionSize.h if isCropped else self.renderSize.h
 
-        # The output region is also used for croppping, but inside the output image (whereas the 
-        # crop region does define cropping inside the rendered image). 
+        # The output region is also used for croppping, but inside the output image (whereas the
+        # crop region does define cropping inside the rendered image).
         # We are never rendering to just a part of the output image, so output region is always
         # equal to the output image size
         rs.rgnLeft = 0
         rs.rgnTop = 0
         rs.rgnWidth = rs.imgWidth
-        rs.rgnHeight = rs.imgHeight 
+        rs.rgnHeight = rs.imgHeight
 
         # Don't make assumptions about the previous state, always set all values
         rs.bitmask  = RenderSizes.Bitmask.ImgSize | RenderSizes.Bitmask.CropRgn
 
-        
 
 class RenderSizes:
     """ Implementation of VRayMessage::RenderSizes ZMQ protocol object """
@@ -492,3 +496,75 @@ def fixOverrideCameraType():
             # Set to Standard
             camera.data.vray.SettingsCamera.type = '0'
 
+
+def camObjUsesMotionBlur(cameraObj: bpy.types.Object, settingsMotionBlur):
+    if blender_utils.isCamera(cameraObj):
+        camera: bpy.types.Camera = cameraObj.data
+        physCamera = camera.vray.CameraPhysical
+        return physCamera.use_moblur if physCamera.use else settingsMotionBlur.on
+    
+    return False
+
+def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
+    """ Get the duration and interval center for motion blur from the camera object """
+
+    mbSettings = commonSettings.scene.vray.SettingsMotionBlur
+    
+    mbDuration = mbSettings.duration
+    intervalCenter = mbSettings.interval_center
+
+    vrayCamera = camera.vray
+    physCamera = vrayCamera.CameraPhysical
+    
+    if physCamera.use:
+        cameraType = int(physCamera.type)
+
+        frameDuration = 1.0 / commonSettings.animation.fps
+
+        match cameraType:
+            case PhysicalCameraType.Still:
+                mbDuration = 1.0 / (physCamera.shutter_speed * frameDuration)
+                intervalCenter = mbDuration * 0.5
+            case PhysicalCameraType.Cinematic:
+                mbDuration =  physCamera.shutter_angle / math.radians(360.0)
+                intervalCenter = (physCamera.shutter_offset / math.radians(360.0)) + mbDuration * 0.5
+            case PhysicalCameraType.Video:
+                mbDuration = 1.0 + physCamera.latency / frameDuration
+                intervalCenter = -mbDuration * 0.5
+            case _:
+                assert False, f"Unknown physical camera type: {cameraType}"
+
+    return intervalCenter, mbDuration
+
+
+def renderCamerasHaveSameType():
+    """ Check if all cameras marked in the render range have the same type """
+
+    scene = bpy.context.scene
+
+    # If not in animation mode, there is only ne camera for rendering.
+    if not scene.vray.Exporter.animation_mode == 'ANIMATION':
+        return True
+
+    frameStart = scene.frame_start
+    frameEnd = scene.frame_end
+    prevType = None
+
+    for marker in sorted(scene.timeline_markers, key=lambda m: m.frame, reverse=True):
+        if marker.frame > frameEnd:
+            continue
+        if not marker.camera:
+            continue
+
+        vrayCamera = marker.camera.data.vray
+        camType = ("Physical" if vrayCamera.use_physical else "Dome" if vrayCamera.use_dome else "Default")
+        
+        if prevType and camType != prevType:
+            debug.reportError(f"Can't have '{camType}' and '{prevType}' cameras marked in the render range.")
+            return  False
+        
+        prevType = camType
+        
+        if marker.frame < frameStart:
+            break
+    return True
