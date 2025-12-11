@@ -1,0 +1,133 @@
+
+{
+    "Desciption" : "GeomGaussians",
+    "ID" : "GeomGaussians",
+    "Name" : "Geom Gaussians",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "file",
+            "default" : "",
+            "desc" : "",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Gaussian splat file",
+                "file_extensions" : [ "ply" ]
+            }
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "0",
+            "desc" : "When 1, performs a rotation of -90 degrees around the X axis. When 2, 90 degrees rotation around the Y axis and flip Y",
+            "items" : 
+            [
+                [ "0", "As Is", "As Is" ],
+                [ "1", "Rotate YZ", "Rotate YZ" ],
+                [ "2", "Rotate XZ + Flip Y", "Rotate XZ + Flip Y" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : 1.0,
+            "desc" : "User-defined scale of the Gaussian model",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "affect_camera",
+            "default" : true,
+            "desc" : "Camera rays to see the Gaussians",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_shadows",
+            "default" : false,
+            "desc" : "Gaussians to cast shadows on shaded geometry",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_reflections",
+            "default" : true,
+            "desc" : "Gaussians to be seen in reflections",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_refractions",
+            "default" : true,
+            "desc" : "Gaussians to be seen in refractions",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "affect_matte_surfaces",
+            "default" : true,
+            "desc" : "Gaussians to be seen in matte surfaces",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "rgb_color_space",
+            "default" : "1",
+            "desc" : "The RGB color space of the input data (0 - default, 1 - sRGB, 2 - ACEScg, 3 - raw)",
+            "items" : 
+            [
+                [ "0", "Default", "Default" ],
+                [ "1", "sRGB", "sRGB" ],
+                [ "2", "ACEScg", "ACEScg" ],
+                [ "3", "Raw", "Raw" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "intensity",
+            "default" : 1.0,
+            "desc" : "User-specified intensity multiplier",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "User-specified color multiplier",
+            "type" : "COLOR"
+        },
+        
+        {
+            "attr" : "clipping_mask",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Texture multiplying the opacity of the Gaussian primitives",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "anim_offset",
+            "default" : 0.0,
+            "desc" : "Animated Gaussian initial frame offset",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Start offset"
+            }
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

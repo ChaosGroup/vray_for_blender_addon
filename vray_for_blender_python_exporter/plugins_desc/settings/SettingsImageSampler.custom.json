@@ -63,24 +63,19 @@
             }
         },
         {
-            "attr": "render_mask_mode",
-            "update": "onUpdateRenderMaskMode"
-        },
-        {
-            "attr": "render_mask_object_selector",
-            "desc": "Objects to use for render mask.",
-            "type": "OBJECT",
-            "filter_type": "geometry",
+            "attr": "object_selector",
+            "type": "TEMPLATE",
+            "desc": "List of objects to use as render mask",
             "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "render_mask_collection_selector",
-            "desc": "Collection to use for render mask.",
-            "type": "OBJECT",
-            "options": {
-                "derived": true
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "bound_property": "render_mask_objects",
+                        "filter_function": "filters.filterRenderMasks"
+                    }
+                }
             }
         },
         {
@@ -105,6 +100,23 @@
             },
             "ui": {
                 "display_name": "Texture"
+            }
+        },
+        {
+            "attr" : "render_mask_mode",
+            "default" : "0",
+            "desc" : "Sets the mode for the render mask. The mode controls which render_mask_* parameter will be used to generate the mask from (0 - Disable, 1 - Texture, 2 - Objects, 3 - ObjectIDs)",
+            "items" :
+            [
+                [ "0", "Disabled", "The render mask is not used" ],
+                [ "1", "Texture", "A texture map is used for the render mask. Black values in the map define pixels which are not rendered. Pixels with any other values are rendered" ],
+                [ "2", "Objects", "Renders only objects specified in a list" ],
+                [ "3", "ObjectIDs", "Renders only objects with specified Object IDs" ],
+                [ "4", "Active Selection", "Renders only the selected object or objects" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {
+                "display_name": "Mode"
             }
         },
         {
@@ -151,7 +163,8 @@
             "ui": {
                 "max": 1,
                 "min": 0,
-                "gpuSupport": "none"
+                "gpuSupport": "none", 
+                "display_name": "Firefly Removal Threshold"
             }
         },
         {
@@ -171,9 +184,9 @@
             "default": 6
         },
         {
-            "attr": "device_dependent_properties",
+            "attr": "gpu_ray_bundle",
             "type": "BOOL",
-            "desc": "Dummy attribute for a block of device-dependent properties drawn in code",
+            "desc": "Dummy attribute",
             "default": false,
             "options": {
                 "derived": true
@@ -184,6 +197,36 @@
             "ui": {
                 "display_name": "Max Render Time (mins)"
             }
+        },
+        {
+            "attr": "dmc_threshold",
+            "ui" : {
+                "display_name": "Noise Limit"
+            }
+        },
+        {
+            "attr": "animated_noise_pattern",
+            "type": "BOOL",
+            "desc": "If this is true, the sample pattern will vary from frame to frame",
+            "default": true,
+            "options" : {
+                "derived": true
+            }
+        },
+        {
+            "attr": "samples_limit",
+            "type": "INT",
+            "desc": "Determines the maximum number of samples that each pixel in the image receives",
+            "default": 2500,
+            "ui": {
+                "min": 0,
+                "spft_min": 1500,
+                "soft_max": 10000
+            },
+            "options": {
+               "derived": true
+            },
+            "update": "onUpdateSamplesLimit"
         }
     ],
     "Widget": {
@@ -193,73 +236,14 @@
                 "attrs": [
                     {
                         "name": "type"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1"
-                },
-                "attrs": [
-                    {
-                        "name": "lock_subdivs"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1,::lock_subdivs=0"
-                },
-                "attrs": [
-                    {
-                        "name": "dmc_minSubdivs"
                     },
                     {
-                        "name": "dmc_maxSubdivs"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1,::lock_subdivs=1"
-                },
-                "attrs": [
-                    {
-                        "name": "dmc_minSubdivs",
-                        "label": "Subdivs"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=1"
-                },
-                "attrs": [
-                    {
-                        "name": "dmc_threshold",
-                        "label": "Noise Limit"
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "name": "dmc_adaptivity_clamp"
-                    },
-                    {
-                        "name": "dmc_fireflyRemoval",
-                        "label": "Firefly Removal"
-                    }
-                ]
-            },
-            {
-                "layout": "COLUMN",
-                "visible": {
-                    "cond": "::type=3"
-                },
-                "attrs": [
-                    {
-                        "align": true,
+                        "layout":  "COLUMN",
+                        "name": "Progressive CPU",
+                        "visible": {"cond": "plugins.settings.SettingsImageSampler.isCpuProgressive"},
                         "attrs": [
                             {
                                 "name": "progressive_minSubdivs"
@@ -268,18 +252,128 @@
                                 "name": "progressive_maxSubdivs"
                             },
                             {
-                                "name": "progressive_threshold",
-                                "label": "Noise Limit"
+                                "name": "dmc_threshold"
                             },
                             {
                                 "name": "progressive_maxTime"
                             },
                             {
-                                "name": "device_dependent_properties",
-                                "custom_draw": "widgetDrawDeviceDependentProperties"
+                                "name": "progressive_bundleSize"
+                            },
+                            {
+                                "name": "dmc_adaptivity_clamp"
                             }
-                        ],
-                        "layout": "COLUMN"
+                        ]
+                    },
+                    {
+                        "layout":  "COLUMN",
+                        "name": "Adaptive CPU",
+                        "visible": {"cond": "plugins.settings.SettingsImageSampler.isCpuAdaptive"},
+                        "attrs": [
+                            {
+                                "name": "lock_subdivs"
+                            },
+                            {
+                                "name": "dmc_minSubdivs",
+                                "visible": {"cond": "::lock_subdivs=0"}
+                            },
+                            {
+                                "name": "dmc_minSubdivs",
+                                "label": "Subdivs",
+                                "visible": {"cond": "::lock_subdivs=1"}
+                            },
+                            {
+                                "name": "dmc_maxSubdivs",
+                                "visible": {"cond": "::lock_subdivs=0"}
+                            },
+                            {
+                                "name": "dmc_threshold"
+                            },
+                            {
+                                "name": "dmc_adaptivity_clamp"
+                            },
+                            {
+                                "name": "dmc_fireflyRemoval"
+                            }
+                        ]
+                    },
+                    {
+                        "layout":  "COLUMN",
+                        "name": "Progressive GPU",
+                        "visible": {"cond": "plugins.settings.SettingsImageSampler.isGpuProgressive"},
+                        "attrs": [
+                            {
+                                "name": "samples_limit"
+                            },
+                            {
+                                "name": "dmc_threshold"
+                            },
+                            {
+                                "name": "progressive_maxTime"
+                            },
+                            {
+                                "name": "gpu_ray_bundle",
+                                "custom_draw": "widgetDrawExternalProperties"
+                            },
+                            {
+                                "name": "dmc_adaptivity_clamp"
+                            }
+                        ]
+                    },
+                    {
+                        "layout":  "COLUMN",
+                        "name": "Adaptive GPU",
+                        "visible": {"cond": "plugins.settings.SettingsImageSampler.isGpuAdaptive"},
+                        "attrs": [
+                            {
+                                "name": "samples_limit"
+                            },
+                            {
+                                "name": "dmc_threshold"
+                            },
+                            {
+                                "name": "gpu_ray_bundle",
+                                "custom_draw": "widgetDrawExternalProperties"
+                            },
+                            {
+                                "name": "dmc_adaptivity_clamp"
+                            },
+                            {
+                                "name": "dmc_fireflyRemoval"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "animated_noise_pattern",
+                        "custom_draw" : "widgetDrawExternalProperties"
+                    }
+                ]
+            }
+            
+        ],
+        "render_mask": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                   {
+                        "name": "render_mask_mode"
+                    },
+                    {
+                        "name": "render_mask_texture_file",
+                        "visible": {"cond": "::render_mask_mode=1"}
+                    },
+                    {
+                        "name": "object_selector",
+                        "visible": {"cond": "::render_mask_mode=2"},
+                        "list_label": "Mask objects"
+                    },
+                    {
+                        "name": "render_mask_object_ids_list",
+                        "visible": {"cond": "::render_mask_mode=3"}
+                    },
+                    {
+                        "name": "render_mask_clear",
+                        "label": "Clear Render Mask"
                     }
                 ]
             }

@@ -1,0 +1,199 @@
+
+{
+    "Desciption" : "BRDFToonOverride",
+    "ID" : "BRDFToonOverride",
+    "Name" : "Toon Override",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_brdf",
+            "default" : null,
+            "desc" : "Base BRDF",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lineColor",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The outer color of the cartoon line",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Line Color"
+            }
+        },
+        
+        {
+            "attr" : "lineColor_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The outer color texture of the cartoon line",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Line Color (map)"
+            }
+        },
+        
+        {
+            "attr" : "lineWidth",
+            "default" : 1.50,
+            "desc" : "Cartoon line width",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Line Width",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lineWidth_tex",
+            "default" : 0.0,
+            "desc" : "Cartoon line width texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Line Width (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "innerLineControl",
+            "default" : true,
+            "desc" : "Use same lineColor/Width param values for both silhouette and inner edges",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Inner Line Control"
+            }
+        },
+        
+        {
+            "attr" : "lineColorInner",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The color of the cartoon line at inner edges",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Line Color Inner"
+            }
+        },
+        
+        {
+            "attr" : "lineColorInner_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color of the cartoon line at inner edges",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Line Color Inner (map)"
+            }
+        },
+        
+        {
+            "attr" : "lineWidthInner",
+            "default" : 1.50,
+            "desc" : "Cartoon line width of inner lines",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Line Width Inner",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lineWidthInner_tex",
+            "default" : 0.0,
+            "desc" : "Cartoon line width texture at inner edges",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Line Width Inner (map)",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "outerOverlapThreshold",
+            "default" : 0.0,
+            "desc" : "This determines when outer edges will be created for overlapping parts of one and the same object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Outer Overlap Threshold",
+                "max" : 1.0,
+                "min" : 0.0,
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "normalThreshold",
+            "default" : 0.6999999880790710,
+            "desc" : "This determines when lines will be created for parts of the same object with varying surface normals (for example, at the inside edges of a box). A value of 0.0 means that only 90 degrees or larger angles will generate internal lines. Higher values mean that more smooth normals can also generate an edge. Don't set this value to pure 1.0 as this will fill curved objects completely",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normal Threshold",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "overlapThreshold",
+            "default" : 0.9499999880790710,
+            "desc" : "This determines when inner edges will be created for overlapping parts of one and the same object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Overlap Threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "Opacity of the cartoon line",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Opacity",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity_tex",
+            "default" : 0.0,
+            "desc" : "Opacity texture of the cartoon line",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Opacity (map)",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

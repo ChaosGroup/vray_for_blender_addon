@@ -2,37 +2,12 @@
     "ID": "RenderView",
     "Parameters": [
         {
-            "attr": "focalDistance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "clipping_near",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "clipping_far",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "orthographicWidth",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
             "attr" : "clipping",
-            "default" : true
+            "default" : false
         }
     ],
     "Type": "CAMERA",
     "Options": {
-        "excluded_parameters": [],
-        "animatable": false
+        "excluded_parameters": []
     }
 }

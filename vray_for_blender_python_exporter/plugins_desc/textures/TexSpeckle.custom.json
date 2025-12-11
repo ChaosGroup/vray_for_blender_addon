@@ -1,6 +1,41 @@
 {
     "ID": "TexSpeckle",
     "Name": "V-Ray Speckle",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "color1",
+            "ui": {
+                "display_name": "Color 1"
+            }
+        },
+        {
+            "attr": "color2",
+            "ui": {
+                "display_name": "Color 2"
+            }
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -104,15 +139,39 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "color1"
             },
-            "type": "UVWGEN"
-        }
-    ],
+            {
+                "name": "color2"
+            },
+            {
+                "name": "uvwgen"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": []

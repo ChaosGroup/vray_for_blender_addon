@@ -4,67 +4,46 @@ import bpy
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
-from vray_blender.engine.zmq_process import ZMQ
 from vray_blender.lib import blender_utils, image_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps
-from vray_blender.vray_tools.vray_proxy import fixPosOfProxyLightsOnPreviewUpdate
 from vray_blender.plugins.BRDF.BRDFScanned import registerScannedNodes
-
-IS_DEFAULT_SCENE = False # Indicates that current loaded scene is newly created
-
-def isDefaultScene() :
-    global IS_DEFAULT_SCENE
-    return IS_DEFAULT_SCENE
 
 
 @bpy.app.handlers.persistent
 def _onSavePost(e):
-    global IS_DEFAULT_SCENE
+    from vray_blender.operators import VRAY_OT_dr_nodes_save
 
-    bpy.ops.vray.dr_nodes_save()
-
-    IS_DEFAULT_SCENE = False
+    if VRAY_OT_dr_nodes_save.poll(bpy.context):
+        bpy.ops.vray.dr_nodes_save()
 
 
 @bpy.app.handlers.persistent
 def _onSavePre(e):
     from vray_blender.version import getBuildVersionString, getAddonUpgradeNumber
     from vray_blender import UPGRADE_NUMBER, debug
-    
+
     scene = bpy.context.scene
-    
-    if scene.vray.Exporter.get('vrayAddonUpgradeNumber', None) != UPGRADE_NUMBER:
-        debug.printAlways(f"Scene version updated to {getAddonUpgradeNumber()}")
-    
+
     # Use the dictionary access syntax here in order to avoid updates to the scene
-    scene.vray.Exporter['vrayAddonVersion'] = getBuildVersionString() 
-    scene.vray.Exporter['vrayAddonUpgradeNumber'] = UPGRADE_NUMBER
+    scene.vray.Exporter['vrayAddonVersion'] = getBuildVersionString()
     scene.vray.SettingsVFB['vfb2_layers'] = VfbEventHandler.getVfbLayers()
-    
+
 
 @bpy.app.handlers.persistent
 def _onLoadPre(e):
-    # Reset any active renderers when the blender scene is switched 
+    # Reset any active renderers when the blender scene is switched
     VRayRenderEngine.resetAll()
     VfbEventHandler.reset()
 
 
 @bpy.app.handlers.persistent
 def _onLoadPost(e):
-    global IS_DEFAULT_SCENE
-    IS_DEFAULT_SCENE = not bpy.data.filepath
-
     from vray_blender import engine, debug
     from vray_blender.plugins.texture.TexRemap import registerCurvesNodes as registerTexRemapCurves
     engine.ensureRunning()
 
-    if bpy.app.background == False:
-        # Request compute devices update as they may have been changed.
-        # Skip in headless mode since UI updates are unnecessary.
-        vray.requestComputeDevices()
-
-    # Reset the global unique ID generator. This will keep the generated IDs to a 
+    # Reset the global unique ID generator. This will keep the generated IDs to a
     # decent size and will also ensure that on reload, given that no changes have been
     # made to the scene, the IDs will remain the same
     IdGenerator.reset()
@@ -76,11 +55,7 @@ def _onLoadPost(e):
     registerColorRamps()
 
     registerTexRemapCurves()
-
     registerScannedNodes()
-
-    # Run upgrade for the loaded scene, if necessary
-    bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
 
     # If SettingsVFB.vfb2_layers is empty, the server will reset layers to their default configuration
     # to override any VFB layer settings from previously opened scenes.
@@ -89,19 +64,26 @@ def _onLoadPost(e):
     # Set VFB Layers if new scene is being loaded
     VfbEventHandler.updateVfbLayers(settingsVFB.vfb2_layers)
     vray.setVfbLayers(settingsVFB.vfb2_layers)
-
-
     vray.resetVfbToolbar()
 
     # Notify the Cosmos browser that the scene name has changed
     vray.updateCosmosSceneName(os.path.basename(e))
 
     # Set the log level to the one saved in the scene
-    debug.setLogLevel(int(bpy.context.scene.vray.Exporter.verbose_level))
+    prefs = blender_utils.getVRayPreferences()
+    debug.setLogLevel(int(prefs.verbose_level), prefs.enable_qt_logs)
 
-    # Remove any images from the previous scene explicitly saved by the plugin.
+    # Remove any images from the previous scene explicitly saved by the plugin and track the ones from the current scene.
     image_utils.clearSavedImages()
+    image_utils.trackImageUpdates()
 
+    # Run upgrade for the loaded scene, if necessary
+    if bpy.app.background:
+        # In headless mode, the rendering may start before the scene is upgraded.
+        # Invoke the operaror synchronously
+        bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
+    else:
+        VfbEventHandler.upgradeScene()
 
 
 @bpy.app.handlers.persistent
@@ -120,19 +102,18 @@ def _onUpdatePre(e):
     from vray_blender.plugins.templates.common import cleanupObjectSelectorLists
     from vray_blender.nodes.nodes import updateNodeLinks
     from vray_blender.lib.camera_utils import fixOverrideCameraType
+
+    if blender_utils.deleteOperatorHasBeenCalled():
+        cleanupObjectSelectorLists()
     
     fixBlenderLights()
-    cleanupObjectSelectorLists()
     syncColorRamps()
     updateNodeLinks()
     fixOverrideCameraType()
 
-    image_utils.checkPackedImageForUpdates()
+    image_utils.trackImageUpdates()
+    image_utils.updateTexturePlaceholderNode()
 
-
-@bpy.app.handlers.persistent
-def _onUpdatePost(scene, depsgraph):
-    fixPosOfProxyLightsOnPreviewUpdate(depsgraph)
 
 # bpy.types.BlendImportContext was added in 4.3
 if bpy.app.version >= (4, 3, 0):
@@ -143,16 +124,15 @@ if bpy.app.version >= (4, 3, 0):
             if item.id_type == 'MATERIAL':
                 createMtlCurvesNodes(item.id)
 
-    
+
 def register():
     blender_utils.addEvent(bpy.app.handlers.save_pre, _onSavePre)
     blender_utils.addEvent(bpy.app.handlers.save_post, _onSavePost)
     blender_utils.addEvent(bpy.app.handlers.load_post, _onLoadPost)
     blender_utils.addEvent(bpy.app.handlers.load_pre, _onLoadPre)
     blender_utils.addEvent(bpy.app.handlers.undo_post, _onUndoPost)
-    blender_utils.addEvent(bpy.app.handlers.undo_post, _onRedoPost)
+    blender_utils.addEvent(bpy.app.handlers.redo_post, _onRedoPost)
     blender_utils.addEvent(bpy.app.handlers.depsgraph_update_pre, _onUpdatePre)
-    blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
 
     # bpy.app.handlers.blend_import_post was added in 4.3
     if bpy.app.version >= (4, 3, 0):
@@ -161,7 +141,6 @@ def register():
     # Explicitly run VfbEventHandler as the add-on registration won't trigger
     # a scene reload.
     VfbEventHandler.ensureRunning(reset=True)
-
 
 def unregister():
 
@@ -172,9 +151,8 @@ def unregister():
     blender_utils.delEvent(bpy.app.handlers.load_post, _onLoadPost)
     blender_utils.delEvent(bpy.app.handlers.load_pre, _onLoadPre)
     blender_utils.delEvent(bpy.app.handlers.undo_post, _onUndoPost)
-    blender_utils.delEvent(bpy.app.handlers.undo_post, _onRedoPost)
+    blender_utils.delEvent(bpy.app.handlers.redo_post, _onRedoPost)
     blender_utils.delEvent(bpy.app.handlers.depsgraph_update_pre, _onUpdatePre)
-    blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
 
     # bpy.app.handlers.blend_import_post was added in 4.3
     if bpy.app.version >= (4, 3, 0):

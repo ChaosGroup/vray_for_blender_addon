@@ -114,6 +114,7 @@
             "ui" : 
             {
                 "min" : 0.0,
+                "quantityType" : "distance",
                 "rollout" : "",
                 "soft_max" : 10.0
             }
@@ -149,6 +150,7 @@
             "type" : "VECTOR_TEXTURE",
             "ui" : 
             {
+                "quantityType" : "distance",
                 "rollout" : ""
             }
         },
@@ -161,7 +163,9 @@
             "ui" : 
             {
                 "max" : 360.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         

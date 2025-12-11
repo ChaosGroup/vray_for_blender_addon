@@ -1,0 +1,152 @@
+
+{
+    "Desciption" : "VDBVolume",
+    "ID" : "VDBVolume",
+    "Name" : "VDB Volume",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "cache_path",
+            "default" : "",
+            "desc" : "Input cache path",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cache_stream",
+            "default" : null,
+            "desc" : "A list of two items representing several VDB grids. First item is number of bytes, second item is VDB grid serialized represented as ListInt",
+            "type" : "LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cache_channels",
+            "default" : "",
+            "desc" : "Comma separated list of channel names to load from the cache file",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cache_velocity",
+            "default" : "",
+            "desc" : "Optional velocity (vector) channel name or comma separeted list of three (single valued) channel names comprising a velocity vector field stored in the cache file. Needed for the motion blurred rendering",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "padding",
+            "default" : 0.0,
+            "desc" : "Additional padding to expand the volume bounding box with. The (base) volume bounding box is computed from the bounds of the voxel data contained in the loaded cache file channels",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "step_scale",
+            "default" : 1.0,
+            "desc" : "Additional scaling factor for the ray marching step which will be used when shading the volume.The base size of the ray marching step is currently determined from the voxel size of the volume datacontained in the cache",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "velocity_scale",
+            "default" : 1.0,
+            "desc" : "Scaling factor for the velocity which will be used when computing the volume medium motion blur",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "anim_mode",
+            "default" : "0",
+            "desc" : "Playback Mode, 0 - Linear, 1 - Frame Index, 2 - Loop",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Frame Index", "Frame Index" ],
+                [ "2", "Loop", "Loop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Playback Mode"
+            }
+        },
+        
+        {
+            "attr" : "anim_frame",
+            "default" : 0.0,
+            "desc" : "Specific cache frame index to load",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Direct Cache Index",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anim_start",
+            "default" : 0,
+            "desc" : "Play Start",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Timeline Origin",
+                "max" : 10000,
+                "min" : -10000
+            }
+        },
+        
+        {
+            "attr" : "anim_offset",
+            "default" : 0,
+            "desc" : "Cache Start",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Cache Origin",
+                "max" : 10000,
+                "min" : -10000
+            }
+        },
+        
+        {
+            "attr" : "anim_speed",
+            "default" : 1.0,
+            "desc" : "Play Speed",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Play Speed",
+                "max" : 10.0,
+                "min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "anim_length",
+            "default" : 0,
+            "desc" : "Play Length",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Play Length",
+                "max" : 10000,
+                "min" : -10000
+            }
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -1,41 +1,18 @@
+import bpy
+import sys
 import time
 from pathlib import PurePath
-import sys
-import bpy
 
-from vray_blender.lib.defs import ExporterType
 from vray_blender.engine.renderer_prod import VRayRendererProd
 from vray_blender.engine.renderer_preview import VRayRendererPreview
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQProcess
-from vray_blender.nodes.utils import tagRedrawPropertyEditor
+from vray_blender.nodes.utils import tagRedrawPropertyEditor, tagRedrawViewport
 from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
-
-def setupDistributedRendering(settings, exporterType: ExporterType, isInteractive=False):
-    """
-    Export the necessary parameters used for distributed rendering i.e. hosts, dispatcher, in process rendering.
-    Args:
-        settings (ExporterSettings): An existing ExporterSettings instance where the parameters will be set.
-        exporterType (ExporterType): The type of export, used to disable DR.
-        isInteractive (bool): Flag indicating if the current export is for interactive.
-    """
-    vrayDR = bpy.context.scene.vray.VRayDR
-    NON_DR_EXPORTERS = [ ExporterType.PREVIEW ]
-    if exporterType not in NON_DR_EXPORTERS and (not isInteractive or not vrayDR.ignoreInInteractive):
-        settings.drUse = vrayDR.on
-        settings.drRenderOnlyOnHosts = vrayDR.renderOnlyOnNodes
-        if vrayDR.use_remote_dispatcher:
-            settings.remoteDispatcher = vrayDR.dispatcher.address + ":" + str(vrayDR.dispatcher.port)
-        hosts = []
-        for node in vrayDR.nodes:
-            if node.use:
-                port = node.port if node.port_override else 20209
-                hosts.append(node.address + ":" + str(port))
-        settings.setDRHosts(hosts)
 
 class VRayRenderEngine(bpy.types.RenderEngine):
     bl_idname = 'VRAY_RENDER_RT'
@@ -44,10 +21,10 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     # Render engine supports being used for rendering previews of materials, lights and worlds
     bl_use_preview = True
 
-    # Don’t expose Cycles and Eevee shading nodes in the node editor 
+    # Don’t expose Cycles and Eevee shading nodes in the node editor
     # user interface, so own nodes can be used instead
     bl_use_shading_nodes_custom = True
-    
+
     # Let blender show texture previews
     bl_use_texture_preview = False
 
@@ -56,42 +33,42 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     previewRenderer = None
     viewportRenderer = None
     iprRenderer = None
-
+    
     ERR_MSG_ZMQ_SERVER_DOWN = "No connection to V-Ray renderer, retry in a few seconds."
     ERR_MSG_MULTIPLE_VIEWPORT_RENDERERS = "Cannot render with V-Ray to more than one viewport."
-    ERR_MSG_PROD_RENDER_RUNNING = "Production rendering is already running. Cannot start viewport rendering." 
-    ERR_MSG_QUAD_VIEW = "Cannot render QuadView with V-Ray." 
+    ERR_MSG_PROD_RENDER_RUNNING = "Production rendering is already running. Cannot start viewport rendering."
+    ERR_MSG_QUAD_VIEW = "Cannot render QuadView with V-Ray."
 
-        
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # During initialization, there is no information as to which type the renderer should be.
-        # These members will be assigned when a VRay renderer is created ( during the 
-        # first invocation of the appropriate 'update' callback )    
-        
+        # These members will be assigned when a VRay renderer is created ( during the
+        # first invocation of the appropriate 'update' callback )
+
         # The viewport renderer is a special case because Blender may create more than one at the
-        # same time, and may also create instances that are never used, i.e. their view_update/view_draw 
-        # methods are never called. 
-        
-        # We only want to allow one instance of the viewport renderer active at any one time. 
+        # same time, and may also create instances that are never used, i.e. their view_update/view_draw
+        # methods are never called.
+
+        # We only want to allow one instance of the viewport renderer active at any one time.
         # If _viewportRendererOwner is True, this is the only instance of VRayRenderer that has actually
-        # created a viewport renderer, i.e. that it owns the VRayRenderer.viewportRenderer. 
+        # created a viewport renderer, i.e. that it owns the VRayRenderer.viewportRenderer.
         self._viewportRendererOwner = False
-        
-        # A rendering engine will be marked as 'inactive' if a renderer cannot be created for it, 
-        # e.g. because another renderer of the same type is already running. Once marked, it won't be 
+
+        # A rendering engine will be marked as 'inactive' if a renderer cannot be created for it,
+        # e.g. because another renderer of the same type is already running. Once marked, it won't be
         # used for rendering. Because each renderer is attached to a specific area, this will allow
         # us to know to never render in the area unless the render engine is recreated.
         self._inactiveViewport = False
-        
-        
+
+
     def __del__(self):
         # For the viewport, Blender creates (and destroys) multiple rendering engine instances. Some of them
         # are never used or at least their view_update/view_draw methods are not called. Because 'viewportRenderer' is
-        # initialized in the view_update() callback, it may not be valid when __del__ is called. 
+        # initialized in the view_update() callback, it may not be valid when __del__ is called.
         try:
             # Delete viewportRenderer only through the owning instance
-            if hasattr(self, "_viewportRendererOwner") and self._viewportRendererOwner and VRayRenderEngine.viewportRenderer:    
+            if hasattr(self, "_viewportRendererOwner") and self._viewportRendererOwner and VRayRenderEngine.viewportRenderer:
                 VRayRenderEngine.viewportRenderer.stop()
                 VRayRenderEngine.viewportRenderer = None
                 self._viewportRendererOwner = False
@@ -104,22 +81,26 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     @staticmethod
     def resetAll():
         """ Reset all renderers. This method should be called when ZMQ server is restarted for
-            whatever reason. In this case, the matching renderers on the server are no longer available 
+            whatever reason. In this case, the matching renderers on the server are no longer available
             so we need to recreate them in V4B as well.
-        """ 
-        VRayRenderEngine.stopInteractiveRenderer()
-
+        """
         if VRayRenderEngine.previewRenderer is not None:
             VRayRenderEngine.previewRenderer.abort()
             VRayRenderEngine.previewRenderer = None
-        
+
         if VRayRenderEngine.prodRenderer is not None:
             VRayRenderEngine.prodRenderer.abort()
             VRayRenderEngine.prodRenderer = None
 
+        if VRayRenderEngine.iprRenderer:
+            VRayRenderEngine.iprRenderer.stop(block=False)
+            VRayRenderEngine.iprRenderer = None
+
         if VRayRenderEngine.viewportRenderer is not None:
-            VRayRenderEngine.viewportRenderer.stop()
+            VRayRenderEngine.viewportRenderer.stop(block=False)
             VRayRenderEngine.viewportRenderer = None
+
+        VRayRenderEngine.mainVrayRenderer = None
 
     @staticmethod
     def startInteractiveRenderer():
@@ -133,6 +114,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             VRayRenderEngine.iprRenderer.stop()
             VRayRenderEngine.iprRenderer = None
             tagRedrawPropertyEditor()
+            tagRedrawViewport()
 
     @staticmethod
     def startVantageLiveLink():
@@ -140,6 +122,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         VRayRenderEngine.iprRenderer = VRayRendererVantageLiveLink()
         VRayRenderEngine.iprRenderer.start()
         VRayRenderEngine.iprRenderer.exportScene()
+        tagRedrawViewport()
 
     @staticmethod
     def stopVantageLiveLink():
@@ -147,29 +130,15 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             VRayRenderEngine.iprRenderer.stop()
             VRayRenderEngine.iprRenderer = None
 
-    def _stopViewportRenderer(self):
+    @staticmethod
+    def stopViewportRenderer():
         # Enabling "Solid" viewport mode triggers blender to stop the viewport rendering instance
         VfbEventHandler.stopViewportRender()
-
-        # VRayRenderer.viewportRenderer value will be set to None when the 
-        # viewport bpy.types.RenderEngine instance is deleted
-        viewPortRunningChecks = 100 # If More than viewPortRunningChecks are made the viewport renderer is probably stalled
-        viewPortCheckSleepTime = 0.2
-        while VRayRendererIprViewport.isActive() and viewPortRunningChecks > 0:
-            time.sleep(viewPortCheckSleepTime)
-            viewPortRunningChecks -= 1
-
-        if viewPortRunningChecks == 0:
-            debug.printError(f'Waiting more than {float(viewPortRunningChecks) * viewPortCheckSleepTime} seconds'
-                             ' for the viewport bpy.types.RenderEngine instance to be destroyed')
-            return False
-
-        return True
 
     # Final render callback
     # Called on a non-main thread.
     def update(self, blendData: bpy.types.BlendData, dg: bpy.types.Depsgraph):
-        
+
         if bpy.app.background:
             # In headless mode, parse command line.
             self._parseHeadlessArguments()
@@ -177,15 +146,10 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         try:
             if self.is_preview:
                 VRayRenderEngine.previewRenderer = VRayRendererPreview()
-            else:
-                # The production rendering job must not be running in parallel with viewport rendering
-                # because they are using same instance of VRay::Renderer
-                if not VRayRendererProd.isActive():
-                    VRayRenderEngine.stopInteractiveRenderer()
-                    if self._stopViewportRenderer():
-                        VRayRenderEngine.prodRenderer = VRayRendererProd()
-                    else:
-                        debug.printError("Production rendering can't be started")
+            elif not VRayRendererProd.isActive():
+                VRayRenderEngine.stopInteractiveRenderer()
+                VRayRenderEngine.stopViewportRenderer()
+                VRayRenderEngine.prodRenderer = VRayRendererProd()
         except Exception as ex:
             debug.printExceptionInfo(ex, "VRayRenderEngine::update()")
 
@@ -213,29 +177,29 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     def view_update(self, context: bpy.types.Context, depsgraph: bpy.types.Depsgraph):
         if not vray.isInitialized():
             self.update_stats("WARNING", 'Can\'t start render job. V-Ray is not initialized')
-            self._stopViewportRenderer()
+            VRayRenderEngine.stopViewportRenderer()
             return
 
         if self._inactiveViewport:
             return
-        
+
         if not ZMQProcess.isRunning():
             self._showCannotRenderErrorMsg(bpy.context, connLost=True)
             return
-        
+
         try:
-            # Blender will try to create multiple viewport renderers if multiple views are switched 
-            # to Viewport mode. We however don't want to allow more than one viewport renderer to run simultaneously 
+            # Blender will try to create multiple viewport renderers if multiple views are switched
+            # to Viewport mode. We however don't want to allow more than one viewport renderer to run simultaneously
             # because they are using same instance of VRay::Renderer. Always called on the main thread.
-            # Create and use renderer for this class instance only if there is none yet.                
+            # Create and use renderer for this class instance only if there is none yet.
             if not VRayRenderEngine.viewportRenderer:
                 if (not VRayRendererProd.isActive()) and not VRayRenderEngine._isQuadView(context):
                     VRayRenderEngine.stopInteractiveRenderer()
                     VRayRenderEngine.viewportRenderer = VRayRendererIprViewport(context)
                     self._viewportRendererOwner = True
             elif not self._viewportRendererOwner:
-                # Only mark as inactive if another viewport renderer is active. If the renderer was not 
-                # created because a PROD renderer was running, it is OK to try to initialize it again. 
+                # Only mark as inactive if another viewport renderer is active. If the renderer was not
+                # created because a PROD renderer was running, it is OK to try to initialize it again.
                 self._inactiveViewport = True
 
             if self._viewportRendererOwner:
@@ -253,16 +217,16 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     def view_draw(self, context, depsgraph):
         if self._inactiveViewport:
             return
-        
+
         if not ZMQProcess.isRunning():
             self._showCannotRenderErrorMsg(bpy.context, connLost=True)
             return
-        
+
         try:
             if self._viewportRendererOwner \
                     and VRayRenderEngine.viewportRenderer \
                     and not VRayRenderEngine._isQuadView(context):
-                
+
                 VRayRenderEngine.viewportRenderer.view_draw(self, context, depsgraph)
             else:
                 self._showCannotRenderErrorMsg(context)
@@ -282,7 +246,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         renderAnim    = False
         imgFormat     = None
         lastIdx = len(sys.argv) - 1
-        
+
         for (idx, arg) in enumerate(sys.argv):
             hasNext = idx < lastIdx
             if arg in {'-f', '--render-frame'} and hasNext:
@@ -327,24 +291,24 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         if output != '':
             outputDir  = output
             outputFile = ''
-            
+
             outPath = PurePath(output)
-            
+
             if outPath.suffix != '':
                 outputFile = outPath.stem
                 outputDir  = str(outPath.parent)
 
             if outputFile:
                 vrayScene.SettingsOutput.img_file = outputFile
-            
+
             vrayScene.SettingsOutput.img_dir  = outputDir
-            
+
             debug.printInfo(f'Changing image output directory to "{output}"')
-            
+
             vrayExporter.auto_save_render = True
 
             debug.printInfo(f'Changing .vrscene output directory to "{output}"')
-    
+
         if renderAnim and vrayExporter.animation_mode == 'FRAME':
             # if we dont have anim mode set, use Full Range
             debug.printInfo('Changing Animation Mode from "%s" to "ANIMATION"' % vrayExporter.animation_mode)
@@ -371,7 +335,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         except Exception:
             return []
         return []
-   
+
 
     def _showCannotRenderErrorMsg(self, context: bpy.types.Context, connLost=False):
         if not vray.isInitialized():
@@ -384,7 +348,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             errMsg = VRayRenderEngine.ERR_MSG_ZMQ_SERVER_DOWN
         elif isQuadView:
             errMsg = VRayRenderEngine.ERR_MSG_QUAD_VIEW
-        elif prodRenderIsActive: 
+        elif prodRenderIsActive:
             errMsg = VRayRenderEngine.ERR_MSG_PROD_RENDER_RUNNING
         else:
             errMsg = VRayRenderEngine.ERR_MSG_MULTIPLE_VIEWPORT_RENDERERS

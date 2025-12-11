@@ -286,7 +286,8 @@
             {
                 "display_name" : "Secondary ray bias",
                 "max" : 1000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

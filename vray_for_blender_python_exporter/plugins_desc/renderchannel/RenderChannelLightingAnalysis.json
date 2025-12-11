@@ -1,0 +1,147 @@
+
+{
+    "Desciption" : "RenderChannelLightingAnalysis",
+    "ID" : "RenderChannelLightingAnalysis",
+    "Name" : "Render Channel Lighting Analysis",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "name",
+            "default" : "LightingAnalysis",
+            "desc" : "The name of the render element",
+            "type" : "STRING",
+            "ui" : 
+            {
+                "display_name" : "Render element name",
+                "rollout" : "V-Ray Lighting Analysis",
+                "tab" : "V-Ray Lighting Analysis"
+            }
+        },
+        
+        {
+            "attr" : "quantity",
+            "default" : "1",
+            "desc" : "Specifies the quantity to be displayed (0 - Luminance in cd, 1 - Illuminance in lx)",
+            "items" : 
+            [
+                [ "0", "Luminance (cd)", "Luminance (cd)" ],
+                [ "1", "Illuminance (lx)", "Illuminance (lx)" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Quantity"
+            }
+        },
+        
+        {
+            "attr" : "min_value",
+            "default" : 260.0,
+            "desc" : "Specifies which values are mapped to blue",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Min. value",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_value",
+            "default" : 400.0,
+            "desc" : "Specifies which values are mapped to red",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Max. value",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "scale",
+            "default" : "0",
+            "desc" : "Specifies how values are mapped to colors (0 - Linear, 1 - Logarithmic)",
+            "items" : 
+            [
+                [ "0", "Linear", "Linear" ],
+                [ "1", "Logarithmic", "Logarithmic" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Scale"
+            }
+        },
+        
+        {
+            "attr" : "display",
+            "default" : "0",
+            "desc" : "Specifies the way data is displayed (0 - False colors, 1 - Grid overlay)",
+            "items" : 
+            [
+                [ "0", "False colors", "False colors" ],
+                [ "1", "Grid overlay", "Grid overlay" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Display"
+            }
+        },
+        
+        {
+            "attr" : "grid_horizontal_spacing",
+            "default" : 40,
+            "desc" : "The horizontal space in pixels between two numeric points on the grid",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Grid horizontal spacing",
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "grid_vertical_spacing",
+            "default" : 40,
+            "desc" : "The vertical space in pixels between two numeric points on the grid",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Grid vertical spacing",
+                "max" : 100,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "fade_background_image",
+            "default" : true,
+            "desc" : "When enabled, it fades the rendered image, so that the grid values would be more visible",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Fade background image"
+            }
+        },
+        
+        {
+            "attr" : "draw_legend",
+            "default" : false,
+            "desc" : "When enabled, shows a legend of the false colors at the bottom of the render",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Draw legend"
+            }
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

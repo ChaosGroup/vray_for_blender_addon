@@ -53,7 +53,11 @@
             "attr" : "consider_for_aa",
             "default" : false,
             "desc" : "true to consider this render element for antialiasing (may slow down rendering)",
-            "type" : "BOOL"
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Consider for Anti-Aliasing"
+            }
         },
         
         {

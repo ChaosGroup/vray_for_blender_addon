@@ -224,7 +224,8 @@
             "ui" : 
             {
                 "display_name" : "Distance Near",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -236,7 +237,8 @@
             "ui" : 
             {
                 "display_name" : "Distance Far",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

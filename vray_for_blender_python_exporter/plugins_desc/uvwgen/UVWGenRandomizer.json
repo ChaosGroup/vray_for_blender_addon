@@ -134,9 +134,11 @@
             "ui" : 
             {
                 "display_name" : "Variance rotation min",
+                "quantityType" : "angle",
                 "soft_max" : 360.0,
                 "soft_min" : 0.0,
-                "spin_step" : 5.0
+                "spin_step" : 5.0,
+                "units" : "degrees"
             }
         },
         
@@ -148,9 +150,11 @@
             "ui" : 
             {
                 "display_name" : "Variance rotation max",
+                "quantityType" : "angle",
                 "soft_max" : 360.0,
                 "soft_min" : 0.0,
-                "spin_step" : 5.0
+                "spin_step" : 5.0,
+                "units" : "degrees"
             }
         },
         

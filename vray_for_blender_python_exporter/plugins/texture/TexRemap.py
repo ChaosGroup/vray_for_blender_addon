@@ -293,7 +293,7 @@ def _extrapolateToEdge(p1, p2, extend, left=True):
 
 def _getInterpolation(point: bpy.types.CurveMapPoint):
     if point.handle_type == 'VECTOR':
-        return 0 # linear
+        return 1 # linear
     else:
         return 4 # bezier
     

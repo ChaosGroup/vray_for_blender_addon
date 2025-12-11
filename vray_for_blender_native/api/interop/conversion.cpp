@@ -72,5 +72,49 @@ proto::RenderSizes fromRenderSizes(const py::object& obj)
 }
 
 
+std::vector<Interop::UVAttrLayer> fromUVAttrLayersArr(const py::object& list)
+{
+	auto vec = toVector<py::object>(list);
+
+	std::vector<Interop::UVAttrLayer> result;
+
+	for (const auto& layer : vec) {
+		result.push_back(
+			Interop::UVAttrLayer {
+				py::extract<std::string>(layer.attr("name")),
+				fromDataArray<const float[2]>(layer)
+			}
+		);
+	}
+
+	return result;
+}
+
+
+std::vector<Interop::AttrLayer> fromAttrLayersArr(const py::object& list)
+{
+	auto vec = toVector<py::object>(list);
+
+	std::vector<Interop::AttrLayer> result;
+
+	for (const auto& layer : vec) {
+		const std::string domain = py::extract<std::string>(layer.attr("domain"));
+		const std::string dataType = py::extract<std::string>(layer.attr("dataType"));
+		const uint8_t* elementPtr = toPtr<uint8_t>(layer.attr("ptr"));
+		const size_t elementCount = py::extract<size_t>(layer.attr("count"));
+		result.push_back(
+			Interop::AttrLayer {
+				py::extract<std::string>(layer.attr("name")),
+				dataType == "BYTE_COLOR" ? Interop::AttrLayer::Byte : Interop::AttrLayer::Float,
+				domain == "POINT" ? Interop::AttrLayer::Point : Interop::AttrLayer::Corner,
+				elementPtr,
+				elementCount
+			}
+		);
+	}
+
+	return result;
+}
+
 
 } // end namespace VrayForBlender::Interop

@@ -4,7 +4,7 @@
     "Parameters": [
         {
             "attr": "default_texture",
-            "ui" : {
+            "ui": {
                 "display_name": "Default"
             }
         },
@@ -13,9 +13,8 @@
             "default": "12",
             "desc": "Specifies the meaning of the ID parameters",
             "update": "onUpdateMode",
-            "items" : 
-            [
-                [ "0", "Polygon Selection", "Uses polygon selection set information" ],
+            "items": [
+                [ "0", "Material Face ID", "Consider the material assignments of the object when selecting textures" ],
                 [ "1", "Object ID", "Consider the Object ID of the object when feeding the data (color or texture) to the material" ],
                 [ "12", "Random by Composite Kеy", "Randomize based on the option selected below" ],
                 [ "30", "Texture Switch", "Enables the Switch ID Texture parameter to determine which texture is used in the material" ]
@@ -27,18 +26,21 @@
         },
         {
             "attr": "hue_variation",
+            "desc": "Specifies the amount of randomness in the hue of the textures",
             "ui": {
                 "spin_step": 0.1
             }
         },
         {
             "attr": "saturation_variation",
+            "desc": "Specifies the amount of randomness in the saturation of the textures",
             "ui": {
                 "spin_step": 0.1
             }
         },
         {
             "attr": "gamma_variation",
+            "desc": "Specifies the amount of randomness in the gamma of the textures",
             "ui": {
                 "spin_step": 0.1,
                 "max": 100.0
@@ -46,7 +48,7 @@
         },
         {
             "attr": "id_gen_tex",
-            "ui" : {
+            "ui": {
                 "display_name": "Switch ID Texture"
             },
             "options": {
@@ -60,7 +62,7 @@
         },
         {
             "attr": "random_user_attr_name",
-            "ui" : {
+            "ui": {
                 "display_name": "Random User Attribute Name"
             }
         },
@@ -70,16 +72,16 @@
             "desc": "Assigns random color based on the name of the node that the texture is applied to.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
             "attr": "random_mode_render_id",
             "type": "BOOL",
             "desc": "Assigns random color based on the render ID.",
-            "default": true,
+            "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
@@ -106,16 +108,16 @@
             "desc": "Assigns random color based on the IDs of objects instanced with the Particle Instancer.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
             "attr": "random_mode_polygon_selection",
             "type": "BOOL",
-            "desc": "Assigns random color based on the unique polygon selection of the object's faces.",
+            "desc": "Assigns random color based on the unique material ids  of the object's faces.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
@@ -124,7 +126,7 @@
             "desc": "Assigns random color based on the object's ID.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
@@ -133,7 +135,7 @@
             "desc": "Assigns random color based on element (e.g., teapot lid, etc.) IDs of the object.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
@@ -142,27 +144,18 @@
             "desc": "Assigns random color based on a User Attribute assigned to the specific objects and set in the Random User Attr Name field.",
             "default": false,
             "options": {
-               "derived": true
+                "derived": true
             }
         },
         {
             "attr": "random_mode_scene_name",
             "type": "BOOL",
             "desc": "Assigns random color/texture based on each object's full scene path.",
-            "default": false,
+            "default": true,
             "options": {
-               "derived": true
+                "derived": true
             }
-        },
-        {
-            "attr": "random_mode_tile",
-            "type": "BOOL",
-            "desc": "Assigns random color/texture based on tile.",
-            "default": false,
-            "options": {
-               "derived": true
-            }
-        }        
+        }
     ],
     "Widget": {
         "widgets": [
@@ -204,8 +197,15 @@
                     },
                     {
                         "layout": "COLUMN",
-                        "visible": {"cond": "::mode=30"},
+                        "visible": {
+                            "cond": "::mode=30"
+                        },
                         "attrs": [
+                            {
+                                "name": "id_gen_tex_round_mode",
+                                "label": "Round Mode",
+                                "expand": true
+                            },
                             {
                                 "name": "interpolate"
                             }
@@ -214,20 +214,24 @@
                     {
                         "name": "loop_textures",
                         "label": "Loop Through Textures",
-                        "active": {"cond": "::mode!=12"}
+                        "active": {
+                            "cond": "::mode!=12"
+                        }
                     },
                     {
                         "layout": "BOX",
                         "label": "Randomize By",
-                        "visible": {"cond": "::mode=12"},
+                        "visible": { "cond": "::mode=12" },
                         "attrs": [
                             {
                                 "name": "random_mode_node_handle",
-                                "label": "Node Handle"
+                                "label": "Node Handle",
+                                "visible": { "cond": "::random_mode_node_handle=1" }
                             },
                             {
                                 "name": "random_mode_render_id",
-                                "label": "Render ID"
+                                "label": "Render ID",
+                                "visible": { "cond": "::random_mode_render_id=1" }
                             },
                             {
                                 "name": "random_mode_node_name",
@@ -235,7 +239,8 @@
                             },
                             {
                                 "name": "random_mode_particle_id",
-                                "label": "Particle ID"
+                                "label": "Particle ID",
+                                "visible": { "cond": "::random_mode_particle_id=1" }
                             },
                             {
                                 "name": "random_mode_instance_id",
@@ -243,7 +248,7 @@
                             },
                             {
                                 "name": "random_mode_polygon_selection",
-                                "label": "Polygon Selection"
+                                "label": "Face Material ID"
                             },
                             {
                                 "name": "random_mode_object_id",
@@ -258,15 +263,14 @@
                                 "label": "Scene Name"
                             },
                             {
-                                "name": "random_mode_tile",
-                                "label": "Tile"
-                            },
-                            {
-                                "name": "random_mode_user_attribute"
+                                "name": "random_mode_user_attribute",
+                                "label": "User Attribute"
                             },
                             {
                                 "layout": "COLUMN",
-                                "active": {"cond": "::random_mode_user_attribute=1"},
+                                "active": {
+                                    "cond": "::random_mode_user_attribute=1"
+                                },
                                 "attrs": [
                                     {
                                         "name": "random_user_attr_name",
@@ -279,22 +283,22 @@
                     {
                         "layout": "BOX",
                         "label": "Ramdomization Options",
-                        "visible": {"cond": "::mode=12"},
+                        "visible": { "cond": "::mode=12" },
                         "attrs": [
                             {
+                                "name": "seed"
+                            },
+                            {
                                 "name": "hue_variation",
-                                "label": "Random Hue"
+                                "label": "Hue"
                             },
                             {
                                 "name": "saturation_variation",
-                                "label": "Random Saturation"
+                                "label": "Saturation"
                             },
                             {
                                 "name": "gamma_variation",
-                                "label": "Random Gamma"
-                            },
-                            {
-                                "name": "seed"
+                                "label": "Gamma"
                             }
                         ]
                     }
@@ -310,11 +314,10 @@
             {
                 "name": "id_gen_tex"
             }
-       ]
+        ]
     },
     "Options": {
         "animatable": true,
-        "excluded_parameters": [
-        ]
+        "excluded_parameters": []
     }
 }

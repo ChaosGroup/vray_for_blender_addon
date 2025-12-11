@@ -6,6 +6,7 @@ from vray_blender.engine.zmq_process import ZMQProcess
 from vray_blender.lib import sys_utils
 from vray_blender.lib.defs import ProdRenderMode
 from vray_blender.nodes.utils import tagRedrawViewport
+from vray_blender.lib.camera_utils import renderCamerasHaveSameType
 
 from vray_blender import debug
 
@@ -21,8 +22,10 @@ class _Event:
     CloudSubmit             = 9     # Submit scene for V-Ray Cloud rendering
     ReportStatus            = 10    # Report to Bleder status area
     UpgradeScene            = 11    # Run a scene version upgrade
-    RenderVantageStop       = 12    # Stop Vantage Live Link
+    RenderVantageStart      = 12    # Start Vantage Live Link
+    RenderVantageStop       = 13    # Stop Vantage Live Link
 
+DrawHandlers = []
 
 class _EventInfo:
     """ Encapsulates the event type and any parameters to the evennt handler procedure """
@@ -38,7 +41,7 @@ class _VfbEventHandler:
 
     def __init__(self):
         self._lock = threading.Lock()
-        
+
         self._eventQueue: list[_EventInfo] = []   # FIFO queue of events
         self._vfbLayersJson      = ""      # Last layer settings received fom VFB
         self._vfbSettingsJson    = ""      # Last received VFB settings
@@ -57,15 +60,16 @@ class _VfbEventHandler:
 
 
     def ensureRunning(self, reset=False):
-        """ Activate event handling. This method is idempotent. 
+        """ Activate event handling. This method is idempotent.
             @param reset - clear data associated with the current scene. Should be set to True upon scene reload.
-        """ 
+        """
         if reset:
             self.reset()
 
-        if not bpy.app.timers.is_registered(_VfbEventHandler._onTimer): 
+        if not bpy.app.timers.is_registered(_VfbEventHandler._onTimer):
             bpy.app.timers.register(_VfbEventHandler._onTimer)
 
+        DrawHandlers.append(bpy.types.SpaceView3D.draw_handler_add(self._exportInteractiveViewport, (), 'WINDOW', 'POST_PIXEL'))
 
     def reset(self):
         with self._lock:
@@ -73,16 +77,19 @@ class _VfbEventHandler:
             self.vfbLayersJson  = ""
             self.vfSettingsJson = ""
             self._redrawViewport = False
-            
+
 
     def stop(self):
-        if bpy.app.timers.is_registered(_VfbEventHandler._onTimer): 
+        if bpy.app.timers.is_registered(_VfbEventHandler._onTimer):
             bpy.app.timers.unregister(_VfbEventHandler._onTimer)
+
+        for handler in DrawHandlers:
+            bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+        DrawHandlers.clear()
 
 
     def stopViewportRender(self):
         """ Set the viewport to SOLID mode """
-        self.stopVantageLiveLink()
         self.addEvent(_Event.RenderSolid)
 
     def startViewportRender(self):
@@ -91,12 +98,14 @@ class _VfbEventHandler:
 
     def startInteractiveRender(self):
         """ Start interactive rendering """
-        self.stopVantageLiveLink()
         self.addEvent(_Event.RenderInteractive)
+
+    def startVantageLiveLink(self):
+        """ Start interactive rendering """
+        self.addEvent(_Event.RenderVantageStart)
 
     def stopInteractiveRender(self):
         """ Stop interactive rendering """
-        self.stopViewportRender()
         self.addEvent(_Event.RenderInteractiveStop)
 
     def startProdRender(self):
@@ -130,7 +139,7 @@ class _VfbEventHandler:
         """ Report to Blender's status field """
         self.addEvent(_Event.ReportStatus, severity, msg)
 
-    
+
     def upgradeScene(self):
         """ Run a scene upgrade """
         self.addEvent(_Event.UpgradeScene)
@@ -139,8 +148,8 @@ class _VfbEventHandler:
     def updateVfbLayers(self, vfbLayersJson: str):
         """ Update VFB layer settings """
         with self._lock:
-            # Do not directly change the vfb2_layers property of SettingsVFB here, because this will 
-            # trigger an unwanted export of the scene. The property will be added to the export by a 
+            # Do not directly change the vfb2_layers property of SettingsVFB here, because this will
+            # trigger an unwanted export of the scene. The property will be added to the export by a
             # custom exporter function for SettingsVFB.
             self._vfbLayersJson = vfbLayersJson
             self._redrawViewport = True
@@ -157,7 +166,7 @@ class _VfbEventHandler:
     def getVfbLayers(self):
         with self._lock:
             return self._vfbLayersJson
-        
+
 
     def _isEventInQueue(self, eventType: int):
         with self._lock:
@@ -183,9 +192,6 @@ class _VfbEventHandler:
 
             if ev:
                 self._handleQueuedEvent(ev)
-
-            # Exporting interactive viewport if there is Interactive renderer running
-            self._exportInteractiveViewport()
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::onTimer()")
@@ -227,6 +233,9 @@ class _VfbEventHandler:
                 case _Event.UpgradeScene:
                     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
 
+                case _Event.RenderVantageStart:
+                    self._startVantageLiveLink()
+
                 case _Event.RenderVantageStop:
                     self._stopVantageLiveLink()
 
@@ -256,10 +265,10 @@ class _VfbEventHandler:
                 space = next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
                 assert space, "No 3D viewport area found when ViewportModeSetter tries to switch shading type"
 
-        if space:
+        if space and space.shading.type != newMode:
             # The change to the shading type value will trigger a switch of the viewport
             # to the specified shading mode.
-            space.shading.type = newMode  
+            space.shading.type = newMode
 
 
     def _saveVfbSettings(self):
@@ -268,7 +277,7 @@ class _VfbEventHandler:
             uiSettings = json.loads(self._vfbSettingsJson)
             vfbConf.write(json.dumps(uiSettings, indent=4))
 
-    
+
     def startProdRenderSync(self, renderMode: int):
         """ Synchronously invoke the production render operator """
         from vray_blender.engine.renderer_prod import VRayRendererProd
@@ -281,37 +290,44 @@ class _VfbEventHandler:
            return True
 
         if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('COMPOSITE'):
-            # Wait for a previously started render job to finish. 
-            # NOTE: This is check is a temporary debug tool used in an attempt to catch 
-            # an intrmittently occuring situation where the context does not permit changes
+            # Wait for a previously started render job to finish.
+            # NOTE: This is check is a temporary debug tool used in an attempt to catch
+            # an intermittently occurring situation where the context does not permit changes
             # to the scene from the timer handler.
             debug.printWarning("VfbEventHandler::startProdRenderSync(): Another job is running.")
             return False
 
         if not ZMQProcess.isRunning():
-            debug.reportError('V-Ray Server is starting, try again in a few moments')
+            from vray_blender.engine.render_engine import VRayRenderEngine
+            debug.reportError(VRayRenderEngine.ERR_MSG_ZMQ_SERVER_DOWN)
             return True
+
+        # Cancel rendering if there are cameras markers with different types in the part of the timeline that is for rendering.
+        if (renderMode == ProdRenderMode.RENDER) and (not renderCamerasHaveSameType()):
+            return True
+
+        debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
 
         # Lock the UI for the duration of the job. If the UI is not locked while a render job is running
         # in a timer callback, an access violation may occur in Blender.
         bpy.context.scene.render.use_lock_interface = True
-        
-        # Run the 'render' operator synchronously. 
-        # NOTE: Running it asynchronously (using 'INVOKE_DEFAULT')
-        # currently leads to an inconsistent state in Blender if there are animated materials in the scene.
-        # This causes 'Can't write to ID classes in this context' type of errors when prod rendering or
-        # loading/saving a scene.
-        # ---
-        # If inside a 3D viewport, the 'use_viewport' parameter will make the renderer use the layers 
-        # and camera of the viewport. 
+
+        # Set render_display_type to None in order to hide the Blender render window and only render in the VFB.
+        lastRenderDisplayType = bpy.context.preferences.view.render_display_type
+        bpy.context.preferences.view.render_display_type = 'NONE'
+
+        # If inside a 3D viewport, the 'use_viewport' parameter will make the renderer use the layers
+        # and camera of the viewport.
         VRayRendererProd.renderMode = renderMode
-        bpy.ops.render.render('EXEC_DEFAULT', use_viewport=True)
+        execContext = 'INVOKE_DEFAULT' if renderMode == ProdRenderMode.RENDER else 'EXEC_DEFAULT'
+        bpy.ops.render.render(execContext, use_viewport=True)
 
         renderModeName = {
             ProdRenderMode.CLOUD_SUBMIT: "Submit to cloud",
             ProdRenderMode.EXPORT_VRSCENE: "Scene export",
             ProdRenderMode.RENDER: "Render"
         }[renderMode]
+        bpy.context.preferences.view.render_display_type = lastRenderDisplayType
 
         debug.report('INFO', f"{renderModeName} finished")
 
@@ -326,6 +342,10 @@ class _VfbEventHandler:
     def _stopInteractiveRender(self):
         from vray_blender.engine.render_engine import VRayRenderEngine
         VRayRenderEngine.stopInteractiveRenderer()
+
+    def _startVantageLiveLink(self):
+        from vray_blender.engine.render_engine import VRayRenderEngine
+        VRayRenderEngine.startVantageLiveLink()
 
     def _stopVantageLiveLink(self):
         from vray_blender.engine.render_engine import VRayRenderEngine

@@ -39,6 +39,26 @@
         },
         
         {
+            "attr" : "compute_normals",
+            "default" : 0,
+            "desc" : "Calculate smooth normals",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "smooth_angle",
+            "default" : 60.0,
+            "desc" : "Smooth angle in degrees",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "angle",
+                "units" : "degrees"
+            }
+        },
+        
+        {
             "attr" : "map_channels",
             "default" : null,
             "desc" : "A list of mapping channels; each channel itself is a list of 3 elements - the channel index, the channel vertices and the channel faces",

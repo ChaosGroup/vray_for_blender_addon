@@ -1,0 +1,270 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Autumn_Palette",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.016963820904493333, -0.06521135568618775],
+                                "right_vector": [0.016817593947052957, 0.06464924663305283]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.17205692827701569, 0.2503438889980316],
+                                "left_vector": [-0.15641802549362184, -0.15966260433197022],
+                                "right_vector": [0.19404911994934083, 0.19807428121566773]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.2522639036178589, -0.23108667135238648],
+                                "right_vector": [0.3865955173969269, 0.35414132475852969]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.06554995477199555, -0.024126071482896806],
+                                "right_vector": [0.06727037578821182, 0.024759285151958467]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.2509702444076538, 0.1856946349143982],
+                                "left_vector": [-0.18008309602737428, -0.1858459711074829],
+                                "right_vector": [0.09314360469579697, 0.09612420946359635]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [0.5304010510444641, 0.5392022132873535],
+                                "left_vector": [-0.09314360469579697, -0.11342941224575043],
+                                "right_vector": [0.15653298795223237, 0.19062440097332]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.15653298795223237, -0.14851325750350953],
+                                "right_vector": [0.43314921855926516, 0.41095784306526186]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.37446802854537966, -0.258381724357605],
+                                "right_vector": [0.12160414457321167, 0.08390646427869797]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.240620955824852, 0.21182943880558015],
+                                "left_vector": [-0.06139190495014191, -0.07134857773780823],
+                                "right_vector": [0.042690813541412356, 0.04961445555090904]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.4411384165287018, 0.7193948030471802],
+                                "left_vector": [-0.025614473968744279, -0.046114154160022739],
+                                "right_vector": [0.11384215950965882, 0.20495188236236573]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.1897369623184204, -0.056123800575733188],
+                                "right_vector": [0.37893369793891909, 0.11208780109882355]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 0,
+                "all_red": -0.13500000536441804,
+                "all_green": -0.02500000037252903,
+                "all_blue": 0.029999999329447748,
+                "shadows_red": 0.0,
+                "shadows_green": 0.0,
+                "shadows_blue": 0.01522842701524496,
+                "mid_red": -0.46446701884269717,
+                "mid_green": 0.0,
+                "mid_blue": -0.050761424005031589,
+                "high_red": -0.9162436723709106,
+                "high_green": 0.614213228225708,
+                "high_blue": 0.11167513579130173
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 1,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 0.6789340376853943,
+                "hejl_dawson_highlights": 0.9809645414352417,
+                "hable_shoulder_strength": 0.16370558738708497,
+                "hable_linear_strength": 0.15000000596046449,
+                "hable_linear_angle": 0.10000000149011612,
+                "hable_toe_strength": 0.1789340227842331,
+                "white_point": 13.200508117675782,
+                "pc_toe_length": 0.800000011920929,
+                "pc_toe_strength": 0.20000000298023225,
+                "pc_contrast": 0.5,
+                "pc_shoulder_length": 1.0,
+                "pc_shoulder_strength": 0.0,
+                "pc_white_point": 4.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves - Contrast",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.004000000189989805],
+                                "left_vector": [-0.06426233798265457, -0.04738491401076317],
+                                "right_vector": [0.10090556740760803, 0.07440440356731415]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.37078651785850527, 0.4901685416698456],
+                                "left_vector": [-0.04180807247757912, -0.0696658119559288],
+                                "right_vector": [0.08667530119419098, 0.14442917704582215]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.07632601261138916, -0.08528196811676026],
+                                "right_vector": [0.05914352834224701, 0.06608331948518753]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.hueSatLight",
+            "properties": {
+                "version": 1,
+                "name": "Hue / Saturation - Saturation",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "hue": 0.0,
+                "sat": 0.019999999552965165,
+                "lightness": 0.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.whiteBalance",
+            "properties": {
+                "version": 1,
+                "name": "White Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "temp": 7690.35546875,
+                "tint": 0.11421320587396622,
+                "color_tint": [1.0, 1.0, 1.0]
+            },
+            "sub-layers": []
+        }]
+}

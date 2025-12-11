@@ -13,9 +13,9 @@ from vray_blender.external import mmh3
 from vray_blender.bin import VRayBlenderLib as vray
 
 
-# Struct to pass to C++. 
-# To avoid the hassle of unpacking Instancer objects in C++ using Python interop, 
-# for the time being pack all the data to a single blob here. 
+# Struct to pass to C++.
+# To avoid the hassle of unpacking Instancer objects in C++ using Python interop,
+# for the time being pack all the data to a single blob here.
 # TODO: Figure out whether doing this in C++ will be more convenient/fast.
 
 class InstancerData:
@@ -46,7 +46,7 @@ class Instancer:
 
         def pack(self):
             m = marshaller.Marshaller()
-            
+
             m.dumpInt32(self.index)
             m.dumpMatrix4(self.tm)
             m.dumpMatrix4(self.velocity)

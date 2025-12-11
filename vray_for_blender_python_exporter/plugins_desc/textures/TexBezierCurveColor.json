@@ -1,0 +1,165 @@
+
+{
+    "Desciption" : "TexBezierCurveColor",
+    "ID" : "TexBezierCurveColor",
+    "Name" : "Bezier Curve Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "input_color",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The input color texture",
+            "type" : "TEXTURE"
+        },
+        
+        {
+            "attr" : "points_r",
+            "default" : 0.0,
+            "desc" : "The control points for R channel. If there are no G or B control points, this control points will be used instead; 6 floats for each point: 2D coords of the point itself, and 2D coords of the left and right tangent",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "points_g",
+            "default" : 0.0,
+            "desc" : "The control points for G channel. If this is empty, points_r will be used instead; 6 floats for each point: 2D coords of the point itself, and 2D coords of the left and right tangent",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "points_b",
+            "default" : 0.0,
+            "desc" : "The control points for B channel. If this is empty, points_r will be used instead; 6 floats for each point: 2D coords of the point itself, and 2D coords of the left and right tangent",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "types_r",
+            "default" : "0",
+            "desc" : "The type of the control points: 0 - free, 1 - bezier, 2- bezier smooth",
+            "items" : 
+            [
+                [ "0", "Free", "Free" ],
+                [ "1", "Bezier", "Bezier" ],
+                [ "2", "Bezier smooth", "Bezier smooth" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "types_g",
+            "default" : "0",
+            "desc" : "The type of the control points: 0 - free, 1 - bezier, 2- bezier smooth. If points_g is empty, types_r will be used",
+            "items" : 
+            [
+                [ "0", "Free", "Free" ],
+                [ "1", "Bezier", "Bezier" ],
+                [ "2", "Bezier smooth", "Bezier smooth" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "types_b",
+            "default" : "0",
+            "desc" : "The type of the control points: 0 - free, 1 - bezier, 2- bezier smooth. If points_b is empty, types_r will be used",
+            "items" : 
+            [
+                [ "0", "Free", "Free" ],
+                [ "1", "Bezier", "Bezier" ],
+                [ "2", "Bezier smooth", "Bezier smooth" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "num_bezier_points_r",
+            "default" : 256,
+            "desc" : "The number of precisely calculated points from bezier curves: default 256",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "num_bezier_points_g",
+            "default" : 256,
+            "desc" : "The number of precisely calculated points from bezier curves: default 256. If points_g is not set, num_bezier_points_r will be used instead",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "num_bezier_points_b",
+            "default" : 256,
+            "desc" : "The number of precisely calculated points from bezier curves: default 256. If points_b is not set, num_bezier_points_r will be used instead",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "use_end_tangents_r",
+            "default" : true,
+            "desc" : "true to extrapolate beyound the control points",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_end_tangents_g",
+            "default" : true,
+            "desc" : "true to extrapolate beyound the control points. If points_g is empty, use_end_tangents_r will be used instead",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "use_end_tangents_b",
+            "default" : true,
+            "desc" : "true to extrapolate beyound the control points. If points_b is empty, use_end_tangents_r will be used instead",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "out_of_range_type_r",
+            "default" : "0",
+            "desc" : "The type of extrapolation for points out of the control range: 0 - end tangnts, 1 - linear, 2 - constant. Used when use_end_tangents is true. ",
+            "items" : 
+            [
+                [ "0", "End tangent", "End tangent" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Constant", "Constant" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "out_of_range_type_g",
+            "default" : "0",
+            "desc" : "The type of extrapolation for points out of the control range: 0 - end tangnts, 1 - linear, 2 - constant. Used when use_end_tangents is true. If points_g is empty, out_of_range_type_r will be used instead",
+            "items" : 
+            [
+                [ "0", "End tangent", "End tangent" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Constant", "Constant" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "out_of_range_type_b",
+            "default" : "0",
+            "desc" : "The type of extrapolation for points out of the control range: 0 - end tangnts, 1 - linear, 2 - constant. Used when use_end_tangents is true. If points_b is empty, out_of_range_type_r will be used instead",
+            "items" : 
+            [
+                [ "0", "End tangent", "End tangent" ],
+                [ "1", "Linear", "Linear" ],
+                [ "2", "Constant", "Constant" ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

@@ -12,10 +12,23 @@ using namespace std::chrono;
 using namespace VRayForBlender;
 
 
-ProductionExporter::ProductionExporter(const ExporterSettings& settings)
-	: SceneExporter(settings)
+ProductionExporter::ProductionExporter(const ExporterSettings& settings) :
+	m_settings(settings)
 {
-	SceneExporter::init();
+}
+
+
+ProductionExporter::~ProductionExporter() {
+	m_exporter->set_callback_on_image_ready(nullptr);
+	m_exporter->set_callback_on_bucket_ready(nullptr);
+	m_exporter->set_callback_on_rt_image_updated(nullptr);
+	m_exporter->set_callback_on_vfb_layers_updated(nullptr);
+}
+
+
+void ProductionExporter::init(ZmqExporter* zmqExporter) {
+	vassert(zmqExporter != nullptr);
+	m_exporter = zmqExporter;
 }
 
 
@@ -96,10 +109,10 @@ void ProductionExporter::renderStart(RenderPass *renderPass, py::object cbImageU
 void ProductionExporter::renderEnd()
 {
 	if (m_settings.closeVfbOnStop) {
-		m_exporter->free();
+		m_exporter->freeRenderer();
 	}
 	else {
-		m_exporter->stop();
+		m_exporter->stopRendering();
 	}
 
 	{
@@ -144,24 +157,13 @@ void ProductionExporter::renderSequence(int start, int end, int step)
 	m_exporter->renderSequence(start, end, step);
 }
 
-bool VRayForBlender::ProductionExporter::renderSequenceRunning()
+bool VRayForBlender::ProductionExporter::isRendering()
 {
-	WithNoGIL noGIL;
-
-	return !m_renderFinished && !m_exporter->isAborted();
-}
-
-bool VRayForBlender::ProductionExporter::vrsceneExportRunning()
-{
-	WithNoGIL noGIL;
-
-	return m_vrsceneExportInProgress;
+	return !m_renderFinished && m_exporter->isRendering();
 }
 
 int VRayForBlender::ProductionExporter::lastRenderedFrame()
 {
-	WithNoGIL noGIL;
-
 	return m_exporter->getLastRenderedFrame();
 }
 
@@ -180,9 +182,9 @@ void VRayForBlender::ProductionExporter::abortRender()
 /// Set image data to the render pass and call the screen update handler in Python
 void ProductionExporter::updateImage()
 {
-	// The exporter's isAborted() method should be checked before accessing the render pass buffer,
+	// The exporter's isRendering() method should be checked before accessing the render pass buffer,
 	// because there will not be a valid reference to the buffer if rendering has been aborted.
-	if (!m_exporter->isAborted() && !m_imageUpdateCallback.is_none() && !m_renderFinished) {
+	if (m_exporter->isRendering() && !m_imageUpdateCallback.is_none() && !m_renderFinished) {
 		auto layerImg = m_exporter->getImage();
 		if (layerImg.channels != m_renderPass->channels){
 			// TODO: figure out when RenderPass might not be RGBA

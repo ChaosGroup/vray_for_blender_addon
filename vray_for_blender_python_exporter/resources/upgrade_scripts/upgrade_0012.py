@@ -12,9 +12,9 @@ def run():
 
             if os.path.exists(filePath):
                 # _getDimsOfProxyPreview overcomes the issue with proxy objects with previewType=None
-                geomMeshFile["initial_preview_dims"] = _getDimsOfProxyPreview(filePath, geomMeshFile)
+                geomMeshFile.initial_preview_dims = _getDimsOfProxyPreview(filePath, geomMeshFile)
             else:
-                geomMeshFile["initial_preview_dims"] = obj.dimensions # Handling the case where the proxy needs re-linking
+                geomMeshFile.initial_preview_dims = obj.dimensions # Handling the case where the proxy needs re-linking
 
             for light in (c for c in obj.children if c.type == 'LIGHT'):
                 light.data.vray.initial_proxy_light_pos = light.matrix_local.decompose()[0]

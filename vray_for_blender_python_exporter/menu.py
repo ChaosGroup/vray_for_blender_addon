@@ -101,6 +101,7 @@ class VRAY_MT_cosmos(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
+        self.layout.operator(VRAY_OT_open_cosmos_ai_generator.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_ai_generator))
         self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
 
 
@@ -134,14 +135,14 @@ class VRAY_MT_main(bpy.types.Menu):
         renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
         layout.operator(VRAY_OT_cloud_submit.bl_idname, icon_value=getUIIcon(VRAY_OT_cloud_submit))
-
         layout.separator()
         layout.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
         layout.separator()
         layout.menu(VRAY_MT_cosmos.bl_idname)
-        if vray.withDR2 and sys.platform == "win32":
+        if False and vray.withDR2:
             layout.separator()
-            layout.operator(VRAY_OT_vantage_live_link.bl_idname)
+            running = VRayRenderEngine.iprRenderer and isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink)
+            layout.operator(VRAY_OT_vantage_live_link.bl_idname, icon = 'CHECKBOX_HLT' if running else 'CHECKBOX_DEHLT')
         layout.separator()
         layout.menu(VRAY_MT_camera.bl_idname)
         layout.menu(VRAY_MT_lights.bl_idname)
@@ -170,16 +171,25 @@ class VRAY_OT_open_collaboration(VRayOperatorBase):
         vray.openCollaboration(hostInfo)
         return {'FINISHED'}
 
+from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy, CosmosBrowserPage
+
 class VRAY_OT_open_cosmos_browser(VRayOperatorBase):
     bl_idname =      "vray.open_cosmos_browser"
     bl_label =       "Cosmos Browser"
     bl_description = "Open Cosmos Browser"
 
     def execute(self, context):
-        vray.openCosmos()
+        vray.openCosmos(CosmosBrowserPage.HomePage.value)
         return {'FINISHED'}
 
-from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy
+class VRAY_OT_open_cosmos_ai_generator(VRayOperatorBase):
+    bl_idname =      "vray.open_cosmos_ai_generator"
+    bl_label =       "AI Material Generator"
+    bl_description = "Open the AI material generator in the Cosmos Browser"
+
+    def execute(self, context):
+        vray.openCosmos(CosmosBrowserPage.AIGenerator.value)
+        return {'FINISHED'}
 
 class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
     bl_idname       = "vray.relink_cosmos_assets"
@@ -211,7 +221,7 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
     def execute(self, context):
         converted = 0
         for material in bpy.data.materials:
-            if (not material.vray.is_vray_class) and material.use_nodes: 
+            if (not material.vray.is_vray_class) and material.use_nodes:
                 convertMaterial(material, self)
                 converted += 1
         self.report({'INFO'}, f"Converted {converted} material(s)")
@@ -232,14 +242,25 @@ class VRAY_OT_vantage_live_link(VRayOperatorBase):
     bl_description  = "Vantage Live Link"
 
     def invoke(self, context, event):
-        if (status := VRayRendererVantageLiveLink.checkAndReportVantageState()) != VantageInitStatus.Success:
+        running = VRayRenderEngine.iprRenderer and (type(VRayRenderEngine.iprRenderer) is VRayRendererVantageLiveLink)
+        if not running and (status := VRayRendererVantageLiveLink.checkAndReportVantageState(context)) != VantageInitStatus.Success:
             return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Vantage Live Link failed: " + status.value)
+
+        if running:
+            from vray_blender.engine  import vfb_event_handler
+            vfb_event_handler.VfbEventHandler.stopVantageLiveLink()
+            return {"FINISHED"}
+
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
-        VRayRenderEngine.stopInteractiveRenderer()
-        VRayRenderEngine.startVantageLiveLink()
+        from vray_blender.engine  import vfb_event_handler
+        vfb_event_handler.VfbEventHandler.stopViewportRender()
+        vfb_event_handler.VfbEventHandler.stopInteractiveRender()
+        vfb_event_handler.VfbEventHandler.startVantageLiveLink()
+
         return { 'FINISHED' }
+
 
 class VRAY_OT_open_vfb(VRayOperatorBase):
     bl_idname =      "vray.open_vfb"
@@ -315,9 +336,10 @@ def _getRegClasses():
     return (
         VRAY_OT_open_collaboration,
         VRAY_OT_open_cosmos_browser,
+        VRAY_OT_open_cosmos_ai_generator,
         VRAY_OT_relink_cosmos_assets,
         VRAY_OT_convert_materials,
-        VRAY_OT_vantage_live_link,
+        # VRAY_OT_vantage_live_link,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
         VRAY_OT_show_account_status,

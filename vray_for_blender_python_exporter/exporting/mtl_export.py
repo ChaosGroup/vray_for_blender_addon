@@ -9,7 +9,7 @@ from vray_blender.nodes import utils as NodesUtils
 
 def _getMtlsOfTextures(textureNames: list[str]):
         """ Return the materials in whose node trees the texture names are used.
-         
+
           NOTE: This is hackish, but for the moment we don't know how to make Blender generate 
           depsgraph updates for the node tree.
     """
@@ -19,7 +19,7 @@ def _getMtlsOfTextures(textureNames: list[str]):
             for n in mtl.node_tree.nodes:
                 if (texture := getattr(n, 'texture', None)) and (texture.name in textureNames):
                     result.add(mtl)
-                
+
         return result
 
 
@@ -38,7 +38,7 @@ def _tagForUpdateMtlWithSelectorNode(exporterCtx: ExporterContext):
                     return
 
 
-def calculateMatExportCache(exporterCtx: ExporterContext):
+def syncMtlExportCache(exporterCtx: ExporterContext):
     """ Refresh the cache of exported materials based on scene updates.
 
         If a full export is requested, clear the entire cache.
@@ -49,16 +49,37 @@ def calculateMatExportCache(exporterCtx: ExporterContext):
         exporterCtx.exportedMtls.clear()
     else:
         _tagForUpdateMtlWithSelectorNode(exporterCtx)
-        mtlUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.ALL)
-        updates = [u.id.original for u in exporterCtx.dg.updates if u.is_updated_geometry or u.is_updated_shading or u.is_updated_transform]
 
-        updatedVrayMtlSIDs = {m[0] for m in mtlUpdates}
-        updatedVrayMtls = {m for m in bpy.data.materials if (getObjTrackId(m) in updatedVrayMtlSIDs) or (m and (m.node_tree in updates))}
+        mtlTaggedUpdates = {m[0] for m in UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.ALL)}
 
+        updates = (u.id.original for u in exporterCtx.dg.updates if u.is_updated_geometry or u.is_updated_shading or u.is_updated_transform)
         updatedTextures = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
-        updatedVrayMtls = [getObjTrackId(mtl) for mtl in updatedVrayMtls.union(_getMtlsOfTextures(updatedTextures))]
-        for m in (exporterCtx.exportedMtls.keys() & updatedVrayMtls):
-            del exporterCtx.exportedMtls[m]
+        mtlsWithUpdatedTextures = _getMtlsOfTextures(updatedTextures)
+
+        # Get the materials that had their entire V-Ray node trees deleted. The update record for them will be just
+        # an update to the node tree without any of the update flags set. If the update list also includes a record
+        # for the material itself, it means the tree has not been deleted.
+        activeMtls = [mtl for mtl in bpy.data.materials if not isObjectOrphaned(mtl)]
+        mtlsWithUpdatedTrees = {mtl for mtl in activeMtls if (mtl.node_tree is not None) and (getObjTrackId(mtl.node_tree) in exporterCtx.dgUpdates['all'])}
+        vrayMtlsWithRemovedNodeTrees = {m for m in mtlsWithUpdatedTrees if m.vray.is_vray_class and(NodesUtils.getOutputNode(m.node_tree, 'MATERIAL') is None)}
+        cyclesMtlsWithRemovedNodeTrees = {m for m in mtlsWithUpdatedTrees if not m.vray.is_vray_class and(NodesUtils.getOutputNode(m.node_tree, 'SHADER') is None)}
+
+        mtlsWithRemovedNodeTrees = {m for m in vrayMtlsWithRemovedNodeTrees.union(cyclesMtlsWithRemovedNodeTrees)}
+
+        for mtl in mtlsWithRemovedNodeTrees:
+            # Tag updated topology. This will be used later by prunePlugins() to remove
+            # the corresponding V-Ray yplugins
+            UpdateTracker.tagMtlTopology(exporterCtx.ctx, mtl)
+
+        updatedMtls = {m for m in bpy.data.materials if getObjTrackId(m) in mtlTaggedUpdates or \
+                                                        getObjTrackId(m) in exporterCtx.dgUpdates['all'] or \
+                                                        (m.use_nodes and getObjTrackId(m.node_tree) in exporterCtx.dgUpdates['all'])}
+
+        updatedMtls = updatedMtls.union(mtlsWithRemovedNodeTrees).union(mtlsWithUpdatedTextures)
+        updatedMtlIDs = [getObjTrackId(mtl) for mtl in updatedMtls]
+
+        for mtlId in (exporterCtx.exportedMtls.keys() & updatedMtlIDs):
+            del exporterCtx.exportedMtls[mtlId]
 
 
 class MtlExporter(ExporterBase):
@@ -72,6 +93,17 @@ class MtlExporter(ExporterBase):
         # Default material to use for non-vray node trees
         self.defaultMaterial = None
 
+    def _getMtlOutputNode(self, mtl: bpy.types.Material):
+        # The evaluated material may point to incorrect "is_vray_class" property, so we need to check the original material.
+        # This happens only in Blender 5.0.
+        isVRayMtl = mtl.original.vray.is_vray_class
+
+        # A material may have both Cycles and VRay nodes regardless of its type.
+        # Render the node tree that corresponds to the material type.
+        outputNodeType = 'MATERIAL' if isVRayMtl else 'SHADER'
+
+        return NodesUtils.getOutputNode(mtl.node_tree, outputNodeType), isVRayMtl
+
     def exportMtl(self, mtl: bpy.types.Material, nodeCtx: NodeContext = None):
         """ Export material.
 
@@ -81,16 +113,22 @@ class MtlExporter(ExporterBase):
         Returns:
             tuple(AttrPlugin, SceneStats): the exported plugin and the update to the export statistics
         """
+
+        outputNode, isVRayMtl = self._getMtlOutputNode(mtl)
+        if not nodeCtx and not self.preview and (not isVRayMtl or (outputNode and not outputNode.dontOverride)):
+            viewLayer = self.dg.view_layer
+            overrideMode = viewLayer.vray.material_override_mode
+            if overrideMode == '1': # Clay
+                return MtlExporter.exportDefaultMaterial(self), SceneStats()
+            elif overrideMode == '2' and viewLayer.material_override: # Custom material
+                mtl = viewLayer.material_override
+
         mtlId = getObjTrackId(mtl)
 
-        if (mtlId in self.exportedMtls):
-            isCachedCopyDirty = not self.fullExport and (mtlId in self.dgUpdates['shading'])
-            if not isCachedCopyDirty:
-                return self.exportedMtls[mtlId], SceneStats()
+        if (not self.fullExport) and (mtlId in self.exportedMtls):
+            return self.exportedMtls[mtlId], SceneStats()
 
         assert mtl.use_nodes and mtl.node_tree, f"Material has no node tree: {mtl.name}"
-
-        isVRayMtl = mtl.vray.is_vray_class
 
         isConversion = (nodeCtx is not None)
         if nodeCtx is None:
@@ -100,11 +138,8 @@ class MtlExporter(ExporterBase):
             nodeCtx.ntree       = mtl.node_tree
 
         with nodeCtx:
-            # A material may have both Cycles and VRay nodes regardless of its type. 
-            # Render the node tree that corresponds to the material type.
-            outputNodeType = 'MATERIAL' if isVRayMtl else 'SHADER'
-            
-            if not (nodeOutput := NodesUtils.getOutputNode(mtl.node_tree, outputNodeType)) :
+            nodeOutput, isVRayMtl = self._getMtlOutputNode(mtl)
+            if not nodeOutput:
                 NodeContext.registerError(f"Output node not found in {'V-Ray' if isVRayMtl else 'Cycles'} material tree")
                 return None, SceneStats()
 
@@ -172,7 +207,7 @@ class MtlExporter(ExporterBase):
             if not mtlIsExportable(mtl):
                 continue
 
-            # NOTE: The is_evaluated property of the evaluated material will be False for materials 
+            # NOTE: The is_evaluated property of the evaluated material will be False for materials
             # which do not need evaluation
             _, mtlStats = self.exportMtl(mtl.evaluated_get(self.dg))
 
@@ -183,7 +218,7 @@ class MtlExporter(ExporterBase):
 
     @staticmethod
     def exportDefaultMaterial(exporterCtx: ExporterContext):
-        """ A BRDF material to use for all objects that do not have 
+        """ A BRDF material to use for all objects that do not have
             an explicitly assigned material.
         """
         DEFAULT_PLUGIN_TYPE = "MtlSingleBRDF"
@@ -208,8 +243,8 @@ class MtlExporter(ExporterBase):
         plDesc = PluginDesc(pluginName, pluginType)
 
         # We want to have the MtlSingleBRDF plugin even if it does not reference any
-        # BSDF plugin (e.g. brdfPlugin is empty) because in this case the object will 
-        # be rendered in black. If there is no MtlSingleBRDF referenced by the object node, 
+        # BSDF plugin (e.g. brdfPlugin is empty) because in this case the object will
+        # be rendered in black. If there is no MtlSingleBRDF referenced by the object node,
         # the object will be invisible and this might be confusing to the user.
         plDesc.setAttribute('scene_name', [pluginName])
         plDesc.setAttribute('brdf', brdfPlugin)
@@ -247,6 +282,8 @@ class MtlExporter(ExporterBase):
         else:
             return mtlPlugin
 
+    def isOverrideMtl(self, mtlId: bpy.types.Material):
+        return self.dg.view_layer.vray.material_override_mode == '2' and self.dg.view_layer.material_override and mtlId == getObjTrackId(self.dg.view_layer.material_override)
 
     def prunePlugins(self):
         """ Delete all plugins associated with removed, orphaned or updated materials """
@@ -262,35 +299,30 @@ class MtlExporter(ExporterBase):
                     trackerLog(f"REMOVE NODE PLUGIN: {pluginName}")
                 self.nodeTracker.forgetNode(mtlId, nodeId)
 
-        # Find all materials that are to be shown in the scene
-        activeMtls = [mtl for mtl in bpy.data.materials if not isObjectOrphaned(mtl)]
-
         # Remove from VRay the materials whose node trees' topology has changed.They will be
         # fully re-exported during the current update cycle
-        topologyUpdates = self._getTopologyUpdates()
-        updatedMtls = [mtl for mtl in activeMtls if self.fullExport or (getObjTrackId(mtl) in topologyUpdates)]
+        if self.fullExport:
+            updatedMtlIds = [getObjTrackId(mtl) for mtl in bpy.data.materials]
+        else:
+            updatedMtlIds = self._getTopologyUpdates()
 
-        for mtl in updatedMtls:
-            mtlId = getObjTrackId(mtl)
+        for mtlId in updatedMtlIds:
+            if self.isOverrideMtl(mtlId):
+                continue
             forgetNodes( mtlId, self.nodeTracker.getOwnedNodes(mtlId))
-            # The material plugins have been deleted, generate update events for the objects
-            # that reference this matarial.
-            # tagObjectsForMaterial(mtl)
-            UpdateTracker.tagMtlTopology(self.ctx, mtl)
-
-        activeMtlIds = [getObjTrackId(mtl) for mtl in activeMtls]
 
         # Remove from VRay the material trees for objects that have been removed from the scene or orphaned
+        activeMtlIds = [getObjTrackId(mtl) for mtl in bpy.data.materials if not isObjectOrphaned(mtl)]
         removedMtlNodeIds = self.nodeTracker.diffObjs(activeMtlIds)
+
         for mtlId in removedMtlNodeIds:
             forgetNodes(mtlId, self.nodeTracker.getOwnedNodes(mtlId))
 
 
     def _getTopologyUpdates(self) -> list[int]:
         """ Return the track IDs of the Material data objects whose node tree topology has changed """
-
         topologyUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
-        return [t[0] for t in topologyUpdates]
+        return {t[0] for t in topologyUpdates}
 
 
 def run(ctx: ExporterContext):

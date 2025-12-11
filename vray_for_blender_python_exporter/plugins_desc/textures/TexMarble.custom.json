@@ -7,6 +7,20 @@
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
         }
     ],
     "Widget": {
@@ -136,8 +150,65 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "filler_color_tex"
+            },
+            {
+                "name": "vein_color_tex"
+            },
+            {
+                "name": "vein_width"
+            },
+            {
+                "name": "diffusion"
+            },
+            {
+                "name": "contrast"
+            },
+            {
+                "name": "amplitude"
+            },
+            {
+                "name": "ratio"
+            },
+            {
+                "name": "ripples"
+            },
+            {
+                "name": "depth_min"
+            },
+            {
+                "name": "depth_max"
+            },
+            {
+                "name": "uvwgen"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Options": {
         "animatable": true,
-        "excluded_parameters": []
+        "excluded_parameters": [ "compatibility_with" ]
     }
 }

@@ -8,19 +8,38 @@ from vray_blender.plugins.BRDF import BRDFScanned
 from vray_blender.nodes.tools import calculateTreeBounds, deselectNodes, rearrangeTree
 from vray_blender.lib import attribute_utils, attribute_types
 from vray_blender.lib import path_utils
-from vray_blender.nodes import importing as NodesImport
-from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
+from vray_blender.plugins import getPluginModule
 from vray_blender.plugins.skipped_plugins import SKIPPED_PLUGINS
 from vray_blender.plugins.texture.TexRemap import getCurvesNode
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.nodes.sockets import addInput, getHiddenInput
 from vray_blender import debug
-from vray_blender.exporting.tools import isColorSocket, getVRayBaseSockType, getInputSocketByName
+from vray_blender.exporting.tools import isColorSocket, getVRayBaseSockType, getInputSocketByName, getInputSocketByAttr
 from vray_blender.exporting.node_exporters.uvw_node_export import UVWGenRandomizerModes
 from vray_blender.lib.names import syncObjectUniqueName
 
 from numpy import allclose
 from mathutils import Matrix, Color, Vector
+
+
+# Some plugins that we import should be remapped to other plugins, e.g. TexBezierCurve to TexRemap.
+# For these, we must also remap the output sockets. It is not convenient to add an additional return
+# value from createNode() for the socket as these cases are very rare, so describe them here
+_REMAPPED_OUTPUT_SOCKETS = {
+    'TexBezierCurve': {
+        'Color' : 'Out Color'
+    },
+    'TexBezierCurveColor': {
+        'Color' : 'Out Color'
+    }
+}
+
+# The plugins below are included in the SKIPPED_PLUGINS list but we need to create
+# some kind of node for them - either include in the node associated with another
+# plugin or remap to a different plugin
+_UNSUPPORTED_PLUGINS = set(SKIPPED_PLUGINS).difference({
+    'TexBitmap', 'TexBezierCurve', 'TexBezierCurveColor'
+})
 
 class ImportContext:
     def __init__(self, nodeTree: bpy.types.NodeTree, vrsceneDict: dict, isConversion = False, locationsMap = None):
@@ -32,8 +51,10 @@ class ImportContext:
     def resolvePath(self, path):
         if self.locationsMap and path in self.locationsMap:
             path = self.locationsMap[path]
+
         return path
 
+   
 def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     from vray_blender.exporting.mtl_export import MtlExporter
     from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
@@ -124,10 +145,10 @@ def _convertMaterialFromDict(importContext: ImportContext):
         return
 
     brdfName = endNodePluginDesc['Attributes']['brdf']
-    outputNode = importContext.nodeTree.nodes.new('VRayNodeOutputMaterial')
-    matPlugin = NodesImport.getPluginByName(importContext.vrsceneDict, brdfName)
-    mtlNode = NodesImport.createNode(importContext, outputNode, matPlugin)
+    matPlugin = getPluginByName(importContext.vrsceneDict, brdfName)
+    mtlNode = createNode(importContext, matPlugin)
 
+    outputNode = importContext.nodeTree.nodes.new('VRayNodeOutputMaterial')
     importContext.nodeTree.links.new(mtlNode.outputs['BRDF'], outputNode.inputs['Material'])
 
     bounds = calculateTreeBounds(importContext.nodeTree)
@@ -171,7 +192,7 @@ def fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
                 vrayMtl['Attributes']['gtr_energy_compensation'] = '2'
 
         if (opacity := attrs.get('opacity', None)) != None:
-            if (type(opacity) is str):
+            if type(opacity) is str:
                 # The VRayMtl node shows only the 'opacity_color' to which both color and float
                 # inputs can be attached. The export code then determines whether to export
                 # 'opacity' or 'opacity_color' based on the type of the connected socket.
@@ -190,42 +211,47 @@ def fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
             fogDepthValue = 1.0/fogMult if fogMult > 1e-6 else 0.0
             vrayMtl['Attributes']['fog_mult'] = fogDepthValue
 
-FLOAT_PLUGINS = [ "TexInvertFloat" ]
+    for brdfBump in [p for p in vrsceneDict if p['ID'] == 'BRDFBump']:
+        attrs = brdfBump['Attributes']
+        if (value := attrs.get('bump_tex', None)) is not None:
+            attrs['bump_tex_color'] = attrs['bump_tex']
+            del attrs['bump_tex']
 
-def getOutputSocket(pluginType):
-    if pluginType == 'BRDFLayered':
-        return 'BRDF'
-    elif pluginType == 'BitmapBuffer':
-        return 'Bitmap'
-    elif pluginType == 'TexLuminance':
-        return 'Luminance'
-    elif pluginType in FLOAT_PLUGINS:
-        return 'Float'
-    elif pluginType == 'TexRemap':
-        return 'Out Color'
-    elif pluginType == 'TexLayeredMax':
-        return 'Output'
-    elif pluginType in ('TexAColorOp', "TexFloatOp"):
-        return "Result"
-    elif pluginType in PLUGIN_MODULES:
-        pluginModule = PLUGIN_MODULES[pluginType]
+        if (value := attrs.get('bump_tex_mult', None)) is not None:
+            attrs['bump_tex_mult_tex'] = attrs['bump_tex_mult']
+            del attrs['bump_tex_mult']
 
-        if pluginModule.TYPE == 'MATERIAL':
-            return "Material"
-        elif pluginModule.TYPE == 'UVWGEN':
-            return "Mapping"
-        elif pluginModule.TYPE == 'BRDF':
-            return "BRDF"
-        elif pluginModule.TYPE == 'GEOMETRY':
-            return "Geometry"
-        elif pluginModule.TYPE == 'EFFECT':
-            return "Output"
-        elif pluginModule.TYPE == 'RENDERCHANNEL':
-            return "Channel"
-        elif pluginModule.TYPE == 'TEXTURE':
-            return "Color"
+        if 'bump_object_space' not in attrs:
+            attrs['bump_object_space'] = False
 
-    return "Output"
+
+def _getDefaultOutputSocketName(pluginType: str):
+    """ Returns the name of the default output socket for this plugin type. """
+
+    pluginModule = getPluginModule(pluginType)
+
+    # Get the Blender name of sockets redefined in Node.output_sockets section of the plugin module description 
+    if outputSockets := pluginModule.Node.get('output_sockets'):
+        if defaultOutput := next((o for o in outputSockets if o['name'] == '_default_'), None):
+            if 'label' in defaultOutput:
+                return defaultOutput['label']
+
+    # No explicit name has been found, return the generic name for the plugin type
+    if pluginModule.TYPE == 'MATERIAL':
+        return "Material"
+    elif pluginModule.TYPE == 'UVWGEN':
+        return "Mapping"
+    elif pluginModule.TYPE == 'BRDF':
+        return "BRDF"
+    elif pluginModule.TYPE == 'GEOMETRY':
+        return "Geometry"
+    elif pluginModule.TYPE == 'EFFECT':
+        return "Output"
+    elif pluginModule.TYPE == 'RENDERCHANNEL':
+        return "Channel"
+    elif pluginModule.TYPE == 'TEXTURE':
+        return "Color"
+
 
 
 def getPluginByName(vrsceneDict, pluginName):
@@ -242,71 +268,54 @@ def getPluginByType(vrsceneDict, pluginType):
     return None
 
 
-def getSocketName(pluginModule, attrName):
-    attrDesc = attribute_utils.getAttrDesc(pluginModule, attrName)
-    if not attrDesc:
-        return None
-    return attrDesc.get('name', attribute_utils.getAttrDisplayName(attrDesc))
+def _getInputSocketNameByAttr(pluginModule, attrName: str):
+    """ Return the Blender name of an input socket given its V-Ray attribute name. """
+    if attrDesc := attribute_utils.getAttrDesc(pluginModule, attrName):
+        return attrDesc.get('name', attribute_utils.getAttrDisplayName(attrDesc))
+    
+    return None
 
 
 def getOutputSocketByAttr(node: bpy.types.Node, attrName:str):
-    for sock in node.outputs:
-        if hasattr(sock, 'vray_attr'):
-            if sock.vray_attr.lower() == attrName.lower():
-                return sock
-    return getOutputSocket(node.vray_type)
+    """ Return an output socket of a node given its V-Ray attribute name. """
+    # (Iavor) Not sure if the lower() conversion is nedessary, but the original code was
+    # written like this and checking all Cosmos assets will be too time consuming.
+    return next((s for s in node.outputs if s.vray_attr.lower() == attrName.lower()), None)
 
 
-def findAndCreateNode(importContext: ImportContext, pluginName: str, prevNode):
-    if not pluginName:
-        return None
-    pluginDesc = getPluginByName(importContext.vrsceneDict, pluginName)
-    if not pluginDesc:
-        return None
-    return createNode(importContext, prevNode, pluginDesc)
+def _getOutputSocketNameByAttr(pluginType: str, outputAttrName: str):
+    """ Return the Blender name of an output socket given its V-Ray attribute name """
+    pluginModule = getPluginModule(pluginType)
+    
+    if outputSockets := pluginModule.Node.get('output_sockets'):
+        if outputSocketDesc := next((o for o in outputSockets if o['name'] == outputAttrName), None):
+            if label := outputSocketDesc.get('label'):
+                return label
+            else:
+                return attribute_utils.formatAttributeName(outputSocketDesc)['name']
+    
+    else:
+        pluginOutputParams = [a for a in pluginModule.Parameters if a['type'] in attribute_types.NodeOutputTypes]
+        if outputSocketDesc := next((o for o in pluginOutputParams if o['attr'] == outputAttrName), None):
+            return attribute_utils.formatAttributeName(outputSocketDesc['attr'])
+    
+    assert False, f"Plugin {pluginType} does not have output attribute {outputAttrName}" 
 
-
-########  ########  ########  ########       ##          ###    ##    ## ######## ########  ######## ########
-##     ## ##     ## ##     ## ##             ##         ## ##    ##  ##  ##       ##     ## ##       ##     ##
-##     ## ##     ## ##     ## ##             ##        ##   ##    ####   ##       ##     ## ##       ##     ##
-########  ########  ##     ## ######         ##       ##     ##    ##    ######   ########  ######   ##     ##
-##     ## ##   ##   ##     ## ##             ##       #########    ##    ##       ##   ##   ##       ##     ##
-##     ## ##    ##  ##     ## ##             ##       ##     ##    ##    ##       ##    ##  ##       ##     ##
-########  ##     ## ########  ##             ######## ##     ##    ##    ######## ##     ## ######## ########
 
 def _createNodeBRDFLayered(importContext: ImportContext, pluginDesc):
     from vray_blender.plugins.BRDF.BRDFLayered import getLayerSocketNames
-    def processSocket(thisNode, socket, attrValue):
+
+    def processSocket(inputSocket, attrValue):
         # Could happen with some broken files
         if not attrValue:
             return
 
-        plName   = attrValue
-        plOutput = None
-        if plName.find("::") != -1:
-            plName, plOutput = plName.split("::")
-            plOutput = attribute_utils.formatAttributeName(plOutput)
-
-        pl = getPluginByName(importContext.vrsceneDict, plName)
-        if pl:
-            # Get default output
-            if plOutput is None:
-                plOutput = getOutputSocket(pl['ID'])
-            collValue = _collapseToValue(pl, importContext.vrsceneDict)
-            if collValue is not None:
-                socket.value = fixValue(collValue)
-            else:
-                # TexCombineColor is not supported for VRaySocketFloat and texture_multiplier is mostly with value 1
-                # TODO Find a way for multiplier implementation id needed
-                plAttrs = pl['Attributes']
-                if (pl['ID'] == 'TexCombineColor') and ("texture" in plAttrs) and (type(plAttrs["texture"]) is str):
-                    pl = getPluginByName(importContext.vrsceneDict, plAttrs["texture"])
-
-                inNode = createNode(importContext, thisNode, pl)
-                if inNode:
-                    importContext.nodeTree.links.new(inNode.outputs[plOutput], socket)
+        connectedPlugin, connectedOutput = _getPluginFromLink(importContext, attrValue)
+        
+        if connectedPlugin:
+            _createLinkedNode(importContext, inputSocket, connectedOutput, connectedPlugin)
         else:
-            socket.value = attrValue
+             inputSocket.value = attrValue
 
     brdfs     = pluginDesc['Attributes'].get('brdfs')
     weights   = pluginDesc['Attributes'].get('weights')
@@ -331,16 +340,17 @@ def _createNodeBRDFLayered(importContext: ImportContext, pluginDesc):
             weightSocket = brdfLayeredNode.inputs[weightSockName]
             opacitySocket = brdfLayeredNode.inputs[weightSockName]
 
-            processSocket(brdfLayeredNode, brdfSocket, brdf)
+            processSocket(brdfSocket, brdf)
 
             # NOTE: 'weights' could be optional
             if weights:
-                processSocket(brdfLayeredNode, weightSocket, weights[i])
+                processSocket(weightSocket, weights[i])
 
             if opacities:
-                processSocket(brdfLayeredNode, opacitySocket, opacities[i])
+                processSocket(opacitySocket, opacities[i])
+
         brdfSock = getInputSocketByName(brdfLayeredNode, "Base Material")
-        processSocket(brdfLayeredNode, brdfSock, brdfs[-1])
+        processSocket(brdfSock, brdfs[-1])
 
     return brdfLayeredNode
 
@@ -355,13 +365,6 @@ def _createNodeBRDFScanned(importContext: ImportContext, pluginDesc):
     BRDFScanned.onFileUpdate(brdfScannedNode.BRDFScanned)
     return brdfScannedNode
 
-########  #### ######## ##     ##    ###    ########        ########  ##     ## ######## ######## ######## ########
-##     ##  ##     ##    ###   ###   ## ##   ##     ##       ##     ## ##     ## ##       ##       ##       ##     ##
-##     ##  ##     ##    #### ####  ##   ##  ##     ##       ##     ## ##     ## ##       ##       ##       ##     ##
-########   ##     ##    ## ### ## ##     ## ########        ########  ##     ## ######   ######   ######   ########
-##     ##  ##     ##    ##     ## ######### ##              ##     ## ##     ## ##       ##       ##       ##   ##
-##     ##  ##     ##    ##     ## ##     ## ##              ##     ## ##     ## ##       ##       ##       ##    ##
-########  ####    ##    ##     ## ##     ## ##              ########   #######  ##       ##       ######## ##     ##
 
 def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False):
     if imageFilepath is not None:
@@ -391,47 +394,13 @@ def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False):
                 bitmapTexture.image.filepath = bpy.path.relpath(bitmapTexture.image.filepath)
 
 
-def _createNodeBitmapBuffer(importContext: ImportContext, pluginDesc):
-    pluginModule = PLUGIN_MODULES.get('BitmapBuffer')
-
-    bitmatBuffer = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeBitmapBuffer', pluginDesc['Name'])
-    propGroup = bitmatBuffer.BitmapBuffer
-
-    NodeUtils.createBitmapTexture(bitmatBuffer)
-    bitmapTexture = bitmatBuffer.texture
-
-    imageFilepath = pluginDesc['Attributes'].get('file')
-    imageFilepath = importContext.resolvePath(imageFilepath)
-    importSettings = getPluginByName(importContext.vrsceneDict, "Import Settings")
-    if importSettings:
-        importDir = importSettings['Attributes']['dirpath']
-
-    loadImage(imageFilepath, importDir, bitmapTexture)
-
-    for attrName in pluginDesc['Attributes']:
-        attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
-
-        attrValue = pluginDesc['Attributes'][attrName]
-
-        if hasattr(propGroup, attrName):
-            if attrDesc['type'] == 'ENUM':
-                attrValue = str(attrValue)
-                if not attribute_utils.valueInEnumItems(attrDesc, attrValue):
-                    debug.printError("Unsupported ENUM value '%s' for attribute: %s.%s" %
-                        (attrValue, 'BitmapBuffer', attrName))
-                    continue
-            setattr(propGroup, attrName, attrValue)
-
-    return bitmatBuffer
-
-
 def _pluginAttrsToNodeProps(pluginDesc, node):
     pluginType = pluginDesc['ID']
 
     assert hasattr(node, pluginType)
 
     propGroup = getattr(node, pluginType)
-    pluginModule = PLUGIN_MODULES.get(pluginType)
+    pluginModule = getPluginModule(pluginType)
 
     for attrName in pluginDesc['Attributes']:
         attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
@@ -448,15 +417,11 @@ def _pluginAttrsToNodeProps(pluginDesc, node):
             setattr(propGroup, attrName, attrValue)
 
 
-def _getPluginOutputSocketName(connectedPlugin, inPluginOutput):
-    connectedPluginType = connectedPlugin['ID']
-    return attribute_utils.formatAttributeName(inPluginOutput) if inPluginOutput else getOutputSocket(connectedPluginType)
-
 def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
     imageTextureNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeMetaImageTexture', pluginDescTexBitmap['Name'])
 
     bitmapBufferName = pluginDescTexBitmap['Attributes']['bitmap']
-    pluginDescBitmapBuffer = NodesImport.getPluginByName(importContext.vrsceneDict, bitmapBufferName)
+    pluginDescBitmapBuffer = getPluginByName(importContext.vrsceneDict, bitmapBufferName)
 
     bitmapTexture = imageTextureNode.texture
 
@@ -472,29 +437,20 @@ def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
 
     # Filling the Mapping Socket of Texture
     if "uvwgen" in pluginDescTexBitmap['Attributes']:
-        pluginOutAttrName, connectedPlugin = _getConnectedPluginInput(importContext.vrsceneDict, "uvwgen", pluginDescTexBitmap)
+        connectedPlugin, outputSocketName = _getPluginConnectedToInput(importContext, "uvwgen", pluginDescTexBitmap)
         if connectedPlugin:
-            uvwgenOutputSocketName = _getPluginOutputSocketName(connectedPlugin, pluginOutAttrName)
-            connectedNode = createNode(importContext, imageTextureNode, connectedPlugin)
+            connectedNode = createNode(importContext, connectedPlugin)
             if connectedNode:
-                importContext.nodeTree.links.new(connectedNode.outputs[uvwgenOutputSocketName], imageTextureNode.inputs["Mapping"])
+                importContext.nodeTree.links.new(connectedNode.outputs[outputSocketName], imageTextureNode.inputs["Mapping"])
 
     _pluginAttrsToNodeProps(pluginDescTexBitmap, imageTextureNode)
     _pluginAttrsToNodeProps(pluginDescBitmapBuffer, imageTextureNode)
 
     return imageTextureNode
 
-########     ###    ##     ## ########   ######
-##     ##   ## ##   ###   ### ##     ## ##    ##
-##     ##  ##   ##  #### #### ##     ## ##
-########  ##     ## ## ### ## ########   ######
-##   ##   ######### ##     ## ##              ##
-##    ##  ##     ## ##     ## ##        ##    ##
-##     ## ##     ## ##     ## ##         ######
 
 CollapsibleTypes = {
     'TexAColor': 'texture',
-    'TexCombineColor': 'color',
     'TexFloatToColor': 'input',
     'TexColorToFloat': 'input',
     'TexInvertFloat': 'texture',
@@ -503,7 +459,7 @@ CollapsibleTypes = {
 }
 
 
-def _collapseToValue(pluginDesc, vrsceneDict=None):
+def _collapseToValue(importContext: ImportContext, pluginDesc: dict):
     """ Transforms plugin from 'CollapsibleTypes' to a simple value (either float or list of floats). """
 
     pluginType    = pluginDesc['ID']
@@ -516,7 +472,10 @@ def _collapseToValue(pluginDesc, vrsceneDict=None):
     valueAttr = CollapsibleTypes[pluginType]
     pluginValue = pluginAttrs[valueAttr]
 
-    if type(pluginValue) is not str:
+    if _isPluginLink(pluginValue):
+        plugin, _ = _getPluginFromLink(importContext, pluginValue) 
+        value = _collapseToValue(importContext, plugin)
+    else:
         if pluginType == 'TexFloatToColor':
             value = Color((pluginValue, pluginValue, pluginValue))
         elif pluginType == 'TexColorToFloat':
@@ -527,22 +486,7 @@ def _collapseToValue(pluginDesc, vrsceneDict=None):
             return Color((1.0 - pluginValue[0], 1.0 - pluginValue[1], 1.0 - pluginValue[2]))
         else:
             value = pluginValue
-    elif vrsceneDict:
-        pluginName = pluginValue
-        if pluginName.find("::") != -1:
-            pluginName, output = pluginName.split("::")
-        newDesc = getPluginByName(vrsceneDict, pluginName)
-        value = _collapseToValue(newDesc, vrsceneDict)
-
     return value
-
-
-def fixValue(attrValue):
-    # Fix for color attribute
-    if type(attrValue) in [list, tuple]:
-        if len(attrValue) == 4:
-            attrValue = attrValue[:3]
-    return attrValue
 
 
 def _fillRamp(importContext: ImportContext, ramp: bpy.types.ColorRamp, colors, positions, interpolation):
@@ -557,7 +501,7 @@ def _fillRamp(importContext: ImportContext, ramp: bpy.types.ColorRamp, colors, p
         for key in rampElement:
             value = rampElement[key]
 
-            if type(value) is str:
+            if _isPluginLink(value):
                 conPlugin   = getPluginByName(importContext.vrsceneDict, value)
                 conPluginType = conPlugin['ID']
 
@@ -565,7 +509,7 @@ def _fillRamp(importContext: ImportContext, ramp: bpy.types.ColorRamp, colors, p
                     debug.printError(f"Plugin '{conPluginType}': Unsupported parameter value! This shouldn't happen! Please, report this!")
                     rampElement[key] = None
                 else:
-                    rampElement[key] = _collapseToValue(conPlugin, importContext.vrsceneDict)
+                    rampElement[key] = _collapseToValue(importContext, conPlugin)
 
         rampElements.append(rampElement)
 
@@ -625,8 +569,9 @@ def _importRemapSplineData(positions, values, interpolations, curve: bpy.types.C
             p.location.y = values[i]
         else:
             p = curve.points.new(positions[i], values[i])
-        p.handle_type = 'VECTOR' if interpolations[i] == 0 else 'AUTO'
+        p.handle_type = 'VECTOR' if interpolations[i] in (0, 1) else 'AUTO'
 
+    
 def _fillRemap(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
     if attributes.get("remapType", 0) == 0:
         redPositions = attributes['red_positions']
@@ -666,7 +611,77 @@ def _fillRemap(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
         _importRemapSplineData(saturationPositions, saturationValues, saturationInterpolations, mapping.curves[1])
         _importRemapSplineData(valuePositions, valueValues, valueInterpolations, mapping.curves[2])
 
+
+def _fillRemapFromBezierCurve(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
+    
+    attrPoints = attributes['points']
+    
+    redPositions = [float(p) for p in attrPoints[::6]]
+    redValues    = [float(v) for v in attrPoints[1::6]]
+    types        = [4] * len(attributes['types']) # Set all point types to Bezier
+    
+    remapAttributes = {
+        'remapType': 0,
+        'red_positions':   redPositions,
+        'red_values':      redValues,
+        'red_types':       types,
+        'green_positions': redPositions,
+        'green_values':    redValues,
+        'green_types':     types,
+        'blue_positions':  redPositions,
+        'blue_values':     redValues,
+        'blue_types':      types
+    }
+
+    _fillRemap(texRemap, mapping, remapAttributes)
+
+
+def _fillRemapFromBezierCurveColor(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
+    def getPoints(attrPoints):
+        return [float(p) for p in attrPoints[::6]]
+
+    def getValues(attrPoints):
+        return [float(v) for v in attrPoints[1::6]]
+
+    def getTypes(attrTypes):
+        return [4] * len(attrTypes) # Set all point types to Bezier
+
+    # The red points should always be defined. The green and blue may be skipped,
+    # convert to greyscale in this case
+    redPoints  = getPoints(attributes['points_r'])
+    greenPoints = getPoints(attributes.get('points_g', attributes['points_r']))
+    bluePoints = getPoints(attributes.get('points_b', attributes['points_r']))
+
+    redTypes = getTypes(attributes['types_r'])
+    greenTypes = getTypes(attributes.get('types_g', attributes['types_r']))
+    blueTypes = getTypes(attributes.get('types_b', attributes['types_r']))
+
+    remapAttributes = {
+        'remapType': 0,
+        'red_positions':   getPoints(redPoints),
+        'red_values':      getValues(redPoints),
+        'red_types':       getTypes(redTypes),
+        'green_positions': getPoints(greenPoints),
+        'green_values':    getValues(greenPoints),
+        'green_types':     getTypes(greenTypes),
+        'blue_positions':  getPoints(bluePoints),
+        'blue_values':     getValues(bluePoints),
+        'blue_types':      getTypes(blueTypes),
+    }
+
+    _fillRemap(texRemap, mapping, remapAttributes)
+
+
 def _createNodeTexRemap(importContext: ImportContext, pluginDesc: dict):
+    
+    def _removeFromDict(dictionary, filterFn):
+        toRemove = []
+        for attr in dictionary:
+            if filterFn(attr):
+                toRemove.append(attr)
+        for attr in toRemove:
+            del dictionary[attr]
+
     texRemapNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexRemap', pluginDesc['Name'])
 
     attributes = pluginDesc['Attributes']
@@ -677,15 +692,34 @@ def _createNodeTexRemap(importContext: ImportContext, pluginDesc: dict):
         attributes
     )
 
-    toRemove = []
-    for attr in attributes:
-        if "_types" in attr:
-            toRemove.append(attr)
-    for attr in toRemove:
-        del attributes[attr]
+    _removeFromDict(attributes, lambda attr: '_types' in attr)
     _fillNodeProperties(importContext, texRemapNode, pluginDesc, 'TexRemap')
 
     return texRemapNode
+
+
+def _createNodeTexRemapFromBezierCurve(importContext: ImportContext, pluginDesc: dict, isColor: False):
+    texRemapNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexRemap', pluginDesc['Name'])
+
+    attributes = pluginDesc['Attributes']
+    curvesNode = getCurvesNode(texRemapNode)
+    
+    if isColor:
+        _fillRemapFromBezierCurveColor(texRemapNode.TexRemap, curvesNode.mapping, attributes)
+    else:
+        _fillRemapFromBezierCurve(texRemapNode.TexRemap, curvesNode.mapping, attributes)
+
+    # Manually import connected inputs because we have created a different type of plugin and
+    # the automatic walk won't find the correct sockets
+    inputAttrName = 'input_color' if isColor else 'input_float'
+    connectedPlugin, connectedOutput = _getPluginConnectedToInput(importContext, inputAttrName, pluginDesc)
+
+    if connectedPlugin:
+        inputColorSocket = getInputSocketByAttr(texRemapNode, 'input_color')
+        _createLinkedNode(importContext, inputColorSocket, connectedOutput, connectedPlugin)
+
+    return texRemapNode
+
 
 def _createNodeTexVectorProduct(importContext: ImportContext, pluginDesc: dict):
     texVectorProductNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexVectorProduct', pluginDesc['Name'])
@@ -696,7 +730,7 @@ def _createNodeTexVectorProduct(importContext: ImportContext, pluginDesc: dict):
     if (inp1 := attributes.get("input1")) and isinstance(inp1, Color):
         vectorNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeVector')
         vectorNode.value = Vector(inp1[:])
-        importContext.nodeTree.links.new(vectorNode.outputs[0], NodeUtils.getInputSocketByAttr(texVectorProductNode, "input1"))
+        importContext.nodeTree.links.new(vectorNode.outputs[0], getInputSocketByAttr(texVectorProductNode, "input1"))
     return texVectorProductNode
 
 def _createNodeTexLayered(importContext: ImportContext, pluginDesc: dict):
@@ -729,31 +763,23 @@ def _createNodeTexLayered(importContext: ImportContext, pluginDesc: dict):
             opacitySocket = getHiddenInput(texLayeredNode, f"Opacity {humanIndex}")
             blendModeSocket = getHiddenInput(texLayeredNode, f"Blend Mode {humanIndex}")
 
-            if type(texture) is str:
-                pluginOutAttrName = None
-                inPluginName = texture
-                if texture.find("::") != -1:
-                    inPluginName, pluginOutAttrName = texture.split("::")
-
-                plg = getPluginByName(importContext.vrsceneDict, inPluginName)
-                _createNodeSocketConnectionUtil(importContext, texLayeredNode, "", "", pluginOutAttrName, plg, textureSocket)
+            if _isPluginLink(texture):
+                connectedPlugin, connectedOutput = _getPluginFromLink(importContext, texture)
+                if connectedPlugin:
+                    _createLinkedNode(importContext, textureSocket, connectedOutput, connectedPlugin)
             else:
-                textureSocket.value = fixValue(texture)
+                textureSocket.value = texture
 
             if masks and i < len(masks):
                 mask = masks[i]
-                if type(mask) is str:
-                    pluginOutAttrName = None
-                    inPluginName = mask
-                    if mask.find("::") != -1:
-                        inPluginName, pluginOutAttrName = mask.split("::")
-
-                    plg = getPluginByName(importContext.vrsceneDict, inPluginName)
-                    _createNodeSocketConnectionUtil(importContext, texLayeredNode, "", "", pluginOutAttrName, plg, maskSocket)
+                if _isPluginLink(mask):
+                    connectedPlugin, connectedOutput = _getPluginFromLink(importContext, mask)
+                    if connectedPlugin:
+                        _createLinkedNode(importContext, maskSocket, connectedOutput, connectedPlugin)
                 else:
-                    maskSocket.value = fixValue(mask)
+                    maskSocket.value = mask
 
-            opacitySocket.value = opacities[i] if opacities and i < len(opacities) else 1.0
+            opacitySocket.value = float(opacities[i]) if opacities and i < len(opacities) else 1.0
             blendModeSocket.value = str(blendModes[i])
     texLayeredNode.layers = len(textures)
 
@@ -780,25 +806,27 @@ def _createTexNormalMapNode(importContext: ImportContext, pluginDesc: dict):
     normalMap, texmap, normalFlip, outputName = None, None, None, ""
     if pluginDesc['ID'] == "TexNormalBump":
         normalMap = pluginDesc
-        outputName, texmap = _getConnectedPluginInput(importContext.vrsceneDict, "bump_tex_color", pluginDesc)
+        texmap, outputName = _getPluginConnectedToInput(importContext, "bump_tex_color", pluginDesc)
         if texmap is not None and texmap['ID'] == "TexNormalMapFlip":
             normalFlip = texmap
-            outputName, texmap = _getConnectedPluginInput(importContext.vrsceneDict, "texmap", texmap)
+            texmap, outputName = _getPluginConnectedToInput(importContext, "texmap", texmap)
     elif pluginDesc['ID'] == "TexNormalMapFlip":
         normalFlip = pluginDesc
-        outputName, texmap = _getConnectedPluginInput(importContext.vrsceneDict, "texmap", pluginDesc)
+        texmap, outputName = _getPluginConnectedToInput(importContext, "texmap", pluginDesc)
         if texmap is not None and texmap['ID'] == "TexNormalBump":
             normalMap = texmap
-            outputName, texmap = _getConnectedPluginInput(importContext.vrsceneDict, "bump_tex_color", texmap)
+            texmap, outputName = _getPluginConnectedToInput(importContext, "bump_tex_color", texmap)
 
     if normalFlip is not None:
         normalBumpNode.TexNormalBump.flip_red = normalFlip['Attributes'].get('flip_red', False)
         normalBumpNode.TexNormalBump.flip_green = normalFlip['Attributes'].get('flip_green', False)
         normalBumpNode.TexNormalBump.swap_red_green = normalFlip['Attributes'].get('swap_redgreen', False)
     if normalMap is not None:
+        normalMap['Attributes'].setdefault('bump_object_space', False)
         _fillNodeProperties(importContext, normalBumpNode, normalMap, "TexNormalBump", {'bump_tex_color'})
     if texmap:
-        _createNodeSocketConnectionUtil(importContext, normalBumpNode, "bump_tex_color", "Map", outputName, texmap)
+        if bumpTexSocket := _getInputSocket(normalBumpNode, "bump_tex_color"):
+            _createLinkedNode(importContext, bumpTexSocket, outputName, texmap)
 
     return normalBumpNode
 
@@ -820,13 +848,6 @@ def _createUVWGenChannelNode(importContext: ImportContext, pluginDesc: dict):
         return None
     return _createGenericNode(importContext, pluginDesc)
 
-##     ## ##     ## ##      ##  ######   ######## ##    ##
-##     ## ##     ## ##  ##  ## ##    ##  ##       ###   ##
-##     ## ##     ## ##  ##  ## ##        ##       ####  ##
-##     ## ##     ## ##  ##  ## ##   #### ######   ## ## ##
-##     ##  ##   ##  ##  ##  ## ##    ##  ##       ##  ####
-##     ##   ## ##   ##  ##  ## ##    ##  ##       ##   ###
- #######     ###     ###  ###   ######   ######## ##    ##
 
 def _createMappingNode(importContext: ImportContext, pluginDesc, pluginType):
     pluginName = pluginDesc['Name']
@@ -847,14 +868,6 @@ def _createMappingNode(importContext: ImportContext, pluginDesc, pluginType):
 
     _fillNodeProperties(importContext, mappingNode, pluginDesc, pluginType)
     return mappingNode
-
- ######   ######## ##    ## ######## ########  ####  ######
-##    ##  ##       ###   ## ##       ##     ##  ##  ##    ##
-##        ##       ####  ## ##       ##     ##  ##  ##
-##   #### ######   ## ## ## ######   ########   ##  ##
-##    ##  ##       ##  #### ##       ##   ##    ##  ##
-##    ##  ##       ##   ### ##       ##    ##   ##  ##    ##
- ######   ######## ##    ## ######## ##     ## ####  ######
 
 
 def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName: str, node: bpy.types.Node):
@@ -921,20 +934,57 @@ def _applyTexCombineToSock(texCombineDesc: dict, inSocket: bpy.types.NodeSocket)
         if isColorSocket(getVRayBaseSockType(inSocket)):
             inSocket.value =  texCombAttrs["color"]
 
-def _getConnectedPluginInput(vrsceneDict, inputAttrName, pluginDesc):
-    """ Returns plugin referenced by attribute named "inputAttrName" """
+
+def _isPluginLink(value):
+    return type(value) is str
+
+
+def _parsePluginLink(pluginLink: str):
+    """ Parse a plugin name set as attribute value into plugin name and output socket attribute name. """
+    if pluginLink.find("::") != -1:
+        pluginName, outSocketName = pluginLink.split("::")
+        assert pluginName != "" and outSocketName != ""
+        return pluginName, outSocketName
+    else:
+        return pluginLink, None
+
+
+def _getPluginFromLink(importContext: ImportContext, pluginLink: str):
+    """ Returns the plugin and output socket name given a fully qualified plugin link (plugnName::output) """
+    if (not pluginLink) or (not _isPluginLink(pluginLink)):
+        return None, None
+    
+    pluginName, outputSocketAttr = _parsePluginLink(pluginLink)
+    
+    if not pluginName:
+        raise Exception(f"Plugin refereced by {pluginLink} not found in .vrmat")
+    
+    plugin = getPluginByName(importContext.vrsceneDict, pluginName)
+    
+    if not plugin:
+        # This may happen when the plugin is referenced from another .vrnat file
+        # like in e.g. HDRI definitions
+        return None, None
+                         
+    pluginType = plugin['ID']
+
+    if outputSocketAttr:
+        outputSocketName = _getOutputSocketNameByAttr(pluginType, outputSocketAttr)
+    else:
+        outputSocketName = _getDefaultOutputSocketName(pluginType)
+
+    return plugin, outputSocketName
+
+
+def _getPluginConnectedToInput(importContext, inputAttrName, pluginDesc):
+    """ Returns the plugin and output referenced by attribute named "inputAttrName" """
 
     inputValue = pluginDesc['Attributes'][inputAttrName]
-    if type(inputValue) is str:
-        pluginOutAttrName = None
-        inPluginName = inputValue
-        # Check if a specific output is requested (like MyTexture::out_intensity)
-        if inputValue.find("::") != -1:
-            inPluginName, pluginOutAttrName = inputValue.split("::")
-
-        return pluginOutAttrName, getPluginByName(vrsceneDict, inPluginName)
-
+    if _isPluginLink(inputValue):
+        return _getPluginFromLink(importContext, inputValue)
+        
     return None, None
+
 
 def _setNodeEnumProperty(attrDesc: dict, attrName: str, attrValue, pluginType: str, propGroup):
     """ Set value of Enum property of node """
@@ -962,49 +1012,61 @@ def _setNodePrimitiveProperty(attrName: str, attrValue, pluginType: str, propGro
     else:
         setattr(propGroup, attrName, attrValue)
 
-def _setNodeTransformProperty(attrName: str, attrValue, pluginType: str, propGroup):
-    """ Setting property of type Transform """
 
-    # UVWGenRandomizer's 'mode' attribute is used as mask on which the first five bits
-    # represent different modes.
-    # In the UI they are visualized as different check boxes
-    # and the code below fills them based on the 'mode' mask value.
-    if pluginType == "UVWGenRandomizer" and attrName == "mode":
-        attrValue = int(attrValue)
-        for modeName, modeMask in UVWGenRandomizerModes.items():
-            # Explicitly set all mode flags in order to override any plugin defaults.
-            setattr(propGroup, modeName, bool(attrValue & modeMask))
-    else:
-        setattr(propGroup, attrName, attrValue)
+def _getMetaInputSocket(pluginModule, node, attrName):
+    """ If the attribute is part of a meta input socket, return the meta socket
+        instead of the socket for the actual attribute.
+    """
+    for s in (s for s in node.inputs if s.bl_idname.startswith('VRaySocketColorTexture_')):
+        for p in (p for p in pluginModule.Parameters if p['type'] == 'COLOR_TEXTURE'):
+            if p['color_prop'] == attrName or p['tex_prop'] == attrName:
+                return s
+    return None
 
-def _getInputSock(node, attrName):
-    sock = next((s for s in node.inputs if s.vray_attr == attrName), None)
 
-    if sock is None:
-        pluginModule = getPluginModule(node.vray_plugin)
+def _getInputSocket(node, attrName):
+    pluginModule = getPluginModule(node.vray_plugin)
+    
+    if (sock := _getMetaInputSocket(pluginModule, node, attrName)) is not None:
+        excludedParams = pluginModule.Options.get('excluded_parameters', [])
+        if sock.vray_attr not in excludedParams:
+            # It is unlikely that a meta socket would be excluded from export, but
+            # do the check for consistency
+            return sock
+        else:
+            debug.printError(f"Import: Parameter '{attrName}' is not part of node {node.name} definition")
+            return None
+    
+    if (sock := getInputSocketByAttr(node, attrName)) is None:
         excludedParams = pluginModule.Options.get('excluded_parameters', [])
         if attrName not in excludedParams:
             debug.printWarning(f"Import: Parameter '{attrName}' is not part of node {node.name} definition")
 
     return sock
 
-def _optimizeGraph(importContext: ImportContext, inPluginOutput: str, connectedPlugin: dict, inputSocket: bpy.types.NodeSocket):
-    # Continue until 'connectedPlugin' is not converter or multiplier
-    # Such situations are possible: TexCombineColor->TexColorToFloat->TexCombineFloat
+
+def _processNonNodePlugins(importContext: ImportContext, inPluginOutput: str, connectedPlugin: dict, inputSocket: bpy.types.NodeSocket):
+    """ Find the first plugin in the chain starting from 'inputSocket' for which a node should be created.
+        Apply any TexCombineColor properties to the input socket.
+    
+        Returns:
+            The plugin description and the name of the output socket of the next plugin in the chain 
+            for which a node should be created.
+    """
+    assert inputSocket is not None
+    assert connectedPlugin is not None
+    
     while connectedPlugin:
         connectedPluginType = connectedPlugin['ID']
         connectedThroughAttr = ""
 
         # MtlSingleBRDF, TexCombineColor, TexColorToFloat and TexFloatToColor node conversions are skipped
         # (they are created only during node tree export and are not visible in the UI)
-        # Only the plugins connected through their input attributes are transformed to Nodes
+        # Only the plugins connected through their input attributes are imported as nodes
         match connectedPluginType:
             case "TexCombineColor" | "TexCombineFloat":
-                if attrSocket := inputSocket:
-                    _applyTexCombineToSock(connectedPlugin, attrSocket)
-                    connectedThroughAttr = "texture"
-                else: # Skip node creation if the plugin is connected through unsupported attribute
-                    return inPluginOutput, connectedPlugin
+                _applyTexCombineToSock(connectedPlugin, inputSocket)
+                connectedThroughAttr = "texture"
             case "TexColorToFloat" | "TexFloatToColor":
                 connectedThroughAttr = "input"
             case "MtlSingleBRDF":
@@ -1014,73 +1076,67 @@ def _optimizeGraph(importContext: ImportContext, inPluginOutput: str, connectedP
 
         # Multiplier or converter is not connected
         if connectedThroughAttr not in connectedPlugin["Attributes"]:
-            return inPluginOutput, connectedPlugin
+            return connectedPlugin, inPluginOutput
 
-        inPluginOutputTemp, connectedPluginTemp = _getConnectedPluginInput(importContext.vrsceneDict, connectedThroughAttr, connectedPlugin)
-        if connectedPluginTemp:
-            inPluginOutput, connectedPlugin = inPluginOutputTemp, connectedPluginTemp
-        else:
-            break
-    return inPluginOutput, connectedPlugin
+        nextPlugin, nextPluginOutput = _getPluginConnectedToInput(importContext, connectedThroughAttr, connectedPlugin)
 
-def getInputSocketByNameHack(node: bpy.types.Node, socketName):
-    # TODO: Rework all of this socket name stuff it's wrong on so many levels.
-    assert node is not None
-    pluginModule = PLUGIN_MODULES.get(node.vray_plugin)
-    return next(iter(s for s in node.inputs if getSocketName(pluginModule, s.vray_attr) == socketName), None)
+        if not nextPlugin:
+            # No plugin is connected to the input
+            break    
 
-def _createNodeSocketConnectionUtil(
+        assert nextPluginOutput
+
+        connectedPlugin, inPluginOutput = nextPlugin, nextPluginOutput
+
+    return connectedPlugin, inPluginOutput
+
+
+                    
+def _createLinkedNode(
     importContext: ImportContext,
-    node: bpy.types.Node,
-    attrName: str,
-    attrSocketName: str,
-    inPluginOutput: str,
-    connectedPlugin: dict,
-    explicitInputSocket: bpy.types.NodeSocket = None,
-    fixBump = False,
+    inputSocket: bpy.types.NodeSocket,
+    connectedPluginOutput: str,
+    connectedPlugin: dict
 ):
-    ntree = importContext.nodeTree
-    assert (attrSocketName != "" and attrSocketName != "") ^ bool(explicitInputSocket)
+    """ Create the node connected to 'inputSocket'
 
-    inputSockByAttr = explicitInputSocket if explicitInputSocket else _getInputSock(node, attrName)
-    inPluginOutput, connectedPlugin = _optimizeGraph(importContext, inPluginOutput, connectedPlugin, inputSockByAttr)
+    Args:
+        importContext (ImportContext): import context
+        inputSocket (bpy.types.NodeSocket): The input socket to connect.
+        connectedPluginOutput (str): The name of the output socket to connect to.
+        connectedPlugin (dict):      The type of the plugin of the new node.
+    """
+    assert connectedPlugin is not None
 
-    # Checking again because the previous "if" could change connectedPlugin's value
-    if connectedPlugin:
-        connectedPluginType = connectedPlugin['ID']
+    connectedPlugin, connectedPluginOutput = _processNonNodePlugins(importContext, connectedPluginOutput, connectedPlugin, inputSocket)
+    assert connectedPlugin is not None
+    
+    if (collapsedValue := _collapseToValue(importContext, connectedPlugin)) is not None:
+        # No need to create a new node for the connected plugin as it has been collapsed to a value
+        inputSocket.value = collapsedValue
+        return None
+    
+    newNode = createNode(importContext, connectedPlugin)
+    
+    if newNode is None:
+        # Some leaf nodes may be omitted if they have their default value, e.g. UVWGenChannel
+        return 
+    
+    # Deal with remapped socket names
+    if remappedPluginOutput := _REMAPPED_OUTPUT_SOCKETS.get(connectedPlugin['ID'], {}).get(connectedPluginOutput):
+        connectedPluginOutput = remappedPluginOutput
 
-        collapsedValue = _collapseToValue(connectedPlugin, importContext.vrsceneDict)
-        if  inputSockByAttr and collapsedValue is not None:
-            inputSockByAttr.value = fixValue(collapsedValue)
-        else:
-            inPluginOutputSocketName = _getPluginOutputSocketName(connectedPlugin, inPluginOutput)
+    assert connectedPluginOutput in (o.name for o in newNode.outputs)
+        
+    # Some plugins, e.g. TexSampler, have part of their output sockets hidden depending on the state of the node.
+    # Make sure the socket is visible and enabled before creating the link to it or the creation will fail.
+    outSock = next((o for o in newNode.outputs if o.name == connectedPluginOutput))
+    if outSock.hide:
+        outSock.hide = False
+        outSock.enabled = True
 
-            inputSocket = explicitInputSocket if explicitInputSocket else getInputSocketByNameHack(node, attrSocketName)
+    importContext.nodeTree.links.new(outSock, inputSocket)
 
-            connectedNode = createNode(importContext, node, connectedPlugin)
-            if connectedNode:
-                if inPluginOutputSocketName not in connectedNode.outputs:
-                    if connectedPluginType in ('TexAColorOp', 'TexFloatOp', 'TexSampler'):
-                        outSock = getOutputSocketByAttr(connectedNode, inPluginOutputSocketName)
-                        if isinstance(outSock, str):
-                            outSock = getOutputSocketByAttr(connectedNode, inPluginOutput)
-                        outSock.hide = False
-                        outSock.enabled = True
-                        ntree.links.new(outSock, inputSocket)
-                    else:
-                        # TODO: Convert to exception after fixing the definitions
-                        debug.printWarning(f"Node {connectedPluginType} does not have an output socket named {inPluginOutputSocketName}")
-                else:
-                    ntree.links.new(connectedNode.outputs[inPluginOutputSocketName], inputSocket)
-
-                if fixBump:
-                    ntree.links.new(getOutputSocketByAttr(connectedNode, 'out_intensity'), node.inputs['Float Texture'])
-
-def _createNodeSocketConnection(importContext: ImportContext, node: bpy.types.Node, attrName: str, attrSocketName: str, pluginDesc: dict, fixBump: bool):
-    """ Create Node for a plugin that's referred by another plugin """
-    inPluginOutput, connectedPlugin = _getConnectedPluginInput(importContext.vrsceneDict, attrName, pluginDesc)
-
-    _createNodeSocketConnectionUtil(importContext, node, attrName, attrSocketName, inPluginOutput, connectedPlugin, fixBump=fixBump)
 
 def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, pluginDesc: dict, pluginType: str, skippedAttrs = {}):
     """ Create Node without specific parameters"""
@@ -1088,18 +1144,17 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
     from vray_blender.plugins import PLUGIN_MODULES
 
     pluginAttrs = pluginDesc['Attributes']
-    pluginModule = PLUGIN_MODULES.get(pluginType)
+    pluginModule = getPluginModule(pluginType)
 
     if pluginModule is None:
         debug.printError(f"Plugin '{pluginType}' is not yet supported! This shouldn't happen! Please, report this!")
         return None
 
-
     # This property group holds all plugin settings
     propGroup = getattr(node, pluginType)
 
     # list of all "COLOR_TEXTURE" attributes
-    colorTexPlugins = [attr for attr in pluginModule.Parameters if attr["type"] == "COLOR_TEXTURE"]
+    colorTexAttributes = [attr for attr in pluginModule.Parameters if attr["type"] == "COLOR_TEXTURE"]
 
     # Now go through all plugin attributes and check
     # if we should create other nodes or simply set the value
@@ -1108,37 +1163,27 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
             continue
         attrValue = pluginAttrs[attrName]
 
-        # NOTE: Fixes vrscene exported from other applications using deprecated 'bump_tex'
-        # attribute
-        fixBump = attrName == 'bump_tex'
-        if fixBump:
-            attrName = 'bump_tex_color'
-
         attrDesc = attribute_utils.getAttrDesc(pluginModule, attrName)
         # TODO: Figure out what to do with these params
         if not attrDesc:
             continue
+
         if not importContext.isConversion and "ui" in attrDesc and attrDesc["ui"].get("quantityType") == "distance":
             lengthUnit = attrDesc["ui"].get("units", "centimeters")
             attrValue = attribute_utils.scaleToSceneLengthUnit(attrValue, lengthUnit)
-
-        if attrDesc is None:
-            # XXX: This could happen when loading VISMATS; error message disabled here...
-            # print("Plugin '%s': Attribute '%s' is not yet supported! This is very strange!" % (pluginType, attrName))
-            continue
-
+        
         # Catching socket mismatches during generic nodes creation.
         # Error occurring in the code below could interrupt importing of cosmos asset.
         try:
-            attrSocketName = getSocketName(pluginModule, attrName)
+            attrSocketName = _getInputSocketNameByAttr(pluginModule, attrName)
 
             origAttrName = attrName
             # Handling attributes that are represented as COLOR_TEXTURE
             if attrDesc['type'] in ("COLOR", "ACOLOR", "TEXTURE"):
-                for clrTex in colorTexPlugins:
-                    if clrTex["color_prop" if (attrDesc['type'] == "COLOR" or attrDesc['type']=="ACOLOR") else "tex_prop"] == attrName:
+                for clrTex in colorTexAttributes:
+                    if clrTex["tex_prop" if attrDesc['type'] == "TEXTURE"  else "color_prop"] == attrName:
                         attrName = clrTex["attr"]
-                        attrSocketName = getSocketName(pluginModule, attrName)
+                        attrSocketName = _getInputSocketNameByAttr(pluginModule, attrName)
 
             # Attribute is a output type - nothing to do
             if attrDesc['type'] in attribute_types.NodeOutputTypes:
@@ -1159,15 +1204,14 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
             elif attrDesc['type'] not in attribute_types.NodeInputTypes:
                 _setNodePrimitiveProperty(attrName, attrValue, pluginType, propGroup)
 
-            else:
-                # Attribute could possibly be mapped with other node
-                # Check if we could find requested node in a vrsceneDict
-                if type(attrValue) is str:
-                    # Here we need the 'attrName' from the material file. The ".vrmat" file format doesn't contain COLOR_TEXTURE attributes 
-                    _createNodeSocketConnection(importContext, node, origAttrName, attrSocketName, pluginDesc, fixBump)
-                # Attr is not linked - set socket default value
-                elif  attrSocket := _getInputSock(node, attrName):
-                    attrSocket.value = fixValue(attrValue)
+            elif _isPluginLink(attrValue):
+                connectedPlugin, outputName = _getPluginFromLink(importContext, attrValue)
+                if connectedPlugin is not None:
+                    if inputSock := _getInputSocket(node, origAttrName):
+                        _createLinkedNode(importContext, inputSock, outputName, connectedPlugin)
+
+            elif  attrSocket := _getInputSocket(node, attrName):
+                attrSocket.value = attrValue
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "nodes.importing._fillNodeProperties")
@@ -1185,12 +1229,11 @@ def _createGenericNode(importContext: ImportContext, pluginDesc: dict):
     return node
 
 
-def createNode(importContext: ImportContext, prevNode: bpy.types.Node, pluginDesc: dict):
+def createNode(importContext: ImportContext, pluginDesc: dict):
     pluginType = pluginDesc['ID']
     pluginName = pluginDesc['Name']
 
-    # TexBitmap is handled by custom meta node
-    if pluginType != 'TexBitmap' and pluginType in SKIPPED_PLUGINS:
+    if pluginType in _UNSUPPORTED_PLUGINS:
         debug.printWarning(f"The asset being imported contains a plugin of type {pluginType}, which is not recognized by V-Ray for Blender. Please contact support.")
         return None
 
@@ -1204,8 +1247,6 @@ def createNode(importContext: ImportContext, prevNode: bpy.types.Node, pluginDes
             return _createNodeBRDFLayered(importContext, pluginDesc)
         case 'BRDFScanned':
             return _createNodeBRDFScanned(importContext, pluginDesc)
-        case 'BitmapBuffer':
-            return _createNodeBitmapBuffer(importContext, prevNode, pluginDesc)
         case 'TexBitmap':
             return _createNodeTexBitmap(importContext, pluginDesc)
         case 'TexGradRamp':
@@ -1224,5 +1265,9 @@ def createNode(importContext: ImportContext, prevNode: bpy.types.Node, pluginDes
             return _createLightIES(importContext, pluginDesc)
         case 'TexNormalMapFlip' | "TexNormalBump":
             return _createTexNormalMapNode(importContext, pluginDesc)
+        case 'TexBezierCurve':
+            return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=False)
+        case 'TexBezierCurveColor':
+            return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=True)
 
     return _createGenericNode(importContext, pluginDesc)

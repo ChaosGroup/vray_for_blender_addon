@@ -10,26 +10,30 @@
 
 namespace VRayForBlender {
 
-class ProductionExporter : public SceneExporter
+class ProductionExporter : public ExporterBase
 {
 	using time_point = std::chrono::high_resolution_clock::time_point;
+	using ZmqExporterPtr = std::shared_ptr<ZmqExporter>;
 
-
+	ProductionExporter(const ProductionExporter&) = delete;
+	ProductionExporter& operator=(const ProductionExporter&) = delete;
+	
 public:
 	explicit ProductionExporter(const ExporterSettings& settings);
+	~ ProductionExporter();
 
-	// SceneExporter interface implementation
-	virtual void      setupCallbacks() override;
-	virtual void	  renderStart(RenderPass *renderResult, py::object imageUpdatedCallback) override;
-	virtual void      renderEnd() override;
-	virtual void      renderFrame() override;
-	virtual void      continueRenderSequence() override;
-	virtual void      renderSequence(int start, int end, int step) override;
-	virtual bool	  renderSequenceRunning() override;
-	virtual bool	  vrsceneExportRunning() override;
-	virtual int 	  lastRenderedFrame() override;
-	virtual void      setRenderFrame(float frame) override;
-	virtual void	  abortRender()  override;
+	// ExporterBase interface implementation
+	void    init(ZmqExporter* zmqExporter) override;
+	void    setupCallbacks() override;
+	void    renderStart(RenderPass *renderResult, py::object imageUpdatedCallback) override;
+	void    renderEnd() override;
+	void    renderFrame() override;
+	void    continueRenderSequence() override;
+	void    renderSequence(int start, int end, int step) override;
+	bool    isRendering() override;
+	int     lastRenderedFrame() override;
+	void    setRenderFrame(float frame) override;
+	void    abortRender()  override;
 
 	// Callbacks
 	void              cb_on_image_ready();
@@ -40,9 +44,11 @@ public:
 private:
 	void              updateImage();
 
+	ZmqExporter*      m_exporter;
+	ExporterSettings  m_settings;
 	std::atomic_bool  m_renderFinished    = false;  // Used to signal a frame has been rendered
 
-	py::object		  m_imageUpdateCallback;
+	py::object        m_imageUpdateCallback;
 	time_point        m_lastImageUpdate;
 	RenderPass*       m_renderPass = nullptr;
 };

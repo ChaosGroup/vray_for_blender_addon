@@ -54,20 +54,20 @@ class _InvalidLinkInfo (_NewLinkInfo):
     def __init__(self, nodeTree, link):
         super().__init__(nodeTree, link.from_node.name, link.to_node.name, link.from_socket.name, link.to_socket.name)
         self.link = link
-        
+
 
     def isSameAs(self, newLinkInfo: _NewLinkInfo):
         return  newLinkInfo.fromNodeName    == self.fromNodeName and    \
                 newLinkInfo.toNodeName      == self.toNodeName and      \
                 newLinkInfo.fromSocketName  == self.fromSocketName and  \
                 newLinkInfo.toSocketName    == self.toSocketName
-    
+
     def __eq__(self, other):
         return self.__hash__() == other.__hash__()
-        
+
     def __hash__(self):
         return hash(f"{self.nodeTree.session_uid}_{self.fromNodeName}_{self.toNodeName}_{self.fromSocketName}_{self.toSocketName}")
-    
+
 
 # A list of links that are deemed invalid and need to be deleted.
 _InvalidLinks: set[_InvalidLinkInfo] = set()
@@ -115,17 +115,12 @@ class VRayMaterialNodeCategory(nodeitems_utils.NodeCategory):
 class VRayObjectNodeCategory(nodeitems_utils.NodeCategory):
     @classmethod
     def poll(cls, context):
-        return classes.pollTreeType(cls, context)
+        return classes.pollTreeType(cls, context) and _pollObjectNodeTreeSelected(context)
 
 class VRayObjectNodeCategoryForMesh(VRayObjectNodeCategory):
     @classmethod
     def poll(cls, context):
         return super().poll(context) and not _pollObjectOfContextIsFur(context)
-
-class VRayObjectNodeCategoryForFur(VRayObjectNodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return super().poll(context) and _pollObjectOfContextIsFur(context)
 
 class VRayWorldNodeCategory(nodeitems_utils.NodeCategory):
     @classmethod
@@ -167,7 +162,7 @@ def _getChannelMenuClasses():
                 }
             )
             _channelMenuClasses.append(vRayRenderChannelType)
-        
+
 
     return _channelMenuClasses
 
@@ -259,7 +254,7 @@ def getMaterialItemsList():
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Switch Mtl"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl 2Sided"),
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Override"),
-        
+
         # Disabled until we decide whether we wont to show nodes for them
         # --------------------
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Material ID"),
@@ -267,11 +262,11 @@ def getMaterialItemsList():
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Round Edges"),
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Wrapper"),
         #
-        # TBD 
+        # TBD
         # --------------------
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl GLSL"),
         # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl OSL"),
-        
+
         _getMtlByTypeAndLabel("MATERIAL", "V-Ray VRmat Mtl")
     )
 
@@ -405,11 +400,11 @@ def vrayNodeDraw(self, context, layout):
     #
     if hasattr(vrayPlugin, 'nodeDraw'):
         vrayPlugin.nodeDraw(context, layout, self)
-        
+
     elif hasattr(vrayPlugin, 'Node') and 'widgets' in vrayPlugin.Node:
         uiPainter = draw_utils.UIPainter(context, vrayPlugin, propGroup, node = self)
-        uiPainter.renderWidgets(layout, vrayPlugin.Node['widgets'])
-        
+        uiPainter.renderWidgets(layout, vrayPlugin.Node['widgets'], True)
+
 
 
 def vrayNodeDrawSide(self, context, layout):
@@ -418,8 +413,8 @@ def vrayNodeDrawSide(self, context, layout):
         return
 
     # TODO: This commented code is intentionally retained so that we remembered
-    # to check that the functionality is not broken after converting the 
-    # corresponding plugin descriptions. Remove afterwards. 
+    # to check that the functionality is not broken after converting the
+    # corresponding plugin descriptions. Remove afterwards.
     #if self.vray_type == 'LIGHT' and self.vray_plugin not in {'LightMesh'}:
     #    # We only need sockets from 'LIGHT' nodes.
     #    # Params will be taken from lamp propGroup
@@ -440,23 +435,14 @@ def vrayNodeDrawSide(self, context, layout):
         )
 
 
-def updateRenderChannelsState(node, enabled):
-    """ Update render channels indicators in the property panel"""
-    VRayRenderChannels = bpy.context.scene.world.vray.VRayRenderChannels
-    if renderChannels := getattr(VRayRenderChannels, node.bl_idname):
-        renderChannels.nodeUpdatesEnabled = False
-        renderChannels.nodesCount += 1 if enabled else -1
-        renderChannels.enabled = renderChannels.nodesCount >= 1
-
-
 def setUniqueRenderChannelName(node: bpy.types.Node, isNewNode: bool):
     """ Set a unique channel name. By default, the name of the channel is set to be
-        the name as the name of the render channel. If this name is already in use for another 
-        render channel however, create a new unique name by adding a numeric suffix. 
+        the name as the name of the render channel. If this name is already in use for another
+        render channel however, create a new unique name by adding a numeric suffix.
     """
     propGroup = NodeUtils.getVrayPropGroup(node)
     channelName = propGroup.name
-    
+
     attempt = 1
     while any([n for n in node.id_data.nodes if isVrayNode(n) and (n.vray_type == 'RENDERCHANNEL') \
                                                 and n != node \
@@ -488,20 +474,19 @@ def vrayNodeInit(self, context):
 
     try:
         pluginModule = PLUGINS[self.vray_type][self.vray_plugin]
-        
+
         # Set the unique ID of the node to the propety group. It will be
-        # used to reach the node from the property group in callbacks which 
-        # do not supply node info. PointerProperty type cannot be used for the 
+        # used to reach the node from the property group in callbacks which
+        # do not supply node info. PointerProperty type cannot be used for the
         # node reference because it only supports types derived from bpy.types.ID
         # This function will also set the parent_node_id on the node's property group.
         syncObjectUniqueName(self, reset=True)
-        
+
         NodeUtils.addInputsOutputs(self, pluginModule)
 
         if self.vray_type == 'RENDERCHANNEL':
-            updateRenderChannelsState(self, True)
             setUniqueRenderChannelName(self, isNewNode = True)
-        
+
         if hasattr(pluginModule, "nodeInit"):
             # Give the node a chance to initialize plugin-specific state
             pluginModule.nodeInit(self)
@@ -515,9 +500,9 @@ def vrayNodeInit(self, context):
 def vrayNodeCopy(self, node):
     """ Copy 'node' to 'self' """
 
-    # NOTE: Do not try to access the values of the 'node's sockets in this function. 
-    # The reference from the socket to the node has not yet been set and any custom 
-    # setter/getter function will cause an access violation. 
+    # NOTE: Do not try to access the values of the 'node's sockets in this function.
+    # The reference from the socket to the node has not yet been set and any custom
+    # setter/getter function will cause an access violation.
 
     # Create a new unique ID for the node and set the link to it in the property group
     syncObjectUniqueName(self, reset=True)
@@ -527,7 +512,7 @@ def vrayNodeCopy(self, node):
 
     propGroupCopy = getattr(self, self.vray_plugin)
     propGroupCopy.parent_node_id = self.unique_id
-    
+
     pluginModule = PLUGINS[self.vray_type][self.vray_plugin]
     if hasattr(pluginModule, "nodeCopy"):
         # Give the node a chance to de-initialize plugin-specific state
@@ -536,20 +521,13 @@ def vrayNodeCopy(self, node):
     # Assign unique names to copied render channel nodes.
     if hasattr(node, 'vray_type') and node.vray_type == "RENDERCHANNEL":
         setUniqueRenderChannelName(self, isNewNode = True)
-   
+
 
 def vrayNodeFree(self: bpy.types.Node):
-    if self.vray_type == 'RENDERCHANNEL':
-        updateRenderChannelsState(self, False)
-
     pluginModule = PLUGINS[self.vray_type][self.vray_plugin]
     if hasattr(pluginModule, "nodeFree"):
         # Give the node a chance to de-initialize plugin-specific state
         pluginModule.nodeFree(self)
-
-
-def vrayNodeDrawLabel(self):
-    return self.name
 
 
 @classmethod
@@ -598,9 +576,9 @@ def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink):
     """
     global STRUCTURAL_SOCKET_CLASSES
     assert type(link) is bpy.types.NodeLink
-    
+
     from vray_blender.nodes.tools import isCompatibleNode
-    
+
     isLinkValid = False
 
     if (node == link.to_node) and  (not isCompatibleNode(link.from_node)):
@@ -616,11 +594,11 @@ def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink):
         global _InvalidLinks
         _InvalidLinks.add(_InvalidLinkInfo(node.id_data, link))
 
-    
+
     # Store newly created links for nodes that have registered a custom nodeInsertLink callback
     if getattr(node, 'vray_plugin', 'NONE') == 'NONE':
         return
-    
+
     pluginModule = getPluginModule(node.vray_plugin)
 
     if hasattr(pluginModule, "nodeInsertLink"):
@@ -650,15 +628,15 @@ def updateNodeLinks():
         toNode = linkInfo.nodeTree.nodes[linkInfo.toNodeName]
 
         if (toPluginType := getattr(toNode, 'vray_plugin', 'NONE')) != 'NONE':
-            
-            pluginModule = getPluginModule(toPluginType)
-            
-            assert hasattr(pluginModule, "nodeInsertLink")
-            fromSocket = fromNode.outputs[linkInfo.fromSocketName]
-            toSocket = toNode.inputs[linkInfo.toSocketName]
 
-            if link := NodeUtils.getNearLink(fromSocket, toSocket):
-                pluginModule.nodeInsertLink(link)
+            pluginModule = getPluginModule(toPluginType)
+
+            if hasattr(pluginModule, "nodeInsertLink"):
+                fromSocket = fromNode.outputs[linkInfo.fromSocketName]
+                toSocket = toNode.inputs[linkInfo.toSocketName]
+
+                if link := NodeUtils.getNearLink(fromSocket, toSocket):
+                    pluginModule.nodeInsertLink(link)
 
     # Remove links between incompatible sockets
     for linkInfo in _InvalidLinks:
@@ -666,7 +644,6 @@ def updateNodeLinks():
 
     _NewlyCreatedLinks = []
     _InvalidLinks = set()
-    
 
 
 ########  ##    ## ##    ##    ###    ##     ## ####  ######     ##    ##  #######  ########  ########  ######
@@ -696,13 +673,12 @@ def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, me
         #'bl_menu'   : textureMenuType,
 
         'vray_menu_subtype' : pluginSubtype,
-        
+
         'init'             : vrayNodeInit,
         'copy'             : vrayNodeCopy,
         'free'             : vrayNodeFree,
         'draw_buttons'     : vrayNodeDraw,
         'draw_buttons_ext' : vrayNodeDrawSide,
-        'draw_label'       : vrayNodeDrawLabel,
         'poll'             : vrayNodePoll,
         'update'           : vrayNodeUpdate,
 
@@ -713,14 +689,14 @@ def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, me
     }
 
     # Allow each plugin to add its own functions to the registered class attributes.
-    # This is necessary in order to use the node in scenarios where only registered 
-    # functions are allowed, e.g. as callbacks passed in operator context. In order to 
-    # use this functionality, the plugin must define a 'nodeRegister' function which 
+    # This is necessary in order to use the node in scenarios where only registered
+    # functions are allowed, e.g. as callbacks passed in operator context. In order to
+    # use this functionality, the plugin must define a 'nodeRegister' function which
     # should return a dictionary of functionName => function
     pluginModule = getPluginModule(pluginType)
     if fnRegister := getattr(pluginModule, 'nodeRegister', None):
         DynNodeClassAttrs.update(fnRegister())
-                                 
+
     if menuType:
         DynNodeClassAttrs['bl_menu'] = menuType
 

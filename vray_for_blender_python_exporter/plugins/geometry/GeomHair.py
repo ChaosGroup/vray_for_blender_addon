@@ -23,12 +23,13 @@ def exportCustom(exporterCtx: HairExporter, pluginDesc: PluginDesc):
     selectedObjects: list[bpy.types.Object] = []  # A list of mesh objects attached to the same VRayFur
     furObject = exporterCtx.objectContext.get()
 
-    def exportVRayFurPlugins(obj: bpy.types.Object, isInstance: bool = False, objName: str = None):
+    def exportVRayFurPlugins(obj: bpy.types.Object, isInstance: bool = False, objName: str = None, dataName: str = None):
         """ Export GeomHair plugin and a node for a V-Ray Fur object """
 
         objName = objName or Names.object(obj)
-        if objName not in exporterCtx.persistedState.objToGeomPluginName:
-            # Return for objects without valid geometry (those that don't have an entry in objToGeomPluginName).
+        dataName = dataName or Names.objectData(obj)
+        if not exporterCtx.persistedState.objDataTracker.dataExported(dataName):
+            # Return for objects without valid geometry (those that don't have an entry in objDataTracker).
             # No need to export if the mesh attribute is not set, as GeomHair requires it for correct results.
             return None
 
@@ -41,7 +42,8 @@ def exportCustom(exporterCtx: HairExporter, pluginDesc: PluginDesc):
         
         geomHairPluginAttr = AttrPlugin(pluginDesc.name)
         if pluginDesc.getAttribute('export_geometry'):
-            pluginDesc.setAttribute('mesh', AttrPlugin(exporterCtx.persistedState.objToGeomPluginName[objName]))
+            geomPluginName = exporterCtx.persistedState.objDataTracker.getPluginName(dataName)
+            pluginDesc.setAttribute('mesh', AttrPlugin(geomPluginName))
             geomHairPluginAttr = export_utils.exportPluginCommon(exporterCtx, pluginDesc)
             exporterCtx.objTracker.trackPlugin(getObjTrackId(furObject), geomHairPluginAttr.name, isInstance)
 
@@ -82,13 +84,15 @@ def exportCustom(exporterCtx: HairExporter, pluginDesc: PluginDesc):
             exportVRayFurPlugins(obj)
             
             # Export fur for instanced objects
-            for instancedObj, objName in instancesOfInstancer.get(getObjTrackId(obj), {}).values():
-                exportVRayFurPlugins(instancedObj, True, objName)
+            for dataName, (instancedObj, objName) in instancesOfInstancer.get(getObjTrackId(obj), {}).items():
+                exportVRayFurPlugins(instancedObj, True, objName, dataName)
 
     return exportedFurs
 
 def collectGeomHairInfo(exporterCtx: ExporterContext):
     furObjects = [o for o in exporterCtx.sceneObjects if o.vray.isVRayFur]
 
-    return export_utils.collectConnectedMeshInfo(
+    activeFurInfo, updatedFurInfo, _ = export_utils.collectConnectedMeshInfo(
         exporterCtx, furObjects, 'GeomHair', 'Mesh', 'vray.ntree', 'VRayNodeFurOutput')   
+
+    return activeFurInfo, updatedFurInfo

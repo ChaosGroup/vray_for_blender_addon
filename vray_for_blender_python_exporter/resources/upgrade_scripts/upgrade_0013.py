@@ -1,6 +1,5 @@
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
-from vray_blender.nodes.sockets import removeInputs
 
 def _upgradeBounds(ctx: UpgradeContext, oldNode: VRayNodeBase, newNode: VRayNodeBase):
     # Min/Max bound were changed from colors to floats. For old scenes just used the intensity.

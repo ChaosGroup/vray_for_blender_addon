@@ -148,7 +148,14 @@
         {
             "attr" : "img_rawFileSaveColorCorrections",
             "default" : false,
-            "desc" : "If true, the VFB color corrections will be saved in the raw file if possible",
+            "desc" : "If true, the VFB color corrections will be baked into the RGB/PostFX channels and saved in the raw file if possible",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "img_rawFileSaveColorCorrectionsRenderElements",
+            "default" : false,
+            "desc" : "If true, the VFB color corrections will be baked into render elements and saved in the raw file if possible",
             "type" : "BOOL"
         },
         

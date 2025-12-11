@@ -4,30 +4,41 @@
     "Subtype": "UTILITY",
     "Parameters": [
         {
-            "attr": "color_mult"
+            "attr": "texmap",
+            "ui": {
+                "display_name": "Texture"
+            }
         },
         {
-            "attr": "color_offset"
+            "attr": "output_mult",
+            "ui": {
+                "display_name": "Output Multiplier"
+            }
         },
         {
-            "attr": "output_mult"
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
         }
     ],
-    "Options": {
-        "excluded_parameters": [
-            "color",
-            "out_transparency",
-            "out_alpha",
-            "out_intensity"
-        ],
-        "animatable": true
-    },
     "Widget": {
         "widgets": [
             {
                 "attrs": [
                     {
-                        "name": "compatibility_with"
+                        "name": "texmap"
+                    },
+                    {
+                        "name": "output_mult"
                     },
                     {
                         "name": "alpha_from_intensity"
@@ -43,20 +54,60 @@
                         "name": "bump_amount"
                     },
                     {
-                        "name": "color_mult",
-                        "label": "RGB Level"
-                    },
-                    {
-                        "name": "color_offset",
-                        "label": "RGB Offset"
-                    },
-                    {
-                        "name": "output_mult",
-                        "label": "Output multiplier"
+                        "layout": "ROLLOUT",
+                        "name": "texture_output",
+                        "label": "Output",
+                        "attrs": [
+                            {
+                                "name": "color_mult"
+                            },
+                            {
+                                "name": "color_offset"
+                            }
+                        ]
                     }
                 ],
                 "layout": "COLUMN"
             }
         ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "texmap"
+            },
+            {
+                "name": "output_mult"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "color",
+            "out_transparency",
+            "out_alpha",
+            "out_intensity"
+        ],
+        "animatable": true
     }
 }

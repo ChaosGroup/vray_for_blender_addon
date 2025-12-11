@@ -42,14 +42,22 @@ public:
 
 	static const int RENDERER_INACTIVITY_INTERVAL = 5000;   //ms
 
+#ifndef __APPLE__
 	// Creating the renderer is part of the handshake. It also carries
 	// out the second part of the license check procedure, hence the relatively big interval.
 	static const int HANDSHAKE_TIMEOUT = 15000;  //ms
+#else
+	// The first time when running the VRayZmqServer it seems to take over 1min to check the
+	// V-Ray libraries we are trying to load so we use an abnormally long timeout here.
+	static const int HANDSHAKE_TIMEOUT = 120000;  //ms
+#endif
 
 
 	using ZmqAgentPtr = std::unique_ptr<VrayZmqWrapper::ZmqAgent>;
 
 public:
+	~ZmqServer();
+
 	void start(const ZmqServerArgs& args);
 	void stop();
 	bool isRunning() const;
@@ -78,6 +86,9 @@ public:
 
 	const ZmqServerArgs& getArgs() const;
 
+	/// Returns the ID of the ZmqServer process
+	int getProcessID() const;
+
 	/// This class' singleton instance accessor.
 	static ZmqServer& get();
 
@@ -88,7 +99,8 @@ private:
 	/// Start VRayZmqServer process.
 	boost::process::child startServerProcess();
 
-	bool obtainServerEndpointInfo();
+	/// Obtain port on which ZmqServer will listen for connections
+	bool obtainServerEndpointInfo(int zmqServerPID);
 
 	void startControlConn();
 

@@ -44,9 +44,9 @@ PLUGINS = {
 
 # Overrides to default plugin properties. Loaded from the corresponding json files in ./settings
 DEFAULTS_OVERRIDES = {
-    "viewport"   : [],
-    "preview"    : [],
-    "production" : [],
+    "VIEWPORT"   : {},
+    "PREVIEW"    : {},
+    "PRODUCTION" : {},
 }
 
 
@@ -443,6 +443,19 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}
 
+class VRayViewLayer(bpy.types.PropertyGroup):
+    material_override_mode: bpy.props.EnumProperty(
+        name = "Override Mode",
+        description = "Select the material override mode",
+        items = (
+            ( "0", "Disabled", "Disabled" ),
+            ( "1", "Clay", "Use a clay material " ),
+            ( "2", "Custom", "Use a custom material" ),
+        ),
+        options = set(), # Disable animations
+        default = "0"
+    )
+
 
 class VRayMetaBall(VRayEntity, bpy.types.PropertyGroup):
     __annotations__ = {}
@@ -552,7 +565,6 @@ class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
 
 
 
-
 class VRayWorld(VRayEntity, bpy.types.PropertyGroup):
     is_vray_class : bpy.props.BoolProperty(
         name = "V-Ray Class Tag",
@@ -586,6 +598,17 @@ class VRayScene(VRayEntity, bpy.types.PropertyGroup):
         description = "V-Ray scene node tree",
     )
 
+    viewport_resolution_override: bpy.props.EnumProperty(
+        name = "Viewport Resolution",
+        default = "auto",
+        items = (
+            ("auto", "Auto", "Auto"),
+            ("0.25", "25%", "25%"),
+            ("0.5", "50%", "50%"),
+            ("0.75", "75%", "75%"),
+            ("1.0", "100%", "100%")
+        )
+    )
 
 class VRayWindowManager(bpy.types.PropertyGroup):
     ui_render_context: bpy.props.EnumProperty(
@@ -605,7 +628,6 @@ class VRayWindowManager(bpy.types.PropertyGroup):
         description = "The warning about VRayScene objects in IPR was already shown to the user"
     )
 
-    
 class VRayFur(VRayEntity, bpy.types.PropertyGroup):
 
     width: bpy.props.FloatProperty(
@@ -636,82 +658,26 @@ class VRayParticleSettings(VRayEntity, bpy.types.PropertyGroup):
     pass
 
 
-
-class VRayRenderNode(VRayEntity, bpy.types.PropertyGroup):
-    address: bpy.props.StringProperty(
-        name = "IP/Hostname",
-        description = "Render node IP or hostname"
-    )
-
-    port_override: bpy.props.BoolProperty(
-        name = "Port Override",
-        description = "Override distributed rendering port for node",
-        default = False
-    )
-
-    port: bpy.props.IntProperty(
-        name = "Port",
-        description = "Distributed rendering port",
-        min = 0,
-        max = 65535,
-        default = 20209
-    )
-
-    use: bpy.props.BoolProperty(
-        name = "Use Node",
-        description = "Use render node",
-        default = True
-    )
-
-
 class VRayDR(VRayEntity, bpy.types.PropertyGroup):
     on: bpy.props.BoolProperty(
         name = "Distributed Rendering",
         description = "Distributed rendering",
-        default = False
-    )
-
-    use_remote_dispatcher: bpy.props.BoolProperty(
-        name = "Use Remote Dispatcher",
-        description = "Use a remote dispatcher server for distributed rendering.",
-        default = False
-    )
-
-    dispatcher: bpy.props.PointerProperty(
-        name="Dispatcher",
-        type = VRayRenderNode,
-        description = "V-Ray remote dispatcher node"
-    )
-
-    nodes: bpy.props.CollectionProperty(
-        name = "Render Nodes",
-        type =  VRayRenderNode,
-        description = "V-Ray render nodes"
-    )
-
-    nodes_selected: bpy.props.IntProperty(
-        name = "Render Node Index",
-        default = -1,
-        min = -1,
-        max = 100
-    )
-
-    renderOnlyOnNodes: bpy.props.BoolProperty(
-        name        = "Don't Use Local Macinhe",
-        description = "Use distributed rendering excluding the local machine",
-        default     = False
+        default = False,
+        options = set()
     )
 
     ignoreInInteractive: bpy.props.BoolProperty(
         name        = "Ignore in Interactive",
         description = "Disable Distributed Rendering during interactive rendering",
-        default     = False
+        default     = False,
+        options     = set()
     )
 
     transferAssets: bpy.props.BoolProperty(
         name        = "Transfer Assets",
         description = "Transfer missing assets when using DR",
-        default     = True
+        default     = True,
+        options     = set()
     )
 
 class VRayCollection(VRayEntity, bpy.types.PropertyGroup):
@@ -727,7 +693,6 @@ class VRayCollection(VRayEntity, bpy.types.PropertyGroup):
 
 def _getRegClasses():
     return (
-        VRayRenderNode,
         VRayDR,
 
         VRayAsset,
@@ -746,6 +711,7 @@ def _getRegClasses():
         VRayWorld,
         VRayCollection,
         VRayNodeTreeSettings,
+        VRayViewLayer,
     )
 
 
@@ -756,13 +722,12 @@ def register():
     from vray_blender.plugins import templates
     templates.register()
 
-    
     # Load plugin descriptions from the json definition files exported from Vray
     if plugin_utils.loadPluginDescriptions() == 0:
         debug.printError('Failed to load JSON plugin descriptions')
         raise IOError('Failed to load JSON plugin descriptions')
-    
-    # Load plugins for which per-plugin .py modules exist  
+
+    # Load plugins for which per-plugin .py modules exist
     _loadPlugins()
 
     # Load the rest of the plugins ( which only have plugin descriptions, but no
@@ -838,7 +803,6 @@ def register():
 
     _loadAttributeOverrides("PREVIEW", "preview.json")
     _loadAttributeOverrides("VIEWPORT", "viewport.json")
-    _loadAttributeOverrides("PRODUCTION", "production.json")
 
     # Attach material options plugins to both Object and Material
     VRayObject.__annotations__['VRayObjectProperties'] = bpy.props.PointerProperty(
@@ -973,6 +937,12 @@ def register():
         description = "V-Ray Point Cloud settings"
     )
 
+    bpy.types.ViewLayer.vray = bpy.props.PointerProperty(
+        name = "V-Ray View Layer Settings",
+        type = VRayViewLayer,
+        description = "V-Ray View Layer settings"
+    )
+
     VRayObject.VRayAsset = bpy.props.PointerProperty(
         name = "VRayAsset",
         type =  VRayAsset,
@@ -1008,7 +978,6 @@ def register():
         description = "Counter used for generation of VRayEntity.static_id"
     )
 
-    
     bpy.utils.register_class(VRayScene)
     bpy.types.Scene.vray = bpy.props.PointerProperty(
         name = "V-Ray Settings",

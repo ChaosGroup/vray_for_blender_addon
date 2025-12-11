@@ -77,29 +77,25 @@
         {
             "attr": "decay_near_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_near_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
@@ -108,38 +104,7 @@
         },
         {
             "attr": "shadowBias",
-            "default" : 0.005,
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "ies_light_width",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "ies_light_length",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "ies_light_height",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "ies_light_diameter",
-            "ui": {
-                "units": "meters",
-                "quantityType": "distance"
-            }
+            "default" : 0.005
         }
     ],
     "Widget": {

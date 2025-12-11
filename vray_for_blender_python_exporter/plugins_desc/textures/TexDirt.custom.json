@@ -4,12 +4,10 @@
     "Parameters": [
         {
             "attr": "black_color",
-            "label": "Occluded Color",
             "desc": "Specifies the color for occluded areas."
         },
         {
             "attr": "white_color",
-            "label": "Unoccluded Color",
             "desc": "Specifies the color for unoccluded areas."
         },
         {
@@ -32,11 +30,14 @@
             "attr": "subdivs",
             "//Comment": "Recommended default of 3 subdivs for optimal performance.",
             "default": 3,
+            "ui": {
+                "min": 1,
+                "max": 100
+            },
             "desc": "Controls the number of samples that V-Ray takes to calculate the dirt effect. Lower values render faster but produce a more noisy result. Low Noise threshold values in the Image Sampler clean the result further."
         },
         {
             "attr": "bias_x",
-            "label": "Bias X",
             "desc": "Forces the dirt effect in the X direction.\nNegative values could be used to invert the direction.",
             "ui": {
                 "spin_step": 0.01
@@ -44,7 +45,6 @@
         },
         {
             "attr": "bias_y",
-            "label": "Bias Y",
             "desc": "Forces the dirt effect in the Y direction.\nNegative values could be used to invert the direction.",
             "ui": {
                 "spin_step": 0.01
@@ -52,7 +52,6 @@
         },
         {
             "attr": "bias_z",
-            "label": "Bias Z",
             "desc": "Forces the dirt effect in the Z direction.\nNegative values could be used to invert the direction.",
             "ui": {
                 "spin_step": 0.01
@@ -60,7 +59,6 @@
         },
         {
             "attr": "ignore_for_gi",
-            "label": "Ignore for GI",
             "desc": "When enabled, the dirt effect is ignored in GI calculations."
         },
         {
@@ -88,7 +86,6 @@
         },
         {
             "attr": "work_with_transparency",
-            "label": "Ignore Invisible Objects",
             "desc": "When enabled, V-Ray Dirt takes into account the opacity of the occluding objects. This can be used, for example, if you want to calculate ambient occlusion from opacity-mapped trees etc. When disabled, occluding objects are always assumed to be opaque. Note that working with correct opacity is slower, since the occluding objects' materials need to be evaluated. V-Ray GPU supports this only with lights and their 'Invisible' parameter and geometry render stats."
         },
         {
@@ -117,12 +114,10 @@
         },
         {
             "attr": "render_nodes",
-            "label": "Exclude list",
             "desc": "Allows disabling the calculations of the dirt map for specific objects."
         },
         {
             "attr": "render_nodes_inclusive",
-            "label": "As Inclusive",
             "desc": "Reverses the Exclude list - only objects in the list will be shaded by the dirt map."
         },
         {
@@ -132,12 +127,10 @@
         },
         {
             "attr": "affect_result_nodes",
-            "label": "Result Affect",
             "desc": "Allows excluding objects from affecting the calculation of the dirt map. Excluded objects will be considered \"invisible\" for the calculations of the dirt map."
         },
         {
             "attr": "affect_result_nodes_inclusive",
-            "label": "As Inclusive",
             "desc": "Reverses the Result Affect list - only objects in the list will affect the calculation of the dirt map."
         },
         {
@@ -147,12 +140,10 @@
         },
         {
             "attr": "streaks_ambient",
-            "label": "Ambient Streaks",
             "desc": "Draws streaks across the dirt effect, respective to the ambient occlusion."
         },
         {
             "attr": "streaks_inner",
-            "label": "Inner Streaks",
             "desc": " Draws streaks across the dirt effect respective to the inner occlusion."
         },
         {
@@ -170,6 +161,10 @@
         {
             "attr": "streaks_density",
             "desc": "Controls the density of the streaks - 0 means no streaks and 1 means all streaks."
+        },
+        {
+            "attr": "subdivs_as_samples",
+            "default": true
         },
         {
             "attr": "render_nodes_object_selector",
@@ -199,12 +194,6 @@
                         "filter_function": "filters.filterGeometries"
                     }
                 }
-            }
-        },
-        {
-            "attr": "radius",
-            "ui": {
-                "quantityType": "distance"
             }
         }
     ],
@@ -306,7 +295,7 @@
                             {
                                 "name": "blur",
                                 "active": {
-                                    "cond": "::mode!=4"
+                                    "cond": "::mode!=4,::streaks_blur=1"
                                 }
                             }
                         ]
@@ -405,7 +394,6 @@
         "excluded_parameters": [
             "use_texture_for_excluded",
             "affect_alpha",
-            "subdivs_as_samples",
             "screen_space_radius",
             "user_attribute"
         ],

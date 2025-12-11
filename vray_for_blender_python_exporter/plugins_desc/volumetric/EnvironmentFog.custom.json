@@ -116,30 +116,6 @@
                     }
                 }
             }
-        },
-        {
-            "attr": "distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "height",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "fade_out_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "step_size",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {
@@ -296,7 +272,7 @@
                 "attrs": [
                     {
                         "name": "gizmo_selector",
-                        "label": "Gizmo Objects",
+                        "label": "Objects",
                         "list_label": "Object List",
                         "draw_container": "ROLLOUT"
                     }
@@ -323,7 +299,8 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "gizmos"
+                "name": "gizmos",
+                "label": "Objects"
             },
             {
                 "name": "lights"

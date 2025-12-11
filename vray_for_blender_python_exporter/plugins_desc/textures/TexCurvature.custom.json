@@ -5,7 +5,7 @@
         {
             "attr": "mode",
             "default": "0",
-            "items" : 
+            "items":
             [
                 [ "0", "Legacy", "Grayscale output for the overall curvature." ],
                 [ "1", "Convex", "Grayscale output for the convex curvature." ],
@@ -32,7 +32,6 @@
         },
         {
             "attr": "out_color_min",
-            "label": "Min Output Color",
             "desc": "The minimum output color value for the most concave area. Default value is 0 - black.",
             "ui": {
                 "soft_max": 1.0
@@ -40,7 +39,6 @@
         },
         {
             "attr": "out_color_max",
-            "label": "Max Output Color",
             "desc": "The maximum output color value for the most convex area. Default value is 1 - white.",
             "ui": {
                 "soft_max": 1.0
@@ -98,12 +96,6 @@
         {
             "attr": "ignore_bump",
             "desc": "Excludes bump from curvature calcutations."
-        },
-        {
-            "attr": "trace_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

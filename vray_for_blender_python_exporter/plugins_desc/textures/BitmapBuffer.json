@@ -189,6 +189,13 @@
                 [ "2", "Hold", "Hold" ]
             ],
             "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "layer",
+            "default" : "",
+            "desc" : "Load color channels from specified OpenEXR layer",
+            "type" : "STRING"
         }
     ],
     "Type" : "TEXTURE",

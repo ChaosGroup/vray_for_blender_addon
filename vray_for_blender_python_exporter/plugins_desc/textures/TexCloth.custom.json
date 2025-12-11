@@ -1,6 +1,29 @@
 {
     "ID": "TexCloth",
     "Name": "V-Ray Cloth",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -125,17 +148,65 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "gap_color"
             },
-            "type": "UVWGEN"
-        }
-    ],
+            {
+                "name": "u_color"
+            },
+            {
+                "name": "v_color"
+            },
+            {
+                "name": "u_width"
+            },
+            {
+                "name": "v_width"
+            },
+            {
+                "name": "u_wave"
+            },
+            {
+                "name": "v_wave"
+            },
+            {
+                "name": "randomness"
+            },
+            {
+                "name": "width_spread"
+            },
+            {
+                "name": "bright_spread"
+            },
+            {
+                "name": "uvwgen"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
+    },
     "Options": {
         "animatable": true,
-        "excluded_parameters": []
+        "excluded_parameters": [ "compatibility_with" ]
     }
 }

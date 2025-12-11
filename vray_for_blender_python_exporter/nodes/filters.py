@@ -32,3 +32,10 @@ def filterTexDistanceTargets(obj: bpy.types.Object):
         return False
     
     return True
+
+
+def filterRenderMasks(obj):
+    # NOTE: Unsupported plugins 
+    #  - Instancer2  - unsupported in V-Ray
+    #  - Text/Curve  - unsupported in V-Ray, because they are expored as Instancer2
+    return not obj.is_instancer and (obj.type in GEOMETRY_OBJECT_TYPES) and (obj.type not in ['CURVE', 'FONT']) 

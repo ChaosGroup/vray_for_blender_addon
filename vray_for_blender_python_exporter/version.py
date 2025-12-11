@@ -20,21 +20,21 @@ def getAddonUpgradeNumber():
 
 
 def getSceneUpgradeNumber():
-    """ Returns the V-Ray version number of the scene in format '0000'. 
+    """ Returns the V-Ray version number of the scene in format '0000'.
         The first upgrade script is numbered 0001, so we can return 0 for
         both pre-version scenes and such not created with V-Ray. In both
         cases all upgrade scripts need to be run.
     """
     upgradeNum = bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber
-    
+
     if upgradeNum == 0:
-        # 0 is a special number for legacy scenes created before the concept of upgrade version 
+        # 0 is a special number for legacy scenes created before the concept of upgrade version
         # number was introduced, and for scenes that were not created using V-Ray.
         sceneVer = getNumericVersion(getSceneVersionString())
 
         if sceneVer == '6.20.00':
             upgradeNum = 0 # Explicitly set to the same value just for clarity
-        if sceneVer == '7.00.10':
+        else:
             upgradeNum = 1
 
     # Return string in 0000 format to allow sorting.
@@ -50,14 +50,14 @@ def getBuildVersionString():
     try:
         vrayVerString = getAddonVersion()
         buildDate = build_number.BUILD_DATE
-        
+
         if build_number.BUILD == 'release':
             # This is an official build, revision number is not relevant
-            return f"{vrayVerString} from {buildDate}" 
+            return f"{vrayVerString} from {buildDate}"
         else:
             buildVer = build_number.BUILD[0:7]
-            return f"{vrayVerString}, revision {buildVer} from {buildDate}" 
-        
+            return f"{vrayVerString}, revision {buildVer} from {buildDate}"
+
     except (KeyError, IndexError):
         raise Exception("Could not read V-Ray addon data!")
 
@@ -65,7 +65,7 @@ def getBuildVersionString():
 def getSceneVersionString():
     """ Get the V-Ray addon version used to save the scene. """
     return bpy.context.scene.vray.Exporter.vrayAddonVersion
-    
+
 
 def getHostAppVersionString():
     """ Get addon version string suitable for using in the header of exported .vrscene files.
@@ -74,7 +74,7 @@ def getHostAppVersionString():
         str: The host app version string.
     """
     vrayVerString = getAddonVersion()
-    return f"V-Ray for Blender, {build_number.BUILD} ({vrayVerString})" 
+    return f"V-Ray for Blender, {build_number.BUILD} ({vrayVerString})"
 
 
 def getNumericVersion(versionString:str):
@@ -104,11 +104,10 @@ def findUpgradeScripts(fromUpgradeNum: str, toUpgradeNum: str):
             path = PurePath(file)
             if path.suffix == '.py':
                 ver = path.stem[len('upgrade_'):]
-                parts  = ver.split('__')
-                allScripts.append((parts[0], parts[1], parts[2], path.stem))
+                allScripts.append((ver, path.stem))
         # Do not recurse
-        break    
-    
+        break
+
     relevantScripts = [v for v in allScripts if fromUpgradeNum < v[0] and v[0] <= toUpgradeNum]
     return sorted(relevantScripts)
 
@@ -124,29 +123,29 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     Returns:
         bool: True if the upgrade was successful
     """
-    from vray_blender.events import isDefaultScene
+    from vray_blender.lib.blender_utils import isDefaultScene
     from vray_blender.lib.sys_utils import importModule
 
     sceneName = "default scene" if isDefaultScene() else f"'{bpy.data.filepath}'"
     debug.printAlways(f"Update scene from v{int(fromUpgradeNum)} to v{int(toUpgradeNum)}: {sceneName}")
-    
+
     scriptInfos = findUpgradeScripts(fromUpgradeNum, toUpgradeNum)
 
     # Run in succession all scripts needed to upgrade from the scene version to the
     # current addon version. Any error will abort the procedure and alert the user.
     for scriptInfo in scriptInfos:
         upgradeNum    = scriptInfo[0]
-        upgradeScript = scriptInfo[3]
+        upgradeScript = scriptInfo[1]
 
         upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
         upgradeModule = None
-        
+
         if (upgradeModule := importModule(upgradeScriptModule)) is None:
             debug.reportError(f'Scene version update failed. See console log for details.')
             return False
-            
+
         debug.printDebug(f"Running version update script {upgradeScriptModule}")
-        
+
         try:
             # Not all upgrades in the range may affect the current scene, run only the ones that do
             if upgradeModule.check():
@@ -183,15 +182,15 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
     # Run in succession all scripts needed to upgrade from the scene version to the
     # current addon version. Any error will abort the procedure and alert the user.
     for scriptInfo in scriptInfos:
-        upgradeScript = scriptInfo[3]
+        upgradeScript = scriptInfo[1]
 
         upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
         upgradeModule = None
-        
+
         if (upgradeModule := importModule(upgradeScriptModule)) is None:
             debug.reportError(f"Scene version updatecheck failed. See console log for details.", exc=e)
             return False
-        
+
         try:
             if upgradeModule.check():
                 return True

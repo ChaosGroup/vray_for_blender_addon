@@ -23,12 +23,11 @@ VRayChannelNodeSubtypes = (
     "RAW"
 )
 
-
 def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
     
     deselectNodes(worldTree)
     
-    renderChannel  = worldTree.nodes.new(nodeName)
+    renderChannel = worldTree.nodes.new(nodeName)
     renderChannel.location.x = channelsNode.location.x - 200
     sockPos = 0
     
@@ -47,43 +46,67 @@ def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.
 
 
 def _removeRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
-    nodeForRemoval = NodesUtils.getNodeByType(worldTree, nodeName)
-    outputSocket = nodeForRemoval.outputs['Channel']
+    for inputSock in channelsNode.inputs:
+        if inputSock.is_linked and inputSock.links[0].from_node.bl_idname == nodeName:
+            worldTree.nodes.remove(inputSock.links[0].from_node)
+            channelsNode.inputs.remove(inputSock)
+
+    channelCnt = 1
+    for inputSock in channelsNode.inputs:
+        inputSock.name = f"Channel {channelCnt}"
+        channelCnt += 1
+
+
+def _getConnectedChannelsNode(worldTree: bpy.types.NodeTree):
+    """ Returns the node connected to the 'Channels' socket of the world output node """
+    if outputNode := NodesUtils.getOutputNode(worldTree):
+        if (channelsSock := getLinkedFromSocket(outputNode.inputs['Channels'])) and \
+            channelsSock.node.bl_idname == 'VRayNodeRenderChannels':
+
+            return channelsSock.node
     
-    for nodeLink in outputSocket.links:
-        if nodeLink.to_node == channelsNode and len(channelsNode.inputs) > 1:
-            channelsNode.inputs.remove(nodeLink.to_socket)
-            # Fixing Channel sockets counters in their labels
-            channelCnt = 1
-            for inputSock in channelsNode.inputs:
-                inputSock.name = f"Channel {channelCnt}"
-                channelCnt += 1
-        elif nodeLink.to_node.bl_idname == 'NodeReroute':
-            worldTree.nodes.remove(nodeLink.to_node)
+    return None
 
-    worldTree.nodes.remove(nodeForRemoval)
+def _setRenderChannelEnabled(self, useRenderChannel: bool):
+    """ Setter for the 'enabled' property of the render channel indicator property group.
+        If the render channel is enabled, a new node for the render element is created in the world node tree.
+        Otherwise, the existing node for the render element is removed from the tree.
+    """
+    currentState = _getRenderChannelEnabled(self)
+    if currentState != useRenderChannel:
+        world = bpy.context.scene.world
+        assert (world and world.node_tree), 'Cannot show a render channel checkbox without an active world'
 
-# Triggered when RenderChannelIndicator.enabled is switched
-def _updateRenderChannel(self: bpy.types.PropertyGroup, context: bpy.types.Context):
-    # This property group should not be editable when there isn't world node tree
-    if not (context.scene.world and context.scene.world.node_tree):
-        debug.printWarning('Cannot create a render channel without an active world')
-        return
+        worldTree = world.node_tree
+        if not world.vray.is_vray_class:
+            tree_defaults.addWorldNodeTree(world)
 
-    if not context.scene.world.vray.is_vray_class:
-        tree_defaults.addWorldNodeTree(context.scene.world)
+        outputNode = NodesUtils.getOutputNode(worldTree) or worldTree.nodes.new('VRayNodeWorldOutput')
 
-    worldTree = context.scene.world.node_tree
-    channelsNode = NodesUtils.getNodeByType(worldTree, 'VRayNodeRenderChannels')
-    if channelsNode:
-        if self.nodeUpdatesEnabled:
-            if self.enabled:
-                _createRenderChannel(worldTree, channelsNode, self.nodeName)
-            else:
-                _removeRenderChannel(worldTree, channelsNode, self.nodeName)
-        
-        # Resetting Node update trigger flag
-        self.nodeUpdatesEnabled = True
+        if not (channelsOutputNode := _getConnectedChannelsNode(worldTree)):
+            channelsOutputNode = worldTree.nodes.new('VRayNodeRenderChannels')
+            channelsOutputNode.location.x = outputNode.location.x - 200
+            channelsOutputNode.location.y = outputNode.location.y - 150 
+            worldTree.links.new(outputNode.inputs['Channels'], channelsOutputNode.outputs['Channels'])
+
+        if useRenderChannel:
+            _createRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+        else:
+            _removeRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+
+
+def _getRenderChannelEnabled(self):
+    """ Getter for the 'enabled' property of the render channel indicator property group.
+        Returns if node for the render element is connected to the 'Channels' socket of the world output node.
+    """
+    world = bpy.context.scene.world
+    if not (world and world.node_tree and world.vray.is_vray_class):
+        return False
+
+    if channelsOutputNode := _getConnectedChannelsNode(world.node_tree):
+        return any(s.links[0].from_node.bl_idname == self.nodeName for s in channelsOutputNode.inputs if s.is_linked)
+    
+    return False
 
 
 _vrayRenderChannelsType = None
@@ -93,9 +116,7 @@ _renderChannelIndicatorTypesList = []
 # enabled - indicates if particular render element has been created in the world node tree. 
 #   If switched from False to True, new node for the render element is created.
 #   Otherwise, existing node instance for the render element is removed from the tree.
-# nodeUpdateEnabled - this property is used to explicitly stop the update function
 # nodeName - name of the node representing the current render element
-# nodesCount - counts how many such nodes are in the world three
 def _createRenderChannelIndicatorType(uiName, nodeName):
     return type(
         # Name. Deviate from the convention and use a short prefix because the name length
@@ -107,17 +128,12 @@ def _createRenderChannelIndicatorType(uiName, nodeName):
                 "enabled": bpy.props.BoolProperty(
                     name        = uiName,
                     default     = False,
-                    update      = lambda self, context: _updateRenderChannel(self, context),
+                    set         = _setRenderChannelEnabled,
+                    get         = _getRenderChannelEnabled,
                     options     = set() # Explicitly reset as it defaults to {'ANIMATABLE'}
                 ),
-                # This property is used to explicitly stop the update function
-                "nodeUpdatesEnabled": bpy.props.BoolProperty(default = True),
-
                 # Name of the node representing the current render element
-                "nodeName": bpy.props.StringProperty(default=nodeName),
-                
-                # Counts how many such nodes are in the world three
-                "nodesCount": bpy.props.IntProperty(default=0),
+                "nodeName": bpy.props.StringProperty(default=nodeName)
             }
         }
     )
@@ -155,8 +171,6 @@ def _loadRenderChannelAnnotations(plugins):
         )
         _renderChannelIndicatorTypesList.append(RenderChannelIndicatorType)
 
-
-    
     return elementsAnnotations
 
 
@@ -172,7 +186,7 @@ def register():
     # Creates indication if channel nodes subtype rollout menu is enabled
     for subtype in VRayChannelNodeSubtypes:
         subtypeName = subtype.title()
-        elementsAnnotations[subtypeName]= bpy.props.BoolProperty(name=subtypeName, default=False)
+        elementsAnnotations[subtypeName] = bpy.props.BoolProperty(name=subtypeName, default=False)
 
     _vrayRenderChannelsType = type(
         "VRayRenderChannelsPanel", # Name

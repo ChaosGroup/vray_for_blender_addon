@@ -14,7 +14,7 @@ class SettingsExporter(ExporterBase):
 
 
     def export(self):
-        # * Some plugins require that SettingsOutput to be exported first, so its export is done 
+        # * Some plugins require that SettingsOutput to be exported first, so its export is done
         #   earlier in the export sequence.
         # * SettingsCurrentFrame should only be exported for interactive renders, so its export
         #   is triggered manually.

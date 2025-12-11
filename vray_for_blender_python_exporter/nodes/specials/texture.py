@@ -161,7 +161,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         for i in range(2):
             VRayNodeTexLayeredMax.addLayer(self, humanIndex = i + 1)
 
-        addOutput(self, 'VRaySocketColor',      "Output")
+        addOutput(self, 'VRaySocketColor',      "Color")
         addOutput(self, 'VRaySocketFloatColor', "Out Transparency", 'out_transparency')
         addOutput(self, 'VRaySocketFloatColor', "Out Alpha",        'out_alpha')
         addOutput(self, 'VRaySocketFloatColor', "Out Intensity",    'out_intensity')

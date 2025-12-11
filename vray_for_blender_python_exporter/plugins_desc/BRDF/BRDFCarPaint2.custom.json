@@ -62,8 +62,7 @@
             "desc": "Scales the entire flake structure when the Mapping Type is set to Triplanar.",
             "ui": {
                 "soft_max": 100.0,
-                "spin_step": 1.0,
-                "quantityType": "distance"
+                "spin_step": 1.0
             }
         },
         {
@@ -107,6 +106,13 @@
         {
             "attr": "cutoff_threshold",
             "desc": "Specifies the reflections’ cutoff threshold for all layers."
+        },
+        {
+            "attr": "trace_depth",
+            "ui": {
+                "min": -1,
+                "max": 20
+            }
         }
     ],
     "Widget": {
@@ -242,6 +248,35 @@
             }
         ]
     },
+    "Node": {
+        "input_sockets": [
+            { "name": "base_color" },
+            { "name": "base_reflection" },
+            { "name": "base_glossiness" },
+            { "name": "base_glossiness_tail" },
+            { "name": "base_bump_color" },
+            { "name": "base_bump_amount" },
+            {
+                "name": "flakes_rollout",
+                "label": "Flakes Layer",
+                "type": "ROLLOUT"
+            },
+            { "name": "flake_color" },
+            { "name": "flake_random_color" },
+            { "name": "flake_orientation" },
+            {
+                "name": "coat_rollout",
+                "label": "Coat Layer",
+                "type": "ROLLOUT"
+            },
+            { "name": "coat_color" },
+            { "name": "coat_amount" },
+            { "name": "coat_ior" },
+            { "name": "coat_glossiness" },
+            { "name": "coat_bump_color" },
+            { "name": "coat_bump_amount" }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [
@@ -250,6 +285,7 @@
             "subdivs",
             "flake_uvwgen",
             "use_environment_override",
+            "environment_override",
             "environment_priority"
         ]
     }

@@ -26,10 +26,7 @@
         },
         {
             "attr": "flake_scale_triplanar",
-            "desc": "Scales the entire flake structure when the Mapping Type is set to Triplanar.",
-            "ui": {
-                "quantityType": "distance"
-            }
+            "desc": "Scales the entire flake structure when the Mapping Type is set to Triplanar."
         },
         {
             "attr": "flake_size",
@@ -91,7 +88,8 @@
                         "name": "flake_scale"
                     },
                     {
-                        "name": "flake_scale_triplanar"
+                        "name": "flake_scale_triplanar",
+                        "active": { "cond": "::mapping_type=1" }
                     },
                     {
                         "name": "flake_size"
@@ -103,13 +101,11 @@
                         "name": "flake_seed"
                     },
                     {
-                        "name": "flake_uvwgen"
-                    },
-                    {
                         "name": "mapping_type"
                     },
                     {
-                        "name": "mapping_channel"
+                        "name": "mapping_channel",
+                        "active": { "cond": "::mapping_type=0" }
                     }
                 ]
             },

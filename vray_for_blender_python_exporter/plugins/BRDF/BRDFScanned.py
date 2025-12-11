@@ -181,7 +181,7 @@ def onFileUpdate(brdfScanned, context = None, attrName = ''):
         brdfScanned.depthmul = preset.depthmul
         brdfScanned.ccbump = preset.ccbump
         brdfScanned.ccmul = preset.ccmul
-        brdfScanned.enable_clear_coat = (preset.ccior != 1.0)
+        brdfScanned.enable_clear_coat = math.isclose(preset.ccior, 1.0)
         brdfScanned.ccglossy = _scannedGlossinessToVRay(preset.orggls)
         brdfScanned.ccglossyvar = preset.orgglvar
     # Set this at the end, it's used to prevent unnecessary parameter encoding from just loading a preset.
@@ -238,18 +238,21 @@ def onParameterUpdate(brdfScanned, context, attrName):
     pluginDesc.setAttribute("UnfRefl", int(brdfScanned.UnfRefl))
     vray.encodeScannedParameters(mat.session_uid, node.name, json.dumps(pluginDesc.attrs))
 
+
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
     propGroup = getVrayPropGroup(node)
 
     pluginName = Names.treeNode(nodeCtx)
-    # Changing the file name doesn't work in IPR so the plugin should be re-created, but
-    # it's disabled for now since it can cause errors because the 'parent' MtlSingleBRDF
-    # might not be always re-exported thus losing it's brdf reference.
-    # filePrevValue = getShadowAttr(propGroup, 'file')
-    # if filePrevValue != propGroup.file and nodeCtx.exporterCtx.interactive:
-        # vray.pluginRemove(nodeCtx.renderer, pluginName)
-        # setShadowAttr(propGroup, 'file', propGroup.file)
+    
+    # Changing the file name doesn't work in IPR so the plugin should be re-created.
+    pluginReCreated = False
+    filePrevValue = getShadowAttr(propGroup, 'file')
+    if filePrevValue != propGroup.file and nodeCtx.exporterCtx.interactive:
+      pluginReCreated = True
+      vray.pluginRemove(nodeCtx.renderer, pluginName)
+      setShadowAttr(propGroup, 'file', propGroup.file)
+
     pluginDesc = PluginDesc(pluginName, "BRDFScanned")
     _fillScannedPluginDesc(pluginDesc, node, propGroup)
 
@@ -265,6 +268,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=skippedAttrs)
 
     plugin = commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
+    plugin.forceUpdate = pluginReCreated
 
     if paramBlockString := propGroup.param_block:
         paramBlock = list(map(int, paramBlockString.split(',')))

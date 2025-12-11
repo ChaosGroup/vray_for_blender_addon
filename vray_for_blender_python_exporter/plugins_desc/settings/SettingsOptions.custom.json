@@ -71,14 +71,31 @@
             }
         },
         {
-            "attr": "ray_bias",
-            "ui": {
-                "quantityType": "distance"
+            "attr": "misc_lowThreadPriority",
+            "default": "2"
+        },
+        {
+            "attr": "misc_useCachedAssets",
+            "default": true,
+            "desc": "Use cached assets on DR nodes",
+            "type": "BOOL",
+            "ui" : {
+                "display_name": "Use cached assets on DR node"
             }
         },
         {
-            "attr" : "misc_lowThreadPriority",
-            "default" : "2"
+            "attr": "dr_assetsCacheLimitType",
+            "default": "0",
+            "desc": "Type of the assets cache limit",
+            "items": [
+                [ "0", "None", "None" ],
+                [ "1", "Age (hours)", "Age (hours)" ],
+                [ "2", "Size (GBs)", "Size (GBs)" ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Cache limit type"
+            }
         }
     ],
     "Widget": {

@@ -12,8 +12,7 @@
             "default": 1.0,
             "ui": {
                 "soft_max": 1000.0,
-                "spin_step": 1.0,
-                "quantityType": "distance"
+                "spin_step": 1.0
             }
         },
         {
@@ -40,10 +39,7 @@
         },
         {
             "attr": "frame_offset",
-            "subtype": "VRAY_OFFSET",
-            "ui": {
-                "quantityType": "distance"
-            }
+            "subtype": "VRAY_OFFSET"
         }
     ],
     "Node": {

@@ -58,7 +58,7 @@ def getUserConfigDir():
 
 def getWinRegistry(path: str, key_name: str, registry_root=None) -> str:
     import winreg
-    if registry_root:
+    if not registry_root:
         registry_root = winreg.HKEY_CURRENT_USER
 
     """
@@ -100,7 +100,7 @@ def parseIni(filename):
 
 def setWinRegistry(path: str, key_name: str, value: str, registry_root=None) -> bool:
     import winreg
-    if registry_root:
+    if not registry_root:
         registry_root = winreg.HKEY_CURRENT_USER
     """
     Sets a string value in the Windows registry.
@@ -152,7 +152,7 @@ def getPreviewBlend():
     return os.path.join(getExporterPath(), "preview", "preview.blend")
 
 
-def isGPUEngine(scene):
+def isGPUEngine(scene: bpy.types.Scene):
     return scene.vray.Exporter.device_type in {'GPU'}
 
 
@@ -228,7 +228,7 @@ def importFunction(functionPath: str, pluginModule = ''):
         # Path relative to vray_blender. Format is folder1....folderN.funcName
         funcModule = importModule('.'.join(functionPath.split('.')[:-1]))
         funcName   = functionPath.split('.')[-1]
-        
+
     return getattr(funcModule, funcName, None)
 
 
@@ -240,24 +240,23 @@ def importModule(modulePath: str):
     except ImportError as e:
         debug.reportError(f"Failed to import module {modulePath}.", exc=e)
         return None
-    
+
 
 class StartupConfig:
     """ General configuration settings passed on the command line.
-        
+
         Currently, all command-line args are  intended for usage during development.
         This is why no help is provided to the user and no rigorous checks are made.
     """
-    debugUI = False         # If True, append (*) to the names of all V-Ray UI panels 
+    debugUI = False         # If True, append (*) to the names of all V-Ray UI panels
     zmqServerFolder = None  # Override the default ZmqServer location
     zmqServerLog = None     # Override the location of ZmqServer's dumpInfo log
     logLevel = None         # Override the startup log level. It will be in effect
-                            #   until a scene is loaded, when the log level will be 
+                            #   until a scene is loaded, when the log level will be
                             #   set to the value saved in the scene.
 
     @staticmethod
     def init():
-       
         if '--vray-debug-ui' in sys.argv:
             # Enables V-Ray specific UI with misc debug info and dev-time properties
             StartupConfig.debugUI = True
@@ -265,7 +264,7 @@ class StartupConfig:
         StartupConfig.zmqServerFolder = StartupConfig._getParamValue('--vray-server-folder')
         StartupConfig.zmqServerLog = StartupConfig._getParamValue('--dumpInfoLog')
         StartupConfig.logLevel = StartupConfig._getParamValue('--vray-log-level') or '3' # Info
-    
+
     @staticmethod
     def _getParamValue(paramName):
 

@@ -1,0 +1,187 @@
+{
+    "Version": 1,
+    "class": "folder",
+    "properties": {
+        "version": 1,
+        "name": "Blonde_Dreams",
+        "enable": true,
+        "expand": true,
+        "expandable": true,
+        "blend_mode": 0,
+        "opacity": 1.0,
+        "show_preview": true
+    },
+    "sub-layers": [{
+            "class": "chaos.cc.filmicTonemap",
+            "properties": {
+                "version": 1,
+                "name": "Filmic tonemap",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "color_space": 1,
+                "type": 3,
+                "use_log": false,
+                "gamma": 1.0,
+                "blue_fix": false,
+                "hejl_dawson_shadows": 1.0,
+                "hejl_dawson_highlights": 1.0,
+                "hable_shoulder_strength": 0.4786795377731323,
+                "hable_linear_strength": 0.15818431973457337,
+                "hable_linear_angle": 0.2888583242893219,
+                "hable_toe_strength": 0.2572214603424072,
+                "white_point": 20.0,
+                "pc_toe_length": 0.800000011920929,
+                "pc_toe_strength": 0.20000000298023225,
+                "pc_contrast": 0.5,
+                "pc_shoulder_length": 1.0,
+                "pc_shoulder_strength": 0.0,
+                "pc_white_point": 4.0
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.curves",
+            "properties": {
+                "version": 1,
+                "name": "Curves",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "curve_graph": {
+                    "version": 1,
+                    "Master": {
+                        "points": [{
+                                "point_type": 3,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.9999999403953552, -0.9999999403953552],
+                                "right_vector": [0.3333333432674408, 0.3333333432674408]
+                            }, {
+                                "point_type": 3,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.3333333432674408, -0.3333333432674408],
+                                "right_vector": [0.9999999403953552, 0.9999999403953552]
+                            }]
+                    },
+                    "Red": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.07617712765932083, -0.11426571011543274],
+                                "right_vector": [0.05056179687380791, 0.07584270089864731]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.3988763988018036, 0.35393258929252627],
+                                "left_vector": [-0.2480987310409546, -0.12676578760147096],
+                                "right_vector": [0.19241571426391602, 0.09831461310386658]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.1671348214149475, -0.3160112500190735],
+                                "right_vector": [0.31116077303886416, 0.5883292555809021]
+                            }]
+                    },
+                    "Green": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.004999999888241291],
+                                "left_vector": [-0.232977494597435, -0.19834968447685243],
+                                "right_vector": [0.1334269642829895, 0.11359550803899765]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.466292142868042, 0.44803372025489809],
+                                "left_vector": [-0.1726069152355194, -0.11949705332517624],
+                                "right_vector": [0.18258428573608399, 0.12640446424484254]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.17134831845760346, -0.17134831845760346],
+                                "right_vector": [0.2828427255153656, 0.2828427255153656]
+                            }]
+                    },
+                    "Blue": {
+                        "points": [{
+                                "point_type": 2,
+                                "point_center": [0.0, 0.0],
+                                "left_vector": [-0.2780899107456207, -0.10533708333969116],
+                                "right_vector": [0.17088016867637635, 0.06472733616828919]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [0.4985955059528351, 0.4929775297641754],
+                                "left_vector": [-0.18319138884544373, -0.19205549359321595],
+                                "right_vector": [0.1741572916507721, 0.1825842559337616]
+                            }, {
+                                "point_type": 2,
+                                "point_center": [1.0, 1.0],
+                                "left_vector": [-0.16245317459106446, -0.16245317459106446],
+                                "right_vector": [0.2828427255153656, 0.2828427255153656]
+                            }]
+                    }
+                }
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.colorBalance",
+            "properties": {
+                "version": 1,
+                "name": "Color Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "show_group": 3,
+                "all_red": 0.0,
+                "all_green": 0.0,
+                "all_blue": 0.0,
+                "shadows_red": 0.03163686394691467,
+                "shadows_green": 0.015130674466490746,
+                "shadows_blue": -0.026134802028536798,
+                "mid_red": 0.06464924663305283,
+                "mid_green": -0.02888583391904831,
+                "mid_blue": -0.1774415522813797,
+                "high_red": -0.4057771861553192,
+                "high_green": -0.38651996850967409,
+                "high_blue": 0.15268225967884065
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.whiteBalance",
+            "properties": {
+                "version": 1,
+                "name": "White Balance",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "temp": 8276.4794921875,
+                "tint": 0.1114167869091034,
+                "color_tint": [1.0, 1.0, 1.0]
+            },
+            "sub-layers": []
+        }, {
+            "class": "chaos.cc.hueSatLight",
+            "properties": {
+                "version": 1,
+                "name": "Hue / Saturation - Saturation",
+                "enable": true,
+                "expand": false,
+                "expandable": true,
+                "blend_mode": 0,
+                "opacity": 1.0,
+                "show_preview": true,
+                "hue": 0.0,
+                "sat": 0.05000000074505806,
+                "lightness": 0.0
+            },
+            "sub-layers": []
+        }]
+}

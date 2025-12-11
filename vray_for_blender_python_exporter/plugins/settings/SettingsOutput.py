@@ -23,8 +23,8 @@ class SettingsOutputExporter(ExporterBase):
     def __init__(self, ctx: ExporterContext, activeCameraViewParams: ViewParams, prevViewParams: ViewParams):
         super().__init__(ctx)
 
-        # Material previews use their own scene accessible through the 
-        # context for the material preview area (which happens to be the 
+        # Material previews use their own scene accessible through the
+        # context for the material preview area (which happens to be the
         # active one when RenderEngine methods are called for the preview)
         self.scene: bpy.types.Scene = bpy.context.scene if ctx.preview else ctx.dg.scene
         self.settings: CommonSettings = ctx.commonSettings
@@ -33,11 +33,14 @@ class SettingsOutputExporter(ExporterBase):
 
 
     def export(self):
-        if self.production and self.isAnimation:
+        if self.isAnimation:
             animation = self.commonSettings.animation
             if animation.frameCurrent != animation.frameStart:
                 # Output settings should not change during an animation
                 return
+
+        if not self.fullExport and self.prevViewParams is not None and (self.viewParams.renderSizes.isEqualTo(self.prevViewParams.renderSizes)):
+            return
 
         pluginDesc = PluginDesc(Names.singletonPlugin("SettingsOutput"), "SettingsOutput")
         pluginDesc.vrayPropGroup = self.scene.vray.SettingsOutput
@@ -82,11 +85,10 @@ class SettingsOutputExporter(ExporterBase):
 
         # We don't cache the values for VRayRenderer methods other than setting plugin attributes, so make sure
         # to only call this when the values change, otherwise the scene will be re-rendered
-        if (self.prevViewParams is None) or (not self.viewParams.renderSizes.isEqualTo(self.prevViewParams.renderSizes)):
-            vray.setRenderSizes(self.renderer, self.viewParams.renderSizes)
+
+        vray.setRenderSizes(self.renderer, self.viewParams.renderSizes)
 
         return result
-
 
 
     def _fillRenderSizes(self, pluginDesc):

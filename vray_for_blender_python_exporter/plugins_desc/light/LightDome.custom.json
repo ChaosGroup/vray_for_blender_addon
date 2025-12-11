@@ -80,8 +80,7 @@
             "ui": {
                 "soft_min": 5.0,
                 "soft_max": 200.0,
-                "spin_step": 0.1,
-                "quantityType": "distance"
+                "spin_step": 0.1
             }
         },
         {
@@ -90,8 +89,7 @@
             "ui": {
                 "soft_min": 0.0,
                 "soft_max": 100.0,
-                "spin_step": 0.1,
-                "quantityType": "distance"
+                "spin_step": 0.1
             }
         },
         {
@@ -100,8 +98,7 @@
             "ui": {
                 "soft_min": -0.1,
                 "soft_max": 0.1,
-                "spin_step": 0.001,
-                "quantityType": "distance"
+                "spin_step": 0.001
             }
         },
         {
@@ -134,24 +131,6 @@
             "type": "BOOL",
             "options": {
                 "derived": true
-            }
-        },
-        {
-            "attr": "dome_targetRadius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "dome_emitRadius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "dome_rayDistance",
-            "ui": {
-                "quantityType": "distance"
             }
         }
     ],

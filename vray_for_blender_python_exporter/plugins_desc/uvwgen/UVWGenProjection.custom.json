@@ -76,7 +76,8 @@
         {
             "attr": "nsamples",
             "ui" : {
-                "min": 0
+                "min": 0,
+                "max": 10
             }
         }
     ],

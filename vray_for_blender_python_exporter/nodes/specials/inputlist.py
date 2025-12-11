@@ -1,7 +1,7 @@
 
 import bpy
 
-from ..importing import getSocketName
+from ..importing import _getInputSocketNameByAttr
 from ..sockets import addInput, addOutput
 from ..operators import sockets as SocketOperators
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase

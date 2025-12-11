@@ -11,7 +11,10 @@
         },
         {
             "attr": "file",
-            "subtype": "FILE_PATH"
+            "subtype": "FILE_PATH",
+            "ui": {
+                "display_name": "Photon Map File"
+            }
         },
         {
             "attr": "auto_save_file",
@@ -23,11 +26,17 @@
         },
         {
             "attr": "search_distance",
-            "default": 0.05
+            "default": 0.05,
+            "ui": {
+                "display_name": "Search Distance"
+            }
         },
         {
             "attr": "search_distance_pixels",
-            "default": 1
+            "default": 1,
+            "ui": {
+                "display_name": "Search Distance"
+            }
         },
         {
             "attr": "max_photons",
@@ -36,18 +45,6 @@
         {
             "attr": "show_calc_phase",
             "default": false
-        },
-        {
-            "attr": "search_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "max_density",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {
@@ -68,18 +65,21 @@
                 "align": true,
                 "attrs": [
                     {
-                        "name": "search_distance_units"
+                        "name": "search_distance_units",
+                        "visible": {
+                            "cond": "::mode!=2"
+                        }
                     },
                     {
                         "name": "search_distance",
                         "visible": {
-                            "cond": "::search_distance_units=1"
+                            "cond": "::search_distance_units=1,::mode!=2"
                         }
                     },
                     {
                         "name": "search_distance_pixels",
                         "visible": {
-                            "cond": "::search_distance_units=0"
+                            "cond": "::search_distance_units=0;::mode=2"
                         }
                     }
                 ]
@@ -109,15 +109,12 @@
                 ]
             },
             {
-                "layout": "SEPARATOR"
-            },
-            {
                 "attrs": [
                     {
-                        "active": {
+                        "name": "file",
+                        "visible": {
                             "cond": "::mode=1"
-                        },
-                        "name": "file"
+                        }
                     }
                 ],
                 "layout": "COLUMN"
@@ -126,15 +123,18 @@
                 "attrs": [
                     {
                         "name": "auto_save",
-                        "active": {
-                            "cond": "::mode!=2"
+                        "visible": {
+                            "cond": "::mode=0"
                         }
                     },
                     {
-                        "active": {
-                            "cond": "::auto_save=1,::mode!=2"
+                        "name": "auto_save_file",
+                        "visible": {
+                            "cond": "::mode=0"
                         },
-                        "name": "auto_save_file"
+                        "active": {
+                            "cond": "::auto_save=1,::mode=0"
+                        }
                     }
                 ],
                 "layout": "COLUMN"

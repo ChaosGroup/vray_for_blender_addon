@@ -14,6 +14,7 @@ from vray_blender.exporting import tools
 from vray_blender.lib.names import Names
 from vray_blender.lib.condition_processor import UIConditionCompiler
 from vray_blender.lib.lib_utils import getLightPluginType
+from collections import defaultdict
 
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -21,16 +22,20 @@ from vray_blender.bin import VRayBlenderLib as vray
 # A list of plugins description as read from the json definition files
 PLUGINS_DESC = {}
 
-# A map of {pluginType: [property_list]} with cross-object dependencies 
+# A map of {pluginType: [property_list]} with cross-object dependencies
 CROSS_DEPENDENCIES = {}
 
 # Key that serves to describe a comment into a *.custom.json plugin description
 DESC_COMMENT_KEY = "//Comment"
 
+# Set to True when the env var for disabling AI features is set
+DISABLE_GEN_AI = os.getenv("CHAOS_DISABLE_GEN_AI") == "1"
+
+# {pluginType: [attribute_name, ...]} that matches a plugin type to a list of its template attributes
+TEMPLATE_ATTRIBUTES = defaultdict(list)
 
 def getPluginsDescDir():
     return os.path.join(sys_utils.getExporterPath(), "plugins_desc")
-
 
 
 def loadPluginDescriptions():
@@ -38,15 +43,13 @@ def loadPluginDescriptions():
 
     loadedPlugins = 0
     for descFile in descDirpath.glob("*/*.json"):
-        
         isBaseDesc = True
 
         if str(descFile).endswith(".custom.json"):
             customDescFile = str(descFile)
-            
             # Check whether the .custom.json file has a corresponding .json file (the same base name).
             # If not, this means that the custom description is for a plugin that is a variant of another
-            # plugin (e.g. as in render channels).  
+            # plugin (e.g. as in render channels).
             baseFilePath = customDescFile[:-len('.custom.json')] + '.json'
             if Path(baseFilePath).exists():
                 # Both base and custom plugin description files are for the same variant of a plugins.
@@ -56,14 +59,14 @@ def loadPluginDescriptions():
             # Custom description file is for a variant of a plugin. Proceed with loading both the base description
             # and the csutom description
             isBaseDesc = False
-        
+
         if not (pluginDesc := _loadDescFromFile(descFile, isBaseDesc)):
             continue
 
         if pluginDesc.get('ID') in PLUGINS_DESC:
             # Already loaded
             continue
-        
+
         loadedPlugins += 1
 
         try:
@@ -280,7 +283,7 @@ def getUIFlagNameFromPropGroup(propGroup, widget):
         the 'open' state of the widget.
     """
     return f"{propGroup.rna_type.name}_{widget.get('name')}"
-    
+
 
 def _attrPluginToVRay(attrPlugin: AttrPlugin):
     """ Convert AttrPlugin to vray.AttrPlugin """
@@ -288,67 +291,58 @@ def _attrPluginToVRay(attrPlugin: AttrPlugin):
     return vray.AttrPlugin(attrPlugin.name, output)
 
 
-def updateValue(renderer, pluginName, attrName, val, subtype=None):
+def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=True):
     if type(val) is bool or type(val) is int:
-        vray.pluginUpdateInt(renderer, pluginName, attrName, int(val)) 
+        vray.pluginUpdateInt(renderer, pluginName, attrName, int(val), animatable)
 
     elif type(val) is float:
-        vray.pluginUpdateFloat(renderer, pluginName, attrName, val)
+        vray.pluginUpdateFloat(renderer, pluginName, attrName, val, animatable)
 
     elif type(val) is mathutils.Matrix:
         if len(val.col) == 4:
-            vray.pluginUpdateTransform(renderer, pluginName, attrName, tools.mat4x4ToTuple(val))
+            vray.pluginUpdateTransform(renderer, pluginName, attrName, tools.mat4x4ToTuple(val), animatable)
         elif len(val.col) == 3:
-            vray.pluginUpdateMatrix(renderer, pluginName, attrName, tools.mat3x3ToTuple(val))
+            vray.pluginUpdateMatrix(renderer, pluginName, attrName, tools.mat3x3ToTuple(val), animatable)
         else:
             raise Exception(f"lib_utils.py: Wrong matrix dimensions: {pluginName}::{attrName} = {val.row}x{val.col}")
-        
+
     elif type(val) is mathutils.Vector:
-        vray.pluginUpdateVector(renderer, pluginName, attrName, val.x, val.y, val.z) 
+        vray.pluginUpdateVector(renderer, pluginName, attrName, val.x, val.y, val.z, animatable)
 
     elif type(val) is mathutils.Color:
         if subtype:
-            vray.pluginUpdateAColor(renderer, pluginName, attrName, val.r,val.g,val.b, 1.0) 
+            vray.pluginUpdateAColor(renderer, pluginName, attrName, val.r,val.g,val.b, 1.0, animatable)
         else:
-            vray.pluginUpdateColor(renderer, pluginName, attrName, val.r,val.g,val.b) 
-            
-    elif type(val) is str:
-        if val == "True":
-            vray.pluginUpdateInt(renderer, pluginName, attrName, 1) 
-            # TODO: Remove, temp code to see if it ever gets here
-            raise Exception(f"lib_utils.py: Bool value as string: {pluginName}::{attrName}")
-        if val == "False":
-            vray.pluginUpdateInt(renderer, pluginName, attrName, 0) 
-            # TODO: Remove, temp code to see if it ever gets here
-            raise Exception(f"lib_utils.py: Bool value as string: {pluginName}::{attrName}")
+            vray.pluginUpdateColor(renderer, pluginName, attrName, val.r,val.g,val.b, animatable)
 
-        vray.pluginUpdateString(renderer, pluginName, attrName, val)
-    
+    elif type(val) is str:
+        vray.pluginUpdateString(renderer, pluginName, attrName, val, animatable)
+
     elif type(val) is AColor:
-        vray.pluginUpdateAColor(renderer, pluginName, attrName, val.r, val.g, val.b, val.a)
-    
+        vray.pluginUpdateAColor(renderer, pluginName, attrName, val.r, val.g, val.b, val.a, animatable)
+
     elif type(val) is list:
-        if len(val) == 0: 
+        if len(val) == 0:
             vray.pluginResetValue(renderer, pluginName, attrName)
         elif type(val[0]) is str:
-            vray.pluginUpdateStringList(renderer, pluginName, attrName, val) 
+            vray.pluginUpdateStringList(renderer, pluginName, attrName, val)
         elif type(val[0]) is int:
-            vray.pluginUpdateIntList(renderer, pluginName, attrName, val)
+            vray.pluginUpdateIntList(renderer, pluginName, attrName, val, animatable)
         elif type(val[0]) is float:
-            vray.pluginUpdateFloatList(renderer, pluginName, attrName, val)
+            vray.pluginUpdateFloatList(renderer, pluginName, attrName, val, animatable)
         elif type(val[0]) is AttrPlugin:
             # Currently, plugin lists do not support setting a non-default output for the individual
             # plugins, this is why the output is set to empty.
             convertedList = [vray.AttrPlugin(p.name, '') for p in val]
-            vray.pluginUpdatePluginList(renderer, pluginName, attrName, convertedList)
+            vray.pluginUpdatePluginList(renderer, pluginName, attrName, convertedList, animatable)
         else:
             debug.printError(f"List type not registered with exporter: List[{type(val[0]).__name__}], pluginName: {pluginName}, attr: {attrName}")
-    
+
     elif type(val) is AttrPlugin:
-        vray.pluginUpdatePluginDesc(renderer, pluginName, attrName, _attrPluginToVRay(val), val.forceUpdate)
+        vray.pluginUpdatePluginDesc(renderer, pluginName, attrName, _attrPluginToVRay(val), animatable, val.forceUpdate)
 
     elif type(val) is AttrListValue:
-        vray.pluginUpdateList(renderer, pluginName, attrName, val.attrList, val.attrType)
+        vray.pluginUpdateList(renderer, pluginName, attrName, val.attrList, val.attrType, animatable)
 
     else:
         debug.printError(f"Type not registered with exporter: {type(val)}, pluginName: {pluginName}, attr: {attrName}")
@@ -358,17 +352,20 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None):
 
 def objectToAttrPlugin(obj: bpy.types.Object):
     """ Constructs an AttrPlugin for a scene object. """
-    
+
     if obj is None:
         return AttrPlugin()
-    
+
     assert isinstance(obj, bpy.types.Object)
+
+    if tools.isObjectVrayScene(obj):
+        return AttrPlugin(Names.pluginObject("vrayscene", Names.object(obj)), pluginType='VRayScene')
     
     match obj.type:
         case 'LIGHT':
             # Lights are represented by a LightXXX plugin in the V-Ray scenes
             return AttrPlugin(Names.object(obj), pluginType=getLightPluginType(obj.data))
-        case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
+        case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE' | 'CURVES':
             # Geometry objects are represented by a Node plugin in the V-Ray scene
             return AttrPlugin(Names.vrayNode(Names.object(obj)), pluginType='Node')   
         case _:
@@ -399,6 +396,14 @@ def setIncludeExcludeList(exporterCtx: ExporterContext, pluginDesc: PluginDesc, 
         fnExport(exporterCtx, pluginDesc)
 
 
+def stringToIntList(string: str, separator: str):
+    if string.strip() == '':
+        return []
+    
+    try:
+        return [int(item) for item in string.split(separator)]
+    except ValueError:
+        return None
     
 
 

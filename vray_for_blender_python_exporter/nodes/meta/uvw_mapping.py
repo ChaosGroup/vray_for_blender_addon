@@ -90,7 +90,7 @@ class VRayNodeUVWMapping(VRayNodeBase):
         elif nodeWidgets := mapPluginDesc.Node.get('widgets'):
             mapPropGroup = getattr(self, mappingPluginType)
             uiPainter = draw_utils.UIPainter(context, mapPluginDesc, mapPropGroup, node = self)
-            uiPainter.renderWidgets(box, nodeWidgets)
+            uiPainter.renderWidgets(box, nodeWidgets, True)
 
 
     def draw_buttons_ext(self, context, layout):

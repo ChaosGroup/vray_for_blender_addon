@@ -1,0 +1,22 @@
+
+{
+    "Desciption" : "SettingsDecal",
+    "ID" : "SettingsDecal",
+    "Name" : "Settings Decal",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "dont_affect_settings",
+            "default" : false,
+            "desc" : "This is here so we can suppress a SettingsDecal node from affecting the main VRayRenderer sequence data",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "SETTINGS",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

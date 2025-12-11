@@ -149,7 +149,12 @@ void ZmqRouter::pollerLoop(std::string clientEndpoint, std::string workerEndopin
 		}
 	}
 	catch (const zmq::error_t& e) {
-		reportError(Msg("Exception in poller loop:", e.what()));
+		if (stopPolling) {
+			reportError(Msg("Exception in router poller loop:", e.what()));
+		}
+		else {
+			trace(Msg("Exception in router poller loop:", e.what()));
+		}
 	}
 
 	trace("Exit poller loop");

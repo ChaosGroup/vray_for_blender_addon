@@ -1,7 +1,7 @@
 from __future__ import annotations # For the forward type hints
 from typing import Dict, Set
 import bpy
-
+from collections import defaultdict
 from vray_blender.lib.names import Names
 
 # This file contains code for tracking VRay plugin deletion in response to
@@ -16,8 +16,8 @@ def log(msg: str):
     pass    
 
 def getObjTrackId(obj: bpy.types.ID):
-        """ Returns a unique identifier of an object """
-        return obj.original.session_uid
+    """ Returns a unique identifier of an object """
+    return obj.original.session_uid
 
 
 def getNodeTrackId(obj: bpy.types.Node):
@@ -298,6 +298,52 @@ class TrackObj:
     def __exit__(self, *args):
         self.tracker.trackObjEnd()
          
+
+class ObjDataTracker:
+    """ This class matches a Names.objectData(obj, instance) to its associated geometry plugin names. 
+        
+        Note: ObjTrackId(obj.data) can't be used instead of the name, because the object may point to data thats internally created by Blender,
+        and in that case its session_uid will be different on every change to it.
+    """
+
+    class GeomPluginData:
+        """ This class contains the names of the geometry plugins associated with a data name. """
+        def __init__(self):
+            self.name = None # The base plugin name e.g. GeomStaticMesh, GeomFileMesh, GeomHair, etc.
+            self.particlePluginNames = {} # A dictionary of particle system names to particle plugin names.
+
+    def __init__(self):        
+        """ Initialize the mapping from data names to geometry plugin names """
+        self.dataToGeomPluginName: dict[str, self.GeomPluginData] = defaultdict(self.GeomPluginData)
+
+    def dataExported(self, dataName: str):
+        """ Return True if a base plugin name has been recorded for the given data name """
+        return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).name is not None
+
+    def getPluginName(self, dataName: str):
+        """ Retrieve the base plugin name for the given data name """
+        return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).name
+
+    def trackPluginOfData(self, dataName: str, pluginName: str):
+        """ Track (associate) the given plugin name as the base plugin for the data name """
+        self.dataToGeomPluginName[dataName].name = pluginName
+
+    def trackParticlePluginOfData(self, dataName: str, particleSystemName: str, pluginName: str):
+        """ Track a particle plugin name for the given data name and particle system name """
+        self.dataToGeomPluginName[dataName].particlePluginNames[particleSystemName] = pluginName
+    
+    def getParticlePluginName(self, dataName: str, particleSystemName: str):
+        """ Retrieve the particle plugin name for the given data name and particle system name """
+        return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).particlePluginNames.get(particleSystemName, None)
+
+    def particleDataExported(self, dataName: str, particleSystemName: str):
+        """ Return True if a particle plugin name has been exported for the given data and particle system names """
+        return self.getParticlePluginName(dataName, particleSystemName) is not None
+
+    def popData(self, dataName: str):
+        """ Remove and return the geometry plugin name association for the given data name """
+        return self.dataToGeomPluginName.pop(dataName, None)
+
 
 
 ################################

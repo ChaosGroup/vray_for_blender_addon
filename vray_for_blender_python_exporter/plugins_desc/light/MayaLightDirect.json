@@ -192,6 +192,7 @@
             "ui" : 
             {
                 "display_name" : "Shadow bias",
+                "quantityType" : "distance",
                 "soft_max" : 0.1000000014901161,
                 "soft_min" : -0.1000000014901161
             }
@@ -393,6 +394,7 @@
             "type" : "FLOAT",
             "ui" : 
             {
+                "quantityType" : "distance",
                 "rollout" : "Shadows"
             }
         },

@@ -231,6 +231,14 @@
         },
         
         {
+            "attr" : "channel_name",
+            "default" : "",
+            "desc" : "Mapping channel name",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
             "attr" : "filtering",
             "default" : 1.0,
             "desc" : "filtering",

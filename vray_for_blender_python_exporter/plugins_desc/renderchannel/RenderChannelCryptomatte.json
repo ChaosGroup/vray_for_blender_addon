@@ -102,6 +102,28 @@
             "default" : false,
             "desc" : "Prepend forward slash for object paths (if necessary)",
             "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "write_manifest_file",
+            "default" : "0",
+            "desc" : "Controls if the manifest should be written to a sidecar json file or not.0 = manifest will be written in the EXR file directly, 1 = manifest will be written to a sidecar json file in the output img directory",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Write manifest to the EXR file",
+                    "Write manifest to the EXR file"
+                ],
+                
+                [
+                    "1",
+                    "Write manifest to a sidecar json file",
+                    "Write manifest to a sidecar json file"
+                ]
+            ],
+            "type" : "ENUM"
         }
     ],
     "Type" : "RENDERCHANNEL",

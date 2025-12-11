@@ -62,14 +62,7 @@ class VRAY_OT_proxy_load_preview(VRayOperatorBase):
         if not os.path.exists(proxyFilepath):
             return {'FINISHED'}
 
-        err = vray_proxy.loadVRayProxyPreviewMesh(
-            context.object,
-            proxyFilepath,
-            geomMeshFile.anim_type,
-            geomMeshFile.anim_offset,
-            geomMeshFile.anim_speed,
-            context.scene.frame_current-1
-        )
+        err = vray_proxy.loadVRayProxyPreviewMesh(context.object, context.scene.frame_current-1)
 
         if err is not None:
             self.report({'ERROR'}, err)
@@ -88,19 +81,18 @@ class VRAY_OT_proxy_generate_preview(VRayOperatorBase):
         description="True if operator is called to regenerate an existing proxy preview")
 
     def execute(self, context):
-        ob  = context.object
+        ob = context.object
         geomMeshFile = ob.data.vray.GeomMeshFile
 
         # Default the preview to the original mesh file
         previewFilePath = bpy.path.abspath(geomMeshFile.file)
 
         if not (os.path.exists(previewFilePath)):
-            debug.reportError(f"File not found: {previewFilePath}", self)
+            debug.reportError(f"File not found: {geomMeshFile.file} [resolves to {previewFilePath}]")
             return {'CANCELLED'}
 
-        if err := vray_proxy.loadVRayProxyPreviewMesh(ob, previewFilePath, geomMeshFile.anim_type,
-                                            geomMeshFile.anim_offset, geomMeshFile.anim_speed, context.scene.frame_current):
-            debug.reportError(err, self)
+        if err := vray_proxy.loadVRayProxyPreviewMesh(ob, geomMeshFile.file, context.scene.frame_current):
+            debug.reportError(err)
             return {'CANCELLED'}
 
         return {'FINISHED'}

@@ -95,44 +95,37 @@
             "attr": "shadowBias",
             "default" : 0.005,
             "ui": {
-                "spin_step": 0.001,
-                "quantityType": "distance"
+                "spin_step": 0.001
             }
         },
         {
             "attr": "decay_near_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_near_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_start",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "decay_far_end",
             "ui": {
-                "spin_step": 0.01,
-                "quantityType": "distance"
+                "spin_step": 0.01
             }
         },
         {
             "attr": "intensity",
             "default": 30.0,
             "ui": {
-                "soft_min": 0.0,
-                "soft_max": 500.0,
                 "spin_step": 0.1
             }
         },
@@ -173,48 +166,6 @@
         {
             "attr": "bumped_below_surface_check",
             "default": true
-        },
-        {
-            "attr": "shadowRadius",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "startDistance1",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "endDistance1",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "startDistance2",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "endDistance2",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "startDistance3",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "endDistance3",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

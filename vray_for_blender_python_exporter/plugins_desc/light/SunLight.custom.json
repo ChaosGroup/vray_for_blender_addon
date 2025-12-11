@@ -72,19 +72,11 @@
         {
             "attr": "clouds_density",
             "desc": "Controls the density of the clouds. A value of 1 fills up the sky with clouds.",
-            "subtype": "PERCENTAGE",
-            "precision": 0,
-            "options": {
-                "value_conv_factor": 100.0
-            }
+            "subtype": "PERCENTAGE"
         },
         {
             "attr": "clouds_variety",
-            "subtype": "PERCENTAGE",
-            "precision": 0,
-            "options": {
-                "value_conv_factor": 100.0
-            }
+            "subtype": "PERCENTAGE"
         },
         {
             "attr": "clouds_seed",
@@ -93,20 +85,14 @@
         {
             "attr": "clouds_cirrus_amount",
             "desc": "A value of 1 fills the sky with cirrus clouds, while 0 produces no cirrus clouds.",
-            "subtype": "PERCENTAGE",
-            "precision": 0,
-            "options": {
-                "value_conv_factor": 100.0
-            }
+            "subtype": "PERCENTAGE"
         },
         {
             "attr": "clouds_thickness",
             "desc": "Clouds thickness in meters. Lower values make the clouds thin and sheer/lucent, while higher values make them full and heavy.",
             "subtype": "DISTANCE",
             "ui": {
-                "spin_step": 10,
-                "units": "meters",
-                "quantityType": "distance"
+                "spin_step": 10
             }
         },
         {
@@ -115,9 +101,7 @@
             "ui": {
                 "soft_min": -10.0,
                 "soft_max": 10.0,
-                "spin_step": 10,
-                "units": "meters",
-                "quantityType": "distance"
+                "spin_step": 10
             }
         },
         {
@@ -126,9 +110,7 @@
             "ui": {
                 "soft_min": -10.0,
                 "soft_max": 10.0,
-                "spin_step": 10,
-                "units": "meters",
-                "quantityType": "distance"
+                "spin_step": 10
             }
         },
         {
@@ -169,9 +151,7 @@
             "ui": {
                 "soft_min": -10.0,
                 "soft_max": 10.0,
-                "spin_step": 0.1,
-                "units": "meters",
-                "quantityType": "distance"
+                "spin_step": 0.1
             }
         },
         {
@@ -180,9 +160,7 @@
             "ui": {
                 "soft_min": -10.0,
                 "soft_max": 10.0,
-                "spin_step": 0.1,
-                "units": "meters",
-                "quantityType": "distance"
+                "spin_step": 0.1
             }
         },
         {
@@ -217,8 +195,7 @@
             "default" : 0.005,
             "ui": {
                 "soft_max": 100.0,
-                "spin_step": 0.1,
-                "quantityType": "distance"
+                "spin_step": 0.1
             }
         },
         {
@@ -281,10 +258,7 @@
         {
             "attr": "blend_angle",
             "subtype": "ANGLE",
-            "precision": 7,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
                 "spin_step": 0.1
             }
@@ -298,47 +272,12 @@
         {
             "attr": "clouds_height",
             "ui": {
-                "spin_step": 100,
-                "units": "meters",
-                "quantityType": "distance"
-            },
-            "options": {
-                "value_conv_factor": 0.1
+                "spin_step": 100
             }
         },
         {
             "attr": "clouds_density_multiplier",
             "desc": "A multiplier to the Density parameter. The larger the value, the darker the sky becomes at the horizon. Setting a value of 0 produces no clouds, regardless of the Density value."
-        },
-        {
-            "attr": "decay_near_start",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_near_end",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_far_start",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "decay_far_end",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "photon_radius",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Widget": {

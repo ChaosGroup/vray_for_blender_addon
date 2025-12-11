@@ -1,1237 +1,1483 @@
+
 {
     "Desciption" : "BRDFVRayMtl",
     "ID" : "BRDFVRayMtl",
     "Name" : "V Ray Mtl",
-    "Parameters" : [
-       {
-          "attr" : "opacity_source",
-          "default" : "0",
-          "desc" : "Choose between grayscale (0) or colored (1) opacity",
-          "items" : [
-             [ "0", "Opacity Grayscale", "Opacity Grayscale" ],
-             [ "1", "Opacity Colored", "Opacity Colored" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "rollout" : "Basic",
-             "tab" : "V-Ray Material Basic"
-          }
-       },
-       {
-          "attr" : "opacity",
-          "default" : 1.0,
-          "desc" : "The opacity of the material",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Opacity Grayscale",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "opacity_color",
-          "default" : [ 1.0, 1.0, 1.0, 1.0 ],
-          "desc" : "The color opacity map of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Opacity Colored"
-          }
-       },
-       {
-          "attr" : "opacity_mode",
-          "default" : "0",
-          "desc" : "The opacity mode (0 - Normal, 1 - Clip, 2 - Stochastic)",
-          "items" : [
-             [ "0", "Normal", "Normal" ],
-             [ "1", "Clip", "Clip" ],
-             [ "2", "Stochastic", "Stochastic" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Opacity Mode"
-          }
-       },
-       {
-          "attr" : "diffuse",
-          "default" : [ 0.50, 0.50, 0.50, 1.0 ],
-          "desc" : "The diffuse color of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Diffuse color",
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "roughness",
-          "default" : 0.0,
-          "desc" : "The roughness of the diffuse part of the material",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Diffuse roughness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "roughness_model",
-          "default" : "0",
-          "desc" : "The roughness model. 0 - Gamma-based; 1 - Oren-Nayar",
-          "items" : [
-             [ "0", "Gamma-based", "Gamma-based" ],
-             [ "1", "Oren-Nayar", "Oren-Nayar" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {}
-       },
-       {
-          "attr" : "self_illumination",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "The self-illumination color of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Self-Illumination color",
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "self_illumination_gi",
-          "default" : true,
-          "desc" : "True if the self-illumination should affect GI",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Self-Illumination affects GI"
-          }
-       },
-       {
-          "attr" : "compensate_camera_exposure",
-          "default" : false,
-          "desc" : "True if the camera exposure should be compensated for self-illumination",
-          "type" : "BOOL",
-          "ui" : {}
-       },
-       {
-          "attr" : "brdf_type",
-          "default" : "4",
-          "desc" : "The BRDF type (0 - Phong, 1 - Blinn, 2 - Ward, 3 - VRay (deprecated, do not use), 4 - GGX)",
-          "items" : [
-             [ "0", "Phong", "Phong" ],
-             [ "1", "Blinn", "Blinn" ],
-             [ "2", "Ward", "Ward" ],
-             [ "4", "GGX", "GGX" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "BRDF Type",
-             "rollout" : "Reflection layer"
-          }
-       },
-       {
-          "attr" : "reflect",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "The reflection color (per-channel reflection factor) of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Reflection color"
-          }
-       },
-       {
-          "attr" : "reflect_glossiness",
-          "default" : 1.0,
-          "desc" : "The glossiness of the reflections",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Reflection glossiness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "hilight_glossiness",
-          "default" : 1.0,
-          "desc" : "The glossiness of the hilights",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Hilight glossiness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "hilight_glossiness_lock",
-          "default" : true,
-          "desc" : "True to use the reflection glossiness also for hilights (hilight_glossiness is ignored)",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Lock hilight glossiness"
-          }
-       },
-       {
-          "attr" : "gtr_gamma",
-          "default" : 2.0,
-          "desc" : "How much to increase/decrease the tail of the glossy highlight when using GGX reflection model",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "GGX tail falloff",
-             "max" : 1000.0,
-             "min" : 0.001000000047497451,
-             "soft_max" : 10.0,
-             "soft_min" : 2.0
-          }
-       },
-       {
-          "attr" : "fresnel",
-          "default" : false,
-          "desc" : "True to enable Fresnel reflections (angle dependent reflection amount)",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Fresnel reflections",
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "fresnel_ior",
-          "default" : 1.600000023841858,
-          "desc" : "The ior for calculating the Fresnel term",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Fresnel IOR",
-             "max" : 100.0,
-             "min" : 9.999999974752427e-07,
-             "soft_max" : 5.0
-          }
-       },
-       {
-          "attr" : "fresnel_ior_lock",
-          "default" : true,
-          "desc" : "True to use the refraction ior also for the Fresnel term (fresnel_ior is ignored)",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Lock fresnel IOR"
-          }
-       },
-       {
-          "attr" : "metalness",
-          "default" : 0.0,
-          "desc" : "When this is 0.0, the material uses dielectric reflections, and when it is 1.0, metallic reflections are used",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Metalness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "gtr_energy_compensation",
-          "default" : "0",
-          "desc" : "0: No GTR energy compensation, 1: GTR energy compensation with color sharpening, 2: GTR energy compensation without color sharpening",
-          "items" : [
-             [ "0", "Disabled", "Disabled" ],
-             [
-                "1",
-                "Compensation incl. diffuse Fresnel",
-                "Compensation incl. diffuse Fresnel"
-             ],
-             [
-                "2",
-                "Compensation w/o diffuse Fresnel",
-                "Compensation w/o diffuse Fresnel"
-             ]
-          ],
-          "type" : "ENUM",
-          "ui" : {}
-       },
-       {
-          "attr" : "reflect_subdivs",
-          "default" : 8,
-          "desc" : "Subdivs for glossy reflectons",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Reflection Subdivs",
-             "max" : 1000,
-             "min" : 1,
-             "rollout" : "",
-             "soft_max" : 20
-          }
-       },
-       {
-          "attr" : "reflect_trace",
-          "default" : true,
-          "desc" : "true to trace reflections and false to only do hilights",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Trace reflections"
-          }
-       },
-       {
-          "attr" : "reflect_depth",
-          "default" : 5,
-          "desc" : "The maximum depth for reflections",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Max depth",
-             "max" : 1000,
-             "min" : 1,
-             "soft_max" : 10
-          }
-       },
-       {
-          "attr" : "reflect_exit_color",
-          "default" : [ 0.0, 0.0, 0.0 ],
-          "desc" : "The color to use when the maximum depth is reached",
-          "type" : "COLOR",
-          "ui" : {
-             "display_name" : "Exit color"
-          }
-       },
-       {
-          "attr" : "hilight_soften",
-          "default" : 0.0,
-          "desc" : "How much to soften hilights and reflections at grazing light angles",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Soften",
-             "max" : 1.0,
-             "min" : -1.0
-          }
-       },
-       {
-          "attr" : "reflect_affect_alpha",
-          "default" : "0",
-          "desc" : "Determines how reflections affect the alpha channel (0 - opaque alpha; 1 - alpha is taken from refractions; 2 - all channels are propagated",
-          "items" : [
-             [ "0", "Color only", "Color only" ],
-             [ "1", "Color+alpha", "Color+alpha" ],
-             [ "2", "All channels", "All channels" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Affect Channels"
-          }
-       },
-       {
-          "attr" : "reflect_weight",
-          "default" : 1.0,
-          "desc" : "Weight of the reflection (specular) component",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Reflection weight"
-          }
-       },
-       {
-          "attr" : "reflect_dim_distance_on",
-          "default" : false,
-          "desc" : "True to enable dim distance",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Enable dim distance",
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "reflect_dim_distance",
-          "default" : 9.999999843067494e+17,
-          "desc" : "How much to dim reflection as length of rays increases",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Dim distance",
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "reflect_dim_distance_falloff",
-          "default" : 0.0,
-          "desc" : "Fall off for the dim distance",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Dim fall-off",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "anisotropy",
-          "default" : 0.0,
-          "desc" : "The anisotropy for glossy reflections, from -1 to 1 (0.0 is isotropic reflections)",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Anisotropy(-1..1)",
-             "max" : 0.9900000095367432,
-             "min" : -0.9900000095367432,
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "anisotropy_rotation",
-          "default" : 0.0,
-          "desc" : "The rotation of the anisotropy axes, from 0.0 to 1.0",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Anisotropy rotation",
-             "soft_max" : 1.0,
-             "soft_min" : 0.0
-          }
-       },
-       {
-          "attr" : "anisotropy_derivation",
-          "default" : "0",
-          "desc" : "What method to use for deriving anisotropy axes (0 - local object axis; 1 - a specified uvw generator)",
-          "items" : [
-             [ "0", "Local object axis", "Local object axis" ],
-             [ "1", "Specified uvw generator", "Specified uvw generator" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "UV Vectors Derivation"
-          }
-       },
-       {
-          "attr" : "anisotropy_axis",
-          "default" : "2",
-          "desc" : "Which local object axis to use when anisotropy_derivation is 0. (0 - X; 1 - Y; 2 - Z)",
-          "items" : [
-             [ "0", "X", "X" ],
-             [ "1", "Y", "Y" ],
-             [ "2", "Z", "Z" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Anisotropy Axis"
-          }
-       },
-       {
-          "attr" : "anisotropy_uvwgen",
-          "default" : null,
-          "desc" : "The uvw generator to use for anisotropy when anisotropy_derivation is 1",
-          "type" : "PLUGIN",
-          "ui" : {}
-       },
-       {
-          "attr" : "new_gtr_anisotropy",
-          "default" : false,
-          "desc" : "If true, the new phisically correct GTR anisotropy is used. Otherwise, the old anisotropy that applies to all brdf types is used",
-          "type" : "BOOL",
-          "ui" : {}
-       },
-       {
-          "attr" : "thin_film_on",
-          "default" : false,
-          "desc" : "true to enable thin film reflections",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Enable thin film",
-             "rollout" : "Thin Film"
-          }
-       },
-       {
-          "attr" : "thin_film_thickness_min",
-          "default" : 250.0,
-          "desc" : "The minimum thickness of the thin film layer in nanometers",
-          "type" : "FLOAT",
-          "ui" : {
-             "max" : 1000000.0,
-             "min" : 0.0,
-             "soft_max" : 3000.0
-          }
-       },
-       {
-          "attr" : "thin_film_thickness_max",
-          "default" : 400.0,
-          "desc" : "The maximum thickness of the thin film layer in nanometers",
-          "type" : "FLOAT",
-          "ui" : {
-             "max" : 1000000.0,
-             "min" : 0.0,
-             "soft_max" : 3000.0
-          }
-       },
-       {
-          "attr" : "thin_film_thickness",
-          "default" : 0.0,
-          "desc" : "The blend between the minimum and maximum thin film thickness",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "attributes" : [
-                [ "textureSlot", 2 ]
-             ],
-             "display_name" : "Thickness blend",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "thin_film_ior",
-          "default" : 1.470000028610229,
-          "desc" : "The index of refraction of the thin film",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Thin Film IOR",
-             "max" : 100.0,
-             "min" : 9.999999974752427e-07,
-             "soft_max" : 5.0
-          }
-       },
-       {
-          "attr" : "refract",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "The refraction color of the material. In other words, relative amount of transmitted light for each color channel",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Refraction color",
-             "rollout" : "Refraction layer"
-          }
-       },
-       {
-          "attr" : "refract_ior",
-          "default" : 1.600000023841858,
-          "desc" : "The index of refraction",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Refraction IOR",
-             "max" : 100.0,
-             "min" : 9.999999974752427e-07,
-             "soft_max" : 5.0
-          }
-       },
-       {
-          "attr" : "refract_glossiness",
-          "default" : 1.0,
-          "desc" : "Glossiness for refractions",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Refraction glossiness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "refract_subdivs",
-          "default" : 8,
-          "desc" : "Subdivs for glossy refractions",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Refraction Subdivs",
-             "max" : 1000,
-             "min" : 1,
-             "rollout" : "",
-             "soft_max" : 20
-          }
-       },
-       {
-          "attr" : "refract_trace",
-          "default" : true,
-          "desc" : "1 to trace refractions; 0 to disable them",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Trace refractions"
-          }
-       },
-       {
-          "attr" : "refract_depth",
-          "default" : 5,
-          "desc" : "The maximum depth for refractions",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Max depth",
-             "max" : 1000,
-             "min" : 1,
-             "soft_max" : 10
-          }
-       },
-       {
-          "attr" : "refract_exit_color_on",
-          "default" : false,
-          "desc" : "If false, when the maximum refraction depth is reached, the material is assumed transparent, instead of terminating the ray",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Use exit color"
-          }
-       },
-       {
-          "attr" : "refract_exit_color",
-          "default" : [ 0.0, 0.0, 0.0 ],
-          "desc" : "The color to use when maximum depth is reached when refract_exit_color_on is true",
-          "type" : "COLOR",
-          "ui" : {
-             "display_name" : "Exit color"
-          }
-       },
-       {
-          "attr" : "refract_affect_alpha",
-          "default" : "0",
-          "desc" : "Determines how refractions affect the alpha channel (0 - opaque alpha; 1 - alpha is taken from refractions; 2 - all channels are propagated",
-          "items" : [
-             [ "0", "Color only", "Color only" ],
-             [ "1", "Color+alpha", "Color+alpha" ],
-             [ "2", "All channels", "All channels" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Affect alpha"
-          }
-       },
-       {
-          "attr" : "refract_affect_shadows",
-          "default" : false,
-          "desc" : "True to enable the refraction to affect the shadows cast by the material (as transparent shadows)",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Affect shadows"
-          }
-       },
-       {
-          "attr" : "dispersion_on",
-          "default" : false,
-          "desc" : "True to enable dispersion",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Enable dispersion",
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "dispersion",
-          "default" : 50.0,
-          "desc" : "Abbe value",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Aberration",
-             "max" : 150.0,
-             "min" : 1.0
-          }
-       },
-       {
-          "attr" : "refract_thin_walled",
-          "default" : false,
-          "desc" : "True to enable thin-walled refraction",
-          "type" : "BOOL",
-          "ui" : {}
-       },
-       {
-          "attr" : "fog_color",
-          "default" : [ 1.0, 1.0, 1.0 ],
-          "desc" : "The absorption (fog) color",
-          "type" : "COLOR",
-          "ui" : {
-             "display_name" : "Fog color",
-             "rollout" : "Fog",
-             "tab" : "V-Ray Material Advanced"
-          }
-       },
-       {
-          "attr" : "fog_color_tex",
-          "default" : [ 0.0, 0.0, 0.0, 0.0 ],
-          "desc" : "The absorption (fog) color texture",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Fog color"
-          }
-       },
-       {
-          "attr" : "fog_mult",
-          "default" : 1.0,
-          "desc" : "Multiplier for the absorption",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Fog multiplier",
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "fog_depth",
-          "default" : 1.0,
-          "desc" : "Multiplier for the scatter radius. Has the inverse effect as fog_mult and is combined with it",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Fog depth",
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "fog_bias",
-          "default" : 0.0,
-          "desc" : "Bias for the absorption",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Fog bias"
-          }
-       },
-       {
-          "attr" : "fog_unit_scale_on",
-          "default" : true,
-          "desc" : "Enable unit scale multiplication, when calculating absorption. When this is enabled, the fog multiplier is in cm^-1. When this is disabled, the fog multiplier is in scene_units^-1",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Fog multiplier in centimeters^-1"
-          }
-       },
-       {
-          "attr" : "translucency",
-          "default" : "0",
-          "desc" : "Translucency mode (0 - None; 1 - Hard (wax) model; 2 - Soft (water) model; 3 - Hybrid model; 4 - Volumetric translucency; 5 - Volumetric (water) model; 6 - SSS (wax) model)",
-          "items" : [
-             [ "0", "None", "None" ],
-             [ "1", "Hard (wax) model", "Hard (wax) model" ],
-             [ "2", "Soft (water) model", "Soft (water) model" ],
-             [ "3", "Hybrid model", "Hybrid model" ],
-             [ "4", "Volumetric", "Volumetric" ],
-             [ "5", "Volumetric (water) model", "Volumetric (water) model" ],
-             [ "6", "SSS (wax) model", "SSS (wax) model" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Translucency type",
-             "rollout" : "Translucency (SSS)"
-          }
-       },
-       {
-          "attr" : "translucency_color",
-          "default" : [ 1.0, 1.0, 1.0, 1.0 ],
-          "desc" : "Filter color for the translucency effect",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Translucency color"
-          }
-       },
-       {
-          "attr" : "translucency_light_mult",
-          "default" : 1.0,
-          "desc" : "A multiplier for the calculated lighting for the translucency effect",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Light multiplier",
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "translucency_scatter_dir",
-          "default" : 0.50,
-          "desc" : "Scatter direction (0.0f is backward, 1.0f is forward)",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Scatter direction",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "translucency_scatter_coeff",
-          "default" : 0.0,
-          "desc" : "Scattering cone (0.0f - no scattering, 1.0f - full scattering",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Scatter coeff",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "translucency_thickness",
-          "default" : 9.999999843067494e+17,
-          "desc" : "Maximum distance to trace inside the object",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Maximum thickness",
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "translucency_amount",
-          "default" : 1.0,
-          "desc" : "Translucency amount for volumetric or SSS translucency",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "translucency_surfaceLighting",
-          "default" : "0",
-          "desc" : "Determines how direct illumination is computed for sub-surface scattering. The uniform method spreads light more uniformly inside the material and is faster for skin etc. The directional method tends to propagate more light in the direction from which it illuminates the surface. The directional method requires the 'affect shadows' option to be enabled so that shadows extend below the surface; this method may also produce a faceted look on low-poly objects",
-          "items" : [
-             [ "0", "Directional", "Directional" ],
-             [ "1", "Uniform", "Uniform" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Illumination method"
-          }
-       },
-       {
-          "attr" : "option_shading_model",
-          "default" : "0",
-          "desc" : "Shading model to use (0 - V-Ray, 1 - OpenPBR)",
-          "items" : [
-             [ "0", "V-Ray", "V-Ray" ],
-             [ "1", "OpenPBR", "OpenPBR" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Mode",
-             "rollout" : "Options"
-          }
-       },
-       {
-          "attr" : "option_double_sided",
-          "default" : true,
-          "desc" : "true if the material is double-sided",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Double-sided",
-             "rollout" : "Options"
-          }
-       },
-       {
-          "attr" : "option_reflect_on_back",
-          "default" : false,
-          "desc" : "true to compute reflections for back sides of objects",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Reflect on back side"
-          }
-       },
-       {
-          "attr" : "option_glossy_rays_as_gi",
-          "default" : "1",
-          "desc" : "Specifies when to treat GI rays as glossy rays (0 - never; 1 - only for rays that are already GI rays; 2 - always",
-          "items" : [
-             [ "0", "Never", "Never" ],
-             [ "1", "GI rays only", "GI rays only" ],
-             [ "2", "Always", "Always" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Glossy rays as GI"
-          }
-       },
-       {
-          "attr" : "option_cutoff",
-          "default" : 0.001000000047497451,
-          "desc" : "Specifies a cutoff threshold for tracing reflections/refractions",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Cutoff",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "option_use_irradiance_map",
-          "default" : true,
-          "desc" : "false to perform local brute-force GI calculatons and true to use the current GI engine",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Use irradiance map"
-          }
-       },
-       {
-          "attr" : "option_energy_mode",
-          "default" : "0",
-          "desc" : "Energy preservation mode for reflections and refractions (0 - color, 1 - monochrome)",
-          "items" : [
-             [ "0", "Color", "Color" ],
-             [ "1", "Monochrome", "Monochrome" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {
-             "display_name" : "Energy preservation"
-          }
-       },
-       {
-          "attr" : "option_fix_dark_edges",
-          "default" : true,
-          "desc" : "true to fix dark edges for glossy reflections with low samples; only set this to false for compatibility with older versions",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Fix dark edges"
-          }
-       },
-       {
-          "attr" : "option_glossy_fresnel",
-          "default" : false,
-          "desc" : "true to enable glossy Fresnel",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Glossy fresnel"
-          }
-       },
-       {
-          "attr" : "option_use_roughness",
-          "default" : false,
-          "desc" : "true to invert all glossiness values and use roughness instead. Always on for OpenPBR mode",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Use roughness"
-          }
-       },
-       {
-          "attr" : "use_environment_override",
-          "default" : false,
-          "desc" : "True to use the 'environment override' texture",
-          "type" : "BOOL",
-          "ui" : {
-             "rollout" : "Environment override"
-          }
-       },
-       {
-          "attr" : "environment_override",
-          "default" : [ 0.0, 0.0, 0.0, 0.0 ],
-          "desc" : "Environment override texture",
-          "type" : "TEXTURE",
-          "ui" : {}
-       },
-       {
-          "attr" : "environment_priority",
-          "default" : 0,
-          "desc" : "Environment override priority (used when several materials override it along a ray path)",
-          "type" : "INT",
-          "ui" : {
-             "max" : 1000,
-             "min" : -1000
-          }
-       },
-       {
-          "attr" : "refl_interpolation_on",
-          "default" : false,
-          "desc" : "This is deprecated and will be removed. This has no effect",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Use reflection interpolation",
-             "rollout" : "Reflection interpolation"
-          }
-       },
-       {
-          "attr" : "refl_imap_min_rate",
-          "default" : -1,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Min rate",
-             "max" : 10,
-             "min" : -10
-          }
-       },
-       {
-          "attr" : "refl_imap_max_rate",
-          "default" : 1,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Max rate",
-             "max" : 10,
-             "min" : -10
-          }
-       },
-       {
-          "attr" : "refl_imap_color_thresh",
-          "default" : 0.250,
-          "desc" : "",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Color threshold",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "refl_imap_norm_thresh",
-          "default" : 0.4000000059604645,
-          "desc" : "",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Normal threshold",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "refl_imap_samples",
-          "default" : 20,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Interpolation samples",
-             "max" : 1000,
-             "min" : 1
-          }
-       },
-       {
-          "attr" : "refr_interpolation_on",
-          "default" : false,
-          "desc" : "This is deprecated and will be removed. This has no effect",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Use refraction interpolation",
-             "rollout" : "Refraction interpolation"
-          }
-       },
-       {
-          "attr" : "refr_imap_min_rate",
-          "default" : -1,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Min rate",
-             "max" : 10,
-             "min" : -10
-          }
-       },
-       {
-          "attr" : "refr_imap_max_rate",
-          "default" : 1,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Max rate",
-             "max" : 10,
-             "min" : -10
-          }
-       },
-       {
-          "attr" : "refr_imap_color_thresh",
-          "default" : 0.250,
-          "desc" : "",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Color threshold",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "refr_imap_norm_thresh",
-          "default" : 0.4000000059604645,
-          "desc" : "",
-          "type" : "FLOAT",
-          "ui" : {
-             "display_name" : "Normal threshold",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "refr_imap_samples",
-          "default" : 20,
-          "desc" : "",
-          "type" : "INT",
-          "ui" : {
-             "display_name" : "Interpolation samples",
-             "max" : 1000,
-             "min" : 1
-          }
-       },
-       {
-          "attr" : "channels",
-          "default" : null,
-          "desc" : "Render channels in which the result of this material will be written to",
-          "elements_count" : 0,
-          "type" : "PLUGIN_LIST",
-          "ui" : {}
-       },
-       {
-          "attr" : "volume",
-          "default" : null,
-          "desc" : "Volume to use for this material. This parameter will make the material ignore the fog and translucency parameters",
-          "type" : "PLUGIN",
-          "ui" : {}
-       },
-       {
-          "attr" : "sheen_color",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "The sheen color of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Sheen color",
-             "rollout" : "Sheen"
-          }
-       },
-       {
-          "attr" : "sheen_amount",
-          "default" : 1.0,
-          "desc" : "Value controlling both the amount of dimming and the intensity of the specular highlight of the sheen layer",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Sheen amount",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "sheen_glossiness",
-          "default" : 0.8000000119209290,
-          "desc" : "The glossiness of the sheen layer of the material",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Sheen glossiness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "coat_color",
-          "default" : [ 1.0, 1.0, 1.0, 1.0 ],
-          "desc" : "The coat color of the material",
-          "type" : "TEXTURE",
-          "ui" : {
-             "display_name" : "Coat color",
-             "rollout" : "Coat"
-          }
-       },
-       {
-          "attr" : "coat_amount",
-          "default" : 0.0,
-          "desc" : "Value controlling both the amount of dimming and the intensity of the specular highlight of the coat layer",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat amount",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "coat_glossiness",
-          "default" : 1.0,
-          "desc" : "The glossiness of the coat layer of the material",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat glossiness",
-             "max" : 1.0,
-             "min" : 0.0
-          }
-       },
-       {
-          "attr" : "coat_ior",
-          "default" : 1.600000023841858,
-          "desc" : "The index of refraction of the coat layer of the material",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat IOR",
-             "max" : 100.0,
-             "min" : 9.999999974752427e-07,
-             "soft_max" : 5.0
-          }
-       },
-       {
-          "attr" : "coat_bump_lock",
-          "default" : false,
-          "desc" : "Lock the coat bump map to the base bump map",
-          "type" : "BOOL",
-          "ui" : {
-             "display_name" : "Coat bump lock"
-          }
-       },
-       {
-          "attr" : "coat_anisotropy",
-          "default" : 0.0,
-          "desc" : "The anisotropy for coat reflections, from -1 to 1 (0.0 is isotropic reflections)",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat Anisotropy(-1..1)",
-             "max" : 0.9900000095367432,
-             "min" : -0.9900000095367432,
-             "rollout" : ""
-          }
-       },
-       {
-          "attr" : "coat_anisotropy_rotation",
-          "default" : 0.0,
-          "desc" : "The rotation of the coat anisotropy axes, from 0.0 to 1.0",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat Anisotropy rotation",
-             "soft_max" : 1.0,
-             "soft_min" : 0.0
-          }
-       },
-       {
-          "attr" : "coat_darkening",
-          "default" : 0.0,
-          "desc" : "Coat darkening factor for the base diffuse and reflection layers",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {
-             "display_name" : "Coat darkening"
-          }
-       },
-       {
-          "attr" : "bump_map",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "Base bump map",
-          "type" : "TEXTURE",
-          "ui" : {
-             "attributes" : [
-                [ "textureSlot", 2 ]
-             ],
-             "rollout" : "Bump"
-          }
-       },
-       {
-          "attr" : "bump_amount",
-          "default" : 1.0,
-          "desc" : "Bump amount",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {}
-       },
-       {
-          "attr" : "bump_type",
-          "default" : "0",
-          "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
-          "items" : [
-             [ "0", "Bump Map", "Bump Map" ],
-             [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
-             [ "2", "Normal map in object space", "Normal map in object space" ],
-             [ "3", "Normal map in screen space", "Normal map in screen space" ],
-             [ "4", "Normal map in world space", "Normal map in world space" ],
-             [ "5", "From texture bump output", "From texture bump output" ],
-             [ "6", "Explicit normal", "Explicit normal" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {}
-       },
-       {
-          "attr" : "coat_bump_map",
-          "default" : [ 0.0, 0.0, 0.0, 1.0 ],
-          "desc" : "Coat bump map",
-          "type" : "TEXTURE",
-          "ui" : {
-             "attributes" : [
-                [ "textureSlot", 2 ]
-             ],
-             "rollout" : "Coat Bump"
-          }
-       },
-       {
-          "attr" : "coat_bump_amount",
-          "default" : 1.0,
-          "desc" : "Coat bump amount",
-          "type" : "FLOAT_TEXTURE",
-          "ui" : {}
-       },
-       {
-          "attr" : "coat_bump_type",
-          "default" : "0",
-          "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
-          "items" : [
-             [ "0", "Bump Map", "Bump Map" ],
-             [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
-             [ "2", "Normal map in object space", "Normal map in object space" ],
-             [ "3", "Normal map in screen space", "Normal map in screen space" ],
-             [ "4", "Normal map in world space", "Normal map in world space" ],
-             [ "5", "From texture bump output", "From texture bump output" ],
-             [ "6", "Explicit normal", "Explicit normal" ]
-          ],
-          "type" : "ENUM",
-          "ui" : {}
-       },
-       {
-          "attr" : "lpe_label",
-          "default" : "",
-          "desc" : "Light path expressions material label which can be used to identify the material",
-          "type" : "STRING",
-          "ui" : {}
-       }
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "opacity_source",
+            "default" : "0",
+            "desc" : "Choose between grayscale (0) or colored (1) opacity",
+            "items" : 
+            [
+                [ "0", "Opacity Grayscale", "Opacity Grayscale" ],
+                [ "1", "Opacity Colored", "Opacity Colored" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "rollout" : "Basic",
+                "tab" : "V-Ray Material Basic"
+            }
+        },
+        
+        {
+            "attr" : "opacity",
+            "default" : 1.0,
+            "desc" : "The opacity of the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Opacity Grayscale",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opacity_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The color opacity map of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Opacity Colored"
+            }
+        },
+        
+        {
+            "attr" : "opacity_mode",
+            "default" : "0",
+            "desc" : "The opacity mode (0 - Normal, 1 - Clip, 2 - Stochastic)",
+            "items" : 
+            [
+                [ "0", "Normal", "Normal" ],
+                [ "1", "Clip", "Clip" ],
+                [ "2", "Stochastic", "Stochastic" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Opacity Mode"
+            }
+        },
+        
+        {
+            "attr" : "diffuse",
+            "default" : [ 0.50, 0.50, 0.50, 1.0 ],
+            "desc" : "The diffuse color of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Diffuse color",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "roughness",
+            "default" : 0.0,
+            "desc" : "The roughness of the diffuse part of the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Diffuse roughness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "roughness_model",
+            "default" : "0",
+            "desc" : "The roughness model. 0 - Gamma-based; 1 - Oren-Nayar",
+            "items" : 
+            [
+                [ "0", "Gamma-based", "Gamma-based" ],
+                [ "1", "Oren-Nayar", "Oren-Nayar" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "self_illumination",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The self-illumination color of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Self-Illumination color",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "self_illumination_gi",
+            "default" : true,
+            "desc" : "True if the self-illumination should affect GI",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Self-Illumination affects GI"
+            }
+        },
+        
+        {
+            "attr" : "compensate_camera_exposure",
+            "default" : false,
+            "desc" : "True if the camera exposure should be compensated for self-illumination",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "brdf_type",
+            "default" : "4",
+            "desc" : "The BRDF type (0 - Phong, 1 - Blinn, 2 - Ward, 3 - VRay (deprecated, do not use), 4 - GGX)",
+            "items" : 
+            [
+                [ "0", "Phong", "Phong" ],
+                [ "1", "Blinn", "Blinn" ],
+                [ "2", "Ward", "Ward" ],
+                [ "4", "GGX", "GGX" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "BRDF Type",
+                "rollout" : "Reflection layer"
+            }
+        },
+        
+        {
+            "attr" : "reflect",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The reflection color (per-channel reflection factor) of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflection color"
+            }
+        },
+        
+        {
+            "attr" : "reflect_glossiness",
+            "default" : 1.0,
+            "desc" : "The glossiness of the reflections",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflection glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "hilight_glossiness",
+            "default" : 1.0,
+            "desc" : "The glossiness of the hilights",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Hilight glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "hilight_glossiness_lock",
+            "default" : true,
+            "desc" : "True to use the reflection glossiness also for hilights (hilight_glossiness is ignored)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Lock hilight glossiness"
+            }
+        },
+        
+        {
+            "attr" : "gtr_gamma",
+            "default" : 2.0,
+            "desc" : "How much to increase/decrease the tail of the glossy highlight when using GGX reflection model",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "GGX tail falloff",
+                "max" : 1000.0,
+                "min" : 0.001000000047497451,
+                "soft_max" : 10.0,
+                "soft_min" : 2.0
+            }
+        },
+        
+        {
+            "attr" : "fresnel",
+            "default" : false,
+            "desc" : "True to enable Fresnel reflections (angle dependent reflection amount)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Fresnel reflections",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "fresnel_ior",
+            "default" : 1.600000023841858,
+            "desc" : "The ior for calculating the Fresnel term",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fresnel IOR",
+                "max" : 100.0,
+                "min" : 9.999999974752427e-07,
+                "soft_max" : 5.0
+            }
+        },
+        
+        {
+            "attr" : "fresnel_ior_lock",
+            "default" : true,
+            "desc" : "True to use the refraction ior also for the Fresnel term (fresnel_ior is ignored)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Lock fresnel IOR"
+            }
+        },
+        
+        {
+            "attr" : "metalness",
+            "default" : 0.0,
+            "desc" : "When this is 0.0, the material uses dielectric reflections, and when it is 1.0, metallic reflections are used",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Metalness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "gtr_energy_compensation",
+            "default" : "0",
+            "desc" : "0: No GTR energy compensation, 1: GTR energy compensation with color sharpening, 2: GTR energy compensation without color sharpening",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                
+                [
+                    "1",
+                    "Compensation incl. diffuse Fresnel",
+                    "Compensation incl. diffuse Fresnel"
+                ],
+                
+                [
+                    "2",
+                    "Compensation w/o diffuse Fresnel",
+                    "Compensation w/o diffuse Fresnel"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect_subdivs",
+            "default" : 8,
+            "desc" : "Subdivs for glossy reflectons",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Reflection Subdivs",
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "",
+                "soft_max" : 20
+            }
+        },
+        
+        {
+            "attr" : "reflect_trace",
+            "default" : true,
+            "desc" : "true to trace reflections and false to only do hilights",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Trace reflections"
+            }
+        },
+        
+        {
+            "attr" : "reflect_depth",
+            "default" : 5,
+            "desc" : "The maximum depth for reflections",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max depth",
+                "max" : 1000,
+                "min" : 1,
+                "soft_max" : 10
+            }
+        },
+        
+        {
+            "attr" : "reflect_exit_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The color to use when the maximum depth is reached",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Exit color"
+            }
+        },
+        
+        {
+            "attr" : "hilight_soften",
+            "default" : 0.0,
+            "desc" : "How much to soften hilights and reflections at grazing light angles",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Soften",
+                "max" : 1.0,
+                "min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "reflect_affect_alpha",
+            "default" : "0",
+            "desc" : "Determines how reflections affect the alpha channel (0 - opaque alpha; 1 - alpha is taken from refractions; 2 - all channels are propagated",
+            "items" : 
+            [
+                [ "0", "Color only", "Color only" ],
+                [ "1", "Color+alpha", "Color+alpha" ],
+                [ "2", "All channels", "All channels" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Affect Channels"
+            }
+        },
+        
+        {
+            "attr" : "reflect_weight",
+            "default" : 1.0,
+            "desc" : "Weight of the reflection (specular) component",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Reflection weight"
+            }
+        },
+        
+        {
+            "attr" : "reflect_dim_distance_on",
+            "default" : false,
+            "desc" : "True to enable dim distance",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable dim distance",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "reflect_dim_distance",
+            "default" : 9.999999843067494e+17,
+            "desc" : "How much to dim reflection as length of rays increases",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Dim distance",
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "reflect_dim_distance_falloff",
+            "default" : 0.0,
+            "desc" : "Fall off for the dim distance",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Dim fall-off",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anisotropy",
+            "default" : 0.0,
+            "desc" : "The anisotropy for glossy reflections, from -1 to 1 (0.0 is isotropic reflections)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Anisotropy(-1..1)",
+                "max" : 0.9900000095367432,
+                "min" : -0.9900000095367432,
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "anisotropy_rotation",
+            "default" : 0.0,
+            "desc" : "The rotation of the anisotropy axes, from 0.0 to 1.0",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Anisotropy rotation",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "anisotropy_derivation",
+            "default" : "0",
+            "desc" : "What method to use for deriving anisotropy axes (0 - local object axis; 1 - a specified uvw generator)",
+            "items" : 
+            [
+                [ "0", "Local object axis", "Local object axis" ],
+                [ "1", "Specified uvw generator", "Specified uvw generator" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "UV Vectors Derivation"
+            }
+        },
+        
+        {
+            "attr" : "anisotropy_axis",
+            "default" : "2",
+            "desc" : "Which local object axis to use when anisotropy_derivation is 0. (0 - X; 1 - Y; 2 - Z)",
+            "items" : 
+            [
+                [ "0", "X", "X" ],
+                [ "1", "Y", "Y" ],
+                [ "2", "Z", "Z" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Anisotropy Axis"
+            }
+        },
+        
+        {
+            "attr" : "anisotropy_uvwgen",
+            "default" : null,
+            "desc" : "The uvw generator to use for anisotropy when anisotropy_derivation is 1",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "new_gtr_anisotropy",
+            "default" : false,
+            "desc" : "If true, the new phisically correct GTR anisotropy is used. Otherwise, the old anisotropy that applies to all brdf types is used",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "thin_film_on",
+            "default" : false,
+            "desc" : "true to enable thin film reflections",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable thin film",
+                "rollout" : "Thin Film"
+            }
+        },
+        
+        {
+            "attr" : "thin_film_thickness_min",
+            "default" : 250.0,
+            "desc" : "The minimum thickness of the thin film layer in nanometers",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000000.0,
+                "min" : 0.0,
+                "soft_max" : 3000.0
+            }
+        },
+        
+        {
+            "attr" : "thin_film_thickness_max",
+            "default" : 400.0,
+            "desc" : "The maximum thickness of the thin film layer in nanometers",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1000000.0,
+                "min" : 0.0,
+                "soft_max" : 3000.0
+            }
+        },
+        
+        {
+            "attr" : "thin_film_thickness",
+            "default" : 0.0,
+            "desc" : "The blend between the minimum and maximum thin film thickness",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "display_name" : "Thickness blend",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "thin_film_ior",
+            "default" : 1.470000028610229,
+            "desc" : "The index of refraction of the thin film",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Thin Film IOR",
+                "max" : 100.0,
+                "min" : 9.999999974752427e-07,
+                "soft_max" : 5.0
+            }
+        },
+        
+        {
+            "attr" : "refract",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The refraction color of the material. In other words, relative amount of transmitted light for each color channel",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Refraction color",
+                "rollout" : "Refraction layer"
+            }
+        },
+        
+        {
+            "attr" : "refract_ior",
+            "default" : 1.600000023841858,
+            "desc" : "The index of refraction",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Refraction IOR",
+                "max" : 100.0,
+                "min" : 9.999999974752427e-07,
+                "soft_max" : 5.0
+            }
+        },
+        
+        {
+            "attr" : "refract_glossiness",
+            "default" : 1.0,
+            "desc" : "Glossiness for refractions",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Refraction glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refract_subdivs",
+            "default" : 8,
+            "desc" : "Subdivs for glossy refractions",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Refraction Subdivs",
+                "max" : 1000,
+                "min" : 1,
+                "rollout" : "",
+                "soft_max" : 20
+            }
+        },
+        
+        {
+            "attr" : "refract_trace",
+            "default" : true,
+            "desc" : "1 to trace refractions; 0 to disable them",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Trace refractions"
+            }
+        },
+        
+        {
+            "attr" : "refract_depth",
+            "default" : 5,
+            "desc" : "The maximum depth for refractions",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max depth",
+                "max" : 1000,
+                "min" : 1,
+                "soft_max" : 10
+            }
+        },
+        
+        {
+            "attr" : "refract_exit_color_on",
+            "default" : false,
+            "desc" : "If false, when the maximum refraction depth is reached, the material is assumed transparent, instead of terminating the ray",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use exit color"
+            }
+        },
+        
+        {
+            "attr" : "refract_exit_color",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The color to use when maximum depth is reached when refract_exit_color_on is true",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Exit color"
+            }
+        },
+        
+        {
+            "attr" : "refract_affect_alpha",
+            "default" : "0",
+            "desc" : "Determines how refractions affect the alpha channel (0 - opaque alpha; 1 - alpha is taken from refractions; 2 - all channels are propagated",
+            "items" : 
+            [
+                [ "0", "Color only", "Color only" ],
+                [ "1", "Color+alpha", "Color+alpha" ],
+                [ "2", "All channels", "All channels" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Affect alpha"
+            }
+        },
+        
+        {
+            "attr" : "refract_affect_shadows",
+            "default" : false,
+            "desc" : "True to enable the refraction to affect the shadows cast by the material (as transparent shadows)",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Affect shadows"
+            }
+        },
+        
+        {
+            "attr" : "dispersion_on",
+            "default" : false,
+            "desc" : "True to enable dispersion",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Enable dispersion",
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "dispersion",
+            "default" : 50.0,
+            "desc" : "Abbe value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Aberration",
+                "max" : 150.0,
+                "min" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "refract_thin_walled",
+            "default" : false,
+            "desc" : "True to enable thin-walled refraction",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "fog_color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "The absorption (fog) color",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "display_name" : "Fog color",
+                "rollout" : "Fog",
+                "tab" : "V-Ray Material Advanced"
+            }
+        },
+        
+        {
+            "attr" : "fog_color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The absorption (fog) color texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fog color"
+            }
+        },
+        
+        {
+            "attr" : "fog_mult",
+            "default" : 1.0,
+            "desc" : "Multiplier for the absorption",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fog multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fog_depth",
+            "default" : 1.0,
+            "desc" : "Multiplier for the scatter radius. Has the inverse effect as fog_mult and is combined with it",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Fog depth",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "fog_bias",
+            "default" : 0.0,
+            "desc" : "Bias for the absorption",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Fog bias"
+            }
+        },
+        
+        {
+            "attr" : "fog_unit_scale_on",
+            "default" : true,
+            "desc" : "Enable unit scale multiplication, when calculating absorption. When this is enabled, the fog multiplier is in cm^-1. When this is disabled, the fog multiplier is in scene_units^-1",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Fog multiplier in centimeters^-1"
+            }
+        },
+        
+        {
+            "attr" : "translucency",
+            "default" : "0",
+            "desc" : "Translucency mode (0 - None; 1 - Hard (wax) model; 2 - Soft (water) model; 3 - Hybrid model; 4 - Volumetric translucency; 5 - Volumetric (water) model; 6 - SSS (wax) model)",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Hard (wax) model", "Hard (wax) model" ],
+                [ "2", "Soft (water) model", "Soft (water) model" ],
+                [ "3", "Hybrid model", "Hybrid model" ],
+                [ "4", "Volumetric", "Volumetric" ],
+                [ "5", "Volumetric (water) model", "Volumetric (water) model" ],
+                [ "6", "SSS (wax) model", "SSS (wax) model" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Translucency type",
+                "rollout" : "Translucency (SSS)"
+            }
+        },
+        
+        {
+            "attr" : "translucency_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Filter color for the translucency effect",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Translucency color"
+            }
+        },
+        
+        {
+            "attr" : "translucency_light_mult",
+            "default" : 1.0,
+            "desc" : "A multiplier for the calculated lighting for the translucency effect",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Light multiplier",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "translucency_scatter_dir",
+            "default" : 0.50,
+            "desc" : "Scatter direction (0.0f is backward, 1.0f is forward)",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Scatter direction",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "translucency_scatter_coeff",
+            "default" : 0.0,
+            "desc" : "Scattering cone (0.0f - no scattering, 1.0f - full scattering",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Scatter coeff",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "translucency_thickness",
+            "default" : 9.999999843067494e+17,
+            "desc" : "Maximum distance to trace inside the object",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Maximum thickness",
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "translucency_amount",
+            "default" : 1.0,
+            "desc" : "Translucency amount for volumetric or SSS translucency",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "translucency_surfaceLighting",
+            "default" : "0",
+            "desc" : "Determines how direct illumination is computed for sub-surface scattering. The uniform method spreads light more uniformly inside the material and is faster for skin etc. The directional method tends to propagate more light in the direction from which it illuminates the surface. The directional method requires the 'affect shadows' option to be enabled so that shadows extend below the surface; this method may also produce a faceted look on low-poly objects",
+            "items" : 
+            [
+                [ "0", "Directional", "Directional" ],
+                [ "1", "Uniform", "Uniform" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Illumination method"
+            }
+        },
+        
+        {
+            "attr" : "option_shading_model",
+            "default" : "0",
+            "desc" : "Shading model to use (0 - V-Ray, 1 - OpenPBR)",
+            "items" : 
+            [
+                [ "0", "V-Ray", "V-Ray" ],
+                [ "1", "OpenPBR", "OpenPBR" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Mode",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "option_double_sided",
+            "default" : true,
+            "desc" : "true if the material is double-sided",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Double-sided",
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "option_reflect_on_back",
+            "default" : false,
+            "desc" : "true to compute reflections for back sides of objects",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Reflect on back side"
+            }
+        },
+        
+        {
+            "attr" : "option_glossy_rays_as_gi",
+            "default" : "1",
+            "desc" : "Specifies when to treat GI rays as glossy rays (0 - never; 1 - only for rays that are already GI rays; 2 - always",
+            "items" : 
+            [
+                [ "0", "Never", "Never" ],
+                [ "1", "GI rays only", "GI rays only" ],
+                [ "2", "Always", "Always" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Glossy rays as GI"
+            }
+        },
+        
+        {
+            "attr" : "option_cutoff",
+            "default" : 0.001000000047497451,
+            "desc" : "Specifies a cutoff threshold for tracing reflections/refractions",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Cutoff",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "option_use_irradiance_map",
+            "default" : true,
+            "desc" : "false to perform local brute-force GI calculatons and true to use the current GI engine",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use irradiance map"
+            }
+        },
+        
+        {
+            "attr" : "option_energy_mode",
+            "default" : "0",
+            "desc" : "Energy preservation mode for reflections and refractions (0 - color, 1 - monochrome)",
+            "items" : 
+            [
+                [ "0", "Color", "Color" ],
+                [ "1", "Monochrome", "Monochrome" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Energy preservation"
+            }
+        },
+        
+        {
+            "attr" : "option_fix_dark_edges",
+            "default" : true,
+            "desc" : "true to fix dark edges for glossy reflections with low samples; only set this to false for compatibility with older versions",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Fix dark edges"
+            }
+        },
+        
+        {
+            "attr" : "option_glossy_fresnel",
+            "default" : false,
+            "desc" : "true to enable glossy Fresnel",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Glossy fresnel"
+            }
+        },
+        
+        {
+            "attr" : "option_use_roughness",
+            "default" : false,
+            "desc" : "true to invert all glossiness values and use roughness instead. Always on for OpenPBR mode",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use roughness"
+            }
+        },
+        
+        {
+            "attr" : "use_environment_override",
+            "default" : false,
+            "desc" : "True to use the 'environment override' texture",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Environment override"
+            }
+        },
+        
+        {
+            "attr" : "environment_override",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Environment override texture",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "environment_priority",
+            "default" : 0,
+            "desc" : "Environment override priority (used when several materials override it along a ray path)",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : -1000
+            }
+        },
+        
+        {
+            "attr" : "refl_interpolation_on",
+            "default" : false,
+            "desc" : "This is deprecated and will be removed. This has no effect",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use reflection interpolation",
+                "rollout" : "Reflection interpolation"
+            }
+        },
+        
+        {
+            "attr" : "refl_imap_min_rate",
+            "default" : -1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min rate",
+                "max" : 10,
+                "min" : -10
+            }
+        },
+        
+        {
+            "attr" : "refl_imap_max_rate",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max rate",
+                "max" : 10,
+                "min" : -10
+            }
+        },
+        
+        {
+            "attr" : "refl_imap_color_thresh",
+            "default" : 0.250,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Color threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refl_imap_norm_thresh",
+            "default" : 0.4000000059604645,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normal threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refl_imap_samples",
+            "default" : 20,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Interpolation samples",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "refr_interpolation_on",
+            "default" : false,
+            "desc" : "This is deprecated and will be removed. This has no effect",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use refraction interpolation",
+                "rollout" : "Refraction interpolation"
+            }
+        },
+        
+        {
+            "attr" : "refr_imap_min_rate",
+            "default" : -1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Min rate",
+                "max" : 10,
+                "min" : -10
+            }
+        },
+        
+        {
+            "attr" : "refr_imap_max_rate",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max rate",
+                "max" : 10,
+                "min" : -10
+            }
+        },
+        
+        {
+            "attr" : "refr_imap_color_thresh",
+            "default" : 0.250,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Color threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refr_imap_norm_thresh",
+            "default" : 0.4000000059604645,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Normal threshold",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "refr_imap_samples",
+            "default" : 20,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Interpolation samples",
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "channels",
+            "default" : null,
+            "desc" : "Render channels in which the result of this material will be written to",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "volume",
+            "default" : null,
+            "desc" : "Volume to use for this material. This parameter will make the material ignore the fog and translucency parameters",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "sheen_color",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "The sheen color of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sheen color",
+                "rollout" : "Sheen"
+            }
+        },
+        
+        {
+            "attr" : "sheen_amount",
+            "default" : 1.0,
+            "desc" : "Value controlling both the amount of dimming and the intensity of the specular highlight of the sheen layer",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sheen amount",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "sheen_glossiness",
+            "default" : 0.8000000119209290,
+            "desc" : "The glossiness of the sheen layer of the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sheen glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "coat_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "The coat color of the material",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat color",
+                "rollout" : "Coat"
+            }
+        },
+        
+        {
+            "attr" : "coat_amount",
+            "default" : 0.0,
+            "desc" : "Value controlling both the amount of dimming and the intensity of the specular highlight of the coat layer",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat amount",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "coat_glossiness",
+            "default" : 1.0,
+            "desc" : "The glossiness of the coat layer of the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "coat_ior",
+            "default" : 1.600000023841858,
+            "desc" : "The index of refraction of the coat layer of the material",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat IOR",
+                "max" : 100.0,
+                "min" : 9.999999974752427e-07,
+                "soft_max" : 5.0
+            }
+        },
+        
+        {
+            "attr" : "coat_bump_lock",
+            "default" : false,
+            "desc" : "Lock the coat bump map to the base bump map",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Coat bump lock"
+            }
+        },
+        
+        {
+            "attr" : "coat_anisotropy",
+            "default" : 0.0,
+            "desc" : "The anisotropy for coat reflections, from -1 to 1 (0.0 is isotropic reflections)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat Anisotropy(-1..1)",
+                "max" : 0.9900000095367432,
+                "min" : -0.9900000095367432,
+                "rollout" : ""
+            }
+        },
+        
+        {
+            "attr" : "coat_anisotropy_rotation",
+            "default" : 0.0,
+            "desc" : "The rotation of the coat anisotropy axes, from 0.0 to 1.0",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat Anisotropy rotation",
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "coat_darkening",
+            "default" : 0.0,
+            "desc" : "Coat darkening factor for the base diffuse and reflection layers",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Coat darkening"
+            }
+        },
+        
+        {
+            "attr" : "bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Base bump map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "rollout" : "Bump"
+            }
+        },
+        
+        {
+            "attr" : "bump_amount",
+            "default" : 1.0,
+            "desc" : "Bump amount",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "coat_bump_map",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Coat bump map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ],
+                "rollout" : "Coat Bump"
+            }
+        },
+        
+        {
+            "attr" : "coat_bump_amount",
+            "default" : 1.0,
+            "desc" : "Coat bump amount",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "coat_bump_type",
+            "default" : "0",
+            "desc" : "The type of the map (0 - from regular texture output, 1 - normal map in tangent space, 2 - normal map in object space, 3 - normal map in camera space, 4 - normal map in world space, 5 - from texture bump output, 6 - explicit normal)",
+            "items" : 
+            [
+                [ "0", "Bump Map", "Bump Map" ],
+                [ "1", "Normal map in tangent space", "Normal map in tangent space" ],
+                [ "2", "Normal map in object space", "Normal map in object space" ],
+                [ "3", "Normal map in screen space", "Normal map in screen space" ],
+                [ "4", "Normal map in world space", "Normal map in world space" ],
+                [ "5", "From texture bump output", "From texture bump output" ],
+                [ "6", "Explicit normal", "Explicit normal" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "lpe_label",
+            "default" : "",
+            "desc" : "Light path expressions material label which can be used to identify the material",
+            "type" : "STRING",
+            "ui" : {}
+        }
     ],
     "Type" : "BRDF",
-    "Widget" : {
-       "widgets" : []
+    "Widget" : 
+    {
+        "widgets" : []
     }
 }

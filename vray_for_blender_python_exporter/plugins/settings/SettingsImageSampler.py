@@ -1,51 +1,92 @@
 import bpy
+import math
 
-from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES
+from vray_blender import debug
+from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
-from vray_blender.lib.names import Names, NamedCounter
+from vray_blender.lib.names import Names
+from vray_blender.lib.plugin_utils import objectToAttrPlugin, stringToIntList
 from vray_blender.lib.sys_utils import isGPUEngine
-
+from vray_blender.nodes.filters import filterRenderMasks
+from vray_blender.plugins.geometry.GeomHair import getGeomHairPluginName
+from vray_blender.bin import VRayBlenderLib as vray
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-def widgetDrawDeviceDependentProperties(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
+def onUpdateSamplesLimit(propGroup, context, attrName):
+    propGroup.dmc_maxSubdivs = _samplesLimitToMaxSubdivs(propGroup.samples_limit)
+
+
+def widgetDrawExternalProperties(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
     vrayScene = context.scene.vray
+    attrName = widgetAttr['name']
 
-    if isGPUEngine(context.scene):
-        layout.prop(vrayScene.SettingsRTEngine, "gpu_bundle_size")
-        layout.prop(vrayScene.SettingsRTEngine, "gpu_samples_per_pixel")
-        layout.prop(vrayScene.SettingsRTEngine, "max_sample_level")
-    else:
-        layout.prop(vrayScene.SettingsImageSampler, "progressive_bundleSize")
+    match attrName:
+        case "gpu_ray_bundle":
+            layout.prop(vrayScene.SettingsRTEngine, "gpu_bundle_size")
+            layout.prop(vrayScene.SettingsRTEngine, "gpu_samples_per_pixel")
+        case "animated_noise_pattern":
+            layout.prop(vrayScene.SettingsDMCSampler, "time_dependent")
+        case "use_blue_noise_optimization":
+            layout.prop(vrayScene.SettingsDMCSampler, "use_blue_noise_optimization")
 
-    layout.prop(vrayScene.SettingsDMCSampler, "time_dependent")
-    
 
-def onUpdateRenderMaskMode(srcPropGroup, context, attrName):
-    srcPropGroup['dirtyRenderMaskMode'] = True
-    
+def isCpuProgressive(propGroup, node):
+    return not isGPUEngine(bpy.context.scene) and (propGroup.type == '3')
 
-def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
+def isCpuAdaptive(propGroup, node):
+    return not isGPUEngine(bpy.context.scene) and (propGroup.type == '1')
+
+def isGpuProgressive(propGroup, node):
+    return isGPUEngine(bpy.context.scene) and (propGroup.type == '3')
+
+def isGpuAdaptive(propGroup, node):
+    return isGPUEngine(bpy.context.scene) and (propGroup.type == '1')
+
+
+# Converters
+def _samplesLimitToMaxSubdivs(samplesLimit: int):
+    return max(1, int(math.sqrt(float(samplesLimit)) - 2.0 ))
+
+def _raysPerPixelToMinSubdivs(raysPerPixel: int):
+    return int(math.sqrt(float(raysPerPixel) * 4.0))
+
+def _maxSubdivsCPUToSamplesLimit(maxSubdivs: int):
+    return (maxSubdivs * 2 + 2)**2
+
+def _maxSubdivsGPUToSamplesLimit(maxSubdivs: int):
+    return (maxSubdivs + 2)**2
+
+
+
+# Export
+def exportCustom(exporterCtx: ExporterContext, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup
+    context = exporterCtx.ctx
+    vrayScene = context.scene.vray
+    isGpuEngine = isGPUEngine(context.scene)
+    isAdaptive = propGroup.type == '1'
 
-    if propGroup.get('dirtyRenderMaskMode', False):
-        # Recreate the plugin, because the render mask might not update correctly in IPR otherwise.
-        _purgeRenderMaskTexturePlugins(ctx)
-        export_utils.removePlugin(ctx, pluginDesc.name)
-        propGroup['dirtyRenderMaskMode'] = False
+    if isGpuEngine:
+        pluginDesc.setAttribute('dmc_minSubdivs', _raysPerPixelToMinSubdivs(vrayScene.SettingsRTEngine.gpu_samples_per_pixel))
+        pluginDesc.setAttribute('dmc_maxSubdivs', _samplesLimitToMaxSubdivs(propGroup.samples_limit))
+    else:
+        minSubdivs = propGroup.dmc_minSubdivs
+        maxSubdivs = propGroup.dmc_maxSubdivs
 
-    if propGroup.type == "1":
-        pluginDesc.setAttribute('dmc_minSubdivs', propGroup.dmc_minSubdivs)
-        if propGroup.lock_subdivs:
-            pluginDesc.setAttribute('dmc_maxSubdivs', propGroup.dmc_minSubdivs)
-        elif propGroup.dmc_minSubdivs > propGroup.dmc_maxSubdivs:
-            pluginDesc.setAttribute('dmc_minSubdivs', propGroup.dmc_maxSubdivs)
-            pluginDesc.setAttribute('dmc_maxSubdivs', propGroup.dmc_minSubdivs)
+        if isAdaptive and propGroup.lock_subdivs:
+            maxSubdivs = minSubdivs
 
+        if maxSubdivs < minSubdivs:
+            # Swap values if the range is reversed
+            minSubdivs, maxSubdivs = maxSubdivs, minSubdivs
 
-    if propGroup.progressive_minSubdivs > propGroup.progressive_maxSubdivs:
+        pluginDesc.setAttribute('dmc_minSubdivs', minSubdivs)
+        pluginDesc.setAttribute('dmc_maxSubdivs', maxSubdivs)
+
+    if (not isAdaptive) and (propGroup.progressive_minSubdivs > propGroup.progressive_maxSubdivs):
         pluginDesc.setAttribute('progressive_minSubdivs', propGroup.progressive_maxSubdivs)
         pluginDesc.setAttribute('progressive_maxSubdivs', propGroup.progressive_minSubdivs)
 
@@ -56,29 +97,41 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     match propGroup.render_mask_mode:
         case '1': # Texture
-            pluginTexture = _exportRenderMaskTexture(ctx, propGroup.render_mask_texture_file)
+            pluginTexture = _exportRenderMaskTexture(exporterCtx, propGroup.render_mask_texture_file)
             pluginDesc.setAttributes({
+                'render_mask_mode': 1,
                 'render_mask_texture': pluginTexture,
                 "render_mask_objects": [],
                 "render_mask_object_ids": [],
             })
 
-        case '2': # Objects
-            renderMaskObjectsCollection = propGroup.render_mask_collection_selector
-            renderMaskObjectPlugins = plugin_utils.collectionToPluginList(renderMaskObjectsCollection, GEOMETRY_OBJECT_TYPES)
-
-            if renderMaskObject := propGroup.render_mask_object_selector:
-                objPlugin = plugin_utils.objectToAttrPlugin(renderMaskObject)
-                if not any([pl for pl in renderMaskObjectPlugins if pl.name == objPlugin.name]):
-                    renderMaskObjectPlugins.append(objPlugin)
-
-            if renderMaskObjectPlugins:
-                # Remove duplicates which could result from 
-                pluginDesc.setAttribute('render_mask_objects', renderMaskObjectPlugins)
+        case '2' | '4': # Objects / Selected
+            if propGroup.render_mask_mode == '2':
+                selected = set(propGroup.object_selector.getSelectedItems(exporterCtx.ctx, asIncludes=True))
             else:
-                pluginDesc.setAttribute('render_mask_mode', '0')
+                selected = {o for o in exporterCtx.ctx.selected_objects if filterRenderMasks(o)}
+
+            # V-Ray Fur requires special handling because we need to add the gizmo objects to the render mask
+            # instead of the V-Ray Fur object.
+            removeFromSelected = set()
+            addToPlugins = set()
+
+            for o in selected:
+                if o.vray.isVRayFur:
+                    if furInfo := next((i for i in exporterCtx.activeFurInfo if i.parentObjTrackId == getObjTrackId(o))):
+                        furNodeName = Names.vrayNode(getGeomHairPluginName(furInfo.parentName, furInfo.gizmoObjName))
+                        removeFromSelected.add(o)
+                        addToPlugins.add(AttrPlugin(furNodeName, pluginType='Node'))
+
+            objPlugins = [objectToAttrPlugin(o) for o in selected.difference(removeFromSelected)]
+            objPlugins.extend(addToPlugins)
+
+            for plugin in objPlugins:
+                vray.pluginCreate(exporterCtx.renderer, plugin.name, plugin.pluginType)
 
             pluginDesc.setAttributes({
+                'render_mask_mode': 2,
+                'render_mask_objects': objPlugins,
                 'render_mask_texture': AttrPlugin(),
                 "render_mask_object_ids": [],
             })
@@ -87,15 +140,18 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             if not propGroup.render_mask_object_ids_list:
                 pluginDesc.setAttribute('render_mask_mode', '0')
             else:
-                maskObjectIDs = propGroup.render_mask_object_ids_list.split(";")
-                pluginDesc.setAttribute('render_mask_object_ids', [int(id) for id in maskObjectIDs])
+                if (maskObjectIDs := stringToIntList(propGroup.render_mask_object_ids_list, ';')) is not None:
+                    pluginDesc.setAttribute('render_mask_object_ids', [int(id) for id in maskObjectIDs])
+                else:
+                    debug.reportError(f"Invalid object ID list in V-Ray Render Mask settings: {propGroup.render_mask_object_ids_list}")
 
             pluginDesc.setAttributes({
+                'render_mask_mode': 3,
                 'render_mask_texture': AttrPlugin(),
                 "render_mask_objects": [],
             })
 
-    return export_utils.exportPluginCommon(ctx, pluginDesc)
+    return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
 
 
 def _exportRenderMaskTexture(ctx: ExporterContext, imageFileName, allowNegativeColors=True):

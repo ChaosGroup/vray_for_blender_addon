@@ -203,7 +203,9 @@
             "ui" : 
             {
                 "max" : 1000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "units" : "centimeters"
             }
         },
         

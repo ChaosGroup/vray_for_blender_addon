@@ -1,6 +1,63 @@
 {
     "ID": "TexSmoke",
     "Name": "V-Ray Smoke",
+    "Parameters": [
+        {
+            "attr": "size",
+            "default": 0.5,
+            "ui": {
+                "min": 0,
+                "soft_min": 0,
+                "soft_max": 5.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "iterations",
+            "ui": {
+                "min": 0,
+                "soft_min": 0,
+                "soft_max": 10,
+                "spin_step": 1
+            }
+        },
+        {
+            "attr": "phase",
+            "ui": {
+                "soft_min": 0,
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "exponent",
+            "default": 1.0,
+            "ui": {
+                "soft_min": 0,
+                "soft_max": 2.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "color1",
+            "ui": {
+                "display_name": "Color 1"
+            }
+        },
+        {
+            "attr": "color2",
+            "ui": {
+                "display_name": "Color 2"
+            }
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -41,45 +98,6 @@
             }
         ]
     },
-    "Parameters": [
-        {
-            "attr": "size",
-            "default": 0.5,
-            "ui": {
-                "soft_max": 5.0,
-                "spin_step": 0.05
-            }
-        },
-        {
-            "attr": "iterations",
-            "ui": {
-                "soft_max": 10,
-                "spin_step": 1
-            }
-        },
-        {
-            "attr": "phase",
-            "ui": {
-                "soft_max": 10.0,
-                "spin_step": 0.1
-            }
-        },
-        {
-            "attr": "exponent",
-            "default": 1.0,
-            "ui": {
-                "soft_max": 2.0,
-                "spin_step": 0.01
-            }
-        },
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
-            },
-            "type": "UVWGEN"
-        }
-    ],
     "Options": {
         "animatable": true,
         "excluded_parameters": [

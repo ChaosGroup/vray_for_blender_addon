@@ -1,13 +1,14 @@
 
 import re
 import bpy
+import math
 import mathutils
 
 from vray_blender import debug
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, tupleTo4x4MatrixLayout, matrixLayoutToMatrix
 from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
 from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMetersToSceneUnitsMultiplier, getShadowAttrName
-from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES
+from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES, TEMPLATE_ATTRIBUTES
 from vray_blender.nodes.tools import getLinkInfo
 
 
@@ -26,7 +27,7 @@ def copyPropGroupValues(srcPropGroup, destPropGroup, pluginModule):
     for attrName, attrType in [(a['attr'], a['type']) for a in pluginModule.Parameters]:
         if attrName not in srcPropGroup.__annotations__:
             continue
-        
+
         if (attrType == 'TEMPLATE'):
             srcAttr = getattr(srcPropGroup, attrName)
             destAttr = getattr(destPropGroup, attrName)
@@ -98,29 +99,53 @@ def isOutputAttribute(pluginModule, attrName):
     return any((o for o in pluginModule.Outputs if o['attr'] == attrName))
 
 
-def convertVRayValueToUI(attrDesc, value):
-    """ Convert property value from its V-Ray represenattion to its UI representation 
-        in Blender by applying a custom multiplier. This is necessary because for some 
+def convertVRayValueToUI(attrDesc, value, doUnitsConversion=True):
+    """ Convert property value from its V-Ray represenattion to its UI representation
+        in Blender by applying a custom multiplier. This is necessary because for some
         of the predefined Blender UI subtypes, the measurement units do not coincide
         with those used in V-Ray.
     """
-    if multiplier := attrDesc.get('options',{}).get('value_conv_factor'):
+    if attrDesc.get('subtype') == 'PERCENTAGE':
+        assert type(value) in (int, float)
+        return value * 100.0
+    elif multiplier := attrDesc.get('options', {}).get('value_conv_factor'):
         assert type(value) in (int, float)
         return value * multiplier
+
+    if doUnitsConversion and (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
+        assert type(value) in (int, float)
+        if units == 'centimeters':
+            return value * 0.01
+        elif units == 'millimeters':
+            return value * 0.01 * 0.01
+        elif units == 'degrees':
+            return math.radians(value)
 
     return value
 
 
 def convertUIValueToVRay(attrDesc, value):
-    """ Convert property value from its UI representation in Blender to its V-Ray 
+    """ Convert property value from its UI representation in Blender to its V-Ray
         representation.
     """
-    # Apply custom multiplier. This is necessary because for some 
+    # Apply custom multiplier. This is necessary because for some
     # of the predefined Blender UI subtypes, the measurement units do not coincide
     # with those used in V-Ray.
-    if multiplier := attrDesc.get('options',{}).get('value_conv_factor'):
+    if attrDesc.get('subtype') == 'PERCENTAGE':
+        assert type(value) in (int, float)
+        return value / 100.0
+    elif multiplier := attrDesc.get('options',{}).get('value_conv_factor'):
         assert type(value) in (int, float)
         return value / multiplier
+
+    if (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
+        assert type(value) in (int, float)
+        if units == 'centimeters':
+            return value * 100
+        elif units == 'millimeters':
+            return value * 100 * 100
+        elif units == 'degrees':
+            return math.degrees(value)
 
     # TRANSFORM and MATRIX types are stored in a FloatVectorProp property of length 16
     if (type(value) is bpy.types.bpy_prop_array) and (attrDesc['type'] in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE')):
@@ -175,7 +200,7 @@ def attrValueToMatrix(value, applyScale: bool):
 
 
 # Matches attribute's "ui::units" to scene unit multiplier
-UNIT_MULTIPLIER_FUNC = { 
+UNIT_MULTIPLIER_FUNC = {
     "centimeters": getCmToSceneUnitsMultiplier,
     "meters" : getMetersToSceneUnitsMultiplier
 }
@@ -210,7 +235,7 @@ def generateAttribute(ctx: AttributeContext, attrDesc):
     }
 
     setAttrDescription(attrArgs, attrDesc)
-    setAttrSubtype(attrArgs, attrDesc)
+    setAttrSubtype(attrArgs, attrDesc, ctx.pluginModule)
     setAttrPrecision(attrArgs, attrDesc)
     setAttrLimits(attrArgs, attrDesc)
     setAttrOptions(attrArgs, attrDesc, ctx.pluginModule)
@@ -244,7 +269,7 @@ def generateAttribute(ctx: AttributeContext, attrDesc):
 
 
 TypeToUISubtype = {
-    'COLOR'         : 'COLOR', 
+    'COLOR'         : 'COLOR',
     'ACOLOR'        : 'COLOR',
     'TEXTURE'       : 'COLOR',
     'COLOR_TEXTURE' : 'COLOR',
@@ -259,9 +284,11 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
     templateName = template['type']
     templateClassFunc = getattr(templates, templateName)
 
-    # Register a dedicated class for the template. 
+    TEMPLATE_ATTRIBUTES[pluginModule.ID].append(attrName)
+
+    # Register a dedicated class for the template.
     # Add all template parameters defined in the plugin description as properties to the
-    # template class and set their default values. This is necessary because there is no event 
+    # template class and set their default values. This is necessary because there is no event
     # we can hook to initialize the property group values dynamically.
     templateMembers = dict()
 
@@ -272,7 +299,7 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
     templateClass = templateClassFunc()
     if fnRegister := getattr(templateClass, 'registerProperties', None):
         # Give a chance to the template class to register its own properties. This will usually
-        # be some variations in the properties definitions, e.g. names or descriptions which are 
+        # be some variations in the properties definitions, e.g. names or descriptions which are
         # shown in the UI.
         fnRegister(pluginModule, attrDesc, templateMembers)
 
@@ -284,7 +311,7 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
 
     bpy.utils.register_class(templatePropGroup)
 
-    # Add the template as a field of the plugin's property group 
+    # Add the template as a field of the plugin's property group
     classMembers[attrName] = bpy.props.PointerProperty(
         type = templatePropGroup
     )
@@ -321,7 +348,7 @@ def getAttrGpuSupport(attrDesc):
     return "full"
 
 
-def setAttrSubtype(attrArgs, attrDesc):
+def setAttrSubtype(attrArgs, attrDesc, pluginModule):
 
     # Vray subtypes only have meaning for choosing the socket type and an error will be generated
     # if we try to set them as a subtype of a property during registration.
@@ -329,14 +356,37 @@ def setAttrSubtype(attrArgs, attrDesc):
         return
 
     attrType = attrDesc['type']
-
-    if (attrType == 'STRING') and ('ui' in attrDesc) and ('file_extensions' in attrDesc['ui']):
-             attrArgs['subtype'] = 'FILE_PATH'
+    ui = attrDesc.get('ui', {})
+    if (attrType == 'STRING') and ('file_extensions' in ui):
+        attrArgs['subtype'] = 'FILE_PATH'
     elif attrType in TypeToUISubtype:
         attrArgs['subtype'] = attrDesc.get('subtype', TypeToUISubtype[attrType])
     elif 'subtype' in attrDesc:
         attrArgs['subtype'] = attrDesc.get('subtype')
+    elif ui:
+        # For attributes that have min/max or soft_min/soft_max UI guides always use a factor slider.
+        pluginSupportsFactor = (pluginModule.Options.get('animatable', True) or pluginModule.Options.get('use_factor_subtype', False))
+        supportedFloatParam = (attrType in ('FLOAT_TEXTURE', 'FLOAT', 'INT') and pluginSupportsFactor)
+        if supportedFloatParam and (('min' in ui and 'max' in ui) or ('soft_min' in ui and 'soft_max' in ui)):
+            attrArgs['subtype'] = 'FACTOR'
 
+        quantityType = ui.get('quantityType', '')
+        units = ui.get('units', '')
+        if not quantityType:
+            if units in ('meters', 'centimeters', 'millimiters'):
+                attrArgs['subtype'] = 'DISTANCE'
+                attrArgs['unit'] = 'LENGTH'
+            elif units in ('radians', 'degrees'):
+                attrArgs['subtype'] = 'ANGLE'
+                attrArgs['unit'] = 'ROTATION'
+        elif quantityType == 'distance':
+            assert units in ('', 'meters', 'centimeters', 'millimiters')
+            attrArgs['subtype'] = 'DISTANCE'
+            attrArgs['unit'] = 'LENGTH'
+        elif quantityType == 'angle':
+            assert units in ('', 'radians', 'degrees')
+            attrArgs['subtype'] = 'ANGLE'
+            attrArgs['unit'] = 'ROTATION'
 
 def _setAttrSize(attrArgs, attrDesc):
     """ Set size of the FloatVector property """
@@ -352,7 +402,7 @@ def setAttrPrecision(attrArgs, attrDesc):
     attrType = attrDesc['type']
 
     if attrType in ('FLOAT', 'FLOAT_TEXTURE', 'VECTOR', 'VECTOR_TEXTURE'):
-        attrArgs['precision'] = attrDesc.get('precision', 3)
+        attrArgs['precision'] = attrDesc.get('precision', 3) if attrDesc.get('subtype') != 'PERCENTAGE' else 0
     elif 'precision' in attrDesc:
         attrArgs['precision'] = attrDesc.get('precision')
 
@@ -387,7 +437,7 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
     elif attrType == 'ENUM':
         if attrArgs['default'] not in [item[0] for item in attrDesc['items']]:
             # Some of the default values read from the json description file are not correct because of
-            # omissions in VRay code. Log and set to a valid value 
+            # omissions in VRay code. Log and set to a valid value
             debug.printWarning(f"Default value {attrArgs['default']} for ENUM {pluginModule.ID}::{attrName} is invalid. Setting default to the first item of the enum")
             attrArgs['default'] = attrDesc['items'][0][0]
 
@@ -429,8 +479,8 @@ def setAttrLimits(attrArgs, attrDesc):
             stepValue = attrDesc['ui']['spin_step']
             if attrType in {'FLOAT', 'FLOAT_TEXTURE'}:
                 # Step for float values is set in 100ths of the actual step value
-                stepValue *= 100
-                stepValue = convertVRayValueToUI(attrDesc, stepValue)
+                stepValue *= 100.0
+                stepValue = convertVRayValueToUI(attrDesc, stepValue, doUnitsConversion=False)
             attrArgs['step'] = stepValue
 
 
@@ -547,7 +597,7 @@ def _addAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
         debug.printExceptionInfo(ex, f"Failed to register property {pluginType}::{attrName} of unsupported type {attrType}")
         raise ex
 
-    if attrType in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
+    if attrType in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE', 'INDEX_VECTOR_4'):
         classMembers[attrName] = attrFunc(attrArgs["default"])
     else:
         classMembers[attrName] = attrFunc(**attrArgs)

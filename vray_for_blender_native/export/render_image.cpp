@@ -68,7 +68,7 @@ void VRayForBlender::updateImageRegion(
 	}
 }
 
-RenderImage::RenderImage(RenderImage&& other) :
+RenderImage::RenderImage(RenderImage&& other) noexcept :
 	pixels(nullptr),
 	w(0),
 	h(0),
@@ -78,7 +78,7 @@ RenderImage::RenderImage(RenderImage&& other) :
 	*this = std::move(other);
 }
 
-RenderImage& RenderImage::operator=(RenderImage&& other)
+RenderImage& RenderImage::operator=(RenderImage&& other) noexcept
 {
 	if (this != &other) {
 		std::swap(updated, other.updated);
@@ -103,7 +103,7 @@ RenderImage RenderImage::deepCopy(const RenderImage &source)
 	dest.h = source.h;
 	dest.channels = source.channels;
 	dest.pixels = new float[source.w * source.h * source.channels];
-	
+
 	::memcpy(dest.pixels, source.pixels, source.w * source.h * source.channels * sizeof(float));
 
 	return dest;
@@ -147,30 +147,6 @@ void RenderImage::updateRegion(const float *source, ImageRegion destRegion)
 
 	ImageSize updateSize = {destRegion.w, destRegion.h, channels};
 	updateImageRegion(pixels, ImageSize{w, h, channels}, destRegion, source, updateSize, updateSize);
-}
-
-
-void RenderImage::flip()
-{
-	if (pixels && w && h) {
-		const int half_h = h / 2;
-
-		const int row_items = w * channels;
-		const int row_bytes = row_items * sizeof(float);
-
-		std::vector<float> buf;
-		buf.resize(row_items);
-
-		for (int i = 0; i < half_h; ++i) {
-			float *to_row   = pixels + (i       * row_items);
-			float *from_row = pixels + ((h-i-1) * row_items);
-
-			// Swap rows
-			memcpy(buf.data(), to_row, row_bytes);
-			memcpy(to_row,from_row, row_bytes);
-			memcpy(from_row, buf.data(), row_bytes);
-		}
-	}
 }
 
 

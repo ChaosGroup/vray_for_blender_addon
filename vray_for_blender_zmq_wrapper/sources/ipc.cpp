@@ -22,6 +22,13 @@ SharedMemoryBase::SharedMemoryBase(const std::string& id, const std::string& nam
 }
 
 
+bool SharedMemoryBase::isValid() const {
+	ipc::scoped_lock lock(*m_lock);
+	return m_shm && m_region;
+}
+
+
+
 std::string SharedMemoryBase::getLastError() const{
 	return m_lastError;
 }
@@ -74,11 +81,11 @@ bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullp
 	// Acquire the lock so that the creation of the mapping and the initialization of the
 	// payload data could be seen as atomic by the reader.
 	ipc::scoped_lock lock(*m_lock);
+	const std::string mappingName = createUniqueName(MAPPING_BASE_NAME);
 
 	try {
 		const SizeType blockSize = size + sizeof(SizeType);
-		const std::string mappingName = createUniqueName(MAPPING_BASE_NAME);
-#if USE_WIN_SHARED_MEM
+#ifdef USE_WIN_SHARED_MEM
 		shm    = std::make_unique<SharedMem>(ipc::create_only, mappingName.c_str(), ipc::read_write, blockSize);
 #else
 		// On Unix system we have to manually clean up the writers, so if the server crashes it's possible
@@ -89,7 +96,7 @@ bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullp
 		region = std::make_unique<MappedRegion>(*shm, ipc::read_write);
 	}
 	catch (const ipc::interprocess_exception& e) {
-		m_lastError = e.what();
+		m_lastError = std::string(e.what()) + " " + mappingName;
 		return false;
 	}
 

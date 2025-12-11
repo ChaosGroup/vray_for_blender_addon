@@ -3,6 +3,7 @@
 #include <span>
 #include <vector>
 #include <boost/python.hpp>
+#include <boost/python/numpy.hpp>
 
 #include <base_types.h>
 #include <zmq_message.hpp>
@@ -18,6 +19,10 @@ namespace VRayForBlender
 {
 
 void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& listElemTypes, const py::list& list);
+
+std::vector<Interop::UVAttrLayer> fromUVAttrLayersArr(const py::object& list);
+
+std::vector<Interop::AttrLayer> fromAttrLayersArr(const py::object& list);
 
 /// Convert AttrList to boost::python::list.
 template<typename T>
@@ -39,24 +44,22 @@ vray::AttrList<T> toAttrList(const py::list &pyList)
 {
 	WithGIL gil;
 	vray::AttrList<T> attrList;
-	
+
 	for (auto i = 0; i < py::len(pyList); i++) {
 		py::api::const_object_item elem = pyList[i];
 		T extractedVal = py::extract<T>(elem);
 		attrList.append(extractedVal);
 	}
-	
+
 	return attrList;
 }
-
 
 
 proto::RenderSizes fromRenderSizes (const py::object& obj);
 
 
-
 /// Convert any iterable python type to a vector. If using a heterogeneous container,
-/// the caller must make sure that all elements are of the same type 
+/// the caller must make sure that all elements are of the same type
 template<typename T>
 inline std::vector<T> toVector(const py::object& iterable)
 {
@@ -113,24 +116,6 @@ std::span<const T> fromPyArray(const py::object& arr)
 }
 
 
-template<class T>
-std::vector<Interop::AttrLayer<const T>> fromAttrLayersArr(const py::object& list)
-{
-	auto vec = toVector<py::object>(list);
-
-	std::vector<Interop::AttrLayer<const T>> result;
-
-	for (const auto& layer : vec) {
-
-		auto& refLayer = result.emplace_back(Interop::AttrLayer<const T>());
-		refLayer.name = py::extract<std::string>(layer.attr("name"));
-		refLayer.data = fromDataArray<T>(layer);
-	}
-
-	return result;
-}
-
-
 template<size_t size>
 std::vector<float> fromMat(const py::object& mat)
 {
@@ -142,7 +127,6 @@ std::vector<float> fromMat(const py::object& mat)
 
 	return vec;
 }
-
 
 
 } // end namespace VRayForBlender

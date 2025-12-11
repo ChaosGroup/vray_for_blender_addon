@@ -2,9 +2,11 @@ from enum import Enum
 import bpy, os, time, queue
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.lib_utils import getLightPropGroup
+from vray_blender.lib.blender_utils import selectObject
 from vray_blender.nodes.operators.import_file import importHDRI, importMaterials, importProxyFromMeshFile
 from vray_blender import debug
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.lib.image_utils import untrackImage
 
 # Cosmos relinking states, keep in sync with the enum in zmq_messages.hpp.
 class CosmosRelinkStatus(Enum):
@@ -22,6 +24,11 @@ class CosmosDownloadStatus(Enum):
     Timeout = 1 # The download of an asset timed out and was cancelled.
     Done = 2 # Download and relinking was successful.
     Aborted = 3 # Only used if something goes wrong with the zmq server.
+
+# Enum used to select which browser page to open. Keep in sync with CosmosBrowserPage in cosmos_importer.cpp.
+class CosmosBrowserPage(Enum):
+    HomePage = 0
+    AIGenerator = 1
 
 """
 When relinking is started first all materials, proxies and (IES/Dome)lights in the scene are checked. If any
@@ -130,7 +137,7 @@ class CosmosHandler:
                         unresolvedPackageIds.append(object.vray.cosmos_package_id)
                         unresolvedRevisionIds.append(object.vray.cosmos_revision_id)
                         unresolvedPaths.append(unresolvedPath)
-                        self.unresolvedCallbacks.append(lambda x, img=texture.image: setattr(img, 'filepath', x))
+                        self.unresolvedCallbacks.append(lambda x, img=texture.image: (setattr(img, 'filepath', x), untrackImage(img)))
                 elif (brdfScanned := getattr(node, 'BRDFScanned', None)):
                     if unresolvedPath := self._getPathIfAssetMissing(brdfScanned.file):
                         unresolvedPackageIds.append(object.vray.cosmos_package_id)
@@ -145,7 +152,10 @@ class CosmosHandler:
                 continue
             checkNodeTreeAssets(material)
 
-        for mesh in bpy.data.meshes:
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH':
+                continue
+            mesh = obj.data
             if not hasattr(mesh, 'vray') or not mesh.vray.cosmos_package_id:
                 continue
             if (vrayProxy := mesh.vray.GeomMeshFile) and mesh.vray.cosmos_package_id:
@@ -153,7 +163,7 @@ class CosmosHandler:
                     unresolvedPackageIds.append(mesh.vray.cosmos_package_id)
                     unresolvedRevisionIds.append(mesh.vray.cosmos_revision_id)
                     unresolvedPaths.append(unresolvedPath)
-                    self.unresolvedCallbacks.append(lambda x, proxy=vrayProxy: setattr(proxy, 'file', x))
+                    self.unresolvedCallbacks.append(lambda x, proxyObj=obj, proxy=vrayProxy: (selectObject(proxyObj), setattr(proxy, 'file', x)))
 
         for light in bpy.data.lights:
             if not hasattr(light, 'vray') or not light.use_nodes or not light.node_tree or not light.vray.cosmos_package_id:
@@ -257,6 +267,7 @@ def assetImportTimerFunction():
             bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
     except Exception as e:
         debug.printExceptionInfo(e, "cosmos_handler.assetImportTimerFunction")
+        debug.reportError("Import of Cosmos asset failed")
 
     return 1.0 # Timeout before the next invocation
 

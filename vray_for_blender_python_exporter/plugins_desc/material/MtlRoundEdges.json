@@ -22,7 +22,10 @@
             "default" : 1.0,
             "desc" : "Rounding radius",
             "type" : "FLOAT_TEXTURE",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {

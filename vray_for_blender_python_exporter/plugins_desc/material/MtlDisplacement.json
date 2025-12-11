@@ -1,0 +1,84 @@
+
+{
+    "Desciption" : "MtlDisplacement",
+    "ID" : "MtlDisplacement",
+    "Name" : "Mtl Displacement",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "base_material",
+            "default" : null,
+            "desc" : "The base material",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement_tex_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The displacement texture. Its intensity is used if the displacement is 2d",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement_tex_float",
+            "default" : 0.0,
+            "desc" : "The displacement texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "displacement_amount",
+            "default" : 1.0,
+            "desc" : "Determines the displacement amount for white areas in the displacement map; if use_globals is true this is multiplied by the global displacement amount option",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "displacement_shift",
+            "default" : 0.0,
+            "desc" : "This constant value is added to the displacement map",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "use_bounds",
+            "default" : false,
+            "desc" : "If true, the min/max values for the displacement texture are specified by the min_bound and max_bound parameters; if false, these are calculated automatically",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "min_bound",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The lowest value for the displacement texture",
+            "type" : "COLOR",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "max_bound",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "The biggest value for the displacement texture",
+            "type" : "COLOR",
+            "ui" : {}
+        }
+    ],
+    "Type" : "MATERIAL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

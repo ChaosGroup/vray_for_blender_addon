@@ -25,9 +25,66 @@
             "attr": "use_curve",
             "type": "BOOL",
             "default": false
+        },
+        {
+            "attr": "color1",
+            "ui": {
+                "display_name": "Color 1"
+            }
+        },
+        {
+            "attr": "color2",
+            "ui": {
+                "display_name": "Color 2"
+            }
+        },
+        {
+            "attr": "alpha_mult",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
+        },
+        {
+            "attr": "alpha_offset",
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 1.0
+            }
         }
     ],
     "Node": {
+        "input_sockets": [
+            {
+                "name": "color1"
+            },
+            {
+                "name": "color2"
+            },
+            {
+                "name": "mix_map"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ]
     },
     "Widget": {
         "widgets": [
@@ -62,6 +119,28 @@
                     {
                         "name": "transition_lower",
                         "active": {"cond": "::use_curve!=0"}
+                    },
+                    {
+                        "name": "texture_rollout",
+                        "label": "Output",
+                        "layout": "ROLLOUT",
+                        "attrs": [
+                            {
+                                "name": "color_mult"
+                            },
+                            {
+                                "name": "color_offset"
+                            },
+                            {
+                                "name": "alpha_mult"
+                            },
+                            {
+                                "name": "alpha_offset"
+                            },
+                            {
+                                "name": "nouvw_color"
+                            }
+                        ]
                     }
                 ]
             }

@@ -176,10 +176,7 @@ class VRAY_OT_osl_node_update(VRayOperatorBase):
     bl_options     = {'INTERNAL'}
 
     def execute(self, context):
-        errs = []
-        osl.update_script_node(context.node, lambda e, m: errs.append((e, m)))
-        for err in errs:
-            print("{'%s'}: %s" % (next(iter(err[0])), err[1]))
+        osl.update_script_node(context.node)
         return {'FINISHED'}
 
 

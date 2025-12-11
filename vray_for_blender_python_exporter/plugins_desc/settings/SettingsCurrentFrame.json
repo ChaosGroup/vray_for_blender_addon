@@ -11,6 +11,13 @@
             "default" : 0,
             "desc" : "Current frame value. Used in interactive mode to force a frame change",
             "type" : "INT"
+        },
+        
+        {
+            "attr" : "frame_fraction",
+            "default" : 0.0,
+            "desc" : "The fractional part of the current frame time. Used to support fractional frames. Value >=0 and <1",
+            "type" : "FLOAT"
         }
     ],
     "Type" : "SETTINGS",

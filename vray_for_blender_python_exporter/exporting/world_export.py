@@ -2,7 +2,7 @@ from vray_blender.exporting.plugin_tracker import TrackObj, TrackNode, getObjTra
 from vray_blender.exporting.tools import *
 from vray_blender.exporting.node_export import *
 from vray_blender.lib import export_utils
-from vray_blender.lib.plugin_utils import updateValue
+from vray_blender.lib.plugin_utils import updateValue, DISABLE_GEN_AI
 from vray_blender.lib.defs import *
 from vray_blender.nodes.tools import isVrayNodeTree, isInputSocketLinked
 from vray_blender.nodes import utils as NodesUtils
@@ -56,6 +56,10 @@ def _sockConnectedToCryptomatte(sock):
     node = getFarNodeLink(sock).from_node
     return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelCryptomatte")
 
+def _sockConnectedToEnhancer(sock):
+    node = getFarNodeLink(sock).from_node
+    return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelEnhancer")
+
 def _getViewportDenoiserEngine(world: bpy.types.World):
     viewportEngine = world.vray.RenderChannelDenoiser.viewport_engine
     upscaling = False
@@ -74,7 +78,22 @@ def _exportViewportDenoiser(nodeCtx: NodeContext):
     pluginDesc.setAttribute("upscaling", upscaling)
     export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
 
-def _exportRenderChannels(nodeCtx: NodeContext):
+class WorldExporter(ExporterBase):
+    def __init__(self, ctx: ExporterContext):
+        super().__init__(ctx)
+        self.exported = set()
+        self.nodeTracker = ctx.nodeTrackers['WORLD']
+        self.denoiserExported = False
+
+    def _getNodeContext(self, world: bpy.types.World):
+        nodeCtx = NodeContext(self, None, self.ctx.scene, self.renderer)
+        nodeCtx.nodeTracker = self.nodeTrackers["WORLD"]
+        nodeCtx.ntree = world.node_tree
+        nodeCtx.rootObj = world
+
+        return nodeCtx
+
+    def _exportRenderChannels(self, nodeCtx: NodeContext):
         """ Export the SettingsRenderChannels and RenderChannelXXX plugins along 
             with any associated node trees.
             Returns true if a denoiser render element was exported.
@@ -91,20 +110,23 @@ def _exportRenderChannels(nodeCtx: NodeContext):
         # Export channel plugins and their node trees
         if channelsNode:
             viewportDenoiserEnabled = nodeCtx.scene.world.vray.RenderChannelDenoiser.viewport_enabled
-            
+
             with nodeCtx.push(channelsNode):
                 if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
                     nodeCtx.cacheNodePlugin(channelsNode)
                     for inSock in [sock for sock in channelsNode.inputs if isInputSocketLinked(sock) and sock.use]:
-                        if _sockConnectedToCryptomatte(inSock) and nodeCtx.exporterCtx.vantage:
+                        if nodeCtx.exporterCtx.vantage and (_sockConnectedToCryptomatte(inSock) or _sockConnectedToEnhancer(inSock)):
                             continue
+                        if DISABLE_GEN_AI and _sockConnectedToEnhancer(inSock):
+                            continue
+
                         if not nodeCtx.exporterCtx.viewport or (_sockConnectedToDenoiser(inSock) and viewportDenoiserEnabled):
                             exportLinkedSocket(nodeCtx, inSock)
                             exportSettingsPlugin = True
 
         # Only the denoiser render element is exported for viewport IPR.
-        exportDenoiser = nodeCtx.exporterCtx.viewport and exportSettingsPlugin
-        if exportDenoiser:
+        self.denoiserExported = nodeCtx.exporterCtx.viewport and exportSettingsPlugin
+        if self.denoiserExported:
             # The viewport parameters serve as overrides for the denoiser node.
             denoiserPluginName = Names.singletonPlugin("RenderChannelDenoiser")
             viewportDenoiserEngine, upscaling = _getViewportDenoiserEngine(nodeCtx.rootObj)
@@ -121,29 +143,13 @@ def _exportRenderChannels(nodeCtx: NodeContext):
 
             export_utils.exportPlugin(nodeCtx.exporterCtx, settingsRenderChannels)
 
-
-class WorldExporter(ExporterBase):
-    def __init__(self, ctx: ExporterContext):
-        super().__init__(ctx)
-        self.exported = set()
-        self.nodeTracker = ctx.nodeTrackers['WORLD']
-        self.denoiserExported = False
-
-    def _getNodeContext(self, world: bpy.types.World):
-        nodeCtx = NodeContext(self, None, self.ctx.scene, self.renderer)
-        nodeCtx.nodeTracker = self.nodeTrackers["WORLD"]
-        nodeCtx.ntree = world.node_tree
-        nodeCtx.rootObj = world
-
-        return nodeCtx
-
     def _exportWorld(self, world: bpy.types.World):
         if not world or not world.node_tree:
             return
 
         nodeOutput = NodesUtils.getOutputNode(world.node_tree, 'WORLD')
 
-        if not world.vray.is_vray_class:
+        if not world.original.vray.is_vray_class:
             # Cannot export non-vray node trees
             if nodeOutput:
                 debug.report(severity="WARNING",
@@ -169,14 +175,13 @@ class WorldExporter(ExporterBase):
         # Removing them during interactive rendering could cause V-Ray to crash.
         if self.fullExport:
             # We are not currently exporting render elements other than the Color image and denoiser in the viewport.
-            _exportRenderChannels(nodeCtx)
-            self.denoiserExported = True
+            self._exportRenderChannels(nodeCtx)
 
 
     def export(self):
         if self.ctx.scene.world is None:
             return
-        
+
         world = self.ctx.scene.world.evaluated_get(self.dg)
 
         self._exportWorld(world)

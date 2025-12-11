@@ -1,0 +1,12 @@
+
+{
+    "Desciption" : "RenderChannelEnhancer",
+    "ID" : "RenderChannelEnhancer",
+    "Name" : "Render Channel Enhancer",
+    "Parameters" : [],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

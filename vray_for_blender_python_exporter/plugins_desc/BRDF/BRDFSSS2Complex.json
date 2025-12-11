@@ -108,7 +108,9 @@
             {
                 "display_name" : "Scatter Radius (in cm)",
                 "min" : 0.0,
-                "soft_max" : 10.0
+                "quantityType" : "distance",
+                "soft_max" : 10.0,
+                "units" : "centimeters"
             }
         },
         
@@ -349,7 +351,8 @@
             "ui" : 
             {
                 "max" : 10000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

@@ -64,6 +64,18 @@
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"
+        },
+        {
+            "attr": "color1",
+            "ui": {
+                "display_name": "Color 1"
+            }
+        },
+        {
+            "attr": "color2",
+            "ui": {
+                "display_name": "Color 2"
+            }
         }
     ],
     "Options": {

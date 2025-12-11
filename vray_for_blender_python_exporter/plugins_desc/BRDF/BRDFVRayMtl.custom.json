@@ -184,8 +184,7 @@
             "ui": {
                 "soft_min": -5.0,
                 "soft_max": 5.0,
-                "spin_step": 0.05,
-                "quantityType": "distance"
+                "spin_step": 0.05
             }
         },
         {
@@ -199,8 +198,7 @@
             "ui": {
                 "soft_min": -5.0,
                 "soft_max": 5.0,
-                "spin_step": 0.05,
-                "quantityType": "distance"
+                "spin_step": 0.05
             }
         },
         {
@@ -225,34 +223,22 @@
             "type": "ENUM"
         },
         {
-            "attr": "reflect_dim_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "translucency_thickness",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
             "attr" : "reflect_glossiness",
-            "ui" : 
+            "ui" :
             {
                 "spin_step" : 0.01
             }
         },
         {
             "attr" : "refract_glossiness",
-            "ui" : 
+            "ui" :
             {
                 "spin_step" : 0.01
             }
         },
         {
             "attr" : "sheen_glossiness",
-            "ui" : 
+            "ui" :
             {
                 "spin_step" : 0.01
             }
@@ -268,7 +254,7 @@
         },
         {
             "attr" : "coat_glossiness",
-            "ui" : 
+            "ui" :
             {
                 "spin_step" : 0.01
             }
@@ -585,7 +571,7 @@
                     },
                     {
                         "name": "refract_ior",
-                        "label": { 
+                        "label": {
                             "cond": {
                                 "Refract IOR":      "::option_shading_model=0",
                                 "Transmission IOR": "::option_shading_model=1"
@@ -661,7 +647,7 @@
                     {
                         "layout": "ROLLOUT",
                         "name": "refraction advanced",
-                        "label": { 
+                        "label": {
                             "cond": {
                                 "Refraction Advanced": "::option_shading_model=0",
                                 "Transmission Advanced": "::option_shading_model=1"
@@ -746,10 +732,10 @@
                 }
             },
 
-            { 
+            {
                 "name": "panel_reflection",
                 "label": "Reflection",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT"
             },
             { "name": "reflect" },
             {   "name": "reflect_glossiness",
@@ -758,7 +744,7 @@
                         "Roughness":              "::option_shading_model=1;::option_use_roughness=1",
                         "Reflection Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
                     }
-                } 
+                }
             },
             { "name": "gtr_gamma" },
             { "name": "fresnel_ior" },
@@ -769,10 +755,10 @@
             { "name": "thin_film_thickness" },
             { "name": "thin_film_ior" },
 
-            { 
+            {
                 "name": "panel_coat",
                 "label": "Coat",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT"
             },
             { "name": "coat_color" },
             { "name": "coat_amount" },
@@ -783,18 +769,18 @@
                         "Coat Roughness":   "::option_shading_model=1;::option_use_roughness=1",
                         "Coat Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
                     }
-                } 
+                }
             },
             { "name": "coat_ior" },
             { "name": "coat_anisotropy" },
             { "name": "coat_anisotropy_rotation" },
             { "name": "coat_bump_map" },
             { "name": "coat_bump_amount" },
-            
-            { 
+
+            {
                 "name": "panel_sheen",
                 "label": "Sheen",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT"
             },
             { "name": "sheen_color" },
             { "name": "sheen_amount" },
@@ -804,10 +790,10 @@
                         "Sheen Roughness":   "::option_shading_model=1;::option_use_roughness=1",
                         "Sheen Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
                     }
-                } 
+                }
             },
 
-            { 
+            {
                 "name": "panel_refraction",
                 "type": "ROLLOUT",
                 "label": {
@@ -815,7 +801,7 @@
                         "Transmission": "::option_shading_model=1",
                         "Refraction":   "::option_shading_model!=1"
                     }
-                } 
+                }
             },
             {   "name": "refract",
                 "label": {
@@ -823,7 +809,7 @@
                         "Transmission":      "::option_shading_model=1",
                         "Refraction Color":  "::option_shading_model!=1"
                      }
-                } 
+                }
             },
             {   "name": "refract_ior",
                 "label": {
@@ -841,14 +827,13 @@
                      }
                 }
             },
-
-            { 
+            {
                 "name": "panel_translucency",
                 "label": "Translucency",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT"
             },
-            { 
-                "name": "translucency_color", 
+            {
+                "name": "translucency_color",
                 "label": {
                      "cond": {
                         "Scatter Color": "::translucency!=6",
@@ -866,18 +851,17 @@
                 }
             },
             { "name": "fog_depth" },
-            
-            { 
+            {
                 "name": "panel_bump",
                 "label": "Bump",
-                "type": "ROLLOUT" 
+                "type": "ROLLOUT"
             },
             { "name": "bump_map" },
             {   "name": "bump_amount",
                 "visible": {
                     "cond": "::bump_type!=6",
                     "default": true
-                }    
+                }
             }
         ]
     },

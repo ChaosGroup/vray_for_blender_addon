@@ -44,25 +44,32 @@ def _drawRendererSelector(self, context):
 
         layoutDevice.prop(vrayExporter, "device_type", text="V-Ray Engine", )
 
-        if vrayExporter.device_type == 'GPU' and sys.platform != "darwin":
-            layoutDevice.separator()
-            gpuDeviceRow = layoutDevice.row()
-            gpuDeviceRow.alignment = 'CENTER'
-            gpuDeviceRow.label(text=f"GPU Device:")
+        if vrayExporter.device_type == 'GPU':
+            if sys.platform != "darwin":
+                layoutDevice.separator()
+                gpuDeviceRow = layoutDevice.row()
+                gpuDeviceRow.alignment = 'CENTER'
+                gpuDeviceRow.label(text=f"GPU Device")
 
-            gpuDeviceBox = gpuDeviceRow.box()
-            gpuDeviceBox.alignment = 'CENTER'
-            gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
-            gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
+                gpuDeviceBox = gpuDeviceRow.box()
+                gpuDeviceBox.alignment = 'CENTER'
+                gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
+                gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
+                devicesRow = gpuDeviceRow
 
-            # Adding the use_gpu_rtx prop into new centered row,
-            # so it can be aligned with the "GPU Device" label.
-            rtxRow = layoutDevice.row()
-            rtxRow.alignment = 'CENTER'
-            rtxRow.scale_x = 2
-            rtxRow.prop(vrayExporter, "use_gpu_rtx")
-
-
+                # Adding the use_gpu_rtx prop into new centered row,
+                # so it can be aligned with the "GPU Device" label.
+                rtxRow = layoutDevice.row()
+                rtxRow.alignment = 'CENTER'
+                rtxRow.scale_x = 2
+                rtxRow.prop(vrayExporter, "use_gpu_rtx")
+            else:
+                devicesRow = layoutDevice.row()
+                devicesRow.alignment = 'RIGHT'
+            devicesRow.operator(
+                "vray.open_preferences",
+                text="Devices", icon="PREFERENCES"
+            ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
 
 class VRAY_PT_Context(classes.VRayRenderPanel):
     """ PROPERTIES->Render panel header"""
@@ -73,7 +80,7 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
     @classmethod
     def poll_group(cls, context):
         return True
-    
+
     def draw(self, context: bpy.types.Context):
         layout = self.layout
         scene  = context.scene
@@ -276,7 +283,7 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         layout.use_property_decorate = False
 
         classes.drawPluginUI(context, layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
-        
+
         # Antialiasing rollout
         panelAntialiasingUniqueId = f'SettingsImageSampler_Antialiasing'
         if panelAntialiasing := draw_utils.rollout(layout, panelAntialiasingUniqueId, "Anti-Aliasing Filter"):
@@ -287,27 +294,12 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
                 filterPropGroup  = getattr(vrayScene, filterPluginType)
 
                 classes.drawPluginUI(context, panelAntialiasing, filterPropGroup, getPluginModule(filterPluginType))
-            
+
         # Render Mask rollout
         panelRenderMaskUniqueId = f'SettingsImageSampler_RenderMask'
-        if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "RenderMask"):
-            panelRenderMask.prop(settingsImageSampler, 'render_mask_mode', text="Type")
-
-            match settingsImageSampler.render_mask_mode:
-                case '1': # Texture
-                    # Disable the Texture field when the IPR is active, as changing the texture
-                    # in this case does not work correctly in V-Ray.
-                    col = panelRenderMask.column()
-                    col.active = not VRayRendererIprViewport.isActive()
-                    col.enabled = col.active
-                    col.prop(settingsImageSampler, 'render_mask_texture_file')
-                case '2': # Objects
-                    panelRenderMask.prop_search(settingsImageSampler, 'render_mask_object_selector',  context.scene, 'objects', text="Object")
-                    panelRenderMask.prop_search(settingsImageSampler, 'render_mask_collection_selector',  bpy.data, 'collections', text="Collection")
-                case '3': # Object IDs
-                    panelRenderMask.prop(settingsImageSampler, 'render_mask_object_ids_list')
-            panelRenderMask.prop(settingsImageSampler, 'render_mask_clear', text="Clear Render Mask")
-
+        if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "Render Mask"):
+            uiPainter = draw_utils.UIPainter(context, getPluginModule('SettingsImageSampler'), settingsImageSampler)
+            uiPainter.renderWidgetsSection(panelRenderMask, 'render_mask')
 
 class VRAY_PT_BucketSize(classes.VRayRenderPanel):
     bl_label = "Bucket Options"
@@ -355,7 +347,7 @@ class VRAY_PT_GI(classes.VRayRenderPanel):
         assert settingsGI.primary_engine == _GI_ENGINE_BRUTE_FORCE, "The Primary GI engine should always be Brute Force"
 
         layout.active = settingsGI.on
-        layout.prop(settingsGI, "secondary_engine", text="Engine:")
+        layout.prop(settingsGI, "secondary_engine", text="Engine")
 
         layout.separator()
         layout.prop(settingsGI, "use_light_cache_for_interactive", text="Use Light Cache for Interactive Rendering")
@@ -421,7 +413,7 @@ class VRAY_PT_GI_LightCache(classes.VRayRenderPanel):
         if not module.mode == '2':
             layout.prop(module, "subdivs")
             layout.prop(module, "sample_size")
-        
+
         layout.separator()
         layout.prop(module, "retrace_enabled")
         sub = layout.column()
@@ -451,7 +443,6 @@ class VRAY_PT_GI_LightCache(classes.VRayRenderPanel):
 
 class VRAY_PT_DR(classes.VRayRenderPanel):
     bl_label = "Distributed Rendering"
-    bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
 
     @classmethod
@@ -471,61 +462,27 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
 
         layout.enabled = vrayDR.on
 
-        split = layout.split()
-        col = split.column()
-        col.prop(vrayDR, 'renderOnlyOnNodes')
-        col.prop(vrayDR, 'ignoreInInteractive')
-        col = split.column()
-        col.prop(vrayDR, 'transferAssets')
+        layout.use_property_decorate = False
+        layout.use_property_split = True
 
-        sub = col.row()
+        layout.prop(vrayDR, 'ignoreInInteractive')
+        layout.prop(vrayDR, 'transferAssets')
+
+        sub = layout.row()
         sub.enabled = vrayDR.transferAssets
         sub.prop(settingsOptions, 'misc_useCachedAssets')
-        sub = col.row()
+        sub = layout.row()
         sub.enabled = vrayDR.transferAssets and settingsOptions.misc_useCachedAssets
         sub.prop(settingsOptions, 'dr_assetsCacheLimitType', text="Limit Cache")
-        sub = col.row()
+        sub = layout.row()
         sub.enabled = vrayDR.transferAssets and settingsOptions.misc_useCachedAssets and settingsOptions.dr_assetsCacheLimitType != '0'
         sub.prop(settingsOptions, 'dr_assetsCacheLimitValue', text="Limit")
 
-        header, body = layout.panel("remote_dispatcher", default_closed=True)
-        header.alignment = 'LEFT'
-        header.prop(vrayDR, "use_remote_dispatcher")
-        if body:
-            body.enabled = vrayDR.use_remote_dispatcher
-            split = body.split(factor=0.6)
-            col = split.column()
-            col.prop(vrayDR.dispatcher, "address")
-            col = split.column()
-            col.prop(vrayDR.dispatcher, "port")
+        layout.operator(
+            "vray.open_preferences",
+            text="Render Hosts", icon="PREFERENCES"
+        ).menu_tab = 'PREFERENCES_MENU_DR'
 
-        layout.separator()
-
-        split = layout.split()
-        row = split.row()
-        row.template_list("VRAY_UL_DR", "", vrayDR, 'nodes', vrayDR, 'nodes_selected', rows= 3)
-        col = row.column(align=True)
-        col.operator('vray.render_nodes_add',    text="", icon="ADD")
-        col.operator('vray.render_nodes_remove', text="", icon="REMOVE")
-
-        col = col.row().column(align=True)
-        col.operator('vray.dr_nodes_load',       text="", icon="FILE_FOLDER")
-        col.operator('vray.dr_nodes_save',       text="", icon='DISK_DRIVE')
-
-        if vrayDR.nodes_selected >= 0 and len(vrayDR.nodes) > 0:
-            render_node = vrayDR.nodes[vrayDR.nodes_selected]
-
-            layout.separator()
-
-            layout.prop(render_node, 'name')
-            layout.prop(render_node, 'address')
-
-            split = layout.split()
-            col = split.column()
-            col.prop(render_node, 'port_override', text="Override Port")
-            col = split.column()
-            col.active = render_node.port_override
-            col.prop(render_node, 'port')
 
 
 ########     ###    ##    ## ########
@@ -564,26 +521,6 @@ class VRAY_PT_SettingsCaustics(classes.VRayRenderPanel):
         classes.drawPluginUI(context, self.layout, settingsCaustics, getPluginModule('SettingsCaustics'))
 
 
- ######  ##    ##  ######  ######## ######## ##     ##
-##    ##  ##  ##  ##    ##    ##    ##       ###   ###
-##         ####   ##          ##    ##       #### ####
- ######     ##     ######     ##    ######   ## ### ##
-      ##    ##          ##    ##    ##       ##     ##
-##    ##    ##    ##    ##    ##    ##       ##     ##
- ######     ##     ######     ##    ######## ##     ##
-
-class VRAY_PT_SettingsSystem(classes.VRayRenderPanel):
-    bl_label   = "Logging"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_panel_groups = RenderPanelGroups
-
-    def draw(self, context):
-        layout = draw_utils.subPanel(self.layout)
-        layout.use_property_decorate = False
-        layout.prop(context.scene.vray.Exporter, 'verbose_level')
-
-
-
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
 ##     ## ##       ##         ##  ##          ##    ##     ##  ##   ##     ##     ##  ##     ## ####  ##
@@ -602,20 +539,19 @@ def getRegClasses():
         VRAY_PT_GpuTextureOptions,
         VRAY_PT_ImageSampler,
         VRAY_PT_BucketSize,
-        
+
         # GI
         VRAY_PT_GI,
         VRAY_PT_GI_BruteForce,
         VRAY_PT_GI_LightCache,
         VRAY_PT_SettingsCaustics,
-        
+
         # Globals
         VRAY_PT_Globals,
         VRAY_PT_ColorManagement,
         # System
         VRAY_PT_Exporter,
         VRAY_PT_Performance,
-        VRAY_PT_SettingsSystem,
         VRAY_PT_DR,
     )
 

@@ -35,7 +35,10 @@
             "default" : 1.0,
             "desc" : "Determines the displacement amount for white areas in the displacement map; if use_globals is true this is multiplied by the global displacement amount option",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -43,7 +46,10 @@
             "default" : 0.0,
             "desc" : "This constant value is added to the displacement map",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {
@@ -105,7 +111,10 @@
             "default" : -1.000000015047466e+30,
             "desc" : "Geometry below this displacement level will be clipped away",
             "type" : "FLOAT",
-            "ui" : {}
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
         },
         
         {

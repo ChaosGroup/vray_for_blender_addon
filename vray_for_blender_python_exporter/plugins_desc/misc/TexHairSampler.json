@@ -69,7 +69,8 @@
             "type" : "FLOAT_TEXTURE",
             "ui" : 
             {
-                "min" : 9.999999974752427e-07
+                "min" : 9.999999974752427e-07,
+                "quantityType" : "distance"
             }
         }
     ],

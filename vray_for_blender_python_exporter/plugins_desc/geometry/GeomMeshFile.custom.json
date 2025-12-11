@@ -49,7 +49,7 @@
         {
             "attr": "file",
             "update": "onUpdatePreviewFile",
-            "options": {
+            "options" : {
                 "shadowed": true
             }
         },
@@ -90,6 +90,24 @@
                 [ "2", "Frame", "" ]
             ],
             "type" : "ENUM"
+        },
+        {
+            "attr": "basis_matrix",
+            "type": "TRANSFORM",
+            "desc": "Basis matrix for the initial geometry transform",
+            "default": [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "basis_vertex_indices",
+            "type": "INDEX_VECTOR_4",
+            "desc": "Indices of the vertices from which tha basis matrix is constructed",
+            "default": [0, 1, 2, 3],
+            "options": {
+               "derived": true
+            }
         }
     ],
     "Widget": {
@@ -101,7 +119,8 @@
                 "default_closed": false,
                 "attrs": [
                     {
-                        "name": "file"
+                        "name": "file",
+                        "active": {"cond": "::previewType!=Point"}
                     },
                     {
                         "layout": "SEPARATOR"

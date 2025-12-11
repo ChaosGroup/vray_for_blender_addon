@@ -102,29 +102,19 @@
         },
         {
             "attr": "variance_rot_min",
-            "subtype": "ANGLE",
-            "precision": 5,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
+            "precision": 3,
             "ui": {
-                "spin_step": 57.2958,
-                "min": -360,
-                "max": 360
+                "spin_step": 1,
+                "soft_min": -360
             }
         },
         {
             "attr": "variance_rot_max",
-            "precision": 5,
-            "subtype": "ANGLE",
+            "precision": 3,
             "default": 360,
-            "options": {
-                "value_conv_factor": 0.017453292519943295
-            },
             "ui": {
-                "spin_step": 57.2958,
-                "min": -360,
-                "max": 360
+                "spin_step": 1,
+                "soft_min": -360
             }
         },
         {
@@ -142,7 +132,7 @@
         },
         {
             "attr" : "wrap_u",
-            "items" : 
+            "items" :
             [
                 [ "0", "None", "None" ],
                 [ "1", "Tile", "Tile" ],
@@ -151,7 +141,7 @@
         },
         {
             "attr" : "wrap_v",
-            "items" : 
+            "items" :
             [
                 [ "0", "None", "None" ],
                 [ "1", "Tile", "Tile" ],
@@ -269,6 +259,10 @@
                         "label": "U Scale Steps"
                     },
                     {
+                        "name": "variance_vscale_unlocked",
+                        "label": "Unlock V Scale"
+                    },
+                    {
                         "name": "variance_vscale_min",
                         "label": "V Scale Range Min",
                         "active": {"cond": "::variance_vscale_unlocked!=0"}
@@ -282,9 +276,6 @@
                         "name": "variance_vscale_steps",
                         "label": "V Scale Steps",
                         "active": {"cond": "::variance_vscale_unlocked!=0"}
-                    },
-                    {
-                        "name": "variance_vscale_unlocked"
                     }
                 ]
             },

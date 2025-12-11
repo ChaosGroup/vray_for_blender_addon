@@ -101,6 +101,18 @@
         },
         
         {
+            "attr" : "night_blueness",
+            "default" : 0.0,
+            "desc" : "Specifies how blue the sky is for low solar elevations. Used by the PRG Clear Sky New model",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
             "attr" : "color_mode",
             "default" : "0",
             "desc" : "This option affects the way the color in the Filter color parameter affects the color of the sun (0 - Filter, 1 - Direct, 2 - Override)",
@@ -138,7 +150,9 @@
             "ui" : 
             {
                 "max" : 90.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -150,7 +164,9 @@
             "ui" : 
             {
                 "max" : 90.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         

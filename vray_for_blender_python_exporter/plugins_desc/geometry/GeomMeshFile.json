@@ -541,10 +541,18 @@
         
         {
             "attr" : "subdiv_type",
-            "default" : 0,
+            "default" : "0",
             "desc" : "0 for Catmull-Clark subdivision and 1 for Loop subdivision",
-            "type" : "INT",
-            "ui" : {}
+            "items" : 
+            [
+                [ "0", "Catmull-Clark", "Catmull-Clark" ],
+                [ "1", "Loop", "Loop" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Subdivision Type"
+            }
         },
         
         {

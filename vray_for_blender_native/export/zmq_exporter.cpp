@@ -76,10 +76,10 @@ namespace
 
 ///////////////// ZMQ RENDER IMAGE ////////////////////
 
-void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, ZmqExporter * exp, bool fixImage) {
-	// conversions here should match Blender's render pass channel requirements
+void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, ZmqExporter *exp) {
+	// Conversions here should match Blender's render pass channel requirements
 	if (img.imageType == VRayBaseTypes::AttrImage::ImageType::RGBA_REAL && img.isBucket()) {
-		// merge in the bucket
+		// Merge in the bucket
 
 		if (!pixels) {
 			w = exp->m_cachedValues.renderSizes.imgWidth;
@@ -92,7 +92,6 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 			resetUpdated();
 		}
 
-		fixImage = false;
 		const float * sourceImage = reinterpret_cast<const float *>(img.data.get());
 
 		updateRegion(sourceImage, {img.x, img.y, img.width, img.height});
@@ -169,26 +168,15 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 			this->pixels = myImage;
 		}
 	}
-
-	if (!img.isBucket()) {
-		flip();
-	}
-
-	if (fixImage) {
-		resetAlpha();
-		clamp(1.0f, 1.0f);
-	}
 }
 
 
 
 ///////////////// ZMQ EXPORTER ////////////////////
-ZmqExporter::ZmqExporter(const ExporterSettings & settings)
-    : m_settings(settings)
-{
+ZmqExporter::ZmqExporter(ExporterType exporterType) {
 	Logger::info("Connect ZmqExporter");
 
-	m_client = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateRoutingId(), settings.getExporterType(), true);
+	m_client = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateRoutingId(), exporterType, true);
 
 	m_client->setMsgCallback([this](zmq::message_t&& payload) {
 		SAFE_CALL(handleMsg(payload))
@@ -199,7 +187,8 @@ ZmqExporter::ZmqExporter(const ExporterSettings & settings)
 		clientPtr->stop();
 		// If the connection has been broken, the stop() will not trigger a state change.
 		// Transition to the 'aborted' state immediately.
-		m_isAborted = true;
+		m_isRendering = false;
+		fireStopEvent(true);
 	});
 
 	m_client->setTraceCallback([this, id=shorten(m_client->routingId())](const std::string& msg) {
@@ -217,12 +206,14 @@ ZmqExporter::ZmqExporter(const ExporterSettings & settings)
 
 ZmqExporter::~ZmqExporter()
 {
-	free();
-
+	freeRenderer();
 	m_client->stop(true);
+	detach();
 
 	std::scoped_lock lock(m_imgMutex);
 	m_layerImages.clear();
+
+	Logger::debug("ZmqExporter deleted");
 }
 
 
@@ -294,14 +285,6 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		Logger::error("Invalid message type: %1%", static_cast<int>(msgType));
 		vassert(!"Invalid message type");
 	}
-
-	{
-		std::scoped_lock l(m_callbacksMutex); 
-
-		if (m_isAborted && this->callback_on_render_stopped) {
-			this->callback_on_render_stopped();
-		}
-	}
 }
 
 
@@ -342,8 +325,7 @@ void ZmqExporter::processControlOnUpdateVfbLayers(DeserializerStream& stream) {
 
 
 void ZmqExporter::processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& message) {
-	
-	std::scoped_lock l(m_callbacksMutex); 
+	std::scoped_lock l(m_callbacksMutex);
 
 	if (callback_on_message_update) {
 		std::string msg = message.log;
@@ -360,28 +342,24 @@ void ZmqExporter::processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& me
 
 
 void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& message) {
-	
-	std::scoped_lock lockCallbacks(m_callbacksMutex); 
-	
+	std::scoped_lock lockCallbacks(m_callbacksMutex);
+
 	bool ready = message.imageSet.sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
 	bool updateHostImage = false;
 
-	
 	if (m_settings.getExporterType() == ExporterType::IPR_VIEWPORT) {
 		if (readViewportImage()) {
 			updateHostImage = true;
 		}
-	}
-	else
-	{
+	} else {
 		{
 			std::scoped_lock lock(m_imgMutex);
 
 			for (const auto &img : message.imageSet.images) {
 				m_layerImages[img.first].update(
 					img.second,
-					this,
-					(m_settings.getExporterType() != ExporterType::IPR_VIEWPORT));
+					this
+				);
 			}
 		}
 
@@ -410,13 +388,12 @@ void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& messag
 void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeState& message) {
 	switch (message.state) {
 	case RendererState::Abort:
-		m_isAborted = true;
+		m_isRendering = false;
+		fireStopEvent(true);
 		break;
 	case RendererState::Stopped:
-		// 'Stopped' state is entered instead of 'Done' when a preview job is rendered
-		// using an accelerator device.
-		// TODO: Figure out why
-		m_isAborted = (m_settings.getExporterType() != ExporterType::PREVIEW);
+		m_isRendering = false;
+		fireStopEvent(false);
 		break;
 	case RendererState::Continue:
 		this->m_lastRenderedFrame = message.lastRenderedFrame;
@@ -432,7 +409,7 @@ void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeS
 
 
 void ZmqExporter::processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message) {
-	std::scoped_lock l(m_callbacksMutex); 
+	std::scoped_lock l(m_callbacksMutex);
 
 	if (this->callback_on_async_op_complete) {
 		this->callback_on_async_op_complete(message.operation, message.success, message.message);
@@ -443,7 +420,6 @@ void ZmqExporter::processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsy
 void ZmqExporter::processRendererOnProgress(const proto::MsgRendererOnProgress& message) {
 	m_renderProgress = static_cast<float>(message.elements) / message.totalElements;
 }
-
 
 
 /// Read an image published by ZmqServer in a shared memory region.
@@ -463,12 +439,12 @@ bool ZmqExporter::readViewportImage() {
 	// not practical to set up another coordination mechanism for this, and it would incur delays in the
 	// processing.
 
-	const auto blenderPID = std::to_string(ZmqServer::get().getArgs().blenderPID);
+	const auto zmqServerPID = std::to_string(ZmqServer::get().getProcessID());
 
-	if (!m_imgIdReader) {
+	if (!m_imgIdReader || !m_imgIdReader->isValid()) {
 		// Create a reader for the image transfer buffer ID shared region. The ID buffer will live as long
 		// as the renderer on the server is alive so we store a reference to it.
-		m_imgIdReader = std::make_unique<ImgIdReader>(blenderPID, SHARED_IMG_ID_MAPPING_ID);
+		m_imgIdReader = std::make_unique<ImgIdReader>(zmqServerPID, SHARED_IMG_ID_MAPPING_ID);
 
 		if (!m_imgIdReader->open(SHARED_ACCESS_WAIT)) {
 			// ZmqServer may have crashed
@@ -487,10 +463,10 @@ bool ZmqExporter::readViewportImage() {
 	// Use the ID we just read to open the correct image transfer buffer. Do not keep references to the data
 	// buffer after the data is read as the next image might be published to a different buffer.
 	const auto imgBufferID = getImageBufferID(imgID);
-	auto imgReader = std::make_unique<ImgReader>(blenderPID, imgBufferID);
+	auto imgReader = std::make_unique<ImgReader>(zmqServerPID, imgBufferID);
 
 	if (!imgReader->open(SHARED_ACCESS_WAIT)) {
-		Logger::error("Failed to open image transfer buffer with ID %1%, error: %2%", imgBufferID, imgReader->getLastError());
+		Logger::debug("Failed to open image transfer buffer with ID %1%, error: %2%", imgBufferID, imgReader->getLastError());
 		return false;
 	}
 
@@ -541,11 +517,15 @@ RenderImage ZmqExporter::getPass(const std::string& name)
 }
 
 
-void ZmqExporter::free()
+void ZmqExporter::freeRenderer()
 {
 	m_client->send(serializeMessage(MsgRendererFree{}));
 }
 
+
+bool ZmqExporter::isStopped() const {
+	return !m_client->isStopped();
+}
 
 void ZmqExporter::clearFrameData(float upTo)
 {
@@ -556,6 +536,7 @@ void ZmqExporter::clearFrameData(float upTo)
 
 void ZmqExporter::clearScene()
 {
+	m_cachedValues = ValueCache{}; // Resetting the cached values, becaues have to be set again after the scene is cleared.
 	m_client->send(serializeMessage(MsgRendererReset{}));
 }
 
@@ -578,29 +559,24 @@ void ZmqExporter::pluginRemove(const std::string& pluginName)
 }
 
 
-void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool forceUpdate /*=false*/)
+void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool animatable, bool forceUpdate)
 {
-	sendPluginMsg(pluginName, serializeMessage(MsgPluginUpdate{
+	MsgPluginUpdate msg{
 		pluginName,
 		attrName,
-		value,
-		false,
-		forceUpdate
-	}));
+		value
+	};
+	msg.setAnimatable(animatable);
+	msg.setForceUpdate(forceUpdate);
+
+	sendPluginMsg(serializeMessage(msg));
 
 	m_dirty = true;
 }
 
 
-void ZmqExporter::sendPluginMsg(const std::string& pluginName, zmq::message_t && msg)
+void ZmqExporter::sendPluginMsg(zmq::message_t && msg)
 {
-	{
-		std::lock_guard<std::mutex> lock(m_statsMutex);
-		auto& stat = m_exportStats[pluginName];
-		++stat.num;
-		stat.size += msg.size();
-	}
-
 	m_client->send(std::move(msg));
 	m_dirty = true;
 }
@@ -684,32 +660,21 @@ void ZmqExporter::commitChanges()
 {
 	if (m_dirty){
 		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitNow}));
-
-		if ( m_exportedAttributes > 0 ){
-			Logger::info("ZMQ Exporter: Total exported attributes: %1%, Size: %2% bytes", m_exportedAttributes, m_exportedSize);
-
-			std::ofstream f;
-			f.open(L"c:/tmp/export_stats.log");
-
-			for(const auto& item: m_exportStats){
-				f << item.first << ": " << item.second.num << ", " << item.second.size << " bytes" << std::endl;
-			}
-		}
-
 		m_dirty = false;
-		m_exportedAttributes = 0;
-		m_exportedSize = 0;
-		m_exportStats.clear();
 	}
 }
 
 
 /// Initialize a VRay rendering session
-void ZmqExporter::init()
+void ZmqExporter::init(const ExporterSettings & settings)
 {
+	m_settings = settings;
+
 	try {
 		RendererType type = RendererType::None;
-		switch(m_settings.getExporterType()){
+		ExporterType exporterType = m_settings.getExporterType();
+		
+		switch(exporterType){
 		case ExporterType::PREVIEW:
 			type = RendererType::Preview;
 			break;
@@ -725,7 +690,7 @@ void ZmqExporter::init()
 			type = RendererType::SingleFrame;
 		}
 
-		m_client->send(serializeMessage(MsgRendererInit{type, m_settings.renderThreads}));
+		m_client->send(serializeMessage(MsgRendererInit{type, m_settings.renderThreads, (int)exporterType}));
 		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitAutoOff}));
 		m_client->send(serializeMessage(MsgRendererGetImage{static_cast<int>(RenderChannelType::RenderChannelTypeNone)}));
 
@@ -776,7 +741,23 @@ void ZmqExporter::start()
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
-	m_isAborted = false;
+	m_isRendering = true;
+}
+
+
+void ZmqExporter::stop() {
+	m_client->stop(true);
+}
+
+
+void ZmqExporter::detach() {
+	set_callback_on_image_ready(nullptr);      
+	set_callback_on_rt_image_updated(nullptr); 
+	set_callback_on_message_updated(nullptr);   
+	set_callback_on_bucket_ready(nullptr);        
+	set_callback_on_vfb_layers_updated(nullptr);
+	set_callback_on_render_stopped(nullptr);	  
+	set_callback_on_async_op_complete(nullptr);
 }
 
 void ZmqExporter::renderSequence(int start, int end, int step)
@@ -789,7 +770,7 @@ void ZmqExporter::renderSequence(int start, int end, int step)
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
-	m_isAborted = false;
+	m_isRendering = true;
 }
 
 void ZmqExporter::continueRenderSequence()
@@ -798,7 +779,7 @@ void ZmqExporter::continueRenderSequence()
 }
 
 
-void ZmqExporter::stop()
+void ZmqExporter::stopRendering()
 {
 	m_client->send(serializeMessage(MsgRendererStop{}));
 }
@@ -859,7 +840,6 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 	}
 
 	m_dirty = true;
-	++m_exportedCount;
 
 	const std::string & name = pluginDesc.pluginName;
 	AttrPlugin plugin(name);
@@ -870,10 +850,14 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 	for (auto & attributePairs : pluginDesc.pluginAttrs) {
 		const PluginAttr & attr = attributePairs.second;
 		if (attr.attrValue.getType() != ValueTypeUnknown) {
-			auto msg = serializeMessage(MsgPluginUpdate{name, attr.attrName, attr.attrValue, false, attr.forceUpdate});
-			m_exportedSize += msg.size();
-			++m_exportedAttributes;
-			sendPluginMsg(pluginDesc.pluginName, std::move(msg));
+			auto msg = serializeMessage(MsgPluginUpdate{
+				name,
+				attr.attrName,
+				attr.attrValue,
+				attr.flags
+			});
+			
+			sendPluginMsg(std::move(msg));
 		}
 	}
 
@@ -881,14 +865,14 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 }
 
 
-int ZmqExporter::getExportedPluginsCount() const
-{
-	return m_exportedCount;
+void ZmqExporter::fireStopEvent(bool isAborted) {
+	RenderStoppedCallback cb;
+	{
+		std::scoped_lock l(m_callbacksMutex); 	
+		cb = this->callback_on_render_stopped;
+	}
+
+	if (cb) {
+		cb(isAborted);
+	}
 }
-
-
-void ZmqExporter::resetExportedPluginsCount()
-{
-	m_exportedCount = 0;
-}
-

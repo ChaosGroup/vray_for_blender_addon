@@ -7,7 +7,7 @@
             "desc": "Controls the scatter depth for both color modes. Smaller values result in a shallower layer of scattered light and the material appears more diffuse-like. Higher values define a deeper layer, and makes the material look more translucent.",
             "ui": {
                 "soft_max": 10.0,
-                "quantityType": "distance"
+                "display_name": "Scatter Radius"
             }
         },
         {
@@ -28,12 +28,6 @@
             "default": true
         },
         {
-            "attr": "max_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
             "attr": "overall_color",
             "desc": "Color tint that filters both the Diffuse and the Sub-surface Colors. Pure white is neutral and doesn’t introduce tinting."
         },
@@ -48,7 +42,10 @@
         },
         {
             "attr": "sub_surface_color",
-            "desc": "The Sub-surface Color is filtered/multiplied by the Overall Color and both filter the Scatter Color."
+            "desc": "The Sub-surface Color is filtered/multiplied by the Overall Color and both filter the Scatter Color.",
+            "ui": {
+                "display_name": "Subsurface Color"
+            }
         },
         {
             "attr": "specular_color",
@@ -94,13 +91,28 @@
         "widgets": [
             {
                 "layout": "ROLLOUT",
-                "name": "diffuse and sss layer",
-                "label": "Diffuse and SSS layer",
+                "name": "general",
+                "label": "General",
                 "default_closed": false,
                 "attrs": [
                     {
                         "name": "overall_color"
                     },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "ior",
+                        "label": "Index of Refraction"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "diffuse and sss layer",
+                "label": "Diffuse and SSS layer",
+                "default_closed": false,
+                "attrs": [
                     {
                         "name": "diffuse_color"
                     },
@@ -115,7 +127,6 @@
                     },
                     {
                         "name": "sub_surface_color",
-                        "label": "Sub-surface Color",
                         "visible": {"cond": "::color_mode=0"}
                     },
                     {
@@ -134,21 +145,13 @@
                         "visible": {"cond": "::color_mode=1"}
                     },
                     {
-                        "name": "scatter_radius_mult",
-                        "label": "Scatter Radius (cm)"
+                        "name": "scatter_radius_mult"
                     },
                     {
                         "layout": "SEPARATOR"
                     },
                     {
                         "name": "phase_function"
-                    },
-                    {
-                        "name": "scale"
-                    },
-                    {
-                        "name": "ior",
-                        "label": "Index of Refraction"
                     }
                 ]
             },
@@ -174,13 +177,13 @@
                         "name": "specular_layout",
                         "attrs": [
                             {
+                                "name": "trace_reflections"
+                            },
+                            {
                                 "name": "reflection_depth",
                                 "active": {
                                     "cond": "::trace_reflections=1"
                                 }
-                            },
-                            {
-                                "name": "trace_reflections"
                             }
                         ]
                     }
@@ -201,20 +204,43 @@
                         "layout": "SEPARATOR"
                     },
                     {
-                        "layout": "COLUMN",
-                        "name": "options_layout",
-                        "label": "options_layout",
-                        "attrs": [
-                            {
-                                "name": "refraction_depth"
-                            },
-                            {
-                                "name": "scatter_gi"
-                            }
-                        ]
+                        "name": "refraction_depth"
+                    },
+                    {
+                        "name": "scatter_gi"
                     }
                 ]
             }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            { "name": "overall_color" },
+            {
+                "name": "panel_diffuse",
+                "label": "Diffuse",
+                "type": "ROLLOUT",
+                "default_closed": false
+            },
+            { "name": "diffuse_color" },
+            { "name": "diffuse_amount" },
+            {
+                "name": "panel_sss",
+                "label": "Subsurface",
+                "type": "ROLLOUT",
+                "default_closed": false
+            },
+            { "name": "sub_surface_color" },
+            { "name": "scatter_color" },
+            { "name": "scatter_radius_mult" },
+            {
+                "name": "panel_specular",
+                "label": "Specular",
+                "type": "ROLLOUT"
+            },
+            { "name": "specular_color" },
+            { "name": "specular_amount" },
+            { "name": "specular_glossiness" }
         ]
     }
 }

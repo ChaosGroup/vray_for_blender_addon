@@ -30,6 +30,11 @@
                 "soft_max": 2.0,
                 "spin_step": 0.01
             }
+        },
+        {
+            "attr": "bump_object_space",
+            "type": "BOOL",
+            "default": true
         }
     ],
     "Widget": {
@@ -50,6 +55,10 @@
                     {
                         "name": "bump_delta_scale",
                         "visible": {"cond": "::map_type=0"}
+                    },
+                    {
+                        "name": "bump_object_space",
+                        "active": {"cond": "::map_type=0"}
                     },
                     {
                         "name": "bump_shadows"

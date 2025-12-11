@@ -5,6 +5,7 @@ from vray_blender.lib.mixin import VRayEntity
 from vray_blender.lib import blender_utils
 from vray_blender.ui import classes
 from vray_blender.plugins import VRayNodeTreeSettings
+from vray_blender.lib.blender_utils import tagUsersForUpdate
 
 
 ##      ##  #######  ########  ##       ########
@@ -62,14 +63,7 @@ class VRayNodeTreeObjectBase(VRayEntity, bpy.types.NodeTree):
         return _getVRayObjectNTreeData(context)
 
     def update(self):
-        self.tagUsersForUpdate()
-
-    def tagUsersForUpdate(self):
-        """ Update all objects that use this node tree
-        """
-        for obj in bpy.data.objects:
-            if hasattr(obj, "vray") and obj.vray and obj.vray.ntree == self:
-                obj.update_tag()
+        tagUsersForUpdate(self)
     
 
 class VRayNodeTreeObject(VRayNodeTreeObjectBase):
@@ -120,6 +114,7 @@ class VRayNodeTreeEditor(bpy.types.NodeTree):
     bl_label  = "V-Ray Node Editor"
     bl_idname = 'VRayNodeTreeEditor'
     bl_icon   = 'MATERIAL'
+    bl_description = "V-Ray Nodes"
 
     @classmethod
     def poll(cls, context):

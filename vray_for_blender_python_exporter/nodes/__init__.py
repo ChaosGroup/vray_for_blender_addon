@@ -1,5 +1,4 @@
-
-__all__ = [ 'export', 'importing' ]
+__all__ = [ 'importing' ]
 
 def _getModules():
     """ Modules requiring registration/unregistration """
@@ -9,6 +8,7 @@ def _getModules():
     from vray_blender.nodes import nodes
     from vray_blender.nodes import operators
     from vray_blender.nodes import tree
+    from vray_blender.nodes import docs
 
     return (
         operators,
@@ -17,6 +17,7 @@ def _getModules():
         specials,
         meta,
         nodes,
+        docs,
     )
 
 def register():

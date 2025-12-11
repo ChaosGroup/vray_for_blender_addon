@@ -6,13 +6,15 @@ import os
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.lib import attribute_utils, plugin_utils, attribute_types, path_utils
+from vray_blender.lib import attribute_utils, blender_utils, plugin_utils, attribute_types, path_utils
 from vray_blender.lib.defs import ExporterContext, ExporterType, PluginDesc, AttrPlugin, NodeContext
 from vray_blender.lib.names import Names
 from vray_blender.nodes.utils import getNonExportablePluginProperties, getNodeByType, getObjectsFromSelector
 from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.exporting.tools import getLinkedFromSocket, getNodeLinkToNode
+
+NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault" ]
 
 def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     mode = "PRODUCTION"
@@ -21,8 +23,7 @@ def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     elif ctx.interactive:
         mode = "VIEWPORT"
 
-    overrides: dict = DEFAULTS_OVERRIDES[mode]
-    return overrides.get(pluginType, {})
+    return DEFAULTS_OVERRIDES.get(mode, {}).get(pluginType, {})
 
 
 def _convertEnumValue(value):
@@ -51,6 +52,7 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
     pluginModule = getPluginModule(pluginDesc.type)
 
     nonExportableParams = getNonExportablePluginProperties(pluginModule)
+    pluginAnimatable = pluginModule.Options.get("animatable", True)
 
     for attrDesc in pluginModule.Parameters:
         attrName = attrDesc['attr']
@@ -72,7 +74,7 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
         if attrType in attribute_types.NodeOutputTypes:
             continue
 
-        isExplicit = attrName in pluginDesc.attrs 
+        isExplicit = attrName in pluginDesc.attrs
 
         # Type could be skipped, but mappedParams could contain a manually defined value for it
         if attrType in attribute_types.SkippedTypes and not isExplicit:
@@ -102,10 +104,13 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
             value = getattr(pluginDesc.vrayPropGroup, attrName, None)
 
         if value is None:
-            value = attrDesc['default']
+            if pluginDesc.type in NON_DEFAULT_EXPORTABLE_TYPES:
+                continue
+            else:
+                value = attrDesc['default']
 
         if value is None:
-            # 'None' is a valid default for some attribuute types
+            # 'None' is a valid default for some attribute types
             value = AttrPlugin()
 
         # Handle special attribute types
@@ -130,7 +135,8 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
                 if attrName == attrDesc['color_prop']:
                     plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrDesc['tex_prop'], AttrPlugin())
 
-        plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrName, attribute_utils.convertUIValueToVRay(attrDesc, value))
+        paramAnimatable = (pluginAnimatable and options.get("animatable", pluginAnimatable))
+        plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrName, attribute_utils.convertUIValueToVRay(attrDesc, value), animatable=paramAnimatable)
 
 
     return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
@@ -239,7 +245,7 @@ def removePlugin(exporterCtx: ExporterContext, pluginName):
     vray.pluginRemove(exporterCtx.renderer, pluginName)
 
 
-def setupDistributedRendering(settings, exporterType: ExporterType, isInteractive=False):
+def setupDistributedRendering(settings: vray.ExporterSettings, exporterType: ExporterType, isInteractive=False):
     """
     Export the necessary parameters used for distributed rendering i.e. hosts, dispatcher, in process rendering.
     Args:
@@ -247,20 +253,23 @@ def setupDistributedRendering(settings, exporterType: ExporterType, isInteractiv
         exporterType (ExporterType): The type of export, used to disable DR.
         isInteractive (bool): Flag indicating if the current export is for interactive.
     """
-    vrayDR = bpy.context.scene.vray.VRayDR
-    # Previews should never use DR, Vantage uses DR but it's enabeld interanlly by V-Ray.
+    preferences = blender_utils.getVRayPreferences()
+    # Previews should never use DR, Vantage uses DR but it's enabled seperately.
     NON_DR_EXPORTERS = [ ExporterType.PREVIEW, ExporterType.VANTAGE_LIVE_LINK ]
+    vrayDR = bpy.context.scene.vray.VRayDR
     if exporterType not in NON_DR_EXPORTERS and (not isInteractive or not vrayDR.ignoreInInteractive):
         settings.drUse = vrayDR.on
-        settings.drRenderOnlyOnHosts = vrayDR.renderOnlyOnNodes
-        if vrayDR.use_remote_dispatcher:
-            settings.remoteDispatcher = vrayDR.dispatcher.address + ":" + str(vrayDR.dispatcher.port)
+        settings.drRenderOnlyOnHosts = preferences.render_only_on_nodes
+        if preferences.use_remote_dispatcher:
+            settings.remoteDispatcher = preferences.dispatcher.address + ":" + str(preferences.dispatcher.port)
         hosts = []
-        for node in vrayDR.nodes:
+        for node in preferences.nodes:
             if node.use:
-                port = node.port if node.port_override else 20209
-                hosts.append(node.address + ":" + str(port))
+                hosts.append(node.address + ":" + str(node.port))
         settings.setDRHosts(hosts)
+    elif exporterType == ExporterType.VANTAGE_LIVE_LINK:
+        settings.drUse = True
+        settings.setDRHosts([preferences.vantage_host + ":" + str(preferences.vantage_port)])
 
 
 from dataclasses import dataclass
@@ -298,27 +307,33 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
         of (light|fur)/geometry object tuples - one for all currently visible in the scene, and one for 
         which depsgraph updates have been generated.
 
-        Returns:
-        set[ActiveConnectedMeshInfo]: currently active connected mesh gizmos
-        set[UpdatedConnectedMeshInfo]: list of updated connected meshes/gizmos
+        Args:
         pluginType: plugin type as which the output node is exported
         socketName: socket name of the output node
         treePath: path to the data property group of the object
         outputNodeType: type of the output node
+        
+        Returns:
+        set[ActiveConnectedMeshInfo]: currently active connected mesh gizmos
+        set[UpdatedConnectedMeshInfo]: list of updated connected meshes/gizmos
+        set[UpdatedConnectedMeshInfo]: the update info for all gizmos from the first set
     """
     
     if not parentObjects:
-        return set(), set()
+        return set(), set(), set()
     
     activeConnectedMeshes = set()
     updatedConnectedMeshes = set()
+    activeMeshesUpdateInfo = set()
+
 
     def isUpdatedPair(updatedObjId, parentObj, geomObj, ntree):
         return exporterCtx.fullExport or (updatedObjId == parentObj) or (updatedObjId == ntree) or (updatedObjId == geomObj)
     
     def registerPair(parentObj, geomObj, ntree=None):
         activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), getObjTrackId(parentObj), Names.object(geomObj), getObjTrackId(geomObj)))
-        
+        activeMeshesUpdateInfo.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
+
         if exporterCtx.fullExport:
             updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
             return
@@ -359,7 +374,8 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
             for targetObject in propGroup.object_selector.getSelectedItems(exporterCtx.ctx, 'objects'):
                 registerPair(parentObj, targetObject)
 
-    return activeConnectedMeshes, updatedConnectedMeshes
+
+    return activeConnectedMeshes, updatedConnectedMeshes, activeMeshesUpdateInfo
 
 
 def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker, nodeOutput, nodePluginNames):
@@ -400,4 +416,4 @@ def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker,
 
     # The fur objects have multiple node plugins, so we need to update the object properties for each of them
     for nodePluginName in nodePluginNames:
-        plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin)
+        plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin, animatable=False)

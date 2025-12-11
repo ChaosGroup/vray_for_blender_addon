@@ -13,7 +13,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         # set to the context while gathering scene light mix info.
         assert ctx.activeLightMixNode is not None
 
-        node = ctx.activeLightMixNode 
+        node = ctx.activeLightMixNode
         if not isSameNode(node, pluginDesc.node):
             debug.report('WARNING', f"More than one active LightMix nodes found in the scene. '{node.name}' node will not be exported.")
 

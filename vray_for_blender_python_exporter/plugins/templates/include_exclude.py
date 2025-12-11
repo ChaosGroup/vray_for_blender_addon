@@ -73,7 +73,23 @@ class TemplateIncludeExclude(multi_select.TemplateMultiObjectSelect):
     def getInclude(self):
         return self.inclusionMode == '1'
     
+    def getSelectedItems(self, context: bpy.types.Context, asIncludes: bool):
+        """ Return a list of selected items. 
+            Parameters:
+                asIncludes (bool) : if True and the control is in exclusive mode, return 
+                                    the inclusion list instead
+        """
+        searchCollection = self.getTemplateAttr('collection', '')
+        selectedObjects = set(super().getSelectedItems(context, searchCollection),)
+        
+        if self.getInclude() or not asIncludes:
+            return selectedObjects
+        else:
+            dataProvider = context.scene.objects if searchCollection in( '', 'objects') else getattr(bpy.data, searchCollection)
+            allObjects = {o for o in dataProvider.values() if self._filterObject(o)}
 
+            return list(allObjects.difference(selectedObjects))
+        
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):
         if super().exportToPluginDesc(exporterCtx, pluginDesc):
             pluginDesc.setAttribute(self.getTemplateAttr('mode_bound_property'), self.getInclude())

@@ -55,7 +55,8 @@
             {
                 "display_name" : "Search distance (World)",
                 "max" : 100000000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         
@@ -81,7 +82,8 @@
             {
                 "display_name" : "Max density",
                 "max" : 100000000.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

@@ -45,6 +45,14 @@
         },
         
         {
+            "attr" : "use_parent_shader",
+            "default" : 0,
+            "desc" : "Internal optimization - do not search for nested shader - use the one from parent Node",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
             "attr" : "file",
             "default" : "",
             "desc" : "Path to a *.vrscene file. If set then other sources are ignored",

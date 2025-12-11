@@ -75,7 +75,8 @@
             "ui" : 
             {
                 "display_name" : "World width",
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "distance"
             }
         },
         

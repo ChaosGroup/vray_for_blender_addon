@@ -9,7 +9,7 @@ from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.lib.names import Names
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.nodes.tools import isInputSocketLinked
-from vray_blender.plugins.texture.TexBitmap import getImageFilePath
+from vray_blender.lib import image_utils
 from vray_blender.plugins.texture.TexRemap import fillSplineData
 from mathutils import Color, Euler, Matrix, Vector
 
@@ -80,7 +80,7 @@ def _getResolvedSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType)
             return Color((float(value), float(value), float(value)))
         else:
             assert False, "Unsupported socket type"
-    return value if type == SocketValueType.Float else toColor(value)
+    return toColor(value)
 
 
 def _getSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType) -> Color | float:
@@ -164,7 +164,7 @@ def _exportCyclesMixedAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, co
         return
     # If strength is 1.0 then just export the color parameter without a mix plugin.
     if not _isSocketTexture(strengthSocket):
-        if _getSocketValue(strengthSocket, SocketValueType.Float) == 1.0:
+        if math.isclose(_getSocketValue(strengthSocket, SocketValueType.Float), 1.0):
             _exportCyclesColorAttribute(nodeCtx, pluginDesc, colorAttrName, plgParamName)
             return
         else:
@@ -270,7 +270,7 @@ def _isSocketZero(socket):
     return not _isSocketNonZero(socket)
 
 def _isSocketNonZero(socket):
-    return _isSocketTexture(socket) or _getSocketValue(socket, SocketValueType.Float) != 0.0
+    return _isSocketTexture(socket) or not math.isclose(_getSocketValue(socket, SocketValueType.Float), 0.0)
 
 def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
     match nodeCtx.node.bl_idname:
@@ -396,6 +396,9 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     roughnessSocket = nodeCtx.node.inputs["Roughness"]
     # OpenPBR also changes refract glossines to roughness
     _exportCyclesFloatAttribute(nodeCtx, mtlDesc, roughnessSocket, "reflect_glossiness", "refract_glossiness")
+    refrGloss = mtlDesc.getAttribute("refract_glossiness")
+    if isinstance(refrGloss, float):
+        mtlDesc.setAttribute('refract_glossiness', _clamp(refrGloss, 0, 0.99))
 
     _exportCyclesFloatAttribute(nodeCtx, mtlDesc, "IOR", "refract_ior")
 
@@ -423,7 +426,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     transmissionWeight = nodeCtx.node.inputs["Transmission Weight"]
     if _isSocketTexture(transmissionWeight):
         transmission = exportLinkedSocket(nodeCtx, transmissionWeight)
-        refract = _wrapFloatToColor(transmission)
+        refract = _wrapFloatToColor(nodeCtx, transmission)
     else:
         refract = _getSocketValue(transmissionWeight, SocketValueType.Color)
     mtlDesc.setAttribute("refract", refract)
@@ -448,7 +451,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
         if isinstance(baseColor, Color):
             mtlDesc.setAttribute("diffuse", baseColor * invertTransmission)
             simpleDiffuse = True
-        elif invertTransmission == 1.0:
+        elif math.isclose(invertTransmission, 1.0):
             mtlDesc.setAttribute("diffuse", baseColor)
             simpleDiffuse = True
 
@@ -463,7 +466,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     # TODO: Remove the mess above after we switch to stable/7.2
     # mtlDesc.setAttribute("diffuse", baseColor)
 
-    if node.subsurface_method != 'BURLEY':
+    if node.subsurface_method != 'BURLEY' and "Subsurface Anisotropy" in nodeCtx.node.inputs:
         sssAnisotropySocket = nodeCtx.node.inputs["Subsurface Anisotropy"]
         if _isSocketTexture(sssAnisotropySocket):
             NodeContext.registerError("V-Ray does not support textured Subsurface Anisotropy")
@@ -701,6 +704,7 @@ def _exportCyclesTranslucentBsdf(nodeCtx: NodeContext):
     mtlDesc.setAttribute("diffuse", BLACK_COLOR)
     mtlDesc.setAttribute("refract", WHITE_COLOR)
     mtlDesc.setAttribute("fog_mult", 0.0)
+    mtlDesc.setAttribute("refract_glossiness", 0.99)
     mtlDesc.setAttribute("roughness_model", 1) # oren-nayar
     mtlDesc.setAttribute("bump_type", 6) # explicit normal
     mtlDesc.setAttribute("gtr_energy_compensation", 2)
@@ -947,7 +951,7 @@ def _exportCyclesMathNode(nodeCtx: NodeContext):
 
         attrPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
 
-        if mode == 'INVERSE_SQRT':
+        if op == 'INVERSE_SQRT':
             pluginName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
             texInvertDesc = PluginDesc(pluginName, "TexInvertFloat")
             texInvertDesc.setAttribute("texture", attrPlugin)
@@ -1062,7 +1066,7 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
             NodeContext.registerError("V-Ray currently  supports only file images")
             return INVALID_COLOR
 
-        imagePath = getImageFilePath(image)
+        imagePath = image_utils.getTrackedImagePath(image)
 
         colorSpace = image.colorspace_settings.name
         match colorSpace:
@@ -1100,6 +1104,13 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
             NodeContext.registerError(f"Bitmap alpha mode {image.alpha_mode} is not fully supported")
     else:
         imagePath = ""
+
+    if imagePath and image_utils.imageUpdated(image):
+        # Reset the file attribute to force reload of the image file.
+        # Note: Does not work in GPU mode.
+        # [GPU_BROKEN_MODIFIED_IMAGES_RELOAD_IPR]
+        updateValue(nodeCtx.exporterCtx.renderer, bitmapBufferName, 'file', AttrPlugin(forceUpdate=True))
+    
     bitmapBufferDesc.setAttribute("file", bpy.path.abspath(imagePath))
 
     match node.interpolation:
@@ -1832,7 +1843,7 @@ def _exportLayerWeightBias(nodeCtx: NodeContext, input: AttrPlugin):
             return texFloatOp
     else:
         blend = _getSocketValue(blendSocket, SocketValueType.Float)
-        if blend != 0.5:
+        if math.isclose(blend, 0.5):
             blend = _clamp(blend, 0.0, 1.0 - 1e-5)
             if blend < 0.5:
                 blend = 2.0 * blend
@@ -2059,7 +2070,7 @@ def _exportCyclesGammaNode(nodeCtx: NodeContext):
         invertDesc.setAttribute("float_a", 1.0)
         invertDesc.setAttribute("mode", 1) # ratio
         gamma = _exportCyclesPluginWithStats(nodeCtx, invertDesc)
-        gamma = _wrapFloatToColor(gamma)
+        gamma = _wrapFloatToColor(nodeCtx, gamma)
         texDesc.setAttribute("col_gamma", gamma)
     else:
         gamma = 1.0 / _getSocketValue(gammaSocket, SocketValueType.Float)

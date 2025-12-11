@@ -1,19 +1,17 @@
 
-from re import L
 import struct
 from pathlib import PurePath
 import os
 from io import BufferedReader
 
 import bpy
-import bmesh
 import numpy as np
 from mathutils import Vector, Matrix
 
-from vray_blender.exporting.tools import isObjectVrayProxy
-
 from vray_blender import debug
+from vray_blender.exporting.tools import isObjectVrayProxy, matrixLayoutToMatrix, mat4x4ToTuple
 from vray_blender.lib import blender_utils, sys_utils, path_utils
+from vray_blender.lib.blender_utils import updateShadowAttr
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.vray_tools import vray_proxy
 
@@ -141,112 +139,249 @@ def _getDataFromMeshFile(filePath: str, previewType: str, previewFaces: int, fli
 
     assert len(objects) == 1
     meshData = list(objects.values())[0]
-    
-    assert meshData is not None
 
+    assert meshData is not None
     return meshData, ""
 
 
-def _getCenterOfProxyPreview(filePath, geomMeshFile):
-    """ Get the center of the bounding box of the proxy mesh preview.
+
+def _basisMatrixFromVectors(v0, v1, v2, v3):
+    return Matrix((
+            (v0.x, v1.x, v2.x, v3.x),
+            (v0.y, v1.y, v2.y, v3.y),
+            (v0.z, v1.z, v2.z, v3.z),
+            (1.0,  1.0,  1.0,  1.0)
+        ))
+
+
+def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray):
+    
     """
-    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
-    if err:
-        debug.printError(f"Proxy preview mesh center calculation error: {err}")
-        return Vector((0.0, 0.0, 0.0))
-
-    return Vector(np.mean(np.array(meshData['vertices']), axis=0)) * geomMeshFile.scale
-
-def _getDimsOfProxyPreview(filePath, geomMeshFile):
-    """ Get the dimensions of the bounding box of the proxy mesh preview.
+    Constructs a basis matrix from 4 non-coplanar vertices that are added to the initial array.
+    The new vertices are placed at the cemter of the object so that they did not go outside the
+    bounding box if the object is not flat. 
+    
+    Parameters:
+        vertices: [N,3]array   
+        bbox: [N,3]array [8] the bounding box of the object
+    Returns:
+        - The basis matrix of the coordinate system defined by the 4 points
+        - The indices of the points in the vertices list
+        - The vertex list with the new vertices added to the initial list
     """
-    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
+
+    # Tetrahedron centered at 0,0,0
+    h = abs((Vector(bbox[0]) - Vector(bbox[4])).length)
+    w = abs((Vector(bbox[0]) - Vector(bbox[1])).length)
+    d = abs((Vector(bbox[0]) - Vector(bbox[3])).length)
+
+    # Compute the minimum dimension size based on the size of the object.
+    # For large objects, picking the anchor points too close together will
+    # result in imprecise transformations. This also solves the problem with
+    # flat objects.
+    avgDimension = (w + h + d) / 3
+    minResolution = max(avgDimension / 100, 0.0001)
+
+    ah = max(h / 100, minResolution)
+    aw = max(w / 100, minResolution)
+    ad = max(d / 100, minResolution)
+    
+    center = (Vector(bbox[0]) + Vector(bbox[6])) / 2
+
+    matScale = Matrix.LocRotScale(None, None, Vector((aw, ad, ah)))
+    matTranslate = Matrix.Translation(center)
+
+    anchorVertices = np.array((
+        (1, 1, 1),
+        (1, -1, -1),
+        (-1, 1, -1),
+        (-1, -1, 1)
+    ))
+    
+    anchorVertices = _applyTransformToVertexArray(anchorVertices, matScale @ matTranslate)
+
+    matrix = _basisMatrixFromVectors(Vector(anchorVertices[0]), 
+                             Vector(anchorVertices[1]), 
+                             Vector(anchorVertices[2]), 
+                             Vector(anchorVertices[3]))
+
+    anchorIndices = list(range(len(vertices), len(vertices) + 4))
+    resultVertices = np.concatenate((vertices, anchorVertices), axis=0)
+    return matrix, anchorIndices, resultVertices
+
+
+def _constructCube(size: float, center=(0, 0, 0)):
+    """
+    Returns the vertices and triangular faces of a cube centered at the given point.
+    
+    Parameters:
+        size (float): The length of one edge of the cube.
+        center (tuple): A tuple (x, y, z) representing the center of the cube.
+    
+    Returns:
+        - vertices: List of 8 (x, y, z) coordinates.
+        - faces: List of 12 tuples, where each tuple contains 3 integer indices
+            pointing to the 'vertices' list.
+    """
+    halfSize = size / 2.0
+    cx, cy, cz = center
+    
+    vertices = np.array((
+        (cx - halfSize, cy - halfSize, cz - halfSize),
+        (cx + halfSize, cy - halfSize, cz - halfSize),
+        (cx + halfSize, cy + halfSize, cz - halfSize),
+        (cx - halfSize, cy + halfSize, cz - halfSize),
+        (cx - halfSize, cy - halfSize, cz + halfSize),
+        (cx + halfSize, cy - halfSize, cz + halfSize),
+        (cx + halfSize, cy + halfSize, cz + halfSize),
+        (cx - halfSize, cy + halfSize, cz + halfSize) 
+    ))
+    
+    faces = np.array((
+        (0, 2, 1), (0, 3, 2),
+        (4, 5, 6), (4, 6, 7),
+        (0, 1, 5), (0, 5, 4),
+        (1, 2, 6), (1, 6, 5),
+        (2, 3, 7), (2, 7, 6),
+        (3, 0, 4), (3, 4, 7)
+    ))
+    
+    return vertices, faces
+
+
+def _constructPointPreview(geomMeshFile: dict, meshFilePath: str):
+    """ Fill mesh data for a point preview """
+    geomMeshFile['num_preview_faces'] = 0
+    bboxData, err = _getDataFromMeshFile(meshFilePath, 'Boxes', 8, int(geomMeshFile.flip_axis))
+
+    if not bboxData:
+        return None, None, err
+    
+    boxVertices = bboxData['vertices']
+    assert len(boxVertices) == 8
+
+    # In Point mode we need to have at least 4 vertices in order to be able to compute
+    # the applied transforms on the preview object. We select them from the bounding box points
+    # but if the mesh has no faces, the vertices will be shown in the selection outline of the object. 
+    # If the mesh has any faces however, Blender will outline them and not outline the 
+    # free vertices. Construct a very small cube with proper faces to 'capture' 
+    # the selection and look as a point.
+    geometryCenter = Vector(np.mean(boxVertices, axis=0))
+    smallBoxVertices, smallBoxFaces = _constructCube(0.00001, geometryCenter)
+    
+    bboxData['vertices'] = np.concatenate((smallBoxVertices, boxVertices), axis=0)
+    bboxData['faces'] = smallBoxFaces
+
+    return bboxData, boxVertices, None
+
+
+def _constructPreview(geomMeshFile: dict, meshFilePath: str):
+    """ Fill mesh data for a non-point preview """
+    meshData, err = _getDataFromMeshFile(meshFilePath, geomMeshFile.previewType,
+                                         geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
     if err:
-        debug.printError(f"Proxy preview mesh dimensions calculation error: {err}")
-        return Vector((0.0, 0.0, 0.0))
+        return None, None, err
+    
+    bboxData, err = _getDataFromMeshFile(meshFilePath, 'Boxes',
+                                        geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
+    if err:
+        return None, None, err
+    
+    assert len(bboxData['vertices']) == 8
+    return meshData, bboxData['vertices'], None
 
-    maxVec = Vector(np.max(np.array(meshData['vertices']), axis=0))
-    minVec = Vector(np.min(np.array(meshData['vertices']), axis=0))
-    return (maxVec - minVec) * geomMeshFile.scale
+
+def _getAnchorTransform(previewMesh: bpy.types.Mesh):
+    """ Return a matrix constructed from the 4 anchor points """
+    geomMeshFile = previewMesh.vray.GeomMeshFile
+    pointIndices = geomMeshFile.basis_vertex_indices
+
+    p0 = previewMesh.vertices[pointIndices[0]].co
+    p1 = previewMesh.vertices[pointIndices[1]].co
+    p2 = previewMesh.vertices[pointIndices[2]].co
+    p3 = previewMesh.vertices[pointIndices[3]].co
+
+    return _basisMatrixFromVectors(p0, p1, p2, p3)
 
 
+def _applyTransformToVertexArray(vertices: np.ndarray, transform: Matrix):
+    npMat = np.array(transform)
 
-def loadVRayProxyPreviewMesh(ob: bpy.types.Object, filePath, animType, animOffset, animSpeed, animFrame):
+    rotScale    = npMat[:3, :3]
+    translation = npMat[:3, 3]
+    return vertices @ rotScale.T + translation
+
+
+def _applyTransformToVertex(vertex: Vector, mat: Matrix):
+    return vertex @ mat.to_3x3().transposed() + mat.to_translation()
+
+
+def _replaceObjMesh(previewObj, meshData):
+     # Replace object's mesh
+    mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
+    mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
+    mesh.update()
+    
+    blender_utils.replaceObjectMesh(previewObj, mesh)
+    bpy.data.meshes.remove(mesh)
+
+
+def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFrame = 0):
     """ Load the preview voxel from a .vrmesh file, if any.
     
         Returns: None on success, error message on error.
     """
-    assert ob is not None, "Proxy object must have been created"
+    assert previewObj is not None, "Proxy object must have been created"
     
-    if ( fileExt:= PurePath(filePath).suffix) not in ('.vrmesh', '.abc'):
+    # Work with the GeomMeshFile field of the original object, or the changes to it
+    # might be lost.
+    geomMeshFile = previewObj.original.data.vray.GeomMeshFile
+    
+    absFilePath = bpy.path.abspath(filePath)
+    if ( fileExt:= PurePath(absFilePath).suffix) not in ('.vrmesh', '.abc'):
         return f"File format {fileExt} is not supported by V-Ray Proxy"
     
-    geomMeshFile = ob.data.vray.GeomMeshFile
-
-    meshData = None
-    if geomMeshFile.previewType == 'Point':
-        # Replace with empty mesh
-        mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
-        blender_utils.replaceObjectMesh(ob, mesh)
-        bpy.data.meshes.remove(mesh)
-        geomMeshFile['num_preview_faces'] = 0
-        meshData = {
-            'vertices': [(0.0, 0.0, 0.0)],
-            'faces': []
-        }
-    else:
-        meshData, err = _getDataFromMeshFile(filePath, geomMeshFile.previewType,
-                                         geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
-        if not meshData:
-            return err
+    meshData, boxVertices, err = _constructPointPreview(geomMeshFile, absFilePath) \
+                                if geomMeshFile.previewType == 'Point' \
+                                    else _constructPreview(geomMeshFile, absFilePath)
     
-    mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
-
-    offset = blender_utils.getGeomCenter(ob) - geomMeshFile.initial_preview_mesh_pos 
-    if (offset != Vector((0.0, 0.0, 0.0))) and \
-        (geomMeshFile.scale != 0): # If scale is zero, all vertices collapse to (0,0,0), so no offset is needed.
+    if err:
+        return err
         
-        offset /= geomMeshFile.scale  # Apply scaling to the object offset.
-        vertices = np.array(meshData['vertices']) # Convert the list of tuple vertices to an (N,3) array
-        offset_array = np.array([offset.x, offset.y, offset.z]) 
-        meshData['vertices'] = (vertices + offset_array).tolist()
+    if len(meshData['vertices']) == 0:
+        return f"V-Ray Proxy object has no vertices. Loaded from {absFilePath}"
+    
+    # The new preview object's anchor points may not be the same as the old ones.
+    # Bring them to the coordinate system of the original object
+    baseMatrix, pointIndices, newVertices = _computeBasisMatrix(meshData['vertices'] , boxVertices)
+    meshData['vertices'] = newVertices
+    geomMeshFileScale = Matrix.Scale(geomMeshFile.scale, 4)
+    meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], geomMeshFileScale)
+    geometryCenter = Vector(np.mean(boxVertices, axis=0))
 
-    mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
-    mesh.update()
+    if geomMeshFile.file:
+        # The proxy is being reimported because one of its properties has changed (incl. the mesh file).
+        # In addition to the scale, we also apply the transform of the previous proxy so that the new
+        # object appeared at the same position
+        appliedTransform = getProxyPreviewAppliedTransform(previewObj)
+        meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], appliedTransform)
+        _positionProxyLights(previewObj, Vector(geomMeshFile['initial_preview_mesh_pos']))
+    else:
+        geomMeshFile['initial_preview_mesh_pos'] = geometryCenter
 
+    geomMeshFile['basis_matrix'] = mat4x4ToTuple(geomMeshFileScale @ baseMatrix)
+    geomMeshFile['basis_vertex_indices'] = pointIndices
 
+    _replaceObjMesh(previewObj, meshData)
+    
     if geomMeshFile.previewType == 'Preview':
         # The preview-generation procedure uses the requested number of preview faces as a guideline only.
         # Write back to the UI the number of actual preview faces
         geomMeshFile['num_preview_faces'] = len(meshData['faces'])
 
-    blender_utils.replaceObjectMesh(ob, mesh)
-    bpy.data.meshes.remove(mesh)
+    updateShadowAttr(geomMeshFile, 'file')
     
-    blender_utils.selectObject(ob)
-
-
-    # Depending on the source of the model, scaling may be necessary. E.g. Cosmos assets are in 
-    # cm. Scale the model geometry without affecting any currently set scale value for the object.
-    oldScale = ob.scale.copy()
-    ob.scale = Vector((1.0, 1.0, 1.0))
-    ob.scale *= geomMeshFile.scale
-    # Apply the selected object's scale. This will apply the transform to the mesh and 
-    # reset the 'scale' field to 1.0.
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True) 
-
-    # Setting initial dimensions of the preview mesh. They are needed for the preview scale calculations.
-    # No need for calculating the dimensions of the preview mesh, they are set in ob.dimensions from Blender
-    geomMeshFile.initial_preview_dims = ob.dimensions
-
-    ob.scale = oldScale # Restoring the original scale of the object.
-
-    # Set the initial position of the preview mesh to the center of the bounding box of the mesh.
-    # This position can't be obtained from the mesh itself, as it may be offset by the object's transform.
-    geomMeshFile.initial_preview_mesh_pos = (0,0,0) if geomMeshFile.previewType == 'Point' else \
-        _getCenterOfProxyPreview(filePath, geomMeshFile)
-
-
+    
 def loadVRayScenePreviewMesh(sceneFilepath, ob: bpy.types.Object):
     """ Load preview from a file format compatible with VRayScene.
     
@@ -257,7 +392,8 @@ def loadVRayScenePreviewMesh(sceneFilepath, ob: bpy.types.Object):
         Returns: 
             None on success, error message on error.
     """
-    if ( fileExt:= PurePath(sceneFilepath).suffix) != '.vrscene':
+    fileExt = PurePath(sceneFilepath).suffix
+    if fileExt != '.vrscene' and not fileExt.startswith(".usd"):
         return f"File format {fileExt} is not supported by V-Ray Scene"
     
     sceneFilepath = bpy.path.abspath(sceneFilepath)
@@ -288,7 +424,7 @@ def loadVRayScenePreviewMesh(sceneFilepath, ob: bpy.types.Object):
     mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
     
     if vrayScene.flip_axis in ('2', '3'):
-        flipYZAxes(mesh, yToZ=(vrayScene.flip_axis == '3'))
+        _flipYZAxes(mesh, yToZ=(vrayScene.flip_axis == '3'))
     mesh.update()
 
     if isPreview:
@@ -370,10 +506,6 @@ def _readObjectFromBinFile(file: BufferedReader):
     Returns:
         dict(str, meshData): a map of object name to mesh data for the object
     """
-    def _reshapeArray(input, size: int):
-        # Reshape an array of items by splitting it into subarrays each containing 'size' items
-        return tuple(zip(*([iter(input)] * size)))
-
     def _readString(file):
         length = _binRead(file, 'I', 1)
         return _binRead(file, 's', length)
@@ -390,16 +522,15 @@ def _readObjectFromBinFile(file: BufferedReader):
 
     vertices = []
     faces = []
-    transform = None
 
     for itemType, offset, itemCount in chunks:    
         match itemType:
             case 'v':
                 floatArray  = _binRead(file, 'f', itemCount * 3) # 3 float coords per vertex
-                vertices = _reshapeArray(floatArray, 3)
+                vertices = np.reshape(floatArray, (-1, 3))
             case 'f':
                 intArray  = _binRead(file, 'I', itemCount * 3) # 3 int indices per face
-                faces = _reshapeArray(intArray, 3)
+                faces = np.reshape(intArray, (-1,3))
             case _:
                 raise Exception(f"Unsupported channel type '{itemType}'")
 
@@ -410,7 +541,7 @@ def _readObjectFromBinFile(file: BufferedReader):
     }
 
 
-def flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
+def _flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
     """ Change mesh orientation by flipping the Y and Z axes in a VRayScene object.
 
     Args:
@@ -430,66 +561,71 @@ def flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
     mesh.transform(flipMatrix)
 
 
-def getProxyPreviewScale(obj: bpy.types.Object):
+def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
+    """ Return the cumulative transformation to the obeject's mesh which has been applied
+        after the proxy object was imported for the first time. This incliudes changing 
+        the object's origin point and using 'Apply transform' on the object.
+    """
     assert isObjectVrayProxy(obj)
-    geomMeshFile = obj.data.vray.GeomMeshFile
 
-    # The dimensions of the point preview are always 0,0,0 and can't be scaled.
-    if geomMeshFile.previewType == 'Point':
-        return Vector((1.0, 1.0, 1.0))
+    # When a transformation is applied to an object, Blender transforms the vertices of its mesh.
+    # From the current locations (in object local coordinates) of the 4 vertices that serve as 
+    # the 'anchor' basis matrix, we can compute the transformation applued to the object.
+    
+    # If in Edit mode, non-original obj will have no geometry data
+    mesh = obj.original.data if fromOriginal else obj.data
+    
+    geomMeshFile = mesh.vray.GeomMeshFile
+    basePosMatrix = matrixLayoutToMatrix(geomMeshFile.basis_matrix)
+    currPosMatrix = _getAnchorTransform(mesh) 
+        
+    return currPosMatrix @ basePosMatrix.inverted()
 
-    initialPreviewDims = geomMeshFile.initial_preview_dims
-    curObjDims = obj.dimensions
 
-    # (curObjDims / initialPreviewDims) / obj.scale
-    return Vector(((a / b) / c if b != 0 and c != 0 else 0 \
-            for a, b, c in zip(curObjDims, initialPreviewDims, obj.scale)))
-
-
-def fixPosOfProxyLightsOnPreviewUpdate(depsgraph: bpy.types.Depsgraph):
-    """ Fix the position of lights attached to a VRayProxy object when the mesh is updated.
+def _positionProxyLights(previewObj: bpy.types.Object, parentObjPos: Vector):
+    """ Set the position of lights attached to a VRayProxy object when the mesh is updated.
     
         This is necessary because the lights are positioned relative to the initial position of the mesh,
         and if the mesh origin point is moved, the lights need to be updated accordingly.
     """
-
-    importedLightPositions = {}
+    geomMeshFile = previewObj.data.vray.GeomMeshFile
+    appliedTransform = getProxyPreviewAppliedTransform(previewObj) 
     
-    for update in depsgraph.updates:
-        if isinstance(update.id, bpy.types.Object) and \
-            update.id.type == 'MESH' and \
-            update.is_updated_geometry:
-
-            # Getting the object from bpy.data.objects,
-            # because "update.id" doesn't have references to the children objects.
-            obj = bpy.data.objects[update.id.name]
-
-            if isObjectVrayProxy(obj):
-                initialPreviewMeshPos = obj.data.vray.GeomMeshFile.initial_preview_mesh_pos
-                scale = getProxyPreviewScale(obj) # Scale of preview mesh of V-Ray Proxy
-
-                originToPreviewOffset = blender_utils.getGeomCenter(obj) 
-                originToPreviewOffset -= blender_utils.vecElemMult(initialPreviewMeshPos, scale)
-
-                for light in (c for c in obj.children if c.type == 'LIGHT'):
-                    initialLightOffset = blender_utils.vecElemMult(Vector(light.data.vray.initial_proxy_light_pos), scale)
-                    initialLightScale = light.data.vray.initial_proxy_light_scale
-                    
-                    parentProxyScaleAdj = 0
-                    if initialLightScale != 0: # Object with initial scale of 0 can't be scaled up or down
-                        parentProxyScaleAdj = obj.data.vray.GeomMeshFile.scale / initialLightScale
-
-                    lightTranslation = originToPreviewOffset + initialLightOffset * parentProxyScaleAdj
-                    lightScale = scale * parentProxyScaleAdj
-
-                    importedLightPositions[light] = (lightTranslation, lightScale)
-
-    if importedLightPositions:
-        # We cannot change the scene here. Fire a one time timer to set the new values.
+    for lightObj in (c for c in previewObj.children if c.type == 'LIGHT'):
+        light = lightObj.data
         
-        def onTimer():
-            for light, pos in importedLightPositions.items():
-                light.matrix_local.translation = pos[0]
-                light.scale = pos[1]
+        offsetFromParent = (Vector(light.vray.initial_proxy_light_pos) + parentObjPos) * geomMeshFile.scale
+        offsetFromParent = _applyTransformToVertex(offsetFromParent, appliedTransform)
 
-        bpy.app.timers.register(onTimer, first_interval=0)
+        lightScale = Vector((1.0, 1.0, 1.0)) * geomMeshFile.scale / light.vray.initial_proxy_light_scale
+
+        lightObj.matrix_local.translation = offsetFromParent
+        lightObj.scale = lightScale
+        
+
+#########################################
+########### OBSOLETE FUNCTIONS ##########
+
+## Used only for the upgrade scripts
+
+def _getCenterOfProxyPreview(filePath, geomMeshFile):
+    """ Get the center of the bounding box of the proxy mesh preview.
+    """
+    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
+    if err:
+        debug.printError(f"Proxy preview mesh center calculation error: {err}")
+        return Vector((0.0, 0.0, 0.0))
+
+    return Vector(np.mean(meshData['vertices'], axis=0)) * geomMeshFile.scale
+
+def _getDimsOfProxyPreview(filePath, geomMeshFile):
+    """ Get the dimensions of the bounding box of the proxy mesh preview.
+    """
+    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
+    if err:
+        debug.printError(f"Proxy preview mesh dimensions calculation error: {err}")
+        return Vector((0.0, 0.0, 0.0))
+
+    maxVec = Vector(np.max(meshData['vertices'], axis=0))
+    minVec = Vector(np.min(meshData['vertices'], axis=0))
+    return (maxVec - minVec) * geomMeshFile.scale

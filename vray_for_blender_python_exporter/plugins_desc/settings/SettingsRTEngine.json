@@ -160,14 +160,15 @@
         
         {
             "attr" : "opencl_resizeTextures",
-            "default" : "1",
-            "desc" : "Texture transfer mode for the GPU. Note that on-demand mipmapping is available only in non-interactive mode",
+            "default" : "0",
+            "desc" : "Texture transfer mode for the GPU. Note that on-demand mipmapping is available only in non-interactive mode. Note that 'Hardware textures' is currently available on MacOS only",
             "items" : 
             [
                 [ "0", "Full size textures", "Full size textures" ],
                 [ "1", "Resize textures", "Resize textures" ],
                 [ "2", "On-demand mipmapping", "On-demand mipmapping" ],
-                [ "3", "Compressed", "Compressed" ]
+                [ "3", "Compressed", "Compressed" ],
+                [ "4", "Hardware Textures", "Hardware Textures" ]
             ],
             "type" : "ENUM",
             "ui" : 

@@ -1,22 +1,20 @@
 {
     "Name": "V-Ray User Color",
     "Subtype": "UTILITY",
-    "Parameters": [],
-    "Widget": {
-        "widgets": [
-            {
-                "attrs": [
-                    {
-                        "name": "user_attribute"
-                    },
-                    {
-                        "name": "default_color"
-                    }
-                ],
-                "layout": "COLUMN"
+    "Parameters": [
+        {
+            "attr": "mode",
+            "type": "ENUM",
+            "default": "0",
+            "items": [
+                [ "0", "User Attribute", "User Attribute" ],
+                [ "1", "Color Attribute", "Color Attribute" ]
+            ],
+            "options": {
+                "derived": true
             }
-        ]
-    },
+        }
+    ],
     "Options": {
         "animatable": true,
         "excluded_parameters": [

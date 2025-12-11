@@ -5,7 +5,8 @@
     "Parameters": [
         {
             "attr": "toonMaterialOnly",
-            "type": "BOOL"
+            "type": "BOOL",
+            "default": 0
         },
         {
             "attr": "widthType",
@@ -107,18 +108,6 @@
         {
             "attr": "angularCurveOn",
             "desc": "Enable view-angle-based line width"
-        },
-        {
-            "attr": "minDepth",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "maxDepth",
-            "ui": {
-                "quantityType": "distance"
-            }
         },
         {
             "attr": "compatibilityMode",

@@ -24,6 +24,7 @@
                 "align": true,
                 "attrs": [
                     {
+                        "label": "Range",
                         "name": "low"
                     },
                     {

@@ -9,22 +9,9 @@
             "options": {
                 "derived": true
             }
-        },
-        {
-            "attr": "eye_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
-        },
-        {
-            "attr": "focus_distance",
-            "ui": {
-                "quantityType": "distance"
-            }
         }
     ],
     "Options": {
-        "excluded_parameters": [],
-        "animatable": false
+        "excluded_parameters": []
     }
 }
