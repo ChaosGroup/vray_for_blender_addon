@@ -134,7 +134,10 @@
             {
                 "name": "out_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Input Color"]
+        }
     },
     "Options": {
         "animatable": true,

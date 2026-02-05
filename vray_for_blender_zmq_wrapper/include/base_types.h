@@ -166,6 +166,7 @@ enum PluginUpdateFlags : uint32_t {
 	PluginValueForceUpdate = 1 << 0,
 	PluginValueAsString    = 1 << 1,
 	PluginValueAnimatable  = 1 << 2,
+	PluginReCreateAttr     = 1 << 3,
 };
 
 /// Empty value type used to block export of a attribute

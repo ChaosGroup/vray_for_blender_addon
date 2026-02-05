@@ -75,10 +75,10 @@ class VRayNodeTreeObject(VRayNodeTreeObjectBase):
 class VRayNodeTreeFur(VRayNodeTreeObjectBase):
     bl_label  = "V-Ray Fur Node Tree"
     bl_idname = 'VRayNodeTreeFur'
-    
-    
-    
 
+class VRayNodeTreeDecal(VRayNodeTreeObjectBase):
+    bl_label = "V-Ray Decal Node Tree"
+    bl_idname = 'VRayNodeTreeDecal'
 
 ######## ########  #### ########  #######  ########
 ##       ##     ##  ##     ##    ##     ## ##     ##
@@ -150,11 +150,12 @@ def getRegClasses():
     return (
         VRayNodeTreeObject,
         VRayNodeTreeFur,
+        VRayNodeTreeDecal,
         VRayNodeTreeEditor
     )
 
 
-def register():    
+def register():
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
 

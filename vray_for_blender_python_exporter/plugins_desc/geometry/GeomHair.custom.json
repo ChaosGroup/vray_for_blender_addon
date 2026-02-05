@@ -164,6 +164,29 @@
             "options": {
                 "linked_only": true
             }
+        },
+        {
+            "attr": "show_viewport_preview",
+            "desc": "Display viewport preview hairs for this V-Ray Fur object",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "preview_hair_count",
+            "desc": "Number of hairs to preview in the viewport",
+            "type": "INT",
+            "default": 1024,
+            "ui": {
+                "max" : 1024,
+                "min" : 10,
+                "spin_step" : 10
+            },
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {
@@ -317,6 +340,18 @@
                     },
                     {
                         "name": "generate_w_coord"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "viewport_preview",
+                "label": "Viewport Preview",
+                "use_prop": "show_viewport_preview",
+                "attrs": [
+                    {
+                        "name": "preview_hair_count",
+                        "label": "Hair Count"
                     }
                 ]
             }

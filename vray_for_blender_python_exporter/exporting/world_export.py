@@ -4,7 +4,7 @@ from vray_blender.exporting.node_export import *
 from vray_blender.lib import export_utils
 from vray_blender.lib.plugin_utils import updateValue, DISABLE_GEN_AI
 from vray_blender.lib.defs import *
-from vray_blender.nodes.tools import isVrayNodeTree, isInputSocketLinked
+from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes import utils as NodesUtils
 
 import mathutils
@@ -27,8 +27,8 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
     effectsSock = getInputSocketByName(worldOutputNode, "Effects")
     environmentVolume = []
 
-    if effectsSock and isInputSocketLinked(effectsSock):
-        effectsNode = effectsSock.links[0].from_node
+    if link := getFarNodeLink(effectsSock):
+        effectsNode = link.from_node
 
         if effectsNode.bl_idname != "VRayNodeEffectsHolder":
             debug.printError("Environment: 'Effects' socket must be connected to a \"V-Ray Effects Container\" node!")
@@ -39,8 +39,8 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
                 if nodeCtx.getCachedNodePlugin(effectsNode) is None:
                     nodeCtx.cacheNodePlugin(effectsNode)
                     for inSock in effectsNode.inputs:
-                        if inSock.shouldExportLink():
-                            effect = exportSocket(nodeCtx, inSock)
+                        if effectLink := getFarNodeLink(inSock):
+                            effect = exportSocketLink(nodeCtx, effectLink)
                             if type(effect) is AttrPlugin:
                                 environmentVolume.append(effect)
 
@@ -114,14 +114,18 @@ class WorldExporter(ExporterBase):
             with nodeCtx.push(channelsNode):
                 if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
                     nodeCtx.cacheNodePlugin(channelsNode)
-                    for inSock in [sock for sock in channelsNode.inputs if isInputSocketLinked(sock) and sock.use]:
+                    for channelLink in [getFarNodeLink(s) for s in channelsNode.inputs]:
+                        if not channelLink:
+                            continue
+
+                        inSock = channelLink.to_socket
                         if nodeCtx.exporterCtx.vantage and (_sockConnectedToCryptomatte(inSock) or _sockConnectedToEnhancer(inSock)):
                             continue
                         if DISABLE_GEN_AI and _sockConnectedToEnhancer(inSock):
                             continue
 
                         if not nodeCtx.exporterCtx.viewport or (_sockConnectedToDenoiser(inSock) and viewportDenoiserEnabled):
-                            exportLinkedSocket(nodeCtx, inSock)
+                            exportSocketLink(nodeCtx, channelLink)
                             exportSettingsPlugin = True
 
         # Only the denoiser render element is exported for viewport IPR.
@@ -204,10 +208,8 @@ class WorldExporter(ExporterBase):
         worldOutputNode = nodeCtx.node
         envSock = getInputSocketByName(worldOutputNode, "Environment")
 
-        if envSock and isInputSocketLinked(envSock):
-            envNode = envSock.links[0].from_node
-            if not envNode:
-                return
+        if envLink := getFarNodeLink(envSock):
+            envNode = envLink.from_node
             
             if envNode.bl_idname != "VRayNodeEnvironment":
                 debug.printError("Environment: 'Environment' socket must be connected to 'Environment' node!")
@@ -230,8 +232,8 @@ class WorldExporter(ExporterBase):
                     mult = sock.multiplier
                     
                     if sock.use:
-                        if isInputSocketLinked(sock):
-                            tex = exportSocket(nodeCtx, sock)
+                        if link := getFarNodeLink(sock):
+                            tex = exportSocketLink(nodeCtx, link)
                         else:
                             # On GPU, the 'xxx_color' properties do not work correctly. As a workaround, export the color as a plugin.
                             texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexColorConstant"), "TexColorConstant")
@@ -255,7 +257,8 @@ class WorldExporter(ExporterBase):
                     pluginDesc.setAttribute(texUseAttrName, sock.use)
         
                 nodeCtx.cacheNodePlugin(envNode)
-            exportPluginWithStats(nodeCtx, pluginDesc)
+        
+        exportPluginWithStats(nodeCtx, pluginDesc)
         
 
     def prunePlugins(self):
@@ -304,8 +307,8 @@ class WorldExporter(ExporterBase):
             """ Return the names of the World data objects with node trees whose topology has been updated """
             
             ntreesWithUpdatedTopology = [ u.id for u in self.dg.updates \
-                                     if isinstance(u.id, bpy.types.NodeTree) \
-                                            and isVrayNodeTree(u.id, 'WORLD')]
+                                            if isinstance(u.id, bpy.types.NodeTree) \
+                                                and isVrayNodeTree(u.id, 'WORLD')]
         
             # Find the World objects whose node trees have topology updates
             topologyUpdates = [ u.id for u in self.dg.updates if isinstance(u.id, bpy.types.World) \

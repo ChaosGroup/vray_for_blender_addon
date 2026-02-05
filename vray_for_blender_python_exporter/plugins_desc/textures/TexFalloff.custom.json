@@ -139,7 +139,10 @@
             {
                 "name": "alpha_mult"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Color 1", "Color 2"]
+        }
     },
     "Widget": {
         "widgets": [

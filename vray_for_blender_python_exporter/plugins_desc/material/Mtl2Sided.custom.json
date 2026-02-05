@@ -44,12 +44,6 @@
             ]
         }
     ],
-    "Options": {
-        "excluded_parameters": [
-            "channels"
-        ],
-        "animatable": true
-    },
     "Widget": {
         "widgets": [
             {
@@ -75,5 +69,16 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "internal_links": {
+            "*": ["Front", "Back"]
+        }
+    },
+    "Options": {
+        "excluded_parameters": [
+            "channels"
+        ],
+        "animatable": true
     }
 }

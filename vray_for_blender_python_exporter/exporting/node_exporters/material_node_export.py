@@ -6,7 +6,6 @@ from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
-from vray_blender.nodes.tools import isInputSocketLinked
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -20,7 +19,7 @@ def exportVRayNodeBRDFBump(nodeCtx: NodeContext):
 
     sockBump = getInputSocketByName(node, "bump_tex_float")
     sockNormal = getInputSocketByName(node, "bump_tex_color")
-    if sockBump and isInputSocketLinked(sockBump):
+    if sockBump and sockBump.hasActiveFarLink():
         pluginDesc.removeAttribute("bump_tex_color")
     else:
         pluginDesc.removeAttribute("bump_tex_float")
@@ -91,12 +90,12 @@ def exportVRayNodeMtlMulti(nodeCtx: NodeContext):
 
     node = nodeCtx.node
     texSock = node.inputs['Switch Texture']
-    if isInputSocketLinked(texSock):
-        switchID = commonNodesExport.exportLinkedSocket(nodeCtx, texSock)
+    if link := getFarNodeLink(texSock):
+        switchID = commonNodesExport.exportLinkedSocket(nodeCtx, link.to_socket)
     else:
         switchID = node.MtlMulti.switch_id
 
-    mtlSockets = [s for s in node.inputs if s.bl_idname == 'VRaySocketMtlMulti' and s.enabled and isInputSocketLinked(s)]
+    mtlSockets = [s for s in node.inputs if s.bl_idname == 'VRaySocketMtlMulti' and s.enabled and s.hasActiveFarLink()]
     mtlIDs = []
     linkedMtls = []
     

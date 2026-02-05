@@ -120,7 +120,7 @@ class UIPainter:
             # in both the node and the property pages. This is necessary because, due to Blender limitations, 
             # only the values of sockets can be animated, and not the fields of the prop group of the node.
             if hasattr(socket, "draw_property"):
-                socket.draw_property(self.context, layout, self.node, label)
+                socket.draw_property(self.context, layout, label)
             else:
                 socket.draw(self.context, layout, self.node, label)
         elif hasattr(self.propGroup, attrName):
@@ -151,7 +151,7 @@ class UIPainter:
                 label = label if (label is not None) else socket.name
                 
                 if hasattr(socket, "draw_property"):
-                    socket.draw_property(self.context, layout, self.node, label, expand=expand, slider=slider)
+                    socket.draw_property(self.context, layout, label, expand=expand, slider=slider)
                 else:
                     socket.draw(self.context, layout, self.node, label)
             else:

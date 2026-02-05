@@ -1,5 +1,6 @@
 __all__ = [ 'importing' ]
 
+
 def _getModules():
     """ Modules requiring registration/unregistration """
     from vray_blender.nodes import meta
@@ -13,12 +14,14 @@ def _getModules():
     return (
         operators,
         tree,
-        sockets,
+        # Descendants need to be registered before base classes (specials before sockets)
         specials,
+        sockets,
         meta,
         nodes,
         docs,
     )
+
 
 def register():
     for module in _getModules():

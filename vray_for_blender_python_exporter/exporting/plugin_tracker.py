@@ -12,7 +12,7 @@ from vray_blender.lib.names import Names
 # always needed. Uncomment the call to print() to achieve that
 # TODO: this function and its invocations should be deleted in the release version
 def log(msg: str):
-    #print(msg)
+    # print(msg)
     pass    
 
 def getObjTrackId(obj: bpy.types.ID):
@@ -30,7 +30,7 @@ def getConnectedTrackIds(node: bpy.types.Node, connectedIds=None):
         connectedIds = set()
 
     for inputSocket in node.inputs:
-        for link in [l for l in inputSocket.links if not l.is_muted and not l.is_hidden]:
+        for link in inputSocket.links:
             fromNode = link.from_node
             connectedIds.add(getNodeTrackId(fromNode))
             getConnectedTrackIds(fromNode, connectedIds) 

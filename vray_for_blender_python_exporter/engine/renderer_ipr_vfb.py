@@ -1,10 +1,9 @@
 import bpy
 import time
 
-
 from vray_blender import debug
 from vray_blender.lib import blender_utils
-from vray_blender.lib.defs import RendererMode, ExporterType
+from vray_blender.lib.defs import RendererMode, ExporterType, IprContext
 from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase, exportViewportView
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.exporting.update_tracker import UpdateTracker
@@ -23,8 +22,8 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     # determine if the viewport renderer is active from any context.
     _activeRenderer = None
 
-    def __init__(self):
-        super().__init__(False)
+    def __init__(self, iprContext: IprContext):
+        super().__init__(False, iprContext, bpy.context)
 
     @staticmethod
     @bpy.app.handlers.persistent
@@ -43,6 +42,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     def getActiveRenderer():
         return VRayRendererIprVfb._activeRenderer
     
+
     @staticmethod
     def reset():
         """ Flags the renderer to clear the scene, re-export it, and perform a fresh render. """
@@ -87,34 +87,31 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         if context.scene.vray.Exporter.debug_log_times:
             vray.startStatsCollection(self.renderer)
 
-        exporterCtx = self._getExporterContext(context, RendererMode.Interactive, depsgraph, isFullExport)
-
-        view3d = None
+        if not (exporterCtx := self._createExporterContext(depsgraph, isFullExport)):
+            return None
+        
         if isFullExport:
             # Updates may have accumulated from a previous renderer session.
             UpdateTracker.clear()
-            # Find an available 3D view from any screen. May be the current or another one
-            view3d = blender_utils.getFirstAvailableView3D()
-        else:
-            # We are reexporting - get the view3D only from the current screen or None if the
-            # current screen has no View3D (can happen). If we use the available here -
-            # the view will change even if we switch to some screen with no visible View3D
-            view3d = blender_utils.getActiveView3D()
 
-        self._export(exporterCtx, view3D=view3d)
+        self._export(exporterCtx)
+
 
     def exportViewport(self):
-        view3D = blender_utils.getFirstAvailableView3D()
-
-        # If this condition is true, there is change in the viewport
-        renderSizesOnly = view3D.region_3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
         depsgraph = bpy.context.evaluated_depsgraph_get()
 
-        ctx = self._getExporterContext(ctx = bpy.context, rendererMode=RendererMode.Interactive, dg = depsgraph, isFullExport = False)
-        self.viewParams = exportViewportView(ctx, view3D, self.viewParams, renderSizesOnly)
+        if not (ctx := self._createExporterContext(dg = depsgraph, isFullExport = False)):
+            return None
+        
+        region3d = ctx.iprContext.region3d
+        
+        # If this condition is true, there is change in the viewport
+        renderSizesOnly = region3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
+        self.viewParams = exportViewportView(ctx, self.viewParams, renderSizesOnly)
 
         vray.finishExport(self.renderer, interactive=True)
-        self.persistedState.prevRegion3dViewMatrix = view3D.region_3d.view_matrix.copy()
+        self.persistedState.prevRegion3dViewMatrix = region3d.view_matrix.copy()
+
 
     def _initRenderer(self):
         self._createRenderer(ExporterType.IPR_VFB)
@@ -133,3 +130,14 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
         # Set a static renderer ref that can be accessed from Blender operators
         VRayRendererIprVfb._activeRenderer = self.renderer
+
+
+    def _createExporterContext(self, dg: bpy.types.Depsgraph, isFullExport: bool):
+        ctx = self._getExporterContext(bpy.context, RendererMode.Interactive, dg, isFullExport)
+        if ctx.iprContext is None:
+            # There is no active viewport to export from. Stop the VFB renderer as we can
+            # no longer control the view from the UI.
+            VfbEventHandler.stopInteractiveRender()
+            return None
+        
+        return ctx

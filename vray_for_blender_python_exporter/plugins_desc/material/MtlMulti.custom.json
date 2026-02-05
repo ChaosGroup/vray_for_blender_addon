@@ -72,6 +72,12 @@
             }
         ]
     },
+    "Node": {
+        "internal_links": 
+        {
+            "Material": ["Material*"]
+        }
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [

@@ -1,12 +1,16 @@
 from enum import Enum
 import bpy, os, time, queue
-from vray_blender.bin import VRayBlenderLib as vray
+
+from vray_blender import debug
+from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVRayDecal
 from vray_blender.lib.lib_utils import getLightPropGroup
 from vray_blender.lib.blender_utils import selectObject
-from vray_blender.nodes.operators.import_file import importHDRI, importMaterials, importProxyFromMeshFile
-from vray_blender import debug
-from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.image_utils import untrackImage
+from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.nodes.operators.import_file import  importDecal, importHDRI, importMaterials, importProxyFromMeshFile
+from vray_blender.nodes.utils import getNodeByType, treeHasNodes
+
+from vray_blender.bin import VRayBlenderLib as vray
 
 # Cosmos relinking states, keep in sync with the enum in zmq_messages.hpp.
 class CosmosRelinkStatus(Enum):
@@ -130,18 +134,20 @@ class CosmosHandler:
 
         unresolvedPackageIds, unresolvedRevisionIds, unresolvedPaths = [], [], []
 
-        def checkNodeTreeAssets(object):
-            for node in object.node_tree.nodes:
+        def checkNodeTreeAssets(dataObject, ntree: bpy.types.NodeTree):
+            # Register unresolved callbacks for the nodes in a  node tree. The object passed in
+            # should have valid cosmos_package_id and cosmos_revision_id properties.
+            for node in ntree.nodes:
                 if (texture := getattr(node, 'texture', None)):
                     if unresolvedPath := self._getPathIfAssetMissing(texture.image.filepath):
-                        unresolvedPackageIds.append(object.vray.cosmos_package_id)
-                        unresolvedRevisionIds.append(object.vray.cosmos_revision_id)
+                        unresolvedPackageIds.append(dataObject.vray.cosmos_package_id)
+                        unresolvedRevisionIds.append(dataObject.vray.cosmos_revision_id)
                         unresolvedPaths.append(unresolvedPath)
                         self.unresolvedCallbacks.append(lambda x, img=texture.image: (setattr(img, 'filepath', x), untrackImage(img)))
                 elif (brdfScanned := getattr(node, 'BRDFScanned', None)):
                     if unresolvedPath := self._getPathIfAssetMissing(brdfScanned.file):
-                        unresolvedPackageIds.append(object.vray.cosmos_package_id)
-                        unresolvedRevisionIds.append(object.vray.cosmos_revision_id)
+                        unresolvedPackageIds.append(dataObject.vray.cosmos_package_id)
+                        unresolvedRevisionIds.append(dataObject.vray.cosmos_revision_id)
                         unresolvedPaths.append(unresolvedPath)
                         self.unresolvedCallbacks.append(lambda x, brdf=brdfScanned: setattr(brdf, 'file', x))
 
@@ -150,7 +156,7 @@ class CosmosHandler:
                 continue
             if not material.vray.cosmos_package_id:
                 continue
-            checkNodeTreeAssets(material)
+            checkNodeTreeAssets(material, material.node_tree)
 
         for obj in bpy.data.objects:
             if obj.type != 'MESH':
@@ -158,12 +164,14 @@ class CosmosHandler:
             mesh = obj.data
             if not hasattr(mesh, 'vray') or not mesh.vray.cosmos_package_id:
                 continue
-            if (vrayProxy := mesh.vray.GeomMeshFile) and mesh.vray.cosmos_package_id:
+            if (isObjectVrayProxy(obj) and (vrayProxy := mesh.vray.GeomMeshFile)):
                 if unresolvedPath := self._getPathIfAssetMissing(vrayProxy.file):
                     unresolvedPackageIds.append(mesh.vray.cosmos_package_id)
                     unresolvedRevisionIds.append(mesh.vray.cosmos_revision_id)
                     unresolvedPaths.append(unresolvedPath)
                     self.unresolvedCallbacks.append(lambda x, proxyObj=obj, proxy=vrayProxy: (selectObject(proxyObj), setattr(proxy, 'file', x)))
+            elif isObjectVRayDecal(obj) and treeHasNodes(obj.vray.ntree) and (getNodeByType(obj.vray.ntree, 'VRayNodeDecalOutput') is not None):
+                checkNodeTreeAssets(obj.data, obj.vray.ntree)
 
         for light in bpy.data.lights:
             if not hasattr(light, 'vray') or not light.use_nodes or not light.node_tree or not light.vray.cosmos_package_id:
@@ -176,7 +184,7 @@ class CosmosHandler:
                     unresolvedPaths.append(unresolvedPath)
                     self.unresolvedCallbacks.append(lambda x, ies=propGroup: setattr(ies, 'ies_file', x))
             if light.vray.light_type=='DOME':
-                checkNodeTreeAssets(light)
+                checkNodeTreeAssets(light, light.node_tree)
 
         if len(unresolvedPackageIds) == 0:
             return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message='There are no Cosmos assets that require relinking.',
@@ -220,13 +228,16 @@ class CosmosHandler:
 
 cosmosHandler = CosmosHandler()
 
-# bpy datastructures modifying from another thread could crash Blender.
+# Modifying bpy data structures from another thread could crash Blender.
 # This means that vrmat and vrmesh file importing can be done only from the main thread.
 # For that reason 'assetImportTimerFunction' is registered as timer and waits until asset import data is
 # added to the 'assetImportQueue' from 'assetImportCallback' which is safe for execution from another thread
 # This is the recommended by the  blender community way for dealing with this problem:
 # https://docs.blender.org/api/current/bpy.app.timers.html#use-a-timer-to-react-to-events-in-another-thread
 assetImportQueue = queue.Queue()
+
+# Scale applied when importing Cosmos Assets
+COSMOS_SCALE_UNIT = 0.01 # centimeters
 
 def assetImportTimerFunction():
     global assetImportQueue
@@ -239,9 +250,9 @@ def assetImportTimerFunction():
                     if not os.path.exists(settings.matFile):
                         debug.printError(f"VRmat file {settings.matFile} does not exist")
                         continue
-                    importMaterials(settings.matFile, 'STANDARD', settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+                    importMaterials(settings.matFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+
                 case "VRMesh":
-                    COSMOS_SCALE_UNIT = 0.01 # centimeters
                     ob, err = importProxyFromMeshFile(bpy.context,
                                             settings.matFile, settings.objFile, lightPath=settings.lightFile,
                                             packageId=settings.packageId, revisionId=settings.revisionId,
@@ -263,6 +274,9 @@ def assetImportTimerFunction():
 
                 case "HDRI":
                     importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+
+                case "Extras":
+                    importDecal(settings)
 
             bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
     except Exception as e:

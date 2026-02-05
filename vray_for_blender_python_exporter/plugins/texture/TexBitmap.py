@@ -5,8 +5,7 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib import plugin_utils, image_utils, sys_utils, path_utils
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel, exportDefaultUVWGenEnvironment
-from vray_blender.exporting.tools import getInputSocketByName
-from vray_blender.nodes.tools import isInputSocketLinked
+from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
 from vray_blender.lib.defs import AttrPlugin
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -28,7 +27,7 @@ def exportTreeNode(nodeCtx: NodeContext):
 
     commonNodesExport.exportNodeTree(nodeCtx, bitmapBufferPluginDesc)
 
-    allowRelativePaths = nodeCtx.exporterCtx.exportOnly
+    allowRelativePaths = nodeCtx.exporterCtx.allowRelativePaths
 
     if node.BitmapBuffer.use_external_image:
         bitmapBufferPluginDesc.setAttribute('file', _getExternalImagePath(node.BitmapBuffer.file, allowRelativePaths))
@@ -53,9 +52,9 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginBitmapBuffer = commonNodesExport.exportPluginWithStats(nodeCtx, bitmapBufferPluginDesc)
 
     mappingSock = getInputSocketByName(nodeCtx.node, "Mapping")
-    if mappingSock and isInputSocketLinked(mappingSock):
+    if mappingSock and (link := getFarNodeLink(mappingSock)):
         # Node has links, continue exporting the node tree
-        uvwPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, mappingSock)
+        uvwPlugin = commonNodesExport.exportSocketLink(nodeCtx, link)
         texBitmapPluginDesc.setAttribute("uvwgen", uvwPlugin)
     else:
         # Add a default UVW Mapping because many consumers of the bitmap will not work without it
@@ -66,7 +65,7 @@ def exportTreeNode(nodeCtx: NodeContext):
 
         texBitmapPluginDesc.setAttribute("uvwgen", uvwPlugin)
 
-    commonNodesExport.exportNodeTree(nodeCtx, texBitmapPluginDesc)
+    commonNodesExport.exportNodeTree(nodeCtx, texBitmapPluginDesc, ("uvwgen"))
     texBitmapPluginDesc.setAttribute("bitmap", pluginBitmapBuffer)
 
     return commonNodesExport.exportPluginWithStats(nodeCtx, texBitmapPluginDesc)

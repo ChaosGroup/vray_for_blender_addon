@@ -205,10 +205,7 @@ def parseVrmat(filePath):
     sceneDesc.append({
         "ID" : 'ImportSettings',
         "Name" : "Import Settings",
-        "Attributes" : {
-            'filepath' : filePath,
-            'dirpath'  : os.path.dirname(filePath),
-        },
+        "Dirpath" : os.path.dirname(filePath)
     })
 
     return sceneDesc

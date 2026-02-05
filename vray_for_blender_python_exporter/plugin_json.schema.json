@@ -24,6 +24,7 @@
                 "UVWGEN",
                 "VECTOR",
                 "BRDF_USE",
+                "TEXTURE",
                 "COLOR_TEXTURE",
                 "PLUGIN",
                 "EFFECT",
@@ -166,7 +167,8 @@
                 "ADVANCED",
                 "GEOMETRY",
                 "MATTE",
-                "UTILITY"
+                "UTILITY",
+                "XYZ"
             ]
         },
         "Parameters": {
@@ -187,6 +189,7 @@
                             "DIR_PATH",
                             "COLOR",
                             "PERCENTAGE",
+                            "XYZ",
                             "DISTANCE",
                             "DISTANCE_CAMERA",
                             "VRAY_ROTATION",
@@ -511,6 +514,18 @@
                             }
                         }
                     }
+                },
+                "internal_links": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "patternProperties": {
+                        "^.*$": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
                 }
             }
         },
@@ -532,18 +547,6 @@
                 },
                 "use_animation_layout": {
                     "type": "boolean"
-                },
-                "default_output": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "label": {
-                            "type": "string"
-                        },
-                        "type": {
-                            "$ref": "#/$defs/paramType"
-                        }
-                    }
                 }
             }
         }

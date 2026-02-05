@@ -63,7 +63,7 @@
 #pragma warning (push)
 #pragma warning (disable: 4505) // Unreferenced function has been removed
 
-namespace VrayZmqWrapper{
+namespace VrayZmqWrapper {
 
 namespace vray = VRayBaseTypes;
 
@@ -116,7 +116,7 @@ enum class MsgType : char {
 	RendererOnChangeState,
 	RendererOnAsyncOpComplete,
 	RendererOnProgress,
-	LastRendererEvent = RendererOnChangeState,
+	LastRendererEvent = RendererOnProgress,
 
 	// Control messages
 	FirstControlMessage,
@@ -157,7 +157,7 @@ enum class MsgType : char {
 	ControlOnImportAsset,
 	ControlOnRendererStatus,
 	ControlOnGetComputeDevices,
-	LastControlEvent = ControlOnRendererStatus,
+	LastControlEvent = ControlOnGetComputeDevices,
 
 	// Compute devices
 };
@@ -202,7 +202,8 @@ enum class ImportedAssetType : char {
 	None,
 	Material,
 	VRMesh,
-	HDRI
+	HDRI,
+	Extras
 };
 
 
@@ -420,9 +421,17 @@ PROTO_MESSAGE(PluginUpdate,
 			flags |= vray::PluginUpdateFlags::PluginValueForceUpdate;
 		}
 	}
+
+	inline void setReCreateAttribute(bool recreateAttribute) {
+		if (recreateAttribute) {
+			flags |= vray::PluginUpdateFlags::PluginReCreateAttr;
+		}
+    }
 	inline bool getForceUpdate() const { return (flags & vray::PluginUpdateFlags::PluginValueForceUpdate) != 0; }
 	inline bool getAsString() const { return (flags & vray::PluginUpdateFlags::PluginValueAsString) != 0; }
 	inline bool getAnimatable() const { return (flags & vray::PluginUpdateFlags::PluginValueAnimatable) != 0; }
+	inline bool getReCreateAttribute() const { return (flags & vray::PluginUpdateFlags::PluginReCreateAttr) != 0; }
+
 );
 
 

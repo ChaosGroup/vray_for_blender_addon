@@ -1,37 +1,13 @@
 
 import bpy
 
-from vray_blender.exporting.tools import getLinkedFromSocket, getActiveFarNodeLinks
+from vray_blender.exporting.tools import getActiveInputFarNodeLinks, getActiveOutputFarNodeLinks
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.lib.mixin import VRayNodeBase
+from vray_blender.nodes.nodes import updateNodeMutedState
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isCompatibleNode
 from vray_blender.plugins.templates import common
-from vray_blender import debug
-
-
-class VRayNodeSelectNodeTree(VRayNodeBase):
-    bl_idname = 'VRayNodeSelectNodeTree'
-    bl_label  = 'V-Ray Node Tree Select'
-    bl_icon   = 'NODETREE'
-
-    vray_type   = 'NONE'
-    vray_plugin = 'NONE'
-
-    treeName: bpy.props.StringProperty(
-        name        = "Tree",
-        description = "Tree name",
-        default     = ""
-    )
-
-    def init(self, context):
-        addOutput(self, 'VRaySocketObject', "Tree")
-
-    def draw_buttons(self, context, layout):
-        layout.prop_search(self, 'treeName',
-                           bpy.data, 'node_groups',
-                           text="")
-
 
     
 class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
@@ -61,19 +37,21 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         result = set()
 
         # Recursively collect the items from connected object selector nodes
-        for link in [l for l in self.inputs[0].links if not l.is_muted and not l.is_hidden]:
-            
-            if sockFrom := getLinkedFromSocket(link.to_socket):
-                match sockFrom.node.bl_idname:
-                    case 'VRayNodeMultiSelect':
-                        result = result | sockFrom.node.getSelected(context)
-                    case 'VRayNodeSelectObject':
-                        if selected := sockFrom.node.getSelected(context):
-                            result.add(selected)
-        
+        for link in [l for l in getActiveInputFarNodeLinks(self.inputs[0])]:
+            node = link.from_node
+            match node.bl_idname:
+                case 'VRayNodeMultiSelect':
+                    result = result | node.getSelected(context)
+                case 'VRayNodeSelectObject':
+                    if selected := node.getSelected(context):
+                        result.add(selected)
+    
         collectionName = getattr(self, 'collection', '')
 
-        return result | set(o for o in self.getSelectedItems(context, collectionName))
+        if not self.mute:
+            result = result | set(o for o in self.getSelectedItems(context, collectionName))
+
+        return result
                 
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
@@ -84,7 +62,7 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         # Return the poll (filter) function for the Object Select field
         sockOut = self.outputs[0]
         
-        activeLinks = getActiveFarNodeLinks(sockOut)
+        activeLinks = getActiveOutputFarNodeLinks(sockOut)
         if len(activeLinks) != 1:
             return True
         
@@ -110,7 +88,7 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
     def update(self):
         # Mark as disabled the items that are not compatible with the socket(s) the output of 
         # this node is linked to.
-        inputSockets = [l.to_socket for l in getActiveFarNodeLinks(self.outputs[0])]
+        inputSockets = [l.to_socket for l in getActiveOutputFarNodeLinks(self.outputs[0])]
         
         filters = [getLinkInfo(toSocket.node.vray_plugin, toSocket.vray_attr).fnFilter \
                     for toSocket in inputSockets \
@@ -125,6 +103,13 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         else:
             for item in selectedObjects:
                 item.enabled = True
+
+        updateNodeMutedState(self)
+
+
+    def resolveInternalLink(self, outSock: bpy.types.NodeSocket):
+        inSock = outSock.node.inputs[0]
+        return inSock, inSock
 
 
 class VRayNodeSelectObject(VRayNodeBase):
@@ -146,7 +131,7 @@ class VRayNodeSelectObject(VRayNodeBase):
         # Return the poll (filter) function for the Object Select field
         sockOut = self.outputs[0]
         
-        activeLinks = getActiveFarNodeLinks(sockOut)
+        activeLinks = getActiveOutputFarNodeLinks(sockOut)
         if len(activeLinks) != 1:
             return True
         
@@ -196,12 +181,26 @@ class VRayNodeSelectObject(VRayNodeBase):
         return False
 
     def getSelected(self, context: bpy.types.Context):
-        if not self.objectName:
+        if (not self.objectName) or self.mute:
             return None
         
         return self.objectPtr.original if self.objectPtr.original in context.scene.objects.values() else None
 
 
+def resolveSelectorNode(toSock: bpy.types.NodeSocket):
+    """ Get a connected Selector node resolving Reroute nodes only.
+        This is specific to Selectors because they implement their own resolution
+        and we only need to find the first of the subtree of connected selectors.
+    """
+    if not toSock.is_linked:
+        return None
+    
+    fromNode = toSock.links[0].from_node
+    if fromNode.bl_idname == 'NodeReroute':
+        return resolveSelectorNode(fromNode.inputs[0])
+    elif fromNode.bl_idname in ('VRayNodeMultiSelect', 'VRayNodeSelectObject'):
+        return fromNode
+    
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
@@ -213,7 +212,6 @@ class VRayNodeSelectObject(VRayNodeBase):
 
 def getRegClasses():
     return (
-        VRayNodeSelectNodeTree,
         VRayNodeMultiSelect,
         VRayNodeSelectObject,
     )

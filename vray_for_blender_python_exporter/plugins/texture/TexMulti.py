@@ -4,12 +4,11 @@ import mathutils
 
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr, getInputSocketByName
-from vray_blender.lib import plugin_utils, draw_utils
+from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import  PluginDesc, NodeContext
 from vray_blender.lib.names import Names
 from vray_blender.nodes.operators.sockets import VRayNodeAddCustomSocket, VRayNodeDelCustomSocket
 from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult
-from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup
 from vray_blender.plugins.templates.common import VRAY_OT_simple_button
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -43,7 +42,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
 
         texSplit = left.split(factor=0.4)
         texSplit.prop(self, 'value', text='')
-        if isInputSocketLinked(self):
+        if self.hasActiveFarLink():
             texSplit.prop(self, 'multiplier', text='')
         elif type(self.value) is mathutils.Color:
             texSplit.label(text=self.name)
@@ -62,9 +61,12 @@ class VRaySocketTexMulti(VRaySocketColorMult):
     def draw_color_simple(cls):
         return RGBA_SOCKET_COLOR
 
-    def shouldExportLink(self):
-        return self.use and super().shouldExportLink()
+    def hasActiveFarLink(self):
+        return self.use and super().hasActiveFarLink()
 
+    def getFarLink(self):
+        return super().getFarLink() if self.use else None
+        
     def copy(self, dest):
         dest.id = self.id
         dest.use = self.use
@@ -150,7 +152,7 @@ def widgetDrawTexMap(context, layout, propGroup, widgetAttr):
         panel.label(text=_getTexSockName(i + 1))
         row = panel.row()
         row.prop(s, 'value', text="Color")
-        if isInputSocketLinked(s):
+        if s.hasActiveFarLink():
             row.prop(s, 'multiplier', text='')
 
         row = panel.row()
@@ -174,11 +176,8 @@ def exportTreeNode(nodeCtx: NodeContext):
         if not sock.use:
             continue
 
-        if sock.shouldExportLink():
-            nodeLink = getFarNodeLink(sock)
-            assert nodeLink is not None
-
-            texPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, nodeLink.to_socket)
+        if nodeLink := getFarNodeLink(sock):
+            texPlugin = commonNodesExport.exportSocketLink(nodeCtx, nodeLink)
             textures.append(texPlugin)
         else:
             # The socket is not connected, export a color wrapped in a TexCombineColor plugin.

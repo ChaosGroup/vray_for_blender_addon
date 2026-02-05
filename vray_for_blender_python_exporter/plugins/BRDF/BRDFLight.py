@@ -4,7 +4,7 @@ from vray_blender.lib.color_utils import opacityToTransparency
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib import plugin_utils
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getInputSocketByAttr
+from vray_blender.exporting.tools import getInputSocketByAttr, getFarNodeLink
 from vray_blender.nodes.utils import getVrayPropGroup
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -22,8 +22,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     # to the user. This is why a conversion is needed.
     sockOpacity = getInputSocketByAttr(node, "transparency")
 
-    if sockOpacity.shouldExportLink():
-        plTexOpacity = commonNodesExport.exportLinkedSocket(nodeCtx, sockOpacity)
+    if opacityLink := getFarNodeLink(sockOpacity):
+        plTexOpacity = commonNodesExport.exportSocketLink(nodeCtx, opacityLink)
         
         plTexInvert = PluginDesc(Names.nextVirtualNode(nodeCtx, 'TexInvert'), 'TexInvert')
         plTexInvert.setAttribute("texture", plTexOpacity)

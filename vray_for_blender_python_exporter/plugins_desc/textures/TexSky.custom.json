@@ -132,7 +132,7 @@
                     }
                 ],
                 "active": {
-                    "cond": "::sun_dir_only=1;::sun=NONE"
+                    "cond": "plugins.texture.TexSky.showBasicOptions"
                 }
             },
             {
@@ -162,7 +162,10 @@
             {
                 "name": "sun"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Filter Color", "Ground Albedo"]
+        }
     },
     "Options": {
         "excluded_parameters": [

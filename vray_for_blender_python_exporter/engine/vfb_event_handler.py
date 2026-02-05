@@ -1,7 +1,7 @@
 import bpy
 import json
 import threading
-from vray_blender.bin import VRayBlenderLib as vray
+
 from vray_blender.engine.zmq_process import ZMQProcess
 from vray_blender.lib import sys_utils
 from vray_blender.lib.defs import ProdRenderMode
@@ -48,6 +48,9 @@ class _VfbEventHandler:
         self._fps                = 5       # Timer activation rate
         self._redrawViewport     = False   # Flag to request viewport redraw on the next timer activation
 
+        self._lightMixSupported  = False   # Flag to indicate if LightMix settings are supported (After a valid RenderChannelLightMix plugin is exported and rendered)
+        self._lightMixSettings   = None    # Stores LightMix settings until a valid RenderChannelLightMix plugin is exported and rendered
+
 
     def addEvent(self, eventType, *args, **kwargs):
         """ Add an event to the event queue. The event will be processed in a valid Blender context.
@@ -77,6 +80,8 @@ class _VfbEventHandler:
             self.vfbLayersJson  = ""
             self.vfSettingsJson = ""
             self._redrawViewport = False
+            self._lightMixSupported = False
+            self._lightMixSettings = None
 
 
     def stop(self):
@@ -96,9 +101,9 @@ class _VfbEventHandler:
         """ Set the viewport to RENDERED mode """
         self.addEvent(_Event.RenderViewport)
 
-    def startInteractiveRender(self):
+    def startInteractiveRender(self, iprContext = None):
         """ Start interactive rendering """
-        self.addEvent(_Event.RenderInteractive)
+        self.addEvent(_Event.RenderInteractive, iprContext)
 
     def startVantageLiveLink(self):
         """ Start interactive rendering """
@@ -108,7 +113,7 @@ class _VfbEventHandler:
         """ Stop interactive rendering """
         self.addEvent(_Event.RenderInteractiveStop)
 
-    def startProdRender(self):
+    def startProdRender(self, forceAnimation: bool):
         """ Start production rendering """
         from vray_blender.engine.renderer_prod import VRayRendererProd
 
@@ -118,7 +123,7 @@ class _VfbEventHandler:
             return
         self.stopViewportRender()
         self.stopInteractiveRender()
-        self.addEvent(_Event.RenderProd)
+        self.addEvent(_Event.RenderProd, forceAnimation)
 
     def stopVantageLiveLink(self):
         self.addEvent(_Event.RenderVantageStop)
@@ -144,13 +149,50 @@ class _VfbEventHandler:
         """ Run a scene upgrade """
         self.addEvent(_Event.UpgradeScene)
 
+    def setLightMixSupported(self, supported: bool):
+        """ Mark LightMix settings as supported """
+        with self._lock:
+            self._lightMixSupported = supported
 
-    def updateVfbLayers(self, vfbLayersJson: str):
-        """ Update VFB layer settings """
+    def updateVfbLayers(self, vfbLayersJson: str, settingsAreFromScene: bool = False):
+        """ Update VFB layer settings
+            @param vfbLayersJson - the VFB layers JSON for storing in _vfbLayersJson
+            @param settingsAreFromScene - if True, the settings are from the scene and not from the server
+        """
         with self._lock:
             # Do not directly change the vfb2_layers property of SettingsVFB here, because this will
             # trigger an unwanted export of the scene. The property will be added to the export by a
             # custom exporter function for SettingsVFB.
+
+            if vfbLayersJson:
+                # LightMix VFB layers require render mode (Production or VFB IPR in our case)
+                # in which the RenderChannelLightMix plugin can be exported and rendered
+                # in order to function properly. Before the first render, or during viewport rendering,
+                # these requirements are not met. As a result, if the server sends VFB layers JSON at that time,
+                # the LightMix settings within it cannot be considered valid. To preserve valid settings,
+                # they are stored in _lightMixSettings only when the requirements above are met.
+                # When the requirements are not met, _lightMixSettings is used to update the
+                # LightMix settings in the VFB layers JSON to ensure they remain valid.
+                vfbLayersJsonDict = json.loads(vfbLayersJson)
+
+                def findLayerByClass(data, className):
+                    return next((l for l in data.get("sub-layers", []) if l.get("class") == className), None)
+
+                if (displayCorrection := findLayerByClass(vfbLayersJsonDict, "chaos.displayCorrection")) and \
+                    (sourceFolder := findLayerByClass(displayCorrection, "chaos.ref.sourcefolder")):
+
+                    if lightMix := findLayerByClass(sourceFolder, "chaos.ref.lightmix"):
+                        # If the settings are from the scene, we can use them directly, they are valid.
+                        if self._lightMixSupported or settingsAreFromScene:
+                            self._lightMixSettings = lightMix
+                        elif self._lightMixSettings:
+                            lightMix["properties"] = self._lightMixSettings["properties"]
+
+                # Somehow the VFB layers get unselected after a render is started,
+                # when the value of SettingsVFB.vfb2_layers property has spaces after "," and ":".
+                # Using separators=(",", ":") instead of the default separators=(", ", ": ") prevents this.
+                vfbLayersJson = json.dumps(vfbLayersJsonDict, separators=(",", ":"))
+
             self._vfbLayersJson = vfbLayersJson
             self._redrawViewport = True
 
@@ -213,7 +255,8 @@ class _VfbEventHandler:
                     self.changeViewportModeSync('RENDERED')
 
                 case _Event.RenderProd:
-                    processed = self.startProdRenderSync(renderMode=ProdRenderMode.RENDER)
+                    self.setLightMixSupported(True)
+                    processed = self.startProdRenderSync(ProdRenderMode.RENDER, *event.args)
 
                 case _Event.ExportVrscene:
                     processed = self.startProdRenderSync(renderMode=ProdRenderMode.EXPORT_VRSCENE)
@@ -222,7 +265,8 @@ class _VfbEventHandler:
                     processed = self.startProdRenderSync(renderMode=ProdRenderMode.CLOUD_SUBMIT)
 
                 case _Event.RenderInteractive:
-                    self._startInteractiveRender()
+                    self.setLightMixSupported(True)
+                    self._startInteractiveRender(*event.args, **event.kwargs)
 
                 case _Event.RenderInteractiveStop:
                     self._stopInteractiveRender()
@@ -256,15 +300,13 @@ class _VfbEventHandler:
             @param targetArea - the area for which the mode is changed. If None, then
                                 the first found area of type View3D.
         """
-        from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+        from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprBase
 
-        if not (space := VRayRendererIprViewport.getLastActiveSpace(bpy.context)):
-            # We don't have information as to which space was last used by the user for V-Ray rendering.
-            # Find any View3D space.
-            if area := next((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'), None):
-                space = next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
-                assert space, "No 3D viewport area found when ViewportModeSetter tries to switch shading type"
+        if not (iprContext := VRayRendererIprBase.getActiveIprContext()):
+            # The command cannot be carried out because there are no 3d viewport views open in Blender.
+            return
 
+        space = iprContext.view3d
         if space and space.shading.type != newMode:
             # The change to the shading type value will trigger a switch of the viewport
             # to the specified shading mode.
@@ -278,20 +320,29 @@ class _VfbEventHandler:
             vfbConf.write(json.dumps(uiSettings, indent=4))
 
 
-    def startProdRenderSync(self, renderMode: int):
-        """ Synchronously invoke the production render operator """
+    def startProdRenderSync(self, renderMode: int, forceAnimation = False, block = False):
+        """ Invoke the production render operator
+
+        Args:
+            renderMode (int): one of the ProdRebderMode members
+            forceAnimation (bool, optional): force renering animation even if the mode currently
+                                             selected in the UI is not ANIMATION.
+            block (bool, optional): Run the render operator in blocking mode.
+
+        Returns:
+            _type_: _description_
+        """
         from vray_blender.engine.renderer_prod import VRayRendererProd
 
         # Blender would not let the 'Render' operator run without a camera. Check here in order
         # to avoid the exception log that would be printed otherwise.
         if not bpy.context.scene.camera:
            action = "export" if renderMode == ProdRenderMode.EXPORT_VRSCENE else "render"
-           debug.reportError(f'Cannot {action} scene without an active camera.')
+           debug.reportError(f'Cannot {action} a scene without a camera. Add a camera to the scene and try again.')
            return True
 
         if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('COMPOSITE'):
-            # Wait for a previously started render job to finish.
-            # NOTE: This is check is a temporary debug tool used in an attempt to catch
+            # This is check is a temporary debug tool used in an attempt to catch
             # an intermittently occurring situation where the context does not permit changes
             # to the scene from the timer handler.
             debug.printWarning("VfbEventHandler::startProdRenderSync(): Another job is running.")
@@ -303,10 +354,8 @@ class _VfbEventHandler:
             return True
 
         # Cancel rendering if there are cameras markers with different types in the part of the timeline that is for rendering.
-        if (renderMode == ProdRenderMode.RENDER) and (not renderCamerasHaveSameType()):
+        if (renderMode == ProdRenderMode.RENDER) and (not renderCamerasHaveSameType(forceAnimation)):
             return True
-
-        debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
 
         # Lock the UI for the duration of the job. If the UI is not locked while a render job is running
         # in a timer callback, an access violation may occur in Blender.
@@ -319,8 +368,8 @@ class _VfbEventHandler:
         # If inside a 3D viewport, the 'use_viewport' parameter will make the renderer use the layers
         # and camera of the viewport.
         VRayRendererProd.renderMode = renderMode
-        execContext = 'INVOKE_DEFAULT' if renderMode == ProdRenderMode.RENDER else 'EXEC_DEFAULT'
-        bpy.ops.render.render(execContext, use_viewport=True)
+        VRayRendererProd.forceAnimation = forceAnimation
+        bpy.ops.render.render('EXEC_DEFAULT' if block else 'INVOKE_DEFAULT', use_viewport=True)
 
         renderModeName = {
             ProdRenderMode.CLOUD_SUBMIT: "Submit to cloud",
@@ -334,9 +383,18 @@ class _VfbEventHandler:
         return True
 
 
-    def _startInteractiveRender(self):
+    def _startInteractiveRender(self, iprContext):
         from vray_blender.engine.render_engine import VRayRenderEngine
-        VRayRenderEngine.startInteractiveRenderer()
+        from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
+
+        if not iprContext:
+            iprContext = VRayRendererIprVfb.getActiveIprContext()
+
+        if not iprContext:
+            debug.report('WARNING', "No active viewport to render")
+            return
+        
+        VRayRenderEngine.startInteractiveRenderer(iprContext)
         VRayRenderEngine.iprRenderer.exportScene()
 
     def _stopInteractiveRender(self):

@@ -96,7 +96,10 @@
             {
                 "name": "uvwgen"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Color 1", "Color 2"]
+        }
     },
     "Options": {
         "animatable": true,

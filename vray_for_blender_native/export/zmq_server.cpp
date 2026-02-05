@@ -4,7 +4,6 @@
 #include "plugin_desc.hpp"
 
 #include <filesystem>
-#include <fstream>
 #include <limits>
 #include <random>
 
@@ -391,6 +390,9 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 			break;
 		case ImportedAssetType::HDRI:
 			cosmosSettings.assetType = "HDRI";
+			break;
+		case ImportedAssetType::Extras:
+			cosmosSettings.assetType = "Extras";
 			break;
 	}
 

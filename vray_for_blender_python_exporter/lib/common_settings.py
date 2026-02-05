@@ -90,8 +90,8 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
 
 
 class CommonSettings:
-    """ This class is used to gather, once per update cycle, the UI settings that are  
-        used by different exporters but not necessarily exported by them. 
+    """ This class is used to gather, once per update cycle, the UI settings that are
+        used by different exporters but not necessarily exported by them.
     """
     def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine, isInteractive, exportOnly: bool = False):
 
@@ -135,12 +135,6 @@ class CommonSettings:
         if self.useStereoCamera:
             self._updateStereoCameraObjectsList(self.leftStereoCamName, self.rightStereoCamName)
 
-        # TODO: export material overrides
-        # overrideName = ""
-        # settingsOptions = vrayScene.SettingsOptions
-        # if settingsOptions.mtl_override_on:
-        #     overrideName = settingsOptions.mtl_override
-
 
     def _updateRenderMode(self):
         self.renderMode = self._getRenderMode()
@@ -164,35 +158,36 @@ class CommonSettings:
         self.viewportImageType      = defs.ImageType.RgbaReal
 
 
-    def _isCloudSubmit(self):
+    def isCloudSubmit(self):
         prodRenderer = self.renderEngine.prodRenderer
         return prodRenderer and prodRenderer.renderMode == ProdRenderMode.CLOUD_SUBMIT
 
     def _updateAnimation(self):
         isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
-        
+
         self.animation.frameStart   = self.scene.frame_start
         self.animation.frameEnd     = self.scene.frame_end
         self.animation.frameCurrent = self.scene.frame_current
         self.animation.frameStep    = self.scene.frame_step
         
-        if not isProductionRendering:
-            self.animation.mode = defs.AnimationMode.SingleFrame
+        animationMode = defs.AnimationMode.SingleFrame
+
+        if isProductionRendering:
+            animationMode = self.vrayExporter.animation_mode
             
-        elif self.exportOnly and not self._isCloudSubmit():
-            animExportOnlySettings = self.vrayExporter.animationSettingsVrsceneExport
+            if self.exportOnly and not self.isCloudSubmit():
+                animExportOnlySettings = self.vrayExporter.animationSettingsVrsceneExport
 
-            if animExportOnlySettings.exportAnimation:
-                self.animation.mode = defs.AnimationMode.Animation
-                if animExportOnlySettings.frameRangeMode == 'CUSTOM_RANGE':
-                    self.animation.frameStart = animExportOnlySettings.customFrameStart
-                    self.animation.frameEnd = animExportOnlySettings.customFrameEnd
-            else:
-                self.animation.mode = defs.AnimationMode.SingleFrame
-        else:
-            self.animation.mode = self.vrayExporter.animation_mode
+                if animExportOnlySettings.exportAnimation:
+                    animationMode = defs.AnimationMode.Animation
+                    if animExportOnlySettings.frameRangeMode == 'CUSTOM_RANGE':
+                        self.animation.frameStart = animExportOnlySettings.customFrameStart
+                        self.animation.frameEnd = animExportOnlySettings.customFrameEnd
+                        self.animation.frameStep = animExportOnlySettings.customFrameStep
+                else:
+                    animationMode = defs.AnimationMode.SingleFrame
 
-        self.animation.use = (self.animation.mode != defs.AnimationMode.SingleFrame)
+        self.animation.use = (animationMode != defs.AnimationMode.SingleFrame)
         
         # scene.render.fps is of type int. In order to have non-int fps, Blender uses 
         # the float divisor fps_base. E.g. FPS 20.5 may be represented as

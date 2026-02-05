@@ -1,4 +1,3 @@
-
 import bpy
 
 from vray_blender.ui import classes
@@ -7,6 +6,7 @@ from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes.utils import findDataObjFromNode, addInputs
 from vray_blender.plugins import getPluginModule, addAttributes
+from vray_blender.plugins.geometry.VRayDecal import drawDecalAspectRatioButtons
 from vray_blender.nodes.nodes import vrayNodeUpdate
 from vray_blender.exporting.update_tracker import UpdateTracker
 
@@ -49,6 +49,11 @@ class VRayNodeObjectOutput(VRayNodeBase):
     def draw_buttons_ext(self, context, layout):
         self._drawObjectID(context, layout)
 
+    def update(self):
+        if self.mute:
+            self.mute = False
+
+
 class VRayNodeFurOutput(VRayNodeBase):
     bl_idname = 'VRayNodeFurOutput'
     bl_label  = 'V-Ray Fur Output'
@@ -64,8 +69,27 @@ class VRayNodeFurOutput(VRayNodeBase):
         classes.drawPluginUI(context, layout, self.GeomHair, getPluginModule('GeomHair'), self)
 
     def update(self):
+        if self.mute:
+            self.mute = False
+            
         vrayNodeUpdate(self)
 
+class VRayNodeDecalOutput(VRayNodeBase):
+    bl_idname = 'VRayNodeDecalOutput'
+    bl_label  = 'V-Ray Decal Output'
+    bl_width_default  = 180
+
+    vray_type  : bpy.props.StringProperty(default='GEOMETRY')
+    vray_plugin: bpy.props.StringProperty(default='VRayDecal')
+
+    def init(self, context):
+        addInputs(self, getPluginModule('VRayDecal'))
+
+    def draw_buttons_ext(self, context, layout):
+        classes.drawPluginUI(context, layout, self.VRayDecal, getPluginModule('VRayDecal'), self)
+
+    def update(self):
+        vrayNodeUpdate(self)
 
 
 ##     ##    ###    ######## ######## ########  ####    ###    ##
@@ -128,7 +152,6 @@ class VRayNodeOutputMaterial(VRayNodeBase):
         panelUniqueId = f'{self.as_pointer()}_{pluginType}'
 
         if panel := draw_utils.rollout(layout, panelUniqueId, label, usePropDataSrc=propGroup, usePropName='use'):
-
             split = panel.split(factor=0.05, align=True)
 
             enabled = propGroup.use
@@ -138,7 +161,6 @@ class VRayNodeOutputMaterial(VRayNodeBase):
             split.column()
             col = split.column()
             classes.drawPluginUI(context, col, propGroup, getPluginModule(pluginType), self)
-
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
@@ -153,12 +175,15 @@ def getRegClasses():
 
         VRayNodeOutputMaterial,
         VRayNodeObjectOutput,
-        VRayNodeFurOutput
+        VRayNodeFurOutput,
+        VRayNodeDecalOutput
     )
 
 
 def register():
     addAttributes(getPluginModule("GeomHair"), VRayNodeFurOutput)
+    addAttributes(getPluginModule("VRayDecal"), VRayNodeDecalOutput)
+
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
 

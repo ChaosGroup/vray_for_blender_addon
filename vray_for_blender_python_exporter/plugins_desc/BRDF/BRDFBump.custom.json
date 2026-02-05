@@ -75,7 +75,10 @@
            {
                "name" : "bump_tex_color"
            }
-       ]
+       ],
+       "internal_links": {
+           "BRDF": ["Base Material"]
+       }
     },
     "Options": {
         "animatable": true,

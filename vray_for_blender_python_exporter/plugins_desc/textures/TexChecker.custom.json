@@ -202,7 +202,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["White Color", "Black Color"]
+        }
     },
     "Options": {
         "animatable": true,

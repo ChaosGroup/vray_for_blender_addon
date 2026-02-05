@@ -1,0 +1,349 @@
+{
+    "Desciption": "VRayDecal",
+    "ID": "VRayDecal",
+    "Name": "V Ray Decal",
+    "Parameters": [
+        {
+            "attr": "decal_type",
+            "type": "ENUM",
+            "default": "Type",
+            "desc": "The type of decal",
+            "items": [
+                [
+                    "0",
+                    "Planar",
+                    "Planar"
+                ],
+                [
+                    "1",
+                    "Cylindrical",
+                    "Cylindrical"
+                ]
+            ],
+            "update": "onUpdateDecalMesh",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "aspect_ratio",
+            "type": "FLOAT",
+            "default": 1.0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "lock_aspect_ratio",
+            "type": "BOOL",
+            "desc": "Lock width-to-height ratio",
+            "update": "onUpdateDecalLockAspectRatio",
+            "default": false,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "normal_angle",
+            "default": 90,
+            "ui": {
+                "min": 0,
+                "max": 180
+            }
+        },
+        {
+            "attr": "fade_on",
+            "type": "BOOL",
+            "ui": {
+                "display_name": "Fade Out"
+            }
+        },
+        {
+            "attr": "fade_angle",
+            "ui": {
+                "min": 0,
+                "max": 180,
+                "display_name": "Fade Out Angle"
+            }
+        },
+        {
+            "attr": "z_order",
+            "ui": {
+                "min": 0,
+                "soft_min": 0,
+                "soft_max": 4,
+                "display_name": "Order"
+            }
+        },
+        {
+            "attr": "enable_mask",
+            "type": "BOOL",
+            "default": true,
+            "options": {
+                "derived": true,
+                "animatable": false
+            }
+        },
+        {
+            "attr": "displacement_multiplier",
+            "type": "FLOAT",
+            "default": 1.0,
+            "options": {
+                "derived": true
+            },
+            "ui": {
+                "soft_min": -5,
+                "soft_max": 5,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "decal_only_bump",
+            "default": false
+        },
+        {
+            "attr": "orig_bump_amount",
+            "default": 1.0,
+            "subtype": "PERCENTAGE",
+            "precision": 0,
+            "ui": {
+                "min": 0,
+                "max": 1,
+                "display_name": "Surface Bump"
+            }
+        },
+        {
+            "attr": "override_user_attributes",
+            "options": {
+                "animatable": false
+            }
+        },
+        {
+            "attr": "height_offset",
+            "default": 0.0,
+            "update": "onUpdateDecalMesh",
+            "ui": {
+                "soft_min": -1,
+                "soft_max": 1
+            }
+        },
+        {
+            "attr": "width",
+            "default": 1.0,
+            "update": "onUpdateDecalMesh",
+            "ui": {
+                "min": 0.0001,
+                "soft_max": 20,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "length",
+            "default": 1.0,
+            "update": "onUpdateDecalMesh",
+            "ui": {
+                "min": 0.0001,
+                "soft_max": 20,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "height",
+            "default": 1.0,
+            "update": "onUpdateDecalMesh",
+            "ui": {
+                "min": 0.0001,
+                "soft_max": 20,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "decal_object_selector",
+            "type": "TEMPLATE",
+            "desc": "A list of plugins that will be included or excluded from decals",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "filter_function": "filters.filterGeometries",
+                        "mode_bound_property": "exclusion_mode",
+                        "bound_property": "exclusion_nodes"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "displacement_tex_color",
+            "type" : "TEXTURE",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "mask",
+            "type" : "TEXTURE",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "bend",
+            "default": 90,
+            "update": "onUpdateDecalMesh",
+            "ui": {
+                "min": 0,
+                "max": 360,
+                "quantityType": "angle",
+                "units": "degrees"
+            }
+        },
+        {
+            "attr": "aspect_ratio_buttons",
+            "type": "INT",
+            "desc": "Dummy property for aspect ratio buttons group",
+            "default": 0,
+            "options": {
+               "derived": true
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "decal_type"
+                    },
+                    {
+                        "name": "enabled"
+                    }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "default_closed": false,
+                "active": { "cond": "::enabled=1" },
+                "attrs": [
+                    {
+                        "name": "height",
+                        "label": "Length"
+                    },
+                    {
+                        "name": "height_offset",
+                        "label": "Length Offset"
+                    },
+                    {
+                        "name": "width"
+                    },
+                    {
+                        "name": "length",
+                        "label": "Height"
+                    },
+                    {
+                        "name": "bend",
+                        "active": {
+                            "cond": "::decal_type=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "aspect_ratio_buttons",
+                        "custom_draw": "drawDecalAspectRatioButtons"
+                    },
+                    {
+                        "name": "lock_aspect_ratio"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "normal_angle"
+                    },
+                    {
+                        "name": "fade_on",
+                        "label": "Fade Out"
+                    },
+                    {
+                        "name": "fade_angle",
+                        "active": {
+                            "cond": "::fade_on!=0"
+                        }
+                    },
+                    {
+                        "name": "z_order"
+                    },
+                    {
+                        "name": "enable_mask"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "project_on_back"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "Decal Objects",
+                        "label": "Decal Objects",
+                        "attrs": [
+                            {
+                                "name": "decal_object_selector",
+                                "list_label": "Objects List"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "Displacement",
+                        "label": "Displacement",
+                        "attrs": [
+                            {
+                                "name": "displacement_multiplier"
+                            },
+                            {
+                                "name": "displacement_ignore_original",
+                                "label": "Use Only Decal Displacement"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "Bump",
+                        "label": "Bump",
+                        "attrs": [
+                            {
+                                "name": "decal_only_bump",
+                                "label": "Use Only Decal Bump"
+                            },
+                            {
+                                "name": "orig_bump_amount",
+                                "active": { "cond": "::decal_only_bump=0" }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "override_user_attributes"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            { "name": "mask" },
+            { "name": "displacement_tex_color", "label": "Displacement" },
+            { "name": "exclusion_nodes", "label": "Objects" }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [ ]
+    }
+}

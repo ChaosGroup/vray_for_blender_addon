@@ -185,7 +185,10 @@
             {
                 "name": "normal_uvwgen"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Map", "Additional Bump"]
+        }
     },
     "Options": {
         "animatable": true,

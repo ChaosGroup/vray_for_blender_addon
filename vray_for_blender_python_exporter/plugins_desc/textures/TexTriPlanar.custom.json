@@ -42,61 +42,6 @@
             "subtype": "VRAY_OFFSET"
         }
     ],
-    "Node": {
-        "input_sockets": [
-            {
-                "name": "texture_x"
-            },
-            {
-                "name": "texture_y"
-            },
-            {
-                "name": "texture_z"
-            },
-            {
-                "name": "texture_negx",
-                "label": "Texture -X"
-            },
-            {
-                "name": "texture_negy",
-                "label": "Texture -Y"
-            },
-            {
-                "name": "texture_negz",
-                "label": "Texture -Z"
-            },
-            {
-                "name": "size"
-            },
-            {
-                "name": "frame_offset"
-            },
-            {
-                "name": "texture_rotation_map",
-                "label": "Texture Rotation"
-            }
-        ],
-        "output_sockets": [
-            {
-                "name": "_default_",
-                "label": "Color",
-                "type": "OUTPUT_TEXTURE"
-            },
-            {
-                "name": "out_intensity"
-            }
-        ],
-        "widgets": [
-            {
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "name": "texture_mode"
-                    }
-                ]
-            }
-        ]
-    },
     "Widget": {
         "widgets": [
             {
@@ -174,6 +119,64 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "texture_x"
+            },
+            {
+                "name": "texture_y"
+            },
+            {
+                "name": "texture_z"
+            },
+            {
+                "name": "texture_negx",
+                "label": "Texture -X"
+            },
+            {
+                "name": "texture_negy",
+                "label": "Texture -Y"
+            },
+            {
+                "name": "texture_negz",
+                "label": "Texture -Z"
+            },
+            {
+                "name": "size"
+            },
+            {
+                "name": "frame_offset"
+            },
+            {
+                "name": "texture_rotation_map",
+                "label": "Texture Rotation"
+            }
+        ],
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Color",
+                "type": "OUTPUT_TEXTURE"
+            },
+            {
+                "name": "out_intensity"
+            }
+        ],
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "texture_mode"
+                    }
+                ]
+            }
+        ],
+        "internal_links": {
+            "*": ["Texture X", "Texture Y", "Texture Z", "Texture -X", "Texture -Y", "Texture -Z"]
+        }
     },
     "Options": {
         "excluded_parameters": [

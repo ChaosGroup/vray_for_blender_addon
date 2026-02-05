@@ -1,5 +1,6 @@
 import os
 import re
+import time
 
 import bpy
 from bpy.props import *
@@ -368,6 +369,10 @@ class VRAY_OT_export_scene(VRayOperatorBase):
                 if not vray.writeVrscene(renderer, exportSettings):
                     self.report({'ERROR'}, "Scene export failed")
                     return { 'FINISHED' }
+                
+                while vray.exportJobIsRunning(renderer):
+                    time.sleep(0.1)
+
                 msgInfo = f"Exported scene: {exportSettings.filePath}."
                 self.report({'INFO'}, msgInfo)
                 debug.printInfo(msgInfo)
@@ -375,7 +380,7 @@ class VRAY_OT_export_scene(VRayOperatorBase):
                 self.report({'ERROR'}, msgErr)
                 debug.printError(msgErr)
         else:
-            msgErr = "Export scene: no active renderer."
+            msgErr = "Export scene: no active V-Ray renderer. Start an interactive render and try again."
             self.report({'ERROR'}, msgErr)
             debug.printError(msgErr)
         return {'FINISHED'}
@@ -447,8 +452,9 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         InvalidFileName = 2
         InvalidFolderName = 3
 
-    errorType: bpy.props.IntProperty(default=_ErrorType.NoError)
+    errorType: bpy.props.IntProperty(default=_ErrorType.NoError, options={'HIDDEN'})
     errorMsg:  bpy.props.StringProperty() # Additional error info in case of a failed check
+    animation: bpy.props.BoolProperty(default=False)
 
     @classmethod
     def description(cls, context, properties):
@@ -456,13 +462,13 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
             return cls.bl_description
         return f"{cls.bl_description}. Unavailable until V-Ray is initialized"
 
-    def execute(self, context):
+    def execute(self, context: bpy.types.Context):
         if vray.isInitialized():
             # This status message should ideally be printed right before the rendering starts but here is the last
             # chance for it to be shown BEFORE the render job is complete. Once the operator starts executing, no 
             # updates to the UI will be made until it's finished.
             debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
-            vfb_event_handler.VfbEventHandler.startProdRender()
+            vfb_event_handler.VfbEventHandler.startProdRender(self.animation)
         else:
             debug.report('WARNING', "Can't start render job. V-Ray is not initialized")
         return {'FINISHED'}
@@ -592,11 +598,15 @@ class VRAY_OT_render_interactive(VRayOperatorBase):
 
 
     def execute(self, context):
+        from vray_blender.lib.defs import IprContext
+
         # The order of the following commands to ZmqServer is important. Opening VFB
         # first might lead to an irrecoverable V-Ray Core error.
         vfb_event_handler.VfbEventHandler.stopViewportRender()
         vfb_event_handler.VfbEventHandler.stopVantageLiveLink()
-        vfb_event_handler.VfbEventHandler.startInteractiveRender()
+
+        iprContext = IprContext(context.space_data, context.window) if context.space_data.type == 'VIEW_3D' else None
+        vfb_event_handler.VfbEventHandler.startInteractiveRender(iprContext)
 
         # This operator is only invoked from the main menu and this is the only case
         # in which we want to open the VFB for an interactive rendering session.
@@ -770,9 +780,11 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         if animSettings.frameRangeMode == 'CUSTOM_RANGE':
             customRangeCol.prop(animSettings, 'customFrameStart')
             customRangeCol.prop(animSettings, 'customFrameEnd')
+            customRangeCol.prop(animSettings, 'customFrameStep')
         else:
             customRangeCol.prop(context.scene, 'frame_start')
             customRangeCol.prop(context.scene, 'frame_end')
+            customRangeCol.prop(context.scene, 'frame_step')
 
         self._cursorWrap(context)
 
@@ -871,6 +883,8 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         # Often the scene will not need to be upgarded because it does not contain data that needs
         # to be upgraded. Do a precheck and spare the user the upgrade dialog.
         if not checkIfSceneNeedsUpgrade(sceneUpgradeNum, addonUpgradeNum):
+            from vray_blender import UPGRADE_NUMBER
+            context.scene.vray.Exporter.vrayAddonUpgradeNumber = UPGRADE_NUMBER
             return {'CANCELLED'}
 
         if sceneUpgradeNum != addonUpgradeNum:
@@ -929,13 +943,21 @@ class VRAY_OT_import_drop_image(bpy.types.Operator):
 
     def execute(self, context):
         ntree = bpy.context.space_data.edit_tree
+        if not ntree:
+            return { 'CANCELLED' }
+
         deselectNodes(ntree)
         for file in self.files:
-            filepath = os.path.join(self.directory, file.name)
+            # For some reason in newer Blender versions the file name is relative e.g. //img.png
+            # and os.path.join(C:\\dev\\test, //img.png) gives us img.png
+            filename = bpy.path.basename(file.name)
+            filepath = os.path.join(self.directory, filename)
+            filepath = bpy.path.abspath(filepath)
             if not os.path.exists(filepath):
                 continue
-            imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
+
             imageBlockName = bpy.path.display_name_from_filepath(filepath)
+            imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
             imageNode.texture.image = bpy.data.images.load(filepath)
             imageNode.texture.image.name = imageBlockName
             imageNode.select = True
@@ -954,6 +976,16 @@ class VRAY_FH_image_handler(bpy.types.FileHandler):
     def poll_drop(cls, context):
         return _pollImageDragDrop(cls, context)
 
+class VRAY_OT_testing_log_marker(bpy.types.Operator):
+    bl_idname = "vray.testing_log_marker"
+    bl_label = "Log marker in UI test output"
+    bl_description = "Helper for adding test separator markers to the log output."
+    
+    def execute(self, context):
+        debug.printAlways("## TEST START ##", raw=True)
+        return {'FINISHED'}
+
+    
 def getRegClasses():
     return (
         VRAY_OT_node_add,
@@ -980,6 +1012,7 @@ def getRegClasses():
         VRAY_OT_upgrade_scene,
 
         VRAY_OT_import_drop_image,
+        VRAY_OT_testing_log_marker,
         VRAY_FH_image_handler,
     )
 

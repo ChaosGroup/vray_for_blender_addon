@@ -166,7 +166,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Line Color", "Fill Color"]
+        }
     },
     "Options": {
         "animatable": true,

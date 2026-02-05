@@ -279,12 +279,20 @@
     "Widget": {
         "widgets": [
             {
-                "layout": "ROW",
+                "layout": "ROLLOUT",
+                "name": "shading_model",
+                "label": "Shading Model",
+                "default_closed": false,
                 "attrs": [
                     {
-                        "name": "option_shading_model",
-                        "label": "Mode",
-                        "expand": true
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "option_shading_model",
+                                "label": "Mode",
+                                "expand": true
+                            }
+                        ]
                     }
                 ]
             },

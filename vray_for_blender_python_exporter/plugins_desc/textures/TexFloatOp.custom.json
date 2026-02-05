@@ -130,7 +130,10 @@
             { "label": "Gain Schlick", "name": "gain_schlick", "visible": false },
             { "label": "Bias Perlin", "name": "bias_perlin", "visible": false },
             { "label": "Gain Perlin", "name": "gain_perlin", "visible": false }
-        ]
+        ],
+        "internal_links" : {
+            "*": ["Float A", "Float B"]
+        }
     },
     "Options": {
         "animatable": true,

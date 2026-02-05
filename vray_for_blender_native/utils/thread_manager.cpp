@@ -25,14 +25,17 @@ ThreadManager::~ThreadManager() {
 }
 
 void ThreadManager::setThreadCount(int count) {
-	// It is easier to stop and re-create all threads as 
+	// It is easier to stop and re-create all threads as
 	// it does not force us to stop only indivudual threads and syncronize m_stop.
 	if (count == m_workers.size()) {
 		return;
 	}
-	
+
 	stop();
-	m_stop = false;
+	{
+		std::scoped_lock lock(m_queueMtx);
+		m_stop = false;
+	}
 
 	if (count > 0) {
 		for (int c = 0; c < count; ++c) {
@@ -42,7 +45,10 @@ void ThreadManager::setThreadCount(int count) {
 }
 
 void ThreadManager::stop() {
-	m_stop = true;
+	{
+		std::scoped_lock lock(m_queueMtx);
+		m_stop = true;
+	}
 
 	if (!m_workers.empty()) {
 		m_queueCondVar.notify_all();

@@ -205,7 +205,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Cell Color", "Crease Color"]
+        }
     },
     "Options": {
         "excluded_parameters": [ "compatibility_with" ],

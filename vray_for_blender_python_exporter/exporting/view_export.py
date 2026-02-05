@@ -9,7 +9,7 @@ from vray_blender.lib import export_utils, blender_utils
 from vray_blender.lib.blender_utils import isCamera
 from vray_blender.lib.camera_utils import ViewParams, Rect, Size, isOrthographicCamera
 from vray_blender.lib import camera_utils as ct
-from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc, ProdRenderMode
+from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.plugins.settings.SettingsOutput import SettingsOutputExporter
 from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
@@ -63,13 +63,14 @@ def _getCameraToViewportRatio(viewParams: ViewParams, region: bpy.types.Region, 
 
 
 def getActiveCamera(ctx: ExporterContext):
-    """ Return the view-local camera, if active. Otherwise return the scene camera. 
+    """ Return the view-local camera, if active. Otherwise return the scene camera.
         NOTE: The view camera is not necessarily of type Camera, may be any object.
     """
-    view3D = blender_utils.getSpaceView3D(ctx.ctx) if ctx.viewport else None
+    if ctx.interactive:
+        view3d = ctx.iprContext.view3d
 
-    if view3D and (view3dCamera := view3D.camera):
-        return view3dCamera
+        if view3d and (view3dCamera := view3d.camera):
+            return view3dCamera
 
     return ctx.dg.scene.camera
 
@@ -98,7 +99,6 @@ class ViewExporter(ExporterBase):
         self.vrayExporter = self.vrayScene.Exporter
         self.activeCamera = getActiveCamera(ctx)
         self.cameraTracker = ctx.objTrackers['CAMERA']
-        self.view3D: bpy.types.SpaceView3D = None
 
 
     def exportProdCameras(self, prevPerCameraViewParams: dict[str, ViewParams]):
@@ -115,9 +115,12 @@ class ViewExporter(ExporterBase):
         # This is necessary for subsequent renderings with V-Ray Standalone
         # where the user can select which one of the exported cameras to use.
         # During production rendering, only the active camera is needed (or the marked cameras, if any, in animation mode).
-        if self.exportOnly or self.preview:
+        if self.exportOnly:
             cameras = list([inst.object for inst in self.dg.object_instances if inst.object.type == 'CAMERA'])
             assert (not self.preview) or len(cameras) == 1, "Exactly 1 camera should exist in the material preview scene"
+
+            if self.activeCamera not in cameras:
+                cameras.append(self.activeCamera)
         else:
             cameras = [self.activeCamera]
 
@@ -129,22 +132,21 @@ class ViewExporter(ExporterBase):
             if exportedViewParams := self._exportProdCamera(cameraObj, viewParams):
                 perCameraViewParams[cameraName] = exportedViewParams
 
-        if not self.exportOnly:
-            # The active camera settings have been exported to a dedicated set of
-            # camera plugins with the RENDER_CAMERA_BASE_NAME scene name. Tell V-Ray
-            # to use it for the actual rendering.
-            vray.setCameraName(self.renderer, RENDER_CAMERA_BASE_NAME)
+        # The active camera settings have been exported to a dedicated set of
+        # camera plugins with the RENDER_CAMERA_BASE_NAME scene name. Tell V-Ray
+        # to use it for the actual rendering.
+        vray.setCameraName(self.renderer, RENDER_CAMERA_BASE_NAME)
 
         return perCameraViewParams
 
 
-    def exportViewportView(self, view3D: bpy.types.SpaceView3D, prevViewParams: ViewParams = None, renderSizesOnly = False):
+    def exportViewportView(self, prevViewParams: ViewParams = None, renderSizesOnly = False):
         assert self.interactive, "Method should only be called for interactive renders"
-        assert (view3D and self.viewport) or not self.viewport, "view3D parameter shouldn't be empty for viewport renders"
-        self.view3D = view3D
+
+        view3d = self.iprContext.view3d
 
         # Use production view params if there aren't any 3d viewports in the scene.
-        viewParams: ViewParams = self._getInteractiveViewParams() if view3D else self._getProdViewParams(self.activeCamera)
+        viewParams: ViewParams = self._getInteractiveViewParams() if view3d else self._getProdViewParams(self.activeCamera)
 
         # Some plugins depend on SettingsOutput and have to be exported AFTER it, so export
         # it before anything else
@@ -172,7 +174,7 @@ class ViewExporter(ExporterBase):
     # Use only for the interactive viewport
     def prunePlugins(self):
         assert(self.interactive)
- 
+
         cameraTracker = self.cameraTracker
         objectIds = [getObjTrackId(o) for o in self.sceneObjects if o.type == "CAMERA"]
 
@@ -181,7 +183,7 @@ class ViewExporter(ExporterBase):
             for pluginName in cameraTracker.getOwnedPlugins(objTrackId):
                 vray.pluginRemove(self.renderer, pluginName)
                 trackerLog(f"REMOVE: {objTrackId} => {pluginName}")
-            cameraTracker.forget(objTrackId) 
+            cameraTracker.forget(objTrackId)
 
 
     def _exportProdCamera(self, camera: bpy.types.Camera, prevViewParams: ViewParams = None):
@@ -195,7 +197,7 @@ class ViewExporter(ExporterBase):
             # it before anything else
             SettingsOutputExporter(self, viewParams, prevViewParams=None).export()
             viewParams.isActiveCamera = True
-        
+
         self._exportCamera(viewParams, prevViewParams, isRenderCamera=viewParams.isActiveCamera)
 
         return viewParams
@@ -205,7 +207,7 @@ class ViewExporter(ExporterBase):
         """ Export a scene object as a camera.
 
             Along with the camera objects, Blender allows to export any scene object as a camera. Such a camera
-            is positioned at the object's coordinates and is looking at the coordinate system origin. 
+            is positioned at the object's coordinates and is looking at the coordinate system origin.
         """
         if self.interactive and prevViewParams:
             self._removeIncompatibleCameras(viewParams, prevViewParams, isRenderCamera)
@@ -231,9 +233,9 @@ class ViewExporter(ExporterBase):
         """ Export RenderView plugin for the specified camera.
 
             @param viewParams - a filled-in ViewParams structure.
-            @param isRenderCamera - True if this is the active camera in the scene through which to render. 
-                                    False if this is a camera that is to be exported, but is not currently active.  
-            @param cameraObj -  In Prespective View - the object to export(may be non-camera). 
+            @param isRenderCamera - True if this is the active camera in the scene through which to render.
+                                    False if this is a camera that is to be exported, but is not currently active.
+            @param cameraObj -  In Prespective View - the object to export(may be non-camera).
                                 In Camera view - a camera object or None for non-camera objects.
         """
         # cameraObj will be None if there is no camera in the scene in perspective mode or
@@ -269,7 +271,7 @@ class ViewExporter(ExporterBase):
         if not self.interactive:
             if self.vrayScene.VRayStereoscopicSettings.use:
                 self._exportCameraStereoscopic(viewParams)
-            
+
 
     def _exportSettingsCamera(self, isRenderCamera: bool, viewParams: ViewParams):
         cameraObj = viewParams.cameraObject
@@ -278,7 +280,7 @@ class ViewExporter(ExporterBase):
 
         pluginName = self._getCameraPluginUniqueName(cameraObj, "SettingsCamera", isRenderCamera)
         plDesc = PluginDesc(pluginName, "SettingsCamera")
-        
+
 
         plDesc.setAttributes({
             'scene_name'            : self._getCameraBaseName(cameraObj),
@@ -310,17 +312,17 @@ class ViewExporter(ExporterBase):
                 # standard camera. Do not do this if the current camera is orthographic because
                 # it should match the camera type set in Blender.
                 plDesc.resetAttribute('type')
-            
+
             # Only camera object plugins are getting tracked and pruned.
             self.cameraTracker.trackPlugin(getObjTrackId(cameraObj), pluginName)
 
         export_utils.exportPlugin(self, plDesc)
-        
+
 
     def _exportCameraDefault(self, viewParams: ViewParams):
         # This plugin can only be used as a singleton, hence the fixed name
         pluginName = Names.singletonPlugin("CameraDefault")
-        
+
         plDesc = PluginDesc(pluginName, "CameraDefault")
         plDesc.setAttribute("orthographic", viewParams.renderView.ortho)
 
@@ -462,7 +464,7 @@ class ViewExporter(ExporterBase):
 
     def _useCamera(self, cameraObj: bpy.types.Object):
         """ Return True if the camera should be used to render the scene """
-        # Camera object isn't set to ViewParams when the default scene camera is used, or when 
+        # Camera object isn't set to ViewParams when the default scene camera is used, or when
         # a non-camera object is used as a camera
         return (cameraObj is None) or self._isActiveCamera(cameraObj)
 
@@ -472,9 +474,7 @@ class ViewExporter(ExporterBase):
             either the 'Camera' view, or the default leayout view.
         """
         viewParams = ViewParams()
-        region3d = blender_utils.getRegion3D(self.ctx) if self.viewport else blender_utils.getFirstAvailableRegion3D()
-        assert region3d, "No Region3D in the context"
-
+        region3d = self.iprContext.region3d
 
         if region3d.view_perspective == 'CAMERA':
 
@@ -484,7 +484,7 @@ class ViewExporter(ExporterBase):
                 # Export the IPR view with prod camera settings
                 viewParams = self._getProdViewParams(self.activeCamera)
         else:
-            self._fillViewFromScene(viewParams, region3d)
+            self._fillViewFromScene(viewParams)
 
         if self.viewport:
             resMult = 1.0
@@ -519,7 +519,7 @@ class ViewExporter(ExporterBase):
         """
 
         viewParams = self._getViewFromViewport()
-        viewParams.calcRenderSizes()
+        viewParams.calcRenderSizes(regionRender=self.iprVFB and not self.scene.render.use_crop_to_border)
 
         return viewParams
 
@@ -534,7 +534,7 @@ class ViewExporter(ExporterBase):
             self._fillViewFromProdCamera(cameraObj, viewParams)
         else:
             self._fillViewFromObject(cameraObj, viewParams)
-            viewParams.calcRenderSizes()
+
 
         return viewParams
 
@@ -567,14 +567,15 @@ class ViewExporter(ExporterBase):
             viewParams.viewportW = renderSettings.resolution_x
             viewParams.viewportH = renderSettings.resolution_y
 
-    def _fillViewFromScene(self, viewParams: ViewParams, region3d):
-        """ Fill ViewParams from the scene view settings, not from a specific camera object 
+    def _fillViewFromScene(self, viewParams: ViewParams):
+        """ Fill ViewParams from the scene view settings, not from a specific camera object
         """
         DEFAULT_SENSOR_WIDTH = 36.0 # This value is hardcoded in Blender
         VIEW_PERSPECTIVE_ORTHO = "ORTHO"
 
         sensorSize = DEFAULT_SENSOR_WIDTH
-        view3d = self.view3D
+        view3d = self.iprContext.view3d
+        region3d = self.iprContext.region3d
 
         lens = view3d.lens / (2.0 if self.viewport else 1)
 
@@ -600,7 +601,7 @@ class ViewExporter(ExporterBase):
         viewParams.renderView.clipping = not isOrtho
 
         viewParams.renderView.tm = Matrix(region3d.view_matrix).inverted()
-        
+
         # This param is only needed for checking if the view3d has valid camera
         viewParams.cameraObject =  view3d.camera
         viewParams.isCameraView = False
@@ -610,8 +611,10 @@ class ViewExporter(ExporterBase):
         """ Fill ViewParams from a look-through non-camera object
 
             @param obj - a non-camera object
-            @param viewParams -    
+            @param viewParams -
         """
+        assert self.production or self.iprVFB
+
         ViewExporter._fillCameraDataFromNonCameraObject(obj, viewParams)
 
         viewParams.renderSize.w = self.scene.render.resolution_x
@@ -620,23 +623,25 @@ class ViewExporter(ExporterBase):
         viewParams.viewportW = self.scene.render.resolution_x
         viewParams.viewportH = self.scene.render.resolution_y
 
-        viewParams.crop = False    
+        viewParams.crop = False
         viewParams.renderView.ortho = False
         viewParams.renderView.clipping = False
 
         # This param is only needed for checking if the view3d has valid camera
         viewParams.cameraObject =  obj
+        viewParams.calcRenderSizes(regionRender=not self.scene.render.use_crop_to_border)
+
 
     def _fillCroppedCameraViewportRenderRegion(self, renderSettings, viewParams: ViewParams, rectView, v3d, region):
         """ Fills render region ViewParams for 'Camera' viewport view that's cropped
         """
 
         # Compute the camera view rectangle inside the view area. The calculated coordinates
-        # will be used later by the drawing procedure to crop 
+        # will be used later by the drawing procedure to crop
         r = renderSettings
         viewParams.cameraParams.setFromObject(v3d.camera)
         rectCamera = viewParams.cameraParams.computeViewplane(r.resolution_x, r.resolution_y, r.pixel_aspect_x, r.pixel_aspect_y)
-        
+
         viewBorder = Rect()
 
         viewBorder.xmin = ((rectCamera.xmin - rectView.xmin) / rectView.width()) * region.width
@@ -652,14 +657,14 @@ class ViewExporter(ExporterBase):
         viewParams.viewportOffsX = int(viewBorder.xmin)
         viewParams.viewportOffsY = int(viewBorder.ymin)
 
-        
+
         # There is a crop region defined. Render only what is inside the camera view rect.
         ct.setRegionBorder(viewParams, ct.getRenderSettingsBorder(renderSettings))
 
         viewParams.renderSize.w = viewParams.viewportW
         viewParams.renderSize.h = viewParams.viewportH
 
-        # The fov needs to be adjusted renderSize.h > renderSize.w 
+        # The fov needs to be adjusted renderSize.h > renderSize.w
         aspect = viewParams.renderSize.w / viewParams.renderSize.h
         if aspect < 1.0:
             viewParams.renderView.fov = 2 * math.atan(math.tan(viewParams.renderView.fov/2.0) * aspect)
@@ -672,8 +677,8 @@ class ViewExporter(ExporterBase):
         MAX_VIEW_3D_ZOOM_FACTOR = 6.03369
 
         if not viewParams.renderView.ortho and self.interactive:
-            # Recompute camera FOV so that the new view encompassed the whole viewport area, but the 
-            # camera view rectangle still showed exactly what the original camera would see 
+            # Recompute camera FOV so that the new view encompassed the whole viewport area, but the
+            # camera view rectangle still showed exactly what the original camera would see
             fov = ct.fov(sensorSize=rectView.width(), focalDist=v3dParams.clip_start/VISIBLE_TO_WHOLE_VIEW_RATIO)
             if fov > 0.0:
                 viewParams.renderView.fov = fov
@@ -695,13 +700,13 @@ class ViewExporter(ExporterBase):
         viewParams.renderSize.h = region.height * VISIBLE_TO_WHOLE_VIEW_RATIO
 
         # When rendering in camera viewport mode, Blender visualizes only part of the 3D viewport region.
-        # We want to set the render size to match the entire region, because users may drag the visible 
-        # area, causing the render result to become misaligned. To address this, we export the whole 3D 
-        # viewport as viewParams.renderSize and render only the visible area as viewParams.regionSize, 
+        # We want to set the render size to match the entire region, because users may drag the visible
+        # area, causing the render result to become misaligned. To address this, we export the whole 3D
+        # viewport as viewParams.renderSize and render only the visible area as viewParams.regionSize,
         # adjusting the start position with the offset from the dragging (rv3d.view_camera_offset).
         #
         #    _____whole_3D_viewport_region__
-        #   |    ____________               | A 
+        #   |    ____________               | A
         #   |   |            | A            | |
         #   |   | region     | |            | |
         #   |   | visible in | regionSize.h | |
@@ -719,17 +724,17 @@ class ViewExporter(ExporterBase):
         def getRegionStartPos(regionSideLength, cameraOffset, flipOffsetDir=False):
             startPos = (regionSideLength * VISIBLE_TO_WHOLE_VIEW_RATIO - regionSideLength) / 2 # Render region start position
             offset = startPos * cameraOffset * zoomFactor # Offset of the visible region with applied zoom
-            
+
             # The Y axis in V-Ray is opposite to Blender's, so the offset direction should be flipped when setting viewParams.regionStart.h
             return startPos + offset * (-1 if flipOffsetDir else 1)
-        
+
         viewParams.regionStart.w = getRegionStartPos(region.width, rv3d.view_camera_offset[0])
         viewParams.regionStart.h = getRegionStartPos( region.height, rv3d.view_camera_offset[1], True)
 
         viewParams.crop = True
         viewParams.canDrawWithOffset = False
 
-        
+
 
     def _fillViewFromCameraViewport(self, viewParams: ViewParams):
         """ Fill ViewParams for the 'Camera' viewport view. This is different from
@@ -738,8 +743,8 @@ class ViewExporter(ExporterBase):
         """
         scene: bpy.types.Scene = self.scene
         region: bpy.types.Region = self.ctx.region
-        v3d = self.view3D
-        rv3d = blender_utils.getRegion3D(self.ctx)
+        view3d = self.iprContext.view3d
+        region3d = self.iprContext.region3d
         cameraObject: bpy.types.Camera = getActiveCamera(self)
 
         if not cameraObject:
@@ -750,12 +755,12 @@ class ViewExporter(ExporterBase):
         # If there is an active crop region, everything outside the camera view rect will be empty.
         # If there is no crop region, the part outside the camera vew rect should show the rest of the scene
         # which would otherwise be invisible to the camera.
-        
+
         # Below, we compute the view parameters needed to match the actual camera view
         # to the camera view rectangle
-        
+
         # Compute the camera params for rendering the whole viewport area
-        viewParams.cameraParams.setFromView3d(self.dg, v3d, rv3d)
+        viewParams.cameraParams.setFromView3d(self.dg, view3d, region3d)
         v3dParams = viewParams.cameraParams
         rectView = v3dParams.computeViewplane(region.width, region.height, 1.0, 1.0)
 
@@ -771,9 +776,9 @@ class ViewExporter(ExporterBase):
             ViewExporter._fillCameraDataFromNonCameraObject(cameraObject, viewParams)
 
         if scene.render.use_border:
-            self._fillCroppedCameraViewportRenderRegion(scene.render, viewParams, rectView, v3d, region)
+            self._fillCroppedCameraViewportRenderRegion(scene.render, viewParams, rectView, view3d, region)
         else:
-            self._fillCameraViewportRenderRegion(viewParams, v3dParams, rectView, rv3d, region)
+            self._fillCameraViewportRenderRegion(viewParams, v3dParams, rectView, region3d, region)
 
 
     def _fillViewFromProdCamera(self, cameraObject: bpy.types.Object, viewParams: ViewParams):
@@ -784,25 +789,31 @@ class ViewExporter(ExporterBase):
         if not camera:
             return
 
-        renderSettings: bpy.types.RenderSettings = self.scene.render
+        rs: bpy.types.RenderSettings = self.scene.render
 
-        viewParams.renderSize.w = renderSettings.resolution_x * renderSettings.resolution_percentage / 100
-        viewParams.renderSize.h = renderSettings.resolution_y * renderSettings.resolution_percentage / 100
+        # Application of the aspect ratio always assumes pixel_aspect_x is the full width of the pixel
+        # so changes to both X and Y of the aspect result in changes to only regions's height (Y)
 
-        if renderSettings.use_border:
+        viewParams.renderSize.w = rs.resolution_x * rs.resolution_percentage / 100
+        viewParams.renderSize.h = rs.resolution_y * rs.resolution_percentage / 100
+
+        if self.production or self.exportOnly:
+            viewParams.pixelAspectY = rs.pixel_aspect_y / rs.pixel_aspect_x
+
+        if rs.use_border:
             viewParams.crop = True
 
-            viewParams.regionStart.w = renderSettings.border_min_x * viewParams.renderSize.w
-            viewParams.regionStart.h = viewParams.renderSize.h - renderSettings.border_max_y * viewParams.renderSize.h
+            viewParams.regionStart.w = rs.border_min_x * viewParams.renderSize.w
+            viewParams.regionStart.h = viewParams.renderSize.h - rs.border_max_y * viewParams.renderSize.h
 
-            viewParams.regionSize.w = (renderSettings.border_max_x - renderSettings.border_min_x) * viewParams.renderSize.w
-            viewParams.regionSize.h = (renderSettings.border_max_y - renderSettings.border_min_y) * viewParams.renderSize.h
+            viewParams.regionSize.w = (rs.border_max_x - rs.border_min_x) * viewParams.renderSize.w
+            viewParams.regionSize.h = (rs.border_max_y - rs.border_min_y) * viewParams.renderSize.h
 
         else:
             viewParams.regionSize = viewParams.regionStart = Size()
             viewParams.crop = False
-        
-        viewParams.calcRenderSizes()
+
+        viewParams.calcRenderSizes(regionRender=not self.scene.render.use_crop_to_border)
 
         self._fillCameraData(cameraObject, viewParams)
         ct.aspectCorrectForFovOrtho(viewParams)
@@ -820,9 +831,9 @@ class ViewExporter(ExporterBase):
         viewParams.regionSize = viewParams.regionStart = Size()
         viewParams.crop = False
 
-        viewParams.calcRenderSizes()
+        viewParams.calcRenderSizes(regionRender=not self.scene.render.use_crop_to_border)
         return viewParams
-    
+
 
     def _fillPhysicalCameraSettings(self, plDesc: PluginDesc, viewParams: ViewParams):
         """ Returns an 'overrides' dictionary with physical camera settings
@@ -831,7 +842,7 @@ class ViewExporter(ExporterBase):
         assert(viewParams.cameraObject)
 
         camera: bpy.types.Camera = viewParams.cameraObject.data
-        
+
         vrayCamera = camera.vray
         physicalCamera = vrayCamera.CameraPhysical
         cameraParams = viewParams.cameraParams
@@ -919,8 +930,8 @@ class ViewExporter(ExporterBase):
 
 
     def _getCameraPluginUniqueName(self, cameraObj, pluginType, isRenderCamera: bool):
-        """ Return plugin name depending on whether we are exporting one (interactive) 
-            or multilpe (prod render) cameras. In the former case, use a fixed name. 
+        """ Return plugin name depending on whether we are exporting one (interactive)
+            or multilpe (prod render) cameras. In the former case, use a fixed name.
             Otherwise create a camera-specific name
         """
 
@@ -937,7 +948,6 @@ class ViewExporter(ExporterBase):
         if not self.exportOnly:
             return RENDER_CAMERA_BASE_NAME
         return Names.object(cameraObj)
-        
 
 
 def run(ctx: ExporterContext):

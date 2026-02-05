@@ -3,9 +3,11 @@ import ctypes
 import struct
 from collections import defaultdict
 from mathutils import Matrix
+
 from vray_blender.exporting import tools, marshaller
 from vray_blender.exporting.node_export import exportNodePlugin
-from vray_blender.exporting.plugin_tracker import getObjTrackId, log as trackerLog
+from vray_blender.exporting.plugin_tracker import getObjTrackId
+from vray_blender.lib.blender_utils import TestBreak
 from vray_blender.lib.defs import DataArray, ExporterBase, ExporterContext, AttrPlugin
 from vray_blender.lib.names import Names
 from vray_blender.external import mmh3
@@ -131,6 +133,7 @@ class InstancerExporter(ExporterBase):
                 # In addition to tracking the Node plugin in the instancer, track it in the instanced object as well
                 # so that deleting the object would delete the node
                 self.instTracker.trackPlugin(instancerId, nodePlugin.name)
+                TestBreak.check(self)
 
 
     @staticmethod

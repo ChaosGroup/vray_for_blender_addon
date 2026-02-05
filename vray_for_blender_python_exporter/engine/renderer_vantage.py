@@ -289,7 +289,7 @@ def drawCallbackVantage():
 
     region = bpy.context.region
     x, y = region.width - 75, 10
-    vantageLogo = _getVantageIcon("Vantage.png")
+    vantageLogo = _getVantageIcon("Vantage.png") #TODO: replace with an SVG Icon
     if vantageLogo:
         gpu.state.blend_set('ALPHA')
         gpu_extras.presets.draw_texture_2d(vantageLogo, (x, y), ICON_PX_SIZE, ICON_PX_SIZE)

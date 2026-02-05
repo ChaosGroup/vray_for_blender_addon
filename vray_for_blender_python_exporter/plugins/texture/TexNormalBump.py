@@ -2,8 +2,7 @@ from vray_blender.lib import plugin_utils
 from vray_blender.lib.names import Names
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getInputSocketByName
-from vray_blender.nodes.tools import isInputSocketLinked
+from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -13,8 +12,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginDesc.vrayPropGroup = nodeCtx.node.TexNormalBump
 
     mappingSock = getInputSocketByName(nodeCtx.node, "Mapping")
-    if mappingSock and isInputSocketLinked(mappingSock):
-        uvwPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, mappingSock)
+    if mappingSock and (mappingLink := getFarNodeLink(mappingSock)):
+        uvwPlugin = commonNodesExport.exportSocketLink(nodeCtx, mappingLink)
         pluginDesc.setAttribute("normal_uvwgen", uvwPlugin)
         pluginDesc.setAttribute("normal_uvwgen_auto", False)
     else:

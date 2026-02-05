@@ -4,6 +4,8 @@ from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import NodeContext, PluginDesc
+from vray_blender.exporting.light_export import getLightMeshInstanceNames
+from vray_blender.nodes.specials.selector import resolveSelectorNode
 from vray_blender.nodes.utils import getObjectsFromSelector, getNodeOfPropGroup
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -43,12 +45,15 @@ def _exportEnvFogMeshGizmoFromObject(nodeCtx: NodeContext, objectName: str):
 
     return None
 
+
 def _getSelectedObjects(context, node, sockAttr, selectorAttr):
     sockGizmos = getInputSocketByAttr(node, sockAttr)
-    if sockSelector := getLinkedFromSocket(sockGizmos):
-        return getObjectsFromSelector(sockSelector.node, context)
+    
+    if selectorNode := resolveSelectorNode(sockGizmos):
+        return getObjectsFromSelector(selectorNode, context)
     else:
         return getattr(node.EnvironmentFog, selectorAttr).getSelectedItems(context, 'objects')
+
 
 def _exportEnvFogMeshGizmosList(nodeCtx: NodeContext):
     node = nodeCtx.node
@@ -62,9 +67,20 @@ def _exportEnvFogMeshGizmosList(nodeCtx: NodeContext):
 def _exportEnvFogMeshLightsList(nodeCtx: NodeContext):
     node = nodeCtx.node
     context = nodeCtx.exporterCtx.ctx
-    selectedObjects = _getSelectedObjects(context, node, "lights", "light_selector")
+    selectedLightObjects = _getSelectedObjects(context, node, "lights", "light_selector")
 
-    return [AttrPlugin(light_export.getPluginName(obj)) for obj in selectedObjects]
+    lights = []
+    
+    for obj in selectedLightObjects:
+        lightPluginName = light_export.getPluginName(obj)
+        
+        if obj.data.vray.light_type == 'MESH':
+            # Append the lights created for each gizmo object of the LightMesh.
+            lights.extend([AttrPlugin(n) for n in getLightMeshInstanceNames(nodeCtx.exporterCtx, lightPluginName)])
+        else:
+            lights.append(AttrPlugin(lightPluginName))
+    
+    return lights
 
 
 def exportTreeNode(nodeCtx: NodeContext):

@@ -2,6 +2,7 @@ import bpy
 
 from vray_blender.lib import class_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
+from vray_blender.nodes.nodes import vrayNodeUpdate
 from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
@@ -207,6 +208,10 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
             sockOpacity.draw(context, row, node, text="Opacity")
 
 
+    def update(self):
+        vrayNodeUpdate(self)
+
+        
     @staticmethod
     def addLayer(node, humanIndex):
         """ Add the inputs for a texture layer """

@@ -1,4 +1,9 @@
 {
     "Name": "V-Ray Float To Color",
-    "Subtype": "UTILITY"
+    "Subtype": "UTILITY",
+    "Node": {
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
 }

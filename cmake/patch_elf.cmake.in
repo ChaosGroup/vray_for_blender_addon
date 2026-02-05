@@ -1,0 +1,15 @@
+find_program(PATHCHELF patchelf REQUIRED)
+if(NOT PATHCHELF)
+    message(FATAL_ERROR "patchelf not found!")
+endif()
+
+message(STATUS "Pathcing ELF in @APPSDK_BIN_DIR@")
+
+# For some reason it's unable to find libcgauth
+execute_process(COMMAND patchelf --set-rpath $ORIGIN @APPSDK_BIN_DIR@/libvray.so RESULT_VARIABLE result)
+# Already has rpath but it's set to $ORIGIN/../lib
+execute_process(COMMAND patchelf --set-rpath $ORIGIN @APPSDK_BIN_DIR@/QtWebEngineProcess RESULT_VARIABLE result)
+# These seem to work without the Qt libs(but ldd reports that it can't find them) so they are modified just in case.
+execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqxcb.so RESULT_VARIABLE result)
+execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqminimal.so RESULT_VARIABLE result)
+execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqoffscreen.so RESULT_VARIABLE result)

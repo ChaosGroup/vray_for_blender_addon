@@ -33,13 +33,13 @@ class SettingsOutputExporter(ExporterBase):
 
 
     def export(self):
-        if self.isAnimation:
-            animation = self.commonSettings.animation
-            if animation.frameCurrent != animation.frameStart:
-                # Output settings should not change during an animation
-                return
+        if self.isAnimation and not self.fullExport:
+            # Output settings should not change during an animation
+            return
 
-        if not self.fullExport and self.prevViewParams is not None and (self.viewParams.renderSizes.isEqualTo(self.prevViewParams.renderSizes)):
+        if (not self.fullExport) and (self.prevViewParams is not None) \
+                    and self.viewParams.renderSizes.isEqualTo(self.prevViewParams.renderSizes):
+            # Nothing has changed
             return
 
         pluginDesc = PluginDesc(Names.singletonPlugin("SettingsOutput"), "SettingsOutput")
@@ -144,7 +144,7 @@ class SettingsOutputExporter(ExporterBase):
             imgFile = path_utils.getOutputFileName(self.ctx, propGroup.img_file, imgFmt, viewLayerName, allowRelative=self.exportOnly)
             imgDir = path_utils.expandPathVariables(self.ctx, propGroup.img_dir)
 
-        if self.settings.animation.mode == AnimationMode.Animation:
+        if self.isAnimation:
             pluginDesc.setAttribute("img_file_needFrameNumber", True)
 
         IMAGE_FORMAT_EXR = 5
@@ -171,9 +171,6 @@ class SettingsOutputExporter(ExporterBase):
 
 
     def _fillAnimation(self, pluginDesc):
-        # TODO replace values from scene from the ones gotten from FrameExporter
-        # when it has been ported to Python
-
         # The 'frames' parameter needs to be list of lists in animation mode
         # When this mode is not active its unused
         framesList = None
@@ -181,12 +178,17 @@ class SettingsOutputExporter(ExporterBase):
         frameStart = self.scene.frame_start
         frameEnd = self.scene.frame_end
 
-        if self.settings and self.settings.animation.use:
+        if self.settings and self.isAnimation:
             frameStart = self.settings.animation.frameStart
             frameEnd = self.settings.animation.frameEnd
+            frameStep = self.settings.animation.frameStep
 
             framesList = AttrListValue()
-            framesList.append([int(frameStart), int(frameEnd)])
+
+            if frameStep != 1:
+                framesList.append(list(range(int(frameStart), int(frameEnd), frameStep)))
+            else:
+                framesList.append([int(frameStart), int(frameEnd)])
 
         pluginDesc.setAttributes({
             'anim_start'       : frameStart,

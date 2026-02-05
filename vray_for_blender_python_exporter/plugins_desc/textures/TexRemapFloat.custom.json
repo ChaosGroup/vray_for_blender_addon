@@ -3,21 +3,6 @@
     "Name": "V-Ray Remap Float",
     "Subtype": "UTILITY",
     "Category": "FLOAT_TEXTURE",
-    "Node":{
-        "widgets": [
-            {
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "name": "low"
-                    },
-                    {
-                        "name": "high"
-                    }
-                ]
-            }
-        ]
-    },
     "Widget": {
         "widgets": [
             {
@@ -34,5 +19,23 @@
                 "layout": "ROW"
             }
         ]
+    },
+    "Node":{
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "low"
+                    },
+                    {
+                        "name": "high"
+                    }
+                ]
+            }
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
     }
 }

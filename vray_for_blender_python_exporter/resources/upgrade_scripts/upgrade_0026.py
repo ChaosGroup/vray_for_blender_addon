@@ -9,7 +9,7 @@ def run():
 
         if settingsImageSampler.type != '1': # Adaptive(bucket)
             # Go with the deafult value of samples_limit
-            return
+            continue
 
         # CPU and GPU use different conversion because the GPU max subdivs used to be twice the CPU one.
         if isGPUEngine(scene):
@@ -17,8 +17,5 @@ def run():
         else:
             settingsImageSampler['samples_limit'] = _maxSubdivsCPUToSamplesLimit(settingsImageSampler.dmc_maxSubdivs)
 
-    for world in bpy.data.worlds:
-        if world.vray.is_vray_class and world.use_nodes:
-            world.node_tree.vray.tree_type = 'WORLD'
 def check():
     return True

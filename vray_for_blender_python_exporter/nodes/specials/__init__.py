@@ -12,6 +12,7 @@ def _getModules():
     from vray_blender.nodes.specials import inputlist
     from vray_blender.nodes.specials import transform
     from vray_blender.nodes.specials import object_properties
+    from vray_blender.nodes.specials import gradient_ramp
 
     return (
         outputs,
@@ -25,7 +26,9 @@ def _getModules():
         inputlist,
         transform,
         object_properties,
+        gradient_ramp,
     )
+
 
 def register():
     for module in _getModules():

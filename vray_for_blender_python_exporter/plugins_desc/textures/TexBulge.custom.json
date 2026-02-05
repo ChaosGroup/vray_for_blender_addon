@@ -40,7 +40,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Color Mult", "Color Offset", "No UVs Color"]
+        }
     },
     "Widget": {
         "widgets": [

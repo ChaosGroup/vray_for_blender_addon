@@ -4,7 +4,7 @@ from re import S
 import mathutils
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getLinkedFromSocket, getInputSocketByAttr
+from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr
 from vray_blender.nodes.utils import getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.lib import  plugin_utils
 from vray_blender.lib.defs import PluginDesc, AttrPlugin, NodeContext
@@ -74,16 +74,14 @@ def exportTreeNode(nodeCtx: NodeContext):
 
     sockRotation = getInputSocketByAttr(node, "texture_rotation_map")
 
-    if sockRotation.shouldExportLink():
-        sockSource = getLinkedFromSocket(sockRotation)
-
-        if sockSource.node.bl_idname == 'VRayNodeVector':
-            vecRotation = sockSource.node.getValue()
+    if rotationLink := getFarNodeLink(sockRotation):
+        if rotationLink.from_node.bl_idname == 'VRayNodeVector':
+            vecRotation = rotationLink.from_node.getValue()
             rotation = mathutils.Vector(tuple(map(math.degrees, vecRotation)))
             pluginDesc.setAttribute("texture_rotation", rotation)
             pluginDesc.setAttribute("texture_rotation_map", AttrPlugin())
         else:
-            pluginRotation = commonNodesExport.exportLinkedSocket(nodeCtx, sockRotation)
+            pluginRotation = commonNodesExport.exportSocketLink(nodeCtx, rotationLink)
             pluginDesc.setAttribute("texture_rotation_map", pluginRotation)
             pluginDesc.setAttribute("texture_rotation", AttrPlugin())
     else:

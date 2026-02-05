@@ -4,7 +4,6 @@ from vray_blender.lib.names import Names
 from vray_blender.lib.attribute_utils import getAttrDesc
 from vray_blender.exporting.tools import *
 from vray_blender.plugins import getPluginModule
-from vray_blender.nodes.tools import isInputSocketLinked
 
 # Flags for the different UVWGenRandomizer modes
 UVWGenRandomizerModes = {
@@ -22,13 +21,14 @@ UVWGenRandomizerModes = {
 
 def exportDefaultUVWGenChannel(nodeCtx: NodeContext):
     """ Export a UVWGenChannel plugin with the default settings.
-     
+
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
 
-    DEFAULT_PLUGIN_TYPE = 'UVWGenChannel'
+    treeType = nodeCtx.ntree.vray.tree_type if nodeCtx.ntree else ''
+    DEFAULT_PLUGIN_TYPE = f'UVWGenChannel_{treeType}'
     if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
-        uvwGenChannel = PluginDesc('defaultUVWGenChannel', 'UVWGenChannel')
+        uvwGenChannel = PluginDesc(f'defaultUVWGenChannel_{treeType}', 'UVWGenChannel')
         uvwGenChannel.setAttribute('uvw_channel', -1)
         plugin = commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenChannel, False)
         nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
@@ -38,7 +38,7 @@ def exportDefaultUVWGenChannel(nodeCtx: NodeContext):
 
 def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
     """ Export a UVWGenEnvironment plugin with the default settings.
-     
+
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
     DEFAULT_PLUGIN_TYPE = 'UVWGenEnironment'
@@ -77,7 +77,7 @@ def exportVRayNodeUVWGenRandomizer(nodeCtx: NodeContext):
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
 
     # If the 'input' socket is not connected, export with the default mapping
-    if not isInputSocketLinked(node.inputs['Input']):
+    if not node.inputs['Input'].hasActiveFarLink():
         pluginDesc.setAttribute('input', exportDefaultUVWGenChannel(nodeCtx))
 
     # UVWGenRandomizer's 'mode' attribute is used as mask on which the first five bits
@@ -88,7 +88,7 @@ def exportVRayNodeUVWGenRandomizer(nodeCtx: NodeContext):
     for modeName, modeMask in UVWGenRandomizerModes.items():
 
         # Making sure that the checkbox for the given mode is checked
-        # before setting the flag corresponding to it 
+        # before setting the flag corresponding to it
         if getattr(propGroup, modeName):
             mode |= modeMask
 

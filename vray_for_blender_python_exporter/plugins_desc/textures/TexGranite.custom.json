@@ -1,6 +1,15 @@
 {
     "ID": "TexGranite",
     "Name": "V-Ray Granite",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -183,17 +192,11 @@
             {
                 "name": "nouvw_color"
             }
-        ]
-    },
-    "Parameters": [
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
-            },
-            "type": "UVWGEN"
+        ],
+        "internal_links": {
+            "*": ["Color 1", "Color 2", "Color 3", "No UVs Color"]
         }
-    ],
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [ "compatibility_with" ]

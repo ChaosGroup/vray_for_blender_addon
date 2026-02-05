@@ -53,7 +53,10 @@
             { "name": "bg_tex" },
             { "name": "world_width", "visible": { "cond": "::width_type=0" } },
             { "name": "pixel_width", "visible": { "cond": "::width_type=1" } }
-        ]
+        ],
+        "internal_links": {
+            "color": ["Edges Color", "Background Color"]
+        }
     },
     "Options": {
         "animatable": true,

@@ -2,18 +2,6 @@
     "Name": "V-Ray Invert",
     "Subtype": "UTILITY",
     "ID": "TexInvert",
-    "Node": {
-        "widgets": [
-            {
-                "layout": "COLUMN",
-                "attrs": [
-                    {
-                        "name": "invert_alpha"
-                    }
-                ]
-            }
-        ]
-    },
     "Widget": {
         "widgets": [
             {
@@ -30,7 +18,21 @@
             }
         ]
     },
-    "Parameters": [],
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "invert_alpha"
+                    }
+                ]
+            }
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [

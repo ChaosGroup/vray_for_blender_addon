@@ -17,7 +17,7 @@ def updateEnabledComputeDevices(context):
 
     if not computeDevices.devicesUpdatingEnabled:
         return
-    if sys.platform == "win32":
+    if sys.platform != "darwin":
         deviceIsRTX = computeDevices.gpuDeviceType == DeviceType.RTX
         devicesList = computeDevices.devicesOptix if deviceIsRTX else computeDevices.devicesCUDA
     else:

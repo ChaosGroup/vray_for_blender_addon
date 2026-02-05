@@ -9,9 +9,9 @@ import numpy as np
 from mathutils import Vector, Matrix
 
 from vray_blender import debug
-from vray_blender.exporting.tools import isObjectVrayProxy, matrixLayoutToMatrix, mat4x4ToTuple
+from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene, matrixLayoutToMatrix, mat4x4ToTuple
 from vray_blender.lib import blender_utils, sys_utils, path_utils
-from vray_blender.lib.blender_utils import updateShadowAttr
+from vray_blender.lib.blender_utils import hasShadowedAttrChanged, updateShadowAttr, getPropertyDefaultValue
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.vray_tools import vray_proxy
 
@@ -31,7 +31,7 @@ _PREVIEW_TYPES = {
 }
 
 
-def _dumpMeshFile(vrmeshFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int):
+def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int):
     """ Run vraytools utility to dump the requested data from a mesh file (.vrmesh, .abc etc) into a simplified 
         binary format which can that be easily loaded by the Python code.
 
@@ -52,7 +52,7 @@ def _dumpMeshFile(vrmeshFile: str, binFile: str, previewType: int, previewFaces:
     cmd = [vrayToolsApp]
     cmd.extend(['-vrayLib', getAppSdkLibPath()])
     cmd.extend(['-action', PreviewAction.MeshPreview])
-    cmd.extend(['-input', vrmeshFile])
+    cmd.extend(['-input', meshFile])
     cmd.extend(['-output', binFile])
     cmd.extend(['-previewType', str(previewType)])
     cmd.extend(['-previewFaces', str(previewFaces)])
@@ -73,16 +73,17 @@ def _dumpMeshFile(vrmeshFile: str, binFile: str, previewType: int, previewFaces:
     return None
 
 
-def _generateScenePreview(sceneFile: str, binFile: str, previewType: int, previewFaces: int):
+def _dumpVrSceneFile(sceneFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int):
     """ Run vraytools utility to dump the requested data from a scene file (.vrscene, .usd) into a simplified 
         binary format which can be easily loaded by the Python code.
 
     Args:
-        vrsceneFile (str):  path to the .vrscene file from which to generate the preview
+        sceneFile   (str):  path to the .vrscene file from which to generate the preview
         binFile     (str):  path to the resulting binary file
         previewType (int):  one of the values in _PRWVIEW_TYPES
         previewFaces(int):  upper limit for the number of faces in the preview. Only valid 
                             if isPreview is True.
+        flipAxis    (int): one of the GeomMeshFile.flip_axis values
 
     Returns:
         str | None: Error message on failure, None on success
@@ -98,6 +99,7 @@ def _generateScenePreview(sceneFile: str, binFile: str, previewType: int, previe
     cmd.extend(['-output', binFile])
     cmd.extend(['-previewType', str(previewType)])
     cmd.extend(['-previewFaces', str(previewFaces)])
+    cmd.extend(['-flipAxis', str(flipAxis)])
 
     debug.printInfo(f"Calling: {' '.join(cmd)}")
 
@@ -113,11 +115,28 @@ def _generateScenePreview(sceneFile: str, binFile: str, previewType: int, previe
     return None
 
 
-def _getDataFromMeshFile(filePath: str, previewType: str, previewFaces: int, flipAxis: int):
+def _generateScenePreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int):
+    binMeshFile = str(PurePath(path_utils.getV4BTempDir(), PurePath(filePath).stem).with_suffix('.vrbin'))
+
+    if err := _dumpVrSceneFile(filePath, binMeshFile, _PREVIEW_TYPES[previewType], previewFaces, flipAxis):
+        return None, err
+    
+    objects = vray_proxy.readBinMeshFile(binMeshFile)
+
+    os.unlink(binMeshFile)
+
+    assert len(objects) == 1
+    meshData = list(objects.values())[0]
+
+    assert meshData is not None
+    return meshData, ""
+
+
+def _generateProxyPreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int):
     """ Get mesh data from a .vrmesh or .abc file, or a file compatible with VRayScene.
     
     Args:
-        meshFile    (str): path to a file in format compatible wiht VRayProxy
+        meshFile    (str): path to a file in format compatible with VRayProxy
         binFile     (str): path to the resulting binary file
         previewType (int): one of the _PTEVIEW_TYPES values
         previewFaces(int): upper limit for the number of faces in the preview. Only valid 
@@ -143,6 +162,12 @@ def _getDataFromMeshFile(filePath: str, previewType: str, previewFaces: int, fli
     assert meshData is not None
     return meshData, ""
 
+
+def _generatePreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int, isProxy: bool):
+    if isProxy:
+        return _generateProxyPreview(filePath, previewType, previewFaces, flipAxis)
+    else:
+        return _generateScenePreview(filePath, previewType, previewFaces, flipAxis)
 
 
 def _basisMatrixFromVectors(v0, v1, v2, v3):
@@ -198,7 +223,7 @@ def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray):
         (-1, -1, 1)
     ))
     
-    anchorVertices = _applyTransformToVertexArray(anchorVertices, matScale @ matTranslate)
+    anchorVertices = _applyTransformToVertexArray(anchorVertices, matTranslate @ matScale)
 
     matrix = _basisMatrixFromVectors(Vector(anchorVertices[0]), 
                              Vector(anchorVertices[1]), 
@@ -249,16 +274,19 @@ def _constructCube(size: float, center=(0, 0, 0)):
     return vertices, faces
 
 
-def _constructPointPreview(geomMeshFile: dict, meshFilePath: str):
+def _constructPointPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool):
     """ Fill mesh data for a point preview """
-    geomMeshFile['num_preview_faces'] = 0
-    bboxData, err = _getDataFromMeshFile(meshFilePath, 'Boxes', 8, int(geomMeshFile.flip_axis))
+    proxyPropGroup['num_preview_faces'] = 0
 
+    bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy)
+    
     if not bboxData:
         return None, None, err
     
-    boxVertices = bboxData['vertices']
-    assert len(boxVertices) == 8
+    # There may be more then 1 bounding boxes, get the first one. We only need it in order
+    # to position the added vertices for the basis, so this should be fine. 
+    assert len(bboxData['vertices']) >= 8
+    boxVertices = bboxData['vertices'][:8]
 
     # In Point mode we need to have at least 4 vertices in order to be able to compute
     # the applied transforms on the preview object. We select them from the bounding box points
@@ -275,26 +303,40 @@ def _constructPointPreview(geomMeshFile: dict, meshFilePath: str):
     return bboxData, boxVertices, None
 
 
-def _constructPreview(geomMeshFile: dict, meshFilePath: str):
+def _constructPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool, resetNumFaces=False):
     """ Fill mesh data for a non-point preview """
-    meshData, err = _getDataFromMeshFile(meshFilePath, geomMeshFile.previewType,
-                                         geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
+
+    numFaces = proxyPropGroup.num_preview_faces if not resetNumFaces else getPropertyDefaultValue(proxyPropGroup, 'num_preview_faces')
+
+    meshData, err = _generatePreview(meshFilePath, proxyPropGroup.previewType, numFaces, int(proxyPropGroup.flip_axis), isProxy)
     if err:
         return None, None, err
     
-    bboxData, err = _getDataFromMeshFile(meshFilePath, 'Boxes',
-                                        geomMeshFile.num_preview_faces, int(geomMeshFile.flip_axis))
-    if err:
-        return None, None, err
-    
-    assert len(bboxData['vertices']) == 8
-    return meshData, bboxData['vertices'], None
+    if len(meshData['faces']) == 0:
+        return None, None, 'V-RayProxy import failed - mesh has no faces'
+
+    if proxyPropGroup.previewType == 'Boxes':
+        bboxData = meshData
+    else:
+        bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy)
+        if err:
+            return None, None, err
+        
+    # There may be more then 1 bounding boxes, get the first one. We only need it in order
+    # to position the added vertices for the basis, so this should be fine. 
+    assert len(bboxData['vertices']) >= 8
+    return meshData, bboxData['vertices'][:8], None
 
 
-def _getAnchorTransform(previewMesh: bpy.types.Mesh):
+def _getAnchorTransform(previewMesh: bpy.types.Mesh, isProxy: bool):
     """ Return a matrix constructed from the 4 anchor points """
-    geomMeshFile = previewMesh.vray.GeomMeshFile
-    pointIndices = geomMeshFile.basis_vertex_indices
+    
+    if isProxy:
+        proxyPropGroup = previewMesh.vray.GeomMeshFile
+    else:
+        proxyPropGroup = previewMesh.vray.VRayScene
+
+    pointIndices = proxyPropGroup.basis_vertex_indices
 
     p0 = previewMesh.vertices[pointIndices[0]].co
     p1 = previewMesh.vertices[pointIndices[1]].co
@@ -336,14 +378,14 @@ def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFr
     # Work with the GeomMeshFile field of the original object, or the changes to it
     # might be lost.
     geomMeshFile = previewObj.original.data.vray.GeomMeshFile
-    
+    isNewMesh = hasShadowedAttrChanged(geomMeshFile, 'file')
+
     absFilePath = bpy.path.abspath(filePath)
     if ( fileExt:= PurePath(absFilePath).suffix) not in ('.vrmesh', '.abc'):
         return f"File format {fileExt} is not supported by V-Ray Proxy"
     
-    meshData, boxVertices, err = _constructPointPreview(geomMeshFile, absFilePath) \
-                                if geomMeshFile.previewType == 'Point' \
-                                    else _constructPreview(geomMeshFile, absFilePath)
+    meshData, boxVertices, err = _constructPointPreview(geomMeshFile, absFilePath, isProxy=True) if geomMeshFile.previewType == 'Point' \
+                                    else _constructPreview(geomMeshFile, absFilePath, isProxy=True, resetNumFaces=isNewMesh)
     
     if err:
         return err
@@ -382,65 +424,62 @@ def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFr
     updateShadowAttr(geomMeshFile, 'file')
     
     
-def loadVRayScenePreviewMesh(sceneFilepath, ob: bpy.types.Object):
+def loadVRayScenePreviewMesh(previewObj: bpy.types.Object, absFilePath: str):
     """ Load preview from a file format compatible with VRayScene.
     
         Args:
+            previewObj      (Object): scene object whose mesh will be replaced by the preview mesh
             sceneFilepath   (str)   : path to a file compatible with VRayScene
-            ob              (Object): scene object whose mesh will be replaced by the preview mesh
 
         Returns: 
             None on success, error message on error.
     """
-    fileExt = PurePath(sceneFilepath).suffix
+    fileExt = PurePath(absFilePath).suffix
     if fileExt != '.vrscene' and not fileExt.startswith(".usd"):
         return f"File format {fileExt} is not supported by V-Ray Scene"
     
-    sceneFilepath = bpy.path.abspath(sceneFilepath)
-    if not os.path.exists(sceneFilepath):
-        return "Scene file doesn't exists!"
+    absFilePath = bpy.path.abspath(absFilePath)
+    if not os.path.exists(absFilePath):
+        return "Scene file doesn't exist!"
 
-    vrayScene = ob.data.vray.VRayScene
+    vrayScene = previewObj.data.vray.VRayScene
+    isNewScene = hasShadowedAttrChanged(vrayScene, 'filepath')
 
-    if vrayScene.previewType == 'None':
-        # Replace with empty mesh
-        mesh = bpy.data.meshes.new("VRayScenePreviewTemporary")
-        blender_utils.replaceObjectMesh(ob, mesh)
-        bpy.data.meshes.remove(mesh)
-        vrayScene['num_preview_faces'] = 0
-        return None
+    meshData, boxVertices, err = _constructPointPreview(vrayScene, absFilePath, isProxy=False) \
+                            if vrayScene.previewType == 'Point' \
+                                else _constructPreview(vrayScene, absFilePath, isProxy=False,  resetNumFaces = isNewScene)
 
-    isPreview   = (vrayScene.previewType == 'Preview')
-    binMeshFile = str(PurePath(sceneFilepath).with_suffix('.vrbin'))
-
-    if err := _generateScenePreview(sceneFilepath, binMeshFile, _PREVIEW_TYPES[vrayScene.previewType], vrayScene.num_preview_faces):
+    if err:
         return err
-
-    objects = readBinMeshFile(binMeshFile)
-    assert len(objects) == 1
-    meshData = list(objects.values())[0]
-
-    mesh = bpy.data.meshes.new("VRayScenePreviewTemporary")
-    mesh.from_pydata(meshData['vertices'], [], meshData['faces'])
+        
+    if len(meshData['vertices']) == 0:
+        return f"V-Ray Scene object has no vertices. Loaded from {absFilePath}"
     
-    if vrayScene.flip_axis in ('2', '3'):
-        _flipYZAxes(mesh, yToZ=(vrayScene.flip_axis == '3'))
-    mesh.update()
+    # The new preview object's anchor points may not be the same as the old ones.
+    # Bring them to the coordinate system of the original object
+    baseMatrix, pointIndices, newVertices = _computeBasisMatrix(meshData['vertices'] , boxVertices)
+    meshData['vertices'] = newVertices
 
-    if isPreview:
-        # Set the actual number of preview faces to be shown to the user
+    if vrayScene.filepath:
+        # The proxy is being reimported because one of its properties has changed (incl. the mesh file).
+        # In addition to the scale, we also apply the transform of the previous proxy so that the new
+        # object appeared at the same position
+        appliedTransform = getProxyPreviewAppliedTransform(previewObj)
+        meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], appliedTransform)
+    
+    vrayScene['basis_matrix'] = mat4x4ToTuple(baseMatrix)
+    vrayScene['basis_vertex_indices'] = pointIndices
+
+    _replaceObjMesh(previewObj, meshData)
+    
+    if vrayScene.previewType == 'Preview':
+        # The preview-generation procedure uses the requested number of preview faces as a guideline only.
+        # Write back to the UI the number of actual preview faces
         vrayScene['num_preview_faces'] = len(meshData['faces'])
 
-    blender_utils.replaceObjectMesh(ob, mesh)
-    bpy.data.meshes.remove(mesh)
-
-    blender_utils.selectObject(ob)
-
-    os.unlink(binMeshFile)
-
-    return None
-
-
+    updateShadowAttr(vrayScene, 'filepath')
+    
+    
 def isAlembicFile(filePath: str):
     # Cannot use functions from pathlib here because the path may be in Blender relative format.
     return filePath.endswith('.abc')
@@ -500,9 +539,6 @@ def _readObjectFromBinFile(file: BufferedReader):
     Args:
         file (BufferedReader): an open reader for the binary file
 
-    Raises:
-        Exception: 
-
     Returns:
         dict(str, meshData): a map of object name to mesh data for the object
     """
@@ -541,43 +577,25 @@ def _readObjectFromBinFile(file: BufferedReader):
     }
 
 
-def _flipYZAxes(mesh: bpy.types.Mesh, yToZ: bool):
-    """ Change mesh orientation by flipping the Y and Z axes in a VRayScene object.
-
-    Args:
-        mesh (bpy.types.Mesh)   : The mesh to rotate.
-        yToZ (bool)             : True - Y to Z, False - Z to Y
-    """
-    from mathutils import Matrix
-    
-    flipMatrix = Matrix()
-    flipMatrix[1][1] = 0.0
-    flipMatrix[2][2] = 0.0
-    # 1) 90 degrees rotation around x axis (Z-up to Y-up: transform maya to max coordinate system)
-    # 2) -90 degrees rotation around x axis (Y-up to Z-up: transform max to maya coordinate system)
-    flipMatrix[1][2] = -1.0 if yToZ else 1.0
-    flipMatrix[2][1] = 1.0 if yToZ else -1.0
-
-    mesh.transform(flipMatrix)
-
-
 def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
     """ Return the cumulative transformation to the obeject's mesh which has been applied
         after the proxy object was imported for the first time. This incliudes changing 
         the object's origin point and using 'Apply transform' on the object.
     """
-    assert isObjectVrayProxy(obj)
+    assert isObjectVrayProxy(obj) or isObjectVrayScene(obj)
 
     # When a transformation is applied to an object, Blender transforms the vertices of its mesh.
     # From the current locations (in object local coordinates) of the 4 vertices that serve as 
     # the 'anchor' basis matrix, we can compute the transformation applued to the object.
     
+    isProxy = isObjectVrayProxy(obj)
+
     # If in Edit mode, non-original obj will have no geometry data
     mesh = obj.original.data if fromOriginal else obj.data
     
-    geomMeshFile = mesh.vray.GeomMeshFile
-    basePosMatrix = matrixLayoutToMatrix(geomMeshFile.basis_matrix)
-    currPosMatrix = _getAnchorTransform(mesh) 
+    propGroup = mesh.vray.GeomMeshFile if isProxy else mesh.vray.VRayScene
+    basePosMatrix = matrixLayoutToMatrix(propGroup.basis_matrix)
+    currPosMatrix = _getAnchorTransform(mesh, isProxy) 
         
     return currPosMatrix @ basePosMatrix.inverted()
 
@@ -603,29 +621,4 @@ def _positionProxyLights(previewObj: bpy.types.Object, parentObjPos: Vector):
         lightObj.scale = lightScale
         
 
-#########################################
-########### OBSOLETE FUNCTIONS ##########
 
-## Used only for the upgrade scripts
-
-def _getCenterOfProxyPreview(filePath, geomMeshFile):
-    """ Get the center of the bounding box of the proxy mesh preview.
-    """
-    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
-    if err:
-        debug.printError(f"Proxy preview mesh center calculation error: {err}")
-        return Vector((0.0, 0.0, 0.0))
-
-    return Vector(np.mean(meshData['vertices'], axis=0)) * geomMeshFile.scale
-
-def _getDimsOfProxyPreview(filePath, geomMeshFile):
-    """ Get the dimensions of the bounding box of the proxy mesh preview.
-    """
-    meshData, err = _getDataFromMeshFile(filePath, 'Boxes', 0, int(geomMeshFile.flip_axis))
-    if err:
-        debug.printError(f"Proxy preview mesh dimensions calculation error: {err}")
-        return Vector((0.0, 0.0, 0.0))
-
-    maxVec = Vector(np.max(meshData['vertices'], axis=0))
-    minVec = Vector(np.min(meshData['vertices'], axis=0))
-    return (maxVec - minVec) * geomMeshFile.scale

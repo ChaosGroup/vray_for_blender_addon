@@ -207,10 +207,7 @@ class VRayObjectSelector(VRayUITemplate):
         layout.prop_search( self, 'objectSelector', dataProvider, dataProperty, text='')
 
         if isinstance(dataProvider, bpy.types.Scene):
-            # NOTE: Currently, we support selection only from the top-level scene collections. bpy.types.Scene has
-            # a children_recursive property, but its type is list, not bpy.types.Collection, so it cannot
-            # be used in the prop_search template. 
-            layout.prop_search(self, 'collectionSelector', dataProvider.collection, 'children', text='')
+            layout.prop_search(self, 'collectionSelector', bpy.data, 'collections', text='')
 
         layout.label(text=listLabel)
         layout.template_list('VRAY_UL_SimpleList', self.name, self, 'selectedItems', self, 'activeItem')

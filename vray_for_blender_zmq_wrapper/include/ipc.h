@@ -4,6 +4,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef _WIN32
 #define USE_WIN_SHARED_MEM

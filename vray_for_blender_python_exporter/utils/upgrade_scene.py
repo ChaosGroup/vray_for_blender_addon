@@ -79,10 +79,10 @@ def _upgradeNodeTree(ctx: UpgradeContext):
 
     for node in nodesList:
         if node.bl_idname in ctx.nodesUpgradeInfo.keys():
-            _upgradeNode(ctx, node)
+            upgradeNode(ctx, node)
 
 
-def _upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
+def upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
     """ Upgrade a single node by creating a new node of the same type, copying
         properties and links from the old node and then deleting the old node.
         Custom upgrade functions are invoked at specific points of the upgrade.
@@ -366,6 +366,6 @@ def sceneNeedsUpgrade(upgradeInfo: dict):
            return True
 
     for group in bpy.data.node_groups:
-        if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
+        if hasattr(group, 'vray') and _hasUpgradeableNodes(group, upgradeInfo):
             return True
     return False

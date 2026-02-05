@@ -327,6 +327,11 @@
             }
         ]
     },
+    "Node": {
+        "internal_links": {
+            "*": ["Input"]
+        }
+    },
     "Options": {
         "excluded_parameters": []
     }

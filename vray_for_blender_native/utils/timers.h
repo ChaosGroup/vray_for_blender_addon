@@ -18,7 +18,7 @@ public:
 	static void endCollection(bool printStats, const std::string& title);
 
 private:
-	std::chrono::steady_clock::time_point m_tmStart;
+	std::chrono::high_resolution_clock::time_point m_tmStart;
 	std::string                           m_name;
 
 	static std::map<std::string, std::pair<float, int>>	s_times;  // name -> (time_ms, count)

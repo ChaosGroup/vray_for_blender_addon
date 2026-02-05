@@ -82,8 +82,13 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 		// Merge in the bucket
 
 		if (!pixels) {
-			w = exp->m_cachedValues.renderSizes.imgWidth;
-			h = exp->m_cachedValues.renderSizes.imgHeight;
+			const auto& renderSizes = exp->m_cachedValues.renderSizes;
+			
+			vassert((renderSizes.imgWidth != 0) && (renderSizes.imgHeight != 0) 
+				&& "Invalid render size. Call ZmqExporter::setRenderSize() first.");
+
+			w = renderSizes.imgWidth;
+			h = renderSizes.imgHeight;
 			channels = 4;
 
 			pixels = new float[w * h * channels];
@@ -559,7 +564,7 @@ void ZmqExporter::pluginRemove(const std::string& pluginName)
 }
 
 
-void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool animatable, bool forceUpdate)
+void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool animatable, bool forceUpdate, bool recreate)
 {
 	MsgPluginUpdate msg{
 		pluginName,
@@ -568,11 +573,13 @@ void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string&
 	};
 	msg.setAnimatable(animatable);
 	msg.setForceUpdate(forceUpdate);
+	msg.setReCreateAttribute(recreate);
 
 	sendPluginMsg(serializeMessage(msg));
 
 	m_dirty = true;
 }
+
 
 
 void ZmqExporter::sendPluginMsg(zmq::message_t && msg)

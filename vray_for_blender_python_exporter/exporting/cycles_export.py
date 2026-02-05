@@ -2,15 +2,14 @@ from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting.mtl_export import MtlExporter
 from vray_blender.exporting.node_export import exportLinkedSocket
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import resolveNodeSocket, FarNodeLink
+from vray_blender.exporting.tools import FarNodeLink, resolveNodeSocket, _getActiveNearLinks, socketHasActiveNearLinks
 from vray_blender.lib.attribute_utils import toColor
 from vray_blender.lib.defs import AttrPlugin, NodeContext, PluginDesc
 from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.lib.names import Names
 from vray_blender.lib.plugin_utils import updateValue
-from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.lib import image_utils
-from vray_blender.plugins.texture.TexRemap import fillSplineData
+from vray_blender.nodes.curves_node import fillSplineData
 from mathutils import Color, Euler, Matrix, Vector
 
 import bpy, math
@@ -84,22 +83,27 @@ def _getResolvedSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType)
 
 
 def _getSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType) -> Color | float:
-    if socket.is_output or not isInputSocketLinked(socket):
+   
+    if socket.is_output or not socketHasActiveNearLinks(socket):
         return _getResolvedSocketValue(socket, type)
-
+    
     if resolvedSocket := resolveNodeSocket(socket):
         return _getResolvedSocketValue(resolvedSocket, type)
+    
     return _getResolvedSocketValue(socket, type)
 
+
 def _isSocketTexture(socket: bpy.types.NodeSocket):
-    # The check the two basic cases - if we have an unmuted conneciton. Then check if the connection
+    # The check the two basic cases - if we have an unmuted connection. Then check if the connection
     # is meaningful i.e. going to an actual node not just re-routed to a node group.
-    if not isInputSocketLinked(socket):
+    if not socketHasActiveNearLinks(socket):
         return False
+    
     resolvedSocket = resolveNodeSocket(socket)
-    if not resolvedSocket or not isInputSocketLinked(resolvedSocket):
+    if not resolvedSocket or not socketHasActiveNearLinks(resolvedSocket):
         return False
     return True
+
 
 def _wrapClampPlugin(nodeCtx: NodeContext, input: AttrPlugin, min: float | AttrPlugin, max: float | AttrPlugin):
     # Currently we have no way to clamp floats so wrap the plugin similar to the

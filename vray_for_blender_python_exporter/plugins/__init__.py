@@ -439,6 +439,11 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
         default = False
     )
 
+    isVRayDecal: bpy.props.BoolProperty(
+        name = "Is V-Ray Decal Object",
+        description = "True if this is a decal object.",
+        default = False
+    )
 
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}

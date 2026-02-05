@@ -77,7 +77,7 @@ class ZMQProcess:
         vray.setScannedParamBlockCallback(self.scannedParamBlockCallback)
 
          # VFB start button callback
-        self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport else VfbEventHandler.startProdRender()
+        self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport else VfbEventHandler.startProdRender(forceAnimation=False)
         vray.setRenderStartCallback(self.renderStartCallback)
 
         # Abort-all-renders callback (e.g. if ZmqServer crashes)
@@ -147,7 +147,7 @@ class ZMQProcess:
         args.vrayLibPath         = sys_utils.getAppSdkLibPath()
         args.appSDKPath          = sys_utils.getAppSdkPath()
         args.pluginVersion       = "".join(bl_info['version'])
-        args.blenderVersion      = f'{bpy.app.version[0]}.{bpy.app.version[1]}'
+        args.blenderVersion      = f'{bpy.app.version[0]}.{bpy.app.version[1]},{bpy.app.version[2]}'
 
         debug.printInfo("Starting ZmqServer process ...")
 

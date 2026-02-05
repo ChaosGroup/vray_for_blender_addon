@@ -19,6 +19,10 @@ class SettingsExporter(ExporterBase):
         # * SettingsCurrentFrame should only be exported for interactive renders, so its export
         #   is triggered manually.
         skipSettings = {'SettingsOutput', 'SettingsCurrentFrame'}
+        if self.preview:
+            # We have one SettingsVFB instance in the scene, it's skipped here
+            # for previews, otherwise they will be affected by the VFB layers.
+            skipSettings.add('SettingsVFB')
 
         toExport = [pl for pl in PLUGINS['SETTINGS'] if pl not in IGNORED_PLUGINS.union(skipSettings)]
 

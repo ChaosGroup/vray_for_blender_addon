@@ -453,6 +453,11 @@ void pluginUpdatePluginDesc(py::object renderer, std::string name, std::string a
 	exporter->getPluginExporter()->pluginUpdate(name, attrName, valuePlugin, animatable, forceUpdate);
 }
 
+void pluginReCreateAttr(py::object renderer, std::string name, std::string attrName, bool animatable=true)
+{
+	auto* exporter = getExporter(renderer);
+	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrPlugin(), animatable, false, true);
+}
 
 
 
@@ -926,6 +931,7 @@ BOOST_PYTHON_MODULE(VRayBlenderLib)
 	py::def(FUN(pluginUpdateTransform),		(py::args("renderer", "pluginName", "attrName", "mat"), py::arg("animatable")=true));
 	py::def(FUN(pluginUpdatePluginDesc),	(py::args("renderer", "pluginName", "attrName", "pluginValue"), py::arg("animatable")=true, py::arg("forceUpdate")=false));
 	py::def(FUN(pluginUpdateList),			(py::args("renderer", "name", "attrName", "list", "elemTypes"), py::arg("animatable")=true));
+	py::def(FUN(pluginReCreateAttr),		(py::args("renderer", "name", "attrName"), py::arg("animatable")=true));
 	py::def(FUN(pluginResetValue),			(py::args("renderer", "name", "attrName")));
 
 	py::def(FUN(exportGeometry),			(py::args("renderer", "meshData", "asyncExport")));

@@ -35,7 +35,10 @@
                 "label": "Scalar",
                 "type": "OUTPUT_FLOAT_TEXTURE"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
     },
     "Options": {
         "animatable": true,

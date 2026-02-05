@@ -1,5 +1,14 @@
 {
     "ID": "TexGradient",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "ui" : {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        }
+    ],
     "Widget": {
         "widgets": [
             {
@@ -168,14 +177,5 @@
                 ]
             }
         ]
-    },
-    "Parameters": [
-        {
-            "attr": "uvwgen",
-            "ui" : {
-                "display_name": "Mapping"
-            },
-            "type": "UVWGEN"
-        }
-    ]
+    }
 }

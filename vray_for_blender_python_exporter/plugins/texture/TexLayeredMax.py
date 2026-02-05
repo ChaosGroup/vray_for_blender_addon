@@ -1,12 +1,15 @@
+import bpy
+
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.names import Names
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.nodes.sockets import getHiddenInput
-from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.exporting import node_export as commonNodesExport
+from vray_blender.exporting.tools import getFarNodeLink
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
+
 
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
@@ -20,15 +23,15 @@ def exportTreeNode(nodeCtx: NodeContext):
         humanIndex = l + 1
 
         sockTexture = node.inputs[f'Texture {humanIndex}']
-        if isInputSocketLinked(sockTexture):
-            linkedPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, sockTexture)
+        if texLink := getFarNodeLink(sockTexture):
+            linkedPlugin = commonNodesExport.exportSocketLink(nodeCtx, texLink)
             textures.append(wrapAsTexture(nodeCtx, linkedPlugin))
         else:
             textures.append(wrapAsTexture(nodeCtx, sockTexture.value))
 
         sockMask = node.inputs[f'Mask {humanIndex}']
-        if isInputSocketLinked(sockMask):
-            linkedPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, sockMask)
+        if maskLink := getFarNodeLink(sockMask):
+            linkedPlugin = commonNodesExport.exportSocketLink(nodeCtx, maskLink)
             masks.append(linkedPlugin)
         else:
             masks.append(wrapAsTexture(nodeCtx, sockMask.value))
@@ -51,3 +54,5 @@ def exportTreeNode(nodeCtx: NodeContext):
     skippedSockets = [ "textures", "masks", "opacities", "blend_modes" ]
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
+
+

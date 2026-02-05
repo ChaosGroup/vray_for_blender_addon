@@ -5,7 +5,7 @@ from vray_blender.lib import export_utils
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.names import Names
 from vray_blender.lib.plugin_utils import objectToAttrPlugin, AttrListValue
-from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
+from vray_blender.exporting.light_export import getLightMeshInstanceNames
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -77,8 +77,8 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
         if light.vray.light_type == 'MESH':
             # All mesh light plugins related to the current mesh light property group
-            lightPlugins = [AttrPlugin(getLightMeshPluginName(al.parentName, al.gizmoObjTrackId)) \
-                            for al in ctx.activeMeshLightsInfo if al.parentName == Names.object(obj)]
+            parentlLightMeshName = Names.object(obj)
+            lightPlugins = [AttrPlugin(n) for n in getLightMeshInstanceNames(ctx, parentlLightMeshName)] 
         else:
             lightPlugins = [objectToAttrPlugin(obj)]
 

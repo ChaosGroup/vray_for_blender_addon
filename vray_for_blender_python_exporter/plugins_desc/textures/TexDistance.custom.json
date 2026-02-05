@@ -138,7 +138,10 @@
             {
                 "name": "objects"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Far Color", "Near Color", "Inside Color", "Outside Color"]
+        }
     },
     "Options": {
         "animatable": true,

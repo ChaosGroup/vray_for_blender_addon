@@ -198,13 +198,7 @@ def getLinkInfo(pluginType: str, attrName: str):
 
     return linkInfo
 
-
-def isInputSocketLinked(sock: bpy.types.NodeSocket):
-    """ Returns True if an input socket is linked to an exportable part of the node tree """
-    assert not sock.is_output
-    return sock.is_linked and any(l for l in sock.links if not l.is_muted and not l.is_hidden)
-
-
+                                                
 def getSocketPanelName(pluginModule: dict, vrayAttrName: str):
     """ Returns the name of the panel that the socket for the vray attribute is placed on, or None """
     return next((name for name in pluginModule.SocketPanels if vrayAttrName in pluginModule.SocketPanels[name]), None)

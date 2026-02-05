@@ -1,5 +1,6 @@
 
 import bpy
+import time
 
 from vray_blender import debug
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
@@ -8,55 +9,6 @@ from vray_blender.lib.defs import ProdRenderMode
 from vray_blender.ui import classes
 from vray_blender.lib.mixin import VRayOperatorBase
 
-
-# Temporary cache for global settings that we need to change during the 
-# bake render job. The values will be restored after the job is complete.
-SettingsBackup = {}
-
-def _valueBackup(propGroup, attrName):
-    global SettingsBackup
-
-    propGroupName = propGroup.bl_rna.name
-    # Strip the 'VRay' prefix
-    if (propGroupName.startswith('VRay')):
-        propGroupName = propGroupName[len('VRay'):]
-
-    if propGroupName not in SettingsBackup:
-        SettingsBackup[propGroupName] = {}
-
-    SettingsBackup[propGroupName][attrName] = getattr(propGroup, attrName)
-
-
-def _valueRestore(propGroup, attrName):
-    global SettingsBackup
-
-    propGroupName = propGroup.bl_rna.name
-    # Strip the 'VRay' prefix
-    if (propGroupName.startswith('VRay')):
-        propGroupName = propGroupName[len('VRay'):]
-
-    setattr(propGroup, attrName, SettingsBackup[propGroupName][attrName])
-
-
-def _restoreSettings(scene):
-    global SettingsBackup
-
-    VRayScene = scene.vray
-    VRayScene.Exporter.wait = False
-
-    for propGroupName in SettingsBackup:
-        for attrName in SettingsBackup[propGroupName]:
-            if hasattr(VRayScene, propGroupName):
-                propGroup = getattr(VRayScene, propGroupName)
-                if hasattr(propGroup, attrName):
-                    setattr(propGroup, attrName, SettingsBackup[propGroupName][attrName])
-
-    _valueRestore(VRayScene.Exporter, 'auto_save_render')
-
-    VRayScene.BakeView.uv_channel = 0
-    VRayScene.BakeView.bake_node  = ""
-
-    SettingsBackup = {}
 
 
 def _fixSquareResolution(self, context):
@@ -290,99 +242,197 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
 
 
 class VRAY_OT_batch_bake(VRayOperatorBase):
-    """ This operator runs a bake render job. In the UI, it is attached to the Bake button in the 
-        'Bake' section.
+    """ This operator runs a bake render job for one or multiple scene objects.
+
+        It implements both 'INVOKE_DEFAULT' and 'EXECUTE_DEFAULT' verbs. 
+        * In 'INVOKE_DEFAULT' mode, it behaves as amodal operator. It will show the progress 
+          in the UI and will handle cancellation requests by the user. 
+        * 'EXECUTE_DEFAULT' is meant to be used in headless mode. It will carry out all tasks
+          in blocking mode.
     """  
     bl_idname      = "vray.batch_bake"
     bl_label       = "Batch Bake"
     bl_description = "Batch bake tool"
 
-    def execute(self, context):
-        vrayScene = context.scene.vray
-        batchBake = vrayScene.BatchBake
+    _timer = None
+    _items = []
+    _currentIndex = 0
+    _waitingForRender = False
 
-        # Copy selection
-        selection = [ob for ob in context.selected_objects]
+    # Store scene settings that need to be changed during the execution
+    # and then restored back.
+    _backupAutoSaveRender = False
 
-        formatDict = lib_utils.getDefFormatDict()
+    
+    def invoke(self, context: bpy.types.Context, event):
+        self._collectData(context)
 
-        obList = None
-        if batchBake.work_mode == 'SELECTION':
-            obList = selection
-        elif batchBake.work_mode == 'LIST':
-            obList = [item.ob for item in batchBake.list_items if item.use and item.ob]
+        if not self._items:
+            debug.report('ERROR', "Bake texture operation ont started: No object selected.")
+            return {'CANCELLED'}
+        
+        # Report messages shown from the timer handler are delayed until the rendering
+        # completes, so we need to show the one for the first object here
+        obj = self._items[0][0]
+        debug.report('INFO', f"Baking object {obj.name} [1 of {len(self._items)}] ...")
 
-        numObjects = len(obList)
+        self._updateSceneSettings(context)
+        self._currentIndex = 0
+        self._waitingForRender = False
 
-        # Backup some settings
-        _valueBackup(vrayScene.Exporter, 'auto_save_render')
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.5, window=context.window)
+        wm.modal_handler_add(self)
 
-        if numObjects == 0:
-            debug.printError("Bake texture failed: No object selected.")
-            self.report({'ERROR'}, 'Bake texture failed: No object selected.')
+        return {'RUNNING_MODAL'}
 
-        vrayScene.Exporter.auto_save_render = True
 
-        try:
-            for itemIndex, ob in enumerate(obList):
-                debug.printInfo(f"Baking: {ob.name}...")
+    def modal(self, context: bpy.types.Context, event: bpy.types.Event):
+        match event.type:
+            case 'TIMER':
+                from vray_blender.engine.render_engine import VRayRenderEngine
+                from vray_blender.engine.renderer_prod import VRayRendererProd
                 
-                if len(ob.data.uv_layers) == 0:
-                    debug.printError(f"Bake texture: UV Map is not defined for object {ob.name_full}")
-                    self.report({'ERROR'}, "Object has no UV map")
-                    continue
+                isRendering = VRayRendererProd.isActive() or bpy.app.is_job_running('RENDER')
                 
-                # Output path format is currently the same for all textures
-                formatDict['$O'] = ("Object Name", lib_utils.cleanString(ob.name, stripSigns=False))
+                if self._waitingForRender and (not isRendering):
+                    if VRayRenderEngine.prodRenderer and VRayRenderEngine.prodRenderer.isAborted():
+                        self._finish(context)
+                        return {'CANCELLED'}
+                    
+                    # Render finished, move to the next item
+                    self._waitingForRender = False
+                    self._currentIndex += 1
+                    
+                if self._waitingForRender:
+                    # Still rendering
+                    return {'PASS_THROUGH'}
+                
+                totalObjs = len(self._items)
+                
+                if self._currentIndex < totalObjs:
+                    obj, dataSrc = self._items[self._currentIndex]
+                    
+                    if self._currentIndex < totalObjs - 1:
+                        # Blender will show this message after the render job completes so print it
+                        # for the next object in the list. 
+                        nextIndex = self._currentIndex + 1
+                        nextObj = self._items[nextIndex][0]
+                        debug.report('INFO', f"Baking object {nextObj.name} [{nextIndex + 1} of {totalObjs}] ...")
 
-                # Fill the active item with values from either the object list or the
-                # or the common properties depending on the object selection mode
-                bakeItem = batchBake.active_item
-                
-                if batchBake.work_mode == 'LIST':
-                    # Copy the properties from the current list item
-                    dataSrc = batchBake.list_items[itemIndex]
+                    if self._startBake(context, obj, dataSrc, block=False):
+                        self._waitingForRender = True
+                    else:
+                        # Rendering the current item failed, move to the next one 
+                        self._currentIndex += 1
                 else:
-                    dataSrc = batchBake.default_item
-                
-                bakeItem.ob             = ob
-                bakeItem.width          = dataSrc.width
-                bakeItem.height         = dataSrc.height
-                bakeItem.dilation       = dataSrc.dilation
-                bakeItem.flip_derivs    = dataSrc.flip_derivs
-                bakeItem.img_file       = lib_utils.formatName(dataSrc.img_file, formatDict)
-                bakeItem.img_dir        = lib_utils.formatName(dataSrc.img_dir,  formatDict)
-                bakeItem.img_format     = dataSrc.img_format
+                    self._finish(context)
+                    debug.report('INFO', 'Bake job finished')
+                    return {'FINISHED'}
+                    
+            case 'ESC':
+                self._finish(context)
+                return {'CANCELLED'}
+             
+        return {'PASS_THROUGH'}
 
-                # Uv channel number does not seem to have any effect on the channel selection.
-                # The channel is selected by name 
-                vrayScene.BakeView.uv_channel = 0
 
-                # Render
-                # Set the bake 'active' flag for the duration of the render job(s) only.
-                # This will tell the renderer that a bake job has been requested.
-                vrayScene.Exporter.isBakeMode = True
+    def execute(self, context: bpy.types.Context):
 
-                # Render the scene synchronously so that the settings changed for the duration
-                # of the baking could be reset at the end of this function.
-                VfbEventHandler.changeViewportModeSync(newMode='SOLID') 
-                VfbEventHandler.startProdRenderSync(renderMode = ProdRenderMode.RENDER)
-                
+        self._collectData(context)
 
-        except Exception as e:
-            errMsg = f"Error baking object: {ob.name_full}"
-            debug.printError(errMsg)
-            debug.printExceptionInfo(e)
-            self.report({'ERROR'}, errMsg)
-        finally:
-            vrayScene.Exporter.isBakeMode = False
-            _restoreSettings(context.scene)
+        if len(self._items) == 0:
+            self.report({'WARNING'}, "Bake texture failed: No object selected.")
+            return {'CANCELLED'}
+        
+        self._updateSceneSettings(context)
 
-        # Restore selection
-        for ob in selection:
-            ob.select_set(True)
+        for item in self._items:
+            try:
+                obj, dataSrc = item
+                self._startBake(context, obj, dataSrc, block = True)
+
+            except Exception as e:
+                errMsg = f"Error baking object {obj.name_full}"
+                debug.printExceptionInfo(e, "VRAY_OT_batch_bake")
+                self.report({'ERROR'}, errMsg)
+            
+        self._restoreSettings(context)
 
         return {'FINISHED'}
+             
+
+    def _startBake(self, context: bpy.types.Context, obj: bpy.types.Object, dataSrc: bpy.types.PropertyGroup, block: bool):
+        vrayScene = context.scene.vray
+        batchBake = vrayScene.BatchBake
+        
+        debug.printInfo(f"Baking: {obj.name}...")
+        
+        if len(obj.data.uv_layers) == 0:
+            self.report({'ERROR'}, f"Bake texture: UV Map is not defined for object {obj.name_full}")
+            return False
+            
+        formatDict = lib_utils.getDefFormatDict()
+        formatDict['$O'] = ("Object Name", lib_utils.cleanString(obj.name, stripSigns=False))
+        
+        bakeItem = batchBake.active_item
+        bakeItem.ob             = obj
+        bakeItem.width          = dataSrc.width
+        bakeItem.height         = dataSrc.height
+        bakeItem.dilation       = dataSrc.dilation
+        bakeItem.flip_derivs    = dataSrc.flip_derivs
+        bakeItem.img_file       = lib_utils.formatName(dataSrc.img_file, formatDict)
+        bakeItem.img_dir        = lib_utils.formatName(dataSrc.img_dir,  formatDict)
+        bakeItem.img_format     = dataSrc.img_format
+        
+        vrayScene.BakeView.uv_channel = 0
+        vrayScene.Exporter.isBakeMode = True
+        
+        VfbEventHandler.changeViewportModeSync(newMode='SOLID') 
+        VfbEventHandler.startProdRenderSync(renderMode = ProdRenderMode.RENDER, block=block)
+        
+        return True
+    
+
+    def _finish(self, context: bpy.types.Context):
+        wm = context.window_manager
+        if self._timer:
+            wm.event_timer_remove(self._timer)
+            self._timer = None
+        
+        self._restoreSettings(context)
+
+
+    def _collectData(self, context: bpy.types.Context):
+        batchBake = context.scene.vray.BatchBake
+
+        self._items = []
+        
+        if batchBake.work_mode == 'SELECTION':
+             for ob in [ob for ob in context.selected_objects]:
+                 self._items.append((ob, batchBake.default_item))
+        elif batchBake.work_mode == 'LIST':
+             for item in batchBake.list_items:
+                 if item.use and item.ob:
+                     self._items.append((item.ob, item))
+
+
+    def _updateSceneSettings(self, context: bpy.types.Context):
+        vrayScene = context.scene.vray
+
+        self._backupAutoSaveRender = vrayScene.Exporter.auto_save_render
+        vrayScene.Exporter.auto_save_render = True
+
+
+    def _restoreSettings(self, context: bpy.types.Context):
+        """ Restore scene settings at the end of a Bake render job. """
+        vrayScene = context.scene.vray
+
+        vrayScene.Exporter.auto_save_render = self._backupAutoSaveRender
+        vrayScene.Exporter.isBakeMode = False
+        vrayScene.BakeView.uv_channel = 0
+        vrayScene.BakeView.bake_node  = ""
+
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##

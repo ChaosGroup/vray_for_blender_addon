@@ -4,13 +4,12 @@ from vray_blender.exporting.tools import *
 from vray_blender.exporting.plugin_tracker import getObjTrackId, getNodeTrackId, TrackObj, log as trackerLog
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget 
 from vray_blender.exporting.node_export import exportNodeTree
-from vray_blender.lib.blender_utils import getFirstAvailableView3D
 from vray_blender.lib.lib_utils import  LightVrayTypeToBlender, getLightPropGroup, getLightPluginType
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.lib.settings_defs import LightSelectMode
 from vray_blender.lib import export_utils, plugin_utils
-from vray_blender.nodes.tools import isVrayNodeTree, isInputSocketLinked
+from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes.utils import getLightOutputNode, areNodesInterconnected, getOutputNode
 from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
 
@@ -83,6 +82,22 @@ def collectLightMixInfo(exporterCtx: ExporterContext):
         exporterCtx.lightCollections[""] = freeLights
 
 
+def getLightMeshInstanceNames(exporterCtx: ExporterContext, baseLightPluginName: str):
+    """ Return the names of the 'instance' plugins for a LightMesh. 
+    
+        Each LightMesh plugin can only have one mesh gizmo attached. The UI however supports
+        setting multuple gizmos which are exported as individual LightMesh plugins.
+
+        Args:
+        baseLightPluginName (str) : the name of the 'instancer' LightMesh plugin, It is used as
+                                    a base from which to construct the instance names. Note that 
+                                    no actual plugin with this name will be exported.
+    """
+    return [getLightMeshPluginName(baseLightPluginName,li.gizmoObjTrackId) \
+                    for li in exporterCtx.activeMeshLightsInfo \
+                        if li.parentName == baseLightPluginName]
+
+
 def linkLightToRenderChannel(exporterCtx: ExporterContext, objLight: bpy.types.Object, channelPropName: str, lightSelectPlugin: AttrPlugin):
     """ Set a reference to the lightSelectPlugin in the corresponding channels_xxx property of the 
         light plugins exported for objLight.
@@ -98,8 +113,7 @@ def linkLightToRenderChannel(exporterCtx: ExporterContext, objLight: bpy.types.O
     if objLight.data.vray.light_type == 'MESH':
         # A LightMesh 'lamp' object is exported as multiple instances of the LightMesh plugin, 
         # one for each object referenced by the lamp.
-        for gizmoObjTrackId in [li.gizmoObjTrackId for li in exporterCtx.activeMeshLightsInfo if li.parentName == lightPluginName]:
-            lightMeshPluginName = getLightMeshPluginName(lightPluginName, gizmoObjTrackId)
+        for lightMeshPluginName in getLightMeshInstanceNames(exporterCtx, lightPluginName): 
             exporterCtx.linkPluginToRenderChannel(lightMeshPluginName, channelPropName, lightSelectPlugin)
     else:
         exporterCtx.linkPluginToRenderChannel(lightPluginName, channelPropName, lightSelectPlugin)
@@ -165,7 +179,7 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
         # do not allow connections from native VRay plugins.
         uvwNode = nodeCtx.node
         texNode = nodeCtx.nodes[-2]
-        if not any([i for i in texNode.inputs if isInputSocketLinked(i) and \
+        if not any([i for i in texNode.inputs if i.hasActiveFarLink() and \
                                                 ((i.links[0].to_socket.name == 'Uvwgen') or (i.links[0].to_socket.name == 'Mapping')) and \
                                                 (i.links[0].from_socket == uvwNode.outputs['Mapping']) ]):
             # The socket is not connected to the corrrect socket type on the texture node
@@ -179,7 +193,7 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
         texNode = nodeCtx.nodes[1]
         for sockName in ['color_colortex', 'intensity_tex', 'shadowColor_colortex']:
             sock = getInputSocketByAttr(domeNode, sockName)
-            if any ([l for l in sock.links if (not l.is_muted and not l.is_hidden) and (l.from_node == texNode)]):
+            if (link := getFarNodeLink(sock)) and (link.from_node == texNode):
                 _, rotQuat, _ = nodeCtx.sceneObj.matrix_world.decompose()
                 tm = rotQuat.inverted().to_matrix().to_4x4()
                 pluginDesc.setAttribute('uvw_matrix', tm)
@@ -431,9 +445,12 @@ class LightExporter(ExporterBase):
             evalObj = obj.evaluated_get(dg)
             return evalObj.local_view_get(view3d)
         
-        view3d = getFirstAvailableView3D()
-        localView = view3d if (view3d and view3d.local_view) else None
-        
+        localView = None
+        if self.viewport:
+            from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+            view3d = self.iprContext.view3d
+            localView = view3d if (view3d and view3d.local_view) else None
+
         for obj in self.sceneObjects:
             objTrackId = getObjTrackId(obj)
 
@@ -607,8 +624,7 @@ class LightExporter(ExporterBase):
             return
 
         if objLight.data.vray.light_type == 'MESH':
-            for gizmoObjTrackId in [li.gizmoObjTrackId for li in self.activeMeshLightsInfo if li.parentName == lightPlugin.name]:
-                lightMeshPluginName = getLightMeshPluginName(lightPlugin.name, gizmoObjTrackId)
+            for lightMeshPluginName in getLightMeshInstanceNames(self, lightPlugin.name): 
                 lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
                 self.linkPluginToRenderChannel(lightMeshPluginName, 'channels_full', lsPlugin)
         else:

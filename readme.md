@@ -2,7 +2,7 @@
 
 ## 1. Clone Libraries
 1. Clone the repository: [Blender Libraries](https://projects.blender.org/blender/lib-windows_x64.git).
-2. Check out the branch **blender-v4.5-release** (or the respective branch for version 4.2, 4.3 or 4.4).
+2. Check out the branch **blender-v4.5-release** (or the respective branch for version 4.4 or 5.0).
 
 ## 2. Build ZMQ
 1. Clone the repository: [ZeroMQ Library](https://github.com/zeromq/libzmq.git).
@@ -31,7 +31,7 @@ Create the folder passed as the ADDON_PATH parameter to cmake in the next step.
 
 ## 5. Build 
 
-* The `BLENDER_VER` parameter specifies the Blender version (currently 4.3, 4.4, 4.5 and 5.0 are supported) for which this build is intended.
+* The `BLENDER_VER` parameter specifies the Blender version (currently 4.4, 4.5 and 5.0 are supported) for which this build is intended.
 * The path passed in 'ADDON_PATH' parameter must exist before the command is run
 
 
@@ -64,6 +64,7 @@ cmake -S . \
      -B ./build \
      -G Ninja \
      -DCMAKE_OSX_ARCHITECTURES="arm64" \
+     -DCMAKE_BUILD_TYPE=Release \  # or Debug/RelWithDebInfo
      -DWITH_TESTS=0 \
      -DADDON_PATH="./install" \
      -DBOOST_LIBDIR="path/to/boost" \
@@ -77,3 +78,8 @@ ninja install
 
 At the moment, we’re not able to accept external contributions.
 However, if you have any questions or would like to explore potential collaboration, feel free to reach out to us.
+
+# License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or(at your option) any later version.
+See the [LICENSE](LICENSE) file for details.

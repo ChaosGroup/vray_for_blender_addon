@@ -6,17 +6,17 @@ import bpy
 #  might sometimes interfere with the registration process.
 ############################################################################
 
+
 class VRayEntity:
-    
-    # The unique_id and object_ptr properties are used in tandem to implement Blender object 
+    # The unique_id and object_ptr properties are used in tandem to implement Blender object
     # identification. In Python API, the objects are referred to using their names. However the
-    # names can be change, either from code or from the UI. There is no way built into Blender 
-    # for identifying renamed objects. The only thing we can work with is the state of the scene 
+    # names can be change, either from code or from the UI. There is no way built into Blender
+    # for identifying renamed objects. The only thing we can work with is the state of the scene
     # before and after the change. The granularity of the scene updates is not enough to tell which
     # names have changed, e.g. we can have two objects with swapped names in a singel update
-    
 
-    # A human-readable unique object name. It is set at specific points in our code, 
+
+    # A human-readable unique object name. It is set at specific points in our code,
     # prior to any exports that the object is part of.
     unique_id: bpy.props.StringProperty(
         name = "V-Ray Unique ID",
@@ -47,10 +47,10 @@ class VRayEntity:
     def isNewlyAdded(self, objectPtr=None):
         """ Return True if the object's unique_id has not been set yet """
         return str(objectPtr if objectPtr else self.as_pointer()) != self.object_ptr
-    
+
     def setUniqueId(self, id: str, objectPtr=None):
         self.unique_id = id
-        
+
         # Save the pointer to self or to provided pointer 'objectPtr'(used for bpy.types.Object,
         # because obj.vray.as_pointer() and obj.as_pointer() return different values).
         # This will definitely change if the object gets copied, so we
@@ -64,9 +64,9 @@ class VRayEntity:
 
 
 class VRayDirtyState:
-    """ This class is an alternative to the Blender depsgraph updates mechanism 
-        for classes that do not currently get update notifications through 
-        the depsgraph, e.g. custom node trees 
+    """ This class is an alternative to the Blender depsgraph updates mechanism
+        for classes that do not currently get update notifications through
+        the depsgraph, e.g. custom node trees
     """
 
     # Mark the object as having been updated
@@ -85,6 +85,14 @@ class VRayNodeBase(VRayEntity, bpy.types.Node):
     def insert_link(node: bpy.types.Node, link: bpy.types.NodeLink):
         from vray_blender.nodes.nodes import vrayNodeInsertLink
         vrayNodeInsertLink(node, link)
+
+    def update(self):
+        """Update on node graph topology changes (adding or removing nodes and links)"""
+        from vray_blender.nodes.links import isLinkValid
+        for sock in self.inputs:
+            for link in sock.links:
+                if not isLinkValid(self, link):
+                    self.id_data.links.remove(link)
 
 
 class VRayOperatorBase(bpy.types.Operator):

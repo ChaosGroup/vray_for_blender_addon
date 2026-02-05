@@ -76,7 +76,7 @@ class UpdateTracker:
 
         from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES
         from vray_blender.nodes.utils import getVrayPropGroup
-        from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget, UpdateFlags
+        from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags
 
         # Iterate over all plugin types and their cross dependencies
         updatedObjects = [u.id.original for u in exporterCtx.dg.updates if u.is_updated_transform or u.is_updated_geometry]

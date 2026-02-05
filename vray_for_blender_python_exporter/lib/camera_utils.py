@@ -34,12 +34,12 @@ class Rect:
 
     def isEqualTo(self, s: Rect):
         return (
-            self.xmin == s.xmin 
+            self.xmin == s.xmin
             and self.xmax == s.xmax
             and self.ymin == s.ymin
             and self.ymax == s.ymax
         )
-    
+
 class Size:
     """ Floating-size 2d size """
     def __init__(self, w = 0.0,  h = 0.0):
@@ -84,9 +84,17 @@ class ViewParams:
         self.renderSizes        = RenderSizes()
         self.isActiveCamera     = False         # Set to true if this is the active scene camera which should be rendered
         self.resolutionMult     = 1.0
+        self.pixelAspectY       = 1.0
 
 
-    def calcRenderSizes(self):
+    def calcRenderSizes(self, regionRender: bool):
+        """ Calculate the render sizes to set to the SettingsOutput plugin.
+
+        Args:
+            regionRender (bool): if True, the crop region will be rendered as
+                an area inside a larger image (with a blank border). If False, the crop
+                region will fill the whole image.
+        """
         rs = self.renderSizes
 
         # For a detailed description of the render regions and sizes, see the comment here
@@ -100,30 +108,61 @@ class ViewParams:
 
         # Img size is the size of the output image - may be less than camera viewplane quad if
         # a crop region is active. Output img boundaries always map to the crop region boundaries.
-        rs.imgWidth = round(self.regionSize.w) if isCropped else rs.bmpWidth
-        rs.imgHeight = round(self.regionSize.h) if isCropped else rs.bmpHeight
+        rs.imgWidth = round(self.regionSize.w) if (isCropped and not regionRender ) else rs.bmpWidth
+        rs.imgHeight = round(self.regionSize.h) if (isCropped and not regionRender) else rs.bmpHeight
         rs.imgWidth *= self.resolutionMult
         rs.imgHeight *= self.resolutionMult
 
+        if regionRender:
+            srcRgnLeft    = 0
+            srcRgnTop     = 0
+            srcRgnWidth   = rs.imgWidth
+            srcRgnHeight  = rs.imgHeight
+
+            destRgnLeft   = self.regionStart.w if isCropped else 0.0
+            destRgnTop    = self.regionStart.h if isCropped else 0.0
+            destRgnWidth  = self.regionSize.w if isCropped else self.renderSize.w
+            destRgnHeight = self.regionSize.h if isCropped else self.renderSize.h
+        else:
+            srcRgnLeft    = self.regionStart.w if isCropped else 0.0
+            srcRgnTop     = self.regionStart.h if isCropped else 0.0
+            srcRgnWidth   = self.regionSize.w if isCropped else self.renderSize.w
+            srcRgnHeight  = self.regionSize.h if isCropped else self.renderSize.h
+
+            destRgnLeft   = 0
+            destRgnTop    = 0
+            destRgnWidth  = rs.imgWidth
+            destRgnHeight = rs.imgHeight
+
         # The crop region specifies which part of the full view to actually render.
         # The crop quad from the rendered image is 'projected' onto the output img, possibly
-        # resizing it if the img and crop sizes don't match 
-        rs.cropRgnLeft = self.regionStart.w if isCropped else 0.0
-        rs.cropRgnTop = self.regionStart.h if isCropped else 0.0
-        rs.cropRgnWidth = self.regionSize.w if isCropped else self.renderSize.w
-        rs.cropRgnHeight = self.regionSize.h if isCropped else self.renderSize.h
+        # resizing it if the img and crop sizes are not the same.
+        rs.cropRgnLeft   = srcRgnLeft
+        rs.cropRgnTop    = srcRgnTop
+        rs.cropRgnWidth  = srcRgnWidth
+        rs.cropRgnHeight = srcRgnHeight
+
+        # If the pixel aspect ratio is not 1.0, the source image view region will be squashed
+        # in order to fit into the output dimensions. This will make the resulting image file 
+        # show with the correct aspect on monitor with the the target non-1.0 pixel ratio.
+        if not math.isclose(self.pixelAspectY, 1.0):
+            rs.cropRgnTop -= (srcRgnHeight * self.pixelAspectY - srcRgnHeight) / 2
+            rs.cropRgnHeight *= self.pixelAspectY
 
         # The output region is also used for croppping, but inside the output image (whereas the
         # crop region does define cropping inside the rendered image).
         # We are never rendering to just a part of the output image, so output region is always
         # equal to the output image size
-        rs.rgnLeft = 0
-        rs.rgnTop = 0
-        rs.rgnWidth = rs.imgWidth
-        rs.rgnHeight = rs.imgHeight
+        rs.rgnLeft   = destRgnLeft
+        rs.rgnTop    = destRgnTop
+        rs.rgnWidth  = destRgnWidth
+        rs.rgnHeight = destRgnHeight
 
         # Don't make assumptions about the previous state, always set all values
         rs.bitmask  = RenderSizes.Bitmask.ImgSize | RenderSizes.Bitmask.CropRgn
+
+        if regionRender:
+            rs.bitmask |= rs.Bitmask.RenderRgn
 
 
 class RenderSizes:
@@ -153,7 +192,7 @@ class RenderSizes:
 
     def isEqualTo(self, other: RenderSizes):
         return (
-            self.imgWidth == other.imgWidth 
+            self.imgWidth == other.imgWidth
             and self.imgHeight == other.imgHeight
             and self.bmpWidth == other.bmpWidth
             and self.bmpHeight == other.bmpHeight
@@ -192,7 +231,7 @@ class CameraParams:
         self.lens       = DEFAULT_LENS_FOCAL_LENGTH
         self.orthoScale = 1.0
         self.zoom       = 1.0
-        
+
         self.shiftx   = 0.0
         self.shifty   = 0.0
         self.offsetx  = 0.0
@@ -211,10 +250,10 @@ class CameraParams:
         self._setDefaultParams()
         if not cameraObj:
             return
-        
+
         if cameraObj.type == "CAMERA":
             camera: bpy.types.Camera = cameraObj.data
-            
+
             self.isOrtho = isOrthographicCamera(camera)
             self.orthoScale = camera.ortho_scale if self.isOrtho else 1
 
@@ -227,31 +266,31 @@ class CameraParams:
 
             self.clip_start = camera.clip_start
             self.clip_end = camera.clip_end
-            
+
             settingsCamera = cameraObj.data.vray.SettingsCamera
 
             if settingsCamera.override_camera_settings and settingsCamera.override_fov:
                 if settingsCamera.fov >= math.pi:
                     # Blender does not support camera angles > 180 degrees.
-                    # Set focal distance to a negative value. This will cause the FOV 
-                    # to be negative and to not override the FOV for the render view 
+                    # Set focal distance to a negative value. This will cause the FOV
+                    # to be negative and to not override the FOV for the render view
                     # with a value computed from the focal distance.
                     self.lens = -1.0
                 else:
                     self.lens = focalDist(settingsCamera.fov, getCameraSensorSize(self.sensorFit, self.sensorX, self.sensorY))
-            else:          
+            else:
                 # In case FOV is not overridden, Blender has already computed the focal distance for us
                 self.lens = camera.lens
             return
-        
+
         if (cameraObj.type == "LIGHT") and hasattr(cameraObj.data, "vray"):
             match cameraObj.data.type:
                 case 'SPOT':
                     light: bpy.types.SpotLight = cameraObj.data
                     self.lens = 16.0 / math.tan(light.spot_size * 0.5)
-                # The following adjustments to the focal length have been determined empirically. 
+                # The following adjustments to the focal length have been determined empirically.
                 # TODO: Find where those values are set in Blender code and add a reference.
-                case 'POINT': 
+                case 'POINT':
                     self.lens = DEFAULT_LENS_FOCAL_LENGTH - 14
                 case 'AREA':
                     self.lens = DEFAULT_LENS_FOCAL_LENGTH + 3.5
@@ -279,21 +318,21 @@ class CameraParams:
 
             self.shiftx *= self.zoom
             self.shifty *= self.zoom
-            
+
             self.zoom = CAMERA_PARAM_ZOOM_INIT_CAMOB / self.zoom
             return
-        
+
         if rv3d.view_perspective == 'ORTHO':
             sensorSize = getCameraSensorSize(self.sensorFit, self.sensorX, self.sensorY)
             self.clip_end *= 0.5
             self.clip_start = self.clip_end
-            
+
             self.isOrtho = True
             self.orthoScale = rv3d.view_distance * sensorSize / v3d.lens
-            
+
             self.zoom = CAMERA_PARAM_ZOOM_INIT_PERSP
             return
-        
+
         # Perspective camera
         self.zoom = CAMERA_PARAM_ZOOM_INIT_PERSP
 
@@ -302,7 +341,7 @@ class CameraParams:
         """ For the camera view, compute the camera view rectangle position in the viewport"""
         viewplane = Rect()
         pixSize, viewFac, sensorSize, dx, dy = 0.0, 0.0, 0.0, 0.0, 0.0
-        
+
         ycor = aspY / aspX
 
         if self.isOrtho:
@@ -348,7 +387,7 @@ class CameraParams:
 
 
 #########################################################
-########## FREE FUNCTIONS 
+########## FREE FUNCTIONS
 #########################################################
 
 
@@ -395,7 +434,7 @@ def isPhysicalCamera(obj):
     if blender_utils.isCamera(obj):
         camera: bpy.types.Camera = obj.data
         return camera.vray.CameraPhysical.use
-    
+
     return False
 
 
@@ -403,14 +442,14 @@ def isDomeCamera(obj):
     if blender_utils.isCamera(obj):
         camera: bpy.types.Camera = obj.data
         return camera.vray.CameraDome.use
-    
+
     return False
 
 
 def isOrthographicCamera(camera: bpy.types.Camera):
     settingsCamera = camera.vray.SettingsCamera
     return  (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == '7' )
-    
+
 
 def isSameCamera(camera1: bpy.types.Object, camera2: bpy.types.Object):
     return (camera1 is not None) and (camera2 is not None) and (camera1.name_full == camera2.name_full)
@@ -457,7 +496,7 @@ def getStereoscopicSizeMult(vrayScene):
             return Size(2, 1)
         else:
             return Size(1, 2)
-            
+
     return Size(1, 1)
 
 
@@ -466,11 +505,11 @@ def fixLookThroughObjectCameraZFight(tmObject: Matrix):
         objects positioned at the same place.
 
         Returns:
-        The calculated transform for the camera. 
+        The calculated transform for the camera.
     """
-    
+
     EPSILON = 0.00001 # 1/100 mm
-    
+
     forwardVec  = tmObject.inverted().normalized().row[2]
     forwardVec *= EPSILON
 
@@ -482,16 +521,19 @@ def fixLookThroughObjectCameraZFight(tmObject: Matrix):
 
 
 def fixOverrideCameraType():
-    """ This function is called from the onDepsgraphPre event. It keeps in sync 
+    """ This function is called from the onDepsgraphPre event. It keeps in sync
         Blender and V-Ray camera type selections.
     """
     if (camera := bpy.context.scene.camera) and blender_utils.isCamera(camera):
-        # Orthographic camera mode should always be either ON or OFF for BOTH Blender camera 
+        # Orthographic camera mode should always be either ON or OFF for BOTH Blender camera
         # and V-Ray Camera Override in order for the object selection outline to be correct.
         # Keep them in sync.
         if camera.data.type == 'ORTHO':
-            # Set to Orthogonal
-            camera.data.vray.SettingsCamera.type = '7'
+            # Set to Orthogonal, but check if the type will change, otherwise we might
+            # get stuck in a infinite loop updating camera stuff and will also be refreshing
+            # IPR with every mouse click when ortho camera is used.
+            if camera.data.vray.SettingsCamera.type != '7':
+                camera.data.vray.SettingsCamera.type = '7'
         elif camera.data.vray.SettingsCamera.type == '7':
             # Set to Standard
             camera.data.vray.SettingsCamera.type = '0'
@@ -502,20 +544,20 @@ def camObjUsesMotionBlur(cameraObj: bpy.types.Object, settingsMotionBlur):
         camera: bpy.types.Camera = cameraObj.data
         physCamera = camera.vray.CameraPhysical
         return physCamera.use_moblur if physCamera.use else settingsMotionBlur.on
-    
+
     return False
 
 def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
     """ Get the duration and interval center for motion blur from the camera object """
 
     mbSettings = commonSettings.scene.vray.SettingsMotionBlur
-    
+
     mbDuration = mbSettings.duration
     intervalCenter = mbSettings.interval_center
 
     vrayCamera = camera.vray
     physCamera = vrayCamera.CameraPhysical
-    
+
     if physCamera.use:
         cameraType = int(physCamera.type)
 
@@ -537,13 +579,15 @@ def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
     return intervalCenter, mbDuration
 
 
-def renderCamerasHaveSameType():
+def renderCamerasHaveSameType(forceAnimation: bool):
     """ Check if all cameras marked in the render range have the same type """
 
     scene = bpy.context.scene
 
-    # If not in animation mode, there is only ne camera for rendering.
-    if not scene.vray.Exporter.animation_mode == 'ANIMATION':
+    # If not in animation mode, there is only one camera for rendering.
+    isAnimation = forceAnimation or (scene.vray.Exporter.animation_mode == 'ANIMATION')
+
+    if not isAnimation:
         return True
 
     frameStart = scene.frame_start
@@ -558,13 +602,13 @@ def renderCamerasHaveSameType():
 
         vrayCamera = marker.camera.data.vray
         camType = ("Physical" if vrayCamera.use_physical else "Dome" if vrayCamera.use_dome else "Default")
-        
+
         if prevType and camType != prevType:
             debug.reportError(f"Can't have '{camType}' and '{prevType}' cameras marked in the render range.")
             return  False
-        
+
         prevType = camType
-        
+
         if marker.frame < frameStart:
             break
     return True

@@ -41,8 +41,12 @@
         },
         {
             "attr": "displacement_amount",
+            "default": 0.01,
             "ui": {
-                "display_name": "Amount"
+                "display_name": "Amount",
+                "spin_step": 0.01,
+                "soft_min": -1.0,
+                "soft_max": 1.0
             },
             "options": {
                 "animatable": true
@@ -51,7 +55,10 @@
         {
             "attr": "displacement_shift",
             "ui": {
-                "display_name": "Shift"
+                "display_name": "Shift",
+                "soft_min": -2.0,
+                "soft_max": 2.0,
+                "spin_step": 0.01
             },
             "options": {
                 "animatable": true
