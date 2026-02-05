@@ -4,6 +4,7 @@ import bpy
 from vray_blender import plugins
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.nodes import sockets as SocketUtils, utils as NodeUtils
+from vray_blender.nodes.nodes import vrayNodeUpdate
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
 
@@ -21,14 +22,14 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
     def init(self, context):
         NodeUtils.createBitmapTexture(self)
 
-        SocketUtils.addInput(self, 'VRaySocketCoords', "Mapping")
         NodeUtils.addOutputs(self, plugins.PLUGIN_MODULES['TexBitmap'])
+        NodeUtils.addInputs(self, plugins.PLUGIN_MODULES['BitmapBuffer'])
+        NodeUtils.addInputs(self, plugins.PLUGIN_MODULES['TexBitmap'])
 
         syncObjectUniqueName(self, reset=True)
 
     def copy(self, node):
         def _createTexture():
-            
             hasTexture = bool(self.texture)
             NodeUtils.createBitmapTexture(self)
 
@@ -72,6 +73,9 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
             texPluginDesc,
             self
         )
+
+    def update(self):
+        vrayNodeUpdate(self)
 
 def register():
     for pluginType in VRayNodeMetaImageTexture.vray_plugins_list:

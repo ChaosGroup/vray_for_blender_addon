@@ -1,7 +1,5 @@
 #pragma once
 
-// #include "utils/cgr_config.h"
-
 #include <utility>
 #include <vector>
 #include <cassert>

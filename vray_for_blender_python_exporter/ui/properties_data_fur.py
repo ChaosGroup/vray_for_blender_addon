@@ -24,12 +24,13 @@ class VRAY_PT_context_fur(classes.VRayFurPanel):
 
         fur = context.object
         geomHairPropGroup = fur.data.vray.GeomHair
+        outputNode = None
 
         if NodesUtils.treeHasNodes(fur.vray.ntree) and (outputNode := NodesUtils.getOutputNode(fur.vray.ntree)):
             geomHairPropGroup = getattr(outputNode, outputNode.vray_plugin)
 
 
-        classes.drawPluginUI(context, layout, geomHairPropGroup, PLUGINS['GEOMETRY']['GeomHair'], None)
+        classes.drawPluginUI(context, layout, geomHairPropGroup, PLUGINS['GEOMETRY']['GeomHair'], outputNode)
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##

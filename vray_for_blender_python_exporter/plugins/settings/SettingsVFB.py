@@ -14,4 +14,3 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     if scene.vray.SettingsVFB.use:
         return export_utils.exportPluginCommon(ctx, pluginDesc)
-    

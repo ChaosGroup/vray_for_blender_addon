@@ -54,6 +54,13 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         min = 0
     )
 
+    customFrameStep: bpy.props.IntProperty(
+        name = "Frame Step",
+        description = "Frame step for export (overrides scene frame step during VRScene export only)",
+        default = 1,
+        min = 0
+    )
+
     exportAnimation: bpy.props.BoolProperty(
         name = "Export Animation",
         description = "Export animation frames",

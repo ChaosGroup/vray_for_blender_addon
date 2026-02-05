@@ -1,4 +1,9 @@
 {
     "Name": "V-Ray HSV To RGB",
-    "Subtype": "UTILITY"
+    "Subtype": "UTILITY",
+    "Node": {
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
 }

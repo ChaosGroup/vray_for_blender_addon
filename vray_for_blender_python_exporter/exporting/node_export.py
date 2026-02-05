@@ -8,8 +8,7 @@ from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId
 from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeMtlMulti, exportVRayNodeShaderScript
 from vray_blender.exporting.node_exporters.uvw_node_export import exportVRayNodeUVWGenRandomizer, exportVRayNodeUVWMapping
-from vray_blender.nodes import utils as NodesUtils
-from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isVraySocket, isCompatibleNode, isInputSocketLinked
+from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isVraySocket, isCompatibleNode
 
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
@@ -38,6 +37,20 @@ def exportPluginWithStats(nodeCtx: NodeContext, plDesc: PluginDesc, trackPlugin 
     return export_utils.exportPlugin(nodeCtx.exporterCtx, plDesc)
 
 
+def exportSocketLink(nodeCtx: NodeContext, nodeLink: FarNodeLink):
+    sockValue = exportVRayNode(nodeCtx, nodeLink)
+
+    # Not all nodes are exported as plugins. Some may just return a value.
+    if type(sockValue) is AttrPlugin:
+        if sockValue.isEmpty():
+            return None
+        # Export any conversions needed between the source and the
+        # target socket types
+        sockValue = _exportConverters(nodeCtx, nodeLink.to_socket, sockValue)
+
+    return sockValue
+
+
 def exportLinkedSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
     """ Export the tree branch connected to the input socket, applying any necessary conversions.
 
@@ -51,29 +64,16 @@ def exportLinkedSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
     assert not inSocket.is_output
 
     if nodeLink := getFarNodeLink(inSocket):
-        sockValue = exportVRayNode(nodeCtx, nodeLink)
-
-        # Not all nodes are exported as plugins. Some may just return a value.
-        if type(sockValue) is AttrPlugin:
-            # Export any conversions needed between the source and the
-            # target socket types
-            sockValue = _exportConverters(nodeCtx, inSocket, sockValue)
-
-        return sockValue
+        return exportSocketLink(nodeCtx, nodeLink)
 
     return None
 
 
 def exportSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
-    if isInputSocketLinked(inSocket):
-        return exportLinkedSocket(nodeCtx, inSocket)
+    if link := getFarNodeLink(inSocket):
+        return exportSocketLink(nodeCtx, link)
 
     return inSocket.value
-
-
-def exportSocketByName(nodeCtx: NodeContext, inSocketName: str):
-    socket = getInputSocketByName(nodeCtx.node, inSocketName)
-    return exportSocket(nodeCtx, socket)
 
 
 def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
@@ -88,6 +88,7 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
         try:
             return cycles_export.exportCyclesNode(nodeCtx, nodeLink)
         except Exception as e:
+            debug.printError(f"Failed to export Cycles node '{node.name}' from material '{nodeCtx.material.name}'")
             debug.printExceptionInfo(e)
             return AttrPlugin()
 
@@ -195,9 +196,9 @@ def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
 def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
     """ Export values set to the input sockets of the node. If the socket is connected,
         export the linked node. Otherwise, export the value explicitly set to the node.
-        When the node is a meta node representing several VRay plugins, this function 
+        When the node is a meta node representing several VRay plugins, this function
         will be called for each plugin in turn, and will only export the sockets of this
-        plugin. 
+        plugin.
 
         @param nodeCtx - a NodeContext with the .node member set to the node to export
         @param plDesc - plugin description of the plugin backing the node
@@ -226,12 +227,12 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
 
         if not pluginParam:
             # Nodetrees for meta nodes are exported one VRay plugin at a time. If the plugin param
-            # has not been found, this means that the socket is created for another plugin and would 
+            # has not been found, this means that the socket is created for another plugin and would
             # be exported in another call to this function.
             continue
 
-        if sock.shouldExportLink():
-            if sockValue := exportLinkedSocket(nodeCtx, sock):
+        if link := getFarNodeLink(sock):
+            if sockValue := exportSocketLink(nodeCtx, link):
                 sock.exportLinked(plDesc, pluginParam, sockValue)
         else:
             sock.exportUnlinked(nodeCtx, plDesc, pluginParam)
@@ -355,6 +356,50 @@ def _exportMtlMulti(exporterCtx: ExporterContext, obj: bpy.types.Object, mtlPlug
 
     return export_utils.exportPlugin(exporterCtx, mtlMultiDesc)
 
+def fillNodePluginDesc(exporterCtx: ExporterContext,
+                       obj: bpy.types.Object,
+                       nodeDesc: PluginDesc,
+                       transform: Matrix,
+                       objTracker: ObjTracker,
+                       geomPlugin = None,
+                       hasValidGeometry: bool = True,
+                       instance: bpy.types.DepsgraphObjectInstance = None):
+    if not hasValidGeometry:
+        # No valid geometry is available. No need to set any materials to the plugin.
+        # Also, if any of the materials has MtlDisplacement set, combining it with empty geometry will cause an error.
+        matPlugin = AttrPlugin()
+    else:
+        # Export empty material plugin(s) for the node. They will be filled in later by the 
+        # material export procedure
+        matPlugin = _exportObjMaterials(exporterCtx, obj, instance)
+
+    assert matPlugin is not None, "Default material should be attached if the current material is invalid"
+
+    objTracker.trackPlugin(getObjTrackId(obj), matPlugin.name)
+    nodeDesc.setAttribute("material", matPlugin)
+
+    nodeDesc.setAttribute("transform", transform)
+
+    nodeDesc.setAttribute("objectID", obj.pass_index)
+    if exporterCtx.commonSettings.useMotionBlur:
+        objProperties = obj.vray.VRayObjectProperties
+        if objProperties.override_motion_blur_samples:
+            nodeDesc.setAttribute("nsamples", objProperties.motion_blur_samples)
+        else:
+            nodeDesc.setAttribute("nsamples", exporterCtx.commonSettings.mbSamples)
+
+    if geomPlugin:
+        # In the instancer case, geomPlugin is the instancer plugin
+        sceneName = geomPlugin.name
+        scenePath = f"scene/{geomPlugin.name}"
+    else:
+        sceneName = obj.name
+        scene = exporterCtx.dg.scene
+        scenePath = getSceneNameOfObject(obj, scene)
+    nodeDesc.setAttribute("scene_name", [sceneName, scenePath])
+    if userAttributes := obj.vray.UserAttributes.getAsString():
+        nodeDesc.setAttribute('user_attributes', userAttributes)
+
 
 def exportNodePlugin(exporterCtx: ExporterContext,
                      obj: bpy.types.Object,
@@ -374,10 +419,7 @@ def exportNodePlugin(exporterCtx: ExporterContext,
         tm = mathutils.Matrix() if (isInstancer or isInstance) else tmOverride
 
         # Proxy objects must be rendered at the location of their preview meshes.
-        if isObjectVrayProxy(obj) and \
-                (geomMeshFile := obj.data.vray.GeomMeshFile) and \
-                not isInstancer:
-
+        if isObjectVrayProxy(obj) and obj.data.vray.GeomMeshFile and not isInstancer:
             appliedTransform = getProxyPreviewAppliedTransform(obj, fromOriginal = not isInstance)
             tm = tm @ appliedTransform
 
@@ -388,53 +430,24 @@ def exportNodePlugin(exporterCtx: ExporterContext,
             geomPlugin.forceUpdate = True
 
         nodeDesc.setAttribute("geometry", geomPlugin)
-        nodeDesc.setAttribute("objectID", obj.pass_index)
-        nodeDesc.setAttribute("transform", tm)
         nodeDesc.setAttribute("visible", visible)
 
-        if exporterCtx.commonSettings.useMotionBlur:
-            objProperties = obj.vray.VRayObjectProperties
-            if objProperties.override_motion_blur_samples:
-                nodeDesc.setAttribute("nsamples", objProperties.motion_blur_samples)
-            else:
-                nodeDesc.setAttribute("nsamples", exporterCtx.commonSettings.mbSamples)
-
-        # Export empty material plugin(s) for the node. They will be filled in later by the 
-        # material export procedure
-        matPlugin = _exportObjMaterials(exporterCtx, obj, instance)
-        assert matPlugin is not None, "Default material should be attached if the current material is invalid"
-
-        objTracker.trackPlugin(getObjTrackId(obj), matPlugin.name)
-        nodeDesc.setAttribute("material", matPlugin)
-
-        scene = exporterCtx.dg.scene
-
-        if isInstancer:
-            # In the instancer case, geomPlugin is the instancer plugin
-            sceneName = geomPlugin.name
-            scenePath = f"scene/{geomPlugin.name}"
-        else:
-            sceneName = obj.name
-            scenePath = getSceneNameOfObject(obj, scene)
-
-        nodeDesc.setAttribute("scene_name", [sceneName, scenePath])
-        if userAttributes := obj.vray.UserAttributes.getAsString():
-            nodeDesc.setAttribute('user_attributes', userAttributes)
+        fillNodePluginDesc(
+            exporterCtx,
+            obj,
+            nodeDesc,
+            tm,
+            objTracker,
+            geomPlugin if isInstancer else None,
+            not geomPlugin.isEmpty(),
+            instance
+        )
 
         nodePlugin = export_utils.exportPlugin(exporterCtx, nodeDesc)
 
         objTracker.trackPlugin(getObjTrackId(obj), nodePlugin.name, isInstance)
 
         return nodePlugin
-
-
-def exportNodeVisibility(exporterCtx: ExporterContext, obj: bpy.types.Object, visible: bool):
-    """ Export visibility for an already exported Node plugin """
-    pluginName = Names.vrayNode(Names.object(obj))
-    nodeDesc = PluginDesc(pluginName, "Node")
-    nodeDesc.setAttribute("visible", visible)
-    export_utils.exportPlugin(exporterCtx, nodeDesc)
-
 
 def _getObjectMaterials(obj: bpy.types.Object):
     mtls = []
@@ -529,7 +542,7 @@ def _forwardExportSceneObject(nodeCtx: NodeContext, obj: bpy.types.Object, isGeo
         result.auxData['object'] = obj
         result.useDefaultOutput()
         return result
-    
+
     return AttrPlugin()
 
 
@@ -673,8 +686,8 @@ def _exportCombineTexture(ctxNode: NodeContext, value, txValue: AttrPlugin, txMu
     return exportPluginWithStats(ctxNode, plDesc)
 
 
-def _exportTexConverter(nodeCtx: NodeContext, texPlugin: AttrPlugin, converterPluginType: str): 
-    """ Export a converter between textures of different underlying types. 
+def _exportTexConverter(nodeCtx: NodeContext, texPlugin: AttrPlugin, converterPluginType: str):
+    """ Export a converter between textures of different underlying types.
         All converters expose the same socket called 'input' which allows us
         to use the same function for all conversions.
 
@@ -683,7 +696,7 @@ def _exportTexConverter(nodeCtx: NodeContext, texPlugin: AttrPlugin, converterPl
             convPluginType - the type of the converter plugin, e.g. TexColorToFloat
         Returns:
             The exported AttrPlugin
-    """   
+    """
     pluginName = Names.nextVirtualNode(nodeCtx, converterPluginType)
     plDesc = PluginDesc(pluginName, converterPluginType)
     plDesc.attrs['input'] = texPlugin

@@ -25,6 +25,7 @@ def _getUIIcons():
         ui.VRAY_OT_add_object_vrayscene           : 'VRAY_SCENE',
         ui.VRAY_OT_add_object_proxy               : 'VRAY_PROXY',
         ui.VRAY_OT_add_object_fur                 : 'VRAY_FUR',
+        ui.VRAY_OT_add_object_decal               : 'VRAY_DECAL',
 
         menu.VRAY_OT_show_about_dialog            : 'INFO_ABOUT',
         menu.VRAY_OT_open_collaboration           : 'VRAY_LOGO',
@@ -60,8 +61,9 @@ _ICON_FILES = [
 
         ('VRAY_SCENE',          "VRayScene.svg"),
         ('VRAY_PROXY',          "VRayProxy.svg"),
-        ('VRAY_FUR',            "VRayFur.png"), # TODO: Replace with a proper icon
-
+        ('VRAY_FUR',            "VRayFur.svg"), 
+        ('VRAY_DECAL',          "VRayDecal.svg"),
+        
         ('COSMOS',              "CosmosBrowser.svg"),
         ('COSMOS_AI_GENERATOR', "CosmosAIGenerator.svg"),
         ('COSMOS_RELINK_ASSETS',"CosmosRelinkAssets.svg"),

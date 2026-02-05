@@ -73,7 +73,7 @@ def getV4BTempDir():
 
 def getIconsDir():
     return os.path.join(getRootFolder(), "resources/icons")
-                        
+
 
 def getUpgradeScriptsDir():
     return os.path.join(getRootFolder(), "resources/upgrade_scripts")
@@ -230,3 +230,11 @@ def formatResourcePath(path: str, allowRelative: bool):
         return path[2:]
     
     return bpy.path.abspath(path)
+
+
+def tryGetRelativePath(path: str):
+    """ Return the relative path or None if such cannot be constructed. """
+    try:
+        return bpy.path.relpath(path)
+    except ValueError:
+        return None

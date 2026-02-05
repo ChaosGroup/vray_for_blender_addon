@@ -81,6 +81,7 @@ class VRAY_MT_geometry(bpy.types.Menu):
         vrayProxyOp = menus.VRAY_OT_add_object_proxy
         vraySceneOp = menus.VRAY_OT_add_object_vrayscene
         vrayFurOp = menus.VRAY_OT_add_object_fur
+        vrayDecalOp = menus.VRAY_OT_add_object_decal
 
         enableVrscene = not VRayRendererIprViewport.isActive()
         vraySceneLayout = self.layout.column()
@@ -90,6 +91,8 @@ class VRAY_MT_geometry(bpy.types.Menu):
         vraySceneLayout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
         self.layout.operator(vrayFurOp.bl_idname, text="V-Ray Fur", icon_value=getUIIcon(vrayFurOp))
+        self.layout.operator(vrayDecalOp.bl_idname, text="V-Ray Decal", icon_value=getUIIcon(vrayDecalOp))
+
 
 class VRAY_MT_cosmos(bpy.types.Menu):
     bl_label = 'Chaos Cosmos'
@@ -220,8 +223,13 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
 
     def execute(self, context):
         converted = 0
-        for material in bpy.data.materials:
+        nonVrayMaterials = [m for m in bpy.data.materials if (not m.vray.is_vray_class) and m.use_nodes]
+        mtlCount = len(nonVrayMaterials)
+
+        for material in nonVrayMaterials:
             if (not material.vray.is_vray_class) and material.use_nodes:
+                from vray_blender import debug
+                debug.printInfo(f"Converting material {material.name} [{converted + 1} / {mtlCount}]")
                 convertMaterial(material, self)
                 converted += 1
         self.report({'INFO'}, f"Converted {converted} material(s)")

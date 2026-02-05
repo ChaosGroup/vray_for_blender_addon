@@ -252,7 +252,7 @@
                                 "name": "progressive_maxSubdivs"
                             },
                             {
-                                "name": "dmc_threshold"
+                                "name": "progressive_threshold"
                             },
                             {
                                 "name": "progressive_maxTime"
@@ -306,7 +306,7 @@
                                 "name": "samples_limit"
                             },
                             {
-                                "name": "dmc_threshold"
+                                "name": "progressive_threshold"
                             },
                             {
                                 "name": "progressive_maxTime"

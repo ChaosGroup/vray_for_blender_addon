@@ -4,7 +4,7 @@ import bpy
 from vray_blender import debug
 from vray_blender.nodes.nodes import vrayNodeCopy
 
-# Nodes whic do not need conversion or for which the conversion is not yet implemenyted.
+# Nodes which do not need conversion or for which the conversion is not yet implemented.
 SKIPPED_NODES = {
     "VRayNodeTexTriPlanar",
 

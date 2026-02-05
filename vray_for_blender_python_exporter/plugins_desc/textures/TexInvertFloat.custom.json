@@ -8,15 +8,13 @@
                 "label": "Float",
                 "type": "OUTPUT_FLOAT_TEXTURE"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
     },
     "Options": {
         "animatable": true,
-        "excluded_parameters": [],
-        "default_output": 
-        {
-            "label": "Float",
-            "type": "OUTPUT_FLOAT_TEXTURE"
-        }
+        "excluded_parameters": []
     }
 }

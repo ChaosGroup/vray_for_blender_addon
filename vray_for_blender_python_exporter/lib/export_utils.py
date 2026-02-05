@@ -14,7 +14,7 @@ from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.exporting.tools import getLinkedFromSocket, getNodeLinkToNode
 
-NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault" ]
+NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault", "MtlSingleBRDF" ]
 
 def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     mode = "PRODUCTION"
@@ -64,8 +64,8 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
         options = attrDesc.get('options', {})
 
-        # Some attributes are not plugin properties ( i.e. they are only used in Blender ), 
-        # but are added to the json descriptions to make them available through the standard 
+        # Some attributes are not plugin properties ( i.e. they are only used in Blender ),
+        # but are added to the json descriptions to make them available through the standard
         # property description mechanism. They are marked with a 'derived' field set to 'true'
         if options.get('derived', False):
             continue
@@ -283,7 +283,7 @@ class ActiveConnectedMeshInfo:
     gizmoObjTrackId: int
 
     def __hash__(self):
-        # Do not include parentName in the hash as it may change without the object 
+        # Do not include parentName in the hash as it may change without the object
         # being otherwize modified.
         return hash((self.parentObjTrackId, self.gizmoObjTrackId))
 
@@ -292,7 +292,7 @@ class UpdatedConnectedMeshInfo:
     """ Used to track updated connected parent object / gizmo pairs """
     parentObj: bpy.types.Object
     gizmoObjTrackId: int
-    
+
     def __hash__(self):
         return hash((self.parentObj, self.gizmoObjTrackId))
 
@@ -304,7 +304,7 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
         LightMesh and VRayFur combine a light|fur object and a geometry object, which are exported by LightExporter
         and GeometryExporter respectively. Both exporters need to know about the existing links in order
         to stay in sync about what is exported by each of them. This function will collect two lists
-        of (light|fur)/geometry object tuples - one for all currently visible in the scene, and one for 
+        of (light|fur)/geometry object tuples - one for all currently visible in the scene, and one for
         which depsgraph updates have been generated.
 
         Args:
@@ -312,37 +312,40 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
         socketName: socket name of the output node
         treePath: path to the data property group of the object
         outputNodeType: type of the output node
-        
+
         Returns:
         set[ActiveConnectedMeshInfo]: currently active connected mesh gizmos
         set[UpdatedConnectedMeshInfo]: list of updated connected meshes/gizmos
         set[UpdatedConnectedMeshInfo]: the update info for all gizmos from the first set
     """
-    
+
     if not parentObjects:
         return set(), set(), set()
-    
+
     activeConnectedMeshes = set()
     updatedConnectedMeshes = set()
     activeMeshesUpdateInfo = set()
 
 
-    def isUpdatedPair(updatedObjId, parentObj, geomObj, ntree):
-        return exporterCtx.fullExport or (updatedObjId == parentObj) or (updatedObjId == ntree) or (updatedObjId == geomObj)
-    
+    def isUpdatedPair(updatedObjId, parentObj, geomObj):
+        return any(updatedObjId == ob or getObjTrackId(ob) not in exporterCtx.persistedState.processedObjects for ob in (parentObj, geomObj))
+
     def registerPair(parentObj, geomObj, ntree=None):
-        activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), getObjTrackId(parentObj), Names.object(geomObj), getObjTrackId(geomObj)))
-        activeMeshesUpdateInfo.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
+        parentTrackId = getObjTrackId(parentObj)
+        geomTrackId = getObjTrackId(geomObj)
+
+        activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), parentTrackId, Names.object(geomObj), geomTrackId))
+        activeMeshesUpdateInfo.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
 
         if exporterCtx.fullExport:
-            updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
+            updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
             return
-        
+
         for u in exporterCtx.dg.updates:
             updatedObjId = u.id.original
-            if isUpdatedPair(updatedObjId, parentObj, geomObj, ntree):
-                updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, getObjTrackId(geomObj)))
-    
+            if isUpdatedPair(updatedObjId, parentObj, geomObj) or (ntree == updatedObjId):
+                updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
+
     def getNodeTree(obj: bpy.types.Object, treePath: str):
         props = obj
         for name in treePath.split("."):
@@ -355,7 +358,7 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
         propGroup = getattr(parentObj.data.vray, pluginType)
 
         if ntree := getNodeTree(parentObj, treePath):
-            # If the mesh light has a node tree, we need to obtain the names of the 
+            # If the mesh light has a node tree, we need to obtain the names of the
             # target objects from an object selector node attached to its 'Geometry' socket
             if outputNode := getNodeByType(ntree, outputNodeType):
                 propGroup = getattr(outputNode, pluginType)
@@ -364,7 +367,7 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
 
                     for o in targetObjects:
                         registerPair(parentObj, o, ntree)
-                    
+
                     usesSelectorNode = True
 
         if not usesSelectorNode:
@@ -379,7 +382,7 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
 
 
 def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker, nodeOutput, nodePluginNames):
-    """ Exports the nodes connected in the "Matte", "Surface" and "Visibility" sockets of 
+    """ Exports the nodes connected in the "Matte", "Surface" and "Visibility" sockets of
         object output node
     """
 
@@ -417,3 +420,19 @@ def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker,
     # The fur objects have multiple node plugins, so we need to update the object properties for each of them
     for nodePluginName in nodePluginNames:
         plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin, animatable=False)
+
+def isObjectGeomUpdated(exporterCtx: ExporterContext, obj: bpy.types.Object):
+    """ Check if the object needs to be updated. """
+    objTrackId = getObjTrackId(obj)
+    isFirstMotionBlurFrame = (exporterCtx.commonSettings.useMotionBlur and exporterCtx.motionBlurBuilder.isFirstFrame(exporterCtx.currentFrame))
+
+    return exporterCtx.fullExport \
+            or (objTrackId in exporterCtx.dgUpdates['geometry']) \
+            or isFirstMotionBlurFrame \
+            or (objTrackId not in exporterCtx.persistedState.processedObjects)
+
+def isObjectTreeUpdated(exporterCtx: ExporterContext, obj: bpy.types.Object):
+    """ Check if the object's "OBJECT" node tree has been updated. """
+    objTrackId = getObjTrackId(obj)
+    return objTrackId in exporterCtx.dgUpdates['shading'] and \
+            exporterCtx.ctx.scene.vray.ActiveNodeEditorType == "OBJECT"

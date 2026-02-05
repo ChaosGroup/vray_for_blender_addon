@@ -205,7 +205,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Filler Color", "Vein Color"]
+        }
     },
     "Options": {
         "animatable": true,

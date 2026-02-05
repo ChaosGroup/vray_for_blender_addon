@@ -1,15 +1,21 @@
 import bpy
+import os
 
 from mathutils import Vector
 import numpy as np
 
+from vray_blender.ui.classes import pollEngine
 from vray_blender import debug
-from vray_blender.lib import blender_utils 
 from vray_blender.exporting.tools import isObjectVrayProxy
+from vray_blender.operators import VRAY_OT_message_box_base
+
 import vray_blender.vray_tools.vray_proxy as proxy
 
+_SUCCESS = 0
+_ERROR_FILE_MISSING = 1
+_ERROR_IMPORT_FAILED = 2
 
-def _computeBasisMatrix(vertices: np.ndarray, boundingBox: np.ndarray, isFlatObject: bool):
+def computeBasisMatrix(vertices: np.ndarray, boundingBox: np.ndarray, isFlatObject: bool):
     """
     Constructs a basis matrix from 4 non-coplanar vertices in the given [N,3] array. 
     
@@ -131,59 +137,115 @@ def arrayFromMeshVertices(mesh: bpy.types.Mesh):
     mesh.vertices.foreach_get("co", coords)
     return coords.reshape(count, 3)
 
+
+def upgradeProxy(obj: bpy.types.Object):
+    from mathutils import Matrix
+    import vray_blender.vray_tools.vray_proxy as proxy
+    from vray_blender.exporting.tools import mat4x4ToTuple
+
+    geomMeshFile = obj.data.vray.GeomMeshFile
+    absFilePath = bpy.path.abspath(geomMeshFile.file) 
+    
+    if not os.path.exists(absFilePath):
+        debug.reportError(f"Failed to upgrade V-Ray Proxy {obj.name}. Mesh file '{absFilePath}' is missing.")
+        return _ERROR_FILE_MISSING
+    
+    # Regardless of whether this is a point preview, we need to compute the anchor transform 
+    # from an actual mesh
+    originalPreviewType = geomMeshFile.previewType
+    geomMeshFile['previewType'] = 'Preview'
+    meshData, boxVertices, err = proxy._constructPreview(geomMeshFile, absFilePath, isProxy=True)
+    if err:
+        return _ERROR_IMPORT_FAILED
+
+    # For some old scenes computing the transform of the object from the saved GeomMeshFile properties does not place the object
+    # in the exactly same position after the upgrade. Compute the basis matrix from actual points of the mesh. 
+    basisMatrix, pointIndices, addedVertices = computeBasisMatrix(meshData['vertices'], boxVertices, isFlatObject=False)
+
+    if len(addedVertices) > 0:
+        # The object is too flat, try again with greater tolerance for flatness
+        basisMatrix, pointIndices, addedVertices = computeBasisMatrix(meshData['vertices'], boxVertices, isFlatObject=True)
+    
+    geomMeshFileScale = Matrix.Scale(geomMeshFile.scale, 4)
+    geomMeshFile['basis_matrix'] = mat4x4ToTuple(geomMeshFileScale @ basisMatrix)
+    geomMeshFile['basis_vertex_indices'] = pointIndices
+    geomMeshFile['previewType'] = originalPreviewType
+
+    if len(addedVertices) > 0:
+        # If any anchor vertices were added, set them to the mesh
+        mesh: bpy.types.Mesh = obj.data
+        vertices = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
+        faces = np.empty(len(mesh.loop_triangles) * 3, dtype=np.int32)
+
+        mesh.vertices.foreach_get('co', vertices)
+        mesh.loop_triangles.foreach_get('vertices', faces)
+        vertices = vertices.reshape((-1,3))
+
+        allVertices = np.concatenate((vertices, addedVertices), axis=0)
+        
+        newMeshData = {
+            'vertices': allVertices,
+            'faces': faces.reshape((-1,3))
+        }
+
+        proxy._replaceObjMesh(obj, newMeshData)
+
+    proxy.loadVRayProxyPreviewMesh(obj, geomMeshFile.file)
+    return _SUCCESS
+
 def run():
+    
+    missingFiles = False
     for obj in bpy.data.objects:
         if isObjectVrayProxy(obj):
-            from mathutils import Matrix
-            import vray_blender.vray_tools.vray_proxy as proxy
-            from vray_blender.exporting.tools import mat4x4ToTuple
+            try:
+                if err := upgradeProxy(obj):
+                    if err == _ERROR_FILE_MISSING:
+                        missingFiles = True
+                        
+            except Exception as e:
+                debug.reportError(f"Failed to upgrade V-Ray Proxy {obj.name}. Error: {e} ")
 
-            geomMeshFile = obj.data.vray.GeomMeshFile
-            absFilePath = bpy.path.abspath(geomMeshFile.file) 
-            
-            # Regardless of whether this is a point preview, we need to compute the anchor transform 
-            # from an actual mesh
-            originalPreviewType = geomMeshFile.previewType
-            geomMeshFile['previewType'] = 'Preview'
-            meshData, boxVertices, err = proxy._constructPreview(geomMeshFile, absFilePath)
-            if err:
-                debug.reportError(f"Failed to upgrade V-Ray proxy object: {err}")
-                continue
+    if missingFiles:
 
-            # For some old scenes computing the transform of the object from the saved GeomMeshFile properties does not place the object
-            # in the exactly same position after the upgrade. Compute the basis matrix from actual points of the mesh. 
-            basisMatrix, pointIndices, addedVertices = _computeBasisMatrix(meshData['vertices'], boxVertices, isFlatObject=False)
-
-            if len(addedVertices) > 0:
-                # The object is too flat, try again with greater tolerance for flatness
-                basisMatrix, pointIndices, addedVertices = _computeBasisMatrix(meshData['vertices'], boxVertices, isFlatObject=True)
-            
-            geomMeshFileScale = Matrix.Scale(geomMeshFile.scale, 4)
-            geomMeshFile['basis_matrix'] = mat4x4ToTuple(geomMeshFileScale @ basisMatrix)
-            geomMeshFile['basis_vertex_indices'] = pointIndices
-            geomMeshFile['previewType'] = originalPreviewType
-
-            if len(addedVertices) > 0:
-                # If any anchor vertices were added, set them to the mesh
-                mesh: bpy.types.Mesh = obj.data
-                vertices = np.empty(len(mesh.vertices) * 3, dtype=np.float32)
-                faces = np.empty(len(mesh.loop_triangles) * 3, dtype=np.int32)
-
-                mesh.vertices.foreach_get('co', vertices)
-                mesh.loop_triangles.foreach_get('vertices', faces)
-                vertices = vertices.reshape((-1,3))
-
-                allVertices = np.concatenate((vertices, addedVertices), axis=0)
-                
-                newMeshData = {
-                    'vertices': allVertices,
-                    'faces': faces.reshape((-1,3))
-                }
-
-                proxy._replaceObjMesh(obj, newMeshData)
-
-            proxy.loadVRayProxyPreviewMesh(obj, geomMeshFile.file)
+        msg = ( "Scene update failed for one or more V-Ray Proxy Objects\n"
+                "because their mesh files are missing. Download all missing\n"
+                "Comsos assets and then reload the scene to retry the update.")
+        
+        bpy.utils.register_class(VRAY_OT_prompt_missing_files)
+        bpy.ops.vray.prompt_missing_files('INVOKE_DEFAULT', message=msg)
 
 
 def check():
     return any(isObjectVrayProxy(obj) for obj in bpy.data.objects)
+
+
+class VRAY_OT_prompt_missing_files(VRAY_OT_message_box_base):
+    bl_idname  = "vray.prompt_missing_files"
+    bl_label   = "Scene update"
+    bl_options = {'INTERNAL'}
+
+    message : bpy.props.StringProperty(
+        name = "message",
+        default = ""
+    )
+    
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def execute(self, context):
+        bpy.app.timers.register(lambda : bpy.utils.unregister_class(VRAY_OT_prompt_missing_files))
+        return { 'FINISHED' }
+
+    def invoke(self, context, event):
+        self._centerDialog(context, event)
+        return context.window_manager.invoke_props_dialog(self, width=350)
+
+    def draw(self, context):
+        self.layout.label(text='Missing V-Ray Proxy files', icon='ERROR')
+        self.layout.separator()
+        box = self.layout.box()
+        lines = self.message.split('\n')
+        for line in lines:
+            box.label(text=line)

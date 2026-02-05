@@ -35,7 +35,10 @@
                 "name": "transparency_tex",
                 "label": "Transparency"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Base Material", "Coat Material*"]
+        }
     },
     "Options": {
         "excluded_parameters": [],

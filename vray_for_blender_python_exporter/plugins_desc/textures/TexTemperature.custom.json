@@ -47,6 +47,11 @@
             }
         ]
     },
+    "Node": {
+         "internal_links": {
+            "*": ["Color"]
+        }
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": []

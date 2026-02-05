@@ -154,5 +154,10 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "input_sockets": [
+            { "name": "uvwgen" }
+        ]
     }
 }

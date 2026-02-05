@@ -48,6 +48,7 @@
         },
         {
             "attr": "file",
+            "subtype": "NONE",
             "update": "onUpdatePreviewFile",
             "options" : {
                 "shadowed": true
@@ -66,15 +67,6 @@
             "attr" : "initial_preview_mesh_pos",
             "default" : [ 0.0, 0.0, 0.0 ],
             "desc" : "Initial position of the preview mesh (in local space)",
-            "type" : "VECTOR",
-            "options": {
-               "derived": true
-            }
-        },
-        {
-            "attr" : "initial_preview_dims",
-            "default" : [ 0.0, 0.0, 0.0 ],
-            "desc" : "Initial dimensions of the preview mesh (in local space)",
             "type" : "VECTOR",
             "options": {
                "derived": true
@@ -120,7 +112,8 @@
                 "attrs": [
                     {
                         "name": "file",
-                        "active": {"cond": "::previewType!=Point"}
+                        "active": {"cond": "::previewType!=Point"},
+                        "custom_draw": "widgetDrawFile"
                     },
                     {
                         "layout": "SEPARATOR"

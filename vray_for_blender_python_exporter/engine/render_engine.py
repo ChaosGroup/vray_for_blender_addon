@@ -9,6 +9,7 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQProcess
+from vray_blender.lib.defs import IprContext
 from vray_blender.nodes.utils import tagRedrawPropertyEditor, tagRedrawViewport
 from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
@@ -103,8 +104,8 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         VRayRenderEngine.mainVrayRenderer = None
 
     @staticmethod
-    def startInteractiveRenderer():
-        VRayRenderEngine.iprRenderer = VRayRendererIprVfb()
+    def startInteractiveRenderer(iprContext: IprContext):
+        VRayRenderEngine.iprRenderer = VRayRendererIprVfb(iprContext)
         VRayRenderEngine.iprRenderer.start()
         tagRedrawPropertyEditor()
 

@@ -3,7 +3,8 @@
     "Parameters": [
         {
             "attr": "filepath",
-            "subtype": "FILE_PATH",
+            "subtype": "NONE",
+            "update": "onUpdatePreviewFile",
             "options" : {
                 "shadowed": true
             }
@@ -14,7 +15,7 @@
             "desc" : "The type of the generated preview",
             "items" : 
             [
-                [ "None", "None", "" ],
+                [ "Point", "Point", "" ],
                 [ "Full", "Full", "" ],
                 [ "Preview", "Preview", "" ],
                 [ "Boxes", "Boxes", "" ]
@@ -48,15 +49,35 @@
                "derived": true
             },
              "update": "onUpdatePreview"
+        },
+        {
+            "attr": "basis_matrix",
+            "type": "TRANSFORM",
+            "desc": "Basis matrix for the initial geometry transform",
+            "default": [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "basis_vertex_indices",
+            "type": "INDEX_VECTOR_4",
+            "desc": "Indices of the vertices from which tha basis matrix is constructed",
+            "default": [0, 1, 2, 3],
+            "options": {
+               "derived": true
+            }
         }
     ],
     "Widget": {
         "widgets": [
             {
                 "layout": "COLUMN",
+                "active": {"cond": "plugins.geometry.VRayScene.isEditEnabled"},
                 "attrs": [
                     {
-                        "name": "filepath"
+                        "name": "filepath",
+                        "custom_draw": "widgetDrawFilepath"
                     },
                     {
                         "layout": "SEPARATOR"
@@ -73,6 +94,10 @@
                     },
                     {
                         "name": "flip_axis"
+                    },
+                    {
+                        "name": "material_override",
+                        "search_bar_for": "materials"
                     },
                     {
                         "name": "add_nodes"

@@ -67,8 +67,8 @@ struct ZmqServerArgs
 
 struct UVAttrLayer
 {
-	const std::string name;
-	const std::span<const float[2]> data;
+	std::string name;
+	std::span<const float[2]> data;
 };
 
 
@@ -83,11 +83,11 @@ struct AttrLayer {
 		Corner,
 	};
 
-	const std::string name;
-	const DataType dataType = DataType::Float;
-	const Domain domain = Domain::Point;
-	const uint8_t * const data = nullptr;
-	const size_t elementCount = 0;
+	std::string name;
+	DataType dataType = DataType::Float;
+	Domain domain = Domain::Point;
+	const uint8_t * data = nullptr;
+	size_t elementCount = 0;
 
 	static inline float colorByteToFloat(uint8_t v)
 	{
@@ -100,12 +100,12 @@ struct AttrLayer {
 			const MLoopCol& color = reinterpret_cast<const MLoopCol*>(data)[idx];
 			return VRayBaseTypes::AttrVector(colorByteToFloat(color.r), colorByteToFloat(color.g), colorByteToFloat(color.b));
 		} else {
-			using Vec4f = float[4];
-			const auto& color = reinterpret_cast<const Vec4f*>(data)[idx];
-			return VRayBaseTypes::AttrVector(color);
+			const MPropCol& color = reinterpret_cast<const MPropCol*>(data)[idx];
+			return VRayBaseTypes::AttrVector(color.color);
 		}
 	}
 };
+
 
 struct Subdiv
 {
@@ -114,7 +114,6 @@ struct Subdiv
 	PROPERTY(bool, enabled, false);
 	PROPERTY(bool, useCreases, false);
 };
-
 
 
 struct MeshExportOptions
@@ -165,9 +164,6 @@ struct HairData
 
 	std::string        name;
 	std::string        type;                    // "CURVES" or "PARTICLES"
-	int                segments       = 0;      // Number of segments per strand ( vertices - 1 )
-	float              width          = 0.f;    // Width of the strand at the start point
-	bool               fadeWidth      = false;  // Is the strand getting thinner?
 	bool               widthsInPixels = false;  // Is strand width specified in pixels?
 	bool               useHairBSpline = false;
 	std::vector<float> matWorld;
@@ -175,8 +171,18 @@ struct HairData
 	std::span<const float[3]> points;           // Array of strand points, float[3] per point
 	std::span<const float>    pointRadii;       // Array of float per point
 	std::span<const int>      strandSegments;   // Array of int per point
-	std::span<const float[2]> uvs;              // Array of UVs, float[2] per point
-	std::span<const float[3]> vertColors;       // Array of colors, float[3] per point
+	std::span<const float> uvs;                 // Array of UVs, float[2] per point
+	std::span<const float> vertColors;          // Array of colors, float[3] per point
+
+	// Particle hair
+	ParticleSystem *psys = nullptr;             // A pointer to the particle system for particle hair.
+	int firstToExport = 0;                      // The index of the first particle to export.
+	int totalParticles = 0;                     // The index of the last particle to export.
+	int maxSteps = 0;                           // The max number of hair subdivisions.
+	float shape = 0.0f;                         // The value of the shape parameter of the psys.
+	float rootRadius = 0.0f;                    // The root radius of the psys.
+	float tipRadius = 0.0f;                     // THe tip radius of the psys.
+
 	boost::python::object ref;                  // Lifetime ref
 };
 

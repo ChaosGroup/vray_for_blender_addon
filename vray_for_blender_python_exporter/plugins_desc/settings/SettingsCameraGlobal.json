@@ -31,6 +31,7 @@
                 [ "2", "Histogram", "Histogram" ]
             ],
             "type" : "ENUM",
+            "update": "updateAutoSettings",
             "ui" : {}
         },
         {
@@ -38,6 +39,7 @@
             "default": false,
             "desc": "Enable/Disable auto-white balance",
             "type": "BOOL",
+            "update": "updateAutoSettings",
             "options": {
                 "derived": true
             }

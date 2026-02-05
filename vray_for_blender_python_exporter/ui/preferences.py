@@ -107,15 +107,15 @@ class VRayRenderNode(bpy.types.PropertyGroup):
     nodeName: bpy.props.StringProperty(
         name = "Node name",
         description = "The name of the render node",
-        update=lambda self, context: blender_utils.markPreferencesDirty(context),
-        default="Render Node"
+        update = lambda self, context: blender_utils.markPreferencesDirty(context),
+        default = "Render Node"
     )
 
     address: bpy.props.StringProperty(
         name = "IP/Hostname",
         description = "Render node IP or hostname",
-        update=lambda self, context: blender_utils.markPreferencesDirty(context),
-        default="IP/Hostname"
+        update = lambda self, context: blender_utils.markPreferencesDirty(context),
+        default = "IP/Hostname"
     )
 
     port: bpy.props.IntProperty(
@@ -219,6 +219,8 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
     def _updateLogLevel(self, context):
         from vray_blender import debug
         debug.setLogLevel(int(self.verbose_level), bool(self.enable_qt_logs))
+
+        blender_utils.markPreferencesDirty(context)
 
 
     verbose_level: bpy.props.EnumProperty(

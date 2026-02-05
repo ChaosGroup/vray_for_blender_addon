@@ -186,7 +186,10 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["Color Mortar", "Color Tiles"]
+        }
     },
     "Parameters": [
         {

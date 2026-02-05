@@ -3,7 +3,7 @@ from vray_blender import debug
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes import utils as NodesUtils
-from vray_blender.exporting.tools import getFarNodeLink, getLinkedFromSocket
+from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.nodes import tree_defaults
 from vray_blender.nodes.tools import deselectNodes
 from vray_blender.lib import class_utils

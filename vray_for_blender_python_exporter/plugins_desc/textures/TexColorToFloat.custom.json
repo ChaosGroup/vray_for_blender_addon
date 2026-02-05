@@ -1,5 +1,10 @@
 {
     "Name": "V-Ray Color To Float",
     "Subtype": "UTILITY",
-    "Category": "FLOAT_TEXTURE"
+    "Category": "FLOAT_TEXTURE",
+    "Node": {
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
 }

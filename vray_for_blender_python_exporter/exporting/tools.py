@@ -6,11 +6,10 @@ import math
 import numpy as np
 import time
 from io import StringIO
-from xml.dom import NotFoundErr
 
 from vray_blender import debug
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
-from vray_blender.nodes.tools import isCompatibleNode, isInputSocketLinked, isVrayNode
+from vray_blender.nodes.tools import isCompatibleNode, isVrayNode, isVraySocket
 
 
 FLOAT_SOCK_TYPES = ( "VRaySocketFloat", "VRaySocketFloatColor", "VRaySocketFloatNoValue")
@@ -47,7 +46,6 @@ IGNORED_PLUGINS = {
     "RTEngine",
     "EffectLens",
 }
-
 
 MAPPING_TYPE_TO_UVW_PLUGIN = {
     "UV":           "UVWGenMayaPlace2dTexture",
@@ -100,10 +98,10 @@ def typePrefix(obj):
         case bpy.types.PointCloud:    return 'PC'
         case bpy.types.MetaBall:      return 'MB'
         case _:
-            raise NotFoundErr(f"typePrefix: Type not found in list: {type(obj)}")
+            raise Exception(f"typePrefix: Type not found in list: {type(obj)}")
 
 def getNodeByName(tree, nodeName: str):
-    return next(n for n in tree.nodes if n.bl_idname == nodeName)
+    return next((n for n in tree.nodes if n.bl_idname == nodeName), None)
 
 
 def evalMode(isPreview: bool):
@@ -127,6 +125,9 @@ def isObjectVrayScene(obj: bpy.types.Object):
 def isObjectVrayProxy(obj: bpy.types.Object):
     return obj.vray.VRayAsset.assetType == VRAY_ASSET_TYPE["Proxy"]
 
+def isObjectVRayDecal(obj: bpy.types.Object):
+    return obj.vray.isVRayDecal
+
 def isObjectNonMeshClipper(obj: bpy.types.Object):
     vrayClipper = obj.vray.VRayClipper
     return vrayClipper and vrayClipper.enabled and not vrayClipper.use_obj_mesh
@@ -147,7 +148,7 @@ def getInputSocketByName(node:bpy.types.Node, socketName):
         The found socket or None
     """
     assert node is not None
-    return next(iter(s for s in node.inputs if s.name == socketName), None)
+    return next(iter(s for s in node.inputs if (s.name == socketName)), None)
 
 def getInputSocketByAttr(node, attrName):
     """ Search for input socket by its 'vray_attr' field.
@@ -218,26 +219,50 @@ def getGroupNode(node):
     return None
 
 
+def _isNearSocketLinkActive(l: bpy.types.NodeLink):
+    return l.is_valid and (not l.is_muted) and (not l.is_hidden)
+
+
+def _getActiveNearLinks(sock: bpy.types.NodeSocket):
+    """ Returns a list of all socket links that should be followed during export. """
+    
+    # The is_linked check is an optimization as well as a mitigation for a bug in 
+    # Blender which may cause a crash. Looks like the call triggers populating an internal
+    # structure which will otherwise point to invalid entries.  
+    if not sock.is_linked:
+        return []
+    return [l for l in sock.links if _isNearSocketLinkActive(l)]
+
+
+def socketHasActiveNearLinks(socket: bpy.types.NodeSocket):
+    return any(_getActiveNearLinks(socket))
+
+
 def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
-    """ Resolve an input socket to either another output socket or group node inputs socket
-    going through all re-routes and nested groups.
+    """ Resolve an input socket to either itself or an input socket on a node connected 
+        through any re-routes, muted nodes and groups.
 
         Return:
         The resolved socket that can be directly used for export or None if it's connected
         to an unsupported node.
     """
-    if isInputSocketLinked(toSocket):
+    assert not toSocket.is_multi_input
 
-        # If the linked node is 'Reroute', return its link to the input socket to skip the export.
-        fromNode = toSocket.links[0].from_node
-        
-        if fromNode.bl_idname == "NodeReroute":
+    if toSocket.is_linked and (link := toSocket.links[0]) and _isNearSocketLinkActive(link):
+    
+        fromNode = link.from_node
+        fromSocket = link.from_socket
+
+        if fromNode.mute:
+            _, resolvedSock = resolveInternalLink(fromSocket)
+            return resolvedSock
+        elif fromNode.bl_idname == "NodeReroute":
             return resolveNodeSocket(fromNode.inputs[0])
         elif fromNode.bl_idname == "ShaderNodeGroup":
             nodeGroup = fromNode.node_tree
             groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
             for idx, outSocket in enumerate(fromNode.outputs):
-                if outSocket == toSocket.links[0].from_socket:
+                if outSocket == fromSocket:
                     break
             return resolveNodeSocket(groupOutput.inputs[idx])
         elif fromNode.bl_idname == "NodeGroupInput":
@@ -245,8 +270,8 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
             if not groupNode:
                 # This might happen if a GroupInput node was copied outside a group.
                 return None
-            for idx, inSocket in enumerate(fromNode.outputs):
-                if inSocket == toSocket.links[0].from_socket:
+            for idx, outSocket in enumerate(fromNode.outputs):
+                if outSocket == fromSocket:
                     break
             return resolveNodeSocket(groupNode.inputs[idx])
         elif not isCompatibleNode(fromNode):
@@ -256,6 +281,72 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
            
     return toSocket
 
+
+def resolveInternalLink(outSocket: bpy.types.NodeSocket):
+    """ Return a resolved input socket following the best-matching internal link of a muted node. """
+    from vray_blender.nodes.utils import getPluginTypeOfNode, getPluginTypeOfNode
+    from vray_blender.plugins import getPluginModule
+    
+    node = outSocket.node
+
+    if isVrayNode(node):
+        if fnResolve := getattr(node, 'resolveInternalLink', None):
+            return fnResolve(outSocket)
+        
+        pluginType = getPluginTypeOfNode(node)
+        
+        if pluginType is None:
+            return None, None
+        
+        pluginModule = getPluginModule(pluginType)
+
+        if 'internal_links' not in pluginModule.Node:
+            # A missing internal_links list means there are no valid internal links
+            return None, None
+        
+        # If there is no internal_links property on Node, treat all possible links as valid
+        internalLinks = pluginModule.Node.get('internal_links')  
+        
+        def getInputSocketNames(inputsList: list):
+            if inputsList[0] == '*':
+                # case '*' => ['*']
+                return [s.name for s in node.inputs if not s.hide]
+            else:
+                # case '*' => [attr1, attr2]
+                return inputsList
+
+        inSocketNames = []
+        
+        if '*' in internalLinks:
+            # All output sockets
+            inSocketNames = getInputSocketNames(internalLinks['*'])
+        elif inputsList := internalLinks.get(outSocket.name, []):
+            inSocketNames = getInputSocketNames(inputsList)
+            
+        for inSockName in inSocketNames:
+            if inSockName.endswith('*'):
+                # This is the prefix to a socket name and is used for nodes with sockets 
+                # created at runtime which are usually numbered
+                sockNamePrefix = inSockName[:-1]
+                for inSock in node.inputs:
+                    if inSock.name.startswith(sockNamePrefix):
+                        return inSock, resolveNodeSocket(inSock)
+            else:
+                inSock = node.inputs.get(inSockName)
+                assert inSock, f"Invalid socket '{inSockName}' in internal links list of plugin {pluginType}"
+                return inSock, resolveNodeSocket(inSock)
+
+    else: # Cycles node    
+        # Walk all internal links and return the first match. The links are 
+        # ordered by priority.
+        for l in node.internal_links:
+            # In an internal link, to and from sockets are reversed:
+            # 'from_socket' is the input socket and 'to_socket' is the output socket
+            if l.to_socket == outSocket:
+                return l.to_socket, resolveNodeSocket(l.from_socket)
+
+    return None, None
+        
 
 class FarNodeLink:
     """ Node link that can span one or more Reroute nodes. 
@@ -268,20 +359,40 @@ class FarNodeLink:
         self.to_node      = toSock.node
 
 
-def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
+def getFarNodeLink(toSock: bpy.types.NodeSocket):
     """ Get the link between toSock and an output socket possibly
-        spanning one or more Reroute nodes.
+        spanning one or more Reroute nodes, groups and muted nodes.
 
         If no output socket is found, return None.
     """
-    socket = resolveNodeSocket(toSock)
-    if (socket is not None) and isInputSocketLinked(socket):
+
+    if isVraySocket(toSock):
+        # Some V-Ray sockets provide custom implementation in their getFarLink() method.
+        return toSock.getFarLink()
+    else:
+        return getFarNodeLinkImpl(toSock)
+    
+
+def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
+    """ Get the link between toSock and an output socket possibly
+        spanning one or more Reroute nodes, groups and muted nodes.
+        Only works for single-input sockets.
+
+        If no output socket is found, return None.
+    """
+    assert not toSock.is_multi_input
+    
+    if (not toSock.is_linked) or (not _isNearSocketLinkActive(toSock.links[0])):
+        return None
+    
+    if (socket := resolveNodeSocket(toSock)) and socket.is_linked:
         return FarNodeLink(socket.links[0].from_socket, toSock)
+    
     return None
 
 
-def getActiveFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
-    """ Get all far links between toSock and connected input sockets, possibly
+def getActiveOutputFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
+    """ Get all far links between fromSock and connected input sockets, possibly
         spanning one or more Reroute nodes.
     """
     assert fromSock is not None
@@ -289,7 +400,7 @@ def getActiveFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
 
     def getActiveFarSockets(outSock: bpy.types.NodeSocket):
         result = []
-        for link in [l for l in outSock.links if not l.is_muted and not l.is_hidden]:
+        for link in _getActiveNearLinks(outSock):
             if link.to_node.bl_idname != 'NodeReroute':
                 result.append(link.to_socket)
             else:
@@ -298,6 +409,26 @@ def getActiveFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
 
     farSocks = getActiveFarSockets(fromSock)
     return [FarNodeLink(fromSock, s) for s in farSocks]
+
+
+def getActiveInputFarNodeLinks(toSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
+    """ Get all far links between toSock and connected output sockets, possibly
+        spanning one or more Reroute nodes.
+    """
+    assert toSock is not None
+    assert not toSock.is_output
+
+    def getActiveFarSockets(inSock: bpy.types.NodeSocket):
+        result = []
+        for link in _getActiveNearLinks(inSock):
+            if link.from_node.bl_idname != 'NodeReroute':
+                result.append(link.from_socket)
+            else:
+                result.extend(getActiveFarSockets(link.from_node.inputs[0]))
+        return result
+
+    farSocks = getActiveFarSockets(toSock)
+    return [FarNodeLink(s, toSock) for s in farSocks]
 
 
 def getLinkedFromSocket(toSock: bpy.types.NodeSocket):

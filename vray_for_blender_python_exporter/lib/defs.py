@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Mapping, Set, TypeVar, Dict
+from typing import Mapping, TypeVar, Dict
 import bpy, mathutils
 from numpy import ndarray
 
@@ -9,8 +9,6 @@ from vray_blender.exporting.tools import TimeStats, FakeTimeStats, isObjectVisib
 from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, ObjDataTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
 from vray_blender.lib.motion_blur import MotionBlurBuilder
 
-from collections import defaultdict
-from vray_blender.lib.names import Names
 
 class RendererMode:
     Invalid     = 0
@@ -43,7 +41,7 @@ class RenderMaskState:
 
     def __eq__(self, other: RenderMaskState):
         assert isinstance(self.renderMaskData, list)
-               
+
         if (self.mode != other.mode) or (self.clearMask != other.clearMask):
             return False
         if len(self.renderMaskData) != len(other.renderMaskData):
@@ -52,7 +50,11 @@ class RenderMaskState:
 
 class PersistedState:
     def __init__(self):
-        self.visibleObjects   = set()
+
+        # A snapshot of scene objects' visibility. Blender does not provide updates when the visibility
+        # of an object changes, so we need to track it ourselves.
+        self.visibleObjects = set() # set of objTrackId
+
         self.activeInstancers = set()
         self.activeGizmos     = set()
         self.exportedMtls: Dict[int, AttrPlugin] = {}
@@ -80,12 +82,26 @@ class PersistedState:
         self.materialOverrideMode = '-1'
         self.overrideMaterial = None
 
+class IprContext:
+    """ UI context in which a interactive render job i started.
+        Only the relevant parts of the Context object are stored rather than the whole object
+        because they may be invalidated.
+    """
+    def __init__(self, view3d: bpy.types.SpaceView3D, window: bpy.types.Window):
+            assert window is not None
+            assert view3d is not None and view3d.type == 'VIEW_3D'
+            assert view3d.region_3d is not None
+
+            self.window:   bpy.types.Window = window
+            self.view3d:   bpy.types.SpaceView3D  = view3d
+            self.region3d: bpy.types.RegionView3D = view3d.region_3d
+
 
 class ExporterContext:
 
     class _CurrentObjectContext:
         # This class manages a stack of the currently exported objects so that the exporting
-        # code could obtain the last pushed object. This is necessary e.g. when custom code 
+        # code could obtain the last pushed object. This is necessary e.g. when custom code
         # is exporting V-Ray properties created directly on the object.
 
         def __init__(self):
@@ -93,7 +109,7 @@ class ExporterContext:
 
         def get(self):
             return self._objectsStack[-1] if self._objectsStack else None
-        
+
         def push(self, obj: bpy.types.Object):
             self._objectsStack.append(obj)
             return self
@@ -147,16 +163,8 @@ class ExporterContext:
         # Track VRay plugins assosiated with nodes in a nodetree.
         self.nodeTrackers: Mapping[str, ScopedNodeTracker|FakeScopedNodeTracker]  = {}
 
-        # A snapshot of scene objects' visibility. Blender does not provide updates when the visibility
-        # of an object changes, so we need to track it ourselves.
-        self.visibleObjects = set() # set of objTrackId
-
         # A snapshot of the active instancer objects in the scene
         self.activeInstancers = set() # set of objTrackId
-
-        # A dictionary of (parentObjTrackId, geomName, dataName) => list of (instancedObj, geomName, dataName)
-        # This is used to export fur for instanced objects
-        self.instancesOfInstancer: dict[int, list[tuple[bpy.types.Object, str, str]]] = defaultdict(dict)
 
         # All objects in the scene, inlcuding those from linked collections
         self.allObjects = set()
@@ -170,6 +178,7 @@ class ExporterContext:
         self.ctx: bpy.types.Context      = None
         self.dg: bpy.types.Depsgraph     = None
         self.ts: TimeStats|FakeTimeStats = None
+        self.engine: bpy.types.RenderEngine = None
 
         # LightMesh and target meshes are exported by geometry and light exporters respectively.
         # Both need to know about any updates to the other. In updatedMeshLightsInfo, all pairs of
@@ -198,12 +207,12 @@ class ExporterContext:
         # This cache is used to avoid re-exporting materials that have already been exported.
         self.exportedMtls: Dict[int, AttrPlugin] = {}
 
-        # There are some default plugins which may be referenced by multiple other plugins, 
+        # There are some default plugins which may be referenced by multiple other plugins,
         # e.g. mapping etc. We only need one copy of those.
         self.defaultPlugins = {}  # plugin_type: attrPlugin
 
-        # A list of all objects for which temp meshes have beem created with the to_mesh method. 
-        # to_mesh_clear() must be called on these objects after the export is complete. 
+        # A list of all objects for which temp meshes have beem created with the to_mesh method.
+        # to_mesh_clear() must be called on these objects after the export is complete.
         # Currently, temp meshes are only created for objects in edit mode.
         self.objectsWithTempMeshes = []
 
@@ -221,7 +230,7 @@ class ExporterContext:
         # A list of the emissive materials in the scene. Used to create LightSelects for the emissive materials
         # when 'Separate emissive materials' is active in the LighMix options.
         # The data type is tuple(emissivePluginName, attrName, nodeName)
-        self.emissiveMaterials = [] 
+        self.emissiveMaterials = []
 
         # A stack of the objects that are being currently exported.
         self.objectContext = __class__._CurrentObjectContext()
@@ -232,15 +241,26 @@ class ExporterContext:
         # The active LightMix node in the scene or None
         self.activeLightMixNode = None
 
+        # The name of currently updated material that has a displacement node in its node tree
+        self.updatedMtlWithDisplacement = ""
+
+        # Context data for IPR renders. Necessary because the IPR rendering is done
+        # without Blender's knowledge and the context data is only available at the
+        # time of the IPR renderer creation
+        self.iprContext: IprContext = None
+
+        # For convenience and conformance with Blender's workflow, production render jobs 
+        # may be started as animation from the keyboard even if the rendering mode set in 
+        # the Output properties is not 'Animation'.
+        self.forceAnimation = False
+
 
     def _copyConstruct(self, other: ExporterContext):
         self.renderer               = other.renderer
         self.rendererMode           = other.rendererMode
         self.objTrackers            = other.objTrackers
         self.nodeTrackers           = other.nodeTrackers
-        self.visibleObjects         = other.visibleObjects
         self.activeInstancers       = other.activeInstancers
-        self.instancesOfInstancer   = other.instancesOfInstancer
         self.persistedState         = other.persistedState
         self.allObjects             = other.allObjects
         self.dgUpdates              = other.dgUpdates
@@ -249,6 +269,7 @@ class ExporterContext:
         self.ctx                    = other.ctx
         self.dg                     = other.dg
         self.ts                     = other.ts
+        self.engine                 = other.engine
         self.updatedMeshLightsInfo  = other.updatedMeshLightsInfo
         self.activeMeshLightsInfo   = other.activeMeshLightsInfo
         self.updatedFurInfo         = other.updatedFurInfo
@@ -267,6 +288,9 @@ class ExporterContext:
         self.objectContext          = other.objectContext
         self.motionBlurBuilder      = other.motionBlurBuilder
         self.activeLightMixNode     = other.activeLightMixNode
+        self.updatedMtlWithDisplacement = other.updatedMtlWithDisplacement
+        self.iprContext             = other.iprContext
+        self.forceAnimation         = other.forceAnimation
 
     @property
     def viewport(self):
@@ -298,54 +322,40 @@ class ExporterContext:
 
     @property
     def isAnimation(self):
-        return self.production and self.commonSettings.animation.use
+        return self.production and (self.forceAnimation or self.commonSettings.animation.use)
 
     @property
     def sceneObjects(self):
         return self.ctx.scene.objects
 
+    @property
+    def visibleObjects(self):
+        return self.persistedState.visibleObjects
 
-    
+    @property
+    def allowRelativePaths(self):
+        # For cloud we always want absolute paths since the .vrscene is saved in %temp%/vray_blender
+        return self.exportOnly and not self.commonSettings.isCloudSubmit()
+
     def calculateObjectVisibility(self):
-        """ Fill the visibility and active instancers info into ExporterContext """ 
+        """ Fill the visibility and active instancers info into ExporterContext """
 
         # Compile a list of the active instancers in the scene. There are two types of instancers:
         #   1. Legacy, set through Data Properties -> Instancing
         #   2. Objects made instancers through e.g. geometry nodes
         #   3. V-Ray Fur Objects (they are also instancers if they have instancers selected)
-        # The depsgraph only includes the visible instancers. We need however a list of all instancers 
+        # The depsgraph only includes the visible instancers. We need however a list of all instancers
         # in the scene in order to determine which ones to delete and which to only hide.
         legacyInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.is_instancer))
-        instancers = set((getObjTrackId(i.parent) for i in self.dg.object_instances if i.is_instance and (i.parent is not None)))   
+        instancers = set((getObjTrackId(i.parent) for i in self.dg.object_instances if i.is_instance and (i.parent is not None)))
         furInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.vray.isVRayFur))
-            
+
         self.activeInstancers = instancers.union(legacyInstancers).union(furInstancers)
-
-        
-        for inst in self.dg.object_instances:
-            if not inst.is_instance:
-                continue
-
-            obj = inst.object.original
-            objName = Names.object(obj, inst)
-            
-            parentId = getObjTrackId(inst.parent)
-            dataName = Names.objectData(inst.object, inst)
-
-            # Avoid adding duplicates
-            if dataName not in self.instancesOfInstancer[parentId]:
-                # Store the instance object and its geometry/data names,
-                # since DepsgraphObjectInstance will be invalidated when accessed later
-                self.instancesOfInstancer[parentId][dataName] = (obj, objName)
-
-        
-        # Obtain the list of visible objects from the scene. The depsgraph does not include collections.
-        self.visibleObjects = set([getObjTrackId(o) for o in self.ctx.scene.objects if isObjectVisible(self, o)])
 
         # Get a list of all objects in the scene, including objects from linked collections. We will
         # need it in order to determine which objects can be deleted from the scene vs only be hidden.
         self.allObjects = set([o for o in self.ctx.scene.objects])
-        
+
         # Add objects from linked collections as they are not included in scene's depsgraph
         linkedCollections = [c for c in bpy.data.collections if c.library is not None]
         for c in linkedCollections:
@@ -374,9 +384,9 @@ class ExporterContext:
 
 
 class ExporterBase(ExporterContext):
-    """ This class serves only to skip copying ExporterContext's members in each 
+    """ This class serves only to skip copying ExporterContext's members in each
         exporter's constructor. The alternative is to have ExporterContext as a member,
-        but this leads to confusion of the names with the Blender's context object and 
+        but this leads to confusion of the names with the Blender's context object and
         also makes accessing ExporterContext's properties unnecessarily verbose ( one more
         indirection )
     """
@@ -453,7 +463,7 @@ class AColor:
 
     def __getitem__(self, i):
         return self.channels[i]
-    
+
 
 class PluginDesc:
     """ This is the main carrier of plugin property data. Fill-in the properties
@@ -494,26 +504,26 @@ class PluginDesc:
             assert type(self.attrs[name]) is list
             self.attrs[name].append(value)
 
-            
+
 
     def setAttributes(self, dict):
         """ Add/update multiple values at once """
         self.attrs.update(dict)
 
-    
+
     def getAttribute(self, name):
         return self.attrs.get(name)
-    
+
 
     def removeAttribute(self, name):
         try:
             self.attrs.pop(name)
         except KeyError:
             pass
-        
+
     def isSetAttribute(self, name):
         return name in self.attrs
-   
+
 
 class AttrPlugin:
     OUTPUT_UNDEFINED = None
@@ -548,10 +558,10 @@ class AttrPlugin:
     def useDefaultOutput(self):
         self.output = __class__.OUTPUT_DEFAULT
 
-    
+
 class AttrListValue:
     """ Python representation of VRayBaseTypes::AttrListValue """
-    
+
     def __init__(self):
         self.attrList = [] # members of AttrListValue instance
         self.attrType = "" # string representing the types in self.attrList
@@ -584,7 +594,7 @@ class AttrListValue:
 
     def isEmpty(self):
         return len(self.attrList) == 0
-    
+
     def __eq__(self, other):
         return self.attrList == other.attrList
 
@@ -600,7 +610,7 @@ class SceneStats:
         self.uniqueMtls     = set()
         self.uniqueObjs     = set()
         self.uniquePlugins  = set()
-        
+
         self.mtls: int      = 0
         self.objs: int      = 0
         self.plugins: int   = 0
@@ -635,10 +645,10 @@ class NodeContext:
             self.ctx._popNode()
 
     # A list of errors that have occurred during the export of the node tree.
-    # It is inconvenient to pass the context to all utility functions that might need it just to 
+    # It is inconvenient to pass the context to all utility functions that might need it just to
     # be able to log errors. This facility provides a globally accessible place to store error messages.
     # The implementation relies on the fact that all export actions will be carried out sequentiallu.
-    # NOTE:The list should be updated through the registerError() function. This is a 
+    # NOTE:The list should be updated through the registerError() function. This is a
     # provision for a possible future need to store the information per-thread if the export procedure
     # gets parallelized when Python 3.12+ is adopted.
     _errorList = set()
@@ -648,7 +658,7 @@ class NodeContext:
         self.rootObj        = dataObj # bpy.types.ID to which the node tree is attached
         self.scene          = scene
         self.renderer       = renderer
-        
+
         self.material       = None
         self.sceneObj       = None # [optional] The bpy.types.Object which holds dataObj
         self.nodeTracker: ScopedNodeTracker = None
@@ -672,7 +682,7 @@ class NodeContext:
 
         # A custom handler to be invoked for each node being exported in addition to the
         # regular export procedure. The handled is invoked right before export_utils.exportPlugin()
-        # is exported for the node 
+        # is exported for the node
         # The signature of the handler is customHandler(nodeCtx: NodeContext, plDesc: PluginDesc)
         self.customHandler = None
 
@@ -769,7 +779,7 @@ class NodeContext:
 
 @dataclass
 class LinkInfo:
-    """ This class represents the information defined in the options:link_info field 
+    """ This class represents the information defined in the options:link_info field
         of the plugin parameter description.
     """
     OBJECTS     = 'OBJECTS'

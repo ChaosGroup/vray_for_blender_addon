@@ -61,7 +61,7 @@ include_directories(${BOOST_LIBDIR}/include)
 include_directories(${BLENDER_SDK_ROOT}/jpeg/include/)
 include_directories(${BLENDER_SDK_ROOT}/imath/include/)
 include_directories(${BLENDER_SDK_ROOT}/osl/include/)
-include_directories(${BLENDER_SDK_ROOT}/OpenImageIO/include/)
+include_directories(${BLENDER_SDK_ROOT}/openimageio/include/)
 
 file(GLOB_RECURSE SOURCES
     "api/*.cpp"
@@ -127,7 +127,7 @@ if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES
                             PREFIX ""
                             SUFFIX ".pyd" )
-elseif(APPLE)
+else()
     set_target_properties(${PROJECT_NAME} PROPERTIES
         PREFIX ""
         SUFFIX ".so"
@@ -142,7 +142,7 @@ if(BLENDER_VER VERSION_GREATER_EQUAL "5.0")
     set(RENDER_PASS_CHAN_ID_SIZE 24)
 endif()
 
-target_compile_definitions(${PROJECT_NAME} 
+target_compile_definitions(${PROJECT_NAME}
     PRIVATE
     "RENDER_PASS_CHAN_ID_SIZE=${RENDER_PASS_CHAN_ID_SIZE}"
 )
@@ -187,11 +187,7 @@ if(WIN32)
         )
     endif()
 
-elseif (APPLE)
-    # Neccessary for std::stop_source in clang15...
-    target_compile_options(${PROJECT_NAME} PRIVATE -fexperimental-library -Wno-enum-constexpr-conversion)
-
-    include_directories(${BLENDER_SDK_ROOT}/python/include/python3.11)
+else()
     target_link_directories( ${PROJECT_NAME} PRIVATE
         "${BOOST_LIBDIR}/lib"
         "${BLENDER_SDK_ROOT}/jpeg/lib"
@@ -201,24 +197,41 @@ elseif (APPLE)
         "${VRAY_ZMQ_WRAPPER_LIBS}"
     )
 
-    list(APPEND LIB_APPLE libboost_filesystem.dylib)
+    list(APPEND LIB_APPLE boost_filesystem)
     # Link only with libboost_python, for some reason when linking blender's python lib nothing works.
-    list(APPEND LIB_APPLE libboost_python311.dylib)
-    list(APPEND LIB_APPLE libboost_numpy311.dylib)
-    list(APPEND LIB_APPLE libboost_atomic.dylib)
-    list(APPEND LIB_APPLE libOpenImageIO.dylib)
-    list(APPEND LIB_APPLE libOpenImageIO_Util.dylib)
-    list(APPEND LIB_APPLE liboslquery.dylib liboslcomp.dylib liboslexec.dylib liboslnoise.dylib)
-    list(APPEND LIB_APPLE libVRayZmqWrapper.a)
-    list(APPEND LIB_APPLE libjpeg.a)
+    list(APPEND LIB_APPLE boost_python311)
+    list(APPEND LIB_APPLE boost_numpy311)
+    list(APPEND LIB_APPLE boost_atomic)
+    list(APPEND LIB_APPLE OpenImageIO)
+    list(APPEND LIB_APPLE OpenImageIO_Util)
+    list(APPEND LIB_APPLE oslquery oslcomp oslexec oslnoise)
+    list(APPEND LIB_APPLE VRayZmqWrapper)
+    list(APPEND LIB_APPLE jpeg)
 
     target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_APPLE})
-    target_link_options(${PROJECT_NAME} PRIVATE "-undefined" "dynamic_lookup")
+    if (APPLE)
+        # Neccessary for std::stop_source in clang14(on MacOS)... And the warning is from boost's headers
+        target_compile_options(${PROJECT_NAME} PRIVATE -fexperimental-library -Wno-enum-constexpr-conversion)
 
-    set_target_properties(${PROJECT_NAME} PROPERTIES
-        INSTALL_RPATH "@loader_path"
-        BUILD_WITH_INSTALL_RPATH ON
-    )
+        target_link_options(${PROJECT_NAME} PRIVATE "-undefined" "dynamic_lookup")
+    endif()
+endif()
+
+if (UNIX)
+    include_directories(${BLENDER_SDK_ROOT}/python/include/python3.11)
+
+    if (APPLE)
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+            INSTALL_RPATH "@loader_path"
+            BUILD_WITH_INSTALL_RPATH ON
+        )
+    else()
+        set_target_properties(${PROJECT_NAME} PROPERTIES
+            INSTALL_RPATH "$ORIGIN"
+            BUILD_WITH_INSTALL_RPATH ON
+        )
+    endif()
+
 endif()
 
 if (INSTALL_LOCAL)
@@ -243,19 +256,33 @@ if (INSTALL_LOCAL)
             )
         endif()
 
-    elseif(APPLE)
+    else()
+        set(DLL_EXT "")
+        set(BOOST_VERSION "")
+        if (APPLE)
+            set(DLL_EXT ".dylib")
+        else()
+            set(DLL_EXT ".so")
+            set(BOOST_VERSION ".1.82.0")
+        endif()
         if (BLENDER_VER VERSION_GREATER_EQUAL "4.4")
             set (COPY_LIBS
-                "${BOOST_LIBDIR}/lib/libboost_filesystem.dylib"
-                "${BOOST_LIBDIR}/lib/libboost_python311.dylib"
-                "${BOOST_LIBDIR}/lib/libboost_numpy311.dylib"
-                "${BOOST_LIBDIR}/lib/libboost_atomic.dylib"
+                "${BOOST_LIBDIR}/lib/libboost_filesystem${DLL_EXT}${BOOST_VERSION}"
+                "${BOOST_LIBDIR}/lib/libboost_python311${DLL_EXT}${BOOST_VERSION}"
+                "${BOOST_LIBDIR}/lib/libboost_numpy311${DLL_EXT}${BOOST_VERSION}"
+                "${BOOST_LIBDIR}/lib/libboost_atomic${DLL_EXT}${BOOST_VERSION}"
             )
         else()
-            set (COPY_LIBS
-                "${BLENDER_SDK_ROOT}/osl/lib/liboslcomp.dylib"
-                "${BLENDER_SDK_ROOT}/osl/lib/liboslquery.dylib"
-            )
+            if (UNIX AND NOT APPLE)
+                # On linux it seems libboost_numpy311 is there, but blender never loads it
+                list(APPEND COPY_LIBS "${BOOST_LIBDIR}/lib/libboost_numpy311${DLL_EXT}${BOOST_VERSION}")
+            else()
+                # OSL seems to load fine on linux without this
+                set (COPY_LIBS
+                    "${BLENDER_SDK_ROOT}/osl/lib/liboslcomp${DLL_EXT}"
+                    "${BLENDER_SDK_ROOT}/osl/lib/liboslquery${DLL_EXT}"
+                )
+            endif()
         endif()
     endif()
 
@@ -276,7 +303,10 @@ if (INSTALL_LOCAL)
         install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${INSTALL_PREFIX})
     else()
         install(TARGETS ${PROJECT_NAME} LIBRARY DESTINATION ${INSTALL_PREFIX})
-        install(FILES "${CMAKE_CURRENT_LIST_DIR}/vray.icns" DESTINATION ${INSTALL_PREFIX}/VRayZmqServer)
+        
+        if (APPLE)
+            install(FILES "${CMAKE_CURRENT_LIST_DIR}/vray.icns" DESTINATION ${INSTALL_PREFIX}/VRayZmqServer)
+        endif()
     endif()
 
     install(FILES ${COPY_LIBS} DESTINATION ${INSTALL_PREFIX})
@@ -291,13 +321,4 @@ if (INSTALL_LOCAL)
         )
     endif()
 
-    # set(STUB_FILE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${PROJECT_NAME})
-    # set(STUBGEN_COMMAND "cd ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} && stubgen -m ${PROJECT_NAME} -o ${CMAKE_BINARY_DIR}")
-
-    # install(CODE
-    #     "execute_process(COMMAND echo HELLO)"
-    # )
-
-
 endif()
-

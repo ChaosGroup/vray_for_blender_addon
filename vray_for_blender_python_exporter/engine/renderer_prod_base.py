@@ -4,10 +4,11 @@ from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
 from vray_blender.exporting.plugin_tracker import ObjTracker, FakeScopedNodeTracker
 from vray_blender.exporting.tools import FakeTimeStats
-from vray_blender.exporting import obj_export, mtl_export, light_export, settings_export, view_export, world_export
+from vray_blender.exporting import obj_export, mtl_export, light_export, settings_export, view_export, world_export, fur_export
 
 from vray_blender import debug
 from vray_blender.lib import path_utils
+from vray_blender.lib.blender_utils import TestBreak
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.defs import ExporterContext, ExporterContext, RendererMode, PersistedState
@@ -49,10 +50,12 @@ class VRayRendererProdBase:
 
 
     def _reportInfo(self, engine: bpy.types.RenderEngine, msg: str):
+        engine.report({'INFO'}, f"V-Ray: {msg}")
         debug.printInfo(msg)
 
 
     def _reportError(self, engine: bpy.types.RenderEngine, msg: str):
+        engine.report({'ERROR'}, f"V-Ray: {msg}")
         debug.printError(msg)
 
 
@@ -111,15 +114,18 @@ class VRayRendererProdBase:
             in order to pick up any animated values.
         """
         try:
+            # Has to be called before syncObjVisibility for proper update of the visibility of the fur objects.
+            fur_export.syncFurInfo(exporterCtx)
+            
             exporterCtx.calculateObjectVisibility()
             obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
 
             light_export.syncLightMeshInfo(exporterCtx)
             light_export.collectLightMixInfo(exporterCtx)
 
-            self._exportObjects(exporterCtx)
-            self._exportMaterials(exporterCtx)
-            self._exportLights(exporterCtx)
+            self._exportObjects(exporterCtx);       TestBreak.check(exporterCtx)
+            self._exportMaterials(exporterCtx);     TestBreak.check(exporterCtx)
+            self._exportLights(exporterCtx);        TestBreak.check(exporterCtx)
 
             if not exporterCtx.bake:
                 self.viewParams = self._exportCameras(exporterCtx, self.viewParams)
@@ -140,14 +146,16 @@ class VRayRendererProdBase:
 
             # Call descendant's interface
             self._exportSceneAdjustments(exporterCtx)
+            TestBreak.check(exporterCtx)
         finally:
             # Wait for all async export tasks to finish before proceeding.
             # This should be done even if an error occured during export
             vray.finishExport(self.renderer, interactive = False)
+            
+        TestBreak.check(exporterCtx)
 
 
     def _persistState(self, exporterCtx: ExporterContext):
-        self.persistedState.visibleObjects = exporterCtx.visibleObjects
         self.persistedState.activeInstancers = exporterCtx.activeInstancers
         self.persistedState.activeGizmos = exporterCtx.activeGizmos
         self.persistedState.exportedMtls = exporterCtx.exportedMtls
@@ -179,9 +187,9 @@ class VRayRendererProdBase:
             debug.printExceptionInfo(ex, "VRayRendererProd::_updateImage() callback")
 
 
-    def _getExporterContext(self, renderer: int, dg: bpy.types.Depsgraph, commonSettings: CommonSettings):
+    def _getExporterContext(self, engine: bpy.types.RenderEngine, dg: bpy.types.Depsgraph, commonSettings: CommonSettings):
         context = ExporterContext()
-        context.renderer        = renderer
+        context.engine          = engine
         context.commonSettings  = commonSettings
         context.objTrackers     = self.objTrackers
         context.nodeTrackers    = _fakeNodeTrackers

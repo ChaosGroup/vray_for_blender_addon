@@ -14,13 +14,13 @@
  /// designed for usage in the following pattern:
  ///
  ///     ZmqAgent(Blender) <--> ZmqRouter <--> ZmqAgent(RendererController)
- /// 
+ ///
  ////////////////////////////////////////////////////////////////////////////////
 
 namespace VrayZmqWrapper{
 
 /// Constructor
-/// @param ctx - initialized ZMQ context 
+/// @param ctx - initialized ZMQ context
 ZmqRouter::ZmqRouter(zmq::context_t& ctx) :
 	ctx(ctx)
 {
@@ -35,7 +35,7 @@ ZmqRouter::~ZmqRouter() {
 		if (pollerThread.joinable()) {
 			pollerThread.join();
 		}
-	} 
+	}
 	catch(const std::exception& exc) {
 		trace(Msg("Exception in ZmqRouter's destructor:", exc.what()));
 		vassert(!"Exception in ZmqRouter's destructor.");
@@ -47,7 +47,7 @@ void ZmqRouter::setNewWorkerCallback(NewWorkerCallback cb) {
 	vassert(cb && "Unsubscribing is not supported");
 	vassert(!newWorkerCallback && "Multiple subscriptions are not supported");
 	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
-	
+
 	newWorkerCallback = cb;
 }
 
@@ -65,7 +65,7 @@ void ZmqRouter::setErrorCallback(ErrorCallback cb) {
 	vassert(cb && "Unsubscribing is not supported");
 	vassert(!errorCallback && "Multiple subscriptions are not supported");
 	vassert(!pollerThread.joinable() && "Callbacks should be registered before the router is run");
-	
+
 	errorCallback = cb;
 }
 
@@ -106,18 +106,18 @@ void ZmqRouter::pollerLoop(std::string clientEndpoint, std::string workerEndopin
 		sockServer = bind(workerEndopint);
 
 		notifyStarted(sockClient);
-		
+
 		trace(Msg("Listening for client connections on", clientEndpoint));
 		trace(Msg("Listening for worker connections on", workerEndopint));
-		
+
 		std::vector<zmq::poller_event<>> events(2);
 		zmq::poller_t<> pollerRecv, pollerSend;
-		
+
 		pollerRecv.add(sockClient, zmq::event_flags::pollin);
 		pollerRecv.add(sockServer, zmq::event_flags::pollin);
 		pollerSend.add(sockClient, zmq::event_flags::pollout);
 		pollerSend.add(sockServer, zmq::event_flags::pollout);
-		
+
 		while (!stopPolling)	{
 			const auto recvEvents = pollerRecv.wait_all(/*r*/events, pollTimeout);
 
@@ -169,15 +169,16 @@ zmq::socket_t ZmqRouter::bind(const std::string& endpoint) {
 
 	sock.set(zmq::sockopt::sndtimeo, timeouts.send);
 	sock.set(zmq::sockopt::rcvtimeo, timeouts.recv);
-	sock.set(zmq::sockopt::router_mandatory, 1);  // Reply with E_UNREACHABLE when route not found
+	sock.set(zmq::sockopt::router_mandatory, 1); // Reply with E_UNREACHABLE when route not found
 	sock.set(zmq::sockopt::sndhwm, 0); // Disable high watermark (available memory will be the limit)
+
 	sock.bind(endpoint);
 
 	return sock;
 }
 
 
-/// Process a CONNECT message from the client. 
+/// Process a CONNECT message from the client.
 /// @param sock - the connecting socket
 /// @param msg - the payload of the CONNECT message
 void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& msg) {
@@ -190,7 +191,7 @@ void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& m
 
 	const auto routingId    = *msg[0].data<RoutingId>();
 	const auto handshakeMsg = *msg[2].data<HandshakeMsg>();
-	
+
 	trace(Msg("Client", shorten(routingId), ", renderer type", handshakeMsg.workerType, "CONNECT"));
 
 	if (handshakeMsg.protoVersion != ZMQ_PROTOCOL_VERSION) {
@@ -201,14 +202,14 @@ void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& m
 		return;
 	}
 
-	// Create a new worker and hand it out. The socket is created with the same ID as that 
+	// Create a new worker and hand it out. The socket is created with the same ID as that
 	// of the requesting socket
 	try {
 		auto worker = std::make_unique<ZmqAgent>(ctx, routingId, static_cast<ExporterType>(handshakeMsg.workerType), ZmqAgent::Worker);
 		newWorkerCallback(std::move(worker));
 	}
 	catch (const std::exception& exc) {
-		// Something is wrong with the peer, but we can't do anything about it 
+		// Something is wrong with the peer, but we can't do anything about it
 		const auto errMsg = Msg("New worker creation failed", shorten(routingId), ", exception:", exc.what());
 		trace(errMsg);
 		replyWithError(sock, routingId, errMsg);
@@ -219,8 +220,7 @@ void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& m
 /// Relay a message received on a socket to its peer
 /// @param fromSock - the socket on which the message was received
 /// @param msg - the message received on the socket
-void ZmqRouter::relayMsg(zmq::socket_ref fromSock, zmq::multipart_t& msg)
-{
+void ZmqRouter::relayMsg(zmq::socket_ref fromSock, zmq::multipart_t& msg) {
 	const auto routingId = *msg[0].data<RoutingId>();
 	const bool isFromSvr = (fromSock.handle() == sockServer.handle());
 
@@ -228,7 +228,7 @@ void ZmqRouter::relayMsg(zmq::socket_ref fromSock, zmq::multipart_t& msg)
 		msg.send(isFromSvr ? sockClient : sockServer);
 	}
 	catch (const std::exception& exc) {
-		// Something is wrong with the peer, but we can't do anything about it 
+		// Something is wrong with the peer, but we can't do anything about it
 		const auto errMsg = Msg("Failed to relay message to", isFromSvr ? "client" : "server", shorten(routingId), ", exception:", exc.what());
 		trace(errMsg);
 		replyWithError(fromSock, routingId, errMsg);
@@ -236,7 +236,7 @@ void ZmqRouter::relayMsg(zmq::socket_ref fromSock, zmq::multipart_t& msg)
 }
 
 
-/// When an error occurs on a connection, this method will notify the peer of the failed agent. 
+/// When an error occurs on a connection, this method will notify the peer of the failed agent.
 /// @param toSock - the peer's socket
 /// @param routingId - the routing ID of the tunnel
 /// @param errMsg - a textual description of the error
@@ -293,9 +293,9 @@ void ZmqRouter::trace(const std::string& msg) {
 
 void ZmqRouter::notifyStarted(zmq::socket_ref clientListenSocket) {
 
-	try { 
+	try {
 		if (startedCallback) {
-			// Client listen socket might be bound on an ephemeral port. 
+			// Client listen socket might be bound on an ephemeral port.
 			// Notify the host about the actual port number.
 			const std::string endpoint = clientListenSocket.get(zmq::sockopt::last_endpoint);
 			const std::string port = endpoint.substr(endpoint.find_last_of(':') + 1);
@@ -311,6 +311,3 @@ void ZmqRouter::notifyStarted(zmq::socket_ref clientListenSocket) {
 
 
 }; // end VrayZmqWrapper namespace
-
-
-

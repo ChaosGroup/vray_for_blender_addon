@@ -48,18 +48,21 @@ MeshData::MeshData(py::object obj) :
 HairData::HairData(py::object obj) :
 	name			(py::extract<std::string>(obj.attr("name"))),
 	type			(py::extract<std::string>(obj.attr("type"))),
-	segments		(py::extract<int>(obj.attr("segments"))),
-	width			(py::extract<float>(obj.attr("width"))),
-	fadeWidth		(py::extract<bool>(obj.attr("fadeWidth"))),
 	widthsInPixels	(py::extract<bool>(obj.attr("widthsInPixels"))),
 	useHairBSpline	(py::extract<bool>(obj.attr("useHairBSpline"))),
-	matWorld		(fromMat<4>(obj.attr("matWorld"))),
-	points			(fromNdOrDataArray<float[3]>(obj.attr("points"), type == "CURVES")),
+	points			(fromDataArray<float[3]>(obj.attr("points"))),
 	pointRadii		(fromNdArray<float>(obj.attr("pointRadii"))),
 	strandSegments	(fromNdArray<int>(obj.attr("strandSegments"))),
-	uvs				(fromNdOrDataArray<float[2]>(obj.attr("uvs"), type == "CURVES")),
-	vertColors		(fromNdArray<float[3]>(obj.attr("vertColors"))),
-	ref				(obj)
+	uvs				(fromNdOrDataArray<float>(obj.attr("uvs"), type == "CURVES")),
+	vertColors		(fromNdArray<float>(obj.attr("vertColors"))),
+	ref				(obj),
+	psys            ((ParticleSystem*)(size_t)py::extract<size_t>(obj.attr("psys"))),
+	firstToExport   (py::extract<int>(obj.attr("firstToExport"))),
+	totalParticles  (py::extract<int>(obj.attr("totalParticles"))),
+	maxSteps        (py::extract<int>(obj.attr("maxSteps"))),
+	shape           (py::extract<float>(obj.attr("shape"))),
+	rootRadius      (py::extract<float>(obj.attr("rootRadius"))),
+	tipRadius       (py::extract<float>(obj.attr("tipRadius")))
 {}
 
 

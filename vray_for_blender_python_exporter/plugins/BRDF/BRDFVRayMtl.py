@@ -2,12 +2,11 @@
 import bpy
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getInputSocketByAttr, getLinkedFromSocket
+from vray_blender.exporting.tools import getInputSocketByAttr, getLinkedFromSocket, getFarNodeLink
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin
 from vray_blender.lib.names import Names
-from vray_blender.nodes.tools import isVraySocket, isInputSocketLinked
-from vray_blender.nodes.utils import getNodeOfPropGroup
+from vray_blender.nodes.tools import isVraySocket
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -54,10 +53,10 @@ def exportTreeNode(nodeCtx: NodeContext):
     # For the moment, we show only the opacity_color socket on the node, although the plugin
     # has also an 'opacity' socket which accepts TEXTURE_FLOAT. 
     opacitySock = getInputSocketByAttr(nodeCtx.node, 'opacity_color')
-    if isInputSocketLinked(opacitySock):
+    if opacityLink := getFarNodeLink(opacitySock):
         pluginDesc.setAttributes({
                 'opacity': AttrPlugin(),
-                'opacity_color': commonNodesExport.exportLinkedSocket(nodeCtx, opacitySock),
+                'opacity_color': commonNodesExport.exportSocketLink(nodeCtx, opacityLink),
                 'opacity_source': 1 # Color opacity
             })
 

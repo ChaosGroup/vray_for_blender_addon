@@ -1,0 +1,162 @@
+{
+    "ID": "MtlDisplacement",
+    "Name": "V-Ray Displacement Mtl",
+    "Parameters": [
+        {
+            "attr" : "base_material",
+            "type" : "BRDF",
+            "ui" : {
+                "display_name": "Base Material"
+            }
+        },
+        {
+            "attr": "displacement_amount",
+            "default": 0.01,
+            "ui": {
+                "display_name": "Amount",
+                "soft_min": -1.0,
+                "soft_max": 1.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "displacement_shift",
+            "ui": {
+                "display_name": "Shift",
+                "soft_min": -2.0,
+                "soft_max": 2.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "edge_length",
+            "ui": {
+                "soft_min": 0.1,
+                "soft_max": 5.0,
+                "spin_step": 0.05
+            }
+        },
+        {
+            "attr": "max_subdivs",
+            "ui": {
+                "soft_max": 1024,
+                "spin_step": 8
+            }
+        },
+        {
+            "attr": "displacement_tex_color",
+            "options": {"linked_only": true}
+        },
+        {
+            "attr" : "min_bound_float",
+            "default": 0.0,
+            "desc": "The lowest value for the displacement texture",
+            "type": "FLOAT",
+            "options": {
+                "derived": true
+            },
+            "ui": {
+                "spin_step": 0.1,
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        }, 
+        {
+            "attr" : "max_bound_float",
+            "default" : 1.0,
+            "desc" : "The biggest value for the displacement texture",
+            "type" : "FLOAT",
+            "options": {
+                "derived": true
+            },
+            "ui": {
+                "spin_step": 0.1,
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "displacement",
+                "label": "Displacement",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "displacement_amount"
+                    },
+                    {
+                        "name": "displacement_shift"
+                    },
+                    {
+                        "name": "use_bounds"
+                    },
+                    {
+                        "name": "min_bound_float",
+                        "label": "Min Bound",
+                        "active": {"cond": "::use_bounds=1"}
+                    },
+                    {
+                        "name": "max_bound_float",
+                        "label": "Max Bound",
+                        "active": {"cond": "::use_bounds=1"}
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "quality",
+                        "label": "Quality",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "use_globals"
+                            },
+                            {
+                                "name": "edge_length",
+                                "active": {"cond": "::use_globals=0"}
+                            },
+                            {
+                                "name": "max_subdivs",
+                                "active": {"cond": "::use_globals=0"}
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "displacement_amount",
+                        "label": "Amount"
+                    },
+                    {
+                        "name": "displacement_shift",
+                        "label": "Shift"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+           {
+               "name": "base_material"
+           },
+           {
+               "name" : "displacement_tex_color",
+               "label": "Displacement Texture"
+           }
+       ],
+       "internal_links": {
+           "Material": ["Base Material"]
+       }
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": ["displacement_tex_float"]
+    }
+}

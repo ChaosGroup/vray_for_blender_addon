@@ -3,7 +3,6 @@ import bpy
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin
 from vray_blender.lib.plugin_utils import objectToAttrPlugin
-from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.plugins import getPluginAttr
 from vray_blender.plugins.templates import common
@@ -56,7 +55,7 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         if (boundProperty := self.getTemplateAttr('bound_property')) and (node := getNodeOfPropGroup(propGroup)):
             sock = getInputSocketByAttr(node, boundProperty)
         
-        if sock and isInputSocketLinked(sock):
+        if sock and sock.hasActiveFarLink():
             # Do not draw if the object is supplied by a linked object selector node
             return
         
@@ -83,7 +82,7 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         
         if node := pluginDesc.node:
             sock = getInputSocketByAttr(node, boundProperty)
-            if isInputSocketLinked(sock):
+            if sock.hasActiveFarLink():
                 # If the socket is linked, it will be exported as part of the tree export
                 return False
 

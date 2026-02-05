@@ -5,7 +5,7 @@ from pathlib import PurePath
 from vray_blender.nodes import importing as NodesImport
 from vray_blender.nodes import tools     as NodesTools
 from vray_blender.nodes.utils import getOutputNode, getLightOutputNode
-from vray_blender.nodes.tree_defaults import addMaterialNodeTree, createNodeTreeForLightObject, removeNonVRayNodes
+from vray_blender.nodes.tree_defaults import addMaterialNodeTree, addDecalNodeTree, createNodeTreeForLightObject, removeNonVRayNodes
 
 from vray_blender.vray_tools.vrscene_parser import parseVrscene
 from vray_blender.vray_tools.vrmat_parser     import parseVrmat
@@ -14,6 +14,8 @@ from vray_blender import debug
 from vray_blender.vray_tools import vray_proxy
 from vray_blender.lib import blender_utils, path_utils
 from vray_blender.lib.lib_utils import getUUID, LightTypeToPlugin, LightBlenderToVrayPlugin
+from vray_blender.lib.path_utils import tryGetRelativePath
+from vray_blender.plugins.geometry.VRayDecal import createDecalObject, generateDecalPreviewMesh
 from pathlib import Path
 
 def _createMaterial(mtlName):
@@ -25,39 +27,33 @@ def _createMaterial(mtlName):
 
     return mtl
 
-def _assignMaterialsToSlots(vrsceneDict, obj, mtlNameOverrides:dict[str, str]):
-    if not obj:
-        return
+def _assignMaterialsToSlots(multiMtlDesc, obj, mtlNameOverrides:dict[str, str]):
+    assert obj is not None
+    assert 'mtls_list' in multiMtlDesc['Attributes']
 
-    for pluginDesc in vrsceneDict:
-        if pluginDesc['ID'] != 'MtlMulti':
-            continue
-        if 'mtls_list' in pluginDesc['Attributes']:
-            mtlsList =  pluginDesc['Attributes']['mtls_list']
-            idsList =  pluginDesc['Attributes']['ids_list']
+    mtlsList =  multiMtlDesc['Attributes']['mtls_list']
+    idsList =  multiMtlDesc['Attributes']['ids_list']
 
-            # There could be case where for example:
-            # ids_list=[1, 5, 3] and mtls_list=[mtl1, mtl5, mtl3]
-            # where we want mtl1 on slot 1, mtl5 on slot 5 and mtl3 on slot 3.
-            # For that the materials are first sorted based on their ids and then if there
-            # is gap between slots (in the example above between slot 1 and 3) None is appended
-            # to obj.data.materials, which adds empty slot between the used ones
+    # There could be case where for example:
+    # ids_list=[1, 5, 3] and mtls_list=[mtl1, mtl5, mtl3]
+    # where we want mtl1 on slot 1, mtl5 on slot 5 and mtl3 on slot 3.
+    # For that the materials are first sorted based on their ids and then if there
+    # is gap between slots (in the example above between slot 1 and 3) None is appended
+    # to obj.data.materials, which adds empty slot between the used ones
 
-            mtlsWithIds = [(int(idsList[i]), mtlNameOverrides.get(mtlsList[i], mtlsList[i])) for i in range(len(idsList))]
-            mtlsWithIds.sort(key=lambda e: e[0])
+    mtlsWithIds = [(int(idsList[i]), mtlNameOverrides.get(mtlsList[i], mtlsList[i])) for i in range(len(idsList))]
+    mtlsWithIds.sort(key=lambda e: e[0])
 
-            slotCounter = 0
-            for id, mtl in mtlsWithIds:
-                while slotCounter < id:
-                    obj.data.materials.append(None)
-                    slotCounter += 1
-                obj.data.materials.append(bpy.data.materials[mtl])
-                slotCounter += 1
-
-            break
+    slotCounter = 0
+    for id, mtl in mtlsWithIds:
+        while slotCounter < id:
+            obj.data.materials.append(None)
+            slotCounter += 1
+        obj.data.materials.append(bpy.data.materials[mtl])
+        slotCounter += 1
 
 
-def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str, objectForMatAssign: bpy.types.Object = None, locationsMap: dict[str, str] = None):
+def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssign: bpy.types.Object = None, locationsMap: dict[str, str] = None):
     debug.printInfo(f'Importing materials from "{filePath}"')
 
     vrsceneDict = {}
@@ -70,33 +66,16 @@ def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str
     # Fix any plugin params that need special handling, e.g. version upgrades etc.
     NodesImport.fixPluginParams(vrsceneDict, materialAssetsOnly=not objectForMatAssign)
 
-
+    # A list of all top-level V-Ray materials.
     MaterialTypeFilter = {
-        'STANDARD' : {
-            'MtlSingleBRDF',
-            'MtlVRmat',
-            'MtlDoubleSided',
-            'MtlGLSL',
-            'MtlLayeredBRDF',
-            'MtlDiffuse',
-            'MtlBump',
-            'Mtl2Sided',
-        },
-        'MULTI' : {
-            'MtlMulti'
-        },
-        'WRAPPED' : {
-            'MtlWrapper',
-            'MtlWrapperMaya',
-            'MayaMtlMatte',
-            'MtlMaterialID',
-            'MtlMayaRamp',
-            'MtlObjBBox',
-            'MtlOverride',
-            'MtlRenderStats',
-            'MtlRoundEdges',
-            'MtlStreakFade',
-        },
+        'MtlSingleBRDF',
+        'MtlVRmat',
+        'MtlDoubleSided',
+        'MtlGLSL',
+        'MtlLayeredBRDF',
+        'MtlDiffuse',
+        'MtlBump',
+        'Mtl2Sided',
     }
 
     # Collect material names based on selected
@@ -110,7 +89,7 @@ def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str
         pluginType  = pluginDesc['ID']
         pluginName  = pluginDesc['Name']
 
-        if pluginType in MaterialTypeFilter[baseMaterial]:
+        if pluginType in MaterialTypeFilter:
             materialNames.append(pluginName)
 
     for mtlName in materialNames:
@@ -119,7 +98,7 @@ def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str
         pluginDesc = NodesImport.getPluginByName(vrsceneDict, mtlName)
 
         if mtlName in bpy.data.materials:
-            # Rename the material if it already exists in the scene 
+            # Rename the material if it already exists in the scene
             mtlNewName = f"{mtlName}_{getUUID()}"
             mtlNameOverrides[mtlName] = mtlNewName
             mtlName = mtlNewName
@@ -155,9 +134,14 @@ def importMaterials(filePath, baseMaterial: str, packageId: str, revisionId: str
         if not objectForMatAssign:
             debug.report('INFO', f"Cosmos material imported: {mtlName}")
 
-    # The created materials are assigned to a the passed blender object
-    # if objectForMatAssign!=None and there is MtlMulti in vrsceneDict
-    _assignMaterialsToSlots(vrsceneDict, objectForMatAssign, mtlNameOverrides)
+    if objectForMatAssign:
+        # Assign the imported materials to the object
+        if multiMtl := next((d for d in vrsceneDict if (d['ID'] == 'MtlMulti') and ('mtls_list' in d['Attributes'])), None):
+            _assignMaterialsToSlots(multiMtl, objectForMatAssign, mtlNameOverrides)
+        else:
+            # The object has only one material, assign to the first material slot
+            mtlName = mtlNameOverrides.get(materialNames[0], materialNames[0])
+            objectForMatAssign.data.materials.append(bpy.data.materials[mtlName])
 
     return {'FINISHED'}
 
@@ -171,7 +155,7 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
         if (pluginType := plgDesc['ID']) in LightTypeToPlugin.values(): # Checking for light plugins
             plgName = plgDesc['Name']
             plgAttrs = plgDesc['Attributes']
- 
+
             blType = next((k for k, v in LightBlenderToVrayPlugin.items() if v == pluginType), 'POINT')
             vrayType = next((k for k, v in LightTypeToPlugin.items() if v == pluginType), 'POINT')
 
@@ -179,7 +163,7 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
             lightData.vray.light_type = vrayType
             lightData.vray.cosmos_package_id = packageId
             lightData.vray.cosmos_revision_id = revisionId
-            
+
             # Scale area light
             if lightData.type == 'AREA':
                 for vrAttr, blAttr in (("u_size", "size"), ("v_size", "size_y")):
@@ -254,6 +238,48 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
     NodesTools.deselectNodes(ntree)
 
 
+def importDecal(settings):
+    if not os.path.exists(settings.matFile):
+        debug.printError(f"VRmat file {settings.matFile} does not exist")
+        return
+    if not os.path.exists(settings.objFile):
+        debug.printError(f"VRmat extras file {settings.objFile} does not exist")
+        return
+
+
+    # Add both the 'extras' file (the one with the VRayDecal definition) and the material
+    # file to the scene dictionary as the obj file might reference plugins from the
+    # material file
+    extrasSceneDesc = parseVrmat(settings.objFile)
+    matSceneDesc = parseVrmat(settings.matFile)
+
+    # Leave just 1 'Import Settings' section. It is always the last list item in any scene description
+    # and is identical for all .vrmat files loaded from the same folder.
+    vrsceneDict = extrasSceneDesc[:-1] + matSceneDesc
+
+    for decalDesc in [p for p in vrsceneDict if p['ID'] == 'VRayDecal']:
+        purePath = PurePath(settings.matFile)
+        obj = createDecalObject(bpy.context, f'VRayDecal@{purePath.stem}')
+
+        addDecalNodeTree(obj)
+        objTree = obj.vray.ntree
+
+        importContext = NodesImport.ImportContext(objTree, vrsceneDict, locationsMap=settings.locationsMap)
+        decalOutputNode = NodesImport.createNode(importContext, decalDesc)
+        generateDecalPreviewMesh(obj, obj.data.vray.VRayDecal)
+
+        obj.data.vray.cosmos_package_id = settings.packageId
+        obj.data.vray.cosmos_revision_id = settings.revisionId
+
+        NodesTools.rearrangeTree(objTree, decalOutputNode)
+        NodesTools.deselectNodes(objTree)
+
+        importMaterials(settings.matFile, settings.packageId, settings.revisionId, objectForMatAssign=obj, locationsMap=settings.locationsMap)
+
+    if obj:
+        blender_utils.selectObject(obj)
+
+
 def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     if not os.path.exists(filePath):
         return None, f"File not found: {filePath}"
@@ -272,7 +298,13 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     ob.location = context.scene.cursor.location
 
     geomMeshFile = previewMesh.vray.GeomMeshFile
-    proxyFilePath = bpy.path.relpath(filePath) if useRelativePath else filePath
+    proxyFilePath = filePath
+
+    if useRelativePath:
+        if relFilePath := tryGetRelativePath(filePath):
+            proxyFilePath = relFilePath
+        else:
+            debug.report('INFO', "Cannot import V-Ray Proxy with relative path, using absolute path instead.")
 
     # Store the scale at which the model was imported. If its preview has to be regenerated, this value will be used to scale it.
     # The scale will be reset to 1 if the path to the mesh file is changed by the user and the new model will always be imported
@@ -299,11 +331,11 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
         This function will create a new scene object and load the preview mesh for it.
 
     Args:
-        context (bpy.types.Context): 
+        context (bpy.types.Context):
         matPath (str): Path to a .vrmat file with the materials for the object
         meshPath (str): Absolute path to the .vrmesh file
         lightPath (str, optional): Path to a .vrmat file with the light propeties. Defaults to "".
-        locationsMap (dict(str, str), optional): A map of the resources used by the proxy (textures, materials etc) to 
+        locationsMap (dict(str, str), optional): A map of the resources used by the proxy (textures, materials etc) to
                                                 fully resolved file paths for each resource. Defaults to None.
         useRelPath (bool, optional): The file paths are in Blender's relative notation. Defaults to False.
         scaleUnit (float, optional): Scale unit for the model in meters. Defaults to 1.0.
@@ -323,7 +355,7 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
     objProxy.data.vray.cosmos_revision_id = revisionId
 
     if os.path.exists(matPath):
-        importMaterials(matPath, 'STANDARD', packageId, revisionId, objectForMatAssign = objProxy, locationsMap=locationsMap)
+        importMaterials(matPath, packageId, revisionId, objectForMatAssign = objProxy, locationsMap=locationsMap)
 
     if lightPath and os.path.exists(lightPath):
         _importLights(context, objProxy, lightPath, packageId, revisionId, locationsMap)
@@ -345,7 +377,7 @@ def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
     if outputNode is None:
         debug.printWarning(f"{locatorName} does not have an output node")
         return
-    
+
     def getConnectedNodes(node: bpy.types.Node, nodes: set):
         # Walk the node tree and make sure that all nodes are connected
         for s in node.inputs:
@@ -356,6 +388,6 @@ def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
 
     treeNodes = {outputNode,}
     getConnectedNodes(outputNode, treeNodes)
-    
+
     if len(treeNodes) != len(ntree.nodes):
         debug.printWarning(f"{locatorName} was imported with some non-connected nodes")

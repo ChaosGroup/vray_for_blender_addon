@@ -53,6 +53,41 @@
         },
         
         {
+            "attr" : "use_globals",
+            "default" : true,
+            "desc" : "If true, the global displacement quality settings will be used",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use global settings"
+            }
+        },
+        
+        {
+            "attr" : "edge_length",
+            "default" : 4.0,
+            "desc" : "If use_globals is false, this determines the approximate edge length for the sub-triangles",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Edge length",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "max_subdivs",
+            "default" : 256,
+            "desc" : "If use_globals is false, this determines the maximum subdivisions for a triangle of the original mesh",
+            "type" : "INT",
+            "ui" : 
+            {
+                "display_name" : "Max subdivisions",
+                "min" : 0
+            }
+        },
+        
+        {
             "attr" : "use_bounds",
             "default" : false,
             "desc" : "If true, the min/max values for the displacement texture are specified by the min_bound and max_bound parameters; if false, these are calculated automatically",

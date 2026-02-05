@@ -7,6 +7,13 @@ from vray_blender.exporting.plugin_tracker import TrackObj, getObjTrackId, log a
 from vray_blender.exporting.update_tracker import UpdateTarget, UpdateTracker, UpdateFlags
 from vray_blender.nodes import utils as NodesUtils
 
+
+def getMtlTopologyUpdates():
+    """ Return the track IDs of the Material data objects whose node tree topology has changed """
+    topologyUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
+    return {t[0] for t in topologyUpdates}
+
+
 def _getMtlsOfTextures(textureNames: list[str]):
         """ Return the materials in whose node trees the texture names are used.
 
@@ -125,7 +132,7 @@ class MtlExporter(ExporterBase):
 
         mtlId = getObjTrackId(mtl)
 
-        if (not self.fullExport) and (mtlId in self.exportedMtls):
+        if mtlId in self.exportedMtls:
             return self.exportedMtls[mtlId], SceneStats()
 
         assert mtl.use_nodes and mtl.node_tree, f"Material has no node tree: {mtl.name}"
@@ -137,6 +144,7 @@ class MtlExporter(ExporterBase):
             nodeCtx.nodeTracker = self.nodeTracker
             nodeCtx.ntree       = mtl.node_tree
 
+        nodeCtx.material = mtl
         with nodeCtx:
             nodeOutput, isVRayMtl = self._getMtlOutputNode(mtl)
             if not nodeOutput:
@@ -269,9 +277,9 @@ class MtlExporter(ExporterBase):
 
     def _exportMtlOption(self, nodeCtx: NodeContext, mtl, mtlPlugin: AttrPlugin, pluginType: str, baseMtlName: str):
         propGroup = getattr(mtl.vray, pluginType)
-        pluginName = Names.pluginObject(pluginType, Names.object(mtl))
         
         if propGroup.use:
+            pluginName = Names.pluginObject(pluginType, Names.object(mtl))
             plDesc = PluginDesc(pluginName, pluginType)
             
             # Material options set on the material override the ones set on the object
@@ -304,7 +312,7 @@ class MtlExporter(ExporterBase):
         if self.fullExport:
             updatedMtlIds = [getObjTrackId(mtl) for mtl in bpy.data.materials]
         else:
-            updatedMtlIds = self._getTopologyUpdates()
+            updatedMtlIds = getMtlTopologyUpdates()
 
         for mtlId in updatedMtlIds:
             if self.isOverrideMtl(mtlId):
@@ -318,11 +326,6 @@ class MtlExporter(ExporterBase):
         for mtlId in removedMtlNodeIds:
             forgetNodes(mtlId, self.nodeTracker.getOwnedNodes(mtlId))
 
-
-    def _getTopologyUpdates(self) -> list[int]:
-        """ Return the track IDs of the Material data objects whose node tree topology has changed """
-        topologyUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
-        return {t[0] for t in topologyUpdates}
 
 
 def run(ctx: ExporterContext):

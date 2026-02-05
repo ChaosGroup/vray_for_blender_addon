@@ -1,9 +1,7 @@
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getInputSocketByName, getVRayBaseSockType
-from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
-from vray_blender.nodes.tools import isInputSocketLinked
 from mathutils import Color
 
 def exportVRayNodeDisplacement(nodeCtx: NodeContext, subdivPropGroup):
@@ -20,7 +18,7 @@ def exportVRayNodeDisplacement(nodeCtx: NodeContext, subdivPropGroup):
     assert texSock
 
     # Do not export any displacement when a texture isn't attached.
-    if not isInputSocketLinked(texSock):
+    if not texSock.hasActiveFarLink():
         # Clearing the textures and water level should be enough to remove any displacement. Reset
         # amount to 1.0 so that it will also work with MtlDisplacement(when implemented).
         pluginDesc.setAttribute("displacement_amount", 1.0)

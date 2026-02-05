@@ -9,11 +9,13 @@ include(common_macros)
 
 set_build_configurations()
 
-set(BLENDER_VER    ""  CACHE STRING  "Blender version in format major.minor, e.g. 4.2")
-set(ADDON_PATH     ""  CACHE PATH    "Path to the Blender addon. If set, the INSTALL target will use it as its destination.")
-set(BINTOOLS_PATH  ""  CACHE STRING  "Path to cgrepo (parent of bintools). If not set, xpaks won't be used.")
-set(INSTALL_LOCAL  ON  CACHE BOOL    "Configure Install step")
-set(WITH_DR2       ON  CACHE BOOL    "Enable DR2")
+set(BLENDER_VER         ""  CACHE STRING  "Blender version in format major.minor, e.g. 4.2")
+set(ADDON_PATH          ""  CACHE PATH    "Path to the Blender addon. If set, the INSTALL target will use it as its destination.")
+set(BINTOOLS_PATH       ""  CACHE STRING  "Path to cgrepo (parent of bintools). If not set, xpaks won't be used.")
+set(INSTALL_LOCAL       ON  CACHE BOOL    "Configure Install step")
+set(WITH_DR2            ON  CACHE BOOL    "Enable DR2")
+set(CUSTOM_APPSDK_ROOT  ""  CACHE PATH    "Root directory of the App SDK (optional)")
+set(WITH_PROFILING      OFF CACHE BOOL    "Enables some profiling features")
 
 # A convenience alias. If bintools path is not set, don't build closed-source components
 if (BINTOOLS_PATH)
@@ -29,11 +31,25 @@ fix_separators(ADDON_PATH)
 
 if (APPLE)
     set(CMAKE_OSX_DEPLOYMENT_TARGET  "11.0")
-    add_compile_options(-Wno-switch -Wno-macro-redefined)
+endif()
+
+if(UNIX)
+    add_compile_options(-Wno-switch -Wno-macro-redefined -Wno-ambiguous-reversed-operator)
+
+    if (NOT APPLE)
+        set(link_magic_common -Wl,--gc-sections -Wl,--discard-all -Wl,--no-as-needed -fuse-ld=lld)
+        string(JOIN " " linker_args ${link_magic_common})
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${linker_args}")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${linker_args}")
+        set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${linker_args}")
+    endif()
 endif()
 
 if (WITH_DR2)
     add_compile_definitions(WITH_DR2)
+endif()
+if (WITH_PROFILING)
+    add_compile_definitions(WITH_MESSAGE_PROFILING)
 endif()
 
 if (MSVC AND MSVC_VERSION GREATER_EQUAL 1940)
@@ -58,8 +74,6 @@ fix_separators(INSTALL_PREFIX)
 
 
 if (FULL_BUILD)
-    set(APPSDK_XPAK "Blender_AppSDK_7")
-
     include(xpak)
     include(xpak_versions)
 
@@ -67,11 +81,17 @@ if (FULL_BUILD)
 
     xpak_work_dir()
 
-    install_xpak(PAK ${APPSDK_XPAK} VERSION ${APPSDK_XPAK_VERSION})
     install_xpak(PAK ${BLENDER_SDK_XPAK} VERSION ${BLENDER_SDK_XPAK_VERSION})
-
-    set(APPSDK_ROOT  "${${APPSDK_XPAK}_ROOT}" CACHE PATH   "Path to AppSDK root")
     set(SDK_ROOT     "${${BLENDER_SDK_XPAK}_ROOT}")
+
+    if (CUSTOM_APPSDK_ROOT)
+        set(APPSDK_ROOT ${CUSTOM_APPSDK_ROOT})
+    else()
+        set(APPSDK_XPAK "Blender_AppSDK_7")
+
+        install_xpak(PAK ${APPSDK_XPAK} VERSION ${APPSDK_XPAK_VERSION})
+        set(APPSDK_ROOT "${${APPSDK_XPAK}_ROOT}")
+    endif()
 
     fix_separators(APPSDK_ROOT)
     fix_separators(SDK_ROOT)
@@ -120,14 +140,23 @@ endif()
 
 if(INSTALL_LOCAL AND ADDON_PATH)
     if(APPLE)
-        install(DIRECTORY "vray_for_blender_python_exporter/"
+        install(
+            DIRECTORY "vray_for_blender_python_exporter/"
             DESTINATION "${ADDON_PATH}"
             PATTERN "external/mmh3.cp311-win_amd64.pyd" EXCLUDE
+            PATTERN "external/mmh3.cpython-311-darwin.so" EXCLUDE
         )
     elseif(WIN32)
         install(DIRECTORY "vray_for_blender_python_exporter/"
             DESTINATION "${ADDON_PATH}"
             PATTERN "external/mmh3.cpython-311-darwin.so" EXCLUDE
+            PATTERN "external/mmh3.cpython-311-x86_64-linux-gnu.so" EXCLUDE
+        )
+    else()
+        install(DIRECTORY "vray_for_blender_python_exporter/"
+            DESTINATION "${ADDON_PATH}"
+            PATTERN "external/mmh3.cpython-311-darwin.so" EXCLUDE
+            PATTERN "external/mmh3.cp311-win_amd64.pyd" EXCLUDE
         )
     endif()
 endif()

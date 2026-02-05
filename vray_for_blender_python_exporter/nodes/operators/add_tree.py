@@ -3,8 +3,10 @@ import bpy
 from vray_blender.nodes.operators.misc import _redrawNodeEditor
 from vray_blender.nodes import tree_defaults, utils as NodeUtils
 from vray_blender.lib import blender_utils
+from vray_blender.lib.attribute_utils import copyPropGroupValues
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.operators import VRAY_OT_message_box_base
+from vray_blender.plugins import getPluginModule
 
 class VRAY_OT_add_nodetree_light(VRayOperatorBase):
     bl_idname       = "vray.add_nodetree_light"
@@ -78,6 +80,24 @@ class VRAY_OT_add_nodetree_fur(VRayOperatorBase):
         bpy.ops.vray.show_ntree(data='OBJECT')
         return {'FINISHED'}
 
+class VRAY_OT_add_nodetree_decal(VRayOperatorBase):
+    bl_idname      = "vray.add_nodetree_decal"
+    bl_label       = "Add Decal Nodetree"
+    bl_description = "Add V-Ray Decal nodetree"
+    bl_options     = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context):
+        ob = context.object
+        if not hasattr(ob, "vray") or not getattr(ob.vray, "isVRayDecal", False):
+            self.report({'ERROR_INVALID_CONTEXT'}, "Selected object is not a V-Ray Decal object!")
+            return {'CANCELLED'}
+
+        tree_defaults.addDecalNodeTree(ob)
+        node = ob.vray.ntree.nodes.new('VRayNodeDecalOutput')
+        copyPropGroupValues(ob.data.vray.VRayDecal, node.VRayDecal, getPluginModule('VRayDecal'))
+
+        bpy.ops.vray.show_ntree(data='OBJECT')
+        return {'FINISHED'}
 
 class VRAY_OT_add_nodetree_world(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_world"
@@ -250,6 +270,7 @@ def getRegClasses():
         VRAY_OT_add_nodetree_object,
         VRAY_OT_add_nodetree_object_lamp,
         VRAY_OT_add_nodetree_fur,
+        VRAY_OT_add_nodetree_decal,
         VRAY_OT_replace_nodetree_material,
         VRAY_OT_convert_nodetree_material,
         VRAY_OT_add_new_material,

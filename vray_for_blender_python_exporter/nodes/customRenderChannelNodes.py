@@ -1,7 +1,7 @@
-# Render channel plugins in V-Ray may be reused to achieve different effects. 
+# Render channel plugins in V-Ray may be reused to achieve different effects.
 # The specific effect is selected by setting the 'alias' property. Each plugin
 # has a default 'alias' value. The following list defines channels for non-default
-# effects (variants). 
+# effects (variants).
 customRenderChannelNodesDesc = (
     # BEAUTY
     {
@@ -85,8 +85,6 @@ customRenderChannelNodesDesc = (
         "Subtype" : "BEAUTY"
     },
 
-
-
     # ADVANCED
     {
         "params":{
@@ -105,7 +103,7 @@ customRenderChannelNodesDesc = (
         "Subtype" : "ADVANCED"
     },
     {
-        "params":{ 
+        "params":{
             "alias":  129,
             "name": "Total Light"
         },
@@ -200,25 +198,22 @@ customRenderChannelNodesDesc = (
         "base_plugin_type": "RenderChannelColor",
         "Subtype" : "ADVANCED"
     },
-    # NOTE: The following 2 channels have been disabled because they are intended 
-    #       to work together with BRDFToonMtl which is currently unavailable
-    # {
-    #     "params":{
-    #         "alias":  180,
-    #         "name": "Toon Lighting"
-    #     },
-    #     "base_plugin_type": "RenderChannelColor",
-    #     "Subtype" : "ADVANCED"
-    # },
-    # {
-    #     "params":{
-    #         "alias":  181,
-    #         "name": "Toon Specular"
-    #     },
-    #     "base_plugin_type": "RenderChannelColor",
-    #     "Subtype" : "ADVANCED"
-    # },
-
+    {
+        "params":{
+            "alias":  180,
+            "name": "Toon Lighting"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "ADVANCED"
+    },
+    {
+        "params":{
+            "alias":  181,
+            "name": "Toon Specular"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "ADVANCED"
+    },
 
     #MATTE
     {
@@ -270,7 +265,7 @@ customRenderChannelNodesDesc = (
         "Subtype" : "RAW",
     },
     {
-        "params":{ 
+        "params":{
             "alias":  130,
             "name": "Raw Total Light"
         },

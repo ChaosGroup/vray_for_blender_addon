@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "api/interop/types.h"
 #include "render_image.h"
 #include "utils/platform.h"

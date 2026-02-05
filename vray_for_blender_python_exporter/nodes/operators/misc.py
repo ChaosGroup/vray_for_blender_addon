@@ -167,6 +167,8 @@ def _drawVRayNodeSelection(layout, context, snode):
         elif vrayTreeType == "OBJECT" and has_material_slots:
             if ob.vray.isVRayFur:
                 _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_fur", "OBJECT_DATAMODE", "Use V-Ray Fur Nodes")
+            elif ob.vray.isVRayDecal:
+                _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_decal", "OBJECT_DATAMODE", "Use V-Ray Decal Nodes")
             else:
                 _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_object", "OBJECT_DATAMODE", "Use V-Ray Object Nodes")
         

@@ -1,9 +1,16 @@
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from vray_blender.lib.defs import ExporterContext
+    
 import bpy
 from bpy_extras import anim_utils
 import bmesh
 import math
 import mathutils
+import re
 
 from vray_blender import debug
 from vray_blender.lib import lib_utils, path_utils
@@ -246,67 +253,38 @@ def getSceneCamera(exporterCtx):
     scene: bpy.types.Scene = bpy.context.scene if exporterCtx.preview else exporterCtx.dg.scene
     return scene.camera
 
-def _getActiveScreen():
-    """ Returns the active screen for the current context using the window manager """
-
-    # Use the window manager to obtain the active screen instead of bpy.context.screen,
-    # as this function may be called without a valid UI context (e.g., from handlers like depsgraph_update_post).
-    wm = bpy.context.window_manager
-    for win in wm.windows:
-        if win.scene is bpy.context.scene:# window showing the scene that triggered the handler
-            return win.screen
-
-    return None
-
-def getActiveView3D():
-    """ Returns SpaceView3D from the active screen or None if the active screen does not have View3D"""
-
-    if not (activeScreen := _getActiveScreen()):
-        return None
-
-    if area := next((a for a in activeScreen.areas if a and a.type == 'VIEW_3D'), None):
-        return next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
-
-    return None
 
 def getFirstAvailableView3D():
-    """ Returns SpaceView3D of the first available VIEW_3D area"""
-    if area := getActiveView3D():
-        return area
+    """ Returns SpaceView3D of the first available VIEW_3D area in the currently active screen"""
+    if not (activeScreen := bpy.context.window.screen):
+        return None
 
-    # Check other screens
-    if area := next((a for screen in bpy.data.screens for a in screen.areas if a.type == 'VIEW_3D'), None):
-        return next((space for space in area.spaces if space.type == 'VIEW_3D'), None)
-
+    for area in (a for a in activeScreen.areas if a and a.type == 'VIEW_3D'):
+        # The currently active space is guaranteed to be the first one on the list
+        if view3d := next((space for space in area.spaces if space.type == 'VIEW_3D'), None):
+            return view3d
+        
     return None
+
 
 def getSpaceView3D(context : bpy.types.Context):
     """ If the context is 'VIEW_3D' returns its SpaceView3D """
     return context.space_data if context.area.type == 'VIEW_3D' else None
 
 
-def getRegion3D(context : bpy.types.Context):
-    """ If the context is 'VIEW_3D' returns its Region3D """
+def isViewportRenderMode():
+    """ Return True if any of the currenlty visible View3D spaces is 
+        ininteractive render mode.
+    """
+    if not (activeScreen := bpy.context.window.screen):
+        return False
 
-    if context.area.type == 'VIEW_3D':
-        if not context.space_data.region_quadviews:
-            return context.space_data.region_3d
-        else:
-            # Region3D from region_quadviews corresponding to the current context is returned
-            # if quad view is enabled
-            quadViewId = -1
-            for region in context.area.regions:
-                if region.type == 'WINDOW':
-                    quadViewId += 1
-                    if context.region == region:
-                        return context.space_data.region_quadviews[quadViewId]
-
-    return None
-
-def getFirstAvailableRegion3D():
-    """ Returns Region3D of the first available VIEW_3D area"""
-    if view3dSpace := getFirstAvailableView3D():
-        return view3dSpace.region_3d
+    for area in (a for a in activeScreen.areas if a and a.type == 'VIEW_3D'):
+        # The currently active space is guaranteed to be the first one on the list
+        if any(space for space in area.spaces if space.type == 'VIEW_3D' and space.shading.type in ('RENDERED', 'MATERIAL')):
+            return True
+    
+    return False
 
 
 def generateVfbTheme(filepath):
@@ -506,3 +484,110 @@ def deleteOperatorHasBeenCalled():
 
     deleteOperators = ('OUTLINER_OT_delete', 'OBJECT_OT_delete')
     return any(op.bl_idname in deleteOperators for op in bpy.context.window_manager.operators)
+
+
+def getPropertyDefaultValue(propGroup, attrName:str):
+    """ Returns the default value of a property in a property group """
+    propDef = type(propGroup).__annotations__.get(attrName)
+    return propDef.keywords['default']
+
+
+class TestBreak:
+    """ Abort a render job in V-Ray when the user aborts it from the UI. """
+    class Exception(Exception):
+        pass
+
+    @staticmethod
+    def check(exporterCtx: ExporterContext):
+        if exporterCtx.production:
+            from vray_blender.engine.renderer_prod import VRayRendererProd
+            VRayRendererProd.testBreak(exporterCtx.engine)
+    
+
+def isMaterialAssignedToObject(materialName: str, obj: bpy.types.Object):
+    """ Return True if the object has the specified material assigned """
+    
+    if not materialName:
+        return False
+
+    for slot in obj.material_slots:
+        if slot.material and slot.material.name == materialName:
+            return True
+
+    return False
+
+
+def checkAndReportVersionIncompatibility():
+    sceneMajor, sceneMinor = bpy.data.version[:2]
+    appMajor   = bpy.app.version[0]
+
+    if sceneMajor >= 5 and appMajor < 5:
+        debug.printError(f"Scene was saved with a newer version of Blender ({sceneMajor}, {sceneMinor})" +
+                         " which is not backward compatible. Expect loss of data.")
+        
+
+def resolveNodeFromPath(fullPythonPath: str):
+    """ Resolves a full Python string path back into a Blender Node object.
+        
+        Args:
+            fullPythonPath(str) : e.g. bpy.data.materials['Material'].node_tree.nodes['Image Texture']
+    """
+    try:
+        # Pattern looks for: bpy.data.{collection}['{name}']
+        match = re.search(r"bpy\.data\.([a-z_]+)\[['\"](.+?)['\"]\]", fullPythonPath)
+        
+        if not match:
+            return None
+            
+        collectionName = match.group(1)
+        itemName = match.group(2)         
+        
+        if not hasattr(bpy.data, collectionName):
+            debug.printError(f"Collection '{collectionName}' not found in bpy.data.")
+            return None
+            
+        dataCollection = getattr(bpy.data, collectionName)
+        
+        if itemName not in dataCollection:
+            return None
+            
+        idBlock = dataCollection[itemName]
+        
+        # Get the relative path inside the ID block
+        # bpy.data.materials['Material'].node_tree... -> becomes 'node_tree...'
+        pathStartIdx = fullPythonPath.find("]", match.end(0) - 1) + 2
+        relativePath = fullPythonPath[pathStartIdx:]
+        
+        return idBlock.path_resolve(relativePath)
+
+    except Exception as e:
+        debug.printExceptionInfo(e, f"blender_utils.resolveNodeFromPath('{fullPythonPath}')")
+        return None
+    
+
+def getFullPathToNode(node: bpy.types.Node):
+    """ Returns the full Python path to a node in a node tree """
+
+    tree = node.id_data
+    relPath = node.path_from_id()
+    
+    # Check if the tree is a standalone NodeGroup
+    if tree.library or tree in bpy.data.node_groups.values():
+        return f"bpy.data.node_groups['{tree.name}'].{relPath}"
+    
+    # Check if it belongs to a material
+    for mat in bpy.data.materials:
+        if mat.node_tree == tree:
+            return f"bpy.data.materials['{mat.name}'].node_tree.{relPath}"
+            
+    # Check if it belongs to a world
+    for world in bpy.data.worlds:
+        if world.node_tree == tree:
+            return f"bpy.data.worlds['{world.name}'].node_tree.{relPath}"
+        
+    # Check if it belongs to a light
+    for light in bpy.data.lights:
+        if light.node_tree == tree:
+            return f"bpy.data.lights['{light.name}'].node_tree.{relPath}"
+
+    return None

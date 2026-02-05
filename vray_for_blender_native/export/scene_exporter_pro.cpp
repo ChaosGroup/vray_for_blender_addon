@@ -193,22 +193,6 @@ void ProductionExporter::updateImage()
 			return;
 		}
 
-
-		// Occasionally, there is a slight rounding difference between the layerImg sizes  
-		// calculated in the 'vray_blender.exporting.view_export._fillViewFromProdCamera' function  
-		// of the Python module and the 'm_renderPass' rect size calculated in Blender.  
-		// If the difference is smaller than 'ALLOWED_SIZE_DIFF', it can be ignored.
-		const int ALLOWED_SIZE_DIFF = 1;
-
-		if (layerImg.w * layerImg.h == 0 || 
-			(std::abs(layerImg.w - m_renderPass->rectx) > ALLOWED_SIZE_DIFF) ||
-			(std::abs(layerImg.h - m_renderPass->recty) > ALLOWED_SIZE_DIFF) )
-		{
-			Logger::error("Rendered image: invalid image size %1%x%2%, expected %3%x%4%",
-				layerImg.w, layerImg.h, m_renderPass->rectx, m_renderPass->recty);
-			return;
-		}
-		
 		int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
 		int destSizeY = std::min(layerImg.h, m_renderPass->recty);
 

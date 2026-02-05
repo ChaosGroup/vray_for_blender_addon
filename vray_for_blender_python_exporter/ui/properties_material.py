@@ -7,14 +7,30 @@ from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui.icons import getUIIcon
 from vray_blender.menu import VRAY_OT_convert_materials
 
-def renderMaterialPanel(mtl, context, layout):
-    assert  mtl.vray.is_vray_class, "Can draw property pages for V-Ray materials only"
+def getMaterialPanelNode(tree):
+    node = NodesUtils.getActiveTreeNode(tree, "MATERIAL")
+    if node:
+        return node
 
-    if not (activeNode := NodesUtils.getActiveTreeNode(mtl.node_tree, 'MATERIAL')):
+    output = NodesUtils.getOutputNode(tree, "MATERIAL")
+    if not output:
+        return None
+
+    link = NodesUtils.getFarNodeLink(output.inputs["Material"])
+    return link.from_node if link else None
+
+def renderMaterialPanel(mtl, context, layout: bpy.types.UILayout):
+    assert mtl.vray.is_vray_class, "Can draw property pages for V-Ray materials only"
+
+    if not (activeNode := getMaterialPanelNode(mtl.node_tree)):
         return
 
-    layout.label(text=f"Node:  {activeNode.name}")
-    layout.label(text=f"Node type:  {activeNode.bl_label}")
+    layout.use_property_split = True
+    layout.use_property_decorate = True
+    box = layout.box()
+    box.label(text=f'  {activeNode.bl_label}')
+    layout.separator()
+
     layout.prop(mtl, "diffuse_color", text="Viewport Color")
 
     layout.separator()
@@ -46,6 +62,7 @@ def renderMaterialSelector(layout: bpy.types.UILayout, obj: bpy.types.Object):
             if NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL') is not None:
                 layout.template_ID(obj, "active_material", new="vray.copy_material")
         else:
+            layout.template_ID(obj, "active_material", new="material.new")
             layout.operator("vray.replace_nodetree_material", icon="NODETREE", text="Use V-Ray Material Nodes")
             if mtl.use_nodes:
                 layout.operator("vray.convert_nodetree_material", icon_value=getUIIcon(VRAY_OT_convert_materials), text="Convert to V-Ray Material")
@@ -103,6 +120,7 @@ class VRAY_PT_preview(classes.VRayMaterialPanel):
 class VRAY_PT_material(classes.VRayMaterialPanel):
     bl_label = "Material"
     bl_idname = "VRAY_PT_material"
+    bl_options = set()
 
     @classmethod
     def poll_custom(cls, context):

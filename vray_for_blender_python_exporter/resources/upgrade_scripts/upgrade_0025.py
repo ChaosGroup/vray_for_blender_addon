@@ -2,6 +2,8 @@ import bpy
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.utils import getPropGroupOfNode
 from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
+from vray_blender import UPGRADE_NUMBER
+
 
 def _upgradeCmToMeters(ctx: UpgradeContext, oldNode: VRayNodeBase, newNode: VRayNodeBase):
     oldVal = getattr(getPropGroupOfNode(oldNode), ctx.currentPropName)
@@ -57,6 +59,9 @@ UPGRADE_INFO = {
         }
     }
 }
+
+if UPGRADE_NUMBER >= 31:
+    del UPGRADE_INFO['nodes']['VRayNodeTexGradRamp']
 
 def run():
     upgradeScene(UPGRADE_INFO)

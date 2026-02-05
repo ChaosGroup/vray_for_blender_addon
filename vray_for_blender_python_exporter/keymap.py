@@ -50,9 +50,10 @@ def register():
     # For rendering with V-Ray, register the same shortcut key which is registered for the built-in Blender 
     # 'render' operartor. If no key is registered, do not register any key for V-Ray.
     if ('vray.render' not in kmVray) and ('render.render' in kmActive):
-        if blenderKeymap := kmActive['render.render']:
+        for blenderKeymap in [i for i in kmActive if i.idname == 'render.render']:
             vrayKeymap = kmVray.new_from_item(blenderKeymap)
             vrayKeymap.idname = 'vray.render'
+            vrayKeymap.properties.animation = blenderKeymap.properties.animation
 
 
 def unregister():

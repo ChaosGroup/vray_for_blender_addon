@@ -7,10 +7,11 @@
 #include "cppzmq/zmq.hpp"
 #include "cppzmq/zmq_addon.hpp"
 #include "vassert.h"
+#include <iostream>
 
 using namespace std::chrono_literals;
 
-namespace VrayZmqWrapper{
+namespace VrayZmqWrapper {
 
 static const bool PING = true;
 static const bool PONG = false;
@@ -145,7 +146,7 @@ void ZmqAgent::send(zmq::message_t&& payload, ControlMessage msgType /*=ControlM
 }
 
 
-/// This is the main 
+/// This is the main loop that handles sending and receiving zmq messages.
 /// @param endpoint - the endpoint to connect to
 void ZmqAgent::pollerLoop(std::string endpoint) {
 
@@ -204,12 +205,11 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 
 /// Send up to MAX_BATCH messages from the message queue in succession
 void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
-
 	static const auto DONT_BLOCK = 0ms;
-	static const size_t MAX_BATCH = 200;
+
+	static const size_t MAX_MSG_BYTES = 32 * 1024 * 1024;
 
 	std::vector<zmq::poller_event<>> events(1);
-	zmq::multipart_t* items[MAX_BATCH];
 
 	size_t total = 0;
 
@@ -218,28 +218,47 @@ void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
 		// this may block senders from queueing messages in case of slow sends on the socket.
 		// Pushing into the deque is guaranteed to not invalidate references to items.
 		std::lock_guard<std::mutex> lock(queueMutex);
+#ifdef WITH_MESSAGE_PROFILING
+		if (msgQueue.size() > MAX_BATCH) {
+			// Generally aim for this to never be printed during export or only printed very few times.
+			std::cout << "Messages left in queue: " << msgQueue.size() - MAX_BATCH << std::endl;
+		}
+#endif
 		total = std::min(msgQueue.size(), MAX_BATCH);
 		for (int i = 0; i < total; ++i) {
-			items[i] = &msgQueue[i];
+			msgBufferItems[i] = &msgQueue[i];
 		}
 	}
 
 	size_t sent = 0;
-
+	size_t sentBytes = 0;
 	while ((sent < total) && (1 == pollerSend.wait_all(events, DONT_BLOCK))) {
 
 		vassert(zmq::event_flags::pollout == events[0].events);
 
-		auto* msg = items[sent];
-		auto& sockOut = events[0].socket;
+		zmq::multipart_t* multiMsg = msgBufferItems[sent];
+		for (const zmq::message_t& msg : *multiMsg) {
+			sentBytes += msg.size();
+		}
 
-		[[maybe_unused]] auto res = msg->send(sockOut);
+		zmq::socket_ref& sockOut = events[0].socket;
+		[[maybe_unused]] const bool res = multiMsg->send(sockOut);
 
 		// For blocking sockets, any failure is reported as an exception
 		vassert(res && "EAGAIN on a blocking socket");
 
 		++sent;
+
+		if (sentBytes > MAX_MSG_BYTES) {
+			break;
+		}
 	}
+#ifdef WITH_MESSAGE_PROFILING
+	const size_t SIZE_THRESHOLD = 1 * 1024 * 1024;
+	if (sentBytes > SIZE_THRESHOLD) {
+		std::cout << "Message batch size: " << sentBytes / 1024.0f / 1024.0f << "MB" << std::endl;
+	}
+#endif
 
 	{
 		std::lock_guard<std::mutex> lock(queueMutex);
@@ -251,7 +270,7 @@ void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
 }
 
 
-/// Receive and dispatch a message 
+/// Receive and dispatch a message
 void ZmqAgent::recvPending(zmq::poller_t<>& pollerRecv) {
 
 	static const auto pollTimeout = 1ms;
@@ -309,11 +328,11 @@ zmq::socket_t ZmqAgent::connect(const std::string& addr, RoutingId routingId) {
 	sock.set(zmq::sockopt::connect_timeout, timeouts.connect);
 	sock.set(zmq::sockopt::sndtimeo, timeouts.send);
 	sock.set(zmq::sockopt::rcvtimeo, timeouts.recv);
-	
-	// Do not try to send outstanding data after close() has been called on the socket
-	sock.set(zmq::sockopt::linger, 0);	
 
-	// Setting the high watermark to a non-zero value 
+	// Do not try to send outstanding data after close() has been called on the socket
+	sock.set(zmq::sockopt::linger, 0);
+
+	// Setting the high watermark to a non-zero value
 	// will allow the send operation to report EHOSTUNREACH errors
 	sock.set(zmq::sockopt::sndhwm, 0);
 
@@ -330,7 +349,7 @@ void ZmqAgent::handshake(zmq::socket_ref sock) {
 		trace("Handshake initiate");
 
 		auto msgOut = createMsg(ControlMessage::CONNECT, toZmqMsg(HandshakeMsg{ZMQ_PROTOCOL_VERSION, static_cast<int>(workerType)}));
-		
+
 		msgOut.send(sock);
 
 		// Synchronously wait for the response from server for the specified handshake timeout
@@ -341,7 +360,7 @@ void ZmqAgent::handshake(zmq::socket_ref sock) {
 
 		do {
 			response.recv(sock);
-		} 
+		}
 		while ((state == State::Running) && (response.size() == 0) && (Clock::now() < end));
 
 		if (state != State::Running) {
@@ -372,7 +391,7 @@ void ZmqAgent::handshake(zmq::socket_ref sock) {
 }
 
 
-/// Called once on each poll cycle to handle heartbeats 
+/// Called once on each poll cycle to handle heartbeats
 void ZmqAgent::processTick() {
 
 	if (timeouts.ping == NO_PING) {
@@ -437,4 +456,4 @@ void ZmqAgent::trace(const std::string& errMsg) {
 	}
 }
 
-}; // end VrayZmqWrapper namespace 
+}; // end VrayZmqWrapper namespace

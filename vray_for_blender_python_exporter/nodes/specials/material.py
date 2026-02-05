@@ -38,7 +38,7 @@ class VRaySocketMtlMulti(VRayValueSocket):
         layout.prop(self, 'value', text="ID")
 
 
-    def draw_property(self, context, layout, node, text):
+    def draw_property(self, context, layout, text):
         layout.prop(self, 'value', text="ID", slider=False, expand=False)
         layout.prop(self, 'enabled', text="Enabled")
 
@@ -166,7 +166,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
 
             if panelBody := draw_utils.rollout(mtlsPanel, uniqueID, sockLabel):
                 sockMtl = self.inputs[sockLabel]
-                sockMtl.draw_property(context, draw_utils.subPanel(panelBody), self, text="")
+                sockMtl.draw_property(context, draw_utils.subPanel(panelBody), text="")
 
 
 class VRAY_OT_osl_node_update(VRayOperatorBase):

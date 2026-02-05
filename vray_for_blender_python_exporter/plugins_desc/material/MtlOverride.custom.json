@@ -90,22 +90,21 @@
                 "name": "base_mtl"
             },
             {
-                "name": "gi_mtl_enabler",
-                "label": "Enable the GI Material"
+                "name": "gi_mtl_enabler"
             },
             {
-                "name": "reflect_mtl_enabler",
-                "label": "Enable the Reflect Material"
+                "name": "reflect_mtl_enabler"
             },
             {
-                "name": "refract_mtl_enabler",
-                "label": "Enable the Refract Material"
+                "name": "refract_mtl_enabler"
             },
             {
-                "name": "shadow_mtl_enabler",
-                "label": "Enable the Shadow Material"
+                "name": "shadow_mtl_enabler"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
     },
     "Options": {
         "animatable": true,

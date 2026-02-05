@@ -2,7 +2,6 @@
 import bpy
 
 from vray_blender.lib import lib_utils
-from vray_blender.lib.attribute_types import MetaPropertyTypes
 from vray_blender.lib.attribute_utils import copyPropGroupValues
 from vray_blender.plugins import getPluginModule
 from vray_blender.nodes import tools as NodeTools
@@ -22,8 +21,8 @@ def addWorldNodeTree(world: bpy.types.World):
         bpy.ops.world.new()
         world = bpy.data.worlds[-1]
         bpy.context.scene.world = world
-        
-    
+
+
     # Setting use_nodes to True will synchronously add a node tree to the node.
     world.use_nodes = True
     ntree = world.node_tree
@@ -36,7 +35,7 @@ def addWorldNodeTree(world: bpy.types.World):
     removeNonVRayNodes(ntree)
 
     NodeTools.addVRayNodeTreeSettings(ntree, 'WORLD')
-    
+
     outputNode    = ntree.nodes.new('VRayNodeWorldOutput')
     envNode       = ntree.nodes.new('VRayNodeEnvironment')
     effectNode    = ntree.nodes.new('VRayNodeEffectsHolder')
@@ -48,7 +47,7 @@ def addWorldNodeTree(world: bpy.types.World):
 
     effectNode.location.x = alignX
     effectNode.location.y = outputNode.location.y
-    
+
     channelsNode.location.x = alignX
     channelsNode.location.y = outputNode.location.y - 150
 
@@ -57,7 +56,7 @@ def addWorldNodeTree(world: bpy.types.World):
     ntree.links.new(channelsNode.outputs['Channels'], outputNode.inputs['Channels'])
 
     world.vray.is_vray_class = True
-    
+
     NodeTools.deselectNodes(ntree)
 
 def createNodeTreeForLightObject(light: bpy.types.Light):
@@ -74,7 +73,7 @@ def createNodeTreeForLightObject(light: bpy.types.Light):
     removeNonVRayNodes(ntree)
 
     NodeTools.addVRayNodeTreeSettings(ntree, 'LIGHT')
-    
+
     return ntree
 
 def addLightNodeTree(light: bpy.types.Light):
@@ -82,7 +81,7 @@ def addLightNodeTree(light: bpy.types.Light):
 
     lightPluginType = lib_utils.getLightPluginType(light)
     lightNode = ntree.nodes.new(f"VRayNode{lightPluginType}")
-    
+
     # Copy property values from light property group to the node property group 
     propGroup = getattr(light.vray, lightPluginType)
     nodePropGroup = getattr(lightNode, lightPluginType)
@@ -92,7 +91,7 @@ def addLightNodeTree(light: bpy.types.Light):
     copyPropGroupValues(propGroup, nodePropGroup, pluginModule)
 
     light.vray.is_vray_class = True
-    
+
     NodeTools.deselectNodes(ntree)
 
 
@@ -112,20 +111,28 @@ def addObjectNodeTree(ob):
 def addFurNodeTree(ob):
     ntree = bpy.data.node_groups.new(ob.name, type='VRayNodeTreeFur')
     ntree.use_fake_user = True
-    
+
     NodeTools.addVRayNodeTreeSettings(ntree, 'FUR')
-    
+
     objOutputNode = ntree.nodes.new('VRayNodeObjectOutput')
-    
+
     furOutputNode = ntree.nodes.new('VRayNodeFurOutput')
     furOutputNode.location.y = objOutputNode.location.y - objOutputNode.height - 150
     copyPropGroupValues(ob.data.vray.GeomHair, furOutputNode.GeomHair, getPluginModule('GeomHair'))
-    
 
     NodeTools.deselectNodes(ntree)
-    
+
     ob.vray.ntree = ntree
 
+def addDecalNodeTree(ob):
+    ntree = bpy.data.node_groups.new(ob.name, type='VRayNodeTreeDecal')
+    ntree.use_fake_user = True
+
+    NodeTools.addVRayNodeTreeSettings(ntree, 'DECAL')
+
+    NodeTools.deselectNodes(ntree)
+
+    ob.vray.ntree = ntree
 
 def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
     # Setting use_nodes to True will synchronously add a node tree to the node.
@@ -133,21 +140,21 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
     ntree = mtl.node_tree
 
     NodeTools.addVRayNodeTreeSettings(ntree, 'MATERIAL')
-    
+
     # The .vray property is added to the bpy.types.Material class, so all materials
     # in the scene will have it regardless of whether they are V-Ray or others'.
-    # This flag will tell us that the material is a V-Ray one and we should process it. 
+    # This flag will tell us that the material is a V-Ray one and we should process it.
     mtl.vray.is_vray_class = True
 
     # Add a default material tree consisting of an output node and a VRayBRDF material node
 
     if addDefaultTree:
         outputNode = NodeUtils.getOutputNode(mtl.node_tree, 'MATERIAL')
-        
-        if outputNode is None:    
+
+        if outputNode is None:
             outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
 
-        if not NodeTools.isInputSocketLinked(outputNode.inputs[0]):    
+        if not outputNode.inputs[0].hasActiveFarLink():
             brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
             ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
 

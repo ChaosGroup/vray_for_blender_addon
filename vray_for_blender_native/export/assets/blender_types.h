@@ -117,3 +117,71 @@ struct RenderPass {
 typedef struct MLoopCol {
 	unsigned char r, g, b, a;
 } MLoopCol;
+
+typedef struct MPropCol {
+  float color[4];
+} MPropCol;
+
+typedef struct ParticleCacheKey {
+  float co[3];
+  float vel[3];
+  float rot[4];
+  float col[3];
+  float time;
+  int segments;
+} ParticleCacheKey;
+
+struct ListBase {
+	void *first, *last;
+};
+
+struct ParticleSystem {
+	struct ParticleSystem *next, *prev;
+
+	/** Particle settings. */
+	void *part;
+
+	/** (parent) particles. */
+	void *particles;
+	/** Child particles. */
+	void *child;
+
+	/** Particle editmode (runtime). */
+	struct PTCacheEdit *edit;
+	/** Free callback. */
+	void (*free_edit)(struct PTCacheEdit *edit);
+
+	/** Path cache (runtime). */
+	struct ParticleCacheKey **pathcache;
+	/** Child cache (runtime). */
+	struct ParticleCacheKey **childcache;
+	/** Buffers for the above. */
+	ListBase pathcachebufs, childcachebufs;
+
+	/** Cloth simulation for hair. */
+	struct ClothModifierData *clmd;
+	/** Input/output for cloth simulation. */
+	struct Mesh *hair_in_mesh, *hair_out_mesh;
+
+	struct Object *target_ob;
+
+	/** Run-time only lattice deformation data. */
+	struct LatticeDeformData *lattice_deform_data;
+
+	/** Particles from global space -> parent space. */
+	struct Object *parent;
+
+	/** Used for keyed and boid physics. */
+	struct ListBase targets;
+
+	/** Particle system name. */
+	char name[/*MAX_NAME*/ 64];
+
+	/** Used for instancing. */
+	float imat[4][4];
+	float cfra, tree_frame, bvhtree_frame;
+	int seed, child_seed;
+	int flag, totpart, totunexist, totchild, totcached, totchildcache;
+
+	// TRUNCATED HERE
+};

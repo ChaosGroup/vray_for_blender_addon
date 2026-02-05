@@ -177,6 +177,9 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
 
     from vray_blender.lib.sys_utils import importModule
 
+    if fromUpgradeNum == toUpgradeNum:
+        return False
+    
     scriptInfos = findUpgradeScripts(fromUpgradeNum, toUpgradeNum)
 
     # Run in succession all scripts needed to upgrade from the scene version to the

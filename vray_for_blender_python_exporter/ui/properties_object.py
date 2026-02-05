@@ -108,11 +108,11 @@ class VRAY_PT_object_properties(classes.VRayObjectPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        return context.material or context.object
+        return context.material or (context.object and not context.object.vray.isVRayDecal)
 
     def draw(self, context):
         propGroup = context.object.vray.VRayObjectProperties
-        
+
         col = self.layout.column()
         col.use_property_split = True
         col.prop(propGroup, 'objectID')
@@ -121,7 +121,7 @@ class VRAY_PT_object_properties(classes.VRayObjectPanel):
 
         split.column()
         col = split.column()
-        
+
         classes.drawPluginUI(context, col, propGroup, getPluginModule('VRayObjectProperties'))
 
         col = col.column()
@@ -150,7 +150,13 @@ class VRAY_PT_object_motion_blur(classes.VRayObjectPanel):
 class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
     bl_label = "Clipper"
     bl_options = {'DEFAULT_CLOSED'}
-    
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.object
+        nonClipperObject = obj.vray.isVRayDecal or obj.vray.isVRayFur
+        return obj and (obj.type not in cls.incompatTypes) and classes.VRayObjectPanel.poll(context) and not nonClipperObject
+
     def drawPanelCheckBox(self, context):
         vrayClipper = context.object.vray.VRayClipper
         self.layout.prop(vrayClipper, 'clipper_enabled', text="")
@@ -161,7 +167,7 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
 
         layout.active = vrayClipper.enabled
         layout.alignment = 'CENTER'
-        
+
         split = layout.split(align = True)
         col = split.column()
         col.prop(vrayClipper, 'affect_light')
@@ -181,7 +187,7 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         col = layout.column(align=True)
         col.active = True
         col.prop(vrayClipper, 'exclusion_mode', text="As exclusive set")
-        searchBoxLabel = "Exclude" if vrayClipper.exclusion_mode else "Include" 
+        searchBoxLabel = "Exclude" if vrayClipper.exclusion_mode else "Include"
         col.prop_search(vrayClipper, 'exclusion_nodes_ptr', bpy.data, 'collections', text=searchBoxLabel)
 
         # TODO: Don't knoe how to export this parameter, is it even used by VRay
@@ -191,8 +197,8 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         # col = layout.column()
         # col.active = vrayClipper.set_material_id and not vrayClipper.use_obj_mtl
         # col.prop(vrayClipper, 'material_id')
-        
-       
+
+
 class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
     bl_label = "User Attributes"
     bl_options = {'DEFAULT_CLOSED'}
@@ -205,8 +211,8 @@ class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
         return obj and (obj.type not in cls.incompatTypes) and \
             (obj.type != 'LIGHT' or obj.data.vray.light_type == 'MESH') and \
             classes.pollBase(cls, context)
-    
- 
+
+
     def draw(self, context):
         layout = self.layout
         ob = context.object

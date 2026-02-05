@@ -1,11 +1,10 @@
-
 import bpy
 
 from vray_blender.lib import blender_utils
 from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.plugins import getPluginModule
+from vray_blender.nodes.utils import getNodeByType, treeHasNodes
 from vray_blender.ui import classes
-
 
 def getContextData(context):
     if context.active_object.type == 'MESH':
@@ -30,7 +29,7 @@ class VRAY_PT_VRayProxy(classes.VRayGeomPanel):
 
         if obj.type != "MESH":
             return
-        
+
         # Disabling the proxy panel in edit mode
         # as generating new preview mesh while in edit mode
         # can lead to unexpected results.
@@ -60,18 +59,41 @@ class VRAY_PT_VRayScene(classes.VRayGeomPanel):
 
         if obj.type != "MESH":
             return
-        
+
         vrayScene = obj.data.vray.VRayScene
 
         vraySceneModule = getPluginModule('VRayScene')
         painter = UIPainter(context, vraySceneModule, vrayScene)
         painter.renderPluginUI(layout)
 
+class VRAY_PT_VRayDecal(classes.VRayGeomPanel):
+    bl_label = "Decal"
+
+    @classmethod
+    def poll(cls, context):
+        return classes.VRayGeomPanel.poll(context) and context.object.vray.isVRayDecal
+
+    def draw(self, context):
+        obj = context.object
+
+        if obj.type != "MESH":
+            return
+
+        propGroup = obj.data.vray.VRayDecal
+        decalNode = None
+        if treeHasNodes(obj.vray.ntree) and (outputNode := getNodeByType(obj.vray.ntree, 'VRayNodeDecalOutput')):
+            decalNode = outputNode
+            propGroup = decalNode.VRayDecal
+
+        vrayDecalModule = getPluginModule('VRayDecal')
+        painter = UIPainter(context, vrayDecalModule, propGroup, decalNode)
+        painter.renderPluginUI(self.layout)
 
 def getRegClasses():
     return (
         VRAY_PT_VRayScene,
         VRAY_PT_VRayProxy,
+        VRAY_PT_VRayDecal
     )
 
 

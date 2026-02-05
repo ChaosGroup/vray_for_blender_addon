@@ -1,6 +1,6 @@
 {
     "ID": "TexGradRamp",
-    "Name": "V-Ray Gradient Ramp",
+    "Name": "V-Ray Gradient Ramp Texture",
     "Parameters": [
         {
             "attr" : "gradient_type",
@@ -39,9 +39,9 @@
         },
         {
             "attr": "color_ramp",
-            "type": "INT",
-            "desc": "Gradient color ramp",
-            "default": 0,
+            "type": "GRAD_RAMP",
+            "desc": "Gradient Color Ramp",
+            "default": null,
             "options": {
                "derived": true
             }
@@ -211,6 +211,7 @@
     },
     "Node": {
         "input_sockets": [
+            { "name": "color_ramp" },
             { "name": "gradient_position" },
             { "name": "texture_map" },
             { "name": "uvwgen" },
@@ -234,7 +235,12 @@
             {
                 "name": "nouvw_color"
             }
-        ]
+        ],
+        "Node": {
+        "internal_links": {
+            "*": ["Texture*"]
+        }
+    }
     },
     "Options": {
         "excluded_parameters": [ "compatibility_with" ],

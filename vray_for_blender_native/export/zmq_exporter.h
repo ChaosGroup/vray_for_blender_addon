@@ -96,7 +96,7 @@ public:
 	// Export API
 	void        pluginCreate(const std::string& pluginName, const std::string& pluginType, bool allowTypeChanges);
 	void        pluginRemove(const std::string& pluginName);
-	void        pluginUpdate(const std::string& pluginName, const std::string& attrName, const VRayBaseTypes::AttrValue& value, bool animatable, bool forceUpdate = false);
+	void        pluginUpdate(const std::string& pluginName, const std::string& attrName, const VRayBaseTypes::AttrValue& value, bool animatable, bool forceUpdate = false, bool recreate = false);
 	void        sendPluginMsg(zmq::message_t&& message);
 
 	RenderImage getImage        ();

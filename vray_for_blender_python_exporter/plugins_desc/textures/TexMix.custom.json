@@ -53,39 +53,6 @@
             }
         }
     ],
-    "Node": {
-        "input_sockets": [
-            {
-                "name": "color1"
-            },
-            {
-                "name": "color2"
-            },
-            {
-                "name": "mix_map"
-            },
-            {
-                "name": "texture_rollout",
-                "label": "Output",
-                "type": "ROLLOUT"
-            },
-            {
-                "name": "color_mult"
-            },
-            {
-                "name": "color_offset"
-            },
-            {
-                "name": "alpha_mult"
-            },
-            {
-                "name": "alpha_offset"
-            },
-            {
-                "name": "nouvw_color"
-            }
-        ]
-    },
     "Widget": {
         "widgets": [
             {
@@ -145,6 +112,42 @@
                 ]
             }
         ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "color1"
+            },
+            {
+                "name": "color2"
+            },
+            {
+                "name": "mix_map"
+            },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            },
+            {
+                "name": "alpha_mult"
+            },
+            {
+                "name": "alpha_offset"
+            },
+            {
+                "name": "nouvw_color"
+            }
+        ],
+        "internal_links" : {
+            "*": ["Color 1", "Color 2", "Mix Map", "Color Mult", "Color Offset", "No UVs Color"]
+        }
     },
     "Options": {
         "excluded_parameters": [

@@ -28,6 +28,11 @@
             }
         ]
     },
+    "Node": {
+        "internal_links": {
+            "*": ["Color 1", "Color 2"]
+        }    
+    },
     "Parameters": [
         {
             "attr": "size",

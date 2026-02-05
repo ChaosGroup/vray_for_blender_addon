@@ -35,21 +35,7 @@ macro(use_qt _qt_root)
 		${_qt_root}/include/QtWebEngineCore
 	)
 
-	if (WIN32)
-		set(QT_LIBPATH ${_qt_root}/lib)
-		set(QT_LIB_EXT ".lib")
-		set(QT_LIB_PREFIX "")
-	else()
-		if (APPLE)
-			set(QT_LIBPATH ${_qt_root}/lib)
-			set(QT_LIB_EXT ".dylib")
-			set(QT_LIB_PREFIX "lib")
-		else()
-			set(QT_LIBPATH ${_qt_root}/lib)
-			set(QT_LIB_EXT ".so")
-			set(QT_LIB_PREFIX "lib")
-		endif()
-	endif()
+	set(QT_LIBPATH ${_qt_root}/lib)
 
 	include_directories(${QT_INCLUDES})
 	link_directories(${QT_LIBPATH})
@@ -57,18 +43,12 @@ endmacro()
 
 
 macro(link_with_qt)
-	if (UNIX AND NOT APPLE)
-		# target_link_libraries(${PROJECT_NAME} libicui18n.so)
-		# target_link_libraries(${PROJECT_NAME} libicuuc.so)
-		# target_link_libraries(${PROJECT_NAME} libicudata.so)
-	endif()
-
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6Core${QT_LIB_EXT})
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6Gui${QT_LIB_EXT})
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6Widgets${QT_LIB_EXT})
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6WebChannel${QT_LIB_EXT})
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6WebEngineCore${QT_LIB_EXT})
-	target_link_libraries(${PROJECT_NAME} ${QT_LIB_PREFIX}Qt6WebEngineWidgets${QT_LIB_EXT})
+	target_link_libraries(${PROJECT_NAME} Qt6Core)
+	target_link_libraries(${PROJECT_NAME} Qt6Gui)
+	target_link_libraries(${PROJECT_NAME} Qt6Widgets)
+	target_link_libraries(${PROJECT_NAME} Qt6WebChannel)
+	target_link_libraries(${PROJECT_NAME} Qt6WebEngineCore)
+	target_link_libraries(${PROJECT_NAME} Qt6WebEngineWidgets)
 endmacro()
 
 
@@ -235,27 +215,29 @@ endmacro()
 
 macro(use_vraysdk _appsdk_root _sdk_root)
 	include_directories(${_appsdk_root}/vraysdk/include/)
-	include_directories(${_sdk_root}/galaxy_content_api/include/)
-	target_link_directories(${PROJECT_NAME} PRIVATE ${_sdk_root}/galaxy_content_api)
+	include_directories(${GALAXY_CONTENT_API_ROOT}/include)
 
+	target_link_directories(${PROJECT_NAME} PRIVATE ${GALAXY_CONTENT_API_ROOT})
+	target_link_directories(${PROJECT_NAME} PRIVATE ${ZLIB_ROOT})
 	target_link_directories(${PROJECT_NAME} PRIVATE ${_appsdk_root}/vraysdk/lib)
+
 	set(_vray_sdk_libs
 		plugman_s # for PluginBase
 		putils_s
 		openexr_s
 		vutils_s
 		cosmos_client_s
+		collaboration_common_s
+		chaos_unified_login_s
 		pll_s # for uuid
 		vray # for valloc
-		chaos_networking # used by galaxy client
+		chaos_networking_201 # used by galaxy client
 		galaxy_content_api_s
 	)
 	target_link_libraries(${PROJECT_NAME} ${_vray_sdk_libs})
-	include_directories(${_sdk_root}/GRPC/include/)
-	link_directories(${_sdk_root}/GRPC/lib)
-	link_directories(${_sdk_root}/GRPC/bin)
+	include_directories(${GRPC_ROOT}/include/)
 
-	set(XPAK_GRPC_LIB_DIR ${_sdk_root}/GRPC/lib)
+	set(XPAK_GRPC_LIB_DIR ${GRPC_ROOT}/lib)
 	if (WIN32)
 		set(XPAK_GRPC_LIBS
 			${XPAK_GRPC_LIB_DIR}/cares.lib
@@ -271,10 +253,13 @@ macro(use_vraysdk _appsdk_root _sdk_root)
 			${XPAK_GRPC_LIB_DIR}/grpc++_error_details.lib
 			${XPAK_GRPC_LIB_DIR}/grpc++_reflection.lib
 			${XPAK_GRPC_LIB_DIR}/grpc++_unsecure.lib
-			${XPAK_GRPC_LIB_DIR}/zlib_s.lib
+			zlib_ng_s
 			ws2_32.lib
 		)
 	elseif(UNIX)
+		if (NOT APPLE)
+			set(XPAK_GRPC_LIB_DIR ${GRPC_ROOT}/lib/clang-gcc-11.2)
+		endif()
 		set(XPAK_GRPC_LIBS
 			${XPAK_GRPC_LIB_DIR}/libcares.a
 			${XPAK_GRPC_LIB_DIR}/libprotobuf.a
@@ -360,6 +345,8 @@ macro(use_vraysdk _appsdk_root _sdk_root)
 				${XPAK_GRPC_LIB_DIR}/libssl.a
 				${XPAK_GRPC_LIB_DIR}/libupb.a
 			)
+		else() # linux
+			list(APPEND XPAK_GRPC_LIBS zlib_ng_s)
 		endif()
 	endif()
 	target_link_libraries(${PROJECT_NAME} ${XPAK_GRPC_LIBS})

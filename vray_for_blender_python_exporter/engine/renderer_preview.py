@@ -47,7 +47,8 @@ class VRayRendererPreview(VRayRendererProdBase):
         commonSettings = CommonSettings(dg.scene, engine, isInteractive = False)
         commonSettings.updateFromScene()
 
-        exporterCtx = self._getExporterContext(self.renderer, dg, commonSettings)
+        exporterCtx = self._getExporterContext(engine, dg, commonSettings)
+        exporterCtx.renderer = self.renderer
         syncUniqueNamesForPreview(exporterCtx.dg)
         exporterCtx.calculateObjectVisibility()
         

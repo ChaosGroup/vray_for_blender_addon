@@ -1,4 +1,3 @@
-
 import bpy
 import os
 from pathlib import PurePath
@@ -6,6 +5,7 @@ from pathlib import PurePath
 from vray_blender import debug
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.lib import blender_utils, lib_utils
+from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.nodes.operators.import_file import importProxyFromMeshFile
 from vray_blender.nodes import tree_defaults
 from vray_blender.nodes import utils as NodesUtils
@@ -14,6 +14,8 @@ from vray_blender.ui import classes, icons
 from vray_blender.menu import VRAY_OT_open_vfb
 from vray_blender.vray_tools import vray_proxy
 from vray_blender.exporting.tools import MESH_OBJECT_TYPES
+from vray_blender.plugins.geometry.VRayDecal import createDecalObject, generateDecalPreviewMesh
+from vray_blender.proxy import VRAY_SCENE_FILTER_GLOB, VRAY_PROXY_FILTER_GLOB
 
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -382,12 +384,12 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
     bl_options = { "UNDO" }
 
     filter_glob: bpy.props.StringProperty(
-        default="*.vrmesh;*.abc",
+        default=VRAY_PROXY_FILTER_GLOB,
         options={'HIDDEN'}
     )
 
-    filepath: bpy.props.StringProperty(name="Filepath (*.vrmesh, *abc)", subtype="FILE_PATH")
-    relpath: bpy.props.BoolProperty(name="Use Relative Path", default=False)
+    filepath: bpy.props.StringProperty(name=f"Filepath ({VRAY_PROXY_FILTER_GLOB})", subtype="FILE_PATH")
+    relpath: bpy.props.BoolProperty(name="Use Relative Path", default=True)
     unit_scale: bpy.props.FloatProperty(
         name="Unit scale",
         description="The unit scale to apply during import",
@@ -413,7 +415,8 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
     def execute(self, context):
         matPath =  "" if vray_proxy.isAlembicFile(self.filepath) else PurePath(self.filepath).with_suffix(".vrmat").as_posix()
 
-        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=self.relpath, scaleUnit=self.unit_scale)
+        useRelPath = (not blender_utils.isDefaultScene()) and self.relpath
+        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=useRelPath, scaleUnit=self.unit_scale)
         
         if err:
             self.report({'ERROR'}, err)
@@ -456,11 +459,11 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
     bl_options = { "UNDO" }
 
     filter_glob: bpy.props.StringProperty(
-        default="*.vrscene;*.usd;*.usda;*.usdc;*.usdz",
+        default=VRAY_SCENE_FILTER_GLOB,
         options={'HIDDEN'}
     )
 
-    filepath: bpy.props.StringProperty(name="Filepath (*.vrscene, *.usd, *.usda, *.usdc, *.usdz)", subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(name=f"Filepath ({VRAY_SCENE_FILTER_GLOB})", subtype="FILE_PATH")
     relpath: bpy.props.BoolProperty(name="Use Relative Path", default=True)
 
     def invoke(self, context, event):
@@ -471,18 +474,18 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
         if not self.filepath:
             return {'CANCELLED'}
 
-        filepath = os.path.normpath(self.filepath)
-        if not os.path.exists(filepath):
+        absFilePath = os.path.normpath(bpy.path.abspath(self.filepath))
+        if not os.path.exists(absFilePath):
             self.report({'ERROR'}, "File not found!")
             return {'CANCELLED'}
 
-        fileExt = PurePath(filepath).suffix
+        fileExt = PurePath(absFilePath).suffix
         if fileExt != '.vrscene' and not fileExt.startswith(".usd"):
            self.report({'ERROR'}, f"File format {fileExt} is not supported by V-Ray Scene")
            return {'CANCELLED'}
 
         # Create a new mesh object to represent the scene
-        name = f"VRayScene@{PurePath(filepath).stem}"
+        name = f"VRayScene@{PurePath(absFilePath).stem}"
 
         mesh = bpy.data.meshes.new(name)
         ob = bpy.data.objects.new(name, mesh)
@@ -490,22 +493,44 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
 
         context.scene.collection.objects.link(ob)
 
-        # Generate preview for the VRScene
-        sceneFilepath = bpy.path.relpath(filepath) if self.relpath and bpy.data.filepath else filepath
-
+        useRelPath = (not blender_utils.isDefaultScene()) and self.relpath
         vrayScene = ob.data.vray.VRayScene
-        vrayScene['filepath'] = filepath    # Set to the value obtained from the FileSelect dialog
 
         ob.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
 
-        if err := vray_proxy.loadVRayScenePreviewMesh(sceneFilepath, ob):
+        if err := vray_proxy.loadVRayScenePreviewMesh(ob, absFilePath):
             debug.report('ERROR', err)
             return {'CANCELLED'}
 
+        # Set the filepath obtained from the FileSelect dialog using the format 
+        # corresponding to the 'relative' option.
+        filePath = absFilePath
+        
+        if useRelPath:
+            if relFilePath := tryGetRelativePath(absFilePath):
+                filePath = relFilePath
+            else:
+                debug.report('INFO', "Cannot import V-Ray Scene with relative path, using absolute path instead") 
+
+        vrayScene['filepath'] = filePath   
         blender_utils.selectObject(ob)
 
         return {'FINISHED'}
 
+class VRAY_OT_add_object_decal(VRayOperatorBase):
+    """ Add a VRayDecal object to the scene. """
+
+    bl_idname = "vray.add_object_decal"
+    bl_label = "Add V-Ray Decal"
+    bl_description = "Add V-Ray Decal object"
+    bl_options = { 'UNDO' }
+
+    def execute(self, context):
+        obj = createDecalObject(context)
+        generateDecalPreviewMesh(obj, obj.data.vray.VRayDecal)
+        blender_utils.selectObject(obj)
+
+        return {'FINISHED'}
 
 class VRAY_MT_Mesh(bpy.types.Menu):
     bl_idname = "VRAY_MT_Mesh"
@@ -524,6 +549,7 @@ class VRAY_MT_Mesh(bpy.types.Menu):
         vraySceneLayout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_vrayscene))
         self.layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
         self.layout.operator(VRAY_OT_add_object_fur.bl_idname, text="V-Ray Fur", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
+        self.layout.operator(VRAY_OT_add_object_decal.bl_idname, text="V-Ray Decal", icon_value=icons.getUIIcon(VRAY_OT_add_object_decal))
 
 
 def addVRayMeshesToMenu(self, context):
@@ -573,6 +599,7 @@ def getRegClasses():
         VRAY_OT_add_object_vrayscene,
         VRAY_OT_add_object_proxy,
         VRAY_OT_add_object_fur,
+        VRAY_OT_add_object_decal,
         VRAY_OT_select_camera,
         VRAY_OT_camera_lock_unlock_view,
         VRAY_MT_Mesh,

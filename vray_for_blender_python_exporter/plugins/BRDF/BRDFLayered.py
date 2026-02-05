@@ -5,14 +5,13 @@ from vray_blender.lib import plugin_utils
 from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.draw_utils import UIPainter
-from vray_blender.lib.names import Names
-from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput
-from vray_blender.nodes.tools import isInputSocketLinked
-from vray_blender.nodes.utils import getVrayPropGroup
-from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getInputSocketByName
-from vray_blender.plugins import getPluginModule
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.lib.names import Names
+from vray_blender.exporting import node_export as commonNodesExport
+from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
+from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput
+from vray_blender.nodes.utils import getVrayPropGroup
+from vray_blender.plugins import getPluginModule
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -58,8 +57,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     brdfSock = getInputSocketByName(node, "Base Material")
     assert brdfSock
 
-    if isInputSocketLinked(brdfSock):
-        brdfs.append(commonNodesExport.exportLinkedSocket(nodeCtx, brdfSock))
+    if brdfLink := getFarNodeLink(brdfSock):
+        brdfs.append(commonNodesExport.exportSocketLink(nodeCtx, brdfLink))
         weights.append(wrapAsTexture(nodeCtx, mathutils.Color((1.0, 1.0, 1.0))))
         opacities.append(1.0)
 
@@ -70,15 +69,15 @@ def exportTreeNode(nodeCtx: NodeContext):
         if not (brdfSock := getInputSocketByName(node, brdfSockName)):
             break
 
-        if isInputSocketLinked(brdfSock):
-            brdf = commonNodesExport.exportLinkedSocket(nodeCtx, brdfSock)
+        if brdfLink := getFarNodeLink(brdfSock):
+            brdf = commonNodesExport.exportSocketLink(nodeCtx, brdfLink)
             weight = None
 
             weightSock = getInputSocketByName(node, weightSockName)
             opacitySock = getInputSocketByName(node, opacitySockName)
 
-            if isInputSocketLinked(weightSock):
-                weight = commonNodesExport.exportLinkedSocket(nodeCtx, weightSock)
+            if weightLink := getFarNodeLink(weightSock):
+                weight = commonNodesExport.exportSocketLink(nodeCtx, weightLink)
             else:
                 weight = mathutils.Color(weightSock.value)
 
@@ -147,7 +146,7 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
             weightSock = node.inputs[weightSockName]
             opacitySock = getHiddenInput(node, opacitySockName)
 
-            if not isInputSocketLinked(brdfSock) and not isInputSocketLinked(weightSock):
+            if not brdfSock.hasActiveFarLink() and not weightSock.hasActiveFarLink():
                 node.inputs.remove(node.inputs[brdfSockName])
                 node.inputs.remove(node.inputs[weightSockName])
                 node.inputs.remove(node.inputs[opacitySockName])

@@ -1,5 +1,6 @@
 import bpy
 
+
 PluginTypes = {
     'BRDF',
     'MATERIAL',
@@ -7,6 +8,7 @@ PluginTypes = {
     'TEXTURE',
     'UVWGEN',
 }
+
 
 # Attributes won't be generated for the SkippedTypes
 SkippedTypes = {
@@ -25,10 +27,12 @@ SkippedTypes = {
     'FLOAT_TEXTURE_LIST',
     'STRING_LIST',
     'BOOL_LIST',
+    'GRAD_RAMP',
 }
 
-# A list of visible input socket types. They will be shown in both the 
-# property pages an in the node itself.
+
+# A list of visible input socket types. They will be shown in both the
+# property pages and in the node itself.
 NodeInputTypes = {
     'BRDF',
     "ACOLOR",
@@ -50,7 +54,9 @@ NodeInputTypes = {
     'TRANSFORM',
     'MATRIX',
     'MATRIX_TEXTURE',
+    'GRAD_RAMP',
 }
+
 
 # A list of hidden input socket types. For them, sockets will be generated, but they will be only
 # visible in the property pages and not in the node itself
@@ -62,9 +68,11 @@ HiddenNodeInputTypes = {
     'ENUM'
 }
 
+
 NodeStructuralInputTypes = {
     'ROLLOUT'
 }
+
 
 AllNodeInputTypes = NodeInputTypes.union(HiddenNodeInputTypes).union(NodeStructuralInputTypes)
 
@@ -76,6 +84,7 @@ MetaPropertyTypes = {
     'BRDF_USE'
 }
 
+
 NodeOutputTypes = {
     'OUTPUT_PLUGIN',
     'OUTPUT_COLOR',
@@ -85,6 +94,7 @@ NodeOutputTypes = {
     'OUTPUT_TRANSFORM_TEXTURE',
     'OUTPUT_TEXTURE',
 }
+
 
 _TypeToSocket = {
     'ACOLOR'                      : 'VRaySocketColor',
@@ -125,7 +135,10 @@ _TypeToSocket = {
     'OUTPUT_VECTOR_TEXTURE'       : 'VRaySocketVector',
     'OUTPUT_INT_TEXTURE'          : 'VRaySocketVectorInt',
     'OUTPUT_TRANSFORM_TEXTURE'    : 'VRaySocketTransform',
+
+    'GRAD_RAMP'                   : 'VRaySocketColorRamp',
 }
+
 
 # SubtypeToSocket is used to map the subtype of a property to a specific socket type.
 # If no entry is found for the specific subtype, the socket type from the TypeToSocket
@@ -138,6 +151,7 @@ _SubtypeToSocket = {
     }
 }
 
+
 # Socket types for linked-only sockets - sockets that cannot have any other value than a linkt to another node.
 _TypeToSocketNoValue = {
     'VRaySocketColor'       : 'VRaySocketColorNoValue',
@@ -145,7 +159,6 @@ _TypeToSocketNoValue = {
     'VRaySocketFloatColor'  : 'VRaySocketFloatNoValue',
     'VRaySocketInt'         : 'VRaySocketIntNoValue',
 }
-
 
 
 def getSocketType(type: str, subtype: str = None, linkedOnly = False) -> str:
@@ -163,7 +176,6 @@ def getSocketType(type: str, subtype: str = None, linkedOnly = False) -> str:
     return sockType
 
 
-
 bpy.props.TransformProperty = bpy.props.FloatVectorProperty(
     name="Transform",
     size=12,
@@ -176,8 +188,10 @@ def propertyMatrix(mtr):
     # There is no property for Matrix for that we use FloatVectorProperty
     return bpy.props.FloatVectorProperty(size=16, default=mtr)
 
+
 def propertyVectorInt(size: int):
     return lambda v: bpy.props.IntVectorProperty(size=size, default=v)
+
 
 TypeToProp = {
     'BOOL'                  : bpy.props.BoolProperty,
@@ -202,7 +216,7 @@ TypeToProp = {
     'PLUGIN_LIST'           : bpy.props.PointerProperty,
     'INCLUDE_EXCLULDE_LIST' : bpy.props.PointerProperty,
     'BRDF_USE'              : bpy.props.BoolProperty,
-    
+
     'UVWGEN'                : bpy.props.StringProperty,
 
     'INT_TEXTURE'           : bpy.props.IntProperty,
@@ -218,8 +232,9 @@ TypeToProp = {
     'OUTPUT_INT_TEXTURE'       : bpy.props.IntProperty,
     'OUTPUT_TEXTURE'           : bpy.props.FloatVectorProperty,
     'OUTPUT_VECTOR_TEXTURE'    : bpy.props.FloatVectorProperty,
-    # TOOD: There is no bpy.props.TransformProperty type. Replace with valid one. 
+    # TOOD: There is no bpy.props.TransformProperty type. Replace with valid one.
     'OUTPUT_TRANSFORM_TEXTURE' : bpy.props.TransformProperty,
+    'GRAD_RAMP'                : bpy.props.PointerProperty,
 }
 
 

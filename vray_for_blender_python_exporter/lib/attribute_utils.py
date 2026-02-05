@@ -352,12 +352,13 @@ def setAttrSubtype(attrArgs, attrDesc, pluginModule):
 
     # Vray subtypes only have meaning for choosing the socket type and an error will be generated
     # if we try to set them as a subtype of a property during registration.
-    if attrDesc.get('subtype', '').startswith('VRAY_'):
+    attrSubtype = attrDesc.get('subtype', '')
+    if attrSubtype.startswith('VRAY_'):
         return
 
     attrType = attrDesc['type']
     ui = attrDesc.get('ui', {})
-    if (attrType == 'STRING') and ('file_extensions' in ui):
+    if (attrType == 'STRING') and (attrSubtype != 'NONE') and ('file_extensions' in ui):
         attrArgs['subtype'] = 'FILE_PATH'
     elif attrType in TypeToUISubtype:
         attrArgs['subtype'] = attrDesc.get('subtype', TypeToUISubtype[attrType])

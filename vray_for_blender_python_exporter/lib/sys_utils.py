@@ -34,7 +34,7 @@ def getPlatformName(executableBaseName: str):
     """ Return the executable name with the correct platform suffix. """
     match sys.platform:
         case 'win32': suffix = ".exe"
-        case 'linux': suffix = ".bin"
+        case 'linux': suffix = ""
         case 'darwin': suffix = ""
         case _:
             raise Exception(f"Unsupported platform: {sys.platform}")
@@ -182,7 +182,7 @@ def getAppSdkLibPath():
     elif sys.platform == 'darwin':
         libFileNameName = "libVRaySDKLibrary.dylib"
     else:
-        raise NotImplementedError()
+        libFileNameName = "libVRaySDKLibrary.so"
     return os.path.join(getAppSdkPath(), libFileNameName)
 
 

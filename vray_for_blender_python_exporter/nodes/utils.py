@@ -3,14 +3,15 @@ import functools
 import operator
 
 from vray_blender import debug
-from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink, removeSocketLinks, getInputSocketByAttr
+from vray_blender.exporting.tools import (getInputSocketByName, getFarNodeLink, removeSocketLinks, 
+                                          getInputSocketByAttr)
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
 from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, getSocketType
 from vray_blender.lib.attribute_utils import getAttrDisplayName, formatAttributeName
 from vray_blender.lib.condition_processor import evaluateCondition, isCondition
 from vray_blender.lib.sys_utils import importFunction
-from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel
+from vray_blender.nodes.tools import isVrayNode, getSocketPanel
 from vray_blender.lib.blender_utils import tagUsersForUpdate
 
 
@@ -58,7 +59,7 @@ class PropertyContext:
 def getNodeOfPropGroup(propGroup: dict):
     """ Return the parent node of a VRay property group. """
 
-    if isinstance(propGroup.id_data, bpy.types.NodeTree):
+    if isinstance(propGroup.id_data, bpy.types.NodeTree) and hasattr(propGroup,'parent_node_id'):
         parentNtree = propGroup.id_data
         return next((n for n in parentNtree.nodes if hasattr(n, "unique_id") and (n.unique_id == propGroup.parent_node_id)), None)
 
@@ -73,6 +74,12 @@ def getPropGroupOfNode(node: bpy.types.Node):
 
     return None
 
+
+def getPluginTypeOfNode(node: bpy.types.Node):
+    """ Returms the vray plugin type associated with the node """
+    if node.vray_plugin and node.vray_plugin != 'NONE':
+        return node.vray_plugin
+    return None
 
 def getUpdateCallbackPropertyContext(updateSource, pluginType) -> PropertyContext:
     """ Create a PropertyContext for the update source 
@@ -123,10 +130,10 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
     visited.add(fromNode)
 
     for output in fromNode.outputs:
-        for link in [l for l in output.links if not l.is_muted and not l.is_hidden]:
+        for link in output.links:
             nextNode = link.to_node
 
-            if not link.to_socket.shouldExportLink():
+            if not link.to_socket.hasActiveFarLink():
                 return False
 
             if nextNode == toNode:
@@ -305,7 +312,7 @@ def addInputs(node: bpy.types.Node, pluginModule):
     """
     from vray_blender.nodes.sockets import addInput
 
-    socketsData = _getPluginInputSockets(pluginModule, node.vray_type)
+    socketsData = _getPluginInputSockets(pluginModule, pluginModule.ID)
 
     for attrName in socketsData:
         sockInfo = socketsData[attrName]
@@ -456,7 +463,7 @@ def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree)
     """ Check if the node is connected to the output node of the object node tree. """
 
     # Note: V-Ray Fur objects can have multiple output nodes, so we need to check all of them
-    for treeType in ['OBJECT', 'FUR']:
+    for treeType in ['OBJECT', 'FUR', 'DECAL']:
         if objTreeOutput := getOutputNode(objTree, treeType):
             if (node == objTreeOutput) or areNodesInterconnected(node, objTreeOutput):
                 return True
@@ -466,18 +473,18 @@ def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree)
 
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """ Triggers an update of the currently selected object or node tree and a redraw of the 
-        property editor. This function is called meant to be set as the 'update' 
-        callback of node sockets and properties. It is needed because Blender does 
-        not generate update events for changes to custom node trees.
+        property editor. This function is set as the 'update' callback of node sockets 
+        and properties. It is needed because Blender does not generate update events 
+        for changes to custom node trees.
     """
+    activeEditor = context.scene.vray.ActiveNodeEditorType
+    
     if isinstance(self, bpy.types.Node):
         # For manually defined nodes (e.g. V-Ray Transform), property updates have 'self' set to the node, not to the node tree.
         # Tag an update on the node tree.
 
         # Nodes from object node trees are tagging for update the object otherwise the changes won't be exported.
-        if context.scene.vray.ActiveNodeEditorType == "OBJECT" and \
-            _nodeConnectedToObjOutput(self, self.id_data):
-
+        if (activeEditor == "OBJECT") and _nodeConnectedToObjOutput(self, self.id_data):
             context.active_object.update_tag()
         else:
             self.id_data.update_tag()
@@ -492,7 +499,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
 
         match ob.type:
             case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE' | 'CURVES' | 'POINTCLOUD' | 'VOLUME':
-                if context.scene.vray.ActiveNodeEditorType == "OBJECT":
+                if activeEditor == "OBJECT":
                     # If the opened node tree editor is 'OBJECT'
                     # and the node of the property group is linked to output node,
                     # the active object is tagged for geometry updates
@@ -502,7 +509,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                         if _nodeConnectedToObjOutput(node, ob.vray.ntree): 
                             tagUsersForUpdate(ob.vray.ntree)
 
-                elif (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
+                elif (activeEditor == 'SHADER') and (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
 
                     srcType = type(self).__name__
 
@@ -517,7 +524,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
 
                         match parentType:
                             case 'Material':
-                                # Tag both material and object options, because both should be exported
+                                # Tag both material and object's material options, because both should be exported
                                 UpdateTracker.tagMtlTopology(context, mtl)
                             case 'Object':
                                 UpdateTracker.tagUpdate(ob, UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
@@ -529,12 +536,13 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
 
 
             case 'LIGHT':
-                # # A Light node's property has changed
-                UpdateTracker.tagUpdate(ob.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
+                if activeEditor == 'SHADER':
+                    # A Light node's property has changed
+                    UpdateTracker.tagUpdate(ob.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
 
-                # For lights, it is currently not possible to tag the node trees, so tag the object
-                # itself. This will trigger a node tree update
-                ob.update_tag()
+                    # For lights, it is currently not possible to tag the node trees, so tag the object
+                    # itself. This will trigger a node tree update
+                    ob.update_tag()
 
     tagRedrawPropertyEditor()
 
@@ -665,6 +673,7 @@ _OUTPUT_NODE_TYPES = {
         'MATERIAL'  : 'VRayNodeOutputMaterial',
         'OBJECT'    : 'VRayNodeObjectOutput',
         'FUR'       : 'VRayNodeFurOutput',
+        'DECAL'     : 'VRayNodeDecalOutput',
 
         'SHADER'    : 'ShaderNodeOutputMaterial' # Cycles Material Output
     }
@@ -719,12 +728,6 @@ def getActiveTreeNode(ntree: bpy.types.NodeTree, treeType: str):
         outputNode = getOutputNode(ntree, treeType)
         isOutputNodeSelected = any(n for n in selectedNodes if n.bl_idname == outputNode.bl_idname) if outputNode else False
         return outputNode if isOutputNodeSelected else selectedNodes[-1]
-
-
-def getMaterialFromNode(node: bpy.types.Node):
-    """ Get the vray material this node is part of. """
-    ntree = node.id_data
-    return next((m for m in bpy.data.materials if hasattr(m, 'vray') and m.node_tree == ntree), None)
 
 
 def getVrayPropGroup(node: bpy.types.Node):

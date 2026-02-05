@@ -170,9 +170,13 @@ class VRAY_OT_report(VRayOperatorBase):
     reportType: bpy.props.StringProperty(default="ERROR")
 
     def execute(self, context):
-        context.window_manager.modal_handler_add(self)
-        return {'RUNNING_MODAL'}
-
+        if context.window:
+            context.window_manager.modal_handler_add(self)
+            return {'RUNNING_MODAL'}
+        
+        printMsg(self.message, level=_LOG_LEVEL_MAP[self.reportType])
+        return {"CANCELLED"}
+    
     def modal(self, context, event):
         try:
             self.report({self.reportType}, self.message)

@@ -2,15 +2,15 @@ from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import getInputSocketByAttr
+from vray_blender.exporting.tools import getInputSocketByAttr, getFarNodeLink
 from vray_blender.lib import path_utils, plugin_utils, sys_utils
 from vray_blender.lib.blender_utils import getShadowAttr, setShadowAttr
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.names import Names
 from vray_blender.lib.sys_utils import getAppSdkLibPath
-from vray_blender.nodes.tools import isInputSocketLinked, isVrayNodeTree
-from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, getMaterialFromNode
+from vray_blender.nodes.tools import isVrayNodeTree
+from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, findDataObjFromNode
 from vray_blender.plugins import getPluginModule
 from vray_blender.vray_tools.vray_proxy import PreviewAction
 
@@ -207,7 +207,7 @@ def _fillScannedPluginDesc(pluginDesc: PluginDesc, node: bpy.types.Node, propGro
         usedMaps |= 2
     if propGroup.enable_clear_coat:
         ccmultSocket = getInputSocketByAttr(node, "ccmul")
-        if ccmultSocket and isInputSocketLinked(ccmultSocket):
+        if ccmultSocket and ccmultSocket.hasActiveFarLink():
             usedMaps |= 4
 
         pluginDesc.setAttribute("ccglossy", _vrayGlossinessToScanned(propGroup.ccglossy))
@@ -225,7 +225,7 @@ def onParameterUpdate(brdfScanned, context, attrName):
     if not brdfScanned.file_info:
         return
     node = getNodeOfPropGroup(brdfScanned)
-    mat = getMaterialFromNode(node)
+    mat = findDataObjFromNode(bpy.data.materials, node)
     pluginDesc = PluginDesc("dummy", "BRDFScanned")
     _fillScannedPluginDesc(pluginDesc, node, brdfScanned)
     for name in dir(brdfScanned):
@@ -257,8 +257,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     _fillScannedPluginDesc(pluginDesc, node, propGroup)
 
     mappingSock = getInputSocketByAttr(node, "uvwgen")
-    if mappingSock and isInputSocketLinked(mappingSock):
-        uvwPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, mappingSock)
+    if mappingSock and (mappingLink := getFarNodeLink(mappingSock)):
+        uvwPlugin = commonNodesExport.exportSocketLink(nodeCtx, mappingLink)
         pluginDesc.setAttribute("uvwgen", uvwPlugin)
     else:
         uvwPlugin = exportDefaultUVWGenChannel(nodeCtx)

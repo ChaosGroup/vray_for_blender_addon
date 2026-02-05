@@ -21,6 +21,11 @@
             }
         ]
     },
+    "Node": {
+        "internal_links": {
+            "*": ["Texture", "Min Color", "Max Color"]
+        }
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": []

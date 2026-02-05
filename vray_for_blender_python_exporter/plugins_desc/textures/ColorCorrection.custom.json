@@ -191,7 +191,10 @@
             {
                 "name" : "adv_rgb_offset"
             }
-        ]
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
     },
     "Options": {
         "animatable": true,

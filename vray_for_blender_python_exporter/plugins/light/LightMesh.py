@@ -1,19 +1,22 @@
-from dataclasses import dataclass
 import bpy
 
 from vray_blender import debug
-from vray_blender.exporting.tools import getLinkedFromSocket
+from vray_blender.exporting.tools import getFarNodeLink
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
-from vray_blender.nodes.tools import isInputSocketLinked
 from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-def onUpdateAttribute(src, context, attrName):
+def nodeUpdate(node: bpy.types.Node):
+    if node.mute:
+        node.mute = False
+
+
+def onUpdateAttribute(src, context: bpy.types.Context, attrName: str):
     onUpdateColorTemperature(src, 'LightMesh', attrName)
 
 
@@ -28,13 +31,13 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     if node := pluginDesc.node:
         geometrySocket = node.inputs['Geometry']
-        if isInputSocketLinked(geometrySocket):
+        if geomLink := getFarNodeLink(geometrySocket):
             # Even if an empty selector or a wrong node is attached to the 'geometry' socket, we
             # want to suppress the usage of internal objects list because it will be confusing
             # to the users (as list is hidden in the UI).
             exportedObjectSelectorNode = True
     
-            linkedNode = getLinkedFromSocket(geometrySocket).node
+            linkedNode = geomLink.from_node
             
             if linkedNode.bl_idname not in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
                 debug.printError(f"A non-selector node attached to 'Geometry' socket of {node.name}.")
