@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Chaos Software EOOD
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef VRAY_FOR_BLENDER_BASE_TYPES_H
 #define VRAY_FOR_BLENDER_BASE_TYPES_H
 

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.lib import plugin_utils
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.nodes.sockets import addInput

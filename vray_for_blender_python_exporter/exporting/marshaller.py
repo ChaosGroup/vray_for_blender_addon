@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import struct
 from mathutils import Matrix, Vector
 from vray_blender.exporting import tools

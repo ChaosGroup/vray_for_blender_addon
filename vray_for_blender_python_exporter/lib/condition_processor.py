@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 
 ######################################################################################
 # This package procides code for compiling and evaliating the conditional expressions

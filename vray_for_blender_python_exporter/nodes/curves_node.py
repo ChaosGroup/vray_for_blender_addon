@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Common logic related to nodes using the Blender's Curves Node (Remap) widget."""
 import bpy
 import json

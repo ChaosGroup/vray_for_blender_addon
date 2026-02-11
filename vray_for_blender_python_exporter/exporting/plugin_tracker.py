@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations # For the forward type hints
 from typing import Dict, Set
 import bpy

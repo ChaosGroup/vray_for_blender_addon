@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Functionality related to the BRDF Toon Material node. Includes logic for
 node initialization, destruction, copy, update, export, and widget-specific logic. """
 import bpy

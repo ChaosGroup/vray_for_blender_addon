@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting.mtl_export import MtlExporter
 from vray_blender.exporting.node_export import exportLinkedSocket

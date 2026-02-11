@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Chaos Software EOOD
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "types.h"
 #include "conversion.hpp"
 #include "export/zmq_server.h"

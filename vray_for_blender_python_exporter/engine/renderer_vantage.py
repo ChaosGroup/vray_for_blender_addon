@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import blf, bpy, gpu, gpu_extras, json, os, requests, subprocess, sys, time
 
 import gpu_extras.presets

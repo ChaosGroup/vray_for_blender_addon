@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
 from vray_blender.resources.upgrade_scripts.upgrade_0001 import _copyPropGroup

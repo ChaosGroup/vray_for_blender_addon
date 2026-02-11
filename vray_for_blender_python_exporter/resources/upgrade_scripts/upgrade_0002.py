@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 
 # This dictionary contains information about all node types that will to be upgraded.
 # For a description of the format, see utils/upgrade_scene.py => upgradeScene()

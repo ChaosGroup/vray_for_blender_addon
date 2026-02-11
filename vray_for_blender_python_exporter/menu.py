@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # This file contains definitions for the V-Ray menu in the main Blender menu bar
 
 import bpy
