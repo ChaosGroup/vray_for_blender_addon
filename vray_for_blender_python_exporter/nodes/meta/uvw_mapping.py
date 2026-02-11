@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import bpy
 from vray_blender import plugins
 from vray_blender.exporting.tools import getActiveOutputFarNodeLinks

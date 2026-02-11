@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Chaos Software EOOD
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "thread_manager.h"
 #include "logger.hpp"
 #include "vassert.h"

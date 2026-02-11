@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.lib.blender_utils import geometryObjectIt, isCamera
 from vray_blender.lib import camera_utils
 import bpy

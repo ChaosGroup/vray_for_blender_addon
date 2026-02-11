@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Plugins which are not skipped for import/conversion purposes or plugins that were simply hidden from
 # the menus but should still remain active and just not show up in node creation menus.
 HIDDEN_PLUGINS = (

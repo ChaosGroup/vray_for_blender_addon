@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.exporting.plugin_tracker import TrackObj, TrackNode, getObjTrackId, getConnectedTrackIds, log as trackerLog
 from vray_blender.exporting.tools import *
 from vray_blender.exporting.node_export import *

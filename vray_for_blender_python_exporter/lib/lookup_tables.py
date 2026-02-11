@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # The following table was produced by calling VRay::Color.fromTemperature() for sRGB color space
 # and then normalizing by dividing each component by the value of the max component of the RGB tuple.
 KELVIN_TO_COLOR_LUT = {

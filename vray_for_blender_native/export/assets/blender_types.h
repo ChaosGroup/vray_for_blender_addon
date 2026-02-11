@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: Chaos Software EOOD
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #pragma once
 
 // Copied verbatim from blender/source/blender/imbuf/IMB_imbuf_types.h

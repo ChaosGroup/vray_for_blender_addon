@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set(APPSDK_XPAK_VERSION "72009.20260128" )
 
 set(QT_XPAK "AppSDKQT6")

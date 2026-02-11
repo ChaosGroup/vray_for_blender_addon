@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.exporting import light_export
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.lib.defs import ExporterContext, PluginDesc, AttrPlugin

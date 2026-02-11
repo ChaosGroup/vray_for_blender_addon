@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set(X_PAK "" CACHE PATH "Conan work directory")
 set(X_PAK_WORK "" CACHE PATH "Conan work directory override")
 set(BINTOOLS_PATH "" CACHE PATH "Path to bintools")

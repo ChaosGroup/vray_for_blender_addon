@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Render channel plugins in V-Ray may be reused to achieve different effects.
 # The specific effect is selected by setting the 'alias' property. Each plugin
 # has a default 'alias' value. The following list defines channels for non-default

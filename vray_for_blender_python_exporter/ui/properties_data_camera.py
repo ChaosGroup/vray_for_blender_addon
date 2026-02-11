@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import bpy
 
 from vray_blender.lib.camera_utils import isOrthographicCamera

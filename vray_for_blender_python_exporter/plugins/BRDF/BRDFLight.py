@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 
 from vray_blender.lib.names import Names
 from vray_blender.lib.color_utils import opacityToTransparency

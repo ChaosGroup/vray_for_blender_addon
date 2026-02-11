@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.engine import resetActiveIprRendering, resetViewportIprRendering
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib import plugin_utils

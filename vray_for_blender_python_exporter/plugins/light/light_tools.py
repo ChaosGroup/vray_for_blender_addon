@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Chaos Software EOOD
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from vray_blender.lib import color_utils
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext
 
