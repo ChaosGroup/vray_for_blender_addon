@@ -60,3 +60,19 @@ def exportTreeNode(nodeCtx: NodeContext):
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
+def nodeInsertLink(link: bpy.types.NodeLink):
+    from vray_blender.nodes.specials.texture import VRayNodeTexLayeredMax
+
+    node = link.to_node
+    if link.to_socket.bl_idname == 'VRaySocketExtend':
+        from_socket = link.from_socket
+        ntree = node.id_data
+
+        humanIndex = node.layers + 1
+        VRayNodeTexLayeredMax.addLayer(node, humanIndex)
+
+        newSock = node.inputs[f"Texture {humanIndex}"]
+        ntree.links.new(from_socket, newSock)
+        ntree.links.remove(link)
+
+

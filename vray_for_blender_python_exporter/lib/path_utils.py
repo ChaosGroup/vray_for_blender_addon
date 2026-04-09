@@ -72,7 +72,9 @@ def getPreviewDir():
 
 
 def getV4BTempDir():
-    return os.path.join(tempfile.gettempdir(), "vray_blender")
+    tempPath = os.path.join(bpy.app.tempdir, "vray_blender")
+    os.makedirs(tempPath, exist_ok=True)
+    return tempPath
 
 
 def getIconsDir():

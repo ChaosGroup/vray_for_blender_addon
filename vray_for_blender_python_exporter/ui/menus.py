@@ -246,15 +246,15 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
 
     def execute(self, context):
         if not context.scene.world:
-            debug.report("ERROR", "Cannot add a V-Ray Sky without an active world")
-            return {'CANCELLED'}
-
+            context.scene.world = bpy.data.worlds.new('World')
+        world = context.scene.world
+        
         _, lightObject = self._createSunAndTarget("VRaySunSky")
 
-        if not context.scene.world.vray.is_vray_class:
-            tree_defaults.addWorldNodeTree(context.scene.world)
+        if not world.vray.is_vray_class:
+            tree_defaults.addWorldNodeTree(world)
 
-        worldTree = context.scene.world.node_tree
+        worldTree = world.node_tree
         envNode = NodesUtils.getNodeByType(worldTree, 'VRayNodeEnvironment')
 
         skyTexNode = worldTree.nodes.new("VRayNodeTexSky")
@@ -279,7 +279,6 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
             for node in linkedNodes:
                 node.location.x = skyTexNode.location.x - node.bl_width_default - 50
                 node.select = False
-
 
         return {'FINISHED'}
 
@@ -420,11 +419,12 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
         matPath =  "" if vray_proxy.isAlembicFile(self.filepath) else PurePath(self.filepath).with_suffix(".vrmat").as_posix()
 
         useRelPath = (not blender_utils.isDefaultScene()) and self.relpath
-        _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=useRelPath, scaleUnit=self.unit_scale)
-        
-        if err:
-            self.report({'ERROR'}, err)
-            return {'CANCELLED'} 
+        with NodesUtils.DisableAutoConnect():
+            _, err = importProxyFromMeshFile(context, matPath, self.filepath, useRelPath=useRelPath, scaleUnit=self.unit_scale)
+
+            if err:
+                self.report({'ERROR'}, err)
+                return {'CANCELLED'} 
 
         return {'FINISHED'}
 

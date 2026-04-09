@@ -5,7 +5,6 @@
 # This file contains definitions for the V-Ray menu in the main Blender menu bar
 
 import bpy
-import sys
 
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink, VantageInitStatus
@@ -17,6 +16,7 @@ from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.nodes.importing import convertMaterial
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.operators import VRAY_OT_message_box_base
+from vray_blender.ui.community_edition import getLimitedFeatureDescription, drawCELimitedFeatureWarning
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -31,14 +31,20 @@ class VRAY_MT_help(bpy.types.Menu):
     def draw(self, context):
         self.layout.operator(VRAY_OT_show_about_dialog.bl_idname, icon_value=getUIIcon(VRAY_OT_show_about_dialog))
 
-        opDocSite = self.layout.operator('wm.url_open', text='Online Documentation', icon_value=getIcon("VRAY_LOGO"))
+        opDocSite = self.layout.operator('vray.url_open', text='Online Documentation', icon_value=getIcon("VRAY_LOGO"))
         opDocSite.url = 'https://documentation.chaos.com/space/VBLD'
+        opDocSite.description = 'Open the V-Ray for Blender online documentation'
 
-        opHelpSite = self.layout.operator('wm.url_open', text='Online Help Center', icon='URL')
+        opHelpSite = self.layout.operator('vray.url_open', text='Online Help Center', icon='URL')
         opHelpSite.url = 'https://support.chaos.com'
+        opHelpSite.description = 'Open the Chaos support center'
 
-        opHelpSite = self.layout.operator('wm.url_open', text='V-Ray Ideas Portal', icon='URL')
-        opHelpSite.url = 'http://chaos.com/ideas/vray-blender'
+        opIdeasPortal = self.layout.operator('vray.url_open', text='V-Ray Ideas Portal', icon='URL')
+        opIdeasPortal.url = 'http://chaos.com/ideas/vray-blender'
+        opIdeasPortal.description = 'Open the V-Ray for Blender ideas portal'
+
+        self.layout.separator()
+        self.layout.operator('vray.check_for_updates', text='Check for Updates', icon_value=getIcon('CHECK_FOR_UPDATES'))
 
 
 class VRAY_MT_camera(bpy.types.Menu):
@@ -108,7 +114,11 @@ class VRAY_MT_cosmos(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
-        self.layout.operator(VRAY_OT_open_cosmos_ai_generator.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_ai_generator))
+        
+        mtlGen = self.layout.row()
+        mtlGen.active = not vray.isCommunityEdition()
+        mtlGen.operator(VRAY_OT_open_cosmos_ai_generator.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_ai_generator))
+        
         self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
 
 
@@ -143,7 +153,11 @@ class VRAY_MT_main(bpy.types.Menu):
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
         layout.operator(VRAY_OT_cloud_submit.bl_idname, icon_value=getUIIcon(VRAY_OT_cloud_submit))
         layout.separator()
-        layout.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
+        
+        collaboration = layout.row()
+        collaboration.active = not vray.isCommunityEdition()
+        collaboration.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
+        
         layout.separator()
         layout.menu(VRAY_MT_cosmos.bl_idname)
         if False and vray.withDR2:
@@ -165,43 +179,68 @@ class VRAY_OT_open_collaboration(VRayOperatorBase):
     bl_idname       = "vray.open_collaboration"
     bl_label        = "Chaos Collaboration"
     bl_description  = "Open Chaos Collaboration"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
         from vray_blender import bl_info, build_number
 
-        hostInfo = vray.HostInfo()
-        hostInfo.vrayVersion    = ".".join(bl_info['version'])
-        hostInfo.buildVersion   = build_number.BUILD
-        # Note that this is 4.2(lowest supported version hard coded in bl_info)
-        hostInfo.blenderVersion = ".".join((str(i) for i in bl_info['blender']))
+        if not vray.isCommunityEdition():
+            hostInfo = vray.HostInfo()
+            hostInfo.vrayVersion    = ".".join(bl_info['version'])
+            hostInfo.buildVersion   = build_number.BUILD
+            # Note that this is the lowest supported version of Blender
+            hostInfo.blenderVersion = ".".join((str(i) for i in bl_info['blender']))
 
-        vray.openCollaboration(hostInfo)
-        return {'FINISHED'}
+            vray.openCollaboration(hostInfo)
+            return {'FINISHED'}
+        else:
+            return context.window_manager.invoke_popup(self, width=400)
+
+    def draw(self, context):
+        drawCELimitedFeatureWarning(self.layout)
+
+    @classmethod
+    def description(cls, context, properties):
+        return getLimitedFeatureDescription(cls.bl_description)
 
 from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy, CosmosBrowserPage
 
 class VRAY_OT_open_cosmos_browser(VRayOperatorBase):
-    bl_idname =      "vray.open_cosmos_browser"
-    bl_label =       "Cosmos Browser"
-    bl_description = "Open Cosmos Browser"
+    bl_idname       = "vray.open_cosmos_browser"
+    bl_label        = "Cosmos Browser"
+    bl_description  = "Open Cosmos Browser"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
         vray.openCosmos(CosmosBrowserPage.HomePage.value)
         return {'FINISHED'}
 
 class VRAY_OT_open_cosmos_ai_generator(VRayOperatorBase):
-    bl_idname =      "vray.open_cosmos_ai_generator"
-    bl_label =       "AI Material Generator"
-    bl_description = "Open the AI material generator in the Cosmos Browser"
+    bl_idname       = "vray.open_cosmos_ai_generator"
+    bl_description  = "Open the AI material generator in the Cosmos Browser"
+    bl_label        = "AI Material Generator"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
-        vray.openCosmos(CosmosBrowserPage.AIGenerator.value)
-        return {'FINISHED'}
+        if not vray.isCommunityEdition():
+            vray.openCosmos(CosmosBrowserPage.AIGenerator.value)
+            return {'FINISHED'}
+        else:
+            return context.window_manager.invoke_popup(self, width=400)
 
+    def draw(self, context):
+        drawCELimitedFeatureWarning(self.layout)
+
+    @classmethod
+    def description(cls, context, properties):
+        return getLimitedFeatureDescription(cls.bl_description)
+
+  
 class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
     bl_idname       = "vray.relink_cosmos_assets"
     bl_label        = "Download Cosmos Assets"
     bl_description  = "Download and Relink Cosmos Assets"
+    bl_options      = {'INTERNAL'}
 
     @classmethod
     def poll(cls, context):
@@ -219,7 +258,7 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
     bl_idname      = "vray.convert_materials"
     bl_label       = "Convert Materials"
     bl_description = "Convert Cycles Materials to V-Ray"
-    bl_options     = { "UNDO" }
+    bl_options     = { "UNDO", "INTERNAL" }
 
     @classmethod
     def poll(cls, context):
@@ -248,10 +287,12 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
         self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
         self.layout.label(text="they will be deleted before the conversion.")
 
+
 class VRAY_OT_vantage_live_link(VRayOperatorBase):
     bl_idname       = "vray.vantage_live_link"
     bl_label        = "Vantage Live Link"
     bl_description  = "Vantage Live Link"
+    bl_options      = {'INTERNAL'}
 
     def invoke(self, context, event):
         running = VRayRenderEngine.iprRenderer and (type(VRayRenderEngine.iprRenderer) is VRayRendererVantageLiveLink)
@@ -275,9 +316,10 @@ class VRAY_OT_vantage_live_link(VRayOperatorBase):
 
 
 class VRAY_OT_open_vfb(VRayOperatorBase):
-    bl_idname =      "vray.open_vfb"
-    bl_label =       "V-Ray VFB"
-    bl_description = "Open VFB"
+    bl_idname       = "vray.open_vfb"
+    bl_label        = "V-Ray VFB"
+    bl_description  = "Open VFB"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
         vfbAlwaysOnTop = context.scene.vray.Exporter.display_vfb_on_top
@@ -297,17 +339,29 @@ class VRAY_OT_show_about_dialog(VRayOperatorBase):
     bl_idname       = "vray.show_about_dialog"
     bl_label        = "About V-Ray for Blender"
     bl_description  = "About V-Ray for Blender"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
         from vray_blender.version import getBuildVersionString
         from vray_blender import bl_info
+        from vray_blender.utils.update_checker import UpdateStatus
         import json
 
-        versionInfo = f"{bl_info['name']}<br>{getBuildVersionString()}"
+        productName = bl_info['name']
+        if vray.isCommunityEdition():
+            productName = f"{productName} - Community Edition"
+
+        versionInfo = f"{productName}<br>{getBuildVersionString()}"
+        updateInfo  = ""
+
+        if UpdateStatus.current == UpdateStatus.Available:
+            updateInfo = f'Update available: {UpdateStatus.versionString}<br/>' \
+                         f'<a href="{UpdateStatus.downloadURL}">Download Page</a>'
 
         dlg = {
             'type': 'AboutDialog',
-            'data': versionInfo
+            'versionInfo': versionInfo,
+            'updateInfo': updateInfo
         }
         vray.showUserDialog(json.dumps(dlg))
 
@@ -318,10 +372,9 @@ class VRAY_OT_show_account_status(VRayOperatorBase):
     bl_idname       = "vray.show_account_status"
     bl_label        = "Chaos Account"
     bl_description  = "Show Chaos Account management dialog"
+    bl_options      = {'INTERNAL'}
 
     def execute(self, context):
-        from vray_blender.version import getBuildVersionString
-        from vray_blender import bl_info
         import json
 
         dlg = {
@@ -332,6 +385,7 @@ class VRAY_OT_show_account_status(VRayOperatorBase):
 
         return {'FINISHED'}
 
+  
 
 def _drawMainMenu(self, context):
     layout = self.layout
@@ -342,6 +396,7 @@ def _drawExportAsVrsceneMenuItem(self, context):
     layout = self.layout.column()
     layout.operator_context = 'INVOKE_DEFAULT'
     layout.operator('vray.export_vrscene', text='V-Ray (.vrscene)')
+    layout.active = not vray.isCommunityEdition()
 
 
 def _getRegClasses():

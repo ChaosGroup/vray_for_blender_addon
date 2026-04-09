@@ -4,8 +4,6 @@
 
 #include "hair_exporter.h"
 
-#include <Imath/ImathMatrix.h>
-
 #include "api/interop/types.h"
 #include "export/zmq_exporter.h"
 #include "export/plugin_desc.hpp"
@@ -17,8 +15,6 @@ using namespace VRayBaseTypes;
 
 namespace VRayForBlender::Assets
 {
-
-using BlTransform = Imath_3_1::Matrix44<float>;
 
 void mul_m4_v3(const float M[4][4], float* r)
 {
@@ -234,11 +230,11 @@ AttrValue exportGeomHair(const HairData& hair, ZmqExporter& exporter) {
 	}
 
 	std::vector<int> pointCountsPerStrand;
-	const int strandCount = int(pointCountsPerStrand.size());
 	std::vector<float> pointRadii;
 
 	getStrandAttributes(hair, /*r*/pointCountsPerStrand, /*r*/pointRadii);
 
+	const int strandCount = int(pointCountsPerStrand.size());
 	AttrListVector  vertices = getStrandPoints(hair, pointCountsPerStrand);
 	AttrListVector  strandUVs = getStrandUVs(hair, strandCount);
 	AttrListVector  strandColors = getStrandColors(hair, pointCountsPerStrand);

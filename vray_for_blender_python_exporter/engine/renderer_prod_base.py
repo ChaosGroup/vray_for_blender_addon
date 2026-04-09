@@ -15,7 +15,7 @@ from vray_blender.lib import path_utils
 from vray_blender.lib.blender_utils import TestBreak
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.common_settings import CommonSettings
-from vray_blender.lib.defs import ExporterContext, ExporterContext, RendererMode, PersistedState
+from vray_blender.lib.defs import ExporterContext, UIRegionContext, RendererMode, PersistedState
 from vray_blender.lib.plugin_utils import updateValue
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -52,6 +52,9 @@ class VRayRendererProdBase:
         # State to carry on to the next render cycle
         self.persistedState = PersistedState()
 
+        # Active region context at the moment of render operator invocation. 
+        self.uiRegionContext: UIRegionContext = None
+
 
     def _reportInfo(self, engine: bpy.types.RenderEngine, msg: str):
         engine.report({'INFO'}, f"V-Ray: {msg}")
@@ -61,6 +64,26 @@ class VRayRendererProdBase:
     def _reportError(self, engine: bpy.types.RenderEngine, msg: str):
         engine.report({'ERROR'}, f"V-Ray: {msg}")
         debug.printError(msg)
+
+
+    @staticmethod
+    def getActiveUIRegionContext():
+        activeWindow = bpy.context.window_manager.windows[0]
+        if not (activeScreen := activeWindow.screen):
+            return None
+        
+        if (space3D := bpy.context.space_data) and (space3D.type == 'VIEW_3D'):
+            return UIRegionContext(bpy.context.space_data, activeWindow)
+        
+        view3DSpaces = [space for area in activeScreen.areas if area and area.type == 'VIEW_3D'
+                            for space in area.spaces if space.type == 'VIEW_3D' ]
+            
+        if len(view3DSpaces) != 1:
+            # 3D View space not found or cannot tell which one is active.
+            # Returning None here will force the caller to use global scene data instead.
+            return None
+        
+        return UIRegionContext(view3DSpaces[0], activeWindow)
 
 
     def _renderStart(self, exporterCtx: ExporterContext):
@@ -141,12 +164,10 @@ class VRayRendererProdBase:
                 self._exportBakeView(exporterCtx)
 
             self._exportWorld(exporterCtx)
+            self._exportSettings(exporterCtx)
+            
             if exporterCtx.fullExport:
-                self._exportSettings(exporterCtx)
-
                 self._linkRenderChannels(exporterCtx)
-            else:
-                settings_export.SettingsExporter(exporterCtx).exportPlugin("SettingsLightLinker")
 
             # Call descendant's interface
             self._exportSceneAdjustments(exporterCtx)
@@ -202,6 +223,7 @@ class VRayRendererProdBase:
         context.fullExport      = True
         context.ts              = FakeTimeStats()
         context.persistedState  = self.persistedState
+        context.uiRegionContext = self.uiRegionContext
 
         if self.isPreview:
             context.rendererMode = RendererMode.Preview
@@ -259,7 +281,7 @@ class VRayRendererProdBase:
         settings_export.SettingsExporter(exporterCtx).export()
 
 
-    def _exportCameras(self, exporterCtx: ExporterContext, prevViewParams = dict[str, ViewParams]):
+    def _exportCameras(self, exporterCtx: ExporterContext, prevViewParams: dict[str, ViewParams]):
         return view_export.ViewExporter(exporterCtx).exportProdCameras(prevViewParams)
 
 

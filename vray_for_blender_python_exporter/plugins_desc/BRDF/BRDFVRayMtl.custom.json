@@ -3,12 +3,20 @@
     "Name": "V-Ray Mtl",
     "Parameters": [
         {
-            "attr": "option_shading_model"
+            "attr": "option_shading_model",
+            "update": "onUpdateShadingModel"
         },
         {
             "attr": "opacity",
             "options": {
                 "visible": false
+            }
+        },
+        {
+            "attr": "option_use_roughness",
+            "update": "onUpdateUseRoughness",
+            "options" : {
+                "shadowed": true
             }
         },
         {
@@ -181,10 +189,11 @@
         },
         {
             "attr": "coat_bump_amount",
+            "default": 0.01,
             "ui": {
-                "soft_min": -5.0,
-                "soft_max": 5.0,
-                "spin_step": 0.05
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
             }
         },
         {
@@ -195,10 +204,11 @@
         },
         {
             "attr": "bump_amount",
+            "default": 0.01,
             "ui": {
-                "soft_min": -5.0,
-                "soft_max": 5.0,
-                "spin_step": 0.05
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
             }
         },
         {
@@ -352,7 +362,7 @@
                 "attrs": [
                     {
                         "name": "brdf_type",
-                        "active": {"cond": "::option_shading_model=0"}
+                        "visible": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "name": "reflect",
@@ -362,21 +372,21 @@
                         "name": "reflect_glossiness",
                         "label": {
                             "cond": {
-                                "Glossiness": "::option_use_roughness=0,::option_shading_model=0",
-                                "Roughness": "::option_use_roughness!=0;::option_shading_model=1"
+                                "Glossiness": "::option_use_roughness=0",
+                                "Roughness": "::option_use_roughness!=0"
                             }
                         }
                     },
                     {
                         "name": "gtr_gamma",
-                        "active": {"cond": "::option_shading_model=0"}
+                        "visible": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "name": "metalness"
                     },
                     {
                         "name": "option_use_roughness",
-                        "active": {"cond": "::option_shading_model=0"}
+                        "visible": {"cond": "::option_shading_model=0"}
                     },
                     {
                         "layout": "ROLLOUT",
@@ -504,8 +514,8 @@
                         "name": "coat_glossiness",
                         "label": {
                             "cond": {
-                                "Coat Glossiness": "::option_use_roughness=0,::option_shading_model=0",
-                                "Coat Roughness":  "::option_use_roughness!=0;::option_shading_model=1"
+                                "Coat Glossiness": "::option_use_roughness=0",
+                                "Coat Roughness":  "::option_use_roughness!=0"
                             }
                         }
                     },
@@ -542,8 +552,8 @@
                         "name": "sheen_glossiness",
                         "label": {
                             "cond": {
-                                "Sheen Glossiness": "::option_use_roughness=0,::option_shading_model=0",
-                                "Sheen Roughness":  "::option_use_roughness!=0;::option_shading_model=1"
+                                "Sheen Glossiness": "::option_use_roughness=0",
+                                "Sheen Roughness":  "::option_use_roughness!=0"
                             }
                         }
                     }
@@ -749,8 +759,8 @@
             {   "name": "reflect_glossiness",
                 "label": {
                     "cond": {
-                        "Roughness":              "::option_shading_model=1;::option_use_roughness=1",
-                        "Reflection Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                        "Roughness":              "::option_use_roughness!=0",
+                        "Reflection Glossiness":  "::option_use_roughness=0"
                     }
                 }
             },
@@ -774,8 +784,8 @@
             {   "name": "coat_glossiness",
                 "label": {
                     "cond": {
-                        "Coat Roughness":   "::option_shading_model=1;::option_use_roughness=1",
-                        "Coat Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                        "Coat Roughness":   "::option_use_roughness!=0",
+                        "Coat Glossiness":  "::option_use_roughness=0"
                     }
                 }
             },
@@ -795,8 +805,8 @@
             {   "name": "sheen_glossiness",
                 "label": {
                     "cond": {
-                        "Sheen Roughness":   "::option_shading_model=1;::option_use_roughness=1",
-                        "Sheen Glossiness":  "::option_shading_model!=1;::option_use_roughness!=1"
+                        "Sheen Roughness":   "::option_use_roughness!=0",
+                        "Sheen Glossiness":  "::option_use_roughness=0"
                     }
                 }
             },

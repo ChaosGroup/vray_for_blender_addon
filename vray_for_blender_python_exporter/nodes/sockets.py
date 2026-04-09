@@ -10,17 +10,18 @@ import sys
 
 from vray_blender import debug
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import getFarNodeLinkImpl, removeSocketLinks
+from vray_blender.exporting.tools import getFarNodeLinkImpl, removeSocketLinks, getInputSocketByAttr
 from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getInputSocketDesc, getPluginModule
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
 from vray_blender.nodes.tools import getSocketPanelName, getSocketPanel
-from vray_blender.nodes.utils import selectedObjectTagUpdate
+from vray_blender.nodes.utils import getAttrDisplayName, selectedObjectTagUpdate, getVrayPropGroup
 
 
 DYNAMIC_SOCKET_OVERRIDES = {}
 DYNAMIC_SOCKET_CLASSES = set()
 DYNAMIC_SOCKET_CLASS_NAMES = set()
+
 
 STRUCTURAL_SOCKET_CLASSES = {
     # Sockets used for organizing node UI, e.g. rollouts, separators etc
@@ -244,6 +245,12 @@ def addInput(node, socketType, socketName, attrName='', pluginType='', visible=T
     return createdSocket
 
 
+def moveExtendSocketToBottom(node: bpy.types.Node):
+    """ Move the extend socket to the end of the node's input list """
+    if sockExtend := next((s for s in node.inputs if s.bl_idname == 'VRaySocketExtend'), None):
+        node.inputs.move(node.inputs.find(sockExtend.name), len(node.inputs) - 1)
+
+
 def _configureInPanel(sock: bpy.types.NodeSocket):
     """ Set socket's initial state if it is placed on a panel or if it is a 'panel' socket """
     assert not sock.is_output, "Only input sockets may be placed onz panels"
@@ -371,6 +378,13 @@ class VRaySocket(bpy.types.NodeSocket):
         default = 0
     )
 
+    ui_enabled: bpy.props.BoolProperty(
+        name = "UI Enabled",
+        description = "Enable/disable socket's UI",
+        options = {'HIDDEN'},
+        default = True 
+    )
+
     def hasActiveFarLink(self):
         return self.getFarLink() is not None
 
@@ -412,10 +426,14 @@ class VRaySocket(bpy.types.NodeSocket):
             for the socket. Children may draw in their draw_impl method.
         """
         layout = self.getNestedLayout(layout)
+        row = layout.row()
+        row.enabled = self.ui_enabled
+        row.alignment = layout.alignment
+        
         if fnDraw := getattr(self, 'draw_impl', None):
-            fnDraw(context, layout, node, self._sockLabel())
+            fnDraw(context, row, node, self._sockLabel())
         else:
-            layout.label(text=self._sockLabel())
+            row.label(text=self._sockLabel())
 
 
     def _sockLabel(self):
@@ -451,6 +469,12 @@ class VRayValueSocket(VRaySocket):
         # This might happen if the attributes are exported out-of-order, e.g. a meta
         # property which exports one or more real attributes.
         pluginDesc.setAttribute(attrDesc['attr'], self.value, overwriteExisting=False)
+
+    def draw_property(self, context, layout, text, expand=False, slider=True):
+        """ Draw as property in a property page, not as a socket.
+            This method is used to show socket values on property pages.
+        """
+        layout.prop(self, 'value', text=text, expand=expand, slider=slider)
 
     def copy(self, dest):
         dest.value = self.value
@@ -522,12 +546,6 @@ class VRaySocketMult(VRayValueSocket):
             return None
 
         return self.multiplier / 100.0
-
-    def draw_property(self, context, layout, text, expand=False, slider=True):
-        """ Draw as property in a property page, not as a socket.
-            This method is used to show socket values on property pages.
-        """
-        layout.prop(self, 'value', text=text, expand=expand, slider=slider)
 
 
     def draw_impl(self, context, layout, node, text):
@@ -815,9 +833,6 @@ class VRaySocketEnum(VRayValueSocket):
             )
         return [('value', prop)]
 
-    def draw_property(self, context, layout, text, expand=False, slider=True):
-        layout.prop(self, 'value', text=text, expand=expand, slider=slider)
-
     @classmethod
     def draw_color_simple(cls):
         return HIDDEN_SOCKET_COLOR
@@ -1031,14 +1046,6 @@ class VRaySocketPluginUse(VRaySocketUse):
     bl_idname = 'VRaySocketPluginUse'
     bl_label  = "BRDF socket with a 'use' flag"
 
-    def setItem(self, value, attrName):
-        propGroup = getattr(self.node, self.getPluginName())
-        setattr(propGroup, attrName, value)
-
-    def getItem(self, attrName):
-        propGroup = getattr(self.node, self.getPluginName())
-        return getattr(propGroup, attrName)
-
     def exportLinked(self, pluginDesc, attrDesc, linkValue):
         pluginDesc.setAttribute(attrDesc['bound_props']['use_prop'], self.use)
         pluginDesc.setAttribute(attrDesc['bound_props']['target_prop'], linkValue)
@@ -1097,6 +1104,94 @@ class VRaySocketColorMult(VRaySocketMult):
     def draw_color_simple(cls):
         return RGBA_SOCKET_COLOR
 
+
+class VRaySocketColorUse(VRaySocketMult):
+    bl_idname = 'VRaySocketColorUse'
+    bl_label  = 'Color socket with enabler'
+
+    # The 'value' property has to be defined for some common socket processing
+    # to be successful. Proxy the value to the 'target' bound property.
+    value: bpy.props.FloatVectorProperty(
+        name = "Color",
+        description = "Color",
+        subtype = 'COLOR',
+        min = 0.0,
+        max = 1.0,
+        soft_min = 0.0,
+        soft_max = 1.0,
+        default = mathutils.Color((1.0, 1.0, 1.0)),
+        get = lambda s: s.getItem(),
+        set = lambda s, v: s.setItem(v),
+    )
+
+    def getItem(self):
+        targetAttrName, _ = self._getBoundProperty()
+        colorSocket = getInputSocketByAttr(self.node, targetAttrName)
+        return colorSocket.value
+        
+    def setItem(self, value):
+        targetAttrName, _ = self._getBoundProperty()
+        colorSocket = getInputSocketByAttr(self.node, targetAttrName)
+        colorSocket.value = value
+    
+    def draw_impl(self, context, layout, node, text):
+        colColor = layout.split(factor=0.3)
+        
+        targetAttrName, useAttrName = self._getBoundProperty()
+        
+        # Get the label to show from the tagret attribute
+        propGroup     = getVrayPropGroup(self.node)
+        pluginModule  = getPluginModule(self.getPluginName())
+        targetAttr    = getPluginAttr(pluginModule, targetAttrName)
+        label         = getAttrDisplayName(targetAttr)
+
+        # Show the UI dimmed but leave it enabled so that the user could
+        # still manipulate it.
+        colColor.active = getattr(propGroup, useAttrName)
+
+        colColor.prop(propGroup, targetAttrName, text="")
+        colLabel = colColor.split(factor=0.9)
+        
+        if self.hasActiveFarLink():
+            colLabel.prop(self, 'multiplier', text=label)
+        else:
+            colLabel.label(text=label)
+
+        colUse = colLabel.column()
+        colUse.prop(propGroup, useAttrName, text="")
+
+
+    def exportLinked(self, pluginDesc, attrDesc, linkValue):
+        targetAttrName, useAttrName = self._getBoundProperty()
+        propGroup = getVrayPropGroup(self.node)
+        use = getattr(propGroup, useAttrName)
+        value = linkValue if use else AttrPlugin()
+
+        pluginDesc.setAttribute(targetAttrName, value)
+
+
+    def exportUnlinked(self, nodeCtx: NodeContext, pluginDesc, attrDesc):
+        targetAttrName, useAttrName = self._getBoundProperty()
+        propGroup = getVrayPropGroup(self.node)
+        use = getattr(propGroup, useAttrName)
+        value = getattr(propGroup, targetAttrName) if use else AttrPlugin()
+
+        pluginDesc.setAttribute(targetAttrName, value)
+
+    
+    def _getBoundProperty(self):
+        pluginModule   = getPluginModule(self.getPluginName())
+        metaAttr       = getPluginAttr(pluginModule, self.vray_attr)
+        
+        targetAttrName = metaAttr['bound_props']['target_prop']
+        useAttrName    = metaAttr['bound_props']['use_prop']
+
+        return targetAttrName, useAttrName
+
+    @classmethod
+    def draw_color_simple(cls):
+        return RGBA_SOCKET_COLOR
+    
 
 ##     ## ########  ######  ########  #######  ########
 ##     ## ##       ##    ##    ##    ##     ## ##     ##
@@ -1482,6 +1577,41 @@ class VRaySocketTransform(VRayValueSocket):
 ##     ## ########  ######   ####  ######     ##    ##     ## ##     ##    ##    ####  #######  ##    ##
 
 
+class VRaySocketExtend(VRaySocket):
+    """
+    Custom socket used to add +/- buttons at the bottom for VRay nodes that
+    accept an arbitrary amount of inputs.
+
+    Attributes:
+        add_operator (str): Operator to call when clicking the add button.
+        del_operator (str): Operator to call when clicking the remove button.
+    """
+    bl_idname = 'VRaySocketExtend'
+    bl_label  = 'Extend Socket'
+
+    add_operator: bpy.props.StringProperty(
+        name = "Add Operator",
+        description = "Operator to call when clicking the add button",
+        default = ""
+    )
+    del_operator: bpy.props.StringProperty(
+        name = "Remove Operator",
+        description = "Operator to call when clicking the remove button",
+        default = ""
+    )
+
+    def draw_impl(self, context, layout, node, text):
+        layout.emboss = 'NONE'
+        row = layout.row()
+        row.operator(self.add_operator, icon='ADD', text="")
+        row.operator(self.del_operator, icon='REMOVE', text="")
+        layout.emboss = 'NORMAL'
+
+    @classmethod
+    def draw_color_simple(cls):
+        return (0.0, 0.0, 0.0, 0.0)
+
+
 def getRegClasses():
     return (
         VRaySocketGeom,
@@ -1517,8 +1647,10 @@ def getRegClasses():
         VRaySocketPlugin,
         VRaySocketObjectProps,
         VRaySocketPluginUse,
+        VRaySocketColorUse,
         VRaySocketWeight,
         VRaySocketRollout,
+        VRaySocketExtend,
     )
 
 # A socket's properties are registered as part of the RNA structure of the socket

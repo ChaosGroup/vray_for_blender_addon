@@ -15,7 +15,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     if not (selectedMtls := propGroup.selected.getSelectedItems(ctx.ctx, 'materials')):
         return AttrPlugin()
     
-    # RenderChannelMaterialSelect is a varaiant of RenderChannelColor
+    # RenderChannelMaterialSelect is a variant of RenderChannelColor
     pluginDesc.type = 'RenderChannelColor'
     
     if not propGroup.name:
@@ -23,7 +23,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
     attrPlugin = export_utils.exportPluginCommon(ctx, pluginDesc)
     
-    # Set link to the the render channel in all selected materials
+    # Set link to the render channel in all selected materials
     for mtl in selectedMtls:
         if mtlPlugin := ctx.exportedMtls.get(getObjTrackId(mtl)):
             plugin_utils.updateValue(ctx.renderer, mtlPlugin.name, 'channels', [attrPlugin])

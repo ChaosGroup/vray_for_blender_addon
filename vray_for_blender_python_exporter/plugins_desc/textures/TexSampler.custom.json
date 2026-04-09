@@ -72,6 +72,15 @@
         {
             "attr": "uvCoord",
             "desc" : "The uvw coordinates of the point being shaded (channel 0)"
+        },
+        {
+            "attr": "internal_sampler",
+            "type": "STRING",
+            "default": "",
+            "update": "onUpdateInternalSampler",
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {
@@ -86,7 +95,6 @@
                     {
                         "name": "refraction_ior"
                     }
-                    
                 ],
                 "layout": "COLUMN"
             }
@@ -109,224 +117,224 @@
             }
         ],
         "output_sockets" : [
-            { 
+            {
                 "name": "point",
                 "label": "Point",
                 "desc": "Shading point in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "pointObject",
                 "label": "Point Object",
                 "desc" : "Shading point in object space",
                 "visible": false
             },
-            { 
+            {
                 "name": "pointCamera",
                 "label": "Point Camera",
                 "desc" : "Shading point in camera space",
                 "visible": false
             },
-            { 
+            {
                 "name": "pointRelative",
                 "label": "Point Relative",
                 "desc" : "Shading point in relative space",
                 "visible": false
             },
-            { 
+            {
                 "name": "pointReference",
                 "label": "Point Reference",
                 "desc" : "Shading point in reference space",
                 "visible": false
             },
 
-            { 
+            {
                 "name": "gnormal",
                 "label": "Geometric Normal",
                 "desc" : "Geometric normal in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "flipped_normal",
                 "label": "Flipped Normal",
                 "desc": "0 - facing camera, 1 - away from camera",
                 "visible": false
             },
-            { 
+            {
                 "name": "normal",
                 "label": "Normal",
                 "desc" : "Smooth normal in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "normalObject",
                 "label": "Normal Object",
                 "desc" : "Smooth normal in object space",
                 "visible": false
             },
-            { 
+            {
                 "name": "normalCamera",
                 "label": "Normal Camera",
                 "desc" : "Smooth normal in camera space",
                 "visible": false
             },
-            { 
+            {
                 "name": "normalRelative",
                 "label": "Normal Relative",
                 "desc" : "Smooth normal in relative space",
                 "visible": false
             },
-            { 
+            {
                 "name": "normalReference",
                 "label": "Normal Reference",
                 "desc" : "Smooth normal in reference space",
                 "visible": false
             },
 
-            { 
+            {
                 "name": "bumpNormal",
                 "label": "Bump Normal",
                 "desc" : "Bump normal in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "bumpNormalObject",
                 "label": "Bump Normal Object",
                 "desc" : "Bump map normal in object space",
                 "visible": false
             },
-            { 
+            {
                 "name": "bumpNormalCamera",
                 "label": "Bump Normal Camera",
                 "desc" : "Bump map normal in camera space",
                 "visible": false
             },
-            { 
+            {
                 "name": "bumpNormalRelative",
                 "label": "Bump Normal Relative",
                 "desc" : "Bump map normal in relative space",
                 "visible": false
             },
 
-            { 
+            {
                 "name": "reflection",
                 "label": "Reflection",
                 "desc" : "Smooth reflection vector in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "reflectionObject",
                 "label": "Reflection Object",
                 "desc" : "Smooth reflection vector in object space",
                 "visible": false
             },
-            { 
+            {
                 "name": "reflectionCamera",
                 "label": "Reflection Camera",
                 "desc" : "Smooth reflection vector in camera space",
                 "visible": false
             },
-            { 
+            {
                 "name": "reflectionRelative",
                 "label": "Reflection Relative",
                 "desc" : "Smooth reflection vector in relative space",
                 "visible": false
             },
 
-            { 
+            {
                 "name": "refraction",
                 "label": "Refraction",
                 "desc" : "Smooth refraction vector in world space",
                 "visible": false
             },
-            { 
+            {
                 "name": "refractionObject",
                 "label": "Refraction Object",
                 "desc" : "Smooth refraction vector in object space",
                 "visible": false
             },
-            { 
+            {
                 "name": "refractionCamera",
                 "label": "Refraction Camera",
                 "desc" : "Smooth refraction vector in camera space",
                 "visible": false
             },
-            { 
+            {
                 "name": "refractionRelative",
                 "label": "Refraction Relative",
                 "desc" : "Smooth refraction vector in relative space",
                 "visible": false
             },
-            
-            { 
+
+            {
                 "name": "view_dir",
                 "label": "View direction",
                 "desc" : "Viewing direction.",
                 "visible": false
             },
-            { 
+            {
                 "name": "frame_time",
                 "label": "Frame Time",
                 "desc" : "Current frame (image) time",
                 "visible": false
             },
-            { 
+            {
                 "name": "ray_time",
                 "label": "Ray Time",
                 "desc" : "Ray time within the motion blur interval",
                 "visible": false
             },
-            { 
+            {
                 "name": "frame_index_offset",
                 "label": "Frame Index Offset",
                 "desc" : "Frame offset from current frame for long motion blur intervals",
                 "visible": false
             },
-            { 
+            {
                 "name": "facing_ratio",
                 "label": "Facing Ratio",
                 "desc" : "Cosine between normal and viewing direction",
                 "visible": false
             },
-            { 
+            {
                 "name": "ray_depth",
                 "label": "Ray Depth",
                 "desc" : "The ray depth",
                 "visible": false
             },
-            { 
+            {
                 "name": "path_length",
                 "label": "Path Length",
                 "desc" : "The path length",
                 "visible": false
             },
-            { 
+            {
                 "name": "transparency_level",
                 "label": "Transparency Level",
                 "desc" : "Transparency intersections along the ray path.",
                 "visible": false
             },
-            
-            { 
+
+            {
                 "name": "pixelCenter",
                 "label": "Pixel Center",
                 "desc" : "Current sample image coordinates.",
                 "visible": false
             },
-            { 
+            {
                 "name": "cameraNearClipPlane",
                 "label": "Camera Near Clip Plane",
                 "desc" : "Camera near clipping plane.",
                 "visible": false
             },
-            { 
+            {
                 "name": "cameraFarClipPlane",
                 "label": "Camera Far Clip Plane",
                 "desc" : "Camera Far clipping plane.",
                 "visible": false
             },
 
-            { 
+            {
                 "name": "uvCoord",
                 "label": "UV Coord",
                 "desc" : "UVW coordinates of shaded point (channel 0)",
@@ -344,7 +352,7 @@
                 "desc": "Tiled UVW coordinates of shaded point (channel 0)",
                 "visible": false
             },
-            
+
             {
                 "name": "tangentUCamera",
                 "label": "Tangent U Camera",
@@ -382,25 +390,25 @@
                 "visible": false
             },
 
-            { 
+            {
                 "name": "random_by_renderID",
                 "label": "Random By Render ID",
                 "desc" : "Random value based on RenderID of the object",
                 "visible": false
             },
-            { 
+            {
                 "name": "random_by_polyShell",
                 "label": "Random By Poly Shell",
                 "desc" : "Random by polygon shell of current face",
                 "visible": false
             },
-            { 
+            {
                 "name": "random_by_scene_name",
                 "label": "Random By Scene Name",
                 "desc" : "Random based on scene name of the object",
                 "visible": false
             },
-            { 
+            {
                 "name": "random_by_instanceID",
                 "label": "Random By Instance ID",
                 "desc" : "Random based on instance identifiers",
@@ -447,13 +455,13 @@
                 "name" : "face_index",
                 "label" : "Face Index",
                 "desc" : "Index of triangle face hit by ray (-1 if not applicable)",
-                "visible" : false             
+                "visible" : false
             },
             {
                 "name" : "barycentric_coords",
                 "label" : "Barycentric Coordinates",
                 "desc" : "Barycentric coordinates of intersection point (0,0,0 if n/a)",
-                "visible" : false             
+                "visible" : false
             }
         ]
     },

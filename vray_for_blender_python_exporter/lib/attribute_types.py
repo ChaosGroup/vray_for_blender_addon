@@ -42,6 +42,7 @@ NodeInputTypes = {
     "ACOLOR",
     "COLOR",
     'COLOR_TEXTURE',
+    'COLOR_USE',
     'INT_TEXTURE',
     'FLOAT_TEXTURE',
     'VECTOR_TEXTURE',
@@ -85,7 +86,8 @@ AllNodeInputTypes = NodeInputTypes.union(HiddenNodeInputTypes).union(NodeStructu
 # and have custom draw and/or export logic.
 MetaPropertyTypes = {
     'COLOR_TEXTURE',
-    'BRDF_USE'
+    'BRDF_USE',
+    'COLOR_USE'
 }
 
 
@@ -121,6 +123,7 @@ _TypeToSocket = {
     'PLUGIN'                      : 'VRaySocketObject',
     'OBJECT'                      : 'VRaySocketObject',
     'BRDF_USE'                    : 'VRaySocketPluginUse',
+    'COLOR_USE'                   : 'VRaySocketColorUse',
     'PLUGIN_LIST'                 : 'VRaySocketObjectList',
     'INCLUDE_EXCLUDE_LIST'        : 'VRaySocketIncludeExcludeList',
     'UVWGEN'                      : 'VRaySocketCoords',
@@ -220,6 +223,7 @@ TypeToProp = {
     'PLUGIN_LIST'           : bpy.props.PointerProperty,
     'INCLUDE_EXCLULDE_LIST' : bpy.props.PointerProperty,
     'BRDF_USE'              : bpy.props.BoolProperty,
+    'COLOR_USE'             : bpy.props.BoolProperty,
 
     'UVWGEN'                : bpy.props.StringProperty,
 

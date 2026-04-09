@@ -44,6 +44,7 @@
         },
         {
             "attr": "uvw_channel",
+            "desc": "Index of the mapping channel to use (for V-Ray Proxy  only).",
             "default": -1,
             "ui": { "display_name": "UVW Channel" }
         },

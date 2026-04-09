@@ -6,7 +6,8 @@ from dataclasses import dataclass
 
 import bpy
 from vray_blender import debug
-from vray_blender.nodes.nodes import vrayNodeCopy
+from vray_blender.nodes.nodes import getPluginModule, vrayNodeCopy
+from vray_blender.plugins import getPluginAttr
 
 # Nodes which do not need conversion or for which the conversion is not yet implemented.
 SKIPPED_NODES = {
@@ -57,12 +58,22 @@ def _copyPropGroup(srcNode, targetNode, propType):
         return
 
     propGroupPropertyNames = sourceProps.__annotations__.keys()
+    pluginModule = getPluginModule(propType)
+    
 
     for propName in targetProps.__annotations__.keys():
         if propName in propGroupPropertyNames:
-            setattr(targetProps, propName,getattr(sourceProps, propName))
+            srcProp = getattr(sourceProps, propName)
+            if (attrDesc := getPluginAttr(pluginModule, propName)) and (attrDesc['type'] == 'TEMPLATE'):
+                # Templates need special handling. Call their 'copy' method, if defined
+                targetProp = getattr(targetProps, propName, None)
+                assert targetProp
+                if hasattr(srcProp, 'copy'):
+                    srcProp.copy(targetProp)
+            else:
+                setattr(targetProps, propName, srcProp)
 
-    # Copy meta sockets (the ones not directly backed by vray propeprties)
+    # Copy meta sockets (the ones not directly backed by vray properties)
     for srcSocket in [s for s in srcNode.inputs if hasattr(s, 'vray_attr')]:
         if srcSocket.vray_attr not in propGroupPropertyNames:
             if fnCopy := getattr(srcSocket, 'copy', None):

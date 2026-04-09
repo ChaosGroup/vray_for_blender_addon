@@ -574,11 +574,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform",
-                "label": "Transform",
-                "type": "TRANSFORM"
-            },
-            {
                 "name": "ground_albedo",
                 "label": "Ground albedo color",
                 "type": "COLOR"

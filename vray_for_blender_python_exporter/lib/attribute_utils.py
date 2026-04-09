@@ -14,7 +14,8 @@ from vray_blender.lib.attribute_types import TypeToProp, SkippedTypes
 from vray_blender.lib.blender_utils import getCmToSceneUnitsMultiplier, getMetersToSceneUnitsMultiplier, getShadowAttrName
 from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES, TEMPLATE_ATTRIBUTES
 from vray_blender.nodes.tools import getLinkInfo
-
+from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.ui.community_edition import getCELimitedFeatureMsg
 
 class AttributeContext:
     """ Context for single attribute generation """
@@ -68,12 +69,18 @@ def formatAttributeName(nameOrLabel):
         Returns:
             str: the formatted string
     """
+    if not nameOrLabel:
+        return ""
+
     attrName = nameOrLabel.strip().replace("_", " ")
+    if not attrName:
+        return ""
+
     attrName = re.sub(' +', ' ', attrName) # Collapse multuple spaces
     words = attrName.split(' ')
 
     try:
-        formattedName = [f"{w[0].title()}{w[1:]}" for w in words]
+        formattedName = [f"{w[0].title()}{w[1:]}" for w in words if w]
         return ' '.join(formattedName)
     except Exception as ex:
         debug.printExceptionInfo(ex, f"Failed to format attribute label '{nameOrLabel}'")
@@ -91,6 +98,10 @@ def valueInEnumItems(attrDesc, enumValue):
 
 
 def isAnimatableAttribute(pluginModule, attrDesc):
+    if attrDesc['type'] == 'STRING':
+        # String properties cannot be directly animated. 
+        return False
+    
     pluginAnimatable = pluginModule.Options.get('animatable', True)
     if 'options' in attrDesc:
         flag = attrDesc['options'].get('animatable', None)
@@ -249,8 +260,7 @@ def generateAttribute(ctx: AttributeContext, attrDesc):
     _setAttrDefault(attrArgs, attrDesc, ctx.pluginModule)
 
     if attrType == 'ENUM':
-        # JSON parser returns lists but EnumProperty types expects tuples
-        attrArgs['items'] = (tuple(item) for item in attrDesc['items'])
+        _setEnumAttribute(attrDesc, attrArgs, attrName)
 
     _addAttrToClassMembers(attrArgs, attrDesc, ctx.classMembers, ctx.pluginModule.ID)
 
@@ -362,7 +372,7 @@ def setAttrSubtype(attrArgs, attrDesc, pluginModule):
 
     attrType = attrDesc['type']
     ui = attrDesc.get('ui', {})
-    if (attrType == 'STRING') and (attrSubtype != 'NONE') and ('file_extensions' in ui):
+    if (attrType == 'STRING') and ('file_extensions' in ui):
         attrArgs['subtype'] = 'FILE_PATH'
     elif attrType in TypeToUISubtype:
         attrArgs['subtype'] = attrDesc.get('subtype', TypeToUISubtype[attrType])
@@ -418,7 +428,9 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
     attrName = attrDesc['attr']
     attrType = attrDesc['type']
 
-    if 'default' in attrDesc:
+    if vray.isCommunityEdition() and 'default_in_CE' in attrDesc:
+        attrArgs['default'] = convertVRayValueToUI(attrDesc, attrDesc['default_in_CE'])
+    elif 'default' in attrDesc:
         attrArgs['default'] = convertVRayValueToUI(attrDesc, attrDesc['default'])
 
     if attrType in ('BRDF', 'PLUGIN', 'UVWGEN'):
@@ -648,3 +660,116 @@ def _getValueWrapper(pluginModule, propGroup, attrName, fnSetName: str):
         return fnGet(propGroup, attrName)
 
     return None
+
+
+def _isEnumItemDisabled(propGroup, attrName, item, disabledItems):
+    """ Check if an enum item is in the list of disabled items """
+    def getEnumIdentifier(item):
+        return propGroup.bl_rna.properties[attrName].enum_items[item].identifier
+
+    if getEnumIdentifier(item) in disabledItems:
+        return True
+    return False
+
+
+def _getEnumValueByIdentifier(propGroup, attrName, identifier):
+    """ Get the value of an enum item by its identifier """
+    for item in propGroup.bl_rna.properties[attrName].enum_items:
+        if item.identifier == identifier:
+            return item.value
+    return -1
+
+
+def _setEnumAttribute(attrDesc, attrArgs, attrName):
+    def getItemTuple(item):
+        if vray.isCommunityEdition() and item[0] in attrDesc.get('items_disabled_in_CE', []):
+            item[1] += " (inactive)"
+            if 'items_disabled_in_CE_tooltip' in attrDesc:
+                item[2] = attrDesc['items_disabled_in_CE_tooltip']
+        return tuple(item)
+
+    # JSON parser returns lists but EnumProperty types expects tuples
+    attrArgs['items'] = (getItemTuple(item) for item in attrDesc['items'])
+
+    # Add getter and setter wrappers for enum items that are disabled in Community Edition
+    if ('items_disabled_in_CE' in attrDesc) and vray.isCommunityEdition():
+        defaultValue = attrArgs['default']
+        itemsDisabledInCE = attrDesc['items_disabled_in_CE']
+
+        if bpy.app.version[0] < 5:
+            # Support for Blender 4.5 and older.
+            # Note: This could be removed after Blender 4.5 is no longer supported.
+            setFunction = attrArgs.get('set', None)
+            def setEnumWrapper(propGroup, value):
+                if _isEnumItemDisabled(propGroup, attrName, value, itemsDisabledInCE):
+                    debug.reportAsync('WARNING', getCELimitedFeatureMsg())
+                    return
+                if setFunction:
+                    setFunction(propGroup, value)
+                else:
+                    propGroup[attrName] = value
+
+            getFunction = attrArgs.get('get', None)
+            def getEnumWrapper(propGroup):
+                defaultItem = _getEnumValueByIdentifier(propGroup, attrName, defaultValue)
+                currentItem = propGroup.get(attrName, defaultItem)
+                
+                if _isEnumItemDisabled(propGroup, attrName, currentItem, itemsDisabledInCE):
+                    return defaultItem
+                if getFunction:
+                    return getFunction(propGroup)
+                return currentItem
+            
+            attrArgs['set'] = lambda propGroup, value: setEnumWrapper(propGroup, value)
+            attrArgs['get'] = lambda propGroup: getEnumWrapper(propGroup)
+
+        else:
+            def filterDisabledItem(propGroup, value, acceptableValue, showWarning: bool = True):
+                if _isEnumItemDisabled(propGroup, attrName, value, itemsDisabledInCE):
+                    if showWarning:
+                        debug.reportAsync('WARNING', getCELimitedFeatureMsg())
+                    return acceptableValue
+                return value
+
+            attrArgs['get_transform'] = lambda propGroup, value, _: filterDisabledItem(
+                propGroup, value, _getEnumValueByIdentifier(propGroup, attrName, defaultValue), showWarning=False
+            )
+            attrArgs['set_transform'] = lambda propGroup, newValue, oldValue, _: filterDisabledItem(
+                propGroup, newValue, oldValue
+            )
+
+
+def getSettingsOutputImgFormatAttrDesc():
+    """Get the attribute description for SettingsOutput.img_format from SettingsOutput.custom.json.
+    """
+    from vray_blender.lib.sys_utils import getExporterPath
+    import os
+    import json
+
+    custom_path = os.path.join(
+        getExporterPath(), 'plugins_desc', 'settings', 'SettingsOutput.custom.json'
+    )
+    attrDesc = None
+
+    # This information can also be gotten from the plugin module dictionary,
+    # but it's safer to get it from the custom.json file
+    # (this function can be called before the dictionary is filled).
+    with open(custom_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        for param in data.get('Parameters', []):
+            if param.get('attr') == 'img_format':
+                attrDesc = param
+                break
+
+    assert attrDesc is not None, "Attribute description for SettingsOutput.img_format not found"
+
+    attrDesc['items'] = [list(item) for item in attrDesc['items']]
+    attrArgs = {
+        'name': attrDesc.get('name', ''),
+        'description': attrDesc.get('desc', ''),
+        'default': attrDesc.get('default', attrDesc['items'][0][0]),
+    }
+    _setEnumAttribute(attrDesc, attrArgs, 'img_format')
+    attrArgs['items'] = tuple(attrArgs['items'])
+
+    return attrArgs

@@ -8,16 +8,14 @@
 #include "zmq_server.h"
 #include "api/interop/utils.hpp"
 #include "utils/logger.hpp"
-#include "utils/synchronization.hpp"
 
-namespace py = boost::python;
 
 using namespace std::chrono;
 using namespace VRayForBlender;
 
 
 ProductionExporter::ProductionExporter(const ExporterSettings& settings) :
-	m_settings(settings)
+	m_settings(settings), m_exporter(nullptr)
 {
 }
 
@@ -27,6 +25,8 @@ ProductionExporter::~ProductionExporter() {
 	m_exporter->set_callback_on_bucket_ready(nullptr);
 	m_exporter->set_callback_on_rt_image_updated(nullptr);
 	m_exporter->set_callback_on_vfb_layers_updated(nullptr);
+	nb::gil_scoped_acquire gil;
+	m_imageUpdateCallback = nb::callable();
 }
 
 
@@ -39,7 +39,7 @@ void ProductionExporter::init(ZmqExporter* zmqExporter) {
 void ProductionExporter::setupCallbacks()
 {
 	// This method is only called from SceneExporter::init()
-	
+
 	m_exporter->set_callback_on_image_ready([this]() {
 		cb_on_image_ready();
 	});
@@ -91,20 +91,20 @@ void ProductionExporter::cb_on_rt_image_updated()
 void ProductionExporter::cb_on_vfb_layers_updated(const std::string& layersJson)
 {
 	auto callback = ZmqServer::get().getPythonCallback("vfbLayersUpdate");
-	
+
 	if (!callback.is_none()) {
 		invokePythonCallback("vfbLayersUpdate", callback, layersJson);
 	}
 }
 
-void ProductionExporter::renderStart(RenderPass *renderPass, py::object cbImageUpdated)
+void ProductionExporter::renderStart(RenderPass *renderPass, nb::callable&& cbImageUpdated)
 {
 	m_lastImageUpdate = high_resolution_clock::now();
 
-	m_imageUpdateCallback = cbImageUpdated;
+	m_imageUpdateCallback = std::move(cbImageUpdated);
 
 	// Setting the pixel data to the RenderPass Blender object is prohibitively slow
-	// to do in Python. Therefore we are forced to do it through a pointer to the 
+	// to do in Python. Therefore we are forced to do it through a pointer to the
 	// native structure
 	m_renderPass = renderPass;
 }
@@ -120,10 +120,10 @@ void ProductionExporter::renderEnd()
 	}
 
 	{
-		// This method is called from Python. Unlock the GIL to avoid a deadlock from 
+		// This method is called from Python. Unlock the GIL to avoid a deadlock from
 		// trying to acquire the callbacks mutex here and in Python callbacks invoked
 		// from server events.
-		WithNoGIL noGIL;
+		nb::gil_scoped_release noGIL;
 		m_exporter->set_callback_on_image_ready(nullptr);
 		m_exporter->set_callback_on_bucket_ready(nullptr);
 		m_exporter->set_callback_on_rt_image_updated(nullptr);
@@ -137,7 +137,7 @@ void ProductionExporter::renderEnd()
 
 void ProductionExporter::renderFrame()
 {
-	WithNoGIL noGIL;
+	nb::gil_scoped_release noGIL;
 
 	m_renderFinished = false;
 
@@ -150,15 +150,16 @@ void ProductionExporter::continueRenderSequence()
 	m_exporter->continueRenderSequence();
 }
 
-void ProductionExporter::renderSequence(int start, int end, int step)
+
+void ProductionExporter::renderSequence(const vray::AttrList<int>& sequences)
 {
-	WithNoGIL noGIL;
+	nb::gil_scoped_release noGIL;
 
 	m_renderFinished = false;
 
 	m_exporter->commitChanges();
 	m_exporter->setLastRenderedFrame(0);
-	m_exporter->renderSequence(start, end, step);
+	m_exporter->renderSequence(sequences);
 }
 
 bool VRayForBlender::ProductionExporter::isRendering()
@@ -178,7 +179,7 @@ void ProductionExporter::setRenderFrame(float frame)
 
 void VRayForBlender::ProductionExporter::abortRender()
 {
-	WithNoGIL noGIL;
+	nb::gil_scoped_release noGIL;
 	m_renderFinished = true;
 	m_exporter->abortRender();
 }
@@ -189,7 +190,7 @@ void ProductionExporter::updateImage()
 	// The exporter's isRendering() method should be checked before accessing the render pass buffer,
 	// because there will not be a valid reference to the buffer if rendering has been aborted.
 	if (m_exporter->isRendering() && !m_imageUpdateCallback.is_none() && !m_renderFinished) {
-		auto layerImg = m_exporter->getImage();
+		const RenderImage& layerImg = m_exporter->getImage();
 		if (layerImg.channels != m_renderPass->channels){
 			// TODO: figure out when RenderPass might not be RGBA
 			Logger::error("Rendered image (%1% channles) not in the same format as RenderPass (%2% channels)",
@@ -197,13 +198,13 @@ void ProductionExporter::updateImage()
 			return;
 		}
 
-		int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
-		int destSizeY = std::min(layerImg.h, m_renderPass->recty);
+		const int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
+		const int destSizeY = std::min(layerImg.h, m_renderPass->recty);
 
-		auto dest = m_renderPass->ibuf->float_buffer.data;
+		float* dest = m_renderPass->ibuf->float_buffer.data;
 		::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
 
-		// Notify Python add-on that the image is written to the render pass buffer and can be 
+		// Notify Python add-on that the image is written to the render pass buffer and can be
 		// updated on the screen
 		invokePythonCallback("imageUpdated", m_imageUpdateCallback);
 	}

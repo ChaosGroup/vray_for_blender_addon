@@ -16,6 +16,8 @@
                 "GEOMETRY",
                 "MATRIX",
                 "MATRIX_TEXTURE",
+                "FLOAT_TEXTURE",
+                "INT_TEXTURE",
                 "INCLUDE_EXCLUDE_LIST",
                 "TEMPLATE",
                 "PLUGIN_LIST",
@@ -30,6 +32,7 @@
                 "EFFECT",
                 "OBJECT",
                 "COLOR",
+                "COLOR_USE",
                 "OUTPUT_PLUGIN",
                 "OUTPUT_TEXTURE",
                 "OUTPUT_FLOAT_TEXTURE",
@@ -141,7 +144,8 @@
                 "CAMERA",
                 "UVWGEN",
                 "SYSTEM",
-                "GEOMETRY"
+                "GEOMETRY",
+                "RENDERCHANNEL"
             ]
         },
         "BASE": {
@@ -193,7 +197,8 @@
                             "DISTANCE",
                             "DISTANCE_CAMERA",
                             "VRAY_ROTATION",
-                            "VRAY_OFFSET"
+                            "VRAY_OFFSET",
+                            "VRAY_FILE_PATH"
                         ]
                     },
                     "precision": {
@@ -354,7 +359,8 @@
                                         "enum": [
                                             "templateIncludeExclude",
                                             "templateMultiObjectSelect",
-                                            "templateSingleObjectSelect"
+                                            "templateSingleObjectSelect",
+                                            "templateFileSelect"
                                         ]
                                     },
                                     "custom_exporter": {
@@ -374,6 +380,9 @@
                                                 "type": "string"
                                             },
                                             "collection": {
+                                                "type": "string"
+                                            },
+                                            "object_type": {
                                                 "type": "string"
                                             }
                                         }

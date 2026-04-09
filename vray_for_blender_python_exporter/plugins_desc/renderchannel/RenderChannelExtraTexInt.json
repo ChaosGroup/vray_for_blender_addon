@@ -1,0 +1,49 @@
+{
+    "Desciption": "RenderChannelExtraTexInt",
+    "ID": "RenderChannelExtraTexInt",
+    "Name": "Render Channel Extra Tex Int",
+    "Parameters": [
+        {
+            "attr": "enableDeepOutput",
+            "default": true,
+            "desc": "",
+            "type": "BOOL",
+            "ui": {}
+        },
+        {
+            "attr": "name",
+            "default": "ExtraTexChannel",
+            "desc": "Display name of this render channel",
+            "type": "STRING"
+        },
+        {
+            "attr": "texmap",
+            "default": 0,
+            "desc": "The texture that will be rendered into this channel",
+            "type": "INT_TEXTURE"
+        },
+        {
+            "attr": "affect_matte_objects",
+            "default": true,
+            "desc": "false to not affect Matte Objects",
+            "type": "BOOL"
+        },
+        {
+            "attr": "exclude_list",
+            "default": null,
+            "desc": "Depending on the value of exclude_list_as_inclusive_set, a list of plugins that will be affected or ignored by the texture",
+            "elements_count": 0,
+            "type": "PLUGIN_LIST"
+        },
+        {
+            "attr": "exclude_list_as_inclusive_set",
+            "default": false,
+            "desc": "When true apply extra texture only to objects in exclude_list. When false apply extra texture to all objects out of exclude_list",
+            "type": "BOOL"
+        }
+    ],
+    "Type": "RENDERCHANNEL",
+    "Widget": {
+        "widgets": []
+    }
+}

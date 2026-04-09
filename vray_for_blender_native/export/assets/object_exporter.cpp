@@ -11,6 +11,7 @@
 
 #include "api/interop/types.h"
 #include "vassert.h"
+#include "utils/mmh3.h"
 
 
 using namespace VRayBaseTypes;
@@ -18,7 +19,7 @@ using namespace VRayBaseTypes;
 
 namespace
 {
-	
+
 // TODO: Move the conversion helpers to some utils file
 AttrListVector arrayToAttrListVec3(const float* src, int vecCount)
 {
@@ -77,7 +78,7 @@ using PointCloudData     = Interop::PointCloudData;
 using InstancerCloudData = Interop::InstancerData;
 
 AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
-{	
+{
 	const int numPts	= static_cast<int>(pc.points.size());
 	const int numClrs	= static_cast<int>(pc.colors.size());
 	const int numRadii	= static_cast<int>(pc.radii.size());
@@ -85,12 +86,12 @@ AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
 	vassert((numClrs == 0) || (numClrs == numPts));
 	vassert((numRadii == 0) || (numRadii == numPts));
 
-	auto positions	= arrayToAttrListVec3(reinterpret_cast<const float*>(pc.points.data()), numPts);
-	auto colors		= arrayToAttrListVec3(reinterpret_cast<const float*>(pc.colors.data()), numClrs);
+	auto positions	= arrayToAttrList<AttrVector>(reinterpret_cast<const AttrVector*>(pc.points.data()), numPts);
+	auto colors		= arrayToAttrList<AttrColor>(reinterpret_cast<const AttrColor*>(pc.colors.data()), numClrs);
 	auto radii		= arrayToAttrList<float>(reinterpret_cast<const float*>(pc.radii.data()), numRadii);
-	
-	// TODO: UVs are not directly used by GeomPatricleSystem, figure out what to do with them 
-	
+
+	// TODO: UVs are not directly used by GeomPatricleSystem, figure out what to do with them
+
 	// Generate particle ids - consecutive numbers
 	std::vector<int> ids(numPts);
 	std::iota(ids.begin(), ids.end(), 1);
@@ -103,7 +104,7 @@ AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
 	pcDesc.add("radii", radii);
 	pcDesc.add("ids", AttrList<int>(std::move(ids)));
 	pcDesc.add("colors", colors);
-	
+
 	return exporter.exportPlugin(pcDesc);
 }
 
@@ -116,34 +117,34 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 
 	using Matrix = float[4][4];
 
-	// Unpack data from buffer. 
-	// TODO: consider replacing with a well-known protocol, e.g. ProtocolBuffers
-	const size_t matByteSize	= sizeof(float) * 16;
-	const size_t tmOffset		= sizeof(int);
-	const size_t velOffset		= tmOffset + matByteSize;
-	const size_t objNameOffset	= velOffset + matByteSize;
-	const size_t objNameDataOffset	= objNameOffset + sizeof(int);
-	
+	// Unpack data from buffer.
 	const char* ptr = &inst.data[0];
 
 	for (int i = 0; i < inst.itemCount; ++i){
 		AttrInstancer::Item& item = (*instancer.data)[i];
 
-		item.index = *reinterpret_cast<const int*>(ptr);
-		item.tm = AttrTransform(*reinterpret_cast<const Matrix*>(ptr + tmOffset));
-		item.vel = AttrTransform(*reinterpret_cast<const Matrix*>(ptr + velOffset));
+		// Read persistentId and hash it. We assume it is always 8 ints long.
+		const int persistentIdSize = 8 * sizeof(int);
 
-		const int nameLen = *reinterpret_cast<const int*>(ptr + objNameOffset);
-		std::string name;
-		name.resize(nameLen);
-		::memcpy(name.data(), ptr + objNameDataOffset, nameLen);
+		uint32_t hash = 0;
+		MurmurHash3_x86_32(ptr, persistentIdSize, 0, &hash);
+		item.index = static_cast<int>(hash);
 
-		item.node = AttrPlugin(name);
-		
-		ptr += objNameDataOffset + nameLen;
+		ptr += persistentIdSize;
+
+		// Read transformation
+		item.tm = AttrTransform(*reinterpret_cast<const Matrix*>(ptr));
+		ptr += sizeof(Matrix);
+
+		item.vel = AttrTransform::zero();
+
+		// Read node name
+		const int nameLen = *reinterpret_cast<const int*>(ptr);
+		ptr += sizeof(int);
+
+		item.node = AttrPlugin(std::string(ptr, nameLen));
+		ptr += nameLen;
 	}
-
-
 
 	PluginDesc instancerDesc(inst.name, "Instancer2");
 	instancerDesc.add("instances", instancer);

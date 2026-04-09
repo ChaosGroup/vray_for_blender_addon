@@ -16,8 +16,6 @@
 #include "plugin_desc.hpp"
 #include "vassert.h"
 #include "utils/timers.h"
-#include "utils/synchronization.hpp"
-
 
 
 using namespace VRayForBlender;
@@ -27,7 +25,7 @@ using namespace VRayBaseTypes;
 
 SceneExporter::SceneExporter() :
 		m_wg(std::make_unique<CondWaitGroup>(0)),
-		m_threadManager(ThreadManager::make(2)) 
+		m_threadManager(ThreadManager::make(2))
 {
 }
 
@@ -41,14 +39,14 @@ SceneExporter::~SceneExporter()
 void SceneExporter::init(ExporterBase* policy, const ExporterSettings& settings) {
 	m_settings = settings;
 
-	if (!m_exporter || !m_exporter->isStopped()) {
+	if (!m_exporter || m_exporter->isStopped()) {
 		const auto exporterType = static_cast<VrayZmqWrapper::ExporterType>(settings.exporterType);
 		m_exporter.reset(new ZmqExporter(exporterType));
 	}
-	
+
 	m_policy.reset(policy);
 	m_policy->init(m_exporter.get());
-	
+
 	m_exporter->init(m_settings);
 
 	m_exporter->set_callback_on_message_updated([this](const std::string& info){
@@ -98,15 +96,14 @@ bool SceneExporter::imageWasUpdated()
 
 bool SceneExporter::vrsceneExportRunning()
 {
-	WithNoGIL noGIL;
+	nb::gil_scoped_release noGIL;
 	return m_vrsceneExportInProgress;
 }
 
-void SceneExporter::setRenderStoppedCallback(py::object cbRenderStopped)
+void SceneExporter::setRenderStoppedCallback(nb::callable&& cbRenderStopped)
 {
-	m_cbRenderStopped = cbRenderStopped;
-	m_exporter->set_callback_on_render_stopped([this](bool isAborted) {
-		invokePythonCallback("renderStoppedCallback", m_cbRenderStopped, isAborted);
+	m_exporter->set_callback_on_render_stopped([renderStoppedCallback = std::move(cbRenderStopped)](bool isAborted) {
+		invokePythonCallback("renderStoppedCallback", renderStoppedCallback, isAborted);
 	});
 
 }
@@ -116,10 +113,10 @@ void SceneExporter::free()
 	// Stop all activity on ZmqExportet before deleting it or the policy which uses it
 	m_exporter->stop();
 	m_exporter->detach();
-	
+
 	m_policy.reset();
 	m_exporter.reset();
-	
+
 	if (m_threadManager) {
 		m_threadManager->stop();
 	}
@@ -204,7 +201,7 @@ void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 			m_exporter->exportPlugin(pluginDesc);
 
 			{
-				WithGIL gil;
+				nb::gil_scoped_acquire gil;
 				mesh.reset();
 			}
 		}, ThreadManager::Priority::LOW);
@@ -213,7 +210,7 @@ void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 		ScopeTimer tm("fillMeshData sync");
 		Assets::fillMeshData(*mesh, pluginDesc);
 		m_exporter->exportPlugin(pluginDesc);
-		WithGIL gil;
+		nb::gil_scoped_acquire gil;
 		mesh.reset();
 	}
 }
@@ -224,12 +221,12 @@ void SceneExporter::exportHair(HairDataPtr hair)
 	m_wg->add(1);
 	m_threadManager->addTask([this, hair](int, const volatile bool &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
-		
+
 		ScopeTimer tm("exportHair");
 		Assets::exportGeomHair(*hair, *m_exporter);
 
 		{
-			WithGIL gil;
+			nb::gil_scoped_acquire gil;
 			hair.reset();
 		}
 
@@ -242,7 +239,7 @@ void SceneExporter::exportSmoke(SmokeDataPtr smoke)
 	m_wg->add(1);
 	m_threadManager->addTask([this, smoke](int, const volatile bool &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
-		
+
 		using Matrix = float[4][4];
 		AttrTransform transform(*reinterpret_cast<Matrix*>(smoke->transform.data()));
 
@@ -250,7 +247,7 @@ void SceneExporter::exportSmoke(SmokeDataPtr smoke)
 		Assets::exportVRayNodePhxShaderSim(smoke->name, smoke->cacheDir, transform, smoke->domainRes.data(), *m_exporter);
 
 		{
-			WithGIL gil;
+			nb::gil_scoped_acquire gil;
 			smoke.reset();
 		}
 
@@ -259,21 +256,28 @@ void SceneExporter::exportSmoke(SmokeDataPtr smoke)
 
 
 
-void SceneExporter::exportPointCloud(PointCloudDataPtr pc)
+void SceneExporter::exportPointCloud(PointCloudDataPtr pc, bool asyncExport)
 {
-	m_wg->add(1);
-	m_threadManager->addTask([this, pc](int, const volatile bool &) mutable {
-		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
-		
-		ScopeTimer tm("exportPointCloud");
+	if (asyncExport) {
+		m_wg->add(1);
+		m_threadManager->addTask([this, pc](int, const volatile bool &) mutable {
+			NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
+
+			ScopeTimer tm("exportPointCloud");
+			Assets::exportPointCloud(*pc, *m_exporter);
+
+			{
+				nb::gil_scoped_acquire gil;
+				pc.reset();
+			}
+
+		}, ThreadManager::Priority::LOW);
+	} else {
+		ScopeTimer tm("exportPointCloud sync");
 		Assets::exportPointCloud(*pc, *m_exporter);
-
-		{
-			WithGIL gil;
-			pc.reset();
-		}
-
-	}, ThreadManager::Priority::LOW);
+		nb::gil_scoped_acquire gil;
+		pc.reset();
+	}
 }
 
 
@@ -282,12 +286,12 @@ void SceneExporter::exportInstancer(InstancerDataPtr inst)
 	m_wg->add(1);
 	m_threadManager->addTask([this, inst](int, const volatile bool &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
-		
+
 		ScopeTimer tm("exportInstancer");
 		Assets::exportInstancer(*inst, *m_exporter);
 
 		{
-			WithGIL gil;
+			nb::gil_scoped_acquire gil;
 			inst.reset();
 		}
 
@@ -304,11 +308,11 @@ void SceneExporter::startExport(int threadCount)
 
 void SceneExporter::finishExport(bool interactive)
 {
-	WithNoGIL noGIL;
+	nb::gil_scoped_release noGIL;
 
 	ScopeTimer tm("finish_export: wait");
 	m_wg->wait();
-	
+
 
 	if (interactive)
 	{

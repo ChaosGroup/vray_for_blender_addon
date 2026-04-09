@@ -30,7 +30,7 @@ def onUpdateAttribute(src, context: bpy.types.Context, attrName: str):
     # This function will be called when the user changes the vaues of the light properties directly
     # in the property pages or through a script, and when the change occurs due to a manipulation of
     # the light gizmo or through the native Blender light properties. In the latter case, an infinite 
-    # recursion may occur with the fixBlenderLights() function in light_export.py if care is not taken 
+    # recursion may occur with the fixSceneLights() function in light_export.py if care is not taken 
     # to only set the properties when their values have changed. 
     match attrName:
         case 'coneAngle':

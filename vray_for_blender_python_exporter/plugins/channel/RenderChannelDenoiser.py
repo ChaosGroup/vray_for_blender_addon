@@ -7,7 +7,6 @@ from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
-from vray_blender.nodes.nodes import setUniqueRenderChannelName
 from vray_blender.plugins.channel.render_channel_common import drawChannelType
 
 

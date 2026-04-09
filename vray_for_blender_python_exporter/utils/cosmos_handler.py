@@ -12,7 +12,7 @@ from vray_blender.lib.blender_utils import selectObject
 from vray_blender.lib.image_utils import untrackImage
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.nodes.operators.import_file import  importDecal, importHDRI, importMaterials, importProxyFromMeshFile
-from vray_blender.nodes.utils import getNodeByType, treeHasNodes
+from vray_blender.nodes.utils import getNodeByType, treeHasNodes, DisableAutoConnect
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -21,7 +21,7 @@ class CosmosRelinkStatus(Enum):
     CheckingIntegrity  = -1 # Python only state to block while checking integrity in c++.
     AllAssetsValid = 0 # All assets are valid and properly linked. In theory we should never end up getting it.
     NotLoggedIn = 1 # The user is not logged in so relinking is not at all possible.
-    RelinkOnly = 2 # Only relinking i.e. chaning paths on some assets.
+    RelinkOnly = 2 # Only relinking i.e. changing paths on some assets.
     DownloadAndRelink = 3 # Download the missing assets and then relink them.
     Aborted = 4 # Only used if something goes wrong with the zmq server.
 
@@ -108,7 +108,7 @@ class CosmosHandler:
         vray.downloadMissingAssets()
         # Just block blender until download is completed. There's a qt dialog where progress
         # is shown along with a way to cancel the download.
-        while self.downloadStatus==CosmosDownloadStatus.Downloading:
+        while self.downloadStatus == CosmosDownloadStatus.Downloading:
             time.sleep(0.1)
 
         if self.downloadStatus == CosmosDownloadStatus.Cancelled:
@@ -142,12 +142,12 @@ class CosmosHandler:
             # Register unresolved callbacks for the nodes in a  node tree. The object passed in
             # should have valid cosmos_package_id and cosmos_revision_id properties.
             for node in ntree.nodes:
-                if (texture := getattr(node, 'texture', None)):
-                    if unresolvedPath := self._getPathIfAssetMissing(texture.image.filepath):
+                if (texture := getattr(node, 'texture', None)) and (image := getattr(texture, 'image', None)):
+                    if unresolvedPath := self._getPathIfAssetMissing(image.filepath):
                         unresolvedPackageIds.append(dataObject.vray.cosmos_package_id)
                         unresolvedRevisionIds.append(dataObject.vray.cosmos_revision_id)
                         unresolvedPaths.append(unresolvedPath)
-                        self.unresolvedCallbacks.append(lambda x, img=texture.image: (setattr(img, 'filepath', x), untrackImage(img)))
+                        self.unresolvedCallbacks.append(lambda x, img=image: (setattr(img, 'filepath', x), untrackImage(img)))
                 elif (brdfScanned := getattr(node, 'BRDFScanned', None)):
                     if unresolvedPath := self._getPathIfAssetMissing(brdfScanned.file):
                         unresolvedPackageIds.append(dataObject.vray.cosmos_package_id)
@@ -180,14 +180,14 @@ class CosmosHandler:
         for light in bpy.data.lights:
             if not hasattr(light, 'vray') or not light.use_nodes or not light.node_tree or not light.vray.cosmos_package_id:
                 continue
-            if light.vray.light_type=='IES':
+            if light.vray.light_type == 'IES':
                 propGroup = getLightPropGroup(light, 'LightIES')
                 if unresolvedPath := self._getPathIfAssetMissing(propGroup.ies_file):
                     unresolvedPackageIds.append(light.vray.cosmos_package_id)
                     unresolvedRevisionIds.append(light.vray.cosmos_revision_id)
                     unresolvedPaths.append(unresolvedPath)
                     self.unresolvedCallbacks.append(lambda x, ies=propGroup: setattr(ies, 'ies_file', x))
-            if light.vray.light_type=='DOME':
+            elif light.vray.light_type == 'DOME':
                 checkNodeTreeAssets(light, light.node_tree)
 
         if len(unresolvedPackageIds) == 0:
@@ -215,14 +215,14 @@ class CosmosHandler:
             return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Checking for asset integrity has failed. No assets have been relinked.")
 
         if self.missingAssetsStatus == CosmosRelinkStatus.AllAssetsValid:
-            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="There are no Cosmos assets that require relinking. \
-                Only assets imported after hotfix 7.00.24 can be relinked.")
+            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="There are no Cosmos assets that require relinking.",
+                messageRow2="Only assets imported after hotfix 7.00.24 can be relinked.")
 
         self.relinked = True
         if self.missingAssetsStatus == CosmosRelinkStatus.RelinkOnly:
             return context.window_manager.invoke_confirm(
                 operator, event, title="", icon='WARNING',
-                message=f"Would you like to relink your Cosmos assets?"
+                message="Would you like to relink your Cosmos assets?"
             )
         else:
             return context.window_manager.invoke_confirm(
@@ -244,45 +244,44 @@ assetImportQueue = queue.Queue()
 COSMOS_SCALE_UNIT = 0.01 # centimeters
 
 def assetImportTimerFunction():
-    global assetImportQueue
-
     try:
         while not assetImportQueue.empty():
             settings = assetImportQueue.get()
-            match(settings.assetType):
-                case "Material":
-                    if not os.path.exists(settings.matFile):
-                        debug.printError(f"VRmat file {settings.matFile} does not exist")
-                        continue
-                    importMaterials(settings.matFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+            with DisableAutoConnect():
+                match(settings.assetType):
+                    case "Material":
+                        if not os.path.exists(settings.matFile):
+                            debug.printError(f"VRmat file {settings.matFile} does not exist")
+                            continue
+                        importMaterials(settings.matFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
 
-                case "VRMesh":
-                    ob, err = importProxyFromMeshFile(bpy.context,
-                                            settings.matFile, settings.objFile, lightPath=settings.lightFile,
-                                            packageId=settings.packageId, revisionId=settings.revisionId,
-                                            locationsMap=settings.locationsMap,
-                                            scaleUnit=COSMOS_SCALE_UNIT)
-                    if err:
-                        debug.printError(err)
+                    case "VRMesh":
+                        ob, err = importProxyFromMeshFile(bpy.context,
+                                                settings.matFile, settings.objFile, lightPath=settings.lightFile,
+                                                packageId=settings.packageId, revisionId=settings.revisionId,
+                                                locationsMap=settings.locationsMap,
+                                                scaleUnit=COSMOS_SCALE_UNIT)
+                        if err:
+                            debug.printError(err)
 
-                    # Animated cosmos models need the attribute below
-                    # to function properly when the scene containing them is exported and rendered through Vantage.
-                    if ob and settings.isAnimated:
-                        userAttrs = ob.vray.UserAttributes
-                        userAttrs.user_attributes.add()
+                        # Animated cosmos models need the attribute below
+                        # to function properly when the scene containing them is exported and rendered through Vantage.
+                        if ob and settings.isAnimated:
+                            userAttrs = ob.vray.UserAttributes
+                            userAttrs.user_attributes.add()
 
-                        animAttr = userAttrs.user_attributes[-1]
-                        animAttr.name = "lavina_fast_morph_mesh"
-                        animAttr.value_type = "0"
-                        animAttr.value_int = 2
+                            animAttr = userAttrs.user_attributes[-1]
+                            animAttr.name = "lavina_fast_morph_mesh"
+                            animAttr.value_type = "0"
+                            animAttr.value_int = 2
 
-                case "HDRI":
-                    importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+                    case "HDRI":
+                        importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
 
-                case "Extras":
-                    importDecal(settings)
+                    case "Extras":
+                        importDecal(settings)
 
-            bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
+                bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
     except Exception as e:
         debug.printExceptionInfo(e, "cosmos_handler.assetImportTimerFunction")
         debug.reportError("Import of Cosmos asset failed")
@@ -290,7 +289,6 @@ def assetImportTimerFunction():
     return 1.0 # Timeout before the next invocation
 
 def assetImportCallback(assetSettings):
-    global assetImportQueue
     assetImportQueue.put(assetSettings)
 
 def registerAssetImportTimerFunction():

@@ -4,12 +4,12 @@
 
 #include "osl.h"
 
+#ifdef WITH_OSL
 #include <filesystem>
 
 #include <OSL/oslconfig.h>
 #include <OSL/oslcomp.h>
 #include <OSL/oslexec.h>
-
 
 namespace VRayForBlender::Interop
 {
@@ -67,7 +67,7 @@ OSLManager& OSLManager::getInstance()
 
 void PyOSLParam::setFloatListSocValFromParam(const OSL::OSLQuery::Parameter* param)
 {
-	boost::python::list list;
+	nb::list list;
 	std::vector<float> defaultFloat3 = { 0.0f, 0.0f, 0.0f };
 
 	if (param->validdefault) {
@@ -86,35 +86,35 @@ void PyOSLParam::setFloatListSocValFromParam(const OSL::OSLQuery::Parameter* par
 
 void PyOSLParam::setFloatSockValFromParam(const OSL::OSLQuery::Parameter* param)
 {
-	float defaultFloat = 0.0f;
-	socketType = boost::python::object("VRaySocketFloat");
+	socketType = nb::str("VRaySocketFloat");
 
+	float defaultFloat = 0.0f;
 	if (param->validdefault)
 		defaultFloat = param->fdefault[0];
 
-	socketDefaultValue = boost::python::object(defaultFloat);
+	socketDefaultValue = nb::cast(defaultFloat);
 }
 
 void PyOSLParam::setIntSockValFromParam(const OSL::OSLQuery::Parameter* param)
 {
 	int defaultInt = 0;
-	socketType = boost::python::object("VRaySocketInt");
+	socketType = nb::str("VRaySocketInt");
 
 	if (param->validdefault)
 		defaultInt = param->idefault[0];
 
-	socketDefaultValue = boost::python::object(defaultInt);
+	socketDefaultValue = nb::cast(defaultInt);
 }
 
 void PyOSLParam::setStringSockValFromParam(const OSL::OSLQuery::Parameter* param)
 {
 	// TODO: strings are only for plugin inputs
 	std::string defaultString = "";
-	socketType = boost::python::object("VRaySocketPlugin");
+	socketType = nb::str("VRaySocketPlugin");
 	if (param->validdefault) {
 		defaultString = param->sdefault[0].string();
 	}
-	socketDefaultValue = boost::python::object(defaultString);
+	socketDefaultValue = nb::cast(defaultString);
 }
 
 
@@ -125,8 +125,8 @@ bool PyOSLParam::init(const OSL::OSLQuery::Parameter* param)
 			/* skip unsupported types or null parameters */
 			return false;
 		}
-	name = boost::python::object(param->name.string());
-	isOutputSocket = boost::python::object(param->isoutput);
+	name = nb::str(param->name.string().c_str());
+	isOutputSocket = nb::cast(param->isoutput);
 
 	if (param->type.vecsemantics == TypeDesc::POINT ||
 		param->type.vecsemantics == TypeDesc::VECTOR ||
@@ -134,25 +134,22 @@ bool PyOSLParam::init(const OSL::OSLQuery::Parameter* param)
 		param->type.vecsemantics == TypeDesc::NORMAL) {
 
 		if (param->type.vecsemantics == TypeDesc::COLOR) {
-			socketType = boost::python::object("VRaySocketColor");
+			socketType = nb::str("VRaySocketColor");
 		}
 		else {
-			socketType = boost::python::object("VRaySocketVector");
+			socketType = nb::str("VRaySocketVector");
 		}
 
 		setFloatListSocValFromParam(param);
 	}
 	else if (param->type.aggregate == TypeDesc::SCALAR) {
 		if (param->type.basetype == TypeDesc::INT) {
-
 			setIntSockValFromParam(param);
 		}
 		else if (param->type.basetype == TypeDesc::FLOAT) {
-
 			setFloatSockValFromParam(param);
 		}
 		else if (param->type.basetype == TypeDesc::STRING) {
-
 			setStringSockValFromParam(param);
 		}
 	}
@@ -171,5 +168,6 @@ bool getOslQuery(OSL::OSLQuery& query, const std::string& script)
 		oslManager.queryFromFile(strOsoPath, query);
 }
 
-
 } // end namespace VRayForBlender::Interop
+
+#endif

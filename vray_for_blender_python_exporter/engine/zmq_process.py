@@ -11,6 +11,7 @@ import time
 from vray_blender import debug
 from vray_blender.lib import blender_utils, sys_utils
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.utils.update_checker import onUpdateSettingsChanged, checkForUpdates
 from vray_blender import bl_info
 
 # Update the compute devices in the UI in the main thread.
@@ -19,6 +20,7 @@ def _updateComputeDevicesCallback(deviceType: int, deviceNames: list[str], defau
         computeDevices = blender_utils.getVRayPreferences().compute_devices
         computeDevices.updateComputeDeviceSelectors(deviceType, deviceNames, defaultDeviceStates)
     bpy.app.timers.register(_updateComputeDevices)
+
 
 class ZMQProcess:
     """ The ZMQ server process is started on the local machine and uses the Blender
@@ -34,7 +36,7 @@ class ZMQProcess:
         # Reset
         if not ZMQProcess._started:
             self._start()
-            ZMQProcess._started = True
+            
 
     def _getDumpInfoLogFile(self):
         from vray_blender.lib.path_utils import getV4BTempDir
@@ -65,9 +67,13 @@ class ZMQProcess:
         from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus, assetImportCallback
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
         from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
+        from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
+        
+        if not self._startServerProcess():
+            return
 
-        self._startServerProcess()
-
+        ZMQProcess._started = True
+        
         # Cosmos Browser download notifications callback
         self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
         vray.setCosmosImportCallback(self.assetImportCallback)
@@ -81,20 +87,28 @@ class ZMQProcess:
         vray.setScannedParamBlockCallback(self.scannedParamBlockCallback)
 
          # VFB start button callback
-        self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport else VfbEventHandler.startProdRender(forceAnimation=False)
+        self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport \
+            else VfbEventHandler.startProdRender(forceAnimation=False, uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext())
+        
         vray.setRenderStartCallback(self.renderStartCallback)
 
         # Abort-all-renders callback (e.g. if ZmqServer crashes)
         vray.setZmqServerAbortCallback(ZMQProcess._zmqServerAbortCallback)
 
         self._updateVFBSettings = lambda vfbSettings: VfbEventHandler.updateVfbSettings(vfbSettings)
-        vray.setVfbSettingsUpdateCallback( self._updateVFBSettings)
+        vray.setVfbSettingsUpdateCallback(self._updateVFBSettings)
 
         self._updateVFBLayers = lambda vfbLayers: VfbEventHandler.updateVfbLayers(vfbLayers)
-        vray.setVfbLayersUpdateCallback( self._updateVFBLayers )
+        vray.setVfbLayersUpdateCallback(self._updateVFBLayers)
 
         self._updateComputeDevices = lambda deviceType, deviceNames, defaultDeviceStates: _updateComputeDevicesCallback(deviceType, deviceNames, defaultDeviceStates)
         vray.setUpdateComputeDevicesCallback(self._updateComputeDevices)
+        
+        self._autoUpdateChanged = lambda autoCheck: onUpdateSettingsChanged(autoCheck)
+        vray.setAutoUpdateChangedCallback(self._autoUpdateChanged)
+
+        self._appUpdateRequested = lambda: checkForUpdates(force=True, showDialog=True)
+        vray.setAppUpdateRequestedCallback(self._appUpdateRequested)
 
 
     def stop(self):
@@ -118,7 +132,7 @@ class ZMQProcess:
 
         if not executablePath or not os.path.exists(executablePath):
             debug.printError(f"Can't find V-Ray ZMQ Server at path {executablePath}")
-            return
+            return False
 
         prefs = blender_utils.getVRayPreferences()
         if hasattr(bpy.context, 'scene'):
@@ -130,7 +144,7 @@ class ZMQProcess:
             # where no scene is available
 
             settings = SimpleNamespace()
-            setattr(settings, 'zmq_port', -1)                     # Efemeral port
+            setattr(settings, 'zmq_port', -1)                     # Ephemeral port
 
         args = vray.ZmqServerArgs()
 
@@ -139,9 +153,11 @@ class ZMQProcess:
         if not os.path.isfile(vfbSettingsPath):
             vfbSettingsPath = sys_utils.getVfbDefaultSettingsPath()
 
+        logLevelOverride = sys_utils.StartupConfig.logLevel
+
         args.exePath             = executablePath
         args.port                = settings.zmq_port
-        args.logLevel            = int(prefs.verbose_level)
+        args.logLevel            = int(logLevelOverride) if logLevelOverride else int(prefs.verbose_level)  
         args.enableQtLogs        = prefs.enable_qt_logs
         args.headlessMode        = bpy.app.background  # Do not try to show VFB and agreements dialog in headless mode
         args.noHeartbeat         = True
@@ -162,20 +178,25 @@ class ZMQProcess:
         if (not useEphemeralPort):
             if sys.platform != "win32":
                 debug.printError("Running ZmqServer on a fixed port is only supported on Windows")
-                return
+                return False
 
             if (not ZMQProcess._waitForProcessToExit(os.path.basename(executablePath), 5)):
                 debug.printError("Cannot run ZmqServer: another instance is running. Rendering in V-Ray will not be available.")
-                return
+                return False
 
-        vray.start(args)
+        success, err = vray.start(args)
 
+        if not success:
+            debug.printError(err)
+            return False
+        
         if bpy.app.background:
             # In headless mode, we need to wait for the ZmqServer to start before attempting any rendering
             if not ZMQProcess._waitForZmqServerToStart():
                 debug.printAlways('ZmqServer failed to start. Terminating application.')
                 sys.exit(-1)
 
+        return True
 
     @staticmethod
     def _waitForProcessToExit(processName, seconds):

@@ -17,6 +17,7 @@ from vray_blender.nodes.utils import getNonExportablePluginProperties, getNodeBy
 from vray_blender.plugins import getPluginModule, DEFAULTS_OVERRIDES
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.exporting.tools import getLinkedFromSocket, getNodeLinkToNode
+from dataclasses import dataclass
 
 NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault", "MtlSingleBRDF" ]
 
@@ -125,7 +126,7 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
             case 'STRING':
                 subtype = attrDesc.get('subtype')
 
-                if subtype == 'FILE_PATH':
+                if subtype in ('FILE_PATH', 'VRAY_FILE_PATH'):
                     value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
                 elif subtype == 'DIR_PATH':
                     # Add a trailing slash to directory paths
@@ -276,11 +277,11 @@ def setupDistributedRendering(settings: vray.ExporterSettings, exporterType: Exp
         settings.setDRHosts([preferences.vantage_host + ":" + str(preferences.vantage_port)])
 
 
-from dataclasses import dataclass
 @dataclass
 class ActiveConnectedMeshInfo:
     """ Used to track active parent object / gizmo pairs   """
     parentName: str
+    parentBlObjName: str # value of bpy.types.Object.name
     parentObjTrackId: int
 
     gizmoObjName: str
@@ -288,7 +289,7 @@ class ActiveConnectedMeshInfo:
 
     def __hash__(self):
         # Do not include parentName in the hash as it may change without the object
-        # being otherwize modified.
+        # being otherwise modified.
         return hash((self.parentObjTrackId, self.gizmoObjTrackId))
 
 @dataclass
@@ -338,7 +339,7 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
         parentTrackId = getObjTrackId(parentObj)
         geomTrackId = getObjTrackId(geomObj)
 
-        activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), parentTrackId, Names.object(geomObj), geomTrackId))
+        activeConnectedMeshes.add(ActiveConnectedMeshInfo(Names.object(parentObj), parentObj.name, parentTrackId, Names.object(geomObj), geomTrackId))
         activeMeshesUpdateInfo.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
 
         if exporterCtx.fullExport:
@@ -425,9 +426,8 @@ def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker,
     for nodePluginName in nodePluginNames:
         plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin, animatable=False)
 
-def isObjectGeomUpdated(exporterCtx: ExporterContext, obj: bpy.types.Object):
+def isObjectGeomUpdated(exporterCtx: ExporterContext, objTrackId: int):
     """ Check if the object needs to be updated. """
-    objTrackId = getObjTrackId(obj)
     isFirstMotionBlurFrame = (exporterCtx.commonSettings.useMotionBlur and exporterCtx.motionBlurBuilder.isFirstFrame(exporterCtx.currentFrame))
 
     return exporterCtx.fullExport \

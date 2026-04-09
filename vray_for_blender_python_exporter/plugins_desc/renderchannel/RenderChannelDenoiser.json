@@ -237,6 +237,16 @@
             {
                 "display_name" : "OIDN prefilter"
             }
+        },
+
+        {
+            "attr": "enable_blurred_denoising",
+            "default": true,
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Denoise Light Cache"
+            }
         }
     ],
     "Type" : "RENDERCHANNEL",

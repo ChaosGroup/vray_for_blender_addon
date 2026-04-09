@@ -11,7 +11,13 @@ from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib import blender_utils, image_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps, pruneColorRamps
+from vray_blender.nodes.tree import upgradeTrees
 from vray_blender.plugins.BRDF.BRDFScanned import registerScannedNodes
+from vray_blender.utils.update_checker import autoCheckForUpdatesFeatureEnabled
+
+
+# Global flag to ensure we only initialize the update check subsystem once
+_UpdateCheckSystemInitialized = False
 
 
 @bpy.app.handlers.persistent
@@ -45,15 +51,19 @@ def _onLoadPost(e):
     from vray_blender import engine, debug
     from vray_blender.nodes.curves_node import registerColorMapCurves
     from vray_blender.lib.blender_utils import checkAndReportVersionIncompatibility
-    
+    from vray_blender.lib.sys_utils import StartupConfig
+
     checkAndReportVersionIncompatibility()
-    
+
     engine.ensureRunning()
 
     # Reset the global unique ID generator. This will keep the generated IDs to a
     # decent size and will also ensure that on reload, given that no changes have been
     # made to the scene, the IDs will remain the same
     IdGenerator.reset()
+
+    # Upgrade trees coming from Blender 4.5, not completely clear why but they seem to have an empty tree_type.
+    upgradeTrees()
 
     # Set unique ids to all objects with VRay properties
     syncUniqueNames(reset=True)
@@ -82,7 +92,8 @@ def _onLoadPost(e):
 
     # Set the log level to the one saved in the scene
     prefs = blender_utils.getVRayPreferences()
-    debug.setLogLevel(int(prefs.verbose_level), prefs.enable_qt_logs)
+    logLevel = int(StartupConfig.logLevel) if StartupConfig.logLevel is not None else int(prefs.verbose_level)
+    debug.setLogLevel(logLevel, prefs.enable_qt_logs)
 
     # Remove any images from the previous scene explicitly saved by the plugin and track the ones from the current scene.
     image_utils.clearSavedImages()
@@ -91,10 +102,16 @@ def _onLoadPost(e):
     # Run upgrade for the loaded scene, if necessary
     if bpy.app.background:
         # In headless mode, the rendering may start before the scene is upgraded.
-        # Invoke the operaror synchronously
+        # Invoke the operator synchronously
         bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
     else:
         VfbEventHandler.upgradeScene()
+
+    if autoCheckForUpdatesFeatureEnabled():
+        if _UpdateCheckSystemInitialized:
+            from vray_blender.utils.update_checker import onCheckTimer
+            if not bpy.app.timers.is_registered(onCheckTimer):
+                bpy.app.timers.register(onCheckTimer)
 
 
 @bpy.app.handlers.persistent
@@ -111,14 +128,14 @@ def _onRedoPost(e):
 
 @bpy.app.handlers.persistent
 def _onUpdatePre(e):
-    from vray_blender.exporting.light_export import fixBlenderLights
+    from vray_blender.exporting.light_export import fixSceneLights
     from vray_blender.plugins.templates.common import cleanupObjectSelectorLists
     from vray_blender.lib.camera_utils import fixOverrideCameraType
 
     if blender_utils.deleteOperatorHasBeenCalled():
         cleanupObjectSelectorLists()
-    
-    fixBlenderLights()
+
+    fixSceneLights()
 
     pruneColorRamps()
     syncColorRamps()
@@ -137,7 +154,6 @@ if bpy.app.version >= (4, 3, 0):
             if item.id_type == 'MATERIAL':
                 createMtlCurvesNodes(item.id)
 
-
 def register():
     blender_utils.addEvent(bpy.app.handlers.save_pre, _onSavePre)
     blender_utils.addEvent(bpy.app.handlers.save_post, _onSavePost)
@@ -155,6 +171,19 @@ def register():
     # a scene reload.
     VfbEventHandler.ensureRunning(reset=True)
 
+    global _UpdateCheckSystemInitialized
+
+    if autoCheckForUpdatesFeatureEnabled():
+        if not _UpdateCheckSystemInitialized:
+            # This is the first scene loaded after Blender has started
+            from vray_blender.utils.update_checker import onInitialCheck
+            bpy.app.timers.register(onInitialCheck)
+            _UpdateCheckSystemInitialized = True
+        else:
+            # Scene has been reloaded
+            from vray_blender.utils.update_checker import onCheckTimer
+            bpy.app.timers.register(onCheckTimer)
+
 
 def unregister():
     VfbEventHandler.stop()
@@ -170,3 +199,7 @@ def unregister():
     # bpy.app.handlers.blend_import_post was added in 4.3
     if bpy.app.version >= (4, 3, 0):
         blender_utils.delEvent(bpy.app.handlers.blend_import_post, _onImportPost)
+
+    from vray_blender.utils.update_checker import onCheckTimer
+    if bpy.app.timers.is_registered(onCheckTimer):
+        bpy.app.timers.unregister(onCheckTimer)

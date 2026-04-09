@@ -3,7 +3,7 @@
     "Parameters": [
         {
             "attr": "filepath",
-            "subtype": "NONE",
+            "subtype": "VRAY_FILE_PATH",
             "update": "onUpdatePreviewFile",
             "options" : {
                 "shadowed": true

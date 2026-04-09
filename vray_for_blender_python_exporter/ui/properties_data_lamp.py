@@ -21,9 +21,7 @@ from vray_blender.plugins.templates.common import VRayObjectSelector
  #######     ##    #### ########  ######
 
 def lightIsSun(lamp):
-    if lamp.type == 'SUN' and lamp.vray.direct_type == 'SUN':
-        return True
-    return False
+    return lamp.type == 'SUN' and lamp.vray.direct_type == 'SUN'
 
 
 def lightIsAmbient(lamp):
@@ -58,7 +56,7 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
             layout.template_ID(context.space_data, "pin_id")
 
         layout.separator()
-        layout.label(text=f"V-Ray Type:  {lightPluginType}")
+        layout.label(text=f"V-Ray Type: {lightPluginType}")
 
         # The property values are stored in different places for light with node trees and such without
         outputNode = None

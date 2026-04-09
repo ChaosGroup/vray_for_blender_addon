@@ -11,6 +11,7 @@ from vray_blender import debug
 from vray_blender import bl_info as vray_bl_info, UPGRADE_NUMBER
 from vray_blender import build_number
 
+from vray_blender.bin import VRayBlenderLib as vray
 
 def getAddonVersion():
     """ Get the 'version' field of bl_info as a string """
@@ -29,15 +30,30 @@ def getSceneUpgradeNumber():
         both pre-version scenes and such not created with V-Ray. In both
         cases all upgrade scripts need to be run.
     """
-    upgradeNum = bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber
 
+    from vray_blender.lib.blender_utils import isDefaultScene
+
+    upgradeNum = bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber
     if upgradeNum == 0:
         # 0 is a special number for legacy scenes created before the concept of upgrade version
         # number was introduced, and for scenes that were not created using V-Ray.
         sceneVer = getNumericVersion(getSceneVersionString())
-
         if sceneVer == '6.20.00':
             upgradeNum = 0 # Explicitly set to the same value just for clarity
+        if sceneVer== '7.00.10':
+            upgradeNum = 1
+        elif sceneVer == '7.00.40':
+            upgradeNum = 12
+        elif sceneVer == '7.10.00':
+            upgradeNum = 20
+        elif sceneVer == '7.10.01':
+            upgradeNum = 21
+        elif sceneVer == '7.20.00':
+            upgradeNum = 29
+        elif sceneVer == '7.20.01':
+            upgradeNum = 33
+        elif sceneVer: # Most likely a non-upgraded default scene
+            upgradeNum = UPGRADE_NUMBER
         else:
             upgradeNum = 1
 
@@ -55,7 +71,7 @@ def getBuildVersionString():
         vrayVerString = getAddonVersion()
         buildDate = build_number.BUILD_DATE
 
-        if build_number.BUILD == 'release':
+        if isReleaseBuild():
             # This is an official build, revision number is not relevant
             return f"{vrayVerString} from {buildDate}"
         else:
@@ -87,6 +103,16 @@ def getNumericVersion(versionString:str):
 
 def getVersionAsNumbers(ver: str):
     return [int(v) for v in ver.split('.')]
+
+
+def formatNumericVersion(ver: list[str]):
+    """ Return the version as numbers only, e.g. 7.20.01.
+
+        Args:
+        ver: a list of major, minor, hotfix version numbers as strings
+    """
+    assert len(ver) == 3
+    return '.'.join(ver)
 
 
 def findUpgradeScripts(fromUpgradeNum: str, toUpgradeNum: str):
@@ -129,6 +155,7 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     """
     from vray_blender.lib.blender_utils import isDefaultScene
     from vray_blender.lib.sys_utils import importModule
+    from vray_blender.nodes.utils import DisableAutoConnect
 
     sceneName = "default scene" if isDefaultScene() else f"'{bpy.data.filepath}'"
     debug.printAlways(f"Update scene from v{int(fromUpgradeNum)} to v{int(toUpgradeNum)}: {sceneName}")
@@ -153,7 +180,8 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
         try:
             # Not all upgrades in the range may affect the current scene, run only the ones that do
             if upgradeModule.check():
-                upgradeModule.run()
+                with DisableAutoConnect():
+                    upgradeModule.run()
 
             # Set the new upgrade number to the scene
             setSceneUpgradeNumber(int(upgradeNum))
@@ -207,3 +235,8 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
 
     return False
 
+
+def isReleaseBuild():
+    """ Return True if the addon's build is of type 'release' """
+    from vray_blender import build_number
+    return build_number.BUILD == 'release'

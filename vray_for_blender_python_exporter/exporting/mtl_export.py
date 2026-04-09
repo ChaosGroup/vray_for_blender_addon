@@ -39,14 +39,11 @@ def _tagForUpdateMtlWithSelectorNode(exporterCtx: ExporterContext):
         referencing object with updated transform
     """
     for mtl in [m for m in bpy.data.materials if m.node_tree]:
-        if not mtl.node_tree:
-            continue
-
         for node in mtl.node_tree.nodes:
             if node.bl_idname == "VRayNodeSelectObject":
                 if node.objectPtr and (node.objectPtr.original.session_uid in exporterCtx.dgUpdates['transform']):
                     UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.DATA)
-                    return
+                    break
 
 
 def syncMtlExportCache(exporterCtx: ExporterContext):
@@ -75,11 +72,11 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
         vrayMtlsWithRemovedNodeTrees = {m for m in mtlsWithUpdatedTrees if m.vray.is_vray_class and(NodesUtils.getOutputNode(m.node_tree, 'MATERIAL') is None)}
         cyclesMtlsWithRemovedNodeTrees = {m for m in mtlsWithUpdatedTrees if not m.vray.is_vray_class and(NodesUtils.getOutputNode(m.node_tree, 'SHADER') is None)}
 
-        mtlsWithRemovedNodeTrees = {m for m in vrayMtlsWithRemovedNodeTrees.union(cyclesMtlsWithRemovedNodeTrees)}
+        mtlsWithRemovedNodeTrees = vrayMtlsWithRemovedNodeTrees.union(cyclesMtlsWithRemovedNodeTrees)
 
         for mtl in mtlsWithRemovedNodeTrees:
             # Tag updated topology. This will be used later by prunePlugins() to remove
-            # the corresponding V-Ray yplugins
+            # the corresponding V-Ray plugins
             UpdateTracker.tagMtlTopology(exporterCtx.ctx, mtl)
 
         updatedMtls = {m for m in bpy.data.materials if getObjTrackId(m) in mtlTaggedUpdates or \
@@ -133,6 +130,7 @@ class MtlExporter(ExporterBase):
                 return MtlExporter.exportDefaultMaterial(self), SceneStats()
             elif overrideMode == '2' and viewLayer.material_override: # Custom material
                 mtl = viewLayer.material_override
+                outputNode, isVRayMtl = self._getMtlOutputNode(mtl)
 
         mtlId = getObjTrackId(mtl)
 
@@ -150,13 +148,12 @@ class MtlExporter(ExporterBase):
 
         nodeCtx.material = mtl
         with nodeCtx:
-            nodeOutput, isVRayMtl = self._getMtlOutputNode(mtl)
-            if not nodeOutput:
+            if not outputNode:
                 NodeContext.registerError(f"Output node not found in {'V-Ray' if isVRayMtl else 'Cycles'} material tree")
                 return None, SceneStats()
 
             sockName = 'Material' if isVRayMtl else 'Surface'
-            sock = getInputSocketByName(nodeOutput, sockName)
+            sock = getInputSocketByName(outputNode, sockName)
             assert sock, "Material output node has no input socket"
 
             if not (nodeLink := getFarNodeLink(sock)):
@@ -170,20 +167,20 @@ class MtlExporter(ExporterBase):
                 self.exportedMtls[mtlId] = defaultMtlPlugin
                 return defaultMtlPlugin, SceneStats()
 
-            with nodeCtx.push(nodeOutput):
+            with nodeCtx.push(outputNode):
                 # Track the plugins exported for each node of the tree
-                if (singleBRDFMtl := nodeCtx.getCachedNodePlugin(nodeOutput)) is None:
+                if (singleBRDFMtl := nodeCtx.getCachedNodePlugin(outputNode)) is None:
                     with TrackObj(self.nodeTracker, mtlId):
                         brdfPlugin = exportVRayNode(nodeCtx, nodeLink) if nodeLink else AttrPlugin()
 
-                        with TrackNode(self.nodeTracker, getNodeTrackId(nodeOutput)):
+                        with TrackNode(self.nodeTracker, getNodeTrackId(outputNode)):
                             singleBRDFMtl = self._exportMtlSingleBRDF(nodeCtx, brdfPlugin)
 
                         nodeCtx.stats.uniqueMtls.add(mtl.name)
                         nodeCtx.stats.mtls += 1
 
                     self.exportedMtls[mtlId] = singleBRDFMtl
-                    nodeCtx.cacheNodePlugin(nodeOutput, singleBRDFMtl)
+                    nodeCtx.cacheNodePlugin(outputNode, singleBRDFMtl)
 
         return singleBRDFMtl, nodeCtx.stats
 

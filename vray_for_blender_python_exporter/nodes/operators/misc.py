@@ -124,31 +124,33 @@ def _drawVRayNodeEditorMenus(layout, context: bpy.types.Context):
     layout.prop(context.scene.vray, "ActiveNodeEditorType", text="")
     layout.menu("NODE_MT_view")
     layout.menu("NODE_MT_select")
-    layout.menu("NODE_MT_add")
+    layout.menu("NODE_MT_vray_add")
     layout.menu("NODE_MT_node")
     layout.separator_spacer()
 
 # Draws the menus for assigning and creating node trees
 def _drawVRayNodeSelection(layout, context, snode):
-    vrayTreeType = context.scene.vray.ActiveNodeEditorType
-    if vrayTreeType == "WORLD" and hasattr(context.scene, 'world'):
+    scene = context.scene
+    vrayTreeType = scene.vray.ActiveNodeEditorType
+    ob = snode.id_from if snode.pin and snode.id_from else context.object
+    layout = layout.row()
+    layout.enabled = not snode.pin
+    if vrayTreeType == "WORLD" and hasattr(scene, 'world'):
         # Worlds list
-        if context.scene.world:
+        if scene.world and scene.world.vray.is_vray_class:
             # Show the list of worlds
-            layout.template_ID(context.scene, "world", new="vray.copy_world")
+            layout.template_ID(scene, "world", new="vray.copy_world")
         else:
             # Show only the 'New' button
-            layout.template_ID(context.scene, "world", new="vray.add_nodetree_world")
-        
+            layout.template_ID(scene, "world", new="vray.add_nodetree_world")
+
         # If this is not a V-Ray world, show a to-vray conversion button
-        if context.scene.world and not context.scene.world.vray.is_vray_class:
-            layout.operator("vray.add_nodetree_world", icon="NODETREE", text="Use V-Ray World Nodes")
+        if scene.world and not scene.world.vray.is_vray_class:
+            layout.operator("vray.add_nodetree_world", icon="NODETREE", text="New V-Ray World Nodes")
 
-
-    elif context.object:
-        ob = context.object
-        has_material_slots = not snode.pin and ob.type in blender_utils.TypesThatSupportMaterial
-        if vrayTreeType == "SHADER" and has_material_slots:
+    elif ob and (objType := getattr(ob, 'type', '')):
+        hasMaterialSlots = objType in blender_utils.TypesThatSupportMaterial
+        if vrayTreeType == "SHADER" and hasMaterialSlots:
             row = layout.row()
             row.enabled = True
             row.ui_units_x = 4
@@ -167,15 +169,15 @@ def _drawVRayNodeSelection(layout, context, snode):
             else:
                 # Just show a label with the light name for now. Light's node trees are not interchangeable.
                 layout.label(text=ob.data.name, icon='LIGHT_DATA')
-        
-        elif vrayTreeType == "OBJECT" and has_material_slots:
+
+        elif vrayTreeType == "OBJECT" and hasMaterialSlots:
             if ob.vray.isVRayFur:
                 _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_fur", "OBJECT_DATAMODE", "Use V-Ray Fur Nodes")
             elif ob.vray.isVRayDecal:
                 _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_decal", "OBJECT_DATAMODE", "Use V-Ray Decal Nodes")
             else:
                 _drawVrayNodeSelector(layout, ob, "ntree", "vray.add_nodetree_object", "OBJECT_DATAMODE", "Use V-Ray Object Nodes")
-        
+
         else:
             row = layout.row()
             row.label(text="Selected object type not supported this Node editor")

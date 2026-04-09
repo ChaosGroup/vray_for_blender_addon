@@ -21,6 +21,11 @@ class LogLevel:
     Info    = 3
     Debug   = 4
 
+class VfbMessageLevel:
+    MessageError = 0
+    MessageWarning = 1
+    MessageInfo = 2
+    MessageDebug = 3
 
 # Blender to V-Ray log level map
 _LOG_LEVEL_MAP = {

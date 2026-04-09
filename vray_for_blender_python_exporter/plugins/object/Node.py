@@ -77,16 +77,12 @@ class VRAY_OT_user_attribute_assign_to_selected(VRayOperatorBase):
                         newValue = random.randrange(activeUA.user_attributes_int_rnd_min,
                             activeUA.user_attributes_int_rnd_max)
                     elif activeAttribute.value_type == '1':
-                        random.random()
                         randFloat = random.random()
                         randRange = activeUA.user_attributes_float_rnd_max - activeUA.user_attributes_float_rnd_min
                         newValue = activeUA.user_attributes_float_rnd_min + randFloat * randRange
                     elif activeAttribute.value_type == '2':
-                        random.random()
                         randR = random.random()
-                        random.random()
                         randG = random.random()
-                        random.random()
                         randB = random.random()
                         newValue = mathutils.Color((randR, randG, randB))
                     setattr(attr, attrValueName, newValue)

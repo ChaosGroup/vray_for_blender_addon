@@ -5,19 +5,21 @@
 import bpy
 import json
 import threading
+from collections import deque
 
 from vray_blender.engine.zmq_process import ZMQProcess
-from vray_blender.lib import sys_utils
-from vray_blender.lib.defs import ProdRenderMode
+from vray_blender.lib import sys_utils, image_utils
+from vray_blender.lib.defs import UIRegionContext, ProdRenderMode
 from vray_blender.nodes.utils import tagRedrawViewport
-from vray_blender.lib.camera_utils import renderCamerasHaveSameType
+from vray_blender.lib.camera_utils import renderCamerasHaveSameType, sceneResolutionLimitedByCE
+from vray_blender.lib.blender_utils import getViewLayerUseFCurve, setFloatFrame
 
 from vray_blender import debug
 
 class _Event:
     Undefined               = 0
     RenderViewport          = 1     # Switch viewport to RENDERED mode
-    RenderSolid             = 2     # Switch  viewport to SOLID mode
+    RenderSolid             = 2     # Switch viewport to SOLID mode
     RenderProd              = 3     # Start production rendering
     RenderProdEnd           = 5     # End a production render
     RenderInteractive       = 6     # Start IPR(Interactive) Rendering
@@ -32,7 +34,7 @@ class _Event:
 DrawHandlers = []
 
 class _EventInfo:
-    """ Encapsulates the event type and any parameters to the evennt handler procedure """
+    """ Encapsulates the event type and any parameters to the event handler procedure """
     def __init__(self, eventType, *args, **kwargs):
         self.eventType = eventType
         self.args = args
@@ -46,19 +48,19 @@ class _VfbEventHandler:
     def __init__(self):
         self._lock = threading.Lock()
 
-        self._eventQueue: list[_EventInfo] = []   # FIFO queue of events
-        self._vfbLayersJson      = ""      # Last layer settings received fom VFB
+        self._eventQueue: deque[_EventInfo] = deque()   # FIFO queue of events
+        self._vfbLayersJson      = ""      # Last layer settings received from VFB
         self._vfbSettingsJson    = ""      # Last received VFB settings
-        self._fps                = 5       # Timer activation rate
+        self._fps                = 10      # Timer activation rate
         self._redrawViewport     = False   # Flag to request viewport redraw on the next timer activation
 
         self._lightMixSupported  = False   # Flag to indicate if LightMix settings are supported (After a valid RenderChannelLightMix plugin is exported and rendered)
-        self._lightMixSettings   = None    # Stores LightMix settings until a valid RenderChannelLightMix plugin is exported and rendered
+        self._lightMixSettings   = None    # Stores LightMix settings until a valid RenderChannelLightMix plugin is exported and rendered  
 
 
     def addEvent(self, eventType, *args, **kwargs):
         """ Add an event to the event queue. The event will be processed in a valid Blender context.
-            This nethod is thread-safe.
+            This method is thread-safe.
         """
         with self._lock:
             # Only add the event if it is not a duplicate of the last one received.
@@ -80,9 +82,9 @@ class _VfbEventHandler:
 
     def reset(self):
         with self._lock:
-            self.eventQueue     = []
-            self.vfbLayersJson  = ""
-            self.vfSettingsJson = ""
+            self._eventQueue     = deque()
+            self._vfbLayersJson  = ""
+            self._vfbSettingsJson = ""
             self._redrawViewport = False
             self._lightMixSupported = False
             self._lightMixSettings = None
@@ -105,19 +107,19 @@ class _VfbEventHandler:
         """ Set the viewport to RENDERED mode """
         self.addEvent(_Event.RenderViewport)
 
-    def startInteractiveRender(self, iprContext = None):
+    def startInteractiveRender(self, uiRegionContext = None):
         """ Start interactive rendering """
-        self.addEvent(_Event.RenderInteractive, iprContext)
+        self.addEvent(_Event.RenderInteractive, uiRegionContext)
 
-    def startVantageLiveLink(self):
+    def startVantageLiveLink(self, uiRegionContext = None):
         """ Start interactive rendering """
-        self.addEvent(_Event.RenderVantageStart)
+        self.addEvent(_Event.RenderVantageStart, uiRegionContext)
 
     def stopInteractiveRender(self):
         """ Stop interactive rendering """
         self.addEvent(_Event.RenderInteractiveStop)
 
-    def startProdRender(self, forceAnimation: bool):
+    def startProdRender(self, forceAnimation: bool, uiRegionContext: UIRegionContext):
         """ Start production rendering """
         from vray_blender.engine.renderer_prod import VRayRendererProd
 
@@ -127,22 +129,22 @@ class _VfbEventHandler:
             return
         self.stopViewportRender()
         self.stopInteractiveRender()
-        self.addEvent(_Event.RenderProd, forceAnimation)
+        self.addEvent(_Event.RenderProd, forceAnimation=forceAnimation, uiRegionContext=uiRegionContext)
 
     def stopVantageLiveLink(self):
         self.addEvent(_Event.RenderVantageStop)
 
-    def exportVrscene(self):
+    def exportVrscene(self, uiRegionContext: UIRegionContext):
         """ Export .vrscene """
         self.stopViewportRender()
         self.stopInteractiveRender()
-        self.addEvent(_Event.ExportVrscene)
+        self.addEvent(_Event.ExportVrscene, uiRegionContext=uiRegionContext)
 
-    def cloudSubmit(self):
+    def cloudSubmit(self, uiRegionContext: UIRegionContext):
         """ Submit scene to Chaos cloud """
         self.stopViewportRender()
         self.stopInteractiveRender()
-        self.addEvent(_Event.CloudSubmit)
+        self.addEvent(_Event.CloudSubmit, uiRegionContext=uiRegionContext)
 
     def reportStatus(self, severity: set, msg: str):
         """ Report to Blender's status field """
@@ -213,7 +215,6 @@ class _VfbEventHandler:
         with self._lock:
             return self._vfbLayersJson
 
-
     def _isEventInQueue(self, eventType: int):
         with self._lock:
             return any(e for e in self._eventQueue if e.eventType == eventType)
@@ -226,6 +227,8 @@ class _VfbEventHandler:
         # the timer works fine).
         self = VfbEventHandler
         try:
+            image_utils.updateTexturePlaceholderNode()
+
             ev = None
 
             with self._lock:
@@ -260,13 +263,13 @@ class _VfbEventHandler:
 
                 case _Event.RenderProd:
                     self.setLightMixSupported(True)
-                    processed = self.startProdRenderSync(ProdRenderMode.RENDER, *event.args)
+                    processed = self.startProdRenderSync(ProdRenderMode.RENDER, *event.args, **event.kwargs)
 
                 case _Event.ExportVrscene:
-                    processed = self.startProdRenderSync(renderMode=ProdRenderMode.EXPORT_VRSCENE)
+                    processed = self.startProdRenderSync(ProdRenderMode.EXPORT_VRSCENE, *event.args, **event.kwargs)
 
                 case _Event.CloudSubmit:
-                    processed = self.startProdRenderSync(renderMode=ProdRenderMode.CLOUD_SUBMIT)
+                    processed = self.startProdRenderSync(ProdRenderMode.CLOUD_SUBMIT, *event.args, **event.kwargs)
 
                 case _Event.RenderInteractive:
                     self.setLightMixSupported(True)
@@ -282,7 +285,7 @@ class _VfbEventHandler:
                     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
 
                 case _Event.RenderVantageStart:
-                    self._startVantageLiveLink()
+                    self._startVantageLiveLink(*event.args, **event.kwargs)
 
                 case _Event.RenderVantageStop:
                     self._stopVantageLiveLink()
@@ -294,7 +297,7 @@ class _VfbEventHandler:
 
         with self._lock:
             if processed:
-                self._eventQueue.pop(0)
+                self._eventQueue.popleft()
 
 
     def changeViewportModeSync(self, newMode: str):
@@ -306,11 +309,11 @@ class _VfbEventHandler:
         """
         from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprBase
 
-        if not (iprContext := VRayRendererIprBase.getActiveIprContext()):
+        if not (uiRegionContext := VRayRendererIprBase.getActiveUIRegionContext()):
             # The command cannot be carried out because there are no 3d viewport views open in Blender.
             return
 
-        space = iprContext.view3d
+        space = uiRegionContext.view3d
         if space and space.shading.type != newMode:
             # The change to the shading type value will trigger a switch of the viewport
             # to the specified shading mode.
@@ -318,18 +321,18 @@ class _VfbEventHandler:
 
 
     def _saveVfbSettings(self):
-        #Save VFB settings in human-readable format
+        # Save VFB settings in human-readable format
         with open(sys_utils.getVfbSettingsPath(), "w") as vfbConf:
             uiSettings = json.loads(self._vfbSettingsJson)
             vfbConf.write(json.dumps(uiSettings, indent=4))
 
 
-    def startProdRenderSync(self, renderMode: int, forceAnimation = False, block = False):
+    def startProdRenderSync(self, renderMode: int, forceAnimation = False, uiRegionContext = None, block = False):
         """ Invoke the production render operator
 
         Args:
-            renderMode (int): one of the ProdRebderMode members
-            forceAnimation (bool, optional): force renering animation even if the mode currently
+            renderMode (int): one of the ProdRenderMode members
+            forceAnimation (bool, optional): force rendering animation even if the mode currently
                                              selected in the UI is not ANIMATION.
             block (bool, optional): Run the render operator in blocking mode.
 
@@ -338,12 +341,17 @@ class _VfbEventHandler:
         """
         from vray_blender.engine.renderer_prod import VRayRendererProd
 
+        scene = bpy.context.scene
+
+        if (renderMode == ProdRenderMode.RENDER) and sceneResolutionLimitedByCE(scene) :
+            return True
+
         # Blender would not let the 'Render' operator run without a camera. Check here in order
         # to avoid the exception log that would be printed otherwise.
-        if not bpy.context.scene.camera:
-           action = "export" if renderMode == ProdRenderMode.EXPORT_VRSCENE else "render"
-           debug.reportError(f'Cannot {action} a scene without a camera. Add a camera to the scene and try again.')
-           return True
+        if not scene.camera:
+            action = "export" if renderMode == ProdRenderMode.EXPORT_VRSCENE else "render"
+            debug.reportError(f'Cannot {action} a scene without a camera. Add a camera to the scene and try again.')
+            return True
 
         if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('COMPOSITE'):
             # This is check is a temporary debug tool used in an attempt to catch
@@ -363,7 +371,7 @@ class _VfbEventHandler:
 
         # Lock the UI for the duration of the job. If the UI is not locked while a render job is running
         # in a timer callback, an access violation may occur in Blender.
-        bpy.context.scene.render.use_lock_interface = True
+        scene.render.use_lock_interface = True
 
         # Set render_display_type to None in order to hide the Blender render window and only render in the VFB.
         lastRenderDisplayType = bpy.context.preferences.view.render_display_type
@@ -373,6 +381,36 @@ class _VfbEventHandler:
         # and camera of the viewport.
         VRayRendererProd.renderMode = renderMode
         VRayRendererProd.forceAnimation = forceAnimation
+        VRayRendererProd.fakeViewLayerKeyframe = None
+        VRayRendererProd.uiRegionContext = uiRegionContext
+
+        useAnimation = scene.vray.Exporter.animation_mode == 'ANIMATION'
+        if renderMode == ProdRenderMode.EXPORT_VRSCENE:
+            useAnimation = scene.vray.Exporter.animationSettingsVrsceneExport.exportAnimation
+        useAnimation |= forceAnimation
+
+        if useAnimation:
+            # Workaround: Ensure rendering initiates for every view layer, including those disabled at the current frame.
+            # If view_layers["viewLayerName"].use is False on the intended first frame, rendering for that view layer does not start.
+            # To prevent this, insert a keyframe setting view_layer.use=True just before the first keyframed frame for each view layer.
+            # This guarantees all view layers are considered enabled when rendering starts.
+            minVLayerUseKf = None
+
+            for view_layer in scene.view_layers:
+                if (vlFCurve := getViewLayerUseFCurve(view_layer.name)):
+                    if (minKf := min((kp.co.x for kp in vlFCurve.keyframe_points), default=None)) is not None:
+                        minVLayerUseKf = min(minVLayerUseKf, minKf) if minVLayerUseKf is not None else minKf
+
+            if minVLayerUseKf is not None:
+                # The fake keyframe is set to the frame before the first keyframed frame for each view layer.
+                VRayRendererProd.fakeViewLayerKeyframe = minVLayerUseKf - 1
+                
+                for view_layer in scene.view_layers:
+                    if vlFCurve := getViewLayerUseFCurve(view_layer.name):
+                        vlFCurve.keyframe_points.insert(frame=VRayRendererProd.fakeViewLayerKeyframe, value=True)
+
+                setFloatFrame(scene, VRayRendererProd.fakeViewLayerKeyframe)
+
         bpy.ops.render.render('EXEC_DEFAULT' if block else 'INVOKE_DEFAULT', use_viewport=True)
 
         renderModeName = {
@@ -387,27 +425,39 @@ class _VfbEventHandler:
         return True
 
 
-    def _startInteractiveRender(self, iprContext):
+    def _startInteractiveRender(self, uiRegionContext: UIRegionContext):
+        if sceneResolutionLimitedByCE(bpy.context.scene):
+            return
+
         from vray_blender.engine.render_engine import VRayRenderEngine
         from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 
-        if not iprContext:
-            iprContext = VRayRendererIprVfb.getActiveIprContext()
+        if not uiRegionContext:
+            uiRegionContext = VRayRendererIprVfb.getActiveUIRegionContext()
 
-        if not iprContext:
+        if not uiRegionContext:
             debug.report('WARNING', "No active viewport to render")
             return
         
-        VRayRenderEngine.startInteractiveRenderer(iprContext)
+        VRayRenderEngine.startInteractiveRenderer(uiRegionContext)
         VRayRenderEngine.iprRenderer.exportScene()
 
     def _stopInteractiveRender(self):
         from vray_blender.engine.render_engine import VRayRenderEngine
         VRayRenderEngine.stopInteractiveRenderer()
 
-    def _startVantageLiveLink(self):
+    def _startVantageLiveLink(self, uiRegionContext: UIRegionContext):
         from vray_blender.engine.render_engine import VRayRenderEngine
-        VRayRenderEngine.startVantageLiveLink()
+        from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
+
+        if not uiRegionContext:
+            uiRegionContext = VRayRendererVantageLiveLink.getActiveUIRegionContext()
+
+        if not uiRegionContext:
+            debug.report('WARNING', "No active viewport to render")
+            return
+        
+        VRayRenderEngine.startVantageLiveLink(uiRegionContext)
 
     def _stopVantageLiveLink(self):
         from vray_blender.engine.render_engine import VRayRenderEngine

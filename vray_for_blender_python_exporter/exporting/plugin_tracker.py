@@ -304,7 +304,7 @@ class TrackObj:
          
 
 class ObjDataTracker:
-    """ This class matches a Names.objectData(obj, instance) to its associated geometry plugin names. 
+    """ This class matches a the name of the object data to its associated geometry plugin names. 
         
         Note: ObjTrackId(obj.data) can't be used instead of the name, because the object may point to data thats internally created by Blender,
         and in that case its session_uid will be different on every change to it.
@@ -317,11 +317,15 @@ class ObjDataTracker:
             self.particlePluginNames = {} # A dictionary of particle system names to particle plugin names.
 
     def __init__(self):        
-        """ Initialize the mapping from data names to geometry plugin names """
+        """ Initialize the mapping from data names to geometry plugin names. """
         self.dataToGeomPluginName: dict[str, self.GeomPluginData] = defaultdict(self.GeomPluginData)
 
     def dataExported(self, dataName: str):
-        """ Return True if a base plugin name has been recorded for the given data name """
+        """ Return True if a base plugin name has been recorded for the given data.
+
+            Parameters:
+                dataName (str): The name of the object data.
+        """
         return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).name is not None
 
     def getPluginName(self, dataName: str):
@@ -329,23 +333,48 @@ class ObjDataTracker:
         return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).name
 
     def trackPluginOfData(self, dataName: str, pluginName: str):
-        """ Track (associate) the given plugin name as the base plugin for the data name """
+        """ Track (associate) the given plugin name as the base plugin for the data.
+
+            Parameters:
+                dataName (str): The name of the object data.
+                pluginName (str): The geometry plugin name to associate with the object data.
+        """
         self.dataToGeomPluginName[dataName].name = pluginName
 
     def trackParticlePluginOfData(self, dataName: str, particleSystemName: str, pluginName: str):
-        """ Track a particle plugin name for the given data name and particle system name """
+        """ Track a particle plugin name for the given data and particle system.
+
+            Parameters:
+                dataName (str): The name of the object data.
+                particleSystemName (str): The name of "ParticleSystem" modifier of the object.
+                pluginName (str): The geometry plugin name to associate with the object data.
+        """
         self.dataToGeomPluginName[dataName].particlePluginNames[particleSystemName] = pluginName
     
     def getParticlePluginName(self, dataName: str, particleSystemName: str):
-        """ Retrieve the particle plugin name for the given data name and particle system name """
+        """ Retrieve the particle plugin name for the given data and particle system.
+
+            Parameters:
+                dataName (str): The name of the object data.
+                particleSystemName (str): The name of "ParticleSystem" modifier of the object.
+        """
         return self.dataToGeomPluginName.get(dataName, self.GeomPluginData()).particlePluginNames.get(particleSystemName, None)
 
     def particleDataExported(self, dataName: str, particleSystemName: str):
-        """ Return True if a particle plugin name has been exported for the given data and particle system names """
+        """ Return True if a particle plugin has been exported for the given data and particle system.
+
+            Parameters:
+                dataName (str): The name of the object data.
+                particleSystemName (str): The name of "ParticleSystem" modifier of the object.
+        """
         return self.getParticlePluginName(dataName, particleSystemName) is not None
 
     def popData(self, dataName: str):
-        """ Remove and return the geometry plugin name association for the given data name """
+        """ Remove and return the geometry plugin association for the given data.
+
+            Parameters:
+                dataName (str): The name of the object data.
+        """
         return self.dataToGeomPluginName.pop(dataName, None)
 
 

@@ -4,11 +4,13 @@
 
 #pragma once
 
+#ifdef WITH_OSL
 #include<string>
 
-#include <boost/python.hpp>
+#include <nanobind/nanobind.h>
 #include <OSL/oslquery.h>
 
+namespace nb = nanobind;
 
 namespace VRayForBlender::Interop
 {
@@ -32,10 +34,10 @@ struct PyOSLParam {
 	PyOSLParam() = default;
 	bool init(const OSL::OSLQuery::Parameter* param);
 
-	boost::python::object name; // OSLQuery::Parameter name
-	boost::python::object socketType; // Socket type for this parameter
-	boost::python::object socketDefaultValue; // default value
-	boost::python::object isOutputSocket; // output or input
+	nb::object name; // OSLQuery::Parameter name
+	nb::object socketType; // Socket type for this parameter
+	nb::object socketDefaultValue; // default value
+	nb::object isOutputSocket; // output or input
 
 private:
 	// extracting default socket value from parameter
@@ -51,3 +53,4 @@ bool getOslQuery(OSL::OSLQuery& query, const std::string& script);
 
 
 } // end namespace VRayForBlender::Interop
+#endif

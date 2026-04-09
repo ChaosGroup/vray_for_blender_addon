@@ -7,6 +7,7 @@ import bpy
 from vray_blender.exporting.tools import removeOutputSocketLinks, getOutputSocketByAttr
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.nodes.utils import getNodeOfPropGroup
 
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -36,6 +37,13 @@ class VRAY_OT_node_texsampler_sockets(VRayOperatorBase):
             removeOutputSocketLinks(outSock)
 
         return {'FINISHED'}
+
+
+def onUpdateInternalSampler(propGroup, context, attrName):
+    node = getNodeOfPropGroup(propGroup)
+    outSock = getOutputSocketByAttr(node, propGroup.internal_sampler)
+    outSock.hide = False
+    outSock.enabled = True
 
 
 def nodeDraw(context, layout, node):

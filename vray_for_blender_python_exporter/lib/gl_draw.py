@@ -5,7 +5,7 @@
 import gpu
 import numpy
 
-
+from gpu_extras.batch import batch_for_shader
 from vray_blender.lib.camera_utils import Size, ViewParams
 
 
@@ -79,7 +79,6 @@ class DrawData:
         Args:
             windowSize (Size): The dimensions of the whole viewport region.
         """
-        from gpu_extras.batch import batch_for_shader
 
         viewParams = self.viewParams
 

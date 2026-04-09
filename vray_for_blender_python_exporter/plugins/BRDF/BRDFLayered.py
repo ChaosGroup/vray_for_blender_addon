@@ -13,7 +13,7 @@ from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.names import Names
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
-from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput
+from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput, moveExtendSocketToBottom
 from vray_blender.nodes.utils import getVrayPropGroup
 from vray_blender.plugins import getPluginModule
 
@@ -22,6 +22,10 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 
 _MAX_LAYERED_BRDFS = 64 # maximum number of brdfs that could be added in BRDFLayered
 
+def addBRDFLayeredExtendSocket(node):
+    sockExtend = addInput(node, 'VRaySocketExtend', "")
+    sockExtend.add_operator = 'vray.node_add_brdf_layered_sockets'
+    sockExtend.del_operator = 'vray.node_del_brdf_layered_sockets'
 
 def nodeInit(node: bpy.types.Node):
     # Base material
@@ -34,7 +38,59 @@ def nodeInit(node: bpy.types.Node):
     addInput(node, 'VRaySocketColor', weightSockName).setValue((0.5, 0.5, 0.5))
     addInput(node, 'VRaySocketWeight', opacitySockName, visible=False).setValue(1.0)
 
+    addBRDFLayeredExtendSocket(node)
+
     addOutput(node, 'VRaySocketBRDF', "BRDF")
+
+
+_ScheduledUpdates = set()
+
+def nodeUpdate(node: bpy.types.Node):
+    def _validateLinks():
+        _ScheduledUpdates.discard(node.as_pointer())
+
+        if not node or not node.id_data:
+            return
+
+        transpSock = node.inputs.get("Transparency Tex")
+        if transpSock and transpSock.is_linked:
+            baseMatSock = node.inputs.get("Base Material")
+            if baseMatSock and not baseMatSock.is_linked:
+                link = transpSock.links[0]
+                if link.from_socket.bl_idname in {'VRaySocketBRDF', 'VRaySocketMtl'}:
+                    node.id_data.links.new(link.from_socket, baseMatSock)
+                    node.id_data.links.remove(link)
+
+    # When creating a BRDFLayered on top on an existing node link between materials it will get connected
+    # to the Transparency socket. In this case insert_link doesn't get called so we do it here manually.
+    nodePtr = node.as_pointer()
+    if nodePtr not in _ScheduledUpdates:
+        _ScheduledUpdates.add(nodePtr)
+        bpy.app.timers.register(_validateLinks)
+
+
+def nodeInsertLink(link: bpy.types.NodeLink):
+    node = link.to_node
+    if link.to_socket.bl_idname == 'VRaySocketExtend':
+        from_socket = link.from_socket
+        ntree = node.id_data
+
+        layersCount = _getLayersCount(node)
+        newIndex = layersCount + 1
+
+        brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(newIndex)
+
+        newBrdfSock = node.inputs.new('VRaySocketBRDF',  brdfSockName)
+        node.inputs.new('VRaySocketColor', weightSockName).setValue((0.5, 0.5, 0.5))
+        opacitySocket = node.inputs.new('VRaySocketWeight', opacitySockName)
+        opacitySocket.setValue(1.0)
+        opacitySocket.hide = True
+
+        moveExtendSocketToBottom(node)
+
+        # Update the link to use the new socket by creating a new link and removing the old one
+        ntree.links.new(from_socket, newBrdfSock)
+        ntree.links.remove(link)
 
 
 def nodeDraw(context, layout, node):
@@ -122,6 +178,9 @@ class VRAY_OT_node_add_brdf_layered_sockets(VRayOperatorBase):
         opacitySocket.setValue(1.0)
         opacitySocket.hide = True
 
+        # Move the extend socket to the end
+        from vray_blender.nodes.sockets import moveExtendSocketToBottom
+        moveExtendSocketToBottom(node)
 
         return {'FINISHED'}
 
@@ -151,9 +210,9 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
             opacitySock = getHiddenInput(node, opacitySockName)
 
             if not brdfSock.hasActiveFarLink() and not weightSock.hasActiveFarLink():
-                node.inputs.remove(node.inputs[brdfSockName])
-                node.inputs.remove(node.inputs[weightSockName])
-                node.inputs.remove(node.inputs[opacitySockName])
+                node.inputs.remove(brdfSock)
+                node.inputs.remove(weightSock)
+                node.inputs.remove(opacitySock)
                 break
 
         return {'FINISHED'}

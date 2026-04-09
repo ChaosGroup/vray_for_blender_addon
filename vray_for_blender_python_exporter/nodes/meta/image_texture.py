@@ -31,6 +31,7 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
         NodeUtils.addInputs(self, plugins.PLUGIN_MODULES['TexBitmap'])
 
         syncObjectUniqueName(self, reset=True)
+        NodeUtils.autoInitBitmapNode(self)
 
     def copy(self, node):
         def _createTexture():
@@ -43,7 +44,7 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
                     # original texture image.
                     self.texture.image = node.texture.image
                 else:
-                    # The node is copied from a diffent scene. The texture image is not copied, so
+                    # The node is copied from a different scene. The texture image is not copied, so
                     # it will be empty in the copy.
                     pass
 
@@ -51,7 +52,10 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
 
         # The 'texture' property of the node is still not valid here. Execute the
         # reattachment asynchronously.
-        bpy.app.timers.register(_createTexture)
+        if bpy.app.version < (5, 1, 0):
+            # In Blender 5.1 this crashes instantly when copying the bitmap, it seems to have been fixed at
+            # some point and this isn't necessary... Or at least I couldn't find a case where it doesn't work.
+            bpy.app.timers.register(_createTexture)
 
 
     def draw_buttons(self, context, layout):

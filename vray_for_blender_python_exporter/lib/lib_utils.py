@@ -5,15 +5,15 @@
 
 import re
 import datetime
-import struct
 import uuid
 
 import bpy
 
+from vray_blender import debug
 from vray_blender.lib import path_utils
 
 
-" Match Blender light ot V-Ray plugin"
+# Match Blender light to V-Ray plugin
 LightBlenderToVrayPlugin = {
     'AREA'  : 'LightRectangle',
     'POINT' : 'LightOmni',
@@ -21,7 +21,7 @@ LightBlenderToVrayPlugin = {
     'SUN'   : 'SunLight',
 }
 
-" Match V-Ray light type to Blender light type"
+# Match V-Ray light type to Blender light type
 LightVrayTypeToBlender = {
     'AMBIENT' : 'POINT',
     'DIRECT'  : 'POINT',
@@ -35,7 +35,7 @@ LightVrayTypeToBlender = {
     'DOME'    : 'POINT'
 }
 
-" Match V-Ray light type ot V-Ray plugin"
+# Match V-Ray light type to V-Ray plugin
 LightTypeToPlugin = {
     'AMBIENT' : 'LightAmbient',
     'DIRECT'  : 'MayaLightDirect',
@@ -65,9 +65,10 @@ def getUUID():
 
 
 def getLightPluginType(light: bpy.types.Light):
-    """ Returns the type of the V-Ray plugin corrextponding to the type of the light. """
+    """ Returns the type of the V-Ray plugin corresponding to the type of the light. """
+    from vray_blender.nodes.tools import isVrayLight
 
-    if light.vray.light_type == 'BLENDER':
+    if not isVrayLight(light):
         return LightBlenderToVrayPlugin[light.type]
     
     return LightTypeToPlugin[light.vray.light_type]
@@ -112,8 +113,8 @@ def cleanString(s, stripSigns=True):
     return s
 
 
-# This funciton will substitue special format sequences with
-# the correspondent values
+# This function will substitute special format sequences with
+# the corresponding values
 #
 def getDefFormatDict():
     blendFileName = None
@@ -159,7 +160,7 @@ def formatName(s, formatDict=None):
         s = s.replace(v, formatDict[v][1])
 
     t = datetime.datetime.now()
-    for v in re.findall("%\w", s):
+    for v in re.findall(r"%\w", s):
         try:
             s = s.replace(v, t.strftime(v))
         except:
@@ -179,3 +180,99 @@ def getPropGroup(parentID, propGroupPath):
 def isRestrictedContext(ctx: bpy.types.Context):
     """ Return True if this is a restricted context. """
     return type(ctx).__name__ == '_RestrictContext'
+
+
+
+def parseFrames(inputString: str, fnAppendFrame, fnAppendRange):
+    """ Parses a custom frame string into a single flat list of unique frames.
+        Example: "1,5,10-12, 20-24:2" -> [1, 5, 10, 11, 12, 20, 22, 24]
+    """
+    
+    segments = inputString.replace(' ', '').replace('..', '-').split(",")
+
+    flatFrameList = []
+    
+    for segment in segments:
+        if not segment:
+            # Skip empty items
+            continue
+            
+        try:
+            match = re.fullmatch(r"(\d+)-(\d+)(?:\:(\d+))?", segment)
+            if match:
+                startFrame = int(match.group(1))
+                endFrame   = int(match.group(2))
+                step       = int(match.group(3) or 1)
+                
+                fnAppendRange(flatFrameList, startFrame, endFrame, step)
+            else:
+                # Single frame
+                startFrame = int(segment)
+                if startFrame < 0:
+                    debug.printError("Negative frame number in frames list")
+                    return None
+                fnAppendFrame(flatFrameList, startFrame)
+        except:
+            debug.printError(f"Invalid frame range specification: {inputString}")
+            return None
+        
+    return flatFrameList
+
+
+def parseFramesToSequences(inputString: str):
+    """ Parses a custom frame string into a list of (start, end, step) items.
+        Example: "5,10-12, 20-24:2" -> [[5,5,1], [10,12,1], [20,24,2]]
+    """
+    
+    def _appendFrame(seq, frame: int):
+        seq.append([frame, frame, 1])
+
+    def _appendRange(seq, start: int, end: int, step: int):
+        seq.append([start, end, step])
+
+    return parseFrames(inputString, _appendFrame, _appendRange)
+
+
+
+def parseFramesToFlatList(inputString: str):
+    """ Parses a custom frame string into a flat list of frames.
+        Example: "5,10-12, 20-24:2" -> [5, 10, 11, 12, 20, 22, 24]
+    """
+
+    def _appendFrame(flatList, frame: int):
+        flatList.append(frame)
+
+    def _appendRange(flatList, start: int, end: int, step: int):
+        flatList.extend(list(range(start, end + 1, step)))
+
+    return parseFrames(inputString, _appendFrame, _appendRange)
+
+def filterSequencesByViewLayerUse(viewLayerName: str, sequences: list[list[float]]):
+    """ Filter the parts of the sequences that are not enabled in the selected view layer """
+
+    from vray_blender.lib.blender_utils import getViewLayerUseFCurve
+
+    if vlFCurve := getViewLayerUseFCurve(viewLayerName):
+        
+        filteredSequences = []
+        for sequence in sequences:
+            startFrame = None
+            endFrame = None
+
+            sequenceStart, sequenceEnd, step = sequence
+            for frame in range(sequenceStart, sequenceEnd + 1, step):
+                vlayerEnabled = vlFCurve.evaluate(frame)
+
+                if not vlayerEnabled and startFrame:
+                    endFrame = max(frame - step, startFrame)
+                    filteredSequences.append([startFrame, endFrame, step])
+                    startFrame = None
+                if vlayerEnabled and not startFrame:
+                    startFrame = frame
+            
+            if (not endFrame) and startFrame:
+                filteredSequences.append([startFrame, sequenceEnd - (sequenceEnd - startFrame) % step, step])
+                
+        return filteredSequences
+    return sequences
+

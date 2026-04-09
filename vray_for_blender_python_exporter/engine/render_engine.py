@@ -3,9 +3,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
-import sys
-import time
-from pathlib import PurePath
 
 from vray_blender.engine.renderer_prod import VRayRendererProd
 from vray_blender.engine.renderer_preview import VRayRendererPreview
@@ -13,7 +10,8 @@ from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.engine.zmq_process import ZMQProcess
-from vray_blender.lib.defs import IprContext
+from vray_blender.lib import command_line
+from vray_blender.lib.defs import UIRegionContext
 from vray_blender.nodes.utils import tagRedrawPropertyEditor, tagRedrawViewport
 from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
@@ -108,8 +106,8 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         VRayRenderEngine.mainVrayRenderer = None
 
     @staticmethod
-    def startInteractiveRenderer(iprContext: IprContext):
-        VRayRenderEngine.iprRenderer = VRayRendererIprVfb(iprContext)
+    def startInteractiveRenderer(uiRegionContext: UIRegionContext):
+        VRayRenderEngine.iprRenderer = VRayRendererIprVfb(uiRegionContext)
         VRayRenderEngine.iprRenderer.start()
         tagRedrawPropertyEditor()
 
@@ -122,9 +120,9 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             tagRedrawViewport()
 
     @staticmethod
-    def startVantageLiveLink():
+    def startVantageLiveLink(uiRegionContext: UIRegionContext):
         from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
-        VRayRenderEngine.iprRenderer = VRayRendererVantageLiveLink()
+        VRayRenderEngine.iprRenderer = VRayRendererVantageLiveLink(uiRegionContext)
         VRayRenderEngine.iprRenderer.start()
         VRayRenderEngine.iprRenderer.exportScene()
         tagRedrawViewport()
@@ -154,6 +152,10 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             elif not VRayRendererProd.isActive():
                 VRayRenderEngine.stopInteractiveRenderer()
                 VRayRenderEngine.stopViewportRenderer()
+
+                # Remove the fake keyframe as it may interfere with the view layer enabled state
+                VRayRendererProd.clearFakeViewLayerKeyframe(dg.view_layer_eval.name)
+
                 VRayRenderEngine.prodRenderer = VRayRendererProd()
         except Exception as ex:
             debug.printExceptionInfo(ex, "VRayRenderEngine::update()")
@@ -206,7 +208,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
                 # Only mark as inactive if another viewport renderer is active. If the renderer was not
                 # created because a PROD renderer was running, it is OK to try to initialize it again.
                 self._inactiveViewport = True
-
+            
             if self._viewportRendererOwner:
                 VRayRenderEngine.viewportRenderer.view_update(self, context, depsgraph)
             else:
@@ -240,89 +242,12 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             debug.printExceptionInfo(ex, "VRayRenderEngine::view_draw()")
 
 
-    # We are in background mode, so override UI settings with supported arugmnets
+    # We are in background mode, so override UI settings with supported arugments
     def _parseHeadlessArguments(self):
 
         assert bpy.app.background
 
-        frameStart    = None
-        frameEnd      = None
-        output        = ''
-        renderAnim    = False
-        imgFormat     = None
-        lastIdx = len(sys.argv) - 1
-
-        for (idx, arg) in enumerate(sys.argv):
-            hasNext = idx < lastIdx
-            if arg in {'-f', '--render-frame'} and hasNext:
-                frameStart = frameEnd = sys.argv[idx + 1]
-            elif arg in {'-s', '--frame-start'} and hasNext:
-                frameStart = sys.argv[idx + 1]
-            elif arg in {'-e', '--frame-end'} and hasNext:
-                frameEnd = sys.argv[idx + 1]
-            elif arg in {'-o', '--render-output'} and hasNext:
-                output = sys.argv[idx + 1]
-            elif arg in {'-F', '--render-format'} and hasNext:
-                imgFormat = sys.argv[idx + 1]
-            elif arg in {'-a', '--render-anim'}:
-                renderAnim = True
-
-        vrayScene = bpy.context.scene.vray
-        vrayExporter = vrayScene.Exporter
-        debug.printInfo('Command line overrides:')
-
-        if imgFormat:
-            formats = self._getImageFormats()
-            newFormatName = None
-            newFormatIdx = 0
-            savedFormatName = None
-            for img in formats:
-                if img[1].lower() == imgFormat.lower():
-                    newFormatName = img[1]
-                    newFormatIdx = img[0]
-                if img[0].lower() == vrayScene.SettingsOutput.img_format:
-                    # get this so we can log it
-                    savedFormatName = img[1]
-                if newFormatName and savedFormatName:
-                    break
-
-            if newFormatName:
-                if newFormatName != savedFormatName:
-                    debug.printInfo('Changing image output format from "%s" to "%s"' % (savedFormatName, newFormatName))
-                    vrayScene.SettingsOutput.img_format = newFormatIdx
-            else:
-                debug.printError('Format "%s" not found, using "%s"' % (imgFormat, savedFormatName))
-
-        if output != '':
-            outputDir  = output
-            outputFile = ''
-
-            outPath = PurePath(output)
-
-            if outPath.suffix != '':
-                outputFile = outPath.stem
-                outputDir  = str(outPath.parent)
-
-            if outputFile:
-                vrayScene.SettingsOutput.img_file = outputFile
-
-            vrayScene.SettingsOutput.img_dir  = outputDir
-
-            debug.printInfo(f'Changing image output directory to "{output}"')
-
-            vrayExporter.auto_save_render = True
-
-            debug.printInfo(f'Changing .vrscene output directory to "{output}"')
-
-        if renderAnim and vrayExporter.animation_mode == 'FRAME':
-            # if we dont have anim mode set, use Full Range
-            debug.printInfo('Changing Animation Mode from "%s" to "ANIMATION"' % vrayExporter.animation_mode)
-            vrayExporter.animation_mode = 'ANIMATION'
-
-        if frameStart == frameEnd and frameStart != None:
-            # force single frame
-            debug.printInfo('Changing Animation Mode from "%s" to "FRAME"' % vrayExporter.animation_mode)
-            vrayExporter.animation_mode = 'FRAME'
+        command_line.parseCommandLine()
 
         # Deliberately set an invalid name to the output file. Currently, there is no way to
         # tell Blender to not save the render result in headless mode. Tracking the exact filenames

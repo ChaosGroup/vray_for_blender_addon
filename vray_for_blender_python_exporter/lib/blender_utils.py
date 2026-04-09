@@ -30,7 +30,7 @@ ObjectPrefix = {
     'CAMERA' : 'CA',
 }
 
-NonGeometryTypes = {'LIGHT','CAMERA','SPEAKER','ARMATURE','LATTICE','EMPTY'}
+NonGeometryTypes = {'LIGHT','LIGHT_PROBE','CAMERA','SPEAKER','ARMATURE','LATTICE','EMPTY'}
 
 TypesThatSupportMaterial = {'MESH', 'CURVE', 'CURVES', 'SURFACE', 'FONT', 'META',
                             'GPENCIL', 'VOLUME', 'HAIR', 'POINTCLOUD'}
@@ -277,8 +277,8 @@ def getSpaceView3D(context : bpy.types.Context):
 
 
 def isViewportRenderMode():
-    """ Return True if any of the currenlty visible View3D spaces is 
-        ininteractive render mode.
+    """ Return True if any of the currently visible View3D spaces is
+        in interactive render mode.
     """
     if not (activeScreen := bpy.context.window.screen):
         return False
@@ -321,7 +321,7 @@ def generateVfbTheme(filepath):
     rollout = rgbToHex(themeUI.wcol_box.inner)
 
     import xml.etree.ElementTree
-    from xml.etree.ElementTree import Element, SubElement, tostring
+    from xml.etree.ElementTree import Element, SubElement
 
     elVfb = Element("VFB")
     elTheme = SubElement(elVfb, "Theme")
@@ -397,7 +397,7 @@ def showVRayPreferences():
 # in the custom plugin description of the attribute.
 
 def getShadowAttrName(attrName: str):
-    """ REturn the name of an attribute's shadow attribute.
+    """ Return the name of an attribute's shadow attribute.
 
     Args:
         attrName (str): The name of the main attribute.
@@ -428,9 +428,9 @@ def updateShadowAttr(data, attrName):
 
 
 def printDepsgraphUpdates(dg: bpy.types.Depsgraph):
-    """ Prety-print the depsgraph update list.
+    """ Pretty-print the depsgraph update list.
 
-        NOTE: This finction is for debugging purposes only, do not call in production code.
+        NOTE: This function is for debugging purposes only, do not call in production code.
     """
 
     print(f"======= DEPSGRAPH UPDATE START ======")
@@ -465,6 +465,11 @@ def tagUsersForUpdate(data: bpy.types.ID):
             user.update_tag()
         # Note: No need to tag the world node tree for update, as it is always exported on depsgraph update.
 
+def setFloatFrame(frameController: bpy.types.RenderEngine | bpy.types.Scene, frame: float):
+    """ Set the frame of a render engine or scene to a float value. """
+    from math import modf
+    frac, whole = modf(frame)
+    frameController.frame_set(int(whole), subframe=frac)
 
 def getFCurves(obj):
     anim = obj.animation_data
@@ -478,6 +483,14 @@ def getFCurves(obj):
     else:
         return action.fcurves
 
+def getViewLayerUseFCurve(viewLayerName: str):
+    """ Returns the keyframes of the view layer enabled state """
+    
+    for fcurve in getFCurves(bpy.context.scene):
+        if fcurve.data_path == f'view_layers["{viewLayerName}"].use':
+            return fcurve
+
+    return None
 
 def isDefaultScene():
     return not bpy.data.filepath
@@ -595,3 +608,12 @@ def getFullPathToNode(node: bpy.types.Node):
             return f"bpy.data.lights['{light.name}'].node_tree.{relPath}"
 
     return None
+
+
+def getObjectFromEditorContext(context: bpy.types.Context):
+    """ Returns the object in the context of the currently open editor.
+        This may be either the currently selected object, or the object 
+        whose editor was pinned.
+    """
+    sdata = context.space_data
+    return sdata.id_from if getattr(sdata, 'pin', None) and getattr(sdata, 'id_from', None) else context.object

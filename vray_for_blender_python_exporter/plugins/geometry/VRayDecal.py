@@ -197,6 +197,7 @@ class DecalBBoxGizmoGroup(bpy.types.GizmoGroup):
 
 
     def setup(self, context):
+        self.undoDone = False
         for _ in range(6):
             gizmo = self.gizmos.new('GIZMO_GT_move_3d')
             gizmo.draw_style = 'RING_2D'
@@ -206,7 +207,6 @@ class DecalBBoxGizmoGroup(bpy.types.GizmoGroup):
             gizmo.color_highlight = (1, 1, 1)
             gizmo.alpha_highlight = 1.0
             gizmo.draw_options = { 'ALIGN_VIEW', 'FILL' }
-            self.undoDone = False
 
         def moveGetPos(index: int):
             """ Return gizmo point position calculated from the current decal object properties.
@@ -320,7 +320,6 @@ class DecalBBoxGizmoGroup(bpy.types.GizmoGroup):
 
         for index, gizmo in enumerate(self.gizmos):
             mat = context.object.matrix_world.copy()
-            gizmo = self.gizmos[index]
             gizmo.matrix_space = mat
             gizmo.scale_basis = 0.1 / mat.to_scale().length
 
@@ -336,10 +335,7 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     pluginDesc.setAttribute('height_offset', vrayDecal.height_offset * 100.0)
 
     # Enabled is also used to handle object visiblity.
-    if pluginDesc.getAttribute('enabled') and vrayDecal.enabled:
-        pluginDesc.setAttribute('enabled', True)
-    else:
-        pluginDesc.setAttribute('enabled', False)
+    pluginDesc.setAttribute('enabled', bool(pluginDesc.getAttribute('enabled') and vrayDecal.enabled))
 
     if vrayDecal.decal_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
         for attrPlugin in pluginDesc.getAttribute('exclusion_nodes'):
@@ -460,7 +456,7 @@ def drawDecalGizmoCallback():
     match vrayDecal.decal_type:
         case '0':
             # Box
-            hx, hy, = width / 2, length / 2
+            hx, hy = width / 2, length / 2
             vertsLocal = [
                 (-hx, -hy, -heightOffset), ( hx, -hy, -heightOffset), ( hx,  hy, -heightOffset), (-hx,  hy, -heightOffset),
                 (-hx, -hy, height - heightOffset), ( hx, -hy,  height - heightOffset), ( hx,  hy,  height - heightOffset), (-hx,  hy,  height - heightOffset),
@@ -485,11 +481,11 @@ def drawDecalGizmoCallback():
                 vertsLocal.append((innerRadius * sinA, -length/2, innerRadius * cosA - innerRadius - heightOffset))
                 vertsLocal.append((innerRadius * sinA,  length/2, innerRadius * cosA - innerRadius - heightOffset))
 
-            edges.append(((0, 1)))
+            edges.append((0, 1))
             for i in range(0, SEGMENTS * 2, 2):
                 edges.append((i + 0, i + 2))
                 edges.append((i + 1, i + 3))
-            edges.append(((SEGMENTS*2, SEGMENTS*2+1)))
+            edges.append((SEGMENTS*2, SEGMENTS*2+1))
 
             startSin, endSin = math.sin(startAngle), math.sin(endAngle)
             startCos, endCos = math.cos(startAngle), math.cos(endAngle)

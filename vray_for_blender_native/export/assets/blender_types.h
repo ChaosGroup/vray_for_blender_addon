@@ -50,6 +50,12 @@ struct ImBuf {
 	 * avoid problems and use int. - campbell */
 	int x, y;
 
+#if BLENDER_VERSION >= 510
+       int display_size[2];
+       int data_offset[2];
+       int display_offset[2];
+#endif ///< Blender >= 5.1
+
 	/** Active amount of bits/bit-planes. */
 	unsigned char planes;
 	/** Number of channels in `rect_float` (0 = 4 channel default) */
@@ -80,7 +86,6 @@ struct ImBuf {
 	// TRUNCATED HERE
 };
 
-
 // Copied verbatim from blender/source/blender/render/RE_pipeline.h
 struct RenderPass {
 	struct RenderPass* next, * prev;
@@ -88,7 +93,11 @@ struct RenderPass {
 	char name[64];   /* amount defined in IMB_openexr.h */
 
 	// Note: The size of chan_id differs between Blender versions.
-	char chan_id[RENDER_PASS_CHAN_ID_SIZE]; /* amount defined in IMB_openexr.h*/
+#if BLENDER_VERSION >= 500
+	char chan_id[24]; /* amount defined in IMB_openexr.h*/
+#else
+	char chan_id[8];  /* amount defined in IMB_openexr.h*/
+#endif ///< Blender >= 5.0
 
 	/* Image buffer which contains data of this pass.
 	 *

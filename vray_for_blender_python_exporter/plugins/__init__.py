@@ -214,7 +214,7 @@ class VRayCamera(VRayEntity, bpy.types.PropertyGroup):
 
     in_update: bpy.props.BoolProperty(
         name = "Updating a property",
-        description = "Updating a proeprty",
+        description = "Updating a property",
         default = False
     )
 
@@ -760,6 +760,7 @@ def register():
                 'Instancer2',
                 'PhxShaderSimGeom',
                 'PhxShaderSimMesh',
+                'xsiUVWGenEnvironment'
             }:
                 continue
 

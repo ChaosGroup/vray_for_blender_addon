@@ -7,7 +7,7 @@ import bpy
 from vray_blender.lib import class_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.nodes import vrayNodeUpdate
-from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput
+from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput, moveExtendSocketToBottom
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui import classes
@@ -131,6 +131,11 @@ class VRAY_OT_node_texlayered_layer_del(VRayOperatorBase):
         sockNameMask = f"Mask {humanIndex}"
 
         if removeInputs(node, [sockNameTexture, sockNameMask], removeLinked=False):
+            # Also remove hidden sockets
+            for hidden in [f"Opacity {humanIndex}", f"Blend Mode {humanIndex}"]:
+                if sock := getHiddenInput(node, hidden):
+                    node.inputs.remove(sock)
+
             node.layers -= 1
             return {'FINISHED'}
 
@@ -138,13 +143,18 @@ class VRAY_OT_node_texlayered_layer_del(VRayOperatorBase):
         return {'CANCELLED'}
 
 
-######## ######## ##     ##    ##          ###    ##    ## ######## ########  ######## ########  
-   ##    ##        ##   ##     ##         ## ##    ##  ##  ##       ##     ## ##       ##     ## 
-   ##    ##         ## ##      ##        ##   ##    ####   ##       ##     ## ##       ##     ## 
-   ##    ######      ###       ##       ##     ##    ##    ######   ########  ######   ##     ## 
-   ##    ##         ## ##      ##       #########    ##    ##       ##   ##   ##       ##     ## 
-   ##    ##        ##   ##     ##       ##     ##    ##    ##       ##    ##  ##       ##     ## 
-   ##    ######## ##     ##    ######## ##     ##    ##    ######## ##     ## ######## ########  
+######## ######## ##     ##    ##          ###    ##    ## ######## ########  ######## ########
+   ##    ##        ##   ##     ##         ## ##    ##  ##  ##       ##     ## ##       ##     ##
+   ##    ##         ## ##      ##        ##   ##    ####   ##       ##     ## ##       ##     ##
+   ##    ######      ###       ##       ##     ##    ##    ######   ########  ######   ##     ##
+   ##    ##         ## ##      ##       #########    ##    ##       ##   ##   ##       ##     ##
+   ##    ##        ##   ##     ##       ##     ##    ##    ##       ##    ##  ##       ##     ##
+   ##    ######## ##     ##    ######## ##     ##    ##    ######## ##     ## ######## ########
+
+def addTexLayeredExtendSocket(node):
+    sockExtend = addInput(node, 'VRaySocketExtend', "")
+    sockExtend.add_operator = 'vray.node_texlayered_layer_add'
+    sockExtend.del_operator = 'vray.node_texlayered_layer_del'
 
 class VRayNodeTexLayeredMax(VRayNodeBase):
     """ Custom node representation for the TexLayeredMax plugin """
@@ -165,6 +175,8 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
     def init(self, context):
         for i in range(2):
             VRayNodeTexLayeredMax.addLayer(self, humanIndex = i + 1)
+
+        addTexLayeredExtendSocket(self)
 
         addOutput(self, 'VRaySocketColor',      "Color")
         addOutput(self, 'VRaySocketFloatColor', "Out Transparency", 'out_transparency')
@@ -215,7 +227,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
     def update(self):
         vrayNodeUpdate(self)
 
-        
+
     @staticmethod
     def addLayer(node, humanIndex):
         """ Add the inputs for a texture layer """
@@ -226,6 +238,9 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         addInput(node, "VRaySocketTexLayeredBlendMode", f"Blend Mode {humanIndex}", visible = False)
 
         node.layers += 1
+
+        # Move the extend socket to the end
+        moveExtendSocketToBottom(node)
 
 
 class VRAY_OT_pack_image(VRayOperatorBase):

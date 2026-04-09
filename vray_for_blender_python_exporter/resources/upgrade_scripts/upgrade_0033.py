@@ -5,11 +5,8 @@
 import bpy
 
 def run():
-    for world in bpy.data.worlds:
-        if world.vray.is_vray_class and world.use_nodes:
-            world.node_tree.vray.tree_type = 'WORLD'
+    return
 
 def check():
-    for world in bpy.data.worlds:
-        if world.vray.is_vray_class and world.use_nodes and not world.node_tree.vray.tree_type:
-            return True
+    # Unused script, this now all done in onLoadPost
+    return False

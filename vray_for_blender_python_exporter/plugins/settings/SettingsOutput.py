@@ -5,13 +5,12 @@
 
 import os
 import bpy
+from bpy import path as bpyPath
 
 from vray_blender.bin import VRayBlenderLib as vray
 
-import vray_blender.debug as debug
+from vray_blender import debug
 from vray_blender.lib.defs import ExporterContext, ExporterBase, PluginDesc, AttrListValue
-from vray_blender.lib.settings_defs import AnimationMode
-from vray_blender.lib import camera_utils as ct
 from vray_blender.lib import export_utils
 from vray_blender.lib import plugin_utils
 from vray_blender.lib import path_utils
@@ -72,7 +71,7 @@ class SettingsOutputExporter(ExporterBase):
 
         settingsSampler = self.scene.vray.SettingsImageSampler
         imgClearMode = 0
-        if settingsSampler.render_mask_mode!='0' and (settingsSampler.render_mask_clear or self.isAnimation):
+        if settingsSampler.render_mask_mode != '0' and (settingsSampler.render_mask_clear or self.isAnimation):
             # In cases the render mask is enabled, the SettingsOptions::img_clearMode requires changes too, in order for the
             # frame buffer to be properly cleared each frame in animation, or to be cleared immediately if the option was
             # toggled during interactive.
@@ -141,7 +140,7 @@ class SettingsOutputExporter(ExporterBase):
             pluginDesc.setAttribute("img_file_needFrameNumber", False)
         else:
             imgDir = propGroup.img_dir
-            multipleLayers = len([layer for layer in self.scene.view_layers if layer.use]) > 1
+            multipleLayers = len(self.scene.view_layers) > 1
             viewLayerName = self.dg.view_layer_eval.name if multipleLayers else ""
 
             imgFmt = int(propGroup.img_format)
@@ -155,16 +154,13 @@ class SettingsOutputExporter(ExporterBase):
         if imgFmt == IMAGE_FORMAT_EXR and not propGroup.relements_separateFiles:
             pluginDesc.setAttribute("img_rawFile", True)
 
-        if not imgDir:
-            debug.report('WARNING', "Invalid output path. No image will be saved.")
-            return
-
         # Try to create the missing folders on the output path
-        try:
-            os.makedirs(imgDir, exist_ok=True)
-        except Exception as exc:
-            debug.report('WARNING', f"Failed to create output folder ['{imgDir}']: {exc}. No image will be saved.")
-            return
+        if imgDir:
+            try:
+                os.makedirs(bpyPath.abspath(imgDir), exist_ok=True)
+            except Exception as exc:
+                debug.report('WARNING', f"Failed to create output folder ['{imgDir}']: {exc}. No image will be saved.")
+                return
 
         lastChar = imgDir[-1:]
         if lastChar not in ('/', '\\'):
@@ -183,17 +179,12 @@ class SettingsOutputExporter(ExporterBase):
         frameEnd = self.scene.frame_end
 
         if self.settings and self.isAnimation:
-            frameStart = self.settings.animation.frameStart
-            frameEnd = self.settings.animation.frameEnd
-            frameStep = self.settings.animation.frameStep
-
-            framesList = AttrListValue()
-
-            if frameStep != 1:
-                framesList.append(list(range(int(frameStart), int(frameEnd), frameStep)))
-            else:
-                framesList.append([int(frameStart), int(frameEnd)])
-
+            animation = self.settings.animation
+            if animation.frames:
+                framesList = __class__._getFramesList(animation.frames)
+                frameStart = animation.frames[0]
+                frameEnd   = animation.frames[-1]
+            
         pluginDesc.setAttributes({
             'anim_start'       : frameStart,
             'anim_end'         : frameEnd,
@@ -211,3 +202,33 @@ class SettingsOutputExporter(ExporterBase):
         return self.settings is None
 
 
+    @staticmethod
+    def _getFramesList(frames):
+        """ Get a list of frame [start,end] pairs with step 1. """
+
+        framesList = AttrListValue()
+        
+        def append(start, end):
+            if start == end:
+                framesList.append(start)
+            else:
+                framesList.append([start, end])
+
+        sortedFrames = sorted(frames)
+        if not sortedFrames:
+            return None
+
+        currStart = sortedFrames[0]
+        currEnd = sortedFrames[0]
+
+        for i in range(1, len(sortedFrames)):
+            if sortedFrames[i] == currEnd + 1:
+                currEnd = sortedFrames[i]
+            else:
+                append(currStart, currEnd)
+                currStart = sortedFrames[i]
+                currEnd = sortedFrames[i]
+        
+        append(currStart, currEnd)
+
+        return framesList if not framesList.isEmpty() else None

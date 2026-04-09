@@ -4,13 +4,12 @@
 
 #include "types.h"
 #include "conversion.hpp"
-#include "export/zmq_server.h"
 
 namespace VRayForBlender::Interop
 {
 using ExporterType = VrayZmqWrapper::ExporterType;
 
-void ExporterSettings::setDRHosts(py::object hosts) {
+void ExporterSettings::setDRHosts(nb::object hosts) {
 	drHosts = toVector<std::string>(hosts);
 }
 
@@ -20,10 +19,9 @@ ExporterType ExporterSettings::getExporterType() const
 }
 
 
-
-MeshData::MeshData(py::object obj) :
-	name               (py::extract<std::string>(obj.attr("name"))),
-	normalsDomain      (static_cast<NormalsDomain>(static_cast<int>(py::extract<int>(obj.attr("normalsDomain"))))),
+MeshData::MeshData(nb::object obj) :
+	name               (nb::cast<std::string>(obj.attr("name"))),
+	normalsDomain      (static_cast<NormalsDomain>(static_cast<int>(nb::cast<int>(obj.attr("normalsDomain"))))),
 	vertices           (fromDataArray<float[3]>(obj.attr("vertices"))),
 	loops              (fromDataArray<unsigned int>(obj.attr("loops"))),
 	loopTris           (fromDataArray<unsigned int[3]>(obj.attr("loopTris"))),
@@ -32,15 +30,15 @@ MeshData::MeshData(py::object obj) :
 	normals			   (fromDataArray<float[3]>(obj.attr("normals"))),
 	uvLayers           (fromUVAttrLayersArr(obj.attr("loopUVs"))),
 	colorLayers        (fromAttrLayersArr(obj.attr("loopColors"))),
-	options			   (py::extract<MeshExportOptions>(obj.attr("options"))),
+	options			   (nb::cast<MeshExportOptions>(obj.attr("options"))),
 	ref				   (obj)
 {
 	const auto& subdivAttr = obj.attr("subdiv");
-	subdiv.enabled = py::extract<bool>(subdivAttr.attr("enabled"));
+	subdiv.enabled = nb::cast<bool>(subdivAttr.attr("enabled"));
 	if (subdiv.enabled) {
-		subdiv.level = py::extract<int>(subdivAttr.attr("level"));
-		subdiv.type = py::extract<int>(subdivAttr.attr("type"));
-		subdiv.useCreases = py::extract<bool>(subdivAttr.attr("useCreases"));
+		subdiv.level = nb::cast<int>(subdivAttr.attr("level"));
+		subdiv.type = nb::cast<int>(subdivAttr.attr("type"));
+		subdiv.useCreases = nb::cast<bool>(subdivAttr.attr("useCreases"));
 	}
 
 	if ((normalsDomain < NormalsDomain::Face) || (NormalsDomain::Corner < normalsDomain))
@@ -49,30 +47,30 @@ MeshData::MeshData(py::object obj) :
 	}
 }
 
-HairData::HairData(py::object obj) :
-	name			(py::extract<std::string>(obj.attr("name"))),
-	type			(py::extract<std::string>(obj.attr("type"))),
-	widthsInPixels	(py::extract<bool>(obj.attr("widthsInPixels"))),
-	useHairBSpline	(py::extract<bool>(obj.attr("useHairBSpline"))),
+HairData::HairData(nb::object obj) :
+	name			(nb::cast<std::string>(obj.attr("name"))),
+	type			(nb::cast<std::string>(obj.attr("type"))),
+	widthsInPixels	(nb::cast<bool>(obj.attr("widthsInPixels"))),
+	useHairBSpline	(nb::cast<bool>(obj.attr("useHairBSpline"))),
 	points			(fromDataArray<float[3]>(obj.attr("points"))),
 	pointRadii		(fromNdArray<float>(obj.attr("pointRadii"))),
 	strandSegments	(fromNdArray<int>(obj.attr("strandSegments"))),
 	uvs				(fromNdOrDataArray<float>(obj.attr("uvs"), type == "CURVES")),
 	vertColors		(fromNdArray<float>(obj.attr("vertColors"))),
 	ref				(obj),
-	psys            ((ParticleSystem*)(size_t)py::extract<size_t>(obj.attr("psys"))),
-	firstToExport   (py::extract<int>(obj.attr("firstToExport"))),
-	totalParticles  (py::extract<int>(obj.attr("totalParticles"))),
-	maxSteps        (py::extract<int>(obj.attr("maxSteps"))),
-	shape           (py::extract<float>(obj.attr("shape"))),
-	rootRadius      (py::extract<float>(obj.attr("rootRadius"))),
-	tipRadius       (py::extract<float>(obj.attr("tipRadius")))
+	psys            ((ParticleSystem*)(size_t)nb::cast<size_t>(obj.attr("psys"))),
+	firstToExport   (nb::cast<int>(obj.attr("firstToExport"))),
+	totalParticles  (nb::cast<int>(obj.attr("totalParticles"))),
+	maxSteps        (nb::cast<int>(obj.attr("maxSteps"))),
+	shape           (nb::cast<float>(obj.attr("shape"))),
+	rootRadius      (nb::cast<float>(obj.attr("rootRadius"))),
+	tipRadius       (nb::cast<float>(obj.attr("tipRadius")))
 {}
 
 
-PointCloudData::PointCloudData(py::object obj) :
-	name		(py::extract<std::string>(obj.attr("name"))),
-	renderType	(py::extract<int>(obj.attr("renderType"))),
+PointCloudData::PointCloudData(nb::object obj) :
+	name		(nb::cast<std::string>(obj.attr("name"))),
+	renderType	(nb::cast<int>(obj.attr("renderType"))),
 	points		(fromNdArray<float[3]>(obj.attr("points"))),
 	uvs			(fromNdArray<float[2]>(obj.attr("uvs"))),
 	radii		(fromNdArray<float>(obj.attr("radii"))),
@@ -81,26 +79,18 @@ PointCloudData::PointCloudData(py::object obj) :
 {}
 
 
-InstancerData::InstancerData(py::object obj) :
-	name		(py::extract<std::string>(obj.attr("name"))),
-	frame		(py::extract<int>(obj.attr("frame"))),
-	itemCount	(py::extract<int>(obj.attr("count"))),
+InstancerData::InstancerData(nb::object obj) :
+	name		(nb::cast<std::string>(obj.attr("name"))),
+	frame		(nb::cast<int>(obj.attr("frame"))),
+	itemCount	(nb::cast<int>(obj.attr("count"))),
 	data		(fromDataArray<char>(obj.attr("arr"))),
 	ref			(obj)
 {}
 
 
-InstanceData::InstanceData(const py::object& obj) :
-	index		(py::extract<int>(obj.attr("index"))),
-	nodePlugin	(py::extract<std::string>(obj.attr("nodePlugin"))),
-	tm			(fromMat<4>(obj.attr("tm"))),
-	vel			(fromMat<4>(obj.attr("vel")))
-{}
-
-
-SmokeData::SmokeData(const py::object& obj) :
-	name		(py::extract<std::string>(obj.attr("name"))),
-	cacheDir	(py::extract<std::string>(obj.attr("cacheDir"))),
+SmokeData::SmokeData(const nb::object& obj) :
+	name		(nb::cast<std::string>(obj.attr("name"))),
+	cacheDir	(nb::cast<std::string>(obj.attr("cacheDir"))),
 	transform	(fromMat<4>(obj.attr("transform"))),
 	domainRes	(toVector<int>(obj.attr("domainRes"))),
 	ref			(obj)

@@ -81,15 +81,15 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 
         if light.vray.light_type == 'MESH':
             # All mesh light plugins related to the current mesh light property group
-            parentlLightMeshName = Names.object(obj)
-            lightPlugins = [AttrPlugin(n) for n in getLightMeshInstanceNames(ctx, parentlLightMeshName)] 
+            parentLightMeshName = Names.object(obj)
+            lightPlugins = [AttrPlugin(n) for n in getLightMeshInstanceNames(ctx, parentLightMeshName)]
         else:
             lightPlugins = [objectToAttrPlugin(obj)]
 
         
         for lightPlugin in lightPlugins:
                 
-            # Each list starts with the light object itsels
+            # Each list starts with the light object itself
             excludeList = [lightPlugin]
 
             # Get the list of affected objects from the object selector

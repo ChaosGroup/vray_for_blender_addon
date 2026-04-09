@@ -22,8 +22,8 @@ from vray_blender.lib.blender_utils import tagUsersForUpdate
 
 def _getVRayWordNTreeData(context):
     if (world := getattr(context.scene, 'world')) and world.node_tree:
-        return world.node_tree, world, None
-    
+        return world.node_tree, world, world
+
     return (None, None, None)
 
 
@@ -39,7 +39,7 @@ def _getVRayObjectNTreeData(context):
     ob = context.active_object
     if ob and ob.type not in blender_utils.NonGeometryTypes:
         if ob.vray.ntree:
-            return ob.vray.ntree, ob, None
+            return ob.vray.ntree, ob, ob
 
     return (None, None, None)
 
@@ -61,14 +61,14 @@ class VRayNodeTreeObjectBase(VRayEntity, bpy.types.NodeTree):
     def poll(cls, context):
         # Do not show in Node Tree Editors list
         return False
-    
+
     @classmethod
     def get_from_context(cls, context):
         return _getVRayObjectNTreeData(context)
 
     def update(self):
         tagUsersForUpdate(self)
-    
+
 
 class VRayNodeTreeObject(VRayNodeTreeObjectBase):
     bl_label  = "V-Ray Object Node Tree"
@@ -93,24 +93,24 @@ class VRayNodeTreeDecal(VRayNodeTreeObjectBase):
 ######## ########  ####    ##     #######  ##     ##
 
 def _getVRayShaderTreeData(context):
-    """ Returns the active nodetree depending the current context. The result is 
-        used e.g. to populate the shader node editor window or to show the nodetree name in 
+    """ Returns the active nodetree depending the current context. The result is
+        used e.g. to populate the shader node editor window or to show the nodetree name in
         active object's property page.
     """
     if ob:= context.active_object:
         if ob.type == 'LIGHT':
             if ob.data.node_tree:
-                return ob.data.node_tree, ob.data, None
+                return ob.data.node_tree, ob.data, ob
         elif material := ob.active_material:
-            return material.node_tree, None, None
+            return material.node_tree, material, ob
 
     return (None, None, None)
 
 
 class VRayNodeTreeEditor(bpy.types.NodeTree):
     """ A custom node tree type that will show up in the editor type list.
-    
-        This class is never instantiated and therefore can have no instance data. 
+
+        This class is never instantiated and therefore can have no instance data.
         Its sole purpose is to be added as an entry in the list of available
         node tree types and to return the actual active node tree object when
         queried by Blender.
@@ -124,22 +124,39 @@ class VRayNodeTreeEditor(bpy.types.NodeTree):
     def poll(cls, context):
         # Return True to show the editor entry in the editor types list
         return context.scene.render.engine in classes.VRayEngines
-    
+
     @classmethod
     def get_from_context(cls, context):
-        # This method is called by Blender when it needs to show a nodetree in 
+        # This method is called by Blender when it needs to show a nodetree in
         # a node editor.
-        match context.scene.vray.ActiveNodeEditorType: 
+
+        # After pinning a tree Blender usually stops calling get_from_context and everything just works,
+        # however, since we have our own trees and editor some checks inside node_edit.cc fail, so we take
+        # care of node pin manually.
+        if (space := context.space_data) and space.pin and space.edit_tree:
+            return space.edit_tree, space.id, space.id_from
+
+        match context.scene.vray.ActiveNodeEditorType:
             case 'SHADER':
                 return _getVRayShaderTreeData(context)
             case 'OBJECT':
                 return _getVRayObjectNTreeData(context)
             case 'WORLD':
                 return _getVRayWordNTreeData(context)
-        
+
         return (None, None, None)
 
-        
+
+def upgradeTrees():
+    for world in bpy.data.worlds:
+        if world.vray.is_vray_class and world.use_nodes and not world.node_tree.vray.tree_type:
+            world.node_tree.vray.tree_type = 'WORLD'
+    for material in bpy.data.materials:
+        if material.vray.is_vray_class and material.use_nodes and not material.node_tree.vray.tree_type:
+            material.node_tree.vray.tree_type = 'MATERIAL'
+    for light in bpy.data.lights:
+        if light.vray.is_vray_class and light.use_nodes and not light.node_tree.vray.tree_type:
+            light.node_tree.vray.tree_type = 'LIGHT'
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##

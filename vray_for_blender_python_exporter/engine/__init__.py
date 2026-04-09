@@ -23,6 +23,7 @@ OBJ_TRACKERS = (
     'LIGHT',
     'CAMERA',
     'INSTANCER',
+    'MODIFIER',
     'GIZMO'
 )
 

@@ -43,6 +43,8 @@ class VRayNodeDisplacement(VRayNodeBase):
         self.GeomDisplacedMesh.keep_continuity = True
         self.GeomDisplacedMesh.water_level = 0.0
 
+        NodeUtils.autoConnectObjectNode(self, 'Displacement')
+
     def draw_buttons(self, context, layout):
         pluginModule = getPluginModule('GeomDisplacedMesh')
         painter = UIPainter(context, pluginModule, self.GeomDisplacedMesh, self)

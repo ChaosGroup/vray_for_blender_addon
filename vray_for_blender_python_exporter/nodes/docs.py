@@ -19,6 +19,7 @@ def _getDocsMapping():
     def _registerExporter(paramName: str, id: str):
         chaosDocsMapping.append((f'bpy.types.vrayexporter.{paramName.lower()}', id),)
 
+    # Materials
     _registerNode('BRDFVRayMtl', '117638527')
     _registerNode('BRDFAlSurface', '117637493')
     _registerNode('BRDFSSS2Complex', '117638568')
@@ -30,19 +31,24 @@ def _getDocsMapping():
     _registerNode('BRDFFlakes2', '117638599')
     _registerNode('BRDFScanned', '117640066')
     _registerNode('BRDFStochasticFlakes', '117638607')
+    _registerNode('BRDFToonMtl', '540672159')
     _registerNode('MtlMulti', '117638595')
     _registerNode('Mtl2Sided', '117638620')
     _registerNode('MtlOverride', '117638093')
+    _registerNode('MtlDisplacement', '540246033')
     _registerNode('MtlVRmat', '117638652')
 
+    # Math
     _registerNode('Transform', '117638209')
     _registerNode('Matrix', '117638212')
     _registerNode('Vector', '117638215')
 
+    # Object
     _registerNode('ObjectMatteProps', '117638241')
     _registerNode('ObjectSurfaceProps', '117638244')
     _registerNode('ObjectVisibilityProps', '117638247')
 
+    # Mapping
     _registerNode('UVWMapping', '117638859')
     _registerNode('UVWGenRandomizer', '117638851')
 
@@ -51,50 +57,57 @@ def _getDocsMapping():
     _registerNode('Displacement', '117638408')
     _registerNode('GeomStaticSmoothedMesh', '117638239')
 
+    # Environment
     _registerNode('Environment', '117638235')
 
+    # Effects
     _registerNode('VolumeVRayToon', '117637912')
     _registerNode('VolumeFog', '117638086')
     _registerNode('EnvironmentFog', '117639260')
     _registerNode('VolumeAerialPerspective', '117638865')
     _registerNode('EffectsHolder', '117638276')
 
+    # Selectors
     _registerNode('SelectObject', '117638253')
     _registerNode('MultiSelect', '117638256')
 
+    # Outputs
     _registerNode('OutputMaterial', '117638221')
     _registerNode('ObjectOutput', '117638228')
     _registerNode('WorldOutput', '117638231')
+    _registerNode('DecalOutput', '540672075')
 
-    _registerNode('TexSmoke', '117638692')
-    _registerNode('TexSplat', '117638696')
-    _registerNode('TexSpeckle', '117638700')
-    _registerNode('TexTiles', '117638706')
+    # Textures
     _registerNode('MetaImageTexture', '117638712')
-    _registerNode('TexDirt', '117638722')
-    _registerNode('TexMarble', '117638730')
-    _registerNode('TexNoiseMax', '117638736')
+    _registerNode('TexBulge', '117638825')
     _registerNode('TexCellular', '117638741')
-    _registerNode('TexGranite', '117638744')
-    _registerNode('TexGrid', '117638748')
-    _registerNode('TexLeather', '117638751')
-    _registerNode('TexCurvature', '117638754')
-    _registerNode('TexGradRamp', '117638758')
     _registerNode('TexChecker', '117638767')
     _registerNode('TexCloth', '117638773')
+    _registerNode('TexCurvature', '117638754')
+    _registerNode('TexDirt', '117638722')
     _registerNode('TexEdges', '117638776')
+    _registerNode('TexGradRamp', '117638758')
+    _registerNode('TexGranite', '117638744')
+    _registerNode('TexGrid', '117638748')
+    _registerNode('TexLayeredMax', '117640076')
+    _registerNode('TexLeather', '117638751')
+    _registerNode('TexMarble', '117638730')
+    _registerNode('TexNoiseMax', '117638736')
     _registerNode('TexNormalBump', '117638779')
     _registerNode('TexOCIO', '117638784')
-    _registerNode('TexSky', '117638794')
-    _registerNode('TexSoftbox', '117638805')
     _registerNode('TexRock', '117638820')
-    _registerNode('TexBulge', '117638825')
+    _registerNode('TexSky', '117638794')
+    _registerNode('TexSmoke', '117638692')
+    _registerNode('TexSoftbox', '117638805')
+    _registerNode('TexSpeckle', '117638700')
+    _registerNode('TexSplat', '117638696')
     _registerNode('TexStucco', '117638828')
     _registerNode('TexSwirl', '117638832')
     _registerNode('TexTemperature', '117638838')
+    _registerNode('TexTiles', '117638706')
     _registerNode('TexWood', '117638842')
-    _registerNode('TexLayeredMax', '117640076')
 
+     # Texture Utilities
     _registerNode('TexClamp', '117638449')
     _registerNode('TexAColorOp', '117638270')
     _registerNode('ColorCorrection', '117638477')
@@ -121,9 +134,10 @@ def _getDocsMapping():
     _registerNode('TexUserColor', '117638465')
     _registerNode('TexUserScalar', '117638475')
 
+     # Render Channels
     _registerNode('RenderChannels', '117637617')
     _registerNode('RenderChannelAtmosphericEffects', '117637560')
-    _registerNode('RenderChannelBackgorund', '117637524')
+    _registerNode('RenderChannelBackground', '117637524')
     _registerNode('RenderChannelBumpNormals', '117637596')
     _registerNode('RenderChannelCaustics', '117637537')
     _registerNode('RenderChannelCoat', '117637602')
@@ -214,6 +228,7 @@ def _getDocsMapping():
     chaosDocsMapping.append(('bpy.ops.vray.render', '117638327#Render-Engine'),)
 
     return chaosDocsUrl, chaosDocsMapping
+
 
 def register():
     bpy.utils.register_manual_map(_getDocsMapping)

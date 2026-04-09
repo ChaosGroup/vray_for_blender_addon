@@ -14,7 +14,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2028;
+static const int ZMQ_PROTOCOL_VERSION = 2033;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -81,13 +81,16 @@ enum class ServerReturnCode : int {
 	STD_EXCEPT = 5,
 	VR_EXCEPT = 6,
 	OPERATION_TIMEOUT = 7,
+	NOT_SUPPORTED = 8,
 	LAST
 };
 
 inline const char * getServerReturnCodeStr(int code) {
 	const char * msg[] = {
-		"OK", "General error", "No license", "Can't parse arguments", "Can't setup environment", "STD exception", "V-Ray exception"
+		"OK", "General error", "No license", "Can't parse arguments", "Can't setup environment", "STD exception", "V-Ray exception",
+		"Operation timeout", "Not supported"
 	};
+	static_assert(std::size(msg) == (int)ServerReturnCode::LAST, "msg array must have one entry per ServerReturnCode");
 	int i=(int)code;
 	if(i>=0 && i<(int)ServerReturnCode::LAST)
 		return msg[(int)code];

@@ -12,15 +12,19 @@
 #include "api/interop/types.h"
 #include "utils/mmh3.h"
 
+#pragma warning(push, 0)
+#include <tsl/robin_set.h>
+#include <tsl/robin_map.h>
+#pragma warning(pop)
 
 using namespace VRayBaseTypes;
 using namespace VRayForBlender;
 
 template <typename KeyT, typename HashT = std::hash<KeyT>>
-using HashSet = std::unordered_set<KeyT, HashT>;
+using HashSet = tsl::robin_set<KeyT, HashT>;
 
 template <typename KeyT, typename ValT, typename HashT = std::hash<KeyT>>
-using HashMap = std::unordered_map<KeyT, ValT, HashT>;
+using HashMap = tsl::robin_map<KeyT, ValT, HashT>;
 
 using MeshData = Interop::MeshData;
 
@@ -71,7 +75,7 @@ struct MapChannelBase {
 	MapChannelBase(const MeshData& meshParameter, int numFacesParameter):
 		mesh(meshParameter),
 		numFaces(numFacesParameter),
-		numChannels(boost::numeric_cast<int>(mesh.uvLayers.size() + mesh.colorLayers.size()))
+		numChannels(int(mesh.uvLayers.size() + mesh.colorLayers.size()))
 	{
 	}
 
@@ -272,6 +276,80 @@ void fillMeshData(const MeshData& mesh, PluginDesc &pluginDesc)
 }
 
 
+static void fillEdgeVisibility(const MeshData& mesh, AttrListInt& edgeVisibility) {
+	const int numTriangles = static_cast<int>(mesh.loopTris.size());
+	int* evPtr = *edgeVisibility;
+
+	int bitBuffer = 0;
+	int bitCount = 0;
+	int evIdx = 0;
+
+	auto getEdgeKey = [](unsigned int a, unsigned int b) {
+		return (a < b) ? (((uint64_t)a << 32) | b) : (((uint64_t)b << 32) | a);
+	};
+	auto checkBitCount = [&] {
+		if (bitCount >= 30) {
+			evPtr[evIdx++] = bitBuffer;
+			bitBuffer = 0;
+			bitCount = 0;
+		}
+	};
+
+	HashMap<uint64_t, int> edgeCounts; // Map to store all edges of a single face
+	for (int fi = 0; fi < numTriangles; ) {
+		const unsigned int pi = mesh.loopTriPolys[fi];
+		int nextFi = fi;
+		while (nextFi < numTriangles && mesh.loopTriPolys[nextFi] == pi) {
+			nextFi++;
+		}
+		if (nextFi - fi == 1) {
+			// For triangle faces we can skip the more complex checks below.
+			bitBuffer |= (0b111 << bitCount);
+			bitCount += 3;
+			checkBitCount();
+			fi = nextFi;
+			continue;
+		}
+		// Triangles in [fi, nextFi) belong to the same polygon pi.
+		// An edge is an "original" edge of the polygon if it belongs to exactly one triangle in this set.
+		for (int i = fi; i < nextFi; i++) {
+			const auto& ltri = mesh.loopTris[i];
+			const unsigned int v0 = mesh.loops[ltri[0]];
+			const unsigned int v1 = mesh.loops[ltri[1]];
+			const unsigned int v2 = mesh.loops[ltri[2]];
+
+			edgeCounts[getEdgeKey(v0, v1)]++;
+			edgeCounts[getEdgeKey(v1, v2)]++;
+			edgeCounts[getEdgeKey(v2, v0)]++;
+		}
+
+		for (int i = fi; i < nextFi; i++) {
+			const auto& ltri = mesh.loopTris[i];
+			const unsigned int v0 = mesh.loops[ltri[0]];
+			const unsigned int v1 = mesh.loops[ltri[1]];
+			const unsigned int v2 = mesh.loops[ltri[2]];
+
+			int triBits = 0;
+			if (edgeCounts[getEdgeKey(v0, v1)] == 1) triBits |= (1 << 0);
+			if (edgeCounts[getEdgeKey(v1, v2)] == 1) triBits |= (1 << 1);
+			if (edgeCounts[getEdgeKey(v2, v0)] == 1) triBits |= (1 << 2);
+
+			bitBuffer |= (triBits << bitCount);
+			bitCount += 3;
+
+			checkBitCount();
+		}
+
+		fi = nextFi;
+		edgeCounts.clear();
+	}
+
+	if (bitCount > 0) {
+		evPtr[evIdx++] = bitBuffer;
+	}
+}
+
+
 void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& faceMtlIDs) {
 	// fi - current face index
 	// vi - current vertex index
@@ -345,7 +423,6 @@ void fillFaceNormalsFromCorners(const MeshData& mesh, AttrListInt& faceNormals) 
 
 
 void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
-
 	const auto numFaces = static_cast<int>(mesh.loopTris.size());
 	AttrListVector  vertices(static_cast<int>(mesh.vertices.size()));
 	AttrListVector  normals(static_cast<int>(mesh.normals.size())); // Normals list
@@ -357,6 +434,12 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 	std::memcpy(*normals, mesh.normals.data(), mesh.normals.size() * sizeof(float) * 3);
 
 	fillFaces(mesh, faces, faceMtlIDs);
+
+	if (mesh.options.exportEdgeVisibility) {
+		AttrListInt edgeVisibility((numFaces + 9) / 10); // 10 tris per int
+		fillEdgeVisibility(mesh, edgeVisibility);
+		pluginDesc.add("edge_visibility", edgeVisibility);
+	}
 
 	switch (mesh.normalsDomain){
 		case MeshData::NormalsDomain::Face:

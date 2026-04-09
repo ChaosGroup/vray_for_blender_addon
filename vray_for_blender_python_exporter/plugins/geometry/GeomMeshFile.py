@@ -51,6 +51,6 @@ def widgetDrawFile(context: bpy.types.Context, layout: bpy.types.UILayout, propG
     row = layout.row()
     row.prop(propGroup, 'file', text=widgetAttr.get('label', 'Mesh File'))
     
-    op = row.operator('vray.proxy_path_browser', icon = 'FILE_FOLDER', text="")
+    op = row.operator('vray.proxy_path_browser', icon='FILE_FOLDER', text="")
     op.is_proxy = True
     op.object_name = context.active_object.name

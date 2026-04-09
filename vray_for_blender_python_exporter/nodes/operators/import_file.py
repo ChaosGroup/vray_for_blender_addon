@@ -194,10 +194,11 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
             # During cosmos import the parent will be the object from the package's .vrmesh file.
             lightObj.parent = parentObj
 
-            lightNtree = createNodeTreeForLightObject(lightData)
+            lightNtree = createNodeTreeForLightObject(lightData, isNewLight = True)
 
             # The transformation is applied directly to the object, no need  for transform node generation
             del plgAttrs['transform']
+
             importContext = NodesImport.ImportContext(lightNtree, lightDict, locationsMap = locationsMap)
             lightNode = NodesImport.createNode(importContext, plgDesc)
 
@@ -224,7 +225,7 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
     bpy.context.collection.objects.link(domeObj)
     blender_utils.selectObject(domeObj)
 
-    ntree = createNodeTreeForLightObject(domeData)
+    ntree = createNodeTreeForLightObject(domeData, isNewLight = True)
     try:
         lightDesc = next((plgDesc for plgDesc in domeDict if plgDesc['ID'] == "LightDome"))
         texDesc = next((plgDesc for plgDesc in textureDict if plgDesc['ID'] == "TexBitmap"))
@@ -234,6 +235,7 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
 
     domeContext = NodesImport.ImportContext(ntree, domeDict, locationsMap=locationsMap)
     textureContext = NodesImport.ImportContext(ntree, textureDict, locationsMap=locationsMap)
+
     lightDomeNode = NodesImport.createNode(domeContext, lightDesc)
     textureNode = NodesImport.createNode(textureContext, texDesc)
 
@@ -270,6 +272,7 @@ def importDecal(settings):
 
         importContext = NodesImport.ImportContext(objTree, vrsceneDict, locationsMap=settings.locationsMap)
         decalOutputNode = NodesImport.createNode(importContext, decalDesc)
+
         generateDecalPreviewMesh(obj, obj.data.vray.VRayDecal)
 
         obj.data.vray.cosmos_package_id = settings.packageId
@@ -392,6 +395,7 @@ def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
 
     treeNodes = {outputNode,}
     getConnectedNodes(outputNode, treeNodes)
+    vrayNodes = sum(1 for n in ntree.nodes if NodesTools.isVrayNode(n))
 
-    if len(treeNodes) != len(ntree.nodes):
+    if len(treeNodes) != vrayNodes:
         debug.printWarning(f"{locatorName} was imported with some non-connected nodes")

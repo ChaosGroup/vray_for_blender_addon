@@ -9,7 +9,7 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib import plugin_utils, image_utils, sys_utils, path_utils
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel, exportDefaultUVWGenEnvironment
-from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
+from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink, getActiveOutputFarNodeLinks
 from vray_blender.lib.defs import AttrPlugin
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -75,14 +75,24 @@ def exportTreeNode(nodeCtx: NodeContext):
     return commonNodesExport.exportPluginWithStats(nodeCtx, texBitmapPluginDesc)
 
 
-def _shouldExportEnvironmentUVW(node: bpy.types.Node):
-    # Return True if all links of the otput socket are to a LightDome or Environment nodes
-    outSock = node.outputs[0]
-    for link in outSock.links:
-        toNode = link.to_socket.node
-        if (toNode.bl_idname in ('VRayNodeLightDome', 'VRayNodeEnvironment')) or \
-            (toNode.bl_idname == "NodeReroute" and _shouldExportEnvironmentUVW(toNode)): # Handling Reroute nodes
-            return True
+def _shouldExportEnvironmentUVW(node: bpy.types.Node, visited=None):
+    # Return True if any links of the otput socket are to a LightDome or Environment nodes
+
+    if visited is None:
+        visited = set()
+
+    nodePtr = node.as_pointer()
+    if nodePtr in visited:
+        return False
+    visited.add(nodePtr)
+
+    if node.bl_idname in ('VRayNodeLightDome', 'VRayNodeEnvironment'):
+        return True
+
+    for outSock in node.outputs:
+        for farLink in getActiveOutputFarNodeLinks(outSock):
+            if _shouldExportEnvironmentUVW(farLink.to_node, visited):
+                return True
 
     return False
 

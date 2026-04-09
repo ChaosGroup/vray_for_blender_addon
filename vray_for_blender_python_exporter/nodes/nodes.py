@@ -2,10 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
-
 import bpy
-import nodeitems_utils
 
 from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
@@ -14,7 +11,7 @@ from vray_blender.nodes.tools import isVrayNode
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.exporting.tools import resolveInternalLink
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget
-from vray_blender.lib import class_utils, draw_utils, blender_utils
+from vray_blender.lib import class_utils, draw_utils, blender_utils, lib_utils
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
@@ -46,17 +43,170 @@ VRayNodeTypeIcon = {
 }
 
 
-@dataclass
-class _NewLinkInfo:
-    nodeTree: bpy.types.NodeTree
-    fromNodeName: str
-    fromSocketName: str
-    toNodeName: str
-    toSocketName: str
+from vray_blender.lib.attribute_utils import getAttrDesc
+
+def _getSearchableEnumVariants(nodePlugin, attrName, labelIdx=1):
+    ''' Extract (Value, Label) from an ENUM parameter in the plugin description. '''
+    pluginModule = getPluginModule(nodePlugin)
+    if not pluginModule:
+        return []
+
+    if attrDesc := getAttrDesc(pluginModule, attrName):
+        return [(item[0], item[labelIdx]) for item in attrDesc.get('items', [])]
+    return []
+
+# Wrapper for the blender swap operator to disable auto connect
+# which causes problems with render elements and effects.
+class VRAY_OT_swap_node(bpy.types.Operator):
+    bl_idname = 'vray.swap_node'
+    bl_label = 'Swap V-Ray Node'
+
+    type: bpy.props.StringProperty(
+        name="Node Type",
+        description="Node type",
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.ops.node.swap_node.poll()
+
+    def execute(self, context):
+        with NodeUtils.DisableAutoConnect():
+            bpy.ops.node.swap_node('INVOKE_DEFAULT', type=self.type)
+
+        return {'FINISHED'}
+
+def _nodeOperator(layout, nodeType, label=None, icon=None, searchWeight=0.0, isInSwapMenu = False):
+    if label is None:
+        bl_rna = bpy.types.Node.bl_rna_get_subclass(nodeType)
+        label = bl_rna.name if bl_rna else nodeType
+
+    # Make sure all V-Ray nodes' labels are prefixed with 'V-Ray'
+    if not label.startswith('V-Ray') and nodeType.startswith('VRayNode'):
+        label = f'V-Ray {label}'
+
+    iconVal = 0
+    if icon:
+        from vray_blender.ui import icons
+        iconVal = icons.getIcon(icon)
+
+    opName = 'vray.swap_node' if isInSwapMenu else 'node.add_node'
+    props = layout.operator(opName, text=label, search_weight=searchWeight, icon_value=iconVal)
+    props.type = nodeType
+    if not isInSwapMenu:
+        props.use_transform = True
+    return props
 
 
-# A list of links created for nodes with a nodeInsertLink callback
-_NewlyCreatedLinks: list[_NewLinkInfo] = []
+def _nodeOperatorWithSearchableEnumSocket(context: bpy.types.Context, layout: bpy.types.UILayout, nodeIdName: str, socketIdentifier: str, enumItems: list, callbackFunc = None, searchWeight=-1.0, isInSwapMenu = False):
+    if not isInSwapMenu and getattr(context, 'is_menu_search', False):
+        bl_rna = bpy.types.Node.bl_rna_get_subclass(nodeIdName)
+        nodeLabel = bl_rna.name if bl_rna else nodeIdName
+
+        for item in enumItems:
+            if isinstance(item, tuple):
+                value, labelText = item
+            else:
+                value, labelText = item, item
+
+            label = f'{nodeLabel} \u25B8 {labelText}'
+            if not label.startswith('V-Ray') and nodeIdName.startswith('VRayNode'):
+                label = f'V-Ray {label}'
+
+            props = layout.operator('node.add_node', text=label, search_weight=searchWeight)
+            props.type = nodeIdName
+            props.use_transform = True
+
+            if socketIdentifier:
+                prop = props.settings.add()
+                prop.name = socketIdentifier
+                # Blender calls eval(value), so we pass it as escaped string...
+                prop.value = repr(value)
+
+            if callbackFunc:
+                callbackFunc(props, value)
+
+
+def buildItemsList(nodeType, subType=None):
+    def _hidePlugin(pluginName):
+        if pluginName in SKIPPED_PLUGINS or pluginName in HIDDEN_PLUGINS:
+            return True
+        _name_filter = ('Maya', 'TexMaya', 'MtlMaya', 'TexModo', 'TexXSI', 'texXSI', 'volumeXSI')
+        if pluginName.startswith(_name_filter):
+            return True
+        if any(x in pluginName for x in ('ASGVIS', 'C4D', 'Modo')):
+            return True
+        return False
+
+    menuItems = []
+    for t in VRayNodeTypes[nodeType]:
+        pluginName = t.bl_rna.identifier.replace('VRayNode', '')
+        if _hidePlugin(pluginName):
+            continue
+
+        pluginSubtype = getattr(t, 'vray_menu_subtype', '')
+        if subType is None:
+            if pluginSubtype: continue
+        else:
+            if subType != pluginSubtype: continue
+
+        menuItems.append((t.bl_rna.identifier, t.bl_label))
+    return menuItems
+
+
+class VRayRenderChannelMenu(bpy.types.Menu):
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, menu_type, isInSwapMenu = False):
+        nodesList = buildItemsList('RENDERCHANNEL', menu_type)
+
+        # Use a higher weight so render elements appear first when searching.
+        for item_idname, item_label in nodesList:
+            _nodeOperator(layout, item_idname, label=item_label, searchWeight=5.0, isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context, self.menu_type)
+
+
+_channelMenuClasses = []
+_channelSwapMenuClasses = []
+
+# Generates Node Menu classes for the render nodes
+def _getRenderChannelMenuClasses(isInSwapMenu = False):
+    global _channelMenuClasses
+    global _channelSwapMenuClasses
+
+    channelList = _channelSwapMenuClasses if isInSwapMenu else _channelMenuClasses
+
+    if not channelList:
+        from vray_blender.plugins.channel.RenderChannelsPanel import VRayChannelNodeSubtypes
+
+        def makeDraw(st, sw):
+            def draw(self, context):
+                self.drawMenu(self.layout, context, st, isInSwapMenu = sw)
+            return draw
+
+        for channelSubtype in VRayChannelNodeSubtypes:
+            channelSubtypeName = channelSubtype.title()
+
+            prefix = 'Swap' if isInSwapMenu else ''
+            idnameInfix = '_VRAY_SWAP_' if isInSwapMenu else '_VRAY_'
+
+            vRayRenderChannelType = type(
+                f'VRay{prefix}{channelSubtypeName}ChannelsMenu',
+                (VRayRenderChannelMenu,),
+                {
+                    'bl_label': f'{channelSubtypeName}',
+                    'bl_idname': f'NODE_MT{idnameInfix}{channelSubtypeName.upper()}_CHANNELS_MENU',
+                    'menu_type': channelSubtype,
+                    'bl_options': { 'SEARCH_ON_KEY_PRESS' },
+                    'draw': makeDraw(channelSubtype, isInSwapMenu)
+                }
+            )
+            channelList.append(vRayRenderChannelType)
+
+    return channelList
 
 ##     ## ######## ##    ## ##     ##
 ###   ### ##       ###   ## ##     ##
@@ -93,286 +243,338 @@ def _pollObjectOfContextIsFur(context):
 def _pollObjectOfContextIsDecal(context):
     return context.object and hasattr(context.object, "vray") and context.object.vray.isVRayDecal
 
-class VRayNodeCategory(nodeitems_utils.NodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context)
 
-
-class VRayMaterialNodeCategory(nodeitems_utils.NodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context) and _pollMaterialNodeTreeSelected(context)
-
-
-class VRayObjectNodeCategory(nodeitems_utils.NodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context) and _pollObjectNodeTreeSelected(context)
-
-
-class VRayObjectNodeCategoryForMesh(VRayObjectNodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return super().poll(context) and not _pollObjectOfContextIsFur(context)
-
-
-class VRayWorldNodeCategory(nodeitems_utils.NodeCategory):
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context) and _pollWorldNodeTreeSelected(context)
-
-
-class VRayRenderChannelMenu(bpy.types.Menu):
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context) and _pollWorldNodeTreeSelected(context)
-
-    def draw(self, context):
-        nodesList = buildItemsList('RENDERCHANNEL', self.menu_type)
-
-        layout = self.layout
-        col = layout.column(align=True)
-
-        for item in nodesList:
-            item.draw(item, col, context)
-
-
-_channelMenuClasses = []
-# Generates Node Menu classes for the render nodes
-def _getChannelMenuClasses():
-    global _channelMenuClasses
-    #If the channel menu
-    if not _channelMenuClasses:
-        from vray_blender.plugins.channel.RenderChannelsPanel import VRayChannelNodeSubtypes
-        for channelSubtype in VRayChannelNodeSubtypes:
-            channelSubtypeName = channelSubtype.title()
-            vRayRenderChannelType = type(
-                f"VRay{channelSubtypeName}ChannelsMenu",
-                (VRayRenderChannelMenu,),
-                {
-                    "bl_label": f"{channelSubtypeName}",
-                    "bl_idname": f"NODE_MT_VRAY_{channelSubtypeName}_Channels_Menu",
-                    "menu_type": channelSubtype
-                }
-            )
-            _channelMenuClasses.append(vRayRenderChannelType)
-
-    return _channelMenuClasses
-
-
-class VRayNodeRenderChannelCategory(nodeitems_utils.NodeItem):
-    def draw(self, _item, layout, _context):
-        for channelMenuClass in _getChannelMenuClasses():
-            layout.menu(channelMenuClass.bl_idname)
-
-    @classmethod
-    def poll(cls, context):
-        return classes.pollTreeType(cls, context)
-
-
-def buildItemsList(nodeType, subType=None):
-    def _hidePlugin(pluginName):
-
-        if pluginName in SKIPPED_PLUGINS or pluginName in HIDDEN_PLUGINS:
-            return True
-
-        # App specific
-        _name_filter = (
-            'Maya',
-            'TexMaya',
-            'MtlMaya',
-            'TexModo',
-            'TexXSI',
-            'texXSI',
-            'volumeXSI',
-        )
-        if pluginName.startswith(_name_filter):
-            return True
-        if pluginName.find('ASGVIS') >= 0:
-            return True
-        if pluginName.find('C4D') >= 0:
-            return True
-        if pluginName.find('Modo') >= 0:
-            return True
+def _vrayMenuPoll(context):
+    if not (spaceData := context.space_data):
+        return False
+    if spaceData.tree_type != 'VRayNodeTreeEditor':
         return False
 
-    menuItems = []
-    for t in VRayNodeTypes[nodeType]:
-        pluginName = t.bl_rna.identifier.replace("VRayNode", "")
+    vrayType = context.scene.vray.ActiveNodeEditorType
+    if vrayType == 'WORLD':
+        return bool(context.scene.world and context.scene.world.node_tree)
+    if vrayType == 'OBJECT':
+        ob = context.object
+        return bool(ob and ob.vray.ntree)
 
-        if _hidePlugin(pluginName):
-            continue
-
-        pluginSubtype = getattr(t, "vray_menu_subtype","")
-        if subType is None:
-            # Add only data without SUBTYPE
-            if pluginSubtype:
-                continue
-        else:
-            # Check subtype
-            if subType != pluginSubtype:
-                continue
-
-        # Make sure all V-Ray nodes' labels are prefixed with 'V-Ray'
-        nodeLabel = t.bl_label
-        if not nodeLabel.startswith('V-Ray'):
-            nodeLabel = f"V-Ray {nodeLabel}"
-
-        menuItems.append(nodeitems_utils.NodeItem(t.bl_rna.identifier, label=nodeLabel))
-
-    return menuItems
+    return True
 
 
-def getMaterialItemsList():
-    """ Returns list of material node items in specific order """
+class NODE_MT_vray_add_material(bpy.types.Menu):
+    bl_label = 'Material'
+    bl_idname = 'NODE_MT_vray_add_material'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
 
-    def _getMtlByTypeAndLabel(type, label):
-        for t in VRayNodeTypes[type]:
-            if t.bl_label == label:
-                return nodeitems_utils.NodeItem(t.bl_rna.identifier, label=t.bl_label)
-        return None
+    @classmethod
+    def poll(cls, context):
+        return _pollMaterialNodeTreeSelected(context)
 
-    return (
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray AL Surface Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Fast SSS2"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Blend Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Bump Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Light Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Hair Next Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Car Paint 2 Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Flakes 2 Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Scanned Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Stochastic Flakes Mtl"),
-        _getMtlByTypeAndLabel("BRDF", "V-Ray Toon Mtl"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Switch Mtl"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl 2Sided"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Override"),
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray Displacement Mtl"),
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        def _addMtl(type, label, icon=None):
+            for t in VRayNodeTypes[type]:
+                if t.bl_label == label:
+                    _nodeOperator(layout, t.bl_rna.identifier, label=t.bl_label, icon=icon, isInSwapMenu = isInSwapMenu)
 
-        # Disabled until we decide whether we want to show nodes for them
-        # --------------------
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Material ID"),
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Render Stats"),
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Round Edges"),
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl Wrapper"),
-        #
-        # TBD
-        # --------------------
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl GLSL"),
-        # _getMtlByTypeAndLabel("MATERIAL", "V-Ray Mtl OSL"),
+        _addMtl('BRDF', 'V-Ray Mtl',                   icon='MTL_VRAY')
+        _addMtl('BRDF', 'V-Ray AL Surface Mtl',        icon='MTL_AL_SURFACE')
+        _addMtl('BRDF', 'V-Ray Fast SSS2',             icon='MTL_FAST_SSS2')
+        _addMtl('BRDF', 'V-Ray Blend Mtl',             icon='MTL_BLEND')
+        _addMtl('BRDF', 'V-Ray Bump Mtl',              icon='MTL_BUMP')
+        _addMtl('BRDF', 'V-Ray Light Mtl',             icon='MTL_LIGHT')
+        _addMtl('BRDF', 'V-Ray Hair Next Mtl',         icon='MTL_HAIR_NEXT')
+        _addMtl('BRDF', 'V-Ray Car Paint 2 Mtl',       icon='MTL_CAR_PAINT2')
+        _addMtl('BRDF', 'V-Ray Flakes 2 Mtl',          icon='MTL_FLAKES')
+        _addMtl('BRDF', 'V-Ray Scanned Mtl',           icon='MTL_SCANNED')
+        _addMtl('BRDF', 'V-Ray Stochastic Flakes Mtl', icon='MTL_STOCHASTIC_FLAKES')
+        _addMtl('BRDF', 'V-Ray Toon Mtl',              icon='MTL_TOON')
+        _addMtl('MATERIAL', 'V-Ray Switch Mtl',        icon='MTL_SWITCH')
+        _addMtl('MATERIAL', 'V-Ray Mtl 2Sided',        icon='MTL_2SIDED')
+        _addMtl('MATERIAL', 'V-Ray Mtl Override',      icon='MTL_OVERRIDE')
+        _addMtl('MATERIAL', 'V-Ray Displacement Mtl',  icon='MTL_DISPLACEMENT')
+        _addMtl('MATERIAL', 'V-Ray VRmat Mtl',         icon='MTL_VRMAT')
 
-        _getMtlByTypeAndLabel("MATERIAL", "V-Ray VRmat Mtl")
-    )
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
 
 
-def getCategories():
-    return [
-        VRayMaterialNodeCategory(
-            'VRAY_MATERIAL',
-            "Material",
-            items = getMaterialItemsList()
-        ),
-        VRayNodeCategory(
-            'VRAY_TEXTURE',
-            "Textures",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeMetaImageTexture"),
-                nodeitems_utils.NodeItem("VRayNodeColorRamp"),
-            ] + buildItemsList('TEXTURE')
-        ),
-        VRayNodeCategory(
-            'VRAY_TEXTURE_UTILITIES',
-            "Texture Utilities",
-            items = buildItemsList('TEXTURE', 'UTILITY')
-        ),
-        VRayNodeCategory(
-            'VRAY_UVWGEN',
-            "Mapping",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeUVWMapping"),
-                nodeitems_utils.NodeItem("VRayNodeUVWGenRandomizer"),
-            ]
-        ),
-        VRayObjectNodeCategoryForMesh(
-            'VRAY_GEOMETRY',
-            "Geometry",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeDisplacement"),
-                nodeitems_utils.NodeItem("VRayNodeGeomStaticSmoothedMesh"),
-            ]
-        ),
-        VRayObjectNodeCategory(
-            'VRAY_OBJECT_PROPERTIES',
-            "Object Properties",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeObjectMatteProps"),
-                nodeitems_utils.NodeItem("VRayNodeObjectSurfaceProps"),
-                nodeitems_utils.NodeItem("VRayNodeObjectVisibilityProps"),
-            ]
-        ),
-        VRayNodeCategory(
-            "VRAY_MATH",
-            "Math",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeTransform"),
-                nodeitems_utils.NodeItem("VRayNodeMatrix"),
-                nodeitems_utils.NodeItem("VRayNodeVector"),
-            ],
-        ),
-        VRayNodeCategory(
-            'VRAY_OUTPUTS',
-            "Output",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeOutputMaterial", poll=_pollMaterialNodeTreeSelected),
-                nodeitems_utils.NodeItem("VRayNodeWorldOutput", poll=_pollWorldNodeTreeSelected),
-                nodeitems_utils.NodeItem("VRayNodeObjectOutput", poll=_pollObjectNodeTreeSelected),
-                nodeitems_utils.NodeItem("VRayNodeFurOutput", poll=_pollFurNodeTreeSelected),
-                nodeitems_utils.NodeItem("VRayNodeDecalOutput", poll=_pollDecalNodeTreeSelected)
-            ],
-        ),
-        VRayNodeCategory(
-            'VRAY_SELECTORS',
-            "Selectors",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeSelectObject"),
-                nodeitems_utils.NodeItem("VRayNodeMultiSelect"),
-            ],
-        ),
-        VRayWorldNodeCategory(
-            'VRAY_ENVIRONMENT',
-            "Environment",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeEnvironment"),
+class NODE_MT_vray_add_textures(bpy.types.Menu):
+    bl_label = 'Textures'
+    bl_idname = 'NODE_MT_vray_add_textures'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
 
-            ],
-        ),
-        VRayWorldNodeCategory(
-            "VRAY_EFFECT",
-            "Effects",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeEffectsHolder"),
-            ] + buildItemsList('EFFECT'),
-        ),
-        VRayWorldNodeCategory(
-            'VRAY_RENDERCHANNEL',
-            "Render Channels",
-            items = [
-                nodeitems_utils.NodeItem("VRayNodeRenderChannels", label="V-Ray Channels Container"),
-                VRayNodeRenderChannelCategory("VRAY_RENDERCHANNEL")
-            ]
-        ),
-        VRayNodeCategory(
-            "VRAY_LAYOUT",
-            "Layout",
-            items = [
-                nodeitems_utils.NodeItem("VRayPluginListHolder"),
-                nodeitems_utils.NodeItem("NodeFrame"),
-                nodeitems_utils.NodeItem("NodeReroute"),
-            ],
-        ),
-    ]
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeMetaImageTexture', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeColorRamp', isInSwapMenu = isInSwapMenu)
+
+        # TexSampler with searchable outputs, outputs are enabled by the internal_sampler update callback.
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeTexSampler', 'TexSampler.internal_sampler',
+            _getSearchableEnumVariants('TexSampler', 'samplers'), isInSwapMenu = isInSwapMenu
+        )
+
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeTexUserColor', 'TexUserColor.mode',
+            _getSearchableEnumVariants('TexUserColor', 'mode'), isInSwapMenu = isInSwapMenu
+        )
+
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeTexAColorOp', 'TexAColorOp.mode',
+            _getSearchableEnumVariants('TexAColorOp', 'mode'), isInSwapMenu = isInSwapMenu
+        )
+
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeTexFloatOp', 'TexFloatOp.mode',
+            _getSearchableEnumVariants('TexFloatOp', 'mode'), isInSwapMenu = isInSwapMenu
+        )
+
+        for idname, label in buildItemsList('TEXTURE'):
+            _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_texture_utilities(bpy.types.Menu):
+    bl_label = 'Texture Utilities'
+    bl_idname = 'NODE_MT_vray_add_texture_utilities'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        for idname, label in buildItemsList('TEXTURE', 'UTILITY'):
+            _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_mapping(bpy.types.Menu):
+    bl_label = 'Mapping'
+    bl_idname = 'NODE_MT_vray_add_mapping'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeUVWMapping', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeUVWGenRandomizer', isInSwapMenu = isInSwapMenu)
+
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeUVWMapping', 'mapping_node_type',
+            (
+                ('UV',          'UV mapping'),
+                ('PROJECTION',  'Projection mapping'),
+                ('OBJECT',      'Object mapping'),
+                ('ENVIRONMENT', 'Environment mapping')
+            ), isInSwapMenu = isInSwapMenu
+        )
+
+        def _projMappingFunc(props: bpy.types.OperatorProperties, value: str):
+            prop = props.settings.add()
+            prop.name = 'mapping_node_type'
+            prop.value = '\'PROJECTION\''
+
+        _nodeOperatorWithSearchableEnumSocket(
+            context, layout, 'VRayNodeUVWMapping', 'UVWGenProjection.type',
+            (
+                ('1', 'Planar mapping'),
+                ('2', 'Spherical mapping'),
+                ('3', 'Cylindrical mapping'),
+                ('5', 'Cubic mapping'),
+                ('8', 'Perspective mapping'),
+            ),
+            callbackFunc=_projMappingFunc, isInSwapMenu = isInSwapMenu
+        )
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_geometry(bpy.types.Menu):
+    bl_label = 'Geometry'
+    bl_idname = 'NODE_MT_vray_add_geometry'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _pollObjectNodeTreeSelected(context) and not _pollObjectOfContextIsFur(context)
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeDisplacement', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeGeomStaticSmoothedMesh', isInSwapMenu = isInSwapMenu)
+
+        _nodeOperatorWithSearchableEnumSocket(context, layout, 'VRayNodeDisplacement', 'GeomDisplacedMesh.type',
+            _getSearchableEnumVariants('GeomDisplacedMesh', 'type', 2), isInSwapMenu = isInSwapMenu
+        )
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_object_properties(bpy.types.Menu):
+    bl_label = 'Object Properties'
+    bl_idname = 'NODE_MT_vray_add_object_properties'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _pollObjectNodeTreeSelected(context)
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeObjectMatteProps', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeObjectSurfaceProps', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeObjectVisibilityProps', isInSwapMenu = isInSwapMenu)
+
+        if not _pollDecalNodeTreeSelected(context) and not _pollFurNodeTreeSelected(context):
+            _nodeOperatorWithSearchableEnumSocket(
+                context, layout, 'VRayNodeObjectMatteProps', 'make_shadow_catcher',
+                ((True, 'Shadow Catcher'),), isInSwapMenu = isInSwapMenu
+            )
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_math(bpy.types.Menu):
+    bl_label = 'Math'
+    bl_idname = 'NODE_MT_vray_add_math'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeTransform', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeMatrix', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeVector', isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_output(bpy.types.Menu):
+    bl_label = 'Output'
+    bl_idname = 'NODE_MT_vray_add_output'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        if _pollMaterialNodeTreeSelected(context):
+            _nodeOperator(layout, 'VRayNodeOutputMaterial', isInSwapMenu = isInSwapMenu)
+        if _pollWorldNodeTreeSelected(context):
+            _nodeOperator(layout, 'VRayNodeWorldOutput', isInSwapMenu = isInSwapMenu)
+        if _pollObjectNodeTreeSelected(context) and not _pollDecalNodeTreeSelected(context):
+            _nodeOperator(layout, 'VRayNodeObjectOutput', isInSwapMenu = isInSwapMenu)
+        if _pollFurNodeTreeSelected(context):
+            _nodeOperator(layout, 'VRayNodeFurOutput', isInSwapMenu = isInSwapMenu)
+        if _pollDecalNodeTreeSelected(context):
+            _nodeOperator(layout, 'VRayNodeDecalOutput', isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_selectors(bpy.types.Menu):
+    bl_label = 'Selectors'
+    bl_idname = 'NODE_MT_vray_add_selectors'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeSelectObject', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'VRayNodeMultiSelect', isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_environment(bpy.types.Menu):
+    bl_label = 'Environment'
+    bl_idname = 'NODE_MT_vray_add_environment'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _pollWorldNodeTreeSelected(context)
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeEnvironment', isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_effects(bpy.types.Menu):
+    bl_label = 'Effects'
+    bl_idname = 'NODE_MT_vray_add_effects'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _pollWorldNodeTreeSelected(context)
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayNodeEffectsHolder', isInSwapMenu = isInSwapMenu)
+        for idname, label in buildItemsList('EFFECT'):
+            _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_render_channels(bpy.types.Menu):
+    bl_label = 'Render Channels'
+    bl_idname = 'NODE_MT_vray_add_render_channels'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _pollWorldNodeTreeSelected(context)
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        # Use a higher weight so render elements appear first when searching.
+        if not isInSwapMenu:
+            _nodeOperator(layout, 'VRayNodeRenderChannels', label='V-Ray Channels Container', searchWeight=5.0, isInSwapMenu = isInSwapMenu)
+
+        for channelMenuClass in _getRenderChannelMenuClasses(isInSwapMenu = isInSwapMenu):
+            layout.menu(channelMenuClass.bl_idname)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_layout(bpy.types.Menu):
+    bl_label = 'Layout'
+    bl_idname = 'NODE_MT_vray_add_layout'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @staticmethod
+    def drawMenu(layout, context, isInSwapMenu = False):
+        _nodeOperator(layout, 'VRayPluginListHolder', isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'NodeFrame', searchWeight=-1, isInSwapMenu = isInSwapMenu)
+        _nodeOperator(layout, 'NodeReroute', isInSwapMenu = isInSwapMenu)
+
+    def draw(self, context):
+        self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add(bpy.types.Menu):
+    bl_label = 'Add'
+    bl_idname = 'NODE_MT_vray_add'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        return _vrayMenuPoll(context)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator_context = 'INVOKE_DEFAULT'
+        _drawVRayAddMenuContents(layout)
 
 
  ######  ##          ###     ######   ######     ##     ## ######## ######## ##     ##  #######  ########   ######
@@ -380,7 +582,7 @@ def getCategories():
 ##       ##        ##   ##  ##       ##          #### #### ##          ##    ##     ## ##     ## ##     ## ##
 ##       ##       ##     ##  ######   ######     ## ### ## ######      ##    ######### ##     ## ##     ##  ######
 ##       ##       #########       ##       ##    ##     ## ##          ##    ##     ## ##     ## ##     ##       ##
-##    ## ##       ##     ## ##    ## ##    ##    ##     ## ##          ##    ##     ## ##     ## ##     ## ##    ##
+##    ## ##       ##     ## ##    ## ##    ##    ##     ## ##          ##    ##     ## ##     ## ##     ##       ##
  ######  ######## ##     ##  ######   ######     ##     ## ########    ##    ##     ##  #######  ########   ######
 
 
@@ -408,15 +610,6 @@ def vrayNodeDrawSide(self: bpy.types.Node, context: bpy.types.Context, layout: b
     """ Draw widgets in the node's sidebar """
     if not hasattr(self, 'vray_type') or not hasattr(self, 'vray_plugin'):
         return
-
-    # TODO: This commented code is intentionally retained so that we remembered
-    # to check that the functionality is not broken after converting the
-    # corresponding plugin descriptions. Remove afterwards.
-    #if self.vray_type == 'LIGHT' and self.vray_plugin not in {'LightMesh'}:
-    #    # We only need sockets from 'LIGHT' nodes.
-    #    # Params will be taken from lamp propGroup
-    #    #
-    #    return
 
     vrayPlugin = PLUGINS[self.vray_type][self.vray_plugin]
 
@@ -490,6 +683,8 @@ def vrayNodeInit(self: bpy.types.Node, context):
             pluginModule.nodeInit(self)
 
         _initTemplates(self, pluginModule)
+
+        NodeUtils.autoConnectNode(self)
     except Exception as ex:
         debug.printExceptionInfo(ex, f"Failed to init node: {self.vray_plugin}")
         raise ex
@@ -530,7 +725,7 @@ def vrayNodeFree(self: bpy.types.Node):
 
 @classmethod
 def vrayNodePoll(cls: bpy.types.Node, nodetree: bpy.types.NodeTree):
-    return cls.bl_idname.startswith('VRayNode') and bpy.context.engine == 'VRAY_RENDER_RT'
+    return hasattr(cls, 'vray') and hasattr(nodetree, 'vray')
 
 
 def vrayNodeUpdate(self: VRayNodeBase):
@@ -568,33 +763,6 @@ def vrayNodeUpdate(self: VRayNodeBase):
     updateNodeMutedState(self)
 
 
-def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink):
-    """ Handler for node link creation callback.
-
-        This insert_link callback is registered in VRayNodeBase and calls this
-        function to process the event.
-    """
-    assert type(link) is bpy.types.NodeLink
-
-    # Store newly created links for nodes that have registered a custom nodeInsertLink callback
-    if getattr(node, 'vray_plugin', 'NONE') == 'NONE':
-        return
-
-    pluginModule = getPluginModule(node.vray_plugin)
-
-    if hasattr(pluginModule, "nodeInsertLink"):
-        global _NewlyCreatedLinks
-        # Give the node a chance to initialize plugin-specific state. At this point,
-        # the 'link' parameter is not a real link yet and we cannot store it for later use.
-        # Store the node tree and the names of the node and the socket which could
-        # be used later to find the correct socket.
-        _NewlyCreatedLinks.append(_NewLinkInfo(node.id_data,
-                                               link.from_node.name,
-                                               link.from_socket.name,
-                                               link.to_node.name,
-                                               link.to_socket.name))
-
-
 def updateNodeMutedState(node: bpy.types.Node):
     """ Show different shape for the sockets that are part of the
         currently active internal connections. This is a replacement
@@ -603,11 +771,11 @@ def updateNodeMutedState(node: bpy.types.Node):
         V-Ray socket types are not derived from Cycles socket types.
     """
 
-    if not bpy.context.region or not bpy.context.space_data:
+    if lib_utils.isRestrictedContext(bpy.context) or not bpy.context.region or not bpy.context.space_data:
         return
 
     # Reset all sockets to the original shape
-    for s in node.outputs.values() + node.inputs.values():
+    for s in list(node.outputs.values()) + list(node.inputs.values()):
         s.display_shape = 'CIRCLE'
 
     if not node.mute:
@@ -635,7 +803,7 @@ def updateNodeMutedState(node: bpy.types.Node):
 _dynamicClasses = []
 
 
-def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, menuType = None, nodeLabel = "", pluginSubtype = ""):
+def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, menuType = None, nodeLabel = '', pluginSubtype = ''):
     """ Creates the class for a custom node representing a VRay plugin. The class
         is created with only boilerplate code. Plugin-specific data and functions
         are added by the caller.
@@ -678,9 +846,9 @@ def createDynamicNodeClass(pluginType, pluginCategory, className, vrayPlugin, me
         DynNodeClassAttrs['bl_menu'] = menuType
 
     return type(
-        className,                # Name
+        className,          # Name
         (VRayNodeBase,),    # Inheritance
-        DynNodeClassAttrs         # Attributes
+        DynNodeClassAttrs   # Attributes
     )
 
 
@@ -723,7 +891,6 @@ def _createAdditionalRenderChannelNodes():
 
         # Register the variant render channel class
         class_utils.registerPluginPropertyGroup(nodeClass, vrayPlugin, overridePropGroup = True)
-        bpy.utils.register_class(nodeClass)
 
         channels.append(nodeClass)
 
@@ -756,15 +923,15 @@ def _loadDynamicNodes():
             vrayPlugin  = PLUGINS[pluginCategory][pluginType]
             textureMenuType = getattr(vrayPlugin, 'MENU', None)
 
-            DynNodeClassName = f"VRayNode{pluginType}"
+            DynNodeClassName = f'VRayNode{pluginType}'
 
             # Create the boilerplate for the node class
             DynNodeClass = createDynamicNodeClass(
                 pluginType, pluginCategory, DynNodeClassName,
                 vrayPlugin, textureMenuType,
-                pluginSubtype=getattr(vrayPlugin, 'SUBTYPE'))
+                pluginSubtype=getattr(vrayPlugin, 'SUBTYPE', ''))
 
-            if pluginType in {'BitmapBuffer'}:
+            if pluginType in { 'BitmapBuffer' }:
                 NodeUtils.createFakeTextureAttribute(DynNodeClass, updateFunc=NodeUtils.selectedObjectTagUpdate)
 
             if pluginType == 'TexSoftbox':
@@ -775,14 +942,13 @@ def _loadDynamicNodes():
 
             # Add fake texture attribute for TexGradRamp nodes to support legacy nodes
             # (created from plugins with UPGRADE_NUMBER < 31).
-            if pluginType == 'TexGradRamp': 
+            if pluginType == 'TexGradRamp':
                 NodeUtils.createFakeTextureAttribute(DynNodeClass, updateFunc=NodeUtils.selectedObjectTagUpdate)
 
 
             # Add a property group with all plugin's properties
             class_utils.registerPluginPropertyGroup(DynNodeClass, vrayPlugin)
 
-            bpy.utils.register_class(DynNodeClass)
             VRayNodeTypes[pluginCategory].append(DynNodeClass)
 
             _dynamicClasses.append(DynNodeClass)
@@ -806,7 +972,7 @@ def _loadDynamicNodes():
 ##     ## ##       ##         ##  ##          ##    ##     ##  ##   ##     ##     ##  ##     ## ####  ##
 ########  ######   ##   ####  ##   ######     ##    ########  ##     ##    ##     ##  ##     ## ## ## ##
 ##   ##   ##       ##    ##   ##        ##    ##    ##   ##   #########    ##     ##  ##     ## ##  ####
-##    ##  ##       ##    ##   ##  ##    ##    ##    ##    ##  ##     ##    ##     ##  ##     ## ##   ###
+##    ##  ##       ##    ##   ##        ##    ##    ##    ##  ##     ##    ##     ##  ##     ## ##   ###
 ##     ## ########  ######   ####  ######     ##    ##     ## ##     ##    ##    ####  #######  ##    ##
 
 
@@ -833,7 +999,7 @@ class NodeSidePropertiesDraw:
         if context.engine == 'VRAY_RENDER_RT':
             layout = self.layout
             node = context.active_node
-            # set "node" context pointer for the panel layout
+            # set 'node' context pointer for the panel layout
             layout.context_pointer_set("node", node)
 
             if hasattr(node, "draw_buttons_ext"):
@@ -844,21 +1010,199 @@ class NodeSidePropertiesDraw:
             NodeSidePropertiesDraw.original(self, context)
 
 
+def _drawVRayAddMenuContents(layout, isInSwapMenu = False):
+    prefix = 'NODE_MT_vray_swap_' if isInSwapMenu else 'NODE_MT_vray_add_'
+
+    def menu(suffix):
+        layout.menu(f'{prefix}{suffix}')
+
+    menu('material')
+    layout.separator()
+
+    menu('textures')
+    menu('texture_utilities')
+    layout.separator()
+
+    menu('mapping')
+    menu('geometry')
+    menu('object_properties')
+    menu('math')
+    layout.separator()
+
+    menu('environment')
+    menu('effects')
+    menu('render_channels')
+    layout.separator()
+
+    menu('output')
+    layout.separator()
+
+    menu('selectors')
+    menu('layout')
+
+
+def _drawVRayAddMenuHook(self, context):
+    if _vrayMenuPoll(context):
+        _drawVRayAddMenuContents(self.layout)
+
+
+def _drawVRaySwapMenuHook(self, context: bpy.types.Context):
+    if not _vrayMenuPoll(context):
+        return
+
+    node = context.active_node
+    if not (node and isVrayNode(node)):
+        return
+
+    # Disable swap for output nodes and containers
+    if node.bl_idname in (
+        'VRayNodeOutputMaterial',
+        'VRayNodeWorldOutput',
+        'VRayNodeObjectOutput',
+        'VRayNodeFurOutput',
+        'VRayNodeDecalOutput',
+        'VRayNodeRenderChannels',
+        'VRayNodeEffectsHolder',
+        'VRayNodeEnvironment'
+    ):
+        return
+
+    layout = self.layout
+
+    # If multiple nodes are selected, show all swap menus
+    if len(context.selected_nodes) > 1:
+        _drawVRayAddMenuContents(layout, isInSwapMenu=True)
+        return
+
+    vrayType = getattr(node, 'vray_type', None)
+
+    if vrayType in {'BRDF', 'MATERIAL'}:
+        layout.menu('NODE_MT_vray_swap_material')
+    elif vrayType == 'TEXTURE':
+        layout.menu('NODE_MT_vray_swap_textures')
+        layout.menu('NODE_MT_vray_swap_texture_utilities')
+    elif vrayType == 'UVWGEN':
+        layout.menu('NODE_MT_vray_swap_mapping')
+    elif vrayType == 'GEOMETRY':
+        layout.menu('NODE_MT_vray_swap_geometry')
+    elif vrayType == 'EFFECT':
+        layout.menu('NODE_MT_vray_swap_effects')
+    elif vrayType == 'RENDERCHANNEL':
+        layout.menu('NODE_MT_vray_swap_render_channels')
+    elif node.bl_idname in {'VRayNodeTransform', 'VRayNodeMatrix', 'VRayNodeVector'}:
+        layout.menu('NODE_MT_vray_swap_math')
+    elif node.bl_idname in {'VRayNodeObjectMatteProps', 'VRayNodeObjectSurfaceProps', 'VRayNodeObjectVisibilityProps'}:
+        layout.menu('NODE_MT_vray_swap_object_properties')
+    else:
+        _drawVRayAddMenuContents(layout, isInSwapMenu=True)
+
+
+_swapMenuClasses = []
+def _getSwapMenuClasses():
+    global _swapMenuClasses
+    if not _swapMenuClasses:
+        baseMenus = [
+            (NODE_MT_vray_add_material, 'Material'),
+            (NODE_MT_vray_add_textures, 'Textures'),
+            (NODE_MT_vray_add_texture_utilities, 'Texture Utilities'),
+            (NODE_MT_vray_add_mapping, 'Mapping'),
+            (NODE_MT_vray_add_geometry, 'Geometry'),
+            (NODE_MT_vray_add_object_properties, 'Object Properties'),
+            (NODE_MT_vray_add_math, 'Math'),
+            (NODE_MT_vray_add_output, 'Output'),
+            (NODE_MT_vray_add_selectors, 'Selectors'),
+            (NODE_MT_vray_add_environment, 'Environment'),
+            (NODE_MT_vray_add_effects, 'Effects'),
+            (NODE_MT_vray_add_render_channels, 'Render Channels'),
+            (NODE_MT_vray_add_layout, 'Layout'),
+        ]
+
+        def makeDraw(b):
+            def draw(self, context):
+                b.drawMenu(self.layout, context, isInSwapMenu = True)
+            return draw
+
+        for cls, label in baseMenus:
+            attrs = {
+                'bl_label': label,
+                'bl_idname': cls.bl_idname.replace('_add_', '_swap_'),
+                'bl_options': {'SEARCH_ON_KEY_PRESS'},
+                'draw': makeDraw(cls)
+            }
+            if 'poll' in cls.__dict__:
+                attrs['poll'] = cls.__dict__['poll']
+            swap_cls = type(
+                cls.__name__.replace('_add_', '_swap_'),
+                (bpy.types.Menu,),
+                attrs
+            )
+            _swapMenuClasses.append(swap_cls)
+
+    return _swapMenuClasses
+
+
+def _getMenuClasses():
+    return (
+        NODE_MT_vray_add_material,
+        NODE_MT_vray_add_textures,
+        NODE_MT_vray_add_texture_utilities,
+        NODE_MT_vray_add_mapping,
+        NODE_MT_vray_add_geometry,
+        NODE_MT_vray_add_object_properties,
+        NODE_MT_vray_add_math,
+        NODE_MT_vray_add_output,
+        NODE_MT_vray_add_selectors,
+        NODE_MT_vray_add_environment,
+        NODE_MT_vray_add_effects,
+        NODE_MT_vray_add_render_channels,
+        NODE_MT_vray_add_layout,
+        NODE_MT_vray_add,
+    )
+
+
 def register():
     _loadDynamicNodes()
-    nodeitems_utils.register_node_categories('VRAY_NODES', getCategories())
+    for cls in _dynamicClasses:
+        bpy.utils.register_class(cls)
+
     NodeSidePropertiesDraw.hook()
 
-    for menuClass in _getChannelMenuClasses():
+    for menuClass in _getRenderChannelMenuClasses(isInSwapMenu = False):
         bpy.utils.register_class(menuClass)
+    for menuClass in _getRenderChannelMenuClasses(isInSwapMenu = True):
+        bpy.utils.register_class(menuClass)
+
+    for cls in _getMenuClasses():
+        bpy.utils.register_class(cls)
+    for cls in _getSwapMenuClasses():
+        bpy.utils.register_class(cls)
+
+    bpy.types.NODE_MT_add.append(_drawVRayAddMenuHook)
+    # Node swap is not fully available in 4.5
+    if hasattr(bpy.types, 'NODE_MT_swap'):
+        bpy.types.NODE_MT_swap.append(_drawVRaySwapMenuHook)
+
+    bpy.utils.register_class(VRAY_OT_swap_node)
 
 
 def unregister():
-    for menuClass in _getChannelMenuClasses():
+    if hasattr(bpy.types, 'NODE_MT_swap'):
+        bpy.types.NODE_MT_swap.remove(_drawVRaySwapMenuHook)
+    bpy.types.NODE_MT_add.remove(_drawVRayAddMenuHook)
+
+    for cls in reversed(_getSwapMenuClasses()):
+        bpy.utils.unregister_class(cls)
+    for cls in reversed(_getMenuClasses()):
+        bpy.utils.unregister_class(cls)
+
+    for menuClass in reversed(_getRenderChannelMenuClasses(isInSwapMenu = True)):
+        bpy.utils.unregister_class(menuClass)
+    for menuClass in reversed(_getRenderChannelMenuClasses(isInSwapMenu = False)):
         bpy.utils.unregister_class(menuClass)
 
     NodeSidePropertiesDraw.unhook()
-    nodeitems_utils.unregister_node_categories('VRAY_NODES')
 
-    for regClass in _dynamicClasses:
+    for regClass in reversed(_dynamicClasses):
         bpy.utils.unregister_class(regClass)
+
+    bpy.utils.unregister_class(VRAY_OT_swap_node)

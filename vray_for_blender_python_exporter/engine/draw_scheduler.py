@@ -41,7 +41,7 @@ class VRay_OT_draw_viewport_timer(VRayOperatorBase):
     bl_options  = {'INTERNAL'}
 
     _timer = None
-    _fps = 20
+    _fps = 30
 
     def switchViewTransformToStandard(self):
         if not hasattr(self, "previousColorManagementSettings"):

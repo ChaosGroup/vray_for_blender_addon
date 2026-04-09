@@ -19,27 +19,29 @@ def filterGeometries(obj):
 
 
 def filterMaterials(mtl):
-    return mtl.vray.is_vray_class    
+    return mtl.vray.is_vray_class
 
 
 def filterSuns(obj):
-    return filterLights(obj) and (obj.data.vray.light_type == 'SUN')
+    return filterLights(obj) and (obj.data.type == 'SUN')
 
 
 def filterTexDistanceTargets(obj: bpy.types.Object):
     if not filterGeometries(obj):
         return False
-    
-    # Exclude objects with TexDistance from their own constaraint lists so that object
+
+    # Exclude objects with TexDistance from their own constraint lists so that object
     # could not be set as its own constraint.
-    if bpy.context.active_object.active_material in [s.material for s in obj.material_slots]:
-        return False
-    
+    if (activeObj := getattr(bpy.context, 'active_object', None)) and \
+       (activeMtl := getattr(activeObj, 'active_material', None)):
+        if activeMtl in [s.material for s in obj.material_slots]:
+            return False
+
     return True
 
 
 def filterRenderMasks(obj):
     # NOTE: Unsupported plugins 
     #  - Instancer2  - unsupported in V-Ray
-    #  - Text/Curve  - unsupported in V-Ray, because they are expored as Instancer2
-    return not obj.is_instancer and (obj.type in GEOMETRY_OBJECT_TYPES) and (obj.type not in ['CURVE', 'FONT']) 
+    #  - Text/Curve  - unsupported in V-Ray, because they are exported as Instancer2
+    return not obj.is_instancer and (obj.type in GEOMETRY_OBJECT_TYPES) and (obj.type not in ['CURVE', 'FONT'])

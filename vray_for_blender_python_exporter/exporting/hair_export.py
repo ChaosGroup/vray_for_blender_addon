@@ -4,7 +4,6 @@
 
 import bpy
 import math
-import mathutils
 import numpy as np
 
 from vray_blender.exporting import tools
@@ -25,7 +24,7 @@ class HairData:
         self.useHairBSpline = False
         self.strandSegments  = np.empty(shape=0, dtype=np.int32)
         self.pointRadii      = np.empty(shape=0, dtype=np.float32)
-        self.vertColors      = np.empty(shape=(0,3), dtype=np.float32)
+        self.vertColors      = np.empty(shape=0, dtype=np.float32)
 
         self.uvs = DataArray()
         self.points = DataArray()
@@ -44,6 +43,7 @@ class HairExporter(ExporterBase):
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
         self.objTracker = ctx.objTrackers['OBJ']
+        self.modTracker = ctx.objTrackers['MODIFIER']
 
 
     def exportFromCurves(self, evaluatedObjCurves: bpy.types.Object, exportGeometry: bool):
@@ -142,7 +142,7 @@ class HairExporter(ExporterBase):
             if len(objMesh.color_attributes) > 0:
                 # Note: In newer Blender versions this only works if the user creates a Face Corner+Byte color
                 # attribute. mcol_on_emitter doesn't seem to work with any other attribute type.
-                activeLayer = next(iter(l for l in objMesh.vertex_colors if l.active_render), None)
+                activeLayer = next((l for l in objMesh.vertex_colors if l.active_render), None)
                 if activeLayer is not None:
                     activeLayerIndex = objMesh.vertex_colors.find(activeLayer.name)
 
@@ -165,7 +165,7 @@ class HairExporter(ExporterBase):
                 colors[i*3+0] = color[0]
                 colors[i*3+1] = color[1]
                 colors[i*3+2] = color[2]
-            i+=1
+            i += 1
         data.uvs = uvs
         data.vertColors = colors
 
@@ -179,7 +179,11 @@ class HairExporter(ExporterBase):
 
         vray.pluginCreate(self.renderer, uniqueName, 'GeomMayaHair')
         vray.exportHair(self.renderer, data)
+        # Track both the object and the particle system settings. That way it can
+        # be deleted if the object is removed or if the modifier is removed.
         self.objTracker.trackPlugin(getObjTrackId(evaluatedObj), data.name)
+        self.objTracker.trackPlugin(getObjTrackId(pset), data.name)
+        self.modTracker.trackPlugin(getObjTrackId(pset), data.name)
 
         self.persistedState.objDataTracker.trackParticlePluginOfData(Names.objectData(evaluatedObj), psys.name, uniqueName)
         return AttrPlugin(data.name)

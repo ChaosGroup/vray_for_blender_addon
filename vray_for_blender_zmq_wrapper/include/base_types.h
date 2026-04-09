@@ -212,18 +212,16 @@ struct AttrSimpleType<bool> {
 	ValueType getType() const {
 		return ValueType::ValueTypeInt;
 	}
-	AttrSimpleType(): value() {}
-	AttrSimpleType(const bool & val): value(val) {}
+	AttrSimpleType(): int_value(0) {}
+	AttrSimpleType(const bool & val): int_value(0) { value = val; }
 
-	operator const bool & () const {
-		return reinterpret_cast<const bool &>(value);
-	}
+	operator const bool & () const { return value; }
+	operator bool & () { return value; }
 
-	operator bool & () {
-		return reinterpret_cast<bool&>(value);
-	}
-
-	int value;
+	union {
+		int  int_value; // Ensures size and alignment match AttrSimpleType<int>
+		bool value;     // Provides a valid bool reference
+	};
 };
 
 
@@ -294,7 +292,7 @@ struct AttrImage {
 		::memcpy(this->data.get(), imgData, dataSize);
 	}
 
-	std::shared_ptr<char> data; ///< Image bytes data
+	std::shared_ptr<char[]> data; ///< Image bytes data
 	size_t size; ///< Size in bytes
 	int width; ///< Width in pixels
 	int height; ///< Height in pixels
@@ -503,6 +501,15 @@ struct AttrTransform {
 		return AttrTransform(tm);
 	}
 
+	static AttrTransform zero() {
+		static float tm[4][4] = {
+			{0, 0, 0, 0},
+			{0, 0, 0, 0},
+			{0, 0, 0, 0},
+			{0, 0, 0, 0},
+		};
+		return AttrTransform(tm);
+	}
 	AttrMatrix m;
 	AttrVector offs;
 };

@@ -94,7 +94,7 @@ def decodeMapping(jsonData: str, mapping: bpy.types.CurveMapping):
     curvesData = mappingData['curves']
     mapping.extend = mappingData['extend']
 
-    for c in range (len(curvesData)):
+    for c in range(len(curvesData)):
         curve = mapping.curves[c]
         curveData = curvesData[c]
         pointsData = curveData['points']
@@ -123,16 +123,22 @@ def getCurvesNode(node: bpy.types.Node):
     return bpy.data.node_groups[_CURVES_NODE_TREE_NAME].nodes[getCurvesNodeName(node)]
 
 
-def addCurvesUpdateCallback(node: bpy.types.Node):
+def addCurvesUpdateCallback(node: bpy.types.Node, curvesNodeOverride: bpy.types.Node = None):
     """To handle updates to the ShaderNodeRGBCurve used for its CurveMapping widget,
     it is subscribed with msgbus and the vrayNodeUpdate function is attached."""
-    curvesNode = getCurvesNode(node)
+    curvesNode = curvesNodeOverride or getCurvesNode(node)
+
+    # The evaluated node may be invalid when accessed by the msgbus,
+    # so we use the original node instead.
+    nodeTree = node.id_data.original
+    originalNode = nodeTree.nodes.get(node.name)
+
     # Clear previous subscriptions to be sure that there aren't other update callbacks left
     bpy.msgbus.clear_by_owner(curvesNode)
     bpy.msgbus.subscribe_rna(
         key=curvesNode,
         owner=curvesNode,
-        args=(node,),
+        args=(originalNode,),
         notify=vrayNodeUpdate,
     )
 
@@ -148,9 +154,9 @@ def createCurvesNode(node: bpy.types.Node):
         bpy.data.node_groups.new(_CURVES_NODE_TREE_NAME, "ShaderNodeTree")
 
     toonRemapTree = bpy.data.node_groups[_CURVES_NODE_TREE_NAME]
-    toonRemapTree.use_fake_user=True
+    toonRemapTree.use_fake_user = True
     curvesNode = toonRemapTree.nodes.new("ShaderNodeRGBCurve")
-    curvesNode.name=getCurvesNodeName(node)
+    curvesNode.name = getCurvesNodeName(node)
 
     addCurvesUpdateCallback(node)
 

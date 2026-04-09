@@ -1,5 +1,14 @@
 {
     "ID": "SettingsPNG",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bits_per_channel",
+            "items_disabled_in_CE": ["16"],
+            "items_disabled_in_CE_tooltip": "Output in 16 bit format is not available in V-Ray for Blender - Community Edition."
+        }
+    ],
     "Widget": {
         "widgets": [
             {

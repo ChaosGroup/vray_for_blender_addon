@@ -11,9 +11,8 @@ from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.lib import draw_utils, class_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs
-from vray_blender.nodes.operators import sockets as SocketOperators
 from vray_blender.nodes.nodes import vrayNodeInit, vrayNodeDraw, vrayNodeDrawSide
-from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode
+from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode, autoConnectNode
 from vray_blender.ui import classes
 
 
@@ -67,7 +66,7 @@ class VRAY_OT_node_mtlmulti_socket_add(VRayOperatorBase):
     def execute(self, context):
         if not (node := _getMtlNodeFromOperatorContext(context)):
             self.report({'WARNING'}, "Could not add socket to V-Ray Switch Mtl, failed to obtain the active node.")
-            return {'CAMCELLED'}
+            return {'CANCELLED'}
 
         node.addMaterial()
         return {'FINISHED'}
@@ -82,7 +81,7 @@ class VRAY_OT_node_mtlmulti_socket_del(VRayOperatorBase):
     def execute(self, context):
         if not (node := _getMtlNodeFromOperatorContext(context)):
             self.report({'WARNING'}, "Could not remove socket from V-Ray Switch Mtl, failed to obtain the active node.")
-            return {'CAMCELLED'}
+            return {'CANCELLED'}
 
         if node.materials < 2:
             # Do not allow the user to remove the last remaining material as
@@ -128,6 +127,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
             mtlSock.enabled = True
 
         addOutput(self, 'VRaySocketMtl', "Material")
+        autoConnectNode(self)
 
     def addMaterial(self):
         """ Add the inputs for a texture layer """

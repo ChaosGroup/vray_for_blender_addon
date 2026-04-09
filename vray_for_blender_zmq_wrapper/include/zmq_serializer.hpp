@@ -17,6 +17,8 @@ public:
 
 	SerializerStream() {
 	}
+	SerializerStream(const SerializerStream& other) = delete;
+	SerializerStream& operator=(const SerializerStream& other) = delete;
 
 	void write(const char * data, size_t size) {
 		if (size == 0) {

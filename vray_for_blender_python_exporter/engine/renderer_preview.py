@@ -39,7 +39,6 @@ class VRayRendererPreview(VRayRendererProdBase):
 
 
     def render(self, engine: bpy.types.RenderEngine, dg: bpy.types.Depsgraph):
-
         with self.lock:
             self.renderer = self._createRenderer(ExporterType.PREVIEW)
             
@@ -101,7 +100,7 @@ class VRayRendererPreview(VRayRendererProdBase):
     def _exportSceneAdjustments(self, exporterCtx: ExporterContext):
         """ An override to some of the plugins's attributes is needed when exporting preview scene. """
             
-        # The 'Foor' object in the scene doesn't have a V-Ray material attached to it
+        # The 'Floor' object in the scene doesn't have a V-Ray material attached to it
         # For that BRDFVRayMtl with TexChecker is attached to the Floor object node
         dg = exporterCtx.dg
         floor = dg.objects['Floor']

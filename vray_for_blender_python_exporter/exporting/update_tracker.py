@@ -83,7 +83,7 @@ class UpdateTracker:
         from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags
 
         # Iterate over all plugin types and their cross dependencies
-        updatedObjects = [u.id.original for u in exporterCtx.dg.updates if u.is_updated_transform or u.is_updated_geometry]
+        updatedObjects = {u.id.original for u in exporterCtx.dg.updates if u.is_updated_transform or u.is_updated_geometry}
 
         if not updatedObjects:
             return

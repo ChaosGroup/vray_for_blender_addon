@@ -3,12 +3,44 @@
     "Parameters": [
         {
             "attr": "file",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "file",
+                        "object_type": "settings"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "Light Cache File"
+            }
         },
         {
             "attr": "auto_save_file",
             "default": "//auto_save_cache.vrlmap",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "auto_save_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "auto_save_file",
+                        "object_type": "settings"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "Auto Save File"
+            }
         },
         {
             "attr" : "auto_save",
@@ -103,59 +135,55 @@
                 "layout": "COLUMN",
                 "attrs": [
                     {
-                        "name": "auto_save"
-                    },
-                    {
-                        "name": "auto_save_file"
-                    },
-                    {
-                        "name": "depth"
-                    },
-                    {
-                        "name": "dont_delete"
-                    },
-                    {
-                        "name": "file"
-                    },
-                    {
-                        "name": "filter"
-                    },
-                    {
                         "name": "mode"
                     },
                     {
-                        "name": "multiple_views"
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "name": "num_passes"
-                    },
-                    {
-                        "name": "num_passes_auto"
+                        "layout": "COLUMN",
+                        "visible": {"cond": "::mode!=2"},
+                        "attrs": [
+                            {
+                                "name": "subdivs"
+                            },
+                            {
+                                "name": "sample_size"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            }
+                        ]
                     },
                     {
                         "name": "retrace_enabled"
                     },
                     {
-                        "name": "retrace_threshold"
+                        "name": "retrace_threshold",
+                        "active": {"cond": "::retrace_enabled!=0"}
                     },
                     {
-                        "name": "sample_size"
+                        "name": "path_guiding",
+                        "label": "Path Guiding (Experimantal)"
                     },
                     {
-                        "name": "show_calc_phase"
+                        "layout": "COLUMN",
+                        "visible": {"cond": "::mode!=2"},
+                        "attrs": [
+                            {
+                                "name": "auto_save"
+                            },
+                            {
+                                "name": "auto_save_file_selector",
+                                "active": {"cond": "::auto_save!=0"}
+                            }
+                        ]
                     },
                     {
-                        "name": "store_direct_light"
-                    },
-                    {
-                        "name": "subdivs"
-                    },
-                    {
-                        "name": "use_for_glossy_rays"
-                    },
-                    {
-                        "name": "world_scale"
+                        "name": "file_selector",
+                        "visible": {"cond": "::mode=2"}
                     }
+
                 ]
             }
         ]

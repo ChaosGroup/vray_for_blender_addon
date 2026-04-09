@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+import sys
 
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib import camera_utils as ct
@@ -65,6 +66,12 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         min = 0
     )
 
+    customFramesList: bpy.props.StringProperty(
+        name = "Frames",
+        description = "A list of frames to export (e.g. 1,3-10:3)",
+        default = ""
+    )
+
     exportAnimation: bpy.props.BoolProperty(
         name = "Export Animation",
         description = "Export animation frames",
@@ -75,10 +82,11 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         name='Animation Mode',
         description='How to handle animation during export',
         items = (
-            ('SCENE_RANGE', "Scene Range", "Use scene frame range"),
-            ('CUSTOM_RANGE', "Custom Range", "Use custom frame range")
+            ("SCENE_RANGE", "Scene Range", "Use scene frame range"),
+            ("CUSTOM_RANGE", "Custom Range", "Use custom frame range"),
+            ("CUSTOM_FRAMES", "Custom Frames", "Use custom list of frames")
         ),
-        default = 'SCENE_RANGE'
+        default = "SCENE_RANGE"
     )
 
 class VRayExporter(bpy.types.PropertyGroup):
@@ -236,14 +244,6 @@ class VRayExporter(bpy.types.PropertyGroup):
     )
 
 
-    ########  ######## ##    ## ########  ######## ########      ######  ######## ######## ######## #### ##    ##  ######    ######
-    ##     ## ##       ###   ## ##     ## ##       ##     ##    ##    ## ##          ##       ##     ##  ###   ## ##    ##  ##    ##
-    ##     ## ##       ####  ## ##     ## ##       ##     ##    ##       ##          ##       ##     ##  ####  ## ##        ##
-    ########  ######   ## ## ## ##     ## ######   ########      ######  ######      ##       ##     ##  ## ## ## ##   ####  ######
-    ##   ##   ##       ##  #### ##     ## ##       ##   ##            ## ##          ##       ##     ##  ##  #### ##    ##        ##
-    ##    ##  ##       ##   ### ##     ## ##       ##    ##     ##    ## ##          ##       ##     ##  ##   ### ##    ##  ##    ##
-    ##     ## ######## ##    ## ########  ######## ##     ##     ######  ########    ##       ##    #### ##    ##  ######    ######
-
     animation_mode: bpy.props.EnumProperty(
         name = "Animation Mode",
         description = "Animation Type",
@@ -252,6 +252,17 @@ class VRayExporter(bpy.types.PropertyGroup):
             ('ANIMATION',     "Animation",                   "Export full animation range then render"),
         ),
         default = 'FRAME'
+    )
+
+    frames_list : bpy.props.StringProperty(
+        name = "Frames List",
+        description = "A list of frames to render in --frame-range parameter format"
+    )
+
+    use_frame_range : bpy.props.BoolProperty(
+        name = "Use Frame Range",
+        description = "Use frame range instead of explicit list of frame numbers",
+        default = True
     )
 
     animationSettingsVrsceneExport: bpy.props.PointerProperty(
@@ -280,6 +291,8 @@ class VRayExporter(bpy.types.PropertyGroup):
 
     def _updateLogLevel(self, context):
         from vray_blender import debug
+        from vray_blender.lib.sys_utils import StartupConfig
+        StartupConfig.logLevel = None
         debug.setLogLevel(int(self.verbose_level), False)
 
 
@@ -326,7 +339,7 @@ class VRayExporter(bpy.types.PropertyGroup):
     display_vfb_on_top: bpy.props.BoolProperty(
         name = "Display Always On Top",
         description = "Display VFB on top of the other windows",
-        default = True,
+        default = False if sys.platform == "win32" else True,
         update=_displayVfbOnTopUpdate,
         options = set()
     )

@@ -21,9 +21,36 @@
             }
         },
         {
+            "attr": "reflect1_bump_amount",
+            "default": 0.01,
+            "ui": {
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
+            }
+        },
+        {
             "attr": "reflect2_bump_map",
             "options": {
                 "linked_only": true
+            }
+        },
+        {
+            "attr": "reflect2_bump_amount",
+            "default": 0.01,
+            "ui": {
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "bump_amount",
+            "default": 0.01,
+            "ui": {
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
             }
         },
         {
@@ -40,7 +67,13 @@
         },
         {
             "attr": "diffuse_bump_amount",
-            "desc": "Multiplier for the diffuse bump map effect."
+            "default": 0.01,
+            "desc": "Multiplier for the diffuse bump map effect.",
+            "ui": {
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
+            }
         },
         {
             "attr": "reflect1",

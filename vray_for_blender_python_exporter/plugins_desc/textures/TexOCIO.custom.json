@@ -3,7 +3,23 @@
     "Parameters": [
         {
             "attr": "config_file",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "config_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "config_file",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "File"
+            }
         }
     ],
     "Widget": {

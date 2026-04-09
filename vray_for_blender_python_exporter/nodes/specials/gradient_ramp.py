@@ -121,7 +121,7 @@ def _prepareRampForBRDFToonMtlReflection(tex: bpy.types.Texture):
 
 
 class VRaySocketColorRampTexture(VRaySocketAColor):
-    """A custom class that represets each Color Ramp Point Texture"""
+    """A custom class that represents each Color Ramp Point Texture"""
     bl_idname = 'VRaySocketColorRampTexture'
     bl_label  = 'Color Ramp Texture'
 

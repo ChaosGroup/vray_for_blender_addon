@@ -13,6 +13,7 @@ from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from vray_blender.lib.settings_defs import LightSelectMode
 from vray_blender.lib import export_utils, plugin_utils
+from vray_blender.nodes import tree_defaults
 from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes.utils import getLightOutputNode, areNodesInterconnected, getOutputNode
 from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
@@ -24,21 +25,45 @@ from vray_blender import debug
 # Epsilon for light cone angle comparison
 ANGLE_EPSILON = 0.000001
 
-def fixBlenderLights():
+# A list of Track IDs of all light data objects in the scene. Used to
+# determine which lights have been added to the scene since the last update.
+knownLights = set()
+
+def fixSceneLights():
     """ For stock Blender lights, translate the Blender properties used for displaying the light gizmos 
         into properties supported by V-Ray.
+        Create V-Ray node trees for the newly added V-Ray lights.
         
         NOTE: This function should be called from a context outside the depsgraph update procedure.
     """
+    global knownLights
+
+    isVRayEngine = (bpy.context.engine == 'VRAY_RENDER_RT')
+    
     for l in [o for o in bpy.context.scene.objects if o.type == 'LIGHT']:
     
-        match l.data.type:
+        light = l.data
+        
+        match light.type:
             case 'AREA':
-                _fixBlenderRectLight(l.data)
+                _fixBlenderRectLight(light)
             
             case 'SPOT':
-                _fixBlenderSpotLight(l.data)
-                
+                _fixBlenderSpotLight(light)
+
+
+        # Blender always creates a node tree for lights starting with version 5.1.
+        # If the active render engine is V-Ray, also add a V-Ray node tree.
+        # If the active render engine is not V-Ray, let the user decide whether
+        # a node tree for the light is needed.
+        if isVRayEngine and (bpy.app.version >= (5, 1, 0)):
+            if (getObjTrackId(light) not in knownLights) and not getLightOutputNode(light.node_tree):
+                tree_defaults.addLightNodeTree(light, isNewLight=True)
+            
+    if bpy.app.version >= (5, 1, 0):
+        knownLights = set(getObjTrackId(l) for l in bpy.data.lights)
+
+
 
 def syncLightMeshInfo(exporterCtx: ExporterContext):
     """ Collect info about the visible and updated objects associated with LightMesh exports. """
@@ -60,7 +85,6 @@ def syncLightMeshInfo(exporterCtx: ExporterContext):
             exporterCtx.updatedMeshLightsInfo.add(updateInfo)
 
 
-
 def collectLightMixInfo(exporterCtx: ExporterContext):
     """ At the start of an export, collect information required to correctly export LightMix """
     
@@ -77,7 +101,7 @@ def collectLightMixInfo(exporterCtx: ExporterContext):
         # Store list of lights by collection
         registeredLights = []
         for coll in bpy.data.collections:
-            if lights := ([o for o in coll.objects if o.type == 'LIGHT']):
+            if lights := [o for o in coll.objects if o.type == 'LIGHT']:
                 exporterCtx.lightCollections[coll] = lights
                 registeredLights.extend(lights)
         
@@ -183,9 +207,9 @@ def _customExportDomeLightSettings(nodeCtx: NodeContext, pluginDesc: PluginDesc)
         # do not allow connections from native VRay plugins.
         uvwNode = nodeCtx.node
         texNode = nodeCtx.nodes[-2]
-        if not any([i for i in texNode.inputs if i.hasActiveFarLink() and \
-                                                ((i.links[0].to_socket.name == 'Uvwgen') or (i.links[0].to_socket.name == 'Mapping')) and \
-                                                (i.links[0].from_socket == uvwNode.outputs['Mapping']) ]):
+        if not any(i for i in texNode.inputs if i.hasActiveFarLink() and \
+                                               ((i.links[0].to_socket.name == 'Uvwgen') or (i.links[0].to_socket.name == 'Mapping')) and \
+                                               (i.links[0].from_socket == uvwNode.outputs['Mapping'])):
             # The socket is not connected to the corrrect socket type on the texture node
             return
 
@@ -210,19 +234,19 @@ def getPluginName(obj: bpy.types.Object):
 
 
 def _getLightsOfTextures(textureNames: list[str]):
-        """ Return the objects of type 'LIGHT' in whose node trees the texture names are used.
-         
-          NOTE: This is hackish, but for the moment we don't know how to make Blender generate 
-          depsgraph updates for the node tree.
-        """
-        result = set()
+    """ Return the objects of type 'LIGHT' in whose node trees the texture names are used.
 
-        for light in [l for l in bpy.context.scene.objects if l.type == 'LIGHT' and hasattr(l.data, 'vray') and l.data.node_tree]:
-            for n in light.data.node_tree.nodes:
-                if hasattr(n, 'texture') and (n.texture.name in textureNames):
-                    result.add(light)
-                
-        return result
+      NOTE: This is hackish, but for the moment we don't know how to make Blender generate
+      depsgraph updates for the node tree.
+    """
+    result = set()
+
+    for light in [l for l in bpy.context.scene.objects if l.type == 'LIGHT' and hasattr(l.data, 'vray') and l.data.node_tree]:
+        for n in light.data.node_tree.nodes:
+            if hasattr(n, 'texture') and (n.texture.name in textureNames):
+                result.add(light)
+
+    return result
 
 
 class LightExporter(ExporterBase):
@@ -254,10 +278,9 @@ class LightExporter(ExporterBase):
     
 
     def _exportScene(self):
-        updates = [u.id for u in self.dg.updates]
         sceneLightObjs = [o for o in self.dg.objects if o.type == 'LIGHT']
-        
-        updatedTextures       = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
+
+        updatedTextures       = [u.id.name for u in self.dg.updates if isinstance(u.id, bpy.types.Texture)]
         updatedTextureLights  = _getLightsOfTextures(updatedTextures)
         updatedMeshLights     = {p.parentObj for p in self.updatedMeshLightsInfo}
 
@@ -288,7 +311,7 @@ class LightExporter(ExporterBase):
 
         # All plugins for lights which should not be exported have been removed from VRay and the tracker
         # by the prune procedure. From the rest, export only the updated visible nodes. 
-        for obj in  [o.evaluated_get(self.dg) for o in lightsForExport()]:
+        for obj in [o.evaluated_get(self.dg) for o in lightsForExport()]:
             with self.objectContext.push(obj):
                 self._exportLight(obj)
 
@@ -331,7 +354,7 @@ class LightExporter(ExporterBase):
         pluginType = getLightPluginType(light)
         if pluginType == "":
             debug.printError(f"Can't find vray Light type for blender object with id:{obj.name}")
-            return AttrPlugin()
+            return
         
         # Match the light representation of V-Ray light to a blender one
         if vrayLight.light_type != "BLENDER":
@@ -371,6 +394,8 @@ class LightExporter(ExporterBase):
             pluginDesc = PluginDesc(lightPluginName, pluginType)
             pluginDesc.vrayPropGroup = getattr(vrayLight, pluginType)
             self._exportLightPlugin(obj, pluginDesc, lightNode = None)
+
+        self.exportProgress.update(self.engine)
 
 
     def _exportLightPlugin(self, obj: bpy.types.Object, pluginDesc: PluginDesc, lightNode: bpy.types.Node):
@@ -440,21 +465,6 @@ class LightExporter(ExporterBase):
         """ Sets the visibility of all light in the scene regardless of the update status. We don't receive light-specific 
             update notifications when the visibility changes, so we must do this for all the lights. 
         """
-        
-        def isVisibleInLocalView(obj: bpy.types.Object, dg:bpy.types.Depsgraph, view3d: bpy.types.SpaceView3D):
-            if not self.interactive:
-                # In production, the local view selection is not respected
-                return True
-            
-            evalObj = obj.evaluated_get(dg)
-            return evalObj.local_view_get(view3d)
-        
-        localView = None
-        if self.viewport:
-            from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
-            view3d = self.iprContext.view3d
-            localView = view3d if (view3d and view3d.local_view) else None
-
         for obj in self.sceneObjects:
             objTrackId = getObjTrackId(obj)
 
@@ -462,21 +472,28 @@ class LightExporter(ExporterBase):
             if obj.type != 'LIGHT' or (objTrackId not in self.persistedState.processedObjects):
                 continue
 
-            pluginName = getPluginName(obj)  
+            pluginName = getPluginName(obj)
             pluginType = getLightPluginType(obj.data)
 
             # Get the current 'enabled' flag from the correct property source depending
             # on whether the light has a V-Ray nodetree attached.
             if (lightNtree := obj.data.node_tree) and (lightNode := getLightOutputNode(lightNtree)):
                 propGroup = getattr(lightNode, pluginType)
-                isEnabled = (lightNode is not None) and propGroup.enabled
+                isEnabled = propGroup.enabled
             else:
                 propGroup = getattr(obj.data.vray, pluginType)
                 isEnabled = propGroup.enabled
 
-            isVisibleLight = (objTrackId in self.visibleObjects) and ((not localView) or isVisibleInLocalView(obj, self.dg, view3d))
+            isVisibleLight = objTrackId in self.visibleObjects
 
-            plugin_utils.updateValue(self.renderer, pluginName, "enabled",  isEnabled and isVisibleLight)
+            if pluginType == 'LightMesh':
+                for li in self.activeMeshLightsInfo:
+                    if li.parentName == pluginName:
+                        gizmoPluginName = getLightMeshPluginName(pluginName,li.gizmoObjTrackId)
+                        gizmoVisible = li.gizmoObjTrackId in self.visibleObjects
+                        plugin_utils.updateValue(self.renderer, gizmoPluginName, "enabled",  isEnabled and isVisibleLight and gizmoVisible)
+            else:
+                plugin_utils.updateValue(self.renderer, pluginName, "enabled",  isEnabled and isVisibleLight)
 
 
     def _getLightMix(self):
@@ -567,7 +584,7 @@ class LightExporter(ExporterBase):
 
     def _pruneDisconnected(self):
         """ Delete plugins for LightMeshes for which the gizmo has been disconnected. """
-        disconnectedMeshLights = [p for p in self.persistedState.activeMeshLightsInfo.difference(self.activeMeshLightsInfo)]
+        disconnectedMeshLights = self.persistedState.activeMeshLightsInfo - self.activeMeshLightsInfo
 
         for l in disconnectedMeshLights:
             lightPluginName = getLightMeshPluginName(l.parentName, l.gizmoObjTrackId)
@@ -600,7 +617,7 @@ class LightExporter(ExporterBase):
             return
 
         for coll in bpy.data.collections:
-            if not (lightObjects := ([o for o in coll.all_objects if o.type == 'LIGHT'])):
+            if not (lightObjects := [o for o in coll.all_objects if o.type == 'LIGHT']):
                 continue
 
             lsPlugin = self._exportLightSelect(coll.name, LightSelectMode.Full)

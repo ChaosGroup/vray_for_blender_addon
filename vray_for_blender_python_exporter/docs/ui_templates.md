@@ -80,6 +80,20 @@ A template for selecting multiple scene objects or materials. Based on TemplateM
 **Exports:** not implemented. The host should call template's methods to obtain the export data.
 
 
+### TemplateFileSelect 
+
+![FileSelect](images/TemplateFileSelect.png)
+
+A template that binds to a string property with subtype 'VRAY_FILE_PATH' and adds a File Select button which shows a FileSelect dialog box with file extensions filter.
+
+**Exports:** not implemented. This template only upates the original property.
+
+Properties:
+- `bound_property` - name of the string property for which to show the FileSelect dialog.
+- `object_type` - the type of the property holder object. Can be one of:
+    - shader_node  - for all shader tree nodes and lights without node trees
+    - camera
+    - settings 
 
 
 

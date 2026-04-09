@@ -5,7 +5,6 @@
 import bpy, platform, os, sys
 from bpy.types import Context
 
-from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine import ZMQ
 from vray_blender.lib import draw_utils
 from vray_blender.lib.sys_utils import StartupConfig, activeRendererExists
@@ -13,7 +12,11 @@ from vray_blender.operators import VRAY_OT_render
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
 from vray_blender.ui.classes import pollEngine, RenderPanelGroups
+from vray_blender.ui.icons import getIcon
+from vray_blender.utils.update_checker import UpdateStatus
+from vray_blender.version import getAddonVersion, formatNumericVersion
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.ui.community_edition import drawCELimitedFeatureIcon, addCEPricingURLInfo
 
 if sys.platform == "win32":
     # The psutil we ship is currently broken on macos. It takes into account numa nodes
@@ -31,49 +34,7 @@ def getRenderIcon(vrayExporter):
     return renderIcon
 
 
-def _drawRendererSelector(self, context):
-    """ Draw V-Ray-specific render engine/device selectors """
-    if context.engine == 'VRAY_RENDER_RT':
-        layout = self.layout
-        vrayExporter = context.scene.vray.Exporter
-
-        # Render engine/device cannot be changed if a rendering job is under way.
-        enabled = not activeRendererExists()
-
-        layoutDevice = layout.column()
-        layoutDevice.use_property_split = True
-        layoutDevice.use_property_decorate = False
-        layoutDevice.enabled = enabled
-        layoutDevice.active = enabled
-
-        layoutDevice.prop(vrayExporter, "device_type", text="V-Ray Engine", )
-
-        if vrayExporter.device_type == 'GPU':
-            if sys.platform != "darwin":
-                layoutDevice.separator()
-                gpuDeviceRow = layoutDevice.row()
-                gpuDeviceRow.alignment = 'CENTER'
-                gpuDeviceRow.label(text=f"GPU Device")
-
-                gpuDeviceBox = gpuDeviceRow.box()
-                gpuDeviceBox.alignment = 'CENTER'
-                gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
-                gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
-                devicesRow = gpuDeviceRow
-
-                # Adding the use_gpu_rtx prop into new centered row,
-                # so it can be aligned with the "GPU Device" label.
-                rtxRow = layoutDevice.row()
-                rtxRow.alignment = 'CENTER'
-                rtxRow.scale_x = 2
-                rtxRow.prop(vrayExporter, "use_gpu_rtx")
-            else:
-                devicesRow = layoutDevice.row()
-                devicesRow.alignment = 'RIGHT'
-            devicesRow.operator(
-                "vray.open_preferences",
-                text="Devices", icon="PREFERENCES"
-            ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
+               
 
 class VRAY_PT_Context(classes.VRayRenderPanel):
     """ PROPERTIES->Render panel header"""
@@ -90,8 +51,12 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
         scene  = context.scene
         rd     = scene.render
 
+        self._drawRendererSelector(context)
+        layout.separator()
+        self._drawAboutBox(context)
+
         vrayScene = scene.vray
-        vrayBake     = vrayScene.BakeView
+        vrayBake  = vrayScene.BakeView
 
         if not vray.isInitialized():
             message = "V-Ray initializing..." if vray.hasLicense() else "No V-Ray license..."
@@ -109,6 +74,81 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
         layout.separator()
 
 
+    def _drawRendererSelector(self, context: bpy.types.Context):
+        """ Draw V-Ray-specific render engine/device selectors """
+        if context.engine == 'VRAY_RENDER_RT':
+            layout = self.layout
+            vrayExporter = context.scene.vray.Exporter
+
+            # Render engine/device cannot be changed if a rendering job is under way.
+            enabled = not activeRendererExists()
+
+            layoutDevice = layout.column()
+            layoutDevice.use_property_split = True
+            layoutDevice.use_property_decorate = False
+            layoutDevice.enabled = enabled
+            layoutDevice.active = enabled
+
+
+            #if context.scene.render.has_multiple_engines:
+            layoutDevice.prop(context.scene.render, "engine", text="Render Engine")
+            layoutDevice.prop(vrayExporter, "device_type", text="V-Ray Engine", )
+
+            if vrayExporter.device_type == 'GPU':
+                if sys.platform != "darwin":
+                    layoutDevice.separator()
+                    gpuDeviceRow = layoutDevice.row()
+                    gpuDeviceRow.alignment = 'CENTER'
+                    gpuDeviceRow.label(text="GPU Device")
+
+                    gpuDeviceBox = gpuDeviceRow.box()
+                    gpuDeviceBox.alignment = 'CENTER'
+                    gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
+                    gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
+                    devicesRow = gpuDeviceRow
+
+                    # Adding the use_gpu_rtx prop into new centered row,
+                    # so it can be aligned with the "GPU Device" label.
+                    rtxRow = layoutDevice.row()
+                    rtxRow.alignment = 'CENTER'
+                    rtxRow.scale_x = 2
+                    rtxRow.prop(vrayExporter, "use_gpu_rtx")
+                else:
+                    devicesRow = layoutDevice.row()
+                    devicesRow.alignment = 'RIGHT'
+                devicesRow.operator(
+                    "vray.open_preferences",
+                    text="Devices", icon="PREFERENCES"
+                ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
+            
+
+    def _drawAboutBox(self, context: bpy.types.Context):   
+        # V-Ray about info
+        box = self.layout.box()
+        box.label(text="V-Ray for Blender", icon_value = getIcon('VRAY_LOGO'))
+        split = box.split(factor=0.5)
+        leftCol = split.column()
+        rightCol = split.column()
+
+        # Line 2: License info and Upgrade button on the same row
+        if vray.isCommunityEdition():
+            leftCol.label(text='Community Edition', icon_value =getIcon('INFO_ABOUT'))
+            op = rightCol.operator('vray.url_open', text='Go Pro', icon='URL')
+            addCEPricingURLInfo(op)
+            leftCol.separator()
+            rightCol.separator()
+        
+        # Line 3: Update info
+        match UpdateStatus.current:
+            case UpdateStatus.NoUpdate | UpdateStatus.Error:      
+                leftCol.label(text=f"Version: {getAddonVersion()}", icon='INFO')
+            
+            case UpdateStatus.Available:
+                leftCol.label(text='Update available:', icon='INFO')
+                op = rightCol.operator("vray.url_open", text=f"v{formatNumericVersion(UpdateStatus.version)}", icon='URL')
+                op.url = UpdateStatus.downloadURL
+                op.description = "Go to V-Ray for Blender downloads page"
+    
 ########  ########    ###    ##       ######## #### ##     ## ########
 ##     ## ##         ## ##   ##          ##     ##  ###   ### ##
 ##     ## ##        ##   ##  ##          ##     ##  #### #### ##
@@ -127,7 +167,7 @@ class VRAY_PT_Device(classes.VRayRenderPanel):
     def poll_custom(cls, context):
         VRayScene = context.scene.vray
         VRayExporter = VRayScene.Exporter
-        return VRayExporter.device_type in {'GPU'}
+        return VRayExporter.device_type == 'GPU'
 
 
 
@@ -189,11 +229,13 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
                 row.prop(vrayExporter, 'export_scene_file_path', text='Vrscene path')
                 boxDebug.prop(vrayExporter, 'export_material_preview_scene', text='Export material preview vrscene')
                 row.operator('vray.select_vrscene_export_file', text='', icon='FILE_FOLDER')
-                boxDebug.operator("vray.export_scene", text="Export vrscene")
+                exportSceneLayout = boxDebug.row(align=True)
+                exportSceneLayout.enabled = not vray.isCommunityEdition()
+                exportSceneLayout.operator("vray.export_scene", text="Export vrscene")
 
             layout.separator()
 
-        # TOOD: Uncomment when imelemented
+        # TODO: Uncomment when implemented
         # col.prop(vrayExporter, 'calculate_instancer_velocity')
         # layout.prop(vrayExporter, 'subsurf_to_osd')
 
@@ -289,18 +331,18 @@ class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
         classes.drawPluginUI(context, layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
 
         # Antialiasing rollout
-        panelAntialiasingUniqueId = f'SettingsImageSampler_Antialiasing'
+        panelAntialiasingUniqueId = 'SettingsImageSampler_Antialiasing'
         if panelAntialiasing := draw_utils.rollout(layout, panelAntialiasingUniqueId, "Anti-Aliasing Filter"):
             panelAntialiasing.prop(settingsImageSampler, "filter_type")
 
-            if settingsImageSampler.filter_type not in {'NONE'}:
+            if settingsImageSampler.filter_type != 'NONE':
                 filterPluginType = settingsImageSampler.filter_type
                 filterPropGroup  = getattr(vrayScene, filterPluginType)
 
                 classes.drawPluginUI(context, panelAntialiasing, filterPropGroup, getPluginModule(filterPluginType))
 
         # Render Mask rollout
-        panelRenderMaskUniqueId = f'SettingsImageSampler_RenderMask'
+        panelRenderMaskUniqueId = 'SettingsImageSampler_RenderMask'
         if panelRenderMask := draw_utils.rollout(layout, panelRenderMaskUniqueId, "Render Mask"):
             uiPainter = draw_utils.UIPainter(context, getPluginModule('SettingsImageSampler'), settingsImageSampler)
             uiPainter.renderWidgetsSection(panelRenderMask, 'render_mask')
@@ -408,33 +450,9 @@ class VRAY_PT_GI_LightCache(classes.VRayRenderPanel):
         layout.use_property_decorate = False
 
         vs = context.scene.vray
-        module = vs.SettingsLightCache
-
-        layout.prop(module, "mode", text="Mode")
-
-        layout.separator()
-
-        if not module.mode == '2':
-            layout.prop(module, "subdivs")
-            layout.prop(module, "sample_size")
-
-        layout.separator()
-        layout.prop(module, "retrace_enabled")
-        sub = layout.column()
-        sub.active = module.retrace_enabled
-        sub.prop(module, "retrace_threshold", text="Retrace Threshold")
-
-        layout.prop(module, "path_guiding", text="Path Guiding (Experimental)")
-
-        layout.separator()
-        if module.mode == '2':
-            layout.prop(module,"file", text="File Name")
-        else:
-            layout.prop(module,"auto_save", text="Auto Save")
-            sub = layout.column()
-            sub.active = module.auto_save
-            sub.prop(module,"auto_save_file", text="File")
-
+        pluginModule = getPluginModule('SettingsLightCache')
+        painter = draw_utils.UIPainter(context, pluginModule, vs.SettingsLightCache)
+        painter.renderPluginUI(layout)
 
 
 ########  ########
@@ -455,7 +473,16 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
 
     def drawPanelCheckBox(self, context: Context):
         vrayDR = context.scene.vray.VRayDR
-        self.layout.prop(vrayDR, "on", text="")
+
+        if vray.isCommunityEdition():
+            self.bl_label = ""
+            ceTooltipRow = self.layout.row()
+            ceTooltipRow.label(text=VRAY_PT_DR.bl_label)
+            ceTooltipRow.enabled = False
+            drawCELimitedFeatureIcon(self.layout)
+        else:
+            self.bl_label = VRAY_PT_DR.bl_label
+            self.layout.prop(vrayDR, "on" , text="")
 
     def draw(self, context):
         layout = self.layout
@@ -463,9 +490,9 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
         vrayScene       = context.scene.vray
         vrayDR          = vrayScene.VRayDR
         settingsOptions = vrayScene.SettingsOptions
+        isLimited       = vray.isCommunityEdition()
 
-        layout.enabled = vrayDR.on
-
+        layout.enabled = vrayDR.on and (not isLimited)
         layout.use_property_decorate = False
         layout.use_property_split = True
 
@@ -559,13 +586,22 @@ def getRegClasses():
         VRAY_PT_DR,
     )
 
+from bl_ui import properties_render as BlenderRender
+
+_originalPoll = None
+
+
+@classmethod
+def myPoll(cls, context):
+    # Return False when V-Ray is the active engine
+    return not pollEngine(context)
 
 def register():
     from vray_blender.lib.class_utils import registerClass
 
-    # Add V-Ray renderer selectors to the stock Render context panel, 
-    # just below the Render engine selector
-    bpy.types.RENDER_PT_context.append(_drawRendererSelector)
+    global _originalPoll
+    _originalPoll = bpy.types.RENDER_PT_context.poll
+    bpy.types.RENDER_PT_context.poll = myPoll
 
     for regClass in getRegClasses():
         registerClass(regClass)
@@ -576,4 +612,4 @@ def unregister():
     for regClass in reversed(getRegClasses()):
         bpy.utils.unregister_class(regClass)
 
-    bpy.types.RENDER_PT_context.remove(_drawRendererSelector)
+    bpy.types.RENDER_PT_context.poll = _originalPoll

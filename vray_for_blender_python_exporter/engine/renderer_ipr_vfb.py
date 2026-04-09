@@ -7,7 +7,7 @@ import time
 
 from vray_blender import debug
 from vray_blender.lib import blender_utils
-from vray_blender.lib.defs import RendererMode, ExporterType, IprContext
+from vray_blender.lib.defs import RendererMode, ExporterType, UIRegionContext
 from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase, exportViewportView
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.exporting.update_tracker import UpdateTracker
@@ -26,15 +26,38 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     # determine if the viewport renderer is active from any context.
     _activeRenderer = None
 
-    def __init__(self, iprContext: IprContext):
-        super().__init__(False, iprContext, bpy.context)
+    # The resolution from the scene render settings from the last export. Used to detect if the resolution has changed.
+    _lastResolution = None
+
+    def __init__(self, uiRegionContext: UIRegionContext):
+        super().__init__(False, uiRegionContext, bpy.context)
+
+
+    @staticmethod
+    def warnForCEResolutionLimit():
+        """ Report a warning if the scene resolution is limited by Community Edition """
+        from vray_blender.lib.camera_utils import sceneResolutionLimitedByCE
+        if sceneResolutionLimitedByCE(bpy.context.scene, printWarning = False):
+            warningMsg = "The render result will be scaled down due to the"
+            warningMsg += " scene resolution exceeding the Community Edition's limit."
+
+            vray.logVfbMessage(debug.VfbMessageLevel.MessageWarning, warningMsg)
+            debug.reportAsync('WARNING', warningMsg)
 
     @staticmethod
     @bpy.app.handlers.persistent
     def _exportOnIprUpdatePost(e):
         """ Exporting of scene on every depsgrpah update """
         from vray_blender.engine.render_engine import VRayRenderEngine
+
         if iprRenderer := VRayRenderEngine.iprRenderer:
+        
+            scene = bpy.context.scene
+            currResolution = (scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage)
+            if VRayRendererIprVfb._lastResolution != currResolution:
+                VRayRendererIprVfb.warnForCEResolutionLimit()
+                VRayRendererIprVfb._lastResolution = currResolution
+            
             iprRenderer.exportScene()
 
     @staticmethod
@@ -107,7 +130,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         if not (ctx := self._createExporterContext(dg = depsgraph, isFullExport = False)):
             return None
         
-        region3d = ctx.iprContext.region3d
+        region3d = ctx.uiRegionContext.region3d
         
         # If this condition is true, there is change in the viewport
         renderSizesOnly = region3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
@@ -138,7 +161,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
     def _createExporterContext(self, dg: bpy.types.Depsgraph, isFullExport: bool):
         ctx = self._getExporterContext(bpy.context, RendererMode.Interactive, dg, isFullExport)
-        if ctx.iprContext is None:
+        if ctx.uiRegionContext is None:
             # There is no active viewport to export from. Stop the VFB renderer as we can
             # no longer control the view from the UI.
             VfbEventHandler.stopInteractiveRender()

@@ -50,7 +50,7 @@ class VRayNodeTransform(VRayNodeBase):
         if link := getFarNodeLink(inputSocket):
             connectedNode = link.from_node
             if connectedNode.bl_idname == 'VRayNodeSelectObject':
-                 return connectedNode.getSelected(context)
+                return connectedNode.getSelected(context)
         return None
 
     def init(self, context):

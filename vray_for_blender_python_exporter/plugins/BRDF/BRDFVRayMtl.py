@@ -8,9 +8,11 @@ import bpy
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getInputSocketByAttr, getLinkedFromSocket, getFarNodeLink
 from vray_blender.lib import export_utils, plugin_utils
-from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin
+from vray_blender.lib.blender_utils import getVRayPreferences, hasShadowedAttrChanged, updateShadowAttr
+from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin, ExporterContext
 from vray_blender.lib.names import Names
 from vray_blender.nodes.tools import isVraySocket
+from vray_blender.nodes.utils import _AutoConnectEnabled
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -18,8 +20,18 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 NORMAL_MAP_TEXTURES = ('VRayNodeTexNormalBump', 'VRayNodeTexBlendBumpNormal', 'VRayNodeTexNormalMapFlip')
 
 
+def nodeInit(node: bpy.types.Node):
+    vrayMtl = node.BRDFVRayMtl
+    
+    if _AutoConnectEnabled:
+        prefs = getVRayPreferences(bpy.context)
+        vrayMtl.option_use_roughness = prefs.mtl_use_roughness
+    
+    updateShadowAttr(vrayMtl, 'option_use_roughness')
+    
+
+
 def nodeInsertLink(link: bpy.types.NodeLink):
-    global NORMAL_MAP_TEXTURES
     attrMap =   {
                     'bump_map':      'bump_type',
                     'coat_bump_map': 'coat_bump_type'
@@ -42,7 +54,7 @@ def nodeInsertLink(link: bpy.types.NodeLink):
             setattr(toNode.BRDFVRayMtl, attrName, '6')
         elif getattr(toNode.BRDFVRayMtl, attrName) == '6':
             # Set default bump type
-           setattr(toNode.BRDFVRayMtl, attrName, '0')
+            setattr(toNode.BRDFVRayMtl, attrName, '0')
 
         
 
@@ -81,7 +93,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
-def exportCustom(exporterCtx, pluginDesc: PluginDesc):
+def exportCustom(exporterCtx: ExporterContext, pluginDesc: PluginDesc):
 
     if propGroup := pluginDesc.vrayPropGroup:
         fogMult = 0.0
@@ -97,4 +109,26 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
         pass
 
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
+
+
+def onUpdateUseRoughness(propGroup, context: bpy.types.Context, attrName: str):
+    assert attrName == "option_use_roughness"
+    
+    if not hasShadowedAttrChanged(propGroup, 'option_use_roughness'):
+        return
+    
+    propGroup.reflect_glossiness = 1.0 - propGroup.reflect_glossiness
+    propGroup.coat_glossiness    = 1.0 - propGroup.coat_glossiness
+    propGroup.sheen_glossiness   = 1.0 - propGroup.sheen_glossiness
+    
+    updateShadowAttr(propGroup, 'option_use_roughness')
+
+
+def onUpdateShadingModel(propGroup, context: bpy.types.Context, attrName: str):
+    assert attrName == "option_shading_model"
+
+    if propGroup.option_shading_model == '1':
+        # Open PBR
+        propGroup.option_use_roughness = True
+
 

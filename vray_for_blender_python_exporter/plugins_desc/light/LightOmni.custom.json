@@ -319,12 +319,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform"
-            },
-            {
-                "name": "pivot_offset"
-            },
-            {
                 "name": "color_colortex"
             },
             {
@@ -346,7 +340,8 @@
             "photonSubdivs",
             "diffuseMult",
             "storeWithIrradianceMap",
-            "shadowSubdivs"
+            "shadowSubdivs",
+            "pivot_offset"
         ],
         "animatable": true
     }

@@ -28,6 +28,11 @@ def exportDefaultUVWGenChannel(nodeCtx: NodeContext):
 
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
+    # Decals don't seem to work well with shared UVWGen plugins so each decal gets its own default...
+    if isinstance(nodeCtx.rootObj, bpy.types.Object) and nodeCtx.rootObj.vray.isVRayDecal:
+        uvwGenChannel = PluginDesc(f'defaultUVWGen_{Names.objectData(nodeCtx.rootObj)}', 'UVWGenChannel')
+        uvwGenChannel.setAttribute('uvw_channel', -1)
+        return commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenChannel)
 
     treeType = nodeCtx.ntree.vray.tree_type if nodeCtx.ntree else ''
     DEFAULT_PLUGIN_TYPE = f'UVWGenChannel_{treeType}'

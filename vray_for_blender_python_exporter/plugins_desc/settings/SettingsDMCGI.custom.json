@@ -15,6 +15,7 @@
     "Options": {
         "excluded_parameters": [
             "subdivs"
-        ]
+        ],
+        "animatable": false
     }
 }

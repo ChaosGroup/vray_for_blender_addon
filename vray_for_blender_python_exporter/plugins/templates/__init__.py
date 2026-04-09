@@ -3,18 +3,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-
 def getRegModules():
     from vray_blender.plugins.templates import (
         common,
         multi_select,
-        include_exclude
+        include_exclude,
+        file_select
     )
 
     return (
         common, # Keep this first in the list
         multi_select,
-        include_exclude
+        include_exclude,
+        file_select
     )
 
 
@@ -40,5 +41,9 @@ def templateMultiObjectSelect():
 def templateIncludeExclude():
     from vray_blender.plugins.templates import include_exclude
     return include_exclude.TemplateIncludeExclude
+
+def templateFileSelect():
+    from vray_blender.plugins.templates import file_select
+    return file_select.TemplateFileSelect
 
 

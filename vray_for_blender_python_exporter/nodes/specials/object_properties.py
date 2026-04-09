@@ -7,6 +7,7 @@ import bpy
 
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addOutput
+from vray_blender.nodes import utils as NodeUtils
 from vray_blender.lib import plugin_utils, draw_utils
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.plugins import PLUGINS
@@ -22,7 +23,7 @@ class VRayObjectProps(VRayNodeBase):
     def draw_buttons_ext(self, context, layout):
         if obj := context.active_object:
             pluginModule = PLUGINS["MISC"]["VRayObjectProperties"]
-            
+
             if (widgetsList := pluginModule.Widget['widgets']) and \
                 (widget := next((w for w in widgetsList if w["name"] == self.pluginWidgetIdx), None)):
 
@@ -31,8 +32,14 @@ class VRayObjectProps(VRayNodeBase):
                 uiPainter.renderWidgetAttributes(widget, layout)
             else:
                 from vray_blender import debug
-                debug.printError(f"Plugin VRayObjectProperties has no widget with at index '{self.pluginWidgetIdx}'")
+                debug.printError(f"Plugin VRayObjectProperties has no widget at index '{self.pluginWidgetIdx}'")
 
+def _makeShadowCatcher(self, context):
+    if obj := context.active_object:
+        objProps = obj.vray.VRayObjectProperties
+        objProps.affect_alpha = True
+        objProps.shadows = True
+        objProps.alpha_contribution = -1.0
 
 class VRayObjectMatteProps(VRayObjectProps):
     bl_idname = 'VRayNodeObjectMatteProps'
@@ -41,6 +48,13 @@ class VRayObjectMatteProps(VRayObjectProps):
 
     vray_type   = 'NONE'
     vray_plugin = 'NONE'
+
+    make_shadow_catcher: bpy.props.BoolProperty(
+        name = 'Internal shadow catcher attribute',
+        default = False,
+        options = { 'SKIP_SAVE', 'HIDDEN' },
+        update = _makeShadowCatcher
+    )
 
     visibleAttrs = (
         "matte_surface",
@@ -59,6 +73,7 @@ class VRayObjectMatteProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Matte")
+        NodeUtils.autoConnectObjectNode(self, 'Matte')
 
 
 
@@ -77,11 +92,12 @@ class VRayObjectSurfaceProps(VRayObjectProps):
         "receive_caustics",
         "gi_surface_id",
         "generate_render_elements"
-    ) 
+    )
     pluginWidgetIdx = "surface properties"
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Surface")
+        NodeUtils.autoConnectObjectNode(self, 'Surface')
 
 
 class VRayObjectVisibilityProps(VRayObjectProps):
@@ -105,6 +121,7 @@ class VRayObjectVisibilityProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Visibility")
+        NodeUtils.autoConnectObjectNode(self, 'Visibility')
 
     def fillReflectAndRefractLists(self, exporterCtx: ExporterContext, pluginDesc: PluginDesc):
         """ Fills the reflection and refraction exclusion lists with objects selected in the property panel of visibility props.

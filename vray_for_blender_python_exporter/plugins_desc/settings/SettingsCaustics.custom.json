@@ -11,14 +11,46 @@
         },
         {
             "attr": "file",
-            "subtype": "FILE_PATH",
+            "subtype": "VRAY_FILE_PATH",
+            "ui": {
+                "display_name": "Photon Map File"
+            }
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "file",
+                        "object_type": "settings"
+                    }
+                }
+            },
             "ui": {
                 "display_name": "Photon Map File"
             }
         },
         {
             "attr": "auto_save_file",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "auto_save_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "auto_save_file",
+                        "object_type": "settings"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "Auto Save File"
+            }
         },
         {
             "attr": "search_distance_units",
@@ -111,7 +143,7 @@
             {
                 "attrs": [
                     {
-                        "name": "file",
+                        "name": "file_selector",
                         "visible": {
                             "cond": "::mode=1"
                         }
@@ -128,7 +160,7 @@
                         }
                     },
                     {
-                        "name": "auto_save_file",
+                        "name": "auto_save_file_selector",
                         "visible": {
                             "cond": "::mode=0"
                         },

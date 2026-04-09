@@ -87,16 +87,27 @@ class VRayNodeBase(VRayEntity, bpy.types.Node):
     bl_width_default = 230
 
     def insert_link(node: bpy.types.Node, link: bpy.types.NodeLink):
-        from vray_blender.nodes.nodes import vrayNodeInsertLink
+        from vray_blender.nodes.links import vrayNodeInsertLink
         vrayNodeInsertLink(node, link)
 
     def update(self):
         """Update on node graph topology changes (adding or removing nodes and links)"""
-        from vray_blender.nodes.links import isLinkValid
+        from vray_blender.nodes.links import isLinkValid, checkAndRemoveNewlyCreatedLink
+        from vray_blender.plugins import getPluginModule
         for sock in self.inputs:
             for link in sock.links:
                 if not isLinkValid(self, link):
                     self.id_data.links.remove(link)
+                elif ((nodeLinkInfo := checkAndRemoveNewlyCreatedLink(link))
+                            and link.to_node == self
+                            and ((getattr(self, 'vray_plugin', 'NONE') != 'NONE') or nodeLinkInfo.customInsertLinkCallback)):
+                    if nodeLinkInfo.customInsertLinkCallback:
+                        fnNodeInsertLink = nodeLinkInfo.customInsertLinkCallback
+                    else:
+                        pluginModule = getPluginModule(self.vray_plugin)
+                        fnNodeInsertLink = getattr(pluginModule, "nodeInsertLink")
+                    assert fnNodeInsertLink
+                    fnNodeInsertLink(link)
 
 
 class VRayOperatorBase(bpy.types.Operator):

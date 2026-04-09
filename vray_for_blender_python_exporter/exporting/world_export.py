@@ -36,7 +36,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
         if effectsNode.bl_idname != "VRayNodeEffectsHolder":
             debug.printError("Environment: 'Effects' socket must be connected to a \"V-Ray Effects Container\" node!")
-            return
+            return []
 
         with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(effectsNode)):
             with nodeCtx.push(effectsNode):
@@ -53,16 +53,16 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
 
 def _sockConnectedToDenoiser(sock):
-    node = getFarNodeLink(sock).from_node
-    return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelDenoiser")
+    link = getFarNodeLink(sock)
+    return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelDenoiser"
 
 def _sockConnectedToCryptomatte(sock):
-    node = getFarNodeLink(sock).from_node
-    return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelCryptomatte")
+    link = getFarNodeLink(sock)
+    return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelCryptomatte"
 
 def _sockConnectedToEnhancer(sock):
-    node = getFarNodeLink(sock).from_node
-    return (node is not None) and (node.bl_idname == "VRayNodeRenderChannelEnhancer")
+    link = getFarNodeLink(sock)
+    return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelEnhancer"
 
 def _getViewportDenoiserEngine(world: bpy.types.World):
     viewportEngine = world.vray.RenderChannelDenoiser.viewport_engine
@@ -112,25 +112,24 @@ class WorldExporter(ExporterBase):
         exportSettingsPlugin = False
 
         # Export channel plugins and their node trees
-        if channelsNode:
-            viewportDenoiserEnabled = nodeCtx.scene.world.vray.RenderChannelDenoiser.viewport_enabled
+        viewportDenoiserEnabled = nodeCtx.scene.world.vray.RenderChannelDenoiser.viewport_enabled
 
-            with nodeCtx.push(channelsNode):
-                if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
-                    nodeCtx.cacheNodePlugin(channelsNode)
-                    for channelLink in [getFarNodeLink(s) for s in channelsNode.inputs]:
-                        if not channelLink:
-                            continue
+        with nodeCtx.push(channelsNode):
+            if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
+                nodeCtx.cacheNodePlugin(channelsNode)
+                for channelLink in [getFarNodeLink(s) for s in channelsNode.inputs]:
+                    if not channelLink:
+                        continue
 
-                        inSock = channelLink.to_socket
-                        if nodeCtx.exporterCtx.vantage and (_sockConnectedToCryptomatte(inSock) or _sockConnectedToEnhancer(inSock)):
-                            continue
-                        if DISABLE_GEN_AI and _sockConnectedToEnhancer(inSock):
-                            continue
+                    inSock = channelLink.to_socket
+                    if nodeCtx.exporterCtx.vantage and (_sockConnectedToCryptomatte(inSock) or _sockConnectedToEnhancer(inSock)):
+                        continue
+                    if DISABLE_GEN_AI and _sockConnectedToEnhancer(inSock):
+                        continue
 
-                        if not nodeCtx.exporterCtx.viewport or (_sockConnectedToDenoiser(inSock) and viewportDenoiserEnabled):
-                            exportSocketLink(nodeCtx, channelLink)
-                            exportSettingsPlugin = True
+                    if not nodeCtx.exporterCtx.viewport or (_sockConnectedToDenoiser(inSock) and viewportDenoiserEnabled):
+                        exportSocketLink(nodeCtx, channelLink)
+                        exportSettingsPlugin = True
 
         # Only the denoiser render element is exported for viewport IPR.
         self.denoiserExported = nodeCtx.exporterCtx.viewport and exportSettingsPlugin
@@ -269,15 +268,15 @@ class WorldExporter(ExporterBase):
         """ Delete all plugins associated with removed, orphaned or updated worlds """
         assert(self.interactive)
 
-        # Find all lights that are to be shown in the scene
+        # Find all worlds that are to be shown in the scene
         activeWorlds = [w for w in bpy.data.worlds if w.vray and (not isObjectOrphaned(w))]
-        
-        # Remove from VRay the lights with node trees whose topology has been updated. 
-        # They will be fully re-exported during the current update cycle 
-        topologyUpdates = self._getTopologyUpdates()
-        updatedWorldIds = [w for w in activeWorlds if self.fullExport or (w.name in topologyUpdates)]
 
-        self._pruneNodeTreePlugins(updatedWorldIds)
+        # Remove from VRay the worlds with node trees whose topology has been updated.
+        # They will be fully re-exported during the current update cycle
+        topologyUpdates = self._getTopologyUpdates()
+        updatedWorlds = [w for w in activeWorlds if self.fullExport or (w.name in topologyUpdates)]
+
+        self._pruneNodeTreePlugins(updatedWorlds)
 
 
     def _pruneNodeTreePlugins(self, removeWorlds):
@@ -308,16 +307,16 @@ class WorldExporter(ExporterBase):
 
 
     def _getTopologyUpdates(self):
-            """ Return the names of the World data objects with node trees whose topology has been updated """
-            
-            ntreesWithUpdatedTopology = [ u.id for u in self.dg.updates \
-                                            if isinstance(u.id, bpy.types.NodeTree) \
-                                                and isVrayNodeTree(u.id, 'WORLD')]
-        
-            # Find the World objects whose node trees have topology updates
-            topologyUpdates = [ u.id for u in self.dg.updates if isinstance(u.id, bpy.types.World) \
-                                                                and u.id.node_tree in ntreesWithUpdatedTopology]
+        """ Return the names of the World data objects with node trees whose topology has been updated """
 
-            return [t.name for t in topologyUpdates]
+        ntreesWithUpdatedTopology = [ u.id for u in self.dg.updates \
+                                        if isinstance(u.id, bpy.types.NodeTree) \
+                                            and isVrayNodeTree(u.id, 'WORLD')]
+
+        # Find the World objects whose node trees have topology updates
+        topologyUpdates = [ u.id for u in self.dg.updates if isinstance(u.id, bpy.types.World) \
+                                                            and u.id.node_tree in ntreesWithUpdatedTopology]
+
+        return [t.name for t in topologyUpdates]
 
 

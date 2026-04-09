@@ -26,6 +26,9 @@ class Marshaller:
     def dumpInt32(self, v):
         self.l.extend(struct.pack('i', v))
 
+    def dumpPersistentId(self, v):
+        self.l.extend(struct.pack('8i', *v))
+
     def dumpInt64(self, v):
         self.l.extend(struct.pack('q', v))
 

@@ -17,7 +17,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     camera = blender_utils.getSceneCamera(ctx)
     
-    if ctx.viewport and ctx.iprContext.region3d.view_perspective != 'CAMERA':
+    if ctx.viewport and ctx.uiRegionContext.region3d.view_perspective != 'CAMERA':
         # Don't show DoF in viewport mode without camera view
         pluginDesc.setAttribute("aperture", 0)
     elif camera and (camera.type == 'CAMERA'):

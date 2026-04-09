@@ -10,8 +10,8 @@ from vray_blender import debug
 from vray_blender.lib import gl_draw
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
-from vray_blender.lib.defs import (IprContext, ExporterContext, RendererMode, AttrPlugin, PersistedState, 
-                                    RenderMaskState, IprContext, getObjTrackId, SceneStats)
+from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, AttrPlugin, PersistedState, 
+                                    RenderMaskState, UIRegionContext, getObjTrackId, SceneStats)
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
 from vray_blender.lib.plugin_utils import updateValue, objectToAttrPlugin, stringToIntList
 from vray_blender.exporting.instancer_export import InstancerExporter
@@ -68,7 +68,7 @@ def _prunePlugins(self, exporterCtx: ExporterContext):
         world_export.WorldExporter(context).prunePlugins()
         InstancerExporter.pruneInstances(context)
 
-        # Persist the new snaphot
+        # Persist the new snapshot
         self.activeInstancers = exporterCtx.activeInstancers
 
          # Remove plugins that need to be recreated
@@ -91,7 +91,7 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
     obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
 
     # NOTE: Updates should tagged be BEFORE any export structures are calculated
-    # for the current pass. Keep this at the beginnign of the function.
+    # for the current pass. Keep this at the beginning of the function.
     UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.materials, UpdateTarget.MATERIAL)
     UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.lights, UpdateTarget.LIGHT)
     UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.worlds, UpdateTarget.WORLD)
@@ -105,20 +105,26 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
         light_export.collectLightMixInfo(exporterCtx)
 
     # NOTE: just to be safe, remove objects that have been processed but not in the current scene
-    allObjectIds = { getObjTrackId(o) for o in exporterCtx.sceneObjects }
+    allObjectIds = {
+        trackId
+        for obj in exporterCtx.sceneObjects
+        for trackId in (
+            [getObjTrackId(obj)] +
+            [getObjTrackId(ps.settings) for ps in getattr(obj, 'particle_systems', [])]
+        )
+    }
     for objTrackId in self.persistedState.processedObjects.difference(allObjectIds):
         self.persistedState.processedObjects.discard(objTrackId)
 
     # Force full scene material re-export to make sure all materials are properly overriden.
     viewLayer = exporterCtx.dg.view_layer
-    
+
     if self.persistedState.materialOverrideMode != viewLayer.vray.material_override_mode or \
         self.persistedState.overrideMaterial != viewLayer.material_override:
         for mtl in bpy.data.materials:
             mtl.update_tag()
             UpdateTracker.tagMtlTopology(exporterCtx.ctx, mtl)
-        self.persistedState.exportedMtls.clear()
-        exporterCtx.exportedMtls.clear()
+        exporterCtx.persistedState.exportedMtls.clear()
 
     # Check if the currently updated material contains a displacement node
     checkForUpdatedMtlWithDisplacement(exporterCtx)
@@ -127,7 +133,6 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
 def _persistState(self, exporterCtx: ExporterContext):
     self.persistedState.activeInstancers = exporterCtx.activeInstancers
     self.persistedState.activeGizmos = exporterCtx.activeGizmos
-    self.persistedState.exportedMtls = exporterCtx.exportedMtls
     self.persistedState.activeFurInfo = exporterCtx.activeFurInfo
     self.persistedState.activeMeshLightsInfo = exporterCtx.activeMeshLightsInfo
 
@@ -247,7 +252,7 @@ class VRayRendererIprBase:
     _lastWindowPtr = 0
 
 
-    def __init__(self, isViewport: bool, iprContext: IprContext, context: bpy.types.Context):
+    def __init__(self, isViewport: bool, uiRegionContext: UIRegionContext, context: bpy.types.Context):
         # An opaque pointer to the VRay renderer object owned by the C++ library
         self.renderer = None
 
@@ -255,8 +260,8 @@ class VRayRendererIprBase:
         self.isViewport = isViewport
         
         # Store an identifier of the screen space it was invoked in.
-        VRayRendererIprBase._lastView3dPtr = iprContext.view3d.as_pointer()
-        VRayRendererIprBase._lastWindowPtr = iprContext.window.as_pointer()
+        VRayRendererIprBase._lastView3dPtr = uiRegionContext.view3d.as_pointer()
+        VRayRendererIprBase._lastWindowPtr = uiRegionContext.window.as_pointer()
 
         # Set up plugin tracking
         self.objTrackers        = {}
@@ -277,16 +282,13 @@ class VRayRendererIprBase:
         # Cache & draw the most recent viewport image.
         self.drawData: gl_draw.DrawData = None
 
-        # Used to store ExporterCtx.exportedMtls between update calls.
-        self.exportedMtls: dict[bpy.types.Material, AttrPlugin] = {}
-
         # State to carry on to the next render cycle
         self.persistedState = PersistedState()
-        
+
         self.persistedState.materialOverrideMode = context.view_layer.vray.material_override_mode
         self.persistedState.overrideMaterial = context.view_layer.material_override
-    
-        # Time when last export has finished. Uset for rate-limiting updates to the veiwport.
+
+        # Time when last export has finished. Used for rate-limiting updates to the viewport.
         self.tmLastExport = 0.0
         reportAutoSettingsWarning(bpy.context)
 
@@ -302,15 +304,18 @@ class VRayRendererIprBase:
         if VRayRendererIprBase._resetRenderer and not isFullExport:
             vray.clearScene(renderer)
             isFullExport = True
-            # Reset the stored view matrix to force camera plugins to be re-exported.
-            self.persistedState.prevRegion3dViewMatrix = None
+            # Reset the persisted state to force scene objects and materials to be re-export.
+            self.persistedState = PersistedState()
+            self.persistedState.materialOverrideMode = bpy.context.view_layer.vray.material_override_mode
+            self.persistedState.overrideMaterial = bpy.context.view_layer.material_override
+
         VRayRendererIprBase._resetRenderer = False
         return isFullExport
 
 
     @staticmethod
     def _showSceneStatus(exporterCtx: ExporterContext):
-        """ Show a warning about V-Ray Scene objects not being modifiable during interactive rednering """
+        """ Show a warning about V-Ray Scene objects not being modifiable during interactive rendering """
         wmgr = exporterCtx.ctx.window_manager.vray
 
         if VRayRendererIprBase._enableVraySceneWarning and not wmgr.vrayscene_warning_shown:
@@ -327,8 +332,8 @@ class VRayRendererIprBase:
 
 
     @staticmethod
-    def getActiveIprContext():
-        """ Return the active Ipr context.
+    def getActiveUIRegionContext():
+        """ Return the active UI region context.
 
             The context is determined when the user explicitly requests an interactive 
             rendering, and pointers to the active SpaceView3D and Window are stored.
@@ -369,10 +374,11 @@ class VRayRendererIprBase:
                         for space in area.spaces \
                             if (space.type == 'VIEW_3D') and (space.as_pointer() == VRayRendererIprBase._lastView3dPtr)), None)
 
-        window = bpy.context.window
+        if (window := bpy.context.window) is None:
+            return None
         
         if view3d := getLastActiveSpace():
-            return IprContext(view3d, window)
+            return UIRegionContext(view3d, window)
 
         if __class__._lastWindowPtr not in (0,  window.as_pointer()):
             # The window containing the space the renderer is attached to was closed.
@@ -386,7 +392,7 @@ class VRayRendererIprBase:
         if view3d := getFirstAvailableView3D():
             __class__._lastView3dPtr = view3d.as_pointer()
             __class__._lastWindowPtr = window.as_pointer()
-            return IprContext(view3d, window)
+            return UIRegionContext(view3d, window)
 
         return None
 
@@ -408,7 +414,7 @@ class VRayRendererIprBase:
             _syncView(exporterCtx)
             _syncAnimFrame(self, exporterCtx)
 
-            region3d = exporterCtx.iprContext.region3d
+            region3d = exporterCtx.uiRegionContext.region3d
 
             # Needed to detect viewport changes in the view draw functions.
             if region3d.view_matrix != self.persistedState.prevRegion3dViewMatrix:
@@ -433,12 +439,11 @@ class VRayRendererIprBase:
                 if hasCameraUpdates or exporterCtx.fullExport:
                     self.viewParams = exportViewportView(exporterCtx, self.viewParams, False)
 
-                if exporterCtx.fullExport:
-                    _exportSettings(exporterCtx)
+                _exportSettings(exporterCtx)
                 _exportWorld(exporterCtx)
                 _exportMaterials(exporterCtx)
 
-                if exporterCtx.rendererMode == RendererMode.Interactive:
+                if exporterCtx.fullExport and (exporterCtx.rendererMode == RendererMode.Interactive):
                     self._linkRenderChannels(exporterCtx)
 
                 _persistState(self, exporterCtx)
@@ -470,9 +475,8 @@ class VRayRendererIprBase:
         context.dg               = dg or bpy.context.evaluated_depsgraph_get()
         context.fullExport       = isFullExport
         context.ts               = tools.TimeStats("Python export code")
-        context.exportedMtls     = self.exportedMtls
         context.persistedState   = self.persistedState
-        context.iprContext       = __class__.getActiveIprContext()
+        context.uiRegionContext  = __class__.getActiveUIRegionContext()
 
         return context
 

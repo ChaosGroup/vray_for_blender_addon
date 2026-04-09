@@ -12,7 +12,7 @@ import types
 import bpy
 
 from vray_blender.lib.sys_utils import importFunction
-from vray_blender.external.pyparsing import Forward, Word, alphanums, Suppress, Group, infixNotation, oneOf, opAssoc
+from vray_blender.external.pyparsing import Forward, Word, alphanums, Suppress, Group, infixNotation, oneOf, opAssoc, Optional
 
 from vray_blender import debug
 
@@ -77,6 +77,9 @@ class UIConditionCompiler:
             for widget in widgetsList:
                 self._generateWidgetConditionEvaluators(widget)
         
+        for widget in self.pluginDesc.get('Node', {}).get('widgets', []):
+            self._generateWidgetConditionEvaluators(widget)
+
         for sockDesc in self.pluginDesc.get('Node', {}).get('input_sockets', []):
             self._generateSocketConditionEvaluators(sockDesc)
 
@@ -199,7 +202,7 @@ class UIConditionGrammar:
     identifier = Word("::" + alphanums + "_")
     equalityOperator = oneOf("!= = < > <= >=")
     value = Word(alphanums)
-    comparisonExpr = identifier + equalityOperator + value
+    comparisonExpr = identifier + equalityOperator + Optional(value, default="")
 
     LPAR,RPAR = map(Suppress, '()')     # Don't generate tokens for the parentheses
     expr = Forward()                    # Enable recursive patterns
@@ -297,7 +300,7 @@ class UIConditionConverter:
         elif prop['type'] == 'BOOL':
             value = bool(int(value))
         else:
-            value = f'"{value}"' if value != 'NONE' else None
+            value = f'"{value}"' if value != 'NONE' else 'None'
 
         if op == "=":
             op = "=="

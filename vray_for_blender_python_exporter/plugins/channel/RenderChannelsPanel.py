@@ -28,13 +28,13 @@ VRayChannelNodeSubtypes = (
 )
 
 def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
-    
+
     deselectNodes(worldTree)
-    
+
     renderChannel = worldTree.nodes.new(nodeName)
     renderChannel.location.x = channelsNode.location.x - 200
     sockPos = 0
-    
+
     for sock in channelsNode.inputs:
         if not sock.is_linked:
             break
@@ -68,7 +68,7 @@ def _getConnectedChannelsNode(worldTree: bpy.types.NodeTree):
             channelsSock.node.bl_idname == 'VRayNodeRenderChannels':
 
             return channelsSock.node
-    
+
     return None
 
 def _setRenderChannelEnabled(self, useRenderChannel: bool):
@@ -82,21 +82,22 @@ def _setRenderChannelEnabled(self, useRenderChannel: bool):
         assert (world and world.node_tree), 'Cannot show a render channel checkbox without an active world'
 
         worldTree = world.node_tree
-        if not world.vray.is_vray_class:
-            tree_defaults.addWorldNodeTree(world)
+        with NodesUtils.DisableAutoConnect():
+            if not world.vray.is_vray_class:
+                tree_defaults.addWorldNodeTree(world)
 
-        outputNode = NodesUtils.getOutputNode(worldTree) or worldTree.nodes.new('VRayNodeWorldOutput')
+            outputNode = NodesUtils.getOutputNode(worldTree) or worldTree.nodes.new('VRayNodeWorldOutput')
 
-        if not (channelsOutputNode := _getConnectedChannelsNode(worldTree)):
-            channelsOutputNode = worldTree.nodes.new('VRayNodeRenderChannels')
-            channelsOutputNode.location.x = outputNode.location.x - 200
-            channelsOutputNode.location.y = outputNode.location.y - 150 
-            worldTree.links.new(outputNode.inputs['Channels'], channelsOutputNode.outputs['Channels'])
+            if not (channelsOutputNode := _getConnectedChannelsNode(worldTree)):
+                channelsOutputNode = worldTree.nodes.new('VRayNodeRenderChannels')
+                channelsOutputNode.location.x = outputNode.location.x - 200
+                channelsOutputNode.location.y = outputNode.location.y - 150
+                worldTree.links.new(outputNode.inputs['Channels'], channelsOutputNode.outputs['Channels'])
 
-        if useRenderChannel:
-            _createRenderChannel(worldTree, channelsOutputNode, self.nodeName)
-        else:
-            _removeRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+            if useRenderChannel:
+                _createRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+            else:
+                _removeRenderChannel(worldTree, channelsOutputNode, self.nodeName)
 
 
 def _getRenderChannelEnabled(self):
@@ -109,7 +110,7 @@ def _getRenderChannelEnabled(self):
 
     if channelsOutputNode := _getConnectedChannelsNode(world.node_tree):
         return any(s.links[0].from_node.bl_idname == self.nodeName for s in channelsOutputNode.inputs if s.is_linked)
-    
+
     return False
 
 
@@ -117,7 +118,7 @@ _vrayRenderChannelsType = None
 _renderChannelIndicatorTypesList = []
 
 # Creates 'RenderChannelIndicator' property group which contains the properties below:
-# enabled - indicates if particular render element has been created in the world node tree. 
+# enabled - indicates if particular render element has been created in the world node tree.
 #   If switched from False to True, new node for the render element is created.
 #   Otherwise, existing node instance for the render element is removed from the tree.
 # nodeName - name of the node representing the current render element
@@ -125,7 +126,7 @@ def _createRenderChannelIndicatorType(uiName, nodeName):
     return type(
         # Name. Deviate from the convention and use a short prefix because the name length
         # could easily surpass the maximum length supported by Blender (64 chars at this time)
-        f"RCI_{nodeName}", 
+        f"RCI_{nodeName}",
         (bpy.types.PropertyGroup,), # Inheritance
         {   '__annotations__': # Attributes
             {
@@ -159,7 +160,7 @@ def _loadRenderChannelAnnotations(plugins):
         channelName = elem['params']['name']
         nodeName = f"VRayNodeRenderChannel{channelName.replace(' ','').replace('-', '')}"
         return (nodeName , channelName)
-    
+
     rendElemsDesc += [toNodeNameAndLabel(elem) for elem in customRenderChannelNodesDesc]
 
     elementsAnnotations = {}

@@ -5,7 +5,7 @@
 import bpy
 
 from vray_blender.nodes.operators.misc import _redrawNodeEditor
-from vray_blender.nodes import tree_defaults, utils as NodeUtils
+from vray_blender.nodes import tree_defaults
 from vray_blender.lib import blender_utils
 from vray_blender.lib.attribute_utils import copyPropGroupValues
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -14,8 +14,8 @@ from vray_blender.plugins import getPluginModule
 
 class VRAY_OT_add_nodetree_light(VRayOperatorBase):
     bl_idname       = "vray.add_nodetree_light"
-    bl_label        = "Add Light Nodetree"
-    bl_description  = "Add light nodetree"
+    bl_label        = "Add V-Ray Light Nodetree"
+    bl_description  = "Add V-Ray Light Nodetree"
     bl_options      = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
@@ -33,7 +33,7 @@ class VRAY_OT_add_nodetree_light(VRayOperatorBase):
         bpy.ops.vray.show_ntree(data='OBJECT')
         return {'FINISHED'}
 
-
+    
 class VRAY_OT_add_nodetree_object(VRayOperatorBase):
     bl_idname      = "vray.add_nodetree_object"
     bl_label       = "Add Object Nodetree"
@@ -115,6 +115,22 @@ class VRAY_OT_add_nodetree_world(VRayOperatorBase):
         return {'FINISHED'}
 
 
+class VRAY_OT_add_new_world(VRayOperatorBase):
+    """ Add a new vray world node tree to the active scene """
+
+    bl_idname      = "vray.add_new_world"
+    bl_label       = "Add New V-Ray World"
+    bl_description = "Add a new V-Ray world"
+    bl_options     = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context):
+        from vray_blender.nodes import tree_defaults
+        tree_defaults.addWorldNodeTree(None)
+
+        _redrawNodeEditor()
+        return {'FINISHED'}
+
+
 class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
     """ Replace the active material's nodetree with a V-Ray material nodetree """
 
@@ -128,7 +144,7 @@ class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
             # Replace the nodetree of the actve material. This case will be executed
             # when a non-vray material is converted to V-Ray, or when the operator is
             # invoked manually.
-            tree_defaults.addMaterialNodeTree(activeMtl)
+            tree_defaults.addMaterialNodeTree(activeMtl, appendLeft=True)
 
             _redrawNodeEditor()
             return {'FINISHED'}
@@ -137,7 +153,7 @@ class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
             return {'CANCELLED'}
 
 class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
-    """ Covnert the active material's nodetree with a V-Ray material nodetree """
+    """ Convert the active material's nodetree with a V-Ray material nodetree """
 
     bl_idname      = "vray.convert_nodetree_material"
     bl_label       = "Convert Cycles Material"
@@ -186,6 +202,9 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
     bl_description = "Add a new V-Ray material"
     bl_options     = {'INTERNAL', 'UNDO'}
 
+    nodeType: bpy.props.StringProperty(name="Node Type", default="")
+    nodeLabel: bpy.props.StringProperty(name="Node Label", default="")
+
     def execute(self, context):
         if ob := getattr(context, 'active_object'):
             if (ob.type in blender_utils.NonGeometryTypes) and (not ob.vray.isVRayFur):
@@ -193,8 +212,8 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
                 return {'CANCELLED'}
 
             # Create a new V-Ray material
-            newMtl = bpy.data.materials.new("Material")
-            tree_defaults.addMaterialNodeTree(newMtl)
+            newMtl = bpy.data.materials.new(self.nodeLabel if self.nodeLabel else "Material")
+            tree_defaults.addMaterialNodeTree(newMtl, nodeType=self.nodeType)
 
             # We are using the main node tree of the material to attach V-Ray nodes to. We don't have
             # control over its creation, and Blender is free to attach some default nodes to it. E.g. 
@@ -280,6 +299,7 @@ def getRegClasses():
         VRAY_OT_add_new_material,
         VRAY_OT_copy_material,
         VRAY_OT_add_nodetree_world,
+        VRAY_OT_add_new_world,
         VRAY_OT_copy_world,
     )
 

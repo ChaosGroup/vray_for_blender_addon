@@ -4,11 +4,13 @@
 
 import bpy
 import sys
+import math
 from pathlib import Path
 
 from vray_blender.lib import blender_utils
 from vray_blender.lib import settings_defs as defs
 from vray_blender.lib.defs import ProdRenderMode
+from vray_blender.lib.lib_utils import parseFramesToFlatList
 
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
@@ -18,12 +20,10 @@ from vray_blender.lib import camera_utils
 
 class AnimationSettings:
     def __init__(self):
-        self.mode         = defs.AnimationMode.SingleFrame
+        self.mode         = 'FRAME'
         self.use          = False
-        self.frameStart   = 0
-        self.frameEnd     = 0
         self.frameCurrent = 0
-        self.frameStep    = 0
+        self.frames       = []
 
 class FileOutputSettings:
     def __init__(self):
@@ -34,7 +34,7 @@ class FileOutputSettings:
         self.projectPath    = ""
 
 
-def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
+def collectExportSceneSettings(scene: bpy.types.Scene, scenePath="", viewLayerName=""):
     """ Collect settings related to .vrscene export.
 
     Args:
@@ -63,6 +63,10 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath=""):
 
         if not Path(filePath).is_absolute():
             return None, "Path to the .vrscene file should be absolute."
+
+        # When exporting multiple view layers, add the view layer name to the scene file path
+        if len(scene.view_layers) > 1 and viewLayerName:
+            filePath = f"{Path(filePath).with_suffix('')!s}_{viewLayerName}.vrscene"
 
         if not Path(filePath).suffix:
             filePath = f"{filePath}.vrscene"
@@ -97,7 +101,8 @@ class CommonSettings:
     """ This class is used to gather, once per update cycle, the UI settings that are
         used by different exporters but not necessarily exported by them.
     """
-    def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine, isInteractive, exportOnly: bool = False):
+    def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine,
+                    isInteractive: bool, viewLayerName: str = "", exportOnly: bool = False, forceAnimation: bool = False):
 
         # renderEngine will be None in case of interactive rendering.
         self.renderEngine = renderEngine
@@ -109,10 +114,12 @@ class CommonSettings:
         self.scene = scene
         self.vrayScene = self.scene.vray
         self.vrayExporter = self.vrayScene.Exporter
+        self.viewLayerName = viewLayerName
 
         self.exportOnly   = exportOnly
         self.animation   = AnimationSettings()
         self.files       = FileOutputSettings()
+        self.forceAnimation = forceAnimation
 
 
     def updateFromScene(self):
@@ -169,29 +176,52 @@ class CommonSettings:
     def _updateAnimation(self):
         isProductionRendering=not (self.isPreview or self._interactive or self.vrayExporter.isBakeMode)
 
-        self.animation.frameStart   = self.scene.frame_start
-        self.animation.frameEnd     = self.scene.frame_end
         self.animation.frameCurrent = self.scene.frame_current
-        self.animation.frameStep    = self.scene.frame_step
-        
-        animationMode = defs.AnimationMode.SingleFrame
 
+        animationMode = 'FRAME'
         if isProductionRendering:
-            animationMode = self.vrayExporter.animation_mode
+            animSettings = self.vrayExporter.animationSettingsVrsceneExport
+            vrsceneExport = self.exportOnly and not self.isCloudSubmit()
             
-            if self.exportOnly and not self.isCloudSubmit():
-                animExportOnlySettings = self.vrayExporter.animationSettingsVrsceneExport
+            if self.forceAnimation:
+                animationMode = 'ANIMATION'
+            elif vrsceneExport:
+                if animSettings.exportAnimation:
+                    animationMode = 'ANIMATION'
+            else:
+                animationMode = self.vrayExporter.animation_mode
 
-                if animExportOnlySettings.exportAnimation:
-                    animationMode = defs.AnimationMode.Animation
-                    if animExportOnlySettings.frameRangeMode == 'CUSTOM_RANGE':
-                        self.animation.frameStart = animExportOnlySettings.customFrameStart
-                        self.animation.frameEnd = animExportOnlySettings.customFrameEnd
-                        self.animation.frameStep = animExportOnlySettings.customFrameStep
-                else:
-                    animationMode = defs.AnimationMode.SingleFrame
+            if animationMode == 'ANIMATION':
+                def getFrameRangeMode():
+                    if vrsceneExport:
+                        return animSettings.frameRangeMode
+                    elif self.vrayExporter.use_frame_range:
+                        return "SCENE_RANGE"
+                    return "CUSTOM_FRAMES"
 
-        self.animation.use = (animationMode != defs.AnimationMode.SingleFrame)
+                match getFrameRangeMode():
+                    case "CUSTOM_RANGE":
+                        self.animation.frames = list(range(animSettings.customFrameStart, animSettings.customFrameEnd + 1, animSettings.customFrameStep))
+                    case "CUSTOM_FRAMES":
+                        frameExprStr = animSettings.customFramesList if vrsceneExport else self.vrayExporter.frames_list
+                        if frames :=  parseFramesToFlatList(frameExprStr):
+                            self.animation.frames = frames
+                        else:
+                            raise Exception("Invalid frames list")
+                    case "SCENE_RANGE":
+                        self.animation.frames = list(range(self.scene.frame_start, self.scene.frame_end + 1, self.scene.frame_step))
+                    case _:
+                        assert False, "Invalid frame range mode"
+  
+                assert self.viewLayerName, "Rendering animation without view layer information"
+                
+                
+                if vlFCurve := blender_utils.getViewLayerUseFCurve(self.viewLayerName):
+                    # Filter the animation frames by the view layer enabled state
+                    self.animation.frames = [frame for frame in self.animation.frames if vlFCurve.evaluate(frame)]
+
+ 
+        self.animation.use = (animationMode != 'FRAME')
         
         # scene.render.fps is of type int. In order to have non-int fps, Blender uses 
         # the float divisor fps_base. E.g. FPS 20.5 may be represented as
@@ -227,8 +257,7 @@ class CommonSettings:
         # it won't handle animation being turned on
         if isProductionRendering and not self.animation.use and self.useMotionBlur:
             self.animation.use = True
-            self.animation.frameStart   = self.scene.frame_current
-            self.animation.frameEnd     = self.scene.frame_current
+            self.animation.frames = [self.scene.frame_current]
 
 
     def _updateStereoCameraObjectsList(self, leftCamName, rightCamName):

@@ -7,9 +7,10 @@ import json
 import os
 import sys
 from vray_blender import version
-from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib import blender_utils, sys_utils
-from vray_blender.plugins.system.compute_devices import ComputeDevices, ComputeDeviceSelector
+from vray_blender.plugins.system.compute_devices import ComputeDevices
+from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.ui.community_edition import drawCELimitedFeatureIcon
 
 def getVRayCloudPath():
     """
@@ -47,7 +48,7 @@ def _getTelemetry(keyName):
         userPath = "Environment"
         systemPath = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
         userVal = sys_utils.getWinRegistry(userPath, keyName)
-        if userVal != None and userVal != "-1":
+        if userVal is not None and userVal != "-1":
             return userVal != "0"
         else:
             systemVal = sys_utils.getWinRegistry(systemPath, keyName, winreg.HKEY_LOCAL_MACHINE)
@@ -67,11 +68,11 @@ def _getPersonalizedTelemetry(self):
     return _getTelemetry("VRAY_SEND_PERSONALIZED_FEEDBACK")
 
 def _setTelemetry(self, keyName, value):
-    def _getNewTeleemtryValue(value):
-        return "1" if value == True else "0"
+    def _getNewTelemetryValue(value):
+        return "1" if value else "0"
 
     # Update envvar if it was present
-    newValue = _getNewTeleemtryValue(value)
+    newValue = _getNewTelemetryValue(value)
     if keyName in os.environ:
         os.environ[keyName] = newValue
 
@@ -80,8 +81,8 @@ def _setTelemetry(self, keyName, value):
         # Update registry value here too, so it works even if ZMQ server isn't running
         sys_utils.setWinRegistry(pathToKey, keyName, newValue)
     else:
-        anonymizedTelemetry = newValue if keyName == "VRAY_SEND_ANONYMIZED_FEEDBACK" else _getNewTeleemtryValue(self.anonymized_telemetry)
-        personalizedTelemetry = newValue if keyName == "VRAY_SEND_PERSONALIZED_FEEDBACK" else _getNewTeleemtryValue(self.personalized_telemetry)
+        anonymizedTelemetry = newValue if keyName == "VRAY_SEND_ANONYMIZED_FEEDBACK" else _getNewTelemetryValue(self.anonymized_telemetry)
+        personalizedTelemetry = newValue if keyName == "VRAY_SEND_PERSONALIZED_FEEDBACK" else _getNewTelemetryValue(self.personalized_telemetry)
         telemetryConfigPath = os.path.expandvars('$HOME/.Chaos/telemetry/config.ini')
         telemetryConfig = f"""; Configuration variable for controlling the Chaos anonymized telemetry.
 VRAY_SEND_ANONYMIZED_FEEDBACK={anonymizedTelemetry}
@@ -222,6 +223,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 
     def _updateLogLevel(self, context):
         from vray_blender import debug
+        sys_utils.StartupConfig.logLevel = None
         debug.setLogLevel(int(self.verbose_level), bool(self.enable_qt_logs))
 
         blender_utils.markPreferencesDirty(context)
@@ -257,6 +259,29 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         name="Ask for confirmation when upgrading scenes",
         description="When enabled will ask before upgrading scenes, if not upgrades will happen automatically",
         default=True
+    )
+
+    mtl_use_roughness: bpy.props.BoolProperty(
+        name="Use roughness for new materials by default",
+        description="Global switch between roughness and glossiness modes.",
+        default=False
+    )
+    
+    def _updateCheckForUpdates(self, context):
+        from vray_blender.utils.update_checker import onUpdateSettingsChanged
+        onUpdateSettingsChanged(self.auto_check_for_updates)
+        
+    auto_check_for_updates: bpy.props.BoolProperty(
+        name="Automatic Check for Updates",
+        description="When enabled, V-Ray will automatically check for updates",
+        default=True,
+        update = _updateCheckForUpdates
+    )
+
+    last_check_for_updates: bpy.props.FloatProperty(
+        name = "Last Check for updates",
+        description = "The time of the last check for updates",
+        default = 0
     )
 
     def _drawAboutPanel(self, layout):
@@ -322,11 +347,13 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             personalTelemetryCol.label(text="and optimize the Product for better personal use")
 
             telemetryCol.separator(type="LINE")
-            telemetryCol.operator("wm.url_open", text="Learn more", icon='HELP',).url = "https://documentation.chaos.com/space/VBLD/117637472/Chaos+Telemetry"
+            opTelemetry = telemetryCol.operator("vray.url_open", text="Learn more", icon='HELP')
+            opTelemetry.url = "https://documentation.chaos.com/space/VBLD/117637472/Chaos+Telemetry"
+            opTelemetry.description = "Open Chaos Telemetry documentation page"
 
     def _drawAdditionalSettingsPanel(self, layout):
         box = layout.box()
-        header, subLayout = box.panel(idname="about", default_closed=True)
+        header, subLayout = box.panel(idname="additional_settings", default_closed=True)
         header.label(text="Additional settings")
         if subLayout:
             split = subLayout.split(factor=0.05, align=True)
@@ -339,6 +366,8 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             subLayout.use_property_decorate = False
 
             subLayout.prop(self, 'ask_for_upgrade_confirm')
+            subLayout.prop(self, 'mtl_use_roughness')
+            subLayout.prop(self, 'auto_check_for_updates')
 
     def _drawGeneralPanel(self, layout, context):
         self._drawAboutPanel(layout)
@@ -391,8 +420,19 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 
     def _drawDistributedRenderingPanel(self, layout, context):
         header, subLayout = layout.box().panel(idname='dr_prefs', default_closed=False)
-        header.label(text="V-Ray Distributed Rendering")
+
+        headerRow = header.row()
+        headerRow.alignment = 'LEFT'
+        headerRow.scale_x = 0.75
+        labelRow = headerRow.row()
+        labelRow.label(text="V-Ray Distributed Rendering")
+        labelRow.enabled = not vray.isCommunityEdition()
+        
+        if vray.isCommunityEdition():
+            drawCELimitedFeatureIcon(headerRow)
+
         if subLayout:
+            subLayout.enabled = not vray.isCommunityEdition()
             split = subLayout.split(factor=0.05, align=True)
             split.column()
             panel = split.column(align=True)

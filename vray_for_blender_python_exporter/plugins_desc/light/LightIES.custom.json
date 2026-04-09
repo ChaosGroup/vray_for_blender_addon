@@ -56,7 +56,23 @@
         },
         {
             "attr": "ies_file",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "ies_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "ies_file",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "IES File"
+            }
         },
         {
             "attr": "shadowColor_colortex",
@@ -147,8 +163,7 @@
                         "layout": "SEPARATOR"
                     },
                     {
-                        "name": "ies_file",
-                        "label": "IES file"
+                        "name": "ies_file_selector"
                     },
                     {
                         "name": "filter_color"
@@ -333,12 +348,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform"
-            },
-            {
-                "name": "pivot_offset"
-            },
-            {
                 "name": "color_colortex"
             },
             {
@@ -359,7 +368,8 @@
             "photonSubdivs",
             "diffuseMult",
             "storeWithIrradianceMap",
-            "shadowSubdivs"
+            "shadowSubdivs",
+            "pivot_offset"
         ],
         "animatable": true
     }

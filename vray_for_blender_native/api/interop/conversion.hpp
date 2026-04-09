@@ -6,34 +6,33 @@
 
 #include <span>
 #include <vector>
-#include <boost/python.hpp>
-#include <boost/python/numpy.hpp>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/vector.h>
 
 #include <base_types.h>
 #include <zmq_message.hpp>
 
 #include "types.h"
 
-namespace py = boost::python;
-using ndarray = boost::python::numpy::ndarray;
+namespace nb = nanobind;
 namespace vray = VRayBaseTypes;
 namespace proto = VrayZmqWrapper;
 
 namespace VRayForBlender
 {
 
-void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& listElemTypes, const py::list& list);
+void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& listElemTypes, const nb::list& list);
 
-std::vector<Interop::UVAttrLayer> fromUVAttrLayersArr(const py::object& list);
+std::vector<Interop::UVAttrLayer> fromUVAttrLayersArr(const nb::object& list);
 
-std::vector<Interop::AttrLayer> fromAttrLayersArr(const py::object& list);
+std::vector<Interop::AttrLayer> fromAttrLayersArr(const nb::object& list);
 
-/// Convert AttrList to boost::python::list.
+/// Convert AttrList to nanobind::list.
 template<typename T>
-py::list toPyList(const vray::AttrList<T>& attrList)
+nb::list toPyList(const vray::AttrList<T>& attrList)
 {
-	WithGIL gil;
-	py::list pyList = py::list();
+	nb::list pyList;
 	const typename vray::AttrList<T>::DataArrayPtr attrListData = attrList.getData();
 
 	for (const auto& elem : *attrListData)
@@ -42,16 +41,15 @@ py::list toPyList(const vray::AttrList<T>& attrList)
 	return pyList;
 }
 
-/// Convert boost::python::list to AttrList.
+/// Convert nanobind::list to AttrList.
 template<typename T>
-vray::AttrList<T> toAttrList(const py::list &pyList)
+vray::AttrList<T> toAttrList(const nb::list &pyList)
 {
-	WithGIL gil;
+	nb::gil_scoped_acquire gil;
 	vray::AttrList<T> attrList;
 
-	for (auto i = 0; i < py::len(pyList); i++) {
-		py::api::const_object_item elem = pyList[i];
-		T extractedVal = py::extract<T>(elem);
+	for (auto elem : pyList) {
+		T extractedVal = nb::cast<T>(elem);
 		attrList.append(extractedVal);
 	}
 
@@ -59,61 +57,77 @@ vray::AttrList<T> toAttrList(const py::list &pyList)
 }
 
 
-proto::RenderSizes fromRenderSizes (const py::object& obj);
+proto::RenderSizes fromRenderSizes (const nb::object& obj);
 
 
 /// Convert any iterable python type to a vector. If using a heterogeneous container,
 /// the caller must make sure that all elements are of the same type
 template<typename T>
-inline std::vector<T> toVector(const py::object& iterable)
+inline std::vector<T> toVector(const nb::object& iterable)
 {
-	return std::vector<T>(py::stl_input_iterator<T>(iterable), py::stl_input_iterator<T>());
+	return nb::cast<std::vector<T>>(iterable);
 }
 
 
 /// Convert Python int to void*
 template<class T>
-T* toPtr(const py::api::const_object_attribute& a)
+T* toPtr(const nb::object& a)
 {
-	const size_t val = py::extract<size_t>(a);
+	const size_t val = nb::cast<size_t>(a);
 	return reinterpret_cast<T*>(val);
 }
 
 
 template <class T>
-std::span<const T> fromDataArray(const py::object& arr)
+std::span<const T> fromDataArray(const nb::object& arr)
 {
 	const T* ptr = toPtr<T>(arr.attr("ptr"));
-	const size_t count = py::extract<size_t>(arr.attr("count"));
+	const size_t count = nb::cast<size_t>(arr.attr("count"));
 
 	return std::span<const T>(ptr, count);
 }
 
 
 template <class T>
-std::span<const T> fromNdArray(const py::object& attr)
+std::span<const T> fromNdArray(const nb::object& attr)
 {
-	ndarray arr = py::extract<ndarray>(attr);
-	const T* ptr = reinterpret_cast<const T*>(arr.get_data());
-	const size_t count = arr.shape(0);
+	if constexpr (std::is_array_v<T>) {
+		using ElementType = std::remove_all_extents_t<T>;
+		constexpr size_t N = sizeof(T) / sizeof(ElementType);
 
-	return std::span<const T>(ptr, count);
+		auto arr = nb::cast<nb::ndarray<ElementType, nb::c_contig>>(attr);
+		if (arr.ndim() != 2 || arr.shape(1) != N) {
+			throw std::runtime_error("fromNdArray: unexpected array shape.");
+		}
+		const T* ptr = reinterpret_cast<const T*>(arr.data());
+		const size_t count = arr.shape(0);
+		return std::span<const T>(ptr, count);
+
+	} else {
+		auto arr = nb::cast<nb::ndarray<T, nb::c_contig>>(attr);
+		if (arr.ndim() != 1) {
+			throw std::runtime_error("fromNdArray: unexpected array shape, expected 1D array.");
+		}
+		const T* ptr = arr.data();
+		const size_t count = arr.shape(0);
+		return std::span<const T>(ptr, count);
+	}
 }
 
 
 // Returns a read-only span of T from a Python attribute.
 // Uses NdArray conversion if condition is true; otherwise, uses DataArray conversion.
 template <class T>
-std::span<const T> fromNdOrDataArray(const py::object& attr, bool isDataArray)
+std::span<const T> fromNdOrDataArray(const nb::object& attr, bool isDataArray)
 {
 	return (isDataArray)? fromDataArray<T>(attr) : fromNdArray<T>(attr);
 }
 
 
 template <class T>
-std::span<const T> fromPyArray(const py::object& arr)
+std::span<const T> fromPyArray(const nb::object& arr)
 {
-	py::object buffer = arr.attr("buffer_info")();
+	nb::object buffer = arr.attr("buffer_info")();
 	auto info = toVector<size_t>(buffer);
 
 	return std::span<const T>(reinterpret_cast<T*>(info[0]), info[1]);
@@ -121,7 +135,7 @@ std::span<const T> fromPyArray(const py::object& arr)
 
 
 template<size_t size>
-std::vector<float> fromMat(const py::object& mat)
+std::vector<float> fromMat(const nb::object& mat)
 {
 	std::vector<float> vec = toVector<float>(mat);
 

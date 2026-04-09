@@ -15,6 +15,7 @@ from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
 from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.lib.names import Names
 from vray_blender.exporting.plugin_tracker import getObjTrackId
+from collections import defaultdict
 
 
 PADDING = 0.0 # Padding to make the data 16-byte aligned for GPUUniformBuf usage
@@ -39,11 +40,13 @@ hairSegmentIndexes = [segmentIdx + i for posIdx in range(MAX_HAIRS) for segmentI
 hairPosIndexes = [posIdx for posIdx in range(MAX_HAIRS) for segmentIdx in range(HAIR_SEGMENTS-1) for _ in (0, 1)]
 
 hairRootsBuffers = {}
+meshDataByObjId = defaultdict(set) # Matches meshdata name to the object id of its user or instance parent.
+furDataForDrawing: set[tuple[str, str, Matrix]] = set() # Data needed for drawing fur preview.
 
 class HairRootsBuff:
     """ Class that stores in buffers the hair roots of fur """
 
-    def _getRandomPointOnFace(self, face, mesh):
+    def _getRandomPointOnFace(self, face, mesh, rng):
         """ Get a random point on a face of a mesh """
 
         if len(face.vertices) < 3:
@@ -54,19 +57,19 @@ class HairRootsBuff:
         v0, v1, v2 = mesh.vertices[i0].co, mesh.vertices[i1].co, mesh.vertices[i2].co
 
         # Generate two random numbers
-        s = random.random()
-        t = random.random()
+        s = rng.random()
+        t = rng.random()
         if s + t > 1.0:
             s = 1.0 - s
             t = 1.0 - t
-            
+
         # Calculate the point using two edges of the triangle
         edge1 = v1 - v0
         edge2 = v2 - v0
-        
+
         return v0 + s * edge1 + t * edge2
 
-    def _getRandomTriIndices(self, mesh: bpy.types.Mesh):
+    def _getRandomTriIndices(self, mesh: bpy.types.Mesh, npRng):
         """ Get MAX_HAIRS random triangle indices from a mesh
             TODO: This function can be rewritten in c++;
         """
@@ -76,7 +79,7 @@ class HairRootsBuff:
         # If the number of triangles is greater than the threshold, use numpy random sampling
         # Using weighted selection is too slow and unnecessary for large meshes.
         if trianglesCount > MAX_TRIANGLE_SAMPLE:
-            return np.random.randint(0, trianglesCount, size=MAX_HAIRS)
+            return npRng.integers(0, trianglesCount, size=MAX_HAIRS)
 
         # Get triangle vertex indices fast
         triVertIdx = np.empty((trianglesCount, 3), dtype=np.int32)
@@ -97,28 +100,32 @@ class HairRootsBuff:
         # Roulette wheel selection with the areas as weights.
         cumulativeWeights = np.cumsum(areas)
         totalArea = cumulativeWeights[-1]
-        r = np.random.random(MAX_HAIRS) * totalArea
+        r = npRng.random(MAX_HAIRS) * totalArea
 
         return np.searchsorted(cumulativeWeights, r)
 
     def _createBuffer(self, data):
         return gpu.types.GPUUniformBuf(data=struct.pack(f"{len(data)}f", *data))
-    
+
 
     def __init__(self, mesh: bpy.types.Mesh):
+        # Use a fixed arbitrarily chosen seed for more deterministic fur previews
+        seed = 195
+        rng = random.Random(seed)
+        npRng = np.random.default_rng(seed)
 
         # Distributes points on a mesh surface.
-        faces = [mesh.loop_triangles[i] for i in self._getRandomTriIndices(mesh)]
+        faces = [mesh.loop_triangles[i] for i in self._getRandomTriIndices(mesh, npRng)]
         points = [PADDING] * MAX_HAIRS * 4
         normals = [PADDING] * MAX_HAIRS * 4
         for i, f in enumerate(faces):
-            p = self._getRandomPointOnFace(f, mesh)
+            p = self._getRandomPointOnFace(f, mesh, rng)
 
             i = i * 4
             points[i] = p.x
             points[i+1] = p.y
             points[i+2] = p.z
-            
+
             normals[i] = f.normal.x
             normals[i+1] = f.normal.y
             normals[i+2] = f.normal.z
@@ -134,7 +141,7 @@ class PreviewShader:
     @staticmethod
     def _init():
         """ Initializes the '_shader' variable """
-        
+
         shaderInfo = gpu.types.GPUShaderCreateInfo()
         shaderInfo.push_constant('MAT4', "transformMatrix")
         shaderInfo.push_constant('MAT4', "perspectiveMatrix")
@@ -142,7 +149,7 @@ class PreviewShader:
         shaderInfo.vertex_in(0, 'INT', "hairSegmentIndex")
         shaderInfo.vertex_in(1, 'INT', "posIndex")
         shaderInfo.fragment_out(0, 'VEC4', "outColor")
-        
+
         shaderInfo.typedef_source(
             f"""
             // Parameter that controls the fur appearance.
@@ -154,18 +161,26 @@ class PreviewShader:
                 vec3 gravity;
                 vec4 lineColor;
             }};
-            
+
+            struct HairRootsPos {{
+                vec4 pos[{MAX_HAIRS}];
+            }};
+
+            struct HairRootsNormals {{
+                vec4 normal[{MAX_HAIRS}];
+            }};
+
             """
         )
         shaderInfo.uniform_buf(0, "FurParams", "furParams")
-        shaderInfo.uniform_buf(1, f"vec3[{MAX_HAIRS}]", "hairRootsPos")
-        shaderInfo.uniform_buf(2, f"vec3[{MAX_HAIRS}]", "hairRootsNormals")
+        shaderInfo.uniform_buf(1, "HairRootsPos", "hairRootsPos")
+        shaderInfo.uniform_buf(2, "HairRootsNormals", "hairRootsNormals")
 
         shaderInfo.vertex_source("""
             void main()
-            {   
-                vec3 position = hairRootsPos[posIndex];
-                vec3 normal = hairRootsNormals[posIndex];
+            {
+                vec3 position = hairRootsPos.pos[posIndex].xyz;
+                vec3 normal = hairRootsNormals.normal[posIndex].xyz;
                 vec3 p = (transformMatrix * vec4(position, 1.0)).xyz;        // current position
                 vec3 d = transpose(inverse(mat3(transformMatrix))) * normal;   // current direction
 
@@ -226,7 +241,7 @@ def _drawFurPreviewBatch(furObj: bpy.types.Object, matrix: Matrix, hairRoots: Ha
 
     previewShader.uniform_block('hairRootsPos', hairRoots.posBuf)
     previewShader.uniform_block('hairRootsNormals', hairRoots.normalsBuf)
-    
+
     furParamsBuf = _genFurParamsBuffer(furObj)
     previewShader.uniform_block('furParams', furParamsBuf)
 
@@ -241,18 +256,18 @@ def _drawFurPreviewBatch(furObj: bpy.types.Object, matrix: Matrix, hairRoots: Ha
 def _getGeomHairPropGroup(furObj: bpy.types.Object):
     if (ntree := furObj.vray.ntree) and (outputNode := getNodeByType(ntree, "VRayNodeFurOutput")):
         return outputNode.GeomHair
-    
+
     return furObj.data.vray.GeomHair
 
 def _getObjectsSelectedByFur(ctx: bpy.types.Context, furObj: bpy.types.Object):
     outputNode = None
     if (ntree := furObj.vray.ntree) and (outputNode := getNodeByType(ntree, "VRayNodeFurOutput")):
-        
+
         if(socketLink := getLinkedFromSocket(outputNode.inputs['Mesh'])):
             if socketLink.node.bl_idname in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
                 return getObjectsFromSelector(socketLink.node, ctx)
             return []
-    
+
     return _getGeomHairPropGroup(furObj).object_selector.getSelectedItems(ctx, 'objects')
 
 
@@ -267,23 +282,35 @@ def drawFurPreview():
     if space3d.shading.type != 'SOLID':
         return
 
+    # Don't draw fur preview if the user is in edit mode.
     if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':
         return
+
+    if not furDataForDrawing:
+        _generateHairRootsBuffers(bpy.context.scene, bpy.context.evaluated_depsgraph_get())
 
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.line_width_set(1.0)
 
+    for furObjName, objDataName, matrix in furDataForDrawing:
+        if (buffers := hairRootsBuffers.get(objDataName)) and (furObj := bpy.data.objects.get(furObjName)):
+            if space3d.local_view and (not furObj.local_view_get(space3d)):
+                # Don't draw fur preview for objects that are not visible in local view
+                continue
+            _drawFurPreviewBatch(furObj, matrix, buffers)
+
+
+def _generateHairRootsBuffers(scene: bpy.types.Scene, depsgraph: bpy.types.Depsgraph):
+    """ Generates the hair roots buffers for the scene """
     objectsWithFur  = {}
-    for obj in bpy.context.scene.objects:
+    for obj in scene.objects:
         if obj.vray.isVRayFur and \
             _getGeomHairPropGroup(obj).show_viewport_preview and \
-            ((not space3d.local_view) or obj.local_view_get(space3d)) and \
             obj.visible_get():
 
-            objectsWithFur[obj] = [getObjTrackId(o) for o in _getObjectsSelectedByFur(bpy.context, obj)]          
+            objectsWithFur[obj] = [getObjTrackId(o) for o in _getObjectsSelectedByFur(bpy.context, obj)]
 
     iteratedInstGeom = {}
-    depsgraph = bpy.context.evaluated_depsgraph_get()
     for inst in depsgraph.object_instances:
         if inst.object.type in blender_utils.NonGeometryTypes:
             continue
@@ -294,52 +321,47 @@ def drawFurPreview():
             iteratedInstGeom[dataID] = Names.objectData(obj, inst if inst.is_instance else None)
         objDataName = iteratedInstGeom[dataID]
 
-        if space3d.local_view and (not obj.local_view_get(space3d)):
-            # Don't draw fur preview for objects that are not visible in local view
-            continue
-
         for furObj, selectedObjects in objectsWithFur.items():
             if ((not inst.is_instance) and (getObjTrackId(obj) in selectedObjects)) or \
                 (inst.is_instance and (getObjTrackId(inst.parent) in selectedObjects)):
 
                 if objDataName not in hairRootsBuffers:
-                    mesh = obj.to_mesh(depsgraph=depsgraph)
+                    mesh = obj.data
                     if len(mesh.loop_triangles) == 0:
                         hairRootsBuffers[objDataName] = None # To indicate that the object has no valid geometry
                     else:
+                        meshDataByObjId[getObjTrackId(obj)].add(objDataName)
+                        if inst.is_instance:
+                            meshDataByObjId[getObjTrackId(inst.parent)].add(objDataName)
                         hairRootsBuffers[objDataName] = HairRootsBuff(mesh)
 
-                if buffers := hairRootsBuffers[objDataName]:
-                    _drawFurPreviewBatch(furObj, inst.matrix_world, buffers)
+                matrixCopy = inst.matrix_world.copy()
+                matrixCopy.freeze()
+                furDataForDrawing.add((furObj.name, objDataName, matrixCopy))
 
 
 @bpy.app.handlers.persistent
 def cleanObsoleteHairRoots(scene, depsgraph):
-    """ Remove roots buffers of objects with changed geometry """
-
-    updatedGeom = {
-        getObjTrackId(u.id)
-        for u in depsgraph.updates
-            if isinstance(u.id, bpy.types.Object)
-                and u.id.type not in blender_utils.NonGeometryTypes
-                and u.is_updated_geometry
-    }
-
-    for inst in depsgraph.object_instances:
-        if inst.object.type in blender_utils.NonGeometryTypes:
+    """ Clear the hair roots buffers for the objects that have been updated. """
+    for u in depsgraph.updates:
+        if not isinstance(u.id, bpy.types.Object) or u.id.type in blender_utils.NonGeometryTypes or not u.is_updated_geometry:
             continue
+        
+        objTrackId = getObjTrackId(u.id)
+        if objTrackId in meshDataByObjId:
+            for objDataName in meshDataByObjId[objTrackId]:
+                hairRootsBuffers.pop(objDataName, None)
+            meshDataByObjId[objTrackId].clear()
 
-        obj = inst.object
-        parentObj = inst.parent if inst.is_instance else obj
-
-        if (getObjTrackId(parentObj) in updatedGeom):
-            objDataName = Names.objectData(obj, inst if inst.is_instance else None)
-            hairRootsBuffers.pop(objDataName, None)
+    furDataForDrawing.clear() # Reset the fur data for as it may be invalidated by the update.
 
 
 @bpy.app.handlers.persistent
 def resetHairRootsBuffers(e):
     hairRootsBuffers.clear()
+    meshDataByObjId.clear()
+    furDataForDrawing.clear()
+
 
 _drawHandler = None
 

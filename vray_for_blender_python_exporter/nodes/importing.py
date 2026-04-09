@@ -65,7 +65,7 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     from vray_blender.exporting.mtl_export import MtlExporter
     from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
     from vray_blender.exporting.tools import FakeTimeStats
-    from vray_blender.lib.defs import ExporterContext, AttrPlugin, ExporterContext, RendererMode, NodeContext, ExporterType, PluginDesc
+    from vray_blender.lib.defs import ExporterContext, AttrPlugin, RendererMode, NodeContext, ExporterType, PluginDesc
     from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
     syncObjectUniqueName(material, reset=False)
@@ -132,8 +132,10 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     material.use_nodes = True
     material.vray.is_vray_class = True
     material.node_tree.vray.tree_type = 'MATERIAL'
-    importContext = ImportContext(material.node_tree, vrsceneDict, isConversion=True)
-    _convertMaterialFromDict(importContext)
+
+    with NodeUtils.DisableAutoConnect():
+        importContext = ImportContext(material.node_tree, vrsceneDict, isConversion=True)
+        _convertMaterialFromDict(importContext)
 
     syncObjectUniqueName(material, reset=False)
     syncObjectUniqueName(material.original, reset=False)
@@ -144,6 +146,8 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
 def _convertMaterialFromDict(importContext: ImportContext):
     fixPluginParams(importContext.vrsceneDict, True)
     deselectNodes(importContext.nodeTree)
+
+    bounds = calculateTreeBounds(importContext.nodeTree)
 
     endNodePluginDesc = None
     for plgDesc in importContext.vrsceneDict:
@@ -159,8 +163,7 @@ def _convertMaterialFromDict(importContext: ImportContext):
     outputNode = importContext.nodeTree.nodes.new('VRayNodeOutputMaterial')
     importContext.nodeTree.links.new(mtlNode.outputs['BRDF'], outputNode.inputs['Material'])
 
-    bounds = calculateTreeBounds(importContext.nodeTree)
-    rearrangeTree(importContext.nodeTree, outputNode, bounds=bounds)
+    rearrangeTree(importContext.nodeTree, outputNode, bounds=bounds, appendLeft=True)
 
     return {'FINISHED'}
 
@@ -346,7 +349,7 @@ def _createNodeBRDFLayered(importContext: ImportContext, pluginDesc):
             brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(humanIndex)
 
             # NOTE: Node already has two inputs
-            if not brdfSockName in brdfLayeredNode.inputs:
+            if brdfSockName not in brdfLayeredNode.inputs:
                 addInput(brdfLayeredNode, 'VRaySocketBRDF',   brdfSockName)
                 addInput(brdfLayeredNode, 'VRaySocketColor',  weightSockName).setValue((1.0, 1.0, 1.0))
                 addInput(brdfLayeredNode, 'VRaySocketWeight', opacitySockName).setValue(1.0)
@@ -791,7 +794,7 @@ def _createNodeTexLayered(importContext: ImportContext, pluginDesc: dict):
             humanIndex = i + 1
             # NOTE: Node already has two inputs
             texSocketName = f"Texture {humanIndex}"
-            if not texSocketName in texLayeredNode.inputs:
+            if texSocketName not in texLayeredNode.inputs:
                 VRayNodeTexLayeredMax.addLayer(texLayeredNode, i)
 
             textureSocket = texLayeredNode.inputs[texSocketName]
@@ -869,7 +872,7 @@ def _createTexNormalMapNode(importContext: ImportContext, pluginDesc: dict):
 
 
 def _checkIdentityMatrix(pluginDesc: dict, paramName: str):
-    if not paramName in pluginDesc['Attributes']:
+    if paramName not in pluginDesc['Attributes']:
         return True
     attrValue = pluginDesc['Attributes'][paramName]
     transform = attrValue if isinstance(attrValue, Matrix) else attribute_utils.attrValueToMatrix(attrValue, True)

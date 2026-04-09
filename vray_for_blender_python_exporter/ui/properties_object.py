@@ -158,8 +158,10 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
     @classmethod
     def poll(cls, context):
         obj = context.object
+        if not obj:
+            return False
         nonClipperObject = obj.vray.isVRayDecal or obj.vray.isVRayFur
-        return obj and (obj.type not in cls.incompatTypes) and classes.VRayObjectPanel.poll(context) and not nonClipperObject
+        return (obj.type not in cls.incompatTypes) and classes.VRayObjectPanel.poll(context) and not nonClipperObject
 
     def drawPanelCheckBox(self, context):
         vrayClipper = context.object.vray.VRayClipper
@@ -189,12 +191,11 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         col.prop(vrayClipper, 'invert_inside')
 
         col = layout.column(align=True)
-        col.active = True
         col.prop(vrayClipper, 'exclusion_mode', text="As exclusive set")
         searchBoxLabel = "Exclude" if vrayClipper.exclusion_mode else "Include"
         col.prop_search(vrayClipper, 'exclusion_nodes_ptr', bpy.data, 'collections', text=searchBoxLabel)
 
-        # TODO: Don't knoe how to export this parameter, is it even used by VRay
+        # TODO: Don't know how to export this parameter, is it even used by VRay
         # when setting clipper materials?
 
         # layout.prop(vrayClipper, 'set_material_id')
@@ -203,7 +204,7 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         # col.prop(vrayClipper, 'material_id')
 
 
-class VRAY_PT_UserAttributes(classes.VRayObjectPanel, bpy.types.Panel):
+class VRAY_PT_UserAttributes(classes.VRayObjectPanel):
     bl_label = "User Attributes"
     bl_options = {'DEFAULT_CLOSED'}
 
