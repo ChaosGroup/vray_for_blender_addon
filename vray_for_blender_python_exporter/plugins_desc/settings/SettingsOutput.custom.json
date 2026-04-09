@@ -48,6 +48,8 @@
             "default": "1",
             "name": "Image Format",
             "type": "ENUM",
+            "items_disabled_in_CE": ["6", "5"],
+            "items_disabled_in_CE_tooltip": "V-Ray for Blender - Community Edition does not support saving to this file format.",
             "options": {
                 "derived": true
             }

@@ -6,15 +6,16 @@ import os
 import bpy
 import pathlib
 
-from vray_blender.vray_tools.vrscene_parser import getMaterialNamesFromVRScene
-from vray_blender.vray_tools.vrmat_parser     import getMaterialNamesFromVRMatFile
+from vray_blender import debug
 
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.lib import export_utils
+from vray_blender.lib import export_utils, plugin_utils
+from vray_blender.lib.blender_utils import getObjectFromEditorContext
+from vray_blender.nodes.utils import getNodeOfPropGroup
+from vray_blender.vray_tools.vrmat_parser import getMaterialNamesFromVRMatFile
+from vray_blender.vray_tools.vrscene_parser import getMaterialNamesFromVRScene
 
-from vray_blender.lib import plugin_utils
-from vray_blender import debug
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -23,6 +24,8 @@ class VRAY_MT_MaterialName(bpy.types.Menu):
     bl_idname = "VRAY_MT_MaterialName"
 
     ma_list = []
+    nodeName = ""
+    mtlName = ""
 
     def draw(self, context):
         row = self.layout.row()
@@ -31,7 +34,10 @@ class VRAY_MT_MaterialName(bpy.types.Menu):
         for i,maName in enumerate(self.ma_list):
             if i and i % 15 == 0:
                 sub = row.column()
-            sub.operator("vray.set_vrscene_material_name", text=maName).name = maName
+            op = sub.operator("vray.set_vrscene_material_name", text=maName)
+            op.name     = maName
+            op.nodeName = self.nodeName
+            op.mtlName  = self.mtlName
 
 
 class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
@@ -41,9 +47,11 @@ class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     name: bpy.props.StringProperty()
+    nodeName: bpy.props.StringProperty()
+    mtlName: bpy.props.StringProperty()
 
     def execute(self, context):
-        node = context.active_node
+        node = bpy.data.materials[self.mtlName].node_tree.nodes[self.nodeName]
         if not node:
             return {'CANCELLED'}
         if node.bl_idname != "VRayNodeMtlVRmat":
@@ -91,47 +99,38 @@ class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
     bl_description = "Get material name from *.vrscene file"
     bl_options     = {'INTERNAL', 'UNDO'}
 
-    node = None
+    nodeName: bpy.props.StringProperty()
+    mtlName: bpy.props.StringProperty()
+    mtlList: bpy.props.StringProperty()
 
     def execute(self, context):
-        if not context.node:
-            debug.printError("No active node!")
-            return {'CANCELLED'}
+        node = bpy.data.materials[self.mtlName].node_tree.nodes[self.nodeName]
 
-        if context.node.bl_idname != "VRayNodeMtlVRmat":
-            debug.printError("Selected node is not of type VRayNodeMtlVRmat!")
-            return {'CANCELLED'}
-
-        MtlVRmat = context.node.MtlVRmat
+        MtlVRmat = node.MtlVRmat
         if not MtlVRmat.filename:
             debug.printError("Filepath is not set!")
             return {'CANCELLED'}
 
-
-        mtlList = _getMaterialNamesFromMtlFile(MtlVRmat.filename)
+        mtlList = self.mtlList.split(';')
         if not mtlList:
             return {'CANCELLED'}
 
         VRAY_MT_MaterialName.ma_list = mtlList
+        VRAY_MT_MaterialName.nodeName = self.nodeName
+        VRAY_MT_MaterialName.mtlName = self.mtlName
         bpy.ops.wm.call_menu(name=VRAY_MT_MaterialName.bl_idname)
 
         return {'FINISHED'}
 
 def onFileNameAttributeUpdate(src, context, attrName):
-    mtlList = _getMaterialNamesFromMtlFile(src.filename)
+    if not os.path.exists(bpy.path.abspath(src.filename)):
+        src.materials_list = ''
+        src.mtlname = ''
+        return
+    
+    mtlList = sorted(_getMaterialNamesFromMtlFile(src.filename))
     src.mtlname = "" if not mtlList else mtlList[0]
-
-def nodeDraw(context, layout, node):
-    propGroup = node.MtlVRmat
-    split = layout.split(factor=0.2, align=True)
-    split.column().label(text="File:")
-    split.column().prop(propGroup, 'filename', text="")
-
-    split = layout.split(factor=0.2, align=True)
-    split.column().label(text="Material Name:")
-    row = split.column().row(align=True)
-    row.prop(propGroup, 'mtlname', text="")
-    row.operator("vray.get_vrscene_material_name", text="Select Material")
+    src.materials_list = ';'.join(mtlList)
 
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
@@ -139,6 +138,17 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     pluginDesc.setAttribute("filename", os.path.normpath(bpy.path.abspath(propGroup.filename)))
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)
+
+def widgetDrawMaterialName(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup, widgetAttr):
+    row = layout.row()
+    row.prop(propGroup, 'mtlname')
+    contextObj = getObjectFromEditorContext(context)
+    assert contextObj, "No valid context object"
+
+    op = row.operator("vray.get_vrscene_material_name", text = "", icon="DOWNARROW_HLT")
+    op.nodeName = getNodeOfPropGroup(propGroup).name
+    op.mtlName  = contextObj.active_material.name
+    op.mtlList = propGroup.materials_list
 
 
 def getRegClasses():

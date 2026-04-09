@@ -1,5 +1,15 @@
 {
     "ID": "SettingsTIFF",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "bits_per_channel",
+            "items_disabled_in_CE": ["16", "32"],
+            "items_disabled_in_CE_tooltip": "Output in 16 and 32 bit format is not available in V-Ray for Blender - Community Edition.",
+            "default_in_CE": "8"
+        }
+    ],
     "Widget": {
         "widgets": [
             {

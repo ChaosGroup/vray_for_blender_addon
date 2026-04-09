@@ -49,7 +49,7 @@ def widgetDrawGradientRamp(context: bpy.types.Context, layout, propGroup, widget
     node = NodeUtils.getNodeOfPropGroup(propGroup)
     
     if not (texture := getattr(node, widgetAttr['name'], None)):
-        # This will be the case right after the node has been copied from anoter node
+        # This will be the case right after the node has been copied from another node
         return
     
     box = layout.box()

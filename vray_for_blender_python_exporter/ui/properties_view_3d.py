@@ -63,7 +63,7 @@ class VRAY_PT_View_3D_Options(classes.VRayPanel):
 
         denoiserColumn = layout.column()
         denoiserColumn.active = channelsDenoiserPropGroup.viewport_enabled
-        denoiserColumn.prop(world.vray.RenderChannelDenoiser, "viewport_engine", text="Engine")
+        denoiserColumn.prop(channelsDenoiserPropGroup, "viewport_engine", text="Engine")
 
 
 def getRegClasses():

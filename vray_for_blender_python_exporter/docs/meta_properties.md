@@ -52,3 +52,18 @@ Combines two plugin properties - a BRDF  and a BOOL, which should be presented t
 
 PLUGIN if the socket is connected and the flag is ON, otherwise resets the PLUGIN.
 </ul>
+
+
+#### COLOR_USE
+<ul>
+Combines two plugin properties - a Texture  and a BOOL, which should be presented to the user as a single one. 
+
+**Properties**
+
+* target_prop - (string) a TEXTURE plugin
+* use_prop - (string) a BOOL/INT flag property
+
+**Exports**
+
+PLUGIN if the socket is connected and the flag is ON, otherwise resets the PLUGIN.
+</ul>

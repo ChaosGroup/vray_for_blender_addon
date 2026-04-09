@@ -41,6 +41,9 @@
                         }
                     },
                     {
+                        "name": "show_hidden_edges"
+                    },
+                    {
                         "name": "show_subtriangles"
                     }
                 ]
@@ -63,8 +66,7 @@
         "excluded_parameters": [
             "raytraced",
             "raytraced_consider_same_object_only",
-            "raytraced_mode",
-            "show_hidden_edges"
+            "raytraced_mode"
         ]
     }
 }

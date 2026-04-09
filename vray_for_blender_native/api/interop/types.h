@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include <boost/python.hpp>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
 #include <memory>
 #include <span>
 #include <string>
@@ -13,6 +14,8 @@
 #include "utils.hpp"
 
 #include "zmq_common.hpp"
+
+namespace nb = nanobind;
 
 namespace VRayForBlender::Interop
 {
@@ -34,7 +37,7 @@ struct ExporterSettings
 	PROPERTY_NO_DEFAULT(StrList, drHosts)           // Distributed rendering
 	PROPERTY(bool, separateFiles          , false)  // Export to separate files
 	PROPERTY(std::string, previewDir      , "")		// Folder for .exr material preview files
-	void setDRHosts(py::object hosts);
+	void setDRHosts(nb::object hosts);
 };
 
 
@@ -125,6 +128,7 @@ struct MeshExportOptions
 	PROPERTY(bool, mergeChannelVerts, false)
 	PROPERTY(bool, forceDynamicGeometry, false)
 	PROPERTY(bool, useSubsurfToOSD, false)
+	PROPERTY(bool, exportEdgeVisibility, false)
 };
 
 
@@ -138,7 +142,7 @@ struct MeshData
 
 	MeshData() = delete;
 
-	explicit MeshData(boost::python::object meshData);
+	explicit MeshData(nb::object meshData);
 
 	std::string                      name;
 	NormalsDomain				     normalsDomain;		// Type of normals in the 'normals' field
@@ -156,7 +160,7 @@ struct MeshData
 	MeshExportOptions options;
 
 public:
-	boost::python::object ref;              // Reference to the original Python object
+	nb::object ref;              // Reference to the original Python object
 };
 
 using MeshDataPtr = std::shared_ptr<MeshData>;
@@ -164,7 +168,7 @@ using MeshDataPtr = std::shared_ptr<MeshData>;
 
 struct HairData
 {
-	explicit HairData(boost::python::object obj);
+	explicit HairData(nb::object obj);
 
 	std::string        name;
 	std::string        type;                    // "CURVES" or "PARTICLES"
@@ -187,7 +191,7 @@ struct HairData
 	float rootRadius = 0.0f;                    // The root radius of the psys.
 	float tipRadius = 0.0f;                     // THe tip radius of the psys.
 
-	boost::python::object ref;                  // Lifetime ref
+	nb::object ref;                  // Lifetime ref
 };
 
 using HairDataPtr = std::shared_ptr<HairData>;
@@ -195,7 +199,7 @@ using HairDataPtr = std::shared_ptr<HairData>;
 
 struct PointCloudData
 {
-	explicit PointCloudData(boost::python::object obj);
+	explicit PointCloudData(nb::object obj);
 
 	std::string name;
 	int         renderType;
@@ -204,7 +208,7 @@ struct PointCloudData
 	std::span<const float[2]> uvs;     // Array of float[2] per point
 	std::span<const float>    radii;   // Array of float per point
 	std::span<const float[3]> colors;  // Array of float[3] per point
-	boost::python::object     ref;     // Lifetime ref
+	nb::object                ref;     // Lifetime ref
 };
 
 using PointCloudDataPtr = std::shared_ptr<PointCloudData>;
@@ -212,40 +216,29 @@ using PointCloudDataPtr = std::shared_ptr<PointCloudData>;
 
 struct InstancerData
 {
-	explicit InstancerData(boost::python::object obj);
+	explicit InstancerData(nb::object obj);
 
 	std::string           name;
 	int                   frame     = 0;
 	int                   itemCount = 0;
 	std::span<const char> data;
-	boost::python::object ref;
+	nb::object ref;
 };
 
 using InstancerDataPtr = std::shared_ptr<InstancerData>;
 
 
-struct InstanceData
-{
-	explicit InstanceData(const boost::python::object &obj);
-
-	int                   index;
-	std::string           nodePlugin;
-	boost::python::object tm;
-	boost::python::object vel;
-};
-
-
 struct SmokeData
 {
 
-	explicit SmokeData(const boost::python::object &obj);
+	explicit SmokeData(const nb::object &obj);
 
 	std::string        name;
 	std::string        cacheDir;
 	std::vector<float> transform;
 	std::vector<int>   domainRes;
 
-	boost::python::object ref;
+	nb::object ref;
 };
 
 using SmokeDataPtr = std::shared_ptr<SmokeData>;
@@ -281,7 +274,7 @@ struct CosmosAssetSettings
 	PROPERTY(std::string, lightFile, "")
 	PROPERTY(std::string, packageId, "")
 	PROPERTY(int, revisionId, 0)
-	PROPERTY(py::dict, locationsMap, py::dict())
+	PROPERTY(nb::dict, locationsMap, nb::dict())
 	PROPERTY(bool, isAnimated, false)
 };
 

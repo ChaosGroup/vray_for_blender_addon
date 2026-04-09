@@ -32,7 +32,6 @@ bool SharedMemoryBase::isValid() const {
 }
 
 
-
 std::string SharedMemoryBase::getLastError() const{
 	return m_lastError;
 }
@@ -66,8 +65,13 @@ SharedMemoryWriter::SharedMemoryWriter(const std::string& id, const std::string&
 
 SharedMemoryWriter::~SharedMemoryWriter() {
 #ifndef _WIN32
-	ipc::scoped_lock lock(*m_lock);
-	SharedMem::remove(createUniqueName(MAPPING_BASE_NAME).c_str());
+	{
+		// First delete the shared memory object.
+		ipc::scoped_lock lock(*m_lock);
+		SharedMem::remove(createUniqueName(MAPPING_BASE_NAME).c_str());
+	}
+	// Clean up m_lock as well.
+	NamedLock::remove(createUniqueName("l").c_str());
 #endif
 }
 
@@ -143,7 +147,6 @@ void SharedMemoryWriter::writeImpl(const void* data) {
 	auto& block = getPayload();
 	::memcpy(block.data, data, block.size);
 }
-
 
 
 ////////////////////////////////////////////

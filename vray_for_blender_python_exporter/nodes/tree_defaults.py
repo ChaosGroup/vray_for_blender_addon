@@ -14,7 +14,7 @@ from vray_blender.nodes import utils as NodeUtils
 
 def removeNonVRayNodes(ntree: bpy.types.NodeTree):
     """ Removes all non-vray nodes from a node tree. """
-    nonVRayNodes = [n for n in ntree.nodes if not hasattr(n, 'vray_plugin')]
+    nonVRayNodes = [n for n in ntree.nodes if not NodeTools.isVrayNode(n)]
     for n in nonVRayNodes:
         ntree.nodes.remove(n)
 
@@ -34,7 +34,7 @@ def addWorldNodeTree(world: bpy.types.World):
 
     # We are using the main node tree of the world to attach V-Ray nodes to. We don't have
     # control over its creation, and Blender is free to attach some default nodes to it.
-    # We cannot export these nodes, so we remove them here and leave only V-Ray nodes in 
+    # We cannot export these nodes, so we remove them here and leave only V-Ray nodes in
     # the newly created tree.
     removeNonVRayNodes(ntree)
 
@@ -63,30 +63,37 @@ def addWorldNodeTree(world: bpy.types.World):
 
     NodeTools.deselectNodes(ntree)
 
-def createNodeTreeForLightObject(light: bpy.types.Light):
-    # Setting use_nodes to True will synchronously add a node tree to the node.
+
+def createNodeTreeForLightObject(light: bpy.types.Light, isNewLight: bool):
+    """ Create a V-Ray node tree for the light with an ouput node corresponding to the 
+        light type.
+        
+        Args:
+            light:  an existing Light object
+            isNewLight: this is a newly created light
+    """
+
+    # Setting use_nodes to True will synchronously create a node tree with one or more nodes.
     light.use_nodes = True
     ntree = light.node_tree
     ntree.use_fake_user = True
 
-    # We are using the main node tree of the light to attach V-Ray nodes to. We don't have
-    # control over its creation, and Blender is free to attach some default nodes to it. E.g. 
-    # for Cycles/EEVEE/Workbench an Emission + Light Output are atttached.
-    # We cannot export these nodes, so we remove them here and leave only V-Ray nodes in 
-    # the newly created tree.
-    removeNonVRayNodes(ntree)
-
     NodeTools.addVRayNodeTreeSettings(ntree, 'LIGHT')
 
+    if isNewLight and NodeTools.isVrayLight(light):
+        # For new lights Blender will create some nodes in the node tree by default.
+        # For V-Ray lights we don't need the Blender nodes
+        removeNonVRayNodes(ntree)
     return ntree
 
-def addLightNodeTree(light: bpy.types.Light):
-    ntree = createNodeTreeForLightObject(light)
+
+def addLightNodeTree(light: bpy.types.Light, isNewLight = False):
+    ntree = createNodeTreeForLightObject(light, isNewLight)
 
     lightPluginType = lib_utils.getLightPluginType(light)
     lightNode = ntree.nodes.new(f"VRayNode{lightPluginType}")
 
-    # Copy property values from light property group to the node property group 
+    # Copy property values from light property group to the node property group
     propGroup = getattr(light.vray, lightPluginType)
     nodePropGroup = getattr(lightNode, lightPluginType)
 
@@ -96,6 +103,8 @@ def addLightNodeTree(light: bpy.types.Light):
 
     light.vray.is_vray_class = True
 
+    bounds = NodeTools.calculateTreeBounds(ntree)
+    NodeTools.rearrangeTree(ntree, lightNode, bounds=bounds, appendLeft=True)
     NodeTools.deselectNodes(ntree)
 
 
@@ -111,6 +120,7 @@ def addObjectNodeTree(ob):
     NodeTools.deselectNodes(ntree)
 
     VRayObject.ntree = ntree
+
 
 def addFurNodeTree(ob):
     ntree = bpy.data.node_groups.new(ob.name, type='VRayNodeTreeFur')
@@ -128,6 +138,7 @@ def addFurNodeTree(ob):
 
     ob.vray.ntree = ntree
 
+
 def addDecalNodeTree(ob):
     ntree = bpy.data.node_groups.new(ob.name, type='VRayNodeTreeDecal')
     ntree.use_fake_user = True
@@ -138,7 +149,8 @@ def addDecalNodeTree(ob):
 
     ob.vray.ntree = ntree
 
-def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
+
+def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True, nodeType = None, appendLeft = False):
     # Setting use_nodes to True will synchronously add a node tree to the node.
     mtl.use_nodes = True
     ntree = mtl.node_tree
@@ -150,19 +162,31 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True):
     # This flag will tell us that the material is a V-Ray one and we should process it.
     mtl.vray.is_vray_class = True
 
+    if not addDefaultTree:
+        return
+
     # Add a default material tree consisting of an output node and a VRayBRDF material node
+    outputNode = NodeUtils.getOutputNode(mtl.node_tree, 'MATERIAL')
 
-    if addDefaultTree:
-        outputNode = NodeUtils.getOutputNode(mtl.node_tree, 'MATERIAL')
+    if outputNode is None:
+        outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
 
-        if outputNode is None:
-            outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
+    if nodeType:
+        mainNode = ntree.nodes.new(nodeType)
+        ntree.links.new(mainNode.outputs[0], outputNode.inputs['Material'])
 
+        if nodeType in NodeUtils.MATERIAL_WRAPPER_SOCKETS:
+            brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
+
+            sockName = NodeUtils.MATERIAL_WRAPPER_SOCKETS[nodeType]
+            if sockName in mainNode.inputs:
+                ntree.links.new(brdfNode.outputs['BRDF'], mainNode.inputs[sockName])
+    else:
         if not outputNode.inputs[0].hasActiveFarLink():
             brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
             ntree.links.new(brdfNode.outputs['BRDF'], outputNode.inputs['Material'])
 
-        bounds = NodeTools.calculateTreeBounds(ntree)
-        NodeTools.rearrangeTree(ntree, outputNode, bounds=bounds)
+    bounds = NodeTools.calculateTreeBounds(ntree)
+    NodeTools.rearrangeTree(ntree, outputNode, bounds=bounds, appendLeft=appendLeft)
 
     NodeTools.deselectNodes(ntree)

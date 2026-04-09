@@ -94,9 +94,22 @@
             "type": "STRING",
             "desc": "Texture to use as a render mask.",
             "default": "",
-            "subtype": "FILE_PATH",
+            "subtype": "VRAY_FILE_PATH",
             "options": {
                 "derived": true
+            }
+        },
+        {
+            "attr": "render_mask_texture_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "render_mask_texture_file",
+                        "object_type": "settings"
+                    }
+                }
             },
             "ui": {
                 "display_name": "Texture"
@@ -359,7 +372,7 @@
                         "name": "render_mask_mode"
                     },
                     {
-                        "name": "render_mask_texture_file",
+                        "name": "render_mask_texture_file_selector",
                         "visible": {"cond": "::render_mask_mode=1"}
                     },
                     {

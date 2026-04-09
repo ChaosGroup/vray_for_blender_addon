@@ -5,9 +5,6 @@
 
 # Miscellaneous enumeration definitions
  
-class AnimationMode:
-    SingleFrame     = 'FRAME'
-    Animation       = 'ANIMATION'
 
 class RenderMode:
     Production          = -1

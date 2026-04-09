@@ -10,12 +10,6 @@ from vray_blender.plugins import getPluginModule
 from vray_blender.nodes.utils import getNodeByType, treeHasNodes
 from vray_blender.ui import classes
 
-def getContextData(context):
-    if context.active_object.type == 'MESH':
-        return context.mesh
-    return context.curve
-
-
 class VRAY_PT_VRayProxy(classes.VRayGeomPanel):
     bl_label   = "Proxy"
     bl_options = {'DEFAULT_CLOSED'}
@@ -57,7 +51,7 @@ class VRAY_PT_VRayScene(classes.VRayGeomPanel):
                     (context.active_object.vray.VRayAsset.assetType == blender_utils.VRAY_ASSET_TYPE["Scene"])
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
         obj = context.active_object
 

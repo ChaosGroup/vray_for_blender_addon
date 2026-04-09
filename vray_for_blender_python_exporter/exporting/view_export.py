@@ -11,7 +11,8 @@ from mathutils import Matrix
 from vray_blender import debug
 from vray_blender.lib import export_utils, blender_utils
 from vray_blender.lib.blender_utils import isCamera
-from vray_blender.lib.camera_utils import ViewParams, Rect, Size, isOrthographicCamera
+from vray_blender.lib.camera_utils import ViewParams, Rect, Size, isOrthographicCamera, getRegionWidth, getRegionHeight
+from vray_blender.lib.camera_utils import applyCEResolutionLimits, applyCEResolutionLimitsSize
 from vray_blender.lib import camera_utils as ct
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, ExporterBase, PluginDesc
 from vray_blender.lib.names import Names
@@ -58,7 +59,7 @@ VISIBLE_TO_WHOLE_VIEW_RATIO = 1.66257 # The ratio of the whole view to the visib
 
 # Returns the ratio between the viewport width and the camera view rectangle width, based on the sensor fit.
 def _getCameraToViewportRatio(viewParams: ViewParams, region: bpy.types.Region, renderer: bpy.types.RenderSettings):
-    rectView = viewParams.cameraParams.computeViewplane(region.width, region.height, 1.0, 1.0)
+    rectView = viewParams.cameraParams.computeViewplane(getRegionWidth(region), getRegionHeight(region), 1.0, 1.0)
     rectCamera = viewParams.cameraParams.computeViewplane(renderer.resolution_x, renderer.resolution_y, 1.0, 1.0)
 
     sensorFit = ct.getCameraSensorFit(viewParams.cameraParams.sensorFit, renderer.resolution_x, renderer.resolution_y)
@@ -70,8 +71,8 @@ def getActiveCamera(ctx: ExporterContext):
     """ Return the view-local camera, if active. Otherwise return the scene camera.
         NOTE: The view camera is not necessarily of type Camera, may be any object.
     """
-    if ctx.interactive:
-        view3d = ctx.iprContext.view3d
+    if ctx.uiRegionContext:
+        view3d = ctx.uiRegionContext.view3d
 
         if view3d and (view3dCamera := view3d.camera):
             return view3dCamera
@@ -135,7 +136,7 @@ class ViewExporter(ExporterBase):
             viewParams = prevPerCameraViewParams.get(cameraName, None)
             if exportedViewParams := self._exportProdCamera(cameraObj, viewParams):
                 perCameraViewParams[cameraName] = exportedViewParams
-
+            self.exportProgress.update(self.engine)
         # The active camera settings have been exported to a dedicated set of
         # camera plugins with the RENDER_CAMERA_BASE_NAME scene name. Tell V-Ray
         # to use it for the actual rendering.
@@ -147,7 +148,7 @@ class ViewExporter(ExporterBase):
     def exportViewportView(self, prevViewParams: ViewParams = None, renderSizesOnly = False):
         assert self.interactive, "Method should only be called for interactive renders"
 
-        view3d = self.iprContext.view3d
+        view3d = self.uiRegionContext.view3d
 
         # Use production view params if there aren't any 3d viewports in the scene.
         viewParams: ViewParams = self._getInteractiveViewParams() if view3d else self._getProdViewParams(self.activeCamera)
@@ -478,7 +479,7 @@ class ViewExporter(ExporterBase):
             either the 'Camera' view, or the default leayout view.
         """
         viewParams = ViewParams()
-        region3d = self.iprContext.region3d
+        region3d = self.uiRegionContext.region3d
 
         if region3d.view_perspective == 'CAMERA':
 
@@ -505,7 +506,7 @@ class ViewExporter(ExporterBase):
                         (2560, 1440, 0.75),
                     ]
                 for (width, height, mult) in resolutions:
-                    if width * height > self.ctx.region.width * self.ctx.region.height:
+                    if width * height > getRegionWidth(self.ctx.region) * getRegionHeight(self.ctx.region):
                         break
                     resMult = mult
             else:
@@ -558,15 +559,16 @@ class ViewExporter(ExporterBase):
         if self.viewport:
             region = self.ctx.region
 
-            viewParams.renderSize.w = region.width
-            viewParams.renderSize.h = region.height
+            viewParams.renderSize.w = getRegionWidth(region)
+            viewParams.renderSize.h = getRegionHeight(region)
 
-            viewParams.viewportW = region.width
-            viewParams.viewportH = region.height
+            viewParams.viewportW = getRegionWidth(region)
+            viewParams.viewportH = getRegionHeight(region)
         else:
             renderSettings = self.scene.render
             viewParams.renderSize.w = renderSettings.resolution_x * renderSettings.resolution_percentage / 100
             viewParams.renderSize.h = renderSettings.resolution_y * renderSettings.resolution_percentage / 100
+            viewParams.renderSize = applyCEResolutionLimitsSize(viewParams.renderSize)
 
             viewParams.viewportW = renderSettings.resolution_x
             viewParams.viewportH = renderSettings.resolution_y
@@ -578,8 +580,8 @@ class ViewExporter(ExporterBase):
         VIEW_PERSPECTIVE_ORTHO = "ORTHO"
 
         sensorSize = DEFAULT_SENSOR_WIDTH
-        view3d = self.iprContext.view3d
-        region3d = self.iprContext.region3d
+        view3d = self.uiRegionContext.view3d
+        region3d = self.uiRegionContext.region3d
 
         lens = view3d.lens / (2.0 if self.viewport else 1)
 
@@ -647,11 +649,10 @@ class ViewExporter(ExporterBase):
         rectCamera = viewParams.cameraParams.computeViewplane(r.resolution_x, r.resolution_y, r.pixel_aspect_x, r.pixel_aspect_y)
 
         viewBorder = Rect()
-
-        viewBorder.xmin = ((rectCamera.xmin - rectView.xmin) / rectView.width()) * region.width
-        viewBorder.xmax = ((rectCamera.xmax - rectView.xmin) / rectView.width()) * region.width
-        viewBorder.ymin = ((rectCamera.ymin - rectView.ymin) / rectView.height()) * region.height
-        viewBorder.ymax = ((rectCamera.ymax - rectView.ymin) / rectView.height()) * region.height
+        viewBorder.xmin = ((rectCamera.xmin - rectView.xmin) / rectView.width()) * getRegionWidth(region)
+        viewBorder.xmax = ((rectCamera.xmax - rectView.xmin) / rectView.width()) * getRegionWidth(region)
+        viewBorder.ymin = ((rectCamera.ymin - rectView.ymin) / rectView.height()) * getRegionHeight(region)
+        viewBorder.ymax = ((rectCamera.ymax - rectView.ymin) / rectView.height()) * getRegionHeight(region)
 
         # The border width is hardcoded and cannot be changed
         CAMERA_VIEW_BORDER = 2
@@ -695,13 +696,18 @@ class ViewExporter(ExporterBase):
                 # Multiplying WHOLE_VIEW_SIZE_FACTOR in Camera View in order to compensate for the different field of view
                 viewParams.renderView.ortho_width *= VISIBLE_TO_WHOLE_VIEW_RATIO
 
-        # region size
-        viewParams.regionSize.w = region.width
-        viewParams.regionSize.h = region.height
+        renderSize = applyCEResolutionLimits(
+            region.width * VISIBLE_TO_WHOLE_VIEW_RATIO,
+            region.height * VISIBLE_TO_WHOLE_VIEW_RATIO
+        )
 
         # render size
-        viewParams.renderSize.w = region.width * VISIBLE_TO_WHOLE_VIEW_RATIO
-        viewParams.renderSize.h = region.height * VISIBLE_TO_WHOLE_VIEW_RATIO
+        viewParams.renderSize.w = renderSize[0]
+        viewParams.renderSize.h = renderSize[1]
+
+        # region size
+        viewParams.regionSize.w = renderSize[0] / VISIBLE_TO_WHOLE_VIEW_RATIO
+        viewParams.regionSize.h = renderSize[1] / VISIBLE_TO_WHOLE_VIEW_RATIO
 
         # When rendering in camera viewport mode, Blender visualizes only part of the 3D viewport region.
         # We want to set the render size to match the entire region, because users may drag the visible
@@ -727,13 +733,13 @@ class ViewExporter(ExporterBase):
 
         def getRegionStartPos(regionSideLength, cameraOffset, flipOffsetDir=False):
             startPos = (regionSideLength * VISIBLE_TO_WHOLE_VIEW_RATIO - regionSideLength) / 2 # Render region start position
-            offset = startPos * cameraOffset * zoomFactor # Offset of the visible region with applied zoom
+            offset = startPos * cameraOffset * zoomFactor# Offset of the visible region with applied zoom
 
             # The Y axis in V-Ray is opposite to Blender's, so the offset direction should be flipped when setting viewParams.regionStart.h
             return startPos + offset * (-1 if flipOffsetDir else 1)
 
-        viewParams.regionStart.w = getRegionStartPos(region.width, rv3d.view_camera_offset[0])
-        viewParams.regionStart.h = getRegionStartPos( region.height, rv3d.view_camera_offset[1], True)
+        viewParams.regionStart.w = getRegionStartPos(viewParams.regionSize.w, rv3d.view_camera_offset[0])
+        viewParams.regionStart.h = getRegionStartPos(viewParams.regionSize.h, rv3d.view_camera_offset[1], True)
 
         viewParams.crop = True
         viewParams.canDrawWithOffset = False
@@ -747,8 +753,8 @@ class ViewExporter(ExporterBase):
         """
         scene: bpy.types.Scene = self.scene
         region: bpy.types.Region = self.ctx.region
-        view3d = self.iprContext.view3d
-        region3d = self.iprContext.region3d
+        view3d = self.uiRegionContext.view3d
+        region3d = self.uiRegionContext.region3d
         cameraObject: bpy.types.Camera = getActiveCamera(self)
 
         if not cameraObject:
@@ -766,7 +772,7 @@ class ViewExporter(ExporterBase):
         # Compute the camera params for rendering the whole viewport area
         viewParams.cameraParams.setFromView3d(self.dg, view3d, region3d)
         v3dParams = viewParams.cameraParams
-        rectView = v3dParams.computeViewplane(region.width, region.height, 1.0, 1.0)
+        rectView = v3dParams.computeViewplane(getRegionWidth(region), getRegionHeight(region), 1.0, 1.0)
 
         # Set calculated view parameters to the camera
         if cameraObject.type == 'CAMERA':
@@ -800,6 +806,8 @@ class ViewExporter(ExporterBase):
 
         viewParams.renderSize.w = rs.resolution_x * rs.resolution_percentage / 100
         viewParams.renderSize.h = rs.resolution_y * rs.resolution_percentage / 100
+
+        viewParams.renderSize = applyCEResolutionLimitsSize(viewParams.renderSize)
 
         if self.production or self.exportOnly:
             viewParams.pixelAspectY = rs.pixel_aspect_y / rs.pixel_aspect_x

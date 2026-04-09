@@ -33,15 +33,15 @@ class VRAY_PT_ContextWorld(classes.VRayPanel):
 
         scene = context.scene
         world = context.world
-        space = context.space_data
 
         if scene:
-            layout.template_ID(scene, "world", new="vray.add_nodetree_world")
-        elif world:
-            layout.template_ID(space, "pin_id")
+            if world and world.vray.is_vray_class:
+                layout.template_ID(scene, "world", new="vray.copy_world")
+            else:
+                layout.template_ID(scene, "world", new="vray.add_new_world")
 
-        if context.world:
-            VRayWorld = context.world.vray
+        if world:
+            VRayWorld = world.vray
 
             layout.separator()
             layout.prop(VRayWorld, 'global_light_level', slider=True)
@@ -49,7 +49,7 @@ class VRAY_PT_ContextWorld(classes.VRayPanel):
             if not NodesUtils.treeHasNodes(world.node_tree):
                 return
 
-            if not (activeNode := NodesUtils.getActiveTreeNode(context.world.node_tree, 'WORLD')):
+            if not (activeNode := NodesUtils.getActiveTreeNode(world.node_tree, 'WORLD')):
                 return
 
             layout.separator()

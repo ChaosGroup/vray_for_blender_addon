@@ -5,8 +5,10 @@
 import bpy
 
 from vray_blender.lib.mixin import VRayOperatorBase, VRayNodeBase
-from vray_blender.nodes.sockets import addInput, addOutput
+from vray_blender.nodes.sockets import addInput, addOutput, moveExtendSocketToBottom
+from vray_blender.nodes.links import vrayNodeInsertLink
 from vray_blender.nodes.operators import sockets as SocketOperators
+
 
  #######  ########  ######## ########     ###    ########  #######  ########   ######
 ##     ## ##     ## ##       ##     ##   ## ##      ##    ##     ## ##     ## ##    ##
@@ -26,6 +28,12 @@ class VRAY_OT_node_effects_add(SocketOperators.VRayNodeAddCustomSocket, VRayOper
         super().__init__(*args, **kwargs)
         self.vray_socket_type = 'VRaySocketEffect'
         self.vray_socket_name = "Effect"
+
+    def execute(self, context):
+        res = super().execute(context)
+        if res == {'FINISHED'}:
+            moveExtendSocketToBottom(context.node)
+        return res
 
 
 class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, VRayOperatorBase):
@@ -48,6 +56,11 @@ class VRAY_OT_node_effects_del(SocketOperators.VRayNodeDelCustomSocket, VRayOper
 ##   ### ##     ## ##     ## ##       ##    ##
 ##    ##  #######  ########  ########  ######
 
+def addEffectsExtendSocket(node):
+    sockExtend = addInput(node, 'VRaySocketExtend', "")
+    sockExtend.add_operator = 'vray.node_effects_add'
+    sockExtend.del_operator = 'vray.node_effects_del'
+
 class VRayNodeEffectsHolder(VRayNodeBase):
     bl_idname = 'VRayNodeEffectsHolder'
     bl_label  = 'V-Ray Effects Container'
@@ -58,6 +71,9 @@ class VRayNodeEffectsHolder(VRayNodeBase):
 
     def init(self, context):
         addInput(self, 'VRaySocketEffect', "Effect 1")
+
+        addEffectsExtendSocket(self)
+
         addOutput(self, 'VRaySocketObjectList', "Effects")
 
     def draw_buttons(self, context, layout):
@@ -70,6 +86,25 @@ class VRayNodeEffectsHolder(VRayNodeBase):
         # Nothing to show here, but keep the method because draw_buttons
         # will be called instead to draw the side bar
         pass
+
+    def insert_link(self: bpy.types.Node, link: bpy.types.NodeLink):
+        vrayNodeInsertLink(self, link, customInsertLinkCallback=effectsInsertLink)
+
+def effectsInsertLink(link: bpy.types.NodeLink):
+    node = link.to_node
+    if link.to_socket.bl_idname == 'VRaySocketExtend':
+        from_socket = link.from_socket
+        ntree = node.id_data
+
+        humanIndex = len([s for s in node.inputs if s.bl_idname == 'VRaySocketEffect']) + 1
+        newSock = addInput(node, 'VRaySocketEffect', f"Effect {humanIndex}")
+
+        # Move the extend socket to the end
+        moveExtendSocketToBottom(node)
+
+        # Update the link to use the new socket by creating a new link and removing the old one
+        ntree.links.new(from_socket, newSock)
+        ntree.links.remove(link)
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##

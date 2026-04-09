@@ -12,7 +12,7 @@ bl_info = {
     "doc_url"     : "https://documentation.chaos.com/space/VBLD",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "20", "01")
+    "version"     : ("7", "30", "00")
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data
@@ -21,7 +21,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 33
+UPGRADE_NUMBER = 39
 
 try:
     import numpy as np
@@ -53,6 +53,8 @@ from vray_blender import events
 from vray_blender import utils
 
 from vray_blender.bin import VRayBlenderLib as vray
+
+_isRegistered = False
 
 def initVRay():
     """ Initialize VRayBlenderLib """
@@ -100,8 +102,7 @@ def initVRay():
     print(f"V-Ray for Blender logging to {logFile}")
     vray.init(logFile)
 
-
-
+   
 def _getModules():
     """ Modules requiring registration/unregistration """
     return (
@@ -117,11 +118,18 @@ def _getModules():
 
 
 def register():
+    import bpy
     from vray_blender.lib.sys_utils import StartupConfig
 
     # Init VRayBlenderLib first as it sets up the logging subsystem
     initVRay()
-
+    
+    # Do the check after initializing VRayBlenderLib so that we could use it to print pretty logs
+    if vray.isCommunityEdition() and bpy.app.background:
+        debug.printError("Community Edition of V-Ray for Blender cannot be used in headless mode")
+        vray.exit()
+        return
+    
     debug.register()
 
     # Parse command line
@@ -137,12 +145,13 @@ def register():
     engine.register()
     engine.ensureRunning()
 
-    import bpy
     if not bpy.app.background:
         # In headless mode, the upgrade will be triggered when the scene is loaded
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
         VfbEventHandler.upgradeScene()
 
+    global _isRegistered
+    _isRegistered = True
 
 
 def _switchViewportsToSolid():
@@ -160,6 +169,9 @@ def _switchViewportsToSolid():
 
 def unregister():
 
+    if not _isRegistered:
+        return
+    
     # Switching all 3D viewports to SOLID mode
     # to ensure no updates are triggered during unregistration.
     _switchViewportsToSolid()

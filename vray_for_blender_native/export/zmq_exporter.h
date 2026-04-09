@@ -14,7 +14,9 @@
 #include <zmq_message.hpp>
 #include <zmq_agent.h>
 
+#include <unordered_set>
 #include <functional>
+#include <atomic>
 #include <map>
 #include <memory>
 #include <string>
@@ -27,6 +29,7 @@ namespace VRayForBlender {
 
 using namespace Interop;
 namespace proto = VrayZmqWrapper;
+namespace vray = VRayBaseTypes;
 
 /// ZmqExporter acts as a proxy between the VRayForBlender addon and ZmqServer.
 /// It implements the ZmqServer protocol defined in the ZmqWrapper project.
@@ -81,7 +84,7 @@ public:
 	void        stop();
 	void        detach();
 
-	void        renderSequence(int start, int end, int step);
+	void        renderSequence(const vray::AttrList<int>& sequences);
 	void        continueRenderSequence();
 	void        stopRendering();
 	void        freeRenderer();
@@ -114,6 +117,10 @@ public:
 	float       getCurrentFrame() const;
 	void        setLastRenderedFrame(int frame) { m_lastRenderedFrame = frame; }
 	int	        getLastRenderedFrame() const { return m_lastRenderedFrame; }
+
+#ifdef WITH_PROFILING
+	uint64_t    getReceivedImagesCount() const { return m_receivedImagesCount; }
+#endif
 
 	AttrPlugin  exportPlugin(const PluginDesc &pluginDesc);
 
@@ -172,6 +179,11 @@ private:
 	std::mutex m_statsMutex;
 
 	ValueCache m_cachedValues;
+	std::unordered_set<std::string> m_sharedMemoryObjects;
+
+#ifdef WITH_PROFILING
+	std::atomic<uint64_t> m_receivedImagesCount = 0;
+#endif
 };
 
 } // namespace VRayForBlender

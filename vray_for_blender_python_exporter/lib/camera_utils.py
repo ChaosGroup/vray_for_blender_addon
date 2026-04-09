@@ -11,9 +11,8 @@ from mathutils import Matrix
 
 from vray_blender import debug
 from vray_blender.lib import blender_utils
-from vray_blender.lib.settings_defs import StereoOutputLayout, StereoViewMode
-
-from vray_blender.lib.settings_defs import PhysicalCameraType
+from vray_blender.lib.settings_defs import StereoOutputLayout, StereoViewMode, PhysicalCameraType
+from vray_blender.bin import VRayBlenderLib as vray
 
 # Values copied from Blender source
 DEFAULT_SENSOR_WIDTH = 36.0 # This value is hardcoded in Blender
@@ -21,6 +20,9 @@ CAMERA_PARAM_ZOOM_INIT_CAMOB = 1.0
 CAMERA_PARAM_ZOOM_INIT_PERSP = 2.0
 M_SQRT2   = 1.41421356237309504880
 DEFAULT_LENS_FOCAL_LENGTH = 35.0
+
+# Biggest region dimension allowed for rendering with Community Edition
+MAX_CE_REGION_DIMENSION = 2560 
 
 class Rect:
     """ Floating-size rectangle """
@@ -478,6 +480,46 @@ def setRegionBorder(vp: ViewParams, borderRect: Rect):
     vp.regionSize.w = int(borderRect.width() * vp.viewportW)
     vp.regionSize.h = int(borderRect.height() * vp.viewportH)
     vp.crop = True
+
+def _resolutionLimitedByCE(resolutionX: int, resolutionY: int) -> bool:
+    if vray.isCommunityEdition():
+        return resolutionX > MAX_CE_REGION_DIMENSION or resolutionY > MAX_CE_REGION_DIMENSION
+    return False
+
+def sceneResolutionLimitedByCE(scene: bpy.types.Scene, printWarning: bool = True) -> bool:
+    """ Check if the scene resolution is limited by Community Edition """
+    resolutionPercentage = scene.render.resolution_percentage / 100
+
+    resolutionX = int(scene.render.resolution_x*resolutionPercentage)
+    resolutionY = int(scene.render.resolution_y*resolutionPercentage)
+    
+    if _resolutionLimitedByCE(resolutionX, resolutionY):
+        if printWarning:
+            warningMsg = f'Resolution is limited by Community Edition to {MAX_CE_REGION_DIMENSION}x{MAX_CE_REGION_DIMENSION}'
+            vray.logVfbMessage(int(debug.VfbMessageLevel.MessageWarning), warningMsg)
+            debug.reportAsync('WARNING', warningMsg)
+        return True
+    
+    return False
+
+def applyCEResolutionLimits(width: int, height: int) -> tuple[int, int]:
+    """ Apply Community Edition resolution limits to the region dimensions """
+    if _resolutionLimitedByCE(width, height):
+        scale = MAX_CE_REGION_DIMENSION / max(width, height)
+        return (round(width * scale), round(height * scale))
+    return (width, height)
+
+def applyCEResolutionLimitsSize(size: Size) -> Size:
+    """ Apply Community Edition resolution limits to the region dimensions """
+    return Size(*applyCEResolutionLimits(size.w, size.h))
+
+def getRegionWidth(region: bpy.types.Region) -> int:
+    """Return region width with applied Community Edition resolution limits"""
+    return applyCEResolutionLimits(region.width, region.height)[0]
+
+def getRegionHeight(region: bpy.types.Region) -> int:
+    """Return region height with applied Community Edition resolution limits"""
+    return applyCEResolutionLimits(region.width, region.height)[1]
 
 
 def getCameraDofDistance(cameraObj: bpy.types.Object):

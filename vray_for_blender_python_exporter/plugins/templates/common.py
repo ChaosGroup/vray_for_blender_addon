@@ -70,6 +70,7 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
 class VRAY_OT_simple_button(VRayOperatorBase):
     bl_label = 'Button'
     bl_idname = 'vray.simple_button'
+    bl_options = { "UNDO" }
 
     # Dynamic replacement for bl_description
     description: bpy.props.StringProperty(default=bl_label)
@@ -340,7 +341,9 @@ def cleanupObjectSelectorLists():
         nonlocal needRedraw
         propGroup = getattr(data, pluginName)
         for attrName in TEMPLATE_ATTRIBUTES.get(pluginName, []):
-            needRedraw |= getattr(propGroup, attrName).removeDeletedItems(bpy.context)
+            templateAttr = getattr(propGroup, attrName)
+            if fnRemoveDeletedItems := getattr(templateAttr, 'removeDeletedItems', None):
+                needRedraw |= fnRemoveDeletedItems(bpy.context)
 
 
     def cleanSelectorsOfNodeTree(ntree: bpy.types.NodeTree):

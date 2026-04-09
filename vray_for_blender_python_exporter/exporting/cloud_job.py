@@ -78,6 +78,7 @@ class VCloudJob:
                 scenePath.with_suffix(".vrdata").unlink(missing_ok=True)
                 scenePath.with_suffix(".vrfiles").unlink(missing_ok=True)
                 scenePath.unlink(missing_ok=True)
+                scenePath.parent.rmdir()
 
             threading.Thread(target=runCloudSubmit, args=(process,), daemon=True).start()
         else:

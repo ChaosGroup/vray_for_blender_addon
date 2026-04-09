@@ -148,8 +148,7 @@ def vrayDrawShape(batch, mult, color, tm=Matrix.Identity(4)):
 
     tm = tm @ Matrix.Scale(mult, 4)
     with gpu.matrix.push_pop():
-        gpu.matrix.load_matrix(tm)
-        gpu.matrix.load_projection_matrix(bpy.context.region_data.perspective_matrix)
+        gpu.matrix.multiply_matrix(tm)
         batch.draw(shader)
 
 
@@ -225,6 +224,9 @@ def vrayDrawLightShape():
     if not space3D.overlay.show_overlays:
         return
     
+    prevGpuState = gpu.state.depth_test_get()
+    gpu.state.depth_test_set('LESS_EQUAL')
+
     uiTheme   = bpy.context.preferences.themes[0]
     colorActive = uiTheme.view_3d.object_active[:] + (1.0,) # This is RGB, add alpha
     colorInactive = uiTheme.view_3d.light
@@ -238,7 +240,7 @@ def vrayDrawLightShape():
         vrayLight = lib_utils.getLightPropGroup(light, lib_utils.getLightPluginType(light))
 
         if vrayLight.enabled:
-            color = colorActive if ob == bpy.context.active_object else colorInactive
+            color = colorActive if ob.select_get() else colorInactive
         else:
             color = colorDisabled
 
@@ -259,20 +261,22 @@ def vrayDrawLightShape():
             #     vrayDrawLightRect(ob, color)
 
 
+    gpu.state.depth_test_set(prevGpuState)
+    
 RegClasses = ()
 
 
 def register():
     global handlers
 
-    def vrayDrawHandlerAdd(cb):
-        handlers.append(bpy.types.SpaceView3D.draw_handler_add(cb, (), 'WINDOW', 'POST_PIXEL'))
+    def vrayDrawHandlerAdd(cb, drawType='POST_PIXEL'):
+        handlers.append(bpy.types.SpaceView3D.draw_handler_add(cb, (), 'WINDOW', drawType))
 
     for regClass in RegClasses:
         bpy.utils.register_class(regClass)
 
-    vrayDrawHandlerAdd(vrayDrawLightShape)
-    vrayDrawHandlerAdd(drawCallbackVantage)
+    vrayDrawHandlerAdd(vrayDrawLightShape, 'POST_VIEW')
+    vrayDrawHandlerAdd(drawCallbackVantage, 'POST_PIXEL')
 
 
 def unregister():

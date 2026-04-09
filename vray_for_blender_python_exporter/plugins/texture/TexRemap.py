@@ -18,7 +18,7 @@ from vray_blender.plugins import getPluginModule
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-# Channel names for "_postion", "_value" and "_type" attributes
+# Channel names for "_position", "_value" and "_type" attributes
 _CHANNEL_NAMES = {
     "1": ["red", "green", "blue"], # For "Remap Color"
     "2": ["hue", "saturation", "value"], # For "Remap HSV"

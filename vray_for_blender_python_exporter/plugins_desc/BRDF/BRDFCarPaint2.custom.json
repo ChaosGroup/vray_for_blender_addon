@@ -22,10 +22,11 @@
         },
         {
             "attr": "base_bump_amount",
-            "default": 1.0,
+            "default": 0.01,
             "ui": {
-                "soft_min": -5.0,
-                "soft_max": 5.0
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
             }
         },
         {
@@ -79,10 +80,11 @@
         },
         {
             "attr": "coat_bump_amount",
-            "default": 1.0,
+            "default": 0.01,
             "ui": {
-                "soft_min": -5.0,
-                "soft_max": 5.0
+                "soft_min": -0.05,
+                "soft_max": 0.05,
+                "spin_step": 0.01
             }
         },
         {

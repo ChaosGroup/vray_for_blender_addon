@@ -48,7 +48,7 @@
         },
         {
             "attr": "file",
-            "subtype": "NONE",
+            "subtype": "VRAY_FILE_PATH",
             "update": "onUpdatePreviewFile",
             "options" : {
                 "shadowed": true

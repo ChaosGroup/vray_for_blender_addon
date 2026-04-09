@@ -11,6 +11,7 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
+from vray_blender.nodes.curves_node import addCurvesUpdateCallback
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -89,31 +90,30 @@ def exportTreeNode(nodeCtx: NodeContext):
     # on closing and reloading the scene the subscription is cleared.
     # Another solution would be to search all node trees for VRayNodeVolumeVRayToon,
     # but this would unnecessarily spread the code and add complexity.
-     # TODO find more elegant solution
+    # TODO find more elegant solution
+    propGroup = getVrayPropGroup(node)
+    pluginName = Names.treeNode(nodeCtx)
+    pluginDesc = PluginDesc(pluginName, node.vray_plugin)
+    pluginDesc.vrayPropGroup = propGroup
+    
     for curveType in _CURVE_TYPES:
-        _addCurvesUpdateCallback(node, curveType)
+        curvesNode = _getCurvesNode(node, curveType)
 
-        propGroup = getVrayPropGroup(node)
-        pluginName = Names.treeNode(nodeCtx)
-        pluginDesc = PluginDesc(pluginName, node.vray_plugin)
-        pluginDesc.vrayPropGroup = propGroup
+        addCurvesUpdateCallback(node, curvesNode)
 
-        for curveType in _CURVE_TYPES:
+        curve  = curvesNode.mapping.curves[3]
 
-            curvesNode = _getCurvesNode(node, curveType)
-            curve  = curvesNode.mapping.curves[3]
+        pluginDesc.setAttribute(f"{curveType}CurvePositions", [point.location[0] for point in curve.points])
+        pluginDesc.setAttribute(f"{curveType}CurveInterpolations", [("3" if "AUTO" in point.handle_type else "1") for point in curve.points])
 
-            pluginDesc.setAttribute(f"{curveType}CurvePositions", [point.location[0] for point in curve.points])
-            pluginDesc.setAttribute(f"{curveType}CurveInterpolations", [("3" if "AUTO" in point.handle_type else "1") for point in curve.points])
+        # The Y coordinate of the points should be exported as TEXTURE_FLOAT_LIST, i.e. a list of plugins
+        pointYCoords = []
+        for point in curve.points:
+            texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, 'FloatToTex'), 'FloatToTex')
+            texPlugin.setAttribute('input', point.location[1])
+            pointYCoords.append(commonNodesExport.exportPluginWithStats(nodeCtx, texPlugin))
 
-            # The Y coordinate of the points should be exported as TEXTURE_FLOAT_LIST, i.e. a list of plugins
-            pointYCoords = []
-            for point in curve.points:
-                texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, 'FloatToTex'), 'FloatToTex')
-                texPlugin.setAttribute('input', point.location[1])
-                pointYCoords.append(commonNodesExport.exportPluginWithStats(nodeCtx, texPlugin))
-
-            pluginDesc.setAttribute(f"{curveType}CurveValues", pointYCoords )
+        pluginDesc.setAttribute(f"{curveType}CurveValues", pointYCoords )
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
@@ -126,19 +126,6 @@ def _getCurvesNodeName(node, curveType: str):
 def _getCurvesNode(node, curveType: str):
     return bpy.data.node_groups[_CURVE_NODES_TREE_NAME].nodes[_getCurvesNodeName(node, curveType)]
 
-
-def _addCurvesUpdateCallback(node, curveType: str):
-    from vray_blender.nodes.nodes import vrayNodeUpdate
-    # To handle updates to the ShaderNodeRGBCurve used for its CurveMapping widget,
-    # we subscribe to it with msgbus and attach the vrayNodeUpdate function.
-    curvesNode = _getCurvesNode(node, curveType)
-    bpy.msgbus.clear_by_owner(curvesNode) # clearing previous subscriptions to be sure that there aren't other update callbacks left
-    bpy.msgbus.subscribe_rna(
-        key=curvesNode,
-        owner=curvesNode,
-        args=(node,),
-        notify=vrayNodeUpdate,
-    )
 
 def _createCurvesNode(node, curveType: str):
     if _CURVE_NODES_TREE_NAME not in bpy.data.node_groups:

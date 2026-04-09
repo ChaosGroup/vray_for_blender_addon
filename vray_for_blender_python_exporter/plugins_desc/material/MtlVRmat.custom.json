@@ -5,7 +5,70 @@
     [
         {
             "attr" : "filename",
+            "subtype": "VRAY_FILE_PATH",
             "update": "onFileNameAttributeUpdate"
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "filename",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "Material File"
+            }
+        },
+        {
+            "attr": "materials_list",
+            "type": "STRING",
+            "desc": "Semicolon-separated list of material names",
+            "default": "",
+            "options": {
+               "derived": true
+            }
         }
-    ]
+    ],
+    "Widget": {
+        "widgets": [
+           {
+               "layout": "COLUMN",
+               "attrs": [
+                    {
+                        "name": "file_selector"
+                    },
+                    {
+                        "name": "mtlname",
+                        "active": {"cond": "::filename!="},
+                        "custom_draw": "plugins.material.MtlVRmat.widgetDrawMaterialName"
+                    }
+               ]
+           }
+       ]
+    },
+    "Node": {
+        "widgets": [
+           {
+               "layout": "COLUMN",
+               "attrs": [
+                    {
+                        "name": "file_selector"
+                    },
+                    {
+                        "name": "mtlname",
+                        "active": {"cond": "::filename!="},
+                        "custom_draw": "plugins.material.MtlVRmat.widgetDrawMaterialName"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options" : {
+        "animatable": false
+    }
 }

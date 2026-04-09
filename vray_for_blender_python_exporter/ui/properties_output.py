@@ -16,6 +16,7 @@ from bl_ui import properties_output as BlenderOutput
 class VRAY_PT_Output(classes.VRayOutputPanel):
     """ PROPERTIES->Output->Dimensions panel """
     bl_label = "Output"
+    bl_icon = "VRAY_PLACEHOLDER"
 
     def drawPanelCheckBox(self, context):
         VRayExporter = context.scene.vray.Exporter
@@ -67,6 +68,7 @@ class VRAY_PT_Output(classes.VRayOutputPanel):
 
 class VRAY_PT_VRayStereoscopicSettings(classes.VRayOutputPanel):
     bl_label = "Stereoscopy"
+    bl_icon = "VRAY_PLACEHOLDER"
     bl_options = {'DEFAULT_CLOSED'}
 
     def drawPanelCheckBox(self, context):
@@ -74,10 +76,10 @@ class VRAY_PT_VRayStereoscopicSettings(classes.VRayOutputPanel):
         self.layout.prop(vrayExporter, 'use_stereo', text="")
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
-        vrayScene= context.scene.vray
-        vrayStereoscopicSettings= vrayScene.VRayStereoscopicSettings
+        vrayScene = context.scene.vray
+        vrayStereoscopicSettings = vrayScene.VRayStereoscopicSettings
 
         self.layout.active = vrayScene.Exporter.use_stereo
 
@@ -125,10 +127,14 @@ class VRAY_PT_FrameRange(classes.VRayOutputPanel):
 
         col = layout.column(align=True)
         col.enabled = vrayExporter.animation_mode == 'ANIMATION'
-        col.prop(scene, "frame_start", text="Frame Start")
-        col.prop(scene, "frame_end", text="End")
-        col.prop(scene, "frame_step", text="Step")
+        col.prop(vrayExporter, "use_frame_range")
 
+        if vrayExporter.use_frame_range:
+            col.prop(scene, "frame_start", text="Frame Start")
+            col.prop(scene, "frame_end", text="End")
+            col.prop(scene, "frame_step", text="Step")
+        else:
+            col.prop(vrayExporter, "frames_list")
 
 class VRAY_PT_TimeStretching(classes.VRayOutputPanel):
     bl_label = "Time Stretching"

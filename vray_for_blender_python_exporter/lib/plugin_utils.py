@@ -20,8 +20,8 @@ from vray_blender.lib.condition_processor import UIConditionCompiler
 from vray_blender.lib.lib_utils import getLightPluginType
 from collections import defaultdict
 
-
 from vray_blender.bin import VRayBlenderLib as vray
+
 
 # A list of plugins description as read from the json definition files
 PLUGINS_DESC = {}
@@ -33,7 +33,7 @@ CROSS_DEPENDENCIES = {}
 DESC_COMMENT_KEY = "//Comment"
 
 # Set to True when the env var for disabling AI features is set
-DISABLE_GEN_AI = os.getenv("CHAOS_DISABLE_GEN_AI") == "1"
+DISABLE_GEN_AI = (os.getenv("CHAOS_DISABLE_GEN_AI") == "1") or vray.isCommunityEdition()
 
 # {pluginType: [attribute_name, ...]} that matches a plugin type to a list of its template attributes
 TEMPLATE_ATTRIBUTES = defaultdict(list)
@@ -308,7 +308,7 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=Tr
         elif len(val.col) == 3:
             vray.pluginUpdateMatrix(renderer, pluginName, attrName, tools.mat3x3ToTuple(val), animatable)
         else:
-            raise Exception(f"lib_utils.py: Wrong matrix dimensions: {pluginName}::{attrName} = {val.row}x{val.col}")
+            raise Exception(f"plugin_utils.py: Wrong matrix dimensions: {pluginName}::{attrName} = {val.row}x{val.col}")
 
     elif type(val) is mathutils.Vector:
         vray.pluginUpdateVector(renderer, pluginName, attrName, val.x, val.y, val.z, animatable)

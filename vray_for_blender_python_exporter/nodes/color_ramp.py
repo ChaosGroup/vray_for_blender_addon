@@ -30,7 +30,7 @@ def copyColorRamp(ramp: bpy.types.ColorRamp, rampCopy: bpy.types.ColorRamp):
         # We will setup proper position later
         rampCopy.elements.new(0.0)
 
-    for i,rampElement in enumerate(ramp.elements):
+    for i, rampElement in enumerate(ramp.elements):
         el = rampCopy.elements[i]
         el.color    = rampElement.color
         el.position = rampElement.position

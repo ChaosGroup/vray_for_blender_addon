@@ -3,19 +3,25 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-
 __all__ = []
 
 
+def getRegModules():
+    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview, update_checker
+    return (
+        cosmos_handler,
+        utils_bake,
+        fur_preview,
+        update_checker
+    )
+
+
 def register():
-    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview
-    cosmos_handler.register()
-    utils_bake.register()
-    fur_preview.register()
+    for regModule in getRegModules():
+        regModule.register()
 
 
 def unregister():
-    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview
-    cosmos_handler.unregister()
-    utils_bake.unregister()
-    fur_preview.unregister()
+    for regModule in reversed(getRegModules()):
+        regModule.unregister()
+

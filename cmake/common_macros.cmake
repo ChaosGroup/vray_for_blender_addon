@@ -89,7 +89,7 @@ endfunction()
 #    full path to the generated file to be added to SOURCES
 # param DEFINITIONS: Additional definitions (optional)
 function(cgr_rcc)
-	cmake_parse_arguments(PAR "" "RCC_COMPILER;TARGET;FILE_IN;FILE_OUT_NAME;FILE_OUT_VAR" "DEFINITIONS" ${ARGN})
+	cmake_parse_arguments(PAR "" "RCC_COMPILER;TARGET;FILE_IN;FILE_OUT_NAME;FILE_OUT_VAR" "DEFINITIONS;DEPENDENT_FILES" ${ARGN})
 
 	set(_rcc_compiler ${PAR_RCC_COMPILER})
 	if(NOT _rcc_compiler)
@@ -111,7 +111,7 @@ function(cgr_rcc)
 	add_custom_command(
 		OUTPUT ${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME}
 		COMMAND ${_rcc_compiler} ${PAR_DEFINITIONS}  ${PAR_FILE_IN} -o ${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME}
-		DEPENDS	${PAR_FILE_IN}
+		DEPENDS	${PAR_FILE_IN} ${PAR_DEPENDENT_FILES}
 		COMMENT	"Using ${_rcc_compiler} to compile ${PAR_FILE_IN} to ${PAR_FILE_OUT_NAME}"
 		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 		VERBATIM
@@ -129,16 +129,6 @@ endfunction()
 macro(use_zmq _zmq_root)
 	if (NOT EXISTS ${_zmq_root})
 		message(FATAL_ERROR "Could not find ZMQ: \"${_zmq_root}\"")
-	endif()
-
-	if (WIN32)
-		#string(REPLACE "/MDd" "/MTd" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
-		#string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
-		#string(REPLACE "/MD" "/MT" CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
-
-		string(REPLACE "/MTd" "/MDd" CMAKE_CXX_FLAGS_DEBUG ${CMAKE_CXX_FLAGS_DEBUG})
-		string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELEASE ${CMAKE_CXX_FLAGS_RELEASE})
-		string(REPLACE "/MT" "/MD" CMAKE_CXX_FLAGS_RELWITHDEBINFO ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
 	endif()
 
 	add_definitions(-DZMQ_STATIC)
@@ -162,7 +152,7 @@ macro(link_with_zmq _name)
     endif ()
 
 	if(UNIX)
-		target_link_libraries(${PROJECT_NAME} ${visibility} libzmq.a)
+		target_link_libraries(${_name} ${visibility} libzmq.a)
 	elseif(WIN32)
 		if (MSVC_VERSION EQUAL 1800)
 			set(MSVC_DIR_NAME "v120")
@@ -354,14 +344,14 @@ endmacro()
 # Replace slashes with forward slashes in the supplied string variable, if it is defined
 macro(fix_separators _path)
 	if (DEFINED ${_path})
-		string(REPLACE "\\" "/" _path ${_path})
+		file(TO_CMAKE_PATH "${${_path}}" ${_path})
 	endif()
 endmacro()
 
 
 # Limit build configurations to a selected set
 macro(set_build_configurations)
-	set(BUILD_TYPES Debug Release RelWithDebInfo)
+	set(BUILD_TYPES Release NoOpt)
 	get_property(multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 	if(multi_config)
 	  set(CMAKE_CONFIGURATION_TYPES "${BUILD_TYPES}" CACHE STRING "list of supported configuration types" FORCE)
@@ -372,8 +362,35 @@ macro(set_build_configurations)
 		message(FATAL_ERROR "Invalid build type '${CMAKE_BUILD_TYPE}'. Possible values:\n ${BUILD_TYPES}")
 	  endif()
 	endif()
+
+	if(WIN32)
+		set(CMAKE_C_FLAGS_NOOPT "/MD /Zi /Ob0 /Od /RTC1" CACHE STRING "Flags used by the C compiler during NoOpt builds." FORCE)
+		set(CMAKE_CXX_FLAGS_NOOPT "/MD /Zi /Ob0 /Od /RTC1" CACHE STRING "Flags used by the C++ compiler during NoOpt builds." FORCE)
+		set(CMAKE_EXE_LINKER_FLAGS_NOOPT "/DEBUG /INCREMENTAL" CACHE STRING "Flags used for linking binaries during NoOpt builds." FORCE)
+		set(CMAKE_SHARED_LINKER_FLAGS_NOOPT "/DEBUG /INCREMENTAL" CACHE STRING "Flags used by the shared libraries linker during NoOpt builds." FORCE)
+		set(CMAKE_MODULE_LINKER_FLAGS_NOOPT "/DEBUG /INCREMENTAL" CACHE STRING "Flags used by the module libraries linker during NoOpt builds." FORCE)
+	else()
+		set(CMAKE_C_FLAGS_NOOPT "-g -O0" CACHE STRING "Flags used by the C compiler during NoOpt builds." FORCE)
+		set(CMAKE_CXX_FLAGS_NOOPT "-g -O0" CACHE STRING "Flags used by the C++ compiler during NoOpt builds." FORCE)
+	endif()
 endmacro()
 
+function(extract_vray_version _version_major_var _version_minor_var _version_patch_var)
+	set (_file_path "${CMAKE_SOURCE_DIR}/vray_for_blender_python_exporter/__init__.py")
+	if(NOT EXISTS "${_file_path}")
+		message(FATAL_ERROR "Exporter init file not found: ${_file_path}")
+	endif()
+
+	file(READ "${_file_path}" _file_contents)
+
+	if(_file_contents MATCHES "\"version\"[ \t]*:[ \t]*\\(\"([0-9]+)\",[ \t]*\"([0-9]+)\",[ \t]*\"([0-9]+)\"\\)")
+		set(${_version_major_var} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+		set(${_version_minor_var} "${CMAKE_MATCH_2}" PARENT_SCOPE)
+		set(${_version_patch_var} "${CMAKE_MATCH_3}" PARENT_SCOPE)
+	else()
+		message(WARNING "Regex did not match any content in ${_file_path}")
+	endif()
+endfunction()
 
 if (WIN32)
 	# Generate folder structure for Visual Studio

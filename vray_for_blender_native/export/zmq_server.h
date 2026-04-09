@@ -12,6 +12,10 @@
 #include "zmq_message.hpp"
 #include "zmq_agent.h"
 
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+
 #include <stop_token>
 #include <string>
 #include <thread>
@@ -30,6 +34,7 @@
 // Forward declarations
 struct PluginDesc;
 
+namespace nb = nanobind;
 namespace proto = VrayZmqWrapper;
 
 namespace VRayForBlender {
@@ -74,10 +79,10 @@ public:
 	bool licenseAcquired() const;
 
 	// Adds python callback to the callbacks list
-	void setPythonCallback(const std::string &name, py::object callback);
+	void setPythonCallback(const std::string &name, nb::callable&& callback);
 
 	/// Gets a stored callback
-	py::object getPythonCallback(const std::string &name);
+	nb::handle getPythonCallback(const std::string &name);
 
 	/// Sends message to ZmqServer through control connection
 	/// @param msg Message to be sent
@@ -129,7 +134,7 @@ private:
 	mutable std::mutex m_lock;				  /// Synchronize internal state
 	mutable std::recursive_mutex m_lockConn;  /// Synchronize access to the zmq agent
 
-	std::unordered_map<std::string, py::object> m_pyCallbacks; /// Stores python callbacks 
+	std::unordered_map<std::string, nb::callable> m_pyCallbacks; /// Stores python callbacks
 
 	std::atomic_bool m_mainRendererCreated = false; /// Flag for indication that the main renderer in the ZMQ server is created
 	std::atomic_bool m_licenseAcquired = false; /// Flag for indication of license acquisition

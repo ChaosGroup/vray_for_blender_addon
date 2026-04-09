@@ -10,7 +10,9 @@
 
 #include <mutex>
 #include <vector>
-#include <boost/python.hpp>
+#include <nanobind/nanobind.h>
+
+namespace nb = nanobind;
 
 namespace VRayForBlender {
 
@@ -29,11 +31,11 @@ public:
 	// ExporterBase interface implementation
 	void    init(ZmqExporter* zmqExporter) override;
 	void    setupCallbacks() override;
-	void    renderStart(RenderPass *renderResult, py::object imageUpdatedCallback) override;
+	void    renderStart(RenderPass *renderResult, nb::callable&& imageUpdatedCallback) override;
 	void    renderEnd() override;
 	void    renderFrame() override;
 	void    continueRenderSequence() override;
-	void    renderSequence(int start, int end, int step) override;
+	void    renderSequence(const vray::AttrList<int>& sequences) override;
 	bool    isRendering() override;
 	int     lastRenderedFrame() override;
 	void    setRenderFrame(float frame) override;
@@ -52,7 +54,7 @@ private:
 	ExporterSettings  m_settings;
 	std::atomic_bool  m_renderFinished    = false;  // Used to signal a frame has been rendered
 
-	py::object        m_imageUpdateCallback;
+	nb::callable      m_imageUpdateCallback;
 	time_point        m_lastImageUpdate;
 	RenderPass*       m_renderPass = nullptr;
 };

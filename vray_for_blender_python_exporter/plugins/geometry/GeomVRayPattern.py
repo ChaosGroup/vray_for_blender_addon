@@ -160,7 +160,7 @@ def add_properties(rna_pointer):
     )
 
     GeomVRayPattern.polygon_id_to: bpy.props.IntProperty(
-        name        = "Polygon ID From",
+        name        = "Polygon ID To",
         description = "Polygon ID high value",
         min         = 0,
         max         = 1024,

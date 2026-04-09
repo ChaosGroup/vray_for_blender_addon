@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 
 message(STATUS "")
 message(STATUS "CONFIGURE VRayZmqWrapper")
@@ -92,23 +92,20 @@ file(GLOB SOURCES
 use_zmq(${ZMQ_LIBDIR})
 
 add_compile_definitions(
-    BLENDER_VER="${BLENDER_VER}"
     BOOST_ALL_NO_LIB        # Allow overriding target toolset version of libs
     BOOST_USE_STATIC_LIBS   # Statically link to Boost libraries
 )
 
+add_library(${PROJECT_NAME} STATIC "${SOURCES};${HEADERS}")
+link_with_zmq(${PROJECT_NAME})
+
 if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "MSVC")
     # Disable warnings on external includes
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /external:W0 /external:anglebrackets /W4 /WX")
-
-	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /D\"VASSERT_ENABLED\"")
+    target_compile_options(${PROJECT_NAME} PRIVATE /external:W0 /external:anglebrackets /W4 /WX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<CONFIG:NoOpt>:VASSERT_ENABLED>)
 else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+    target_compile_options(${PROJECT_NAME} PRIVATE -Werror)
 endif()
-
-
-add_library( ${PROJECT_NAME} STATIC "${SOURCES};${HEADERS}" )
-link_with_zmq(${PROJECT_NAME})
 
 if(VRAY_ZMQ_WRAPPER_INSTALL_PREFIX)
     # using "\" causes errors in some cases

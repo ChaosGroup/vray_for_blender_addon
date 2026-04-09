@@ -176,7 +176,7 @@ def getVantageExecutableFile():
             # There is no dedicated entry for the Vantage executable file, so the only current option is to
             # construct the root installation path from the stored uninstall icon path entry.
             displayIcon, _ = winreg.QueryValueEx(key, "DisplayIcon")
-    except:
+    except Exception:
         return None
 
     # Remove surrounding quotes if present
@@ -201,7 +201,7 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
         vantageHost = preferences.vantage_host
         tryStartVantage = sys.platform == "win32" and (vantageHost.startswith("127.") or vantageHost == "::1" or vantageHost.lower() == "localhost")
         # The Vantage command server isn't accessible from other machines so we skip the checks below if
-        # it's running and directly rely on DR2 to connect and report any potenatial errors.
+        # it's running and directly rely on DR2 to connect and report any potential errors.
         if not tryStartVantage:
             return VantageInitStatus.Success
 
@@ -235,7 +235,7 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
                 time.sleep(waitInterval)
                 vantageStatus = _getVantageStatus(vantageHost)
                 if not vantageStatus:
-			        # The Vantage server will not start immediately after starting the executable so wait for up to 5s.
+                    # The Vantage server will not start immediately after starting the executable so wait for up to 5s.
                     if failedAttempts >= maxFailedAttempts:
                         return VantageInitStatus.VantageConnectionFailed
 
@@ -293,7 +293,7 @@ def drawCallbackVantage():
 
     region = bpy.context.region
     x, y = region.width - 75, 10
-    vantageLogo = _getVantageIcon("Vantage.png") #TODO: replace with an SVG Icon
+    vantageLogo = _getVantageIcon("Vantage.png")
     if vantageLogo:
         gpu.state.blend_set('ALPHA')
         gpu_extras.presets.draw_texture_2d(vantageLogo, (x, y), ICON_PX_SIZE, ICON_PX_SIZE)

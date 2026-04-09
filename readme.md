@@ -1,6 +1,6 @@
 # VRay for Blender building instructions
 
-## 1. Clone Libraries
+## 1. Get Blender SDK repo
 1. Clone the repository: [Blender Libraries](https://projects.blender.org/blender/lib-windows_x64.git).
 2. Check out the branch **blender-v4.5-release** (or the respective branch for version 4.4 or 5.0).
 
@@ -23,8 +23,12 @@ zmq_build
 │   └───libzmq-v142-mt-4_3_4.lib
 ```
 
-## 3. Get boost 1.82:
-Get boost 1.82 library with Python 11 bindings. It can be obtained from the **blender-v4.3-release** branch of [Windows Blender Libraries](https://projects.blender.org/blender/lib-windows_x64/src/branch/blender-v4.3-release) or [MacOS Blender Libraries](https://projects.blender.org/blender/lib-macos_arm64/src/branch/blender-v4.3-release)
+## 3. Get 3-rd party libraries
+### 3.1 Boost
+Get boost v 1.82. It can be obtained from the **blender-v4.3-release** branch of [Windows Blender Libraries](https://projects.blender.org/blender/lib-windows_x64/src/branch/blender-v4.3-release) or [MacOS Blender Libraries](https://projects.blender.org/blender/lib-macos_arm64/src/branch/blender-v4.3-release)
+
+### 3.2 Nanobind
+Clone Nanobind v 2.11 from https://github.com/wjakob/nanobind (tag v.2.11.0)
 
 ## 4. Create the install folder
 Create the folder passed as the ADDON_PATH parameter to cmake in the next step.
@@ -43,9 +47,10 @@ cmake -S ./vray_for_blender_addon \
       -B ./build \
       -G "Visual Studio 17 2022" \
       -A x64 -DWITH_TESTS=0 \
-      -DADDON_PATH="./install"  \
+      -DADDON_PATH="./install" \
       -DBOOST_LIBDIR="path/to/boost" \
       -DZMQ_LIBDIR="path/to/zmq_build" \
+      -DNANOBIND_LIBDIR="path/to/nanobind" \
       -DBLENDER_SDK_ROOT="path/to/lib-windows_x64" \
       -DBLENDER_VER="4.5"
 
@@ -64,10 +69,11 @@ cmake -S . \
      -B ./build \
      -G Ninja \
      -DCMAKE_OSX_ARCHITECTURES="arm64" \
-     -DCMAKE_BUILD_TYPE=Release \  # or Debug/RelWithDebInfo
+     -DCMAKE_BUILD_TYPE=Release \  # or NoOpt
      -DWITH_TESTS=0 \
      -DADDON_PATH="./install" \
      -DBOOST_LIBDIR="path/to/boost" \
+     -DNANOBIND_LIBDIR="path/to/nanobind" \
      -DBLENDER_SDK_ROOT="path/to/lib-macos_arm64" \
      -DBLENDER_VER=4.5 
          

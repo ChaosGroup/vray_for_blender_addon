@@ -66,8 +66,22 @@
         },
         {
             "attr": "file",
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
             "options": {
-                "animatable": false
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "file",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "File"
             }
         }
     ],
@@ -80,7 +94,7 @@
                 "default_closed": false,
                 "attrs": [
                     {
-                        "name": "file",
+                        "name": "file_selector",
                         "custom_draw": "widgetDrawFile"
                     },
                     {

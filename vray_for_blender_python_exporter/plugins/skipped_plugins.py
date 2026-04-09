@@ -30,6 +30,10 @@ SKIPPED_PLUGINS = (
     'BSDFPointParticle',
     'MtlStreakFade',
 
+    'RenderChannelExtraTexInt',
+    'RenderChannelExtraTexFloat',
+    'TexUserInteger',
+
     # 3ds max specific
     'TexMaxHairInfo',
     'GeomHair',

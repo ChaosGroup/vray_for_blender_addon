@@ -28,8 +28,8 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     # The LightMesh node allows either a single or a group object selector to be plugged into it.
     # This procedure will export one instance of LightMesh for each selected object and will
     # return a list of the exported plugins (instead of a single plugin)
-    meshObjects: list[bpy.types.Mesh] = []  # A list of mesh objects attached to the same LightMesh
-    exportedLights: list[AttrPlugin]   = []  # A list of the expored LightMesh plugins 
+    geomObjects: list[bpy.types.Object] = []  # A list of geometry objects attached to the same LightMesh
+    exportedLights: list[AttrPlugin]   = []   # A list of the expored LightMesh plugins 
 
     exportedObjectSelectorNode = False
 
@@ -48,20 +48,20 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             elif linkedItem := pluginDesc.getAttribute('geometry'): 
                 if type(linkedItem) is list:
                     # The node has an group selector connected to its 'geometry' socket
-                    meshObjects = [pl.auxData['object'] for pl in linkedItem]
+                    geomObjects = [pl.auxData['object'] for pl in linkedItem]
                 elif (type(linkedItem) is AttrPlugin) and (not linkedItem.isEmpty()):
                     # The node has an object selector connected to its 'geometry' socket
-                    meshObjects = [linkedItem.auxData['object']]
+                    geomObjects = [linkedItem.auxData['object']]
 
     if not exportedObjectSelectorNode:
         # The 'geometry' socket is not linked, use the value from the property page if any
-        meshObjects = pluginDesc.vrayPropGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
+        geomObjects = pluginDesc.vrayPropGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
         
-    if meshObjects:
+    if geomObjects:
         baseName = pluginDesc.name
         
         # LightMesh plugin can only have one target geometry, so export one LightMesh plugin for each geometry
-        for meshObj in meshObjects:
+        for meshObj in geomObjects:
             meshName = Names.objectData(meshObj)
             pluginDesc.name = getLightMeshPluginName(baseName, getObjTrackId(meshObj))
 
@@ -103,4 +103,4 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
 
 
 def getLightMeshPluginName(lightName: str, gizmoObjTrackId):
-     return f"{lightName}_{gizmoObjTrackId}"
+    return f"{lightName}_{gizmoObjTrackId}"

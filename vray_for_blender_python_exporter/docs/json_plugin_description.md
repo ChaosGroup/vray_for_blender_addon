@@ -82,6 +82,9 @@ where *propGroup* is the vray property group to which the property belongs.
 
 where *propGroup* is the vray property group to which the property belongs.
 
+`items_disabled_in_CE`: (list of strings) **ENUM parameters only.** A list of enum item identifiers that are unavailable in V-Ray Community Edition. In CE, these items are shown with a limited-edition addendum in the UI and cannot be selected.
+
+`default_in_CE`: The default value for this parameter when running in V-Ray Community Edition.
 
 ### options
 Each parameter may have an `options` dictionary with any of the following:
@@ -283,8 +286,13 @@ Conditional expressions are introduces with the *cond* attribute:
 ```json
 "active":
 {
-	// Single-rule, returns True/False
+	// Single-rule, uses inline condition to return True/False
 	"cond": "::num_rays<10"
+},
+"use_roughness":
+{
+	// Single-rule, uses predicate to return True/False
+	"cond": "plugins.BDRF.BDRFVrayMtl.useRoughness" 
 },
 "label" : {
 	// Multi-rule, returns "Sparse" or "Dense" depending on the first expression that evaluated to True
@@ -294,9 +302,10 @@ Conditional expressions are introduces with the *cond* attribute:
 	}
 }
 
+
 ```
 
-From the above rules, the followinf Python code will be generated
+From the above rules, the following Python code will be generated
 ```py
 # Single-rule
 if plugin["num_rays"] < 10:

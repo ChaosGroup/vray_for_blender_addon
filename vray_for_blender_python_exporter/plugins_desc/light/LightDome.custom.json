@@ -159,7 +159,7 @@
                     },
                     {
                         "name": "color_colortex",
-                        "label": "Color 1",
+                        "label": "Color",
                         "active": {
                             "cond": "::color_mode=0"
                         }
@@ -331,12 +331,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform"
-            },
-            {
-                "name": "pivot_offset"
-            },
-            {
                 "name": "color_colortex"
             },
             {
@@ -366,7 +360,8 @@
             "dome_rayDistance",
             "dome_grid_res",
             "dome_u_tiles",
-            "tex_adaptive"
+            "tex_adaptive",
+            "pivot_offset"
         ],
         "animatable": true
     }

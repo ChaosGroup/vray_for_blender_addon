@@ -12,7 +12,7 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 # Map from light select mode to the name of the channel property that
 # has to be exported for Light plugins
 _CHANNELS_PROPERTY_MAP = {
-    '0':  'channels',             # direct diffuse and specula
+    '0':  'channels',             # direct diffuse and specular
     '1':  'channels_raw',         # direct raw
     '2':  'channels_diffuse',     # direct diffuse
     '3':  'channels_specular',    # direct specular

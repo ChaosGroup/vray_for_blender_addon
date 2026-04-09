@@ -32,6 +32,7 @@ zmq::multipart_t createMsg(ControlMessage msgType, zmq::message_t&& payload) {
 
 const bool ZmqAgent::Worker;
 const bool ZmqAgent::Client;
+const size_t ZmqAgent::MAX_BATCH;
 
 ZmqAgent::ZmqAgent(zmq::context_t& ctx, const RoutingId& id, ExporterType workerType, bool isClient)
 	: ctx(ctx)
@@ -198,12 +199,11 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 
 	trace("Exit poller loop");
 
-	state = State::Stopped;
-
 	msgCallback   = nullptr;
 	errorCallback = nullptr;
 	traceCallback = nullptr;
 
+	state = State::Stopped;
 }
 
 

@@ -4,11 +4,11 @@
 
 
 import bpy
-import time
 
 from vray_blender import debug
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib import lib_utils
+from vray_blender.lib.attribute_utils import getSettingsOutputImgFormatAttrDesc
 from vray_blender.lib.defs import ProdRenderMode
 from vray_blender.ui import classes
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -18,10 +18,10 @@ from vray_blender.lib.mixin import VRayOperatorBase
 def _fixSquareResolution(self, context):
     vrayScene = context.scene.vray
     selectedItem = vrayScene.BatchBake.getSelectedItem()
-    
+
     if selectedItem.square_resolution:
         selectedItem.height = selectedItem.width
-    
+
 
 class VRAY_UL_BakeRenderItem(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -75,11 +75,17 @@ class VRayBatchBakeItem(bpy.types.PropertyGroup):
         update = _fixSquareResolution
     )
 
+    if bpy.app.version >= (4, 5, 0):
+        pathOptions = {'PATH_SUPPORTS_BLEND_RELATIVE'}
+    else:
+        pathOptions = set()
+
     img_dir: bpy.props.StringProperty(
         name    = "Directory Path",
         subtype = 'DIR_PATH',
         default = "//bake_$F",
-        description = "Output directory (Variables: %s; $O - Object name)" % lib_utils.formatVariablesDesc()
+        description = "Output directory (Variables: %s; $O - Object name)" % lib_utils.formatVariablesDesc(),
+        options = pathOptions
     )
 
     img_file: bpy.props.StringProperty(
@@ -89,23 +95,12 @@ class VRayBatchBakeItem(bpy.types.PropertyGroup):
     )
 
     img_format: bpy.props.EnumProperty(
-        name        = "Image format",
-        description = "Image format",
-        items       = (
-            ('0',   'PNG',        '' ),
-            ('1',   'JPEG',       '' ),
-            ('2',   'TIFF',       '' ),
-            ('3',   'TGA',        '' ),
-            ('4',   'SGI',        '' ),
-            ('5',   'OpenEXR',    '' ),
-            ('6',   'VRayImage',  'V-Ray Image Format' )
-        ),
-        default     = '0'
+        **getSettingsOutputImgFormatAttrDesc()
     )
-    
+
 
 class VRayPropGroupMultiBake(bpy.types.PropertyGroup):
-    """ Bake settings. This class' current values are also used as defaults for  
+    """ Bake settings. This class' current values are also used as defaults for
         the new objects added to the objects list in 'LIST' mode.
     """
     work_mode: bpy.props.EnumProperty(
@@ -137,7 +132,7 @@ class VRayPropGroupMultiBake(bpy.types.PropertyGroup):
         type = VRayBatchBakeItem
     )
 
-    # The batch item being currently rendered. This is set by the rendering procedure. Non-UI property. 
+    # The batch item being currently rendered. This is set by the rendering procedure. Non-UI property.
     active_item: bpy.props.PointerProperty(
         type = VRayBatchBakeItem
     )
@@ -162,7 +157,7 @@ class VRAY_OT_batch_bake_add_selection(VRayOperatorBase):
             if ob.type not in {'MESH'}:
                 continue
 
-            if any(item.ob == ob for item in BatchBake.list_items): 
+            if any(item.ob == ob for item in BatchBake.list_items):
                 # Skip the items that are already on the list
                 continue
 
@@ -190,11 +185,12 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
 
     bl_label = "Bake"
     bl_options = {'DEFAULT_CLOSED'}
-    
+    bl_icon = "VRAY_PLACEHOLDER"
+
     def draw(self, context):
-        # The Bake panel has 2 modes: 
-        #  - 'SELECTION', in which textures are baked for all objects selected in the viewport. 
-        #       In this mode the same settings are applied for all objects 
+        # The Bake panel has 2 modes:
+        #  - 'SELECTION', in which textures are baked for all objects selected in the viewport.
+        #       In this mode the same settings are applied for all objects
         #  - 'LIST', in which the user adds specific objects to a list. In this mode different settings can
         #       be set for each object.
         layout = self.layout
@@ -224,21 +220,21 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
         split     = box.split()
         colLeft   = split.column()
         colRight  = split.column()
-        
+
         dataSrc: VRayBatchBakeItem = BatchBake.getSelectedItem()
 
         # Show default property values
         colLeft.prop(dataSrc, 'width')
-        
+
         row = colLeft.row()
         row.enabled = (not dataSrc.square_resolution)
         row.prop(dataSrc, 'height')
-        
+
         colLeft.prop(dataSrc, 'dilation')
-            
+
         colRight.prop(dataSrc, 'square_resolution')
         colRight.prop(dataSrc, 'flip_derivs')
-        
+
         layout.separator()
         layout.prop(dataSrc, 'img_dir')
         layout.prop(dataSrc, 'img_file')
@@ -248,12 +244,12 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
 class VRAY_OT_batch_bake(VRayOperatorBase):
     """ This operator runs a bake render job for one or multiple scene objects.
 
-        It implements both 'INVOKE_DEFAULT' and 'EXECUTE_DEFAULT' verbs. 
-        * In 'INVOKE_DEFAULT' mode, it behaves as amodal operator. It will show the progress 
-          in the UI and will handle cancellation requests by the user. 
+        It implements both 'INVOKE_DEFAULT' and 'EXECUTE_DEFAULT' verbs.
+        * In 'INVOKE_DEFAULT' mode, it behaves as amodal operator. It will show the progress
+          in the UI and will handle cancellation requests by the user.
         * 'EXECUTE_DEFAULT' is meant to be used in headless mode. It will carry out all tasks
           in blocking mode.
-    """  
+    """
     bl_idname      = "vray.batch_bake"
     bl_label       = "Batch Bake"
     bl_description = "Batch bake tool"
@@ -267,14 +263,14 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
     # and then restored back.
     _backupAutoSaveRender = False
 
-    
+
     def invoke(self, context: bpy.types.Context, event):
         self._collectData(context)
 
         if not self._items:
             debug.report('ERROR', "Bake texture operation ont started: No object selected.")
             return {'CANCELLED'}
-        
+
         # Report messages shown from the timer handler are delayed until the rendering
         # completes, so we need to show the one for the first object here
         obj = self._items[0][0]
@@ -296,30 +292,30 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
             case 'TIMER':
                 from vray_blender.engine.render_engine import VRayRenderEngine
                 from vray_blender.engine.renderer_prod import VRayRendererProd
-                
+
                 isRendering = VRayRendererProd.isActive() or bpy.app.is_job_running('RENDER')
-                
+
                 if self._waitingForRender and (not isRendering):
                     if VRayRenderEngine.prodRenderer and VRayRenderEngine.prodRenderer.isAborted():
                         self._finish(context)
                         return {'CANCELLED'}
-                    
+
                     # Render finished, move to the next item
                     self._waitingForRender = False
                     self._currentIndex += 1
-                    
+
                 if self._waitingForRender:
                     # Still rendering
                     return {'PASS_THROUGH'}
-                
+
                 totalObjs = len(self._items)
-                
+
                 if self._currentIndex < totalObjs:
                     obj, dataSrc = self._items[self._currentIndex]
-                    
+
                     if self._currentIndex < totalObjs - 1:
                         # Blender will show this message after the render job completes so print it
-                        # for the next object in the list. 
+                        # for the next object in the list.
                         nextIndex = self._currentIndex + 1
                         nextObj = self._items[nextIndex][0]
                         debug.report('INFO', f"Baking object {nextObj.name} [{nextIndex + 1} of {totalObjs}] ...")
@@ -327,17 +323,17 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
                     if self._startBake(context, obj, dataSrc, block=False):
                         self._waitingForRender = True
                     else:
-                        # Rendering the current item failed, move to the next one 
+                        # Rendering the current item failed, move to the next one
                         self._currentIndex += 1
                 else:
                     self._finish(context)
                     debug.report('INFO', 'Bake job finished')
                     return {'FINISHED'}
-                    
+
             case 'ESC':
                 self._finish(context)
                 return {'CANCELLED'}
-             
+
         return {'PASS_THROUGH'}
 
 
@@ -348,7 +344,7 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         if len(self._items) == 0:
             self.report({'WARNING'}, "Bake texture failed: No object selected.")
             return {'CANCELLED'}
-        
+
         self._updateSceneSettings(context)
 
         for item in self._items:
@@ -360,25 +356,25 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
                 errMsg = f"Error baking object {obj.name_full}"
                 debug.printExceptionInfo(e, "VRAY_OT_batch_bake")
                 self.report({'ERROR'}, errMsg)
-            
+
         self._restoreSettings(context)
 
         return {'FINISHED'}
-             
+
 
     def _startBake(self, context: bpy.types.Context, obj: bpy.types.Object, dataSrc: bpy.types.PropertyGroup, block: bool):
         vrayScene = context.scene.vray
         batchBake = vrayScene.BatchBake
-        
+
         debug.printInfo(f"Baking: {obj.name}...")
-        
+
         if len(obj.data.uv_layers) == 0:
             self.report({'ERROR'}, f"Bake texture: UV Map is not defined for object {obj.name_full}")
             return False
-            
+
         formatDict = lib_utils.getDefFormatDict()
         formatDict['$O'] = ("Object Name", lib_utils.cleanString(obj.name, stripSigns=False))
-        
+
         bakeItem = batchBake.active_item
         bakeItem.ob             = obj
         bakeItem.width          = dataSrc.width
@@ -388,22 +384,22 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         bakeItem.img_file       = lib_utils.formatName(dataSrc.img_file, formatDict)
         bakeItem.img_dir        = lib_utils.formatName(dataSrc.img_dir,  formatDict)
         bakeItem.img_format     = dataSrc.img_format
-        
+
         vrayScene.BakeView.uv_channel = 0
         vrayScene.Exporter.isBakeMode = True
-        
-        VfbEventHandler.changeViewportModeSync(newMode='SOLID') 
+
+        VfbEventHandler.changeViewportModeSync(newMode='SOLID')
         VfbEventHandler.startProdRenderSync(renderMode = ProdRenderMode.RENDER, block=block)
-        
+
         return True
-    
+
 
     def _finish(self, context: bpy.types.Context):
         wm = context.window_manager
         if self._timer:
             wm.event_timer_remove(self._timer)
             self._timer = None
-        
+
         self._restoreSettings(context)
 
 
@@ -411,7 +407,7 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         batchBake = context.scene.vray.BatchBake
 
         self._items = []
-        
+
         if batchBake.work_mode == 'SELECTION':
              for ob in [ob for ob in context.selected_objects]:
                  self._items.append((ob, batchBake.default_item))

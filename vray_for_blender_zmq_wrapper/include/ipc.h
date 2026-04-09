@@ -30,7 +30,7 @@
 /// always operate on the whole payload.
 ////////////////////////////////////////////////////////////////////////////////
 
-namespace VrayZmqWrapper{
+namespace VrayZmqWrapper {
 
 
 class SharedMemoryBase {

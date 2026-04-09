@@ -28,11 +28,16 @@ class SettingsExporter(ExporterBase):
             # for previews, otherwise they will be affected by the VFB layers.
             skipSettings.add('SettingsVFB')
 
-        toExport = [pl for pl in PLUGINS['SETTINGS'] if pl not in IGNORED_PLUGINS.union(skipSettings)]
-
+        if self.fullExport:
+            toExport = [pl for pl in PLUGINS['SETTINGS'] if pl not in IGNORED_PLUGINS.union(skipSettings)]
+        else:
+            # Most plugins only need to be exported once. The following list has the ones
+            # that can change during interactive rendering.
+            toExport = {'SettingsLightLinker'}
+            
         for pluginType in toExport:
             self.exportPlugin(pluginType)
-
+        
         return self.stats
 
 

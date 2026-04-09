@@ -25,4 +25,4 @@ def widgetDrawChannelType(context, layout, propGroup, widgetAttr):
 
 
 def onUpdateChannelName(propGroup, context, attrName):
-    setUniqueRenderChannelName(getNodeOfPropGroup(propGroup), isNewNode = False)
+    setUniqueRenderChannelName(getNodeOfPropGroup(propGroup), isNewNode=False)

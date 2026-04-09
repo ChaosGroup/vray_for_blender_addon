@@ -9,7 +9,7 @@ import bpy, mathutils
 from numpy import ndarray
 
 from vray_blender import debug
-from vray_blender.exporting.tools import TimeStats, FakeTimeStats, isObjectVisible
+from vray_blender.exporting.tools import TimeStats, FakeTimeStats
 from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, ObjDataTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
 from vray_blender.lib.motion_blur import MotionBlurBuilder
 
@@ -61,7 +61,13 @@ class PersistedState:
 
         self.activeInstancers = set()
         self.activeGizmos     = set()
+
+        # Cache mapping for exported materials:
+        # Each key is a session_uid of a Blender material that has been processed for export,
+        # and the corresponding value is its AttrPlugin representation.
+        # This cache is used to avoid re-exporting materials that have already been exported.
         self.exportedMtls: Dict[int, AttrPlugin] = {}
+        
         self.activeFurInfo = set()
         self.activeMeshLightsInfo = set()
 
@@ -86,10 +92,11 @@ class PersistedState:
         self.materialOverrideMode = '-1'
         self.overrideMaterial = None
 
-class IprContext:
-    """ UI context in which a interactive render job i started.
-        Only the relevant parts of the Context object are stored rather than the whole object
-        because they may be invalidated.
+class UIRegionContext:
+    """ UI context in which a render job is started. Blender does not provide 
+        UI context for IPR and production rendering so we capture the relevant 
+        data when a render request is made and use it for the duration
+        of the render job.
     """
     def __init__(self, view3d: bpy.types.SpaceView3D, window: bpy.types.Window):
             assert window is not None
@@ -124,6 +131,36 @@ class ExporterContext:
 
         def __exit__(self, *args):
             self._objectsStack.pop()
+
+    class _ExportingProgress:
+        """ Tracks and updates the progress of scene export based on the total number of objects and frames.
+        
+        Notes:
+            - Only unique objects from the scene are counted, object instances are excluded.
+              This may cause reported progress to be less accurate for scenes with many instances.
+
+            - The update() method works only when exporting a .vrscene file.
+              During rendering, the progress is reported directly by V-Ray and it does nothing.
+        """
+        def __init__(self):
+            self.totalObjects = 0
+            self.totalFrames = 0
+            self.progress = 0.0
+
+        def setTotalObjectsAndFrames(self, exporterCtx: ExporterContext):
+            self.totalObjects = len(exporterCtx.dg.view_layer_eval.objects)
+            self.totalFrames = len(exporterCtx.commonSettings.animation.frames) if exporterCtx.isAnimation else 1
+
+        def update(self, engine: bpy.types.RenderEngine):
+            """ Update the progress of the scene export if the total frames and objects counts are set """
+            
+            # Skip updating progress if totalFrames or totalObjects are unset,
+            # which typically indicates we are in the rendering phase rather than exporting.
+            if self.totalFrames == 0 or self.totalObjects == 0: 
+                return
+
+            self.progress += (1 / self.totalFrames) * (1 / self.totalObjects)
+            engine.update_progress(self.progress)
 
 
     ##### Properties accessible in any context #####
@@ -205,12 +242,6 @@ class ExporterContext:
         # Any stats that exporters wish to publish, e.g. number of entities processed
         self.stats: list[str] = []
 
-        # Cache mapping for exported materials:
-        # Each key is a session_uid of a Blender material that has been processed for export,
-        # and the corresponding value is its AttrPlugin representation.
-        # This cache is used to avoid re-exporting materials that have already been exported.
-        self.exportedMtls: Dict[int, AttrPlugin] = {}
-
         # There are some default plugins which may be referenced by multiple other plugins,
         # e.g. mapping etc. We only need one copy of those.
         self.defaultPlugins = {}  # plugin_type: attrPlugin
@@ -248,15 +279,16 @@ class ExporterContext:
         # The name of currently updated material that has a displacement node in its node tree
         self.updatedMtlWithDisplacement = ""
 
-        # Context data for IPR renders. Necessary because the IPR rendering is done
-        # without Blender's knowledge and the context data is only available at the
-        # time of the IPR renderer creation
-        self.iprContext: IprContext = None
+        # UI context data
+        self.uiRegionContext: UIRegionContext = None
 
         # For convenience and conformance with Blender's workflow, production render jobs 
         # may be started as animation from the keyboard even if the rendering mode set in 
         # the Output properties is not 'Animation'.
         self.forceAnimation = False
+
+        # Tracks and updates the progress of the scene export. It is used only when exporting a .vrscene file.
+        self.exportProgress = ExporterContext._ExportingProgress()
 
 
     def _copyConstruct(self, other: ExporterContext):
@@ -283,7 +315,6 @@ class ExporterContext:
         self.exportOnly             = other.exportOnly
         self.currentFrame           = other.currentFrame
         self.stats                  = other.stats
-        self.exportedMtls           = other.exportedMtls
         self.defaultPlugins         = other.defaultPlugins
         self.objectsWithTempMeshes  = other.objectsWithTempMeshes
         self.pluginRenderChannels   = other.pluginRenderChannels
@@ -293,8 +324,9 @@ class ExporterContext:
         self.motionBlurBuilder      = other.motionBlurBuilder
         self.activeLightMixNode     = other.activeLightMixNode
         self.updatedMtlWithDisplacement = other.updatedMtlWithDisplacement
-        self.iprContext             = other.iprContext
+        self.uiRegionContext             = other.uiRegionContext
         self.forceAnimation         = other.forceAnimation
+        self.exportProgress     = other.exportProgress
 
     @property
     def viewport(self):
@@ -340,6 +372,10 @@ class ExporterContext:
     def allowRelativePaths(self):
         # For cloud we always want absolute paths since the .vrscene is saved in %temp%/vray_blender
         return self.exportOnly and not self.commonSettings.isCloudSubmit()
+
+    @property
+    def exportedMtls(self):
+        return self.persistedState.exportedMtls
 
     def calculateObjectVisibility(self):
         """ Fill the visibility and active instancers info into ExporterContext """

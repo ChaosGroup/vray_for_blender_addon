@@ -69,23 +69,6 @@ narrowui = 200
 ##     ##    ##     ##  ##       ##    ##
  #######     ##    #### ########  ######
 
-def getContextType(context):
-    if hasattr(context, 'node'):
-        return 'NODE'
-    if hasattr(context, 'material'):
-        return 'MATERIAL'
-    return None
-
-
-def getRegionWidthFromContext(context):
-    contextType = getContextType(context)
-    if contextType == 'NODE':
-        return context.node.width
-    elif hasattr(context, 'region'):
-        return context.region.width
-    # Assume wide region width
-    return 1024
-
 
 def pollBase(cls, context):
     poll_engine = context.scene.render.engine in cls.COMPAT_ENGINES

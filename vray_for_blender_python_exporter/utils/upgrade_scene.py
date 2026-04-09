@@ -6,6 +6,7 @@ import bpy
 from dataclasses import dataclass
 from vray_blender.lib import blender_utils
 from vray_blender.nodes.sockets import VRaySocketUse, VRaySocketMult
+from vray_blender.nodes.tools import isVraySocket
 
 from vray_blender import debug
 
@@ -58,6 +59,10 @@ def logVerboseMsg(msg: str):
         debug.printDebug(f"UPDATE:   {msg}")
 
 
+def _safeGetVrayAttr(socket: bpy.types.NodeSocket):
+    return socket.vray_attr if isVraySocket(socket) else ""
+
+
 def _getNodeLinksInfo(node: bpy.types.Node):
     """ Returns a list of all links of a node. """
 
@@ -65,8 +70,8 @@ def _getNodeLinksInfo(node: bpy.types.Node):
 
     for socketGroup in (node.inputs, node.outputs):
         for sock in [s for s in socketGroup if s.is_linked]:
-            nodeLinks.extend([NodeLink( link.from_node.name, link.from_socket.name, link.from_socket.vray_attr,
-                                        link.to_node.name, link.to_socket.name, link.to_socket.vray_attr )
+            nodeLinks.extend([NodeLink( link.from_node.name, link.from_socket.name, _safeGetVrayAttr(link.from_socket),
+                                        link.to_node.name, link.to_socket.name, _safeGetVrayAttr(link.to_socket) )
                                 for link in sock.links])
     return nodeLinks
 
@@ -93,6 +98,7 @@ def upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
     """
 
     from vray_blender.nodes.nodes import vrayNodeCopy
+    from vray_blender.nodes.tools import deselectNodes
 
     assert ctx is not None
     assert node is not None
@@ -103,6 +109,9 @@ def upgradeNode(ctx: UpgradeContext, node: bpy.types.Node):
 
     # Create a new node of the same type
     nodeTree = ctx.nodeTree
+    
+    deselectNodes(nodeTree)
+    
     newNode = nodeTree.nodes.new(node.bl_idname)
     newNode.location = node.location
     newNode.location.x = node.location.x - (newNode.width - node.width) # right-align node
@@ -186,7 +195,7 @@ def _copyNode(ctx: UpgradeContext, srcNode: bpy.types.Node, targetNode: bpy.type
     pluginModule = getPluginModule(srcNode.vray_plugin)
 
     # Copy meta sockets (the ones not directly backed by vray properties)
-    for srcSocket in [s for s in srcNode.inputs if hasattr(s, 'vray_attr')]:
+    for srcSocket in [s for s in srcNode.inputs if isVraySocket(s)]:
         if srcSocket.vray_attr not in sourcePropertyNames or isinstance(srcSocket, (VRaySocketUse, VRaySocketMult)):
             if fnCopy := getattr(srcSocket, 'copy', None):
                 if targetSocket := next((s for s in targetNode.inputs if (not s.is_linked) and (s.name.lower() == srcSocket.name.lower())), None):
@@ -253,10 +262,12 @@ def _createNodeLinks(ctx: UpgradeContext, nodeLinks: list[bpy.types.NodeLink]):
             if toNode and fromNode:
 
                 # Search first by vray attribute name and then by lowercase socket name (meta sockets don't have an underlying  vray attribute)
-                toSocket = next((s for s in toNode.inputs if s.vray_attr and (s.vray_attr == link.toSockAttr) or (s.name.lower() == link.toSockName.lower())), None)
+                toSocket = next((s for s in toNode.inputs if (isVraySocket(s) and (s.vray_attr) and (s.vray_attr == link.toSockAttr)) or 
+                                                                (s.name.lower() == link.toSockName.lower())), None)
 
                 if len(fromNode.outputs) > 1:
-                    fromSocket = next((s for s in fromNode.outputs if s.vray_attr and (s.vray_attr == link.toSockAttr) or (s.name.lower() == link.fromSockName.lower())), None)
+                    fromSocket = next((s for s in fromNode.outputs if (isVraySocket(s) and (s.vray_attr) and (s.vray_attr == link.toSockAttr)) or 
+                                                                (s.name.lower() == link.fromSockName.lower())), None)
                 else:
                     # For nodes with just a default output, do not try to match the socket by name
                     fromSocket = fromNode.outputs[0]

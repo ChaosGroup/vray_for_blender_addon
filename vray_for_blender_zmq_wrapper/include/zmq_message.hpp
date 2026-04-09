@@ -76,15 +76,15 @@ enum class MsgType : char {
 
 	// Plugin messages
 	FirstPluginMessage,
-	PluginCreate = FirstPluginMessage,
+	PluginCreate,
 	PluginRemove,
 	PluginUpdate,
 	PluginReplace,
-	LastPluginMessage = PluginReplace,
+	LastPluginMessage,
 
 	// Renderer messages
 	FirstRendererMessage,
-	RendererFree = FirstRendererMessage,
+	RendererFree,
 	RendererStart,
 	RendererStop,
 	RendererPause,
@@ -111,20 +111,20 @@ enum class MsgType : char {
 	RendererSetCropRegion,
 	RendererRenderSequence,
 	RendererContinueSequence,
-	LastRendererMessage = RendererContinueSequence,
+	LastRendererMessage,
 
 	// Renderer events
 	FirstRendererEvent,
-	RendererOnVRayLog = FirstRendererEvent,
+	RendererOnVRayLog,
 	RendererOnImage,
 	RendererOnChangeState,
 	RendererOnAsyncOpComplete,
 	RendererOnProgress,
-	LastRendererEvent = RendererOnProgress,
+	LastRendererEvent,
 
 	// Control messages
 	FirstControlMessage,
-	ControlSetLogLevel = FirstControlMessage,
+	ControlSetLogLevel,
 	ControlOpenCollaboration,
 
 	// Cosmos
@@ -149,11 +149,13 @@ enum class MsgType : char {
 	ControlResetVfbToolbar,
 	ControlGetComputeDevices,
 	ControlSetComputeDevices,
-	LastControlMessage = ControlSetComputeDevices,
+	ControlSetUpdateAvailable,
+	ControlLogVfbMessage,
+	LastControlMessage,
 
 	// Control events
 	FirstControlEvent,
-	ControlOnStartViewportRender = FirstControlEvent,
+	ControlOnStartViewportRender,
 	ControlOnStartProductionRender,
 	ControlOnUpdateVfbSettings,
 	ControlOnUpdateVfbLayers,
@@ -161,7 +163,9 @@ enum class MsgType : char {
 	ControlOnImportAsset,
 	ControlOnRendererStatus,
 	ControlOnGetComputeDevices,
-	LastControlEvent = ControlOnGetComputeDevices,
+	ControlOnAutoUpdateCheckChanged,
+	ControlOnAppUpdateRequested,
+	LastControlEvent,
 
 	// Compute devices
 };
@@ -227,13 +231,13 @@ enum class ComputeDeviceType : int {
 	LastDevice = Metal
 };
 
-
-// Structure describing render sequence
-struct RenderSequenceDesc {
-	int start = 1; // Starting frame
-	int end = 1;   // Last frame
-	int step = 1;  // Frame step
+enum class VfbMessageLevel : int {
+	MessageError = 0,
+	MessageWarning = 1,
+	MessageInfo = 2,
+	MessageDebug = 3
 };
+
 
 // Impelments the protocol for VRay::RenderSizeParams.
 struct RenderSizes {
@@ -711,11 +715,11 @@ SERIALIZE_MESSAGE(RendererSetCropRegion,
 
 /// MsgRendererRenderSequence
 PROTO_MESSAGE(RendererRenderSequence,
-	RenderSequenceDesc description;
+	vray::AttrListInt sequence;
 );
 
 SERIALIZE_MESSAGE(RendererRenderSequence,
-	PARAM(description)
+	PARAM(sequence)
 );
 
 
@@ -1052,7 +1056,7 @@ SERIALIZE_MESSAGE(ControlOnLogMessage,
 );
 
 
-//ControlRequestComputeDevices,
+//ControlRequestComputeDevices
 EMPTY_PROTO_MESSAGE(ControlGetComputeDevices);
 
 SERIALIZE_EMPTY_MESSAGE(ControlGetComputeDevices);
@@ -1079,6 +1083,38 @@ SERIALIZE_MESSAGE(ControlSetComputeDevices,
 	PARAM(computeDeviceIndices)
 	PARAM(deviceType)
 );
+
+PROTO_MESSAGE(ControlSetUpdateAvailable,
+	bool hasUpdate;
+);
+
+SERIALIZE_MESSAGE(ControlSetUpdateAvailable,
+	PARAM(hasUpdate)
+);
+
+PROTO_MESSAGE(ControlLogVfbMessage,
+	VfbMessageLevel level;
+	std::string message;
+);
+
+SERIALIZE_MESSAGE(ControlLogVfbMessage,
+	PARAM(level)
+	PARAM(message)
+);
+
+PROTO_MESSAGE(ControlOnAutoUpdateCheckChanged,
+	bool autoCheck;
+);
+
+SERIALIZE_MESSAGE(ControlOnAutoUpdateCheckChanged,
+	PARAM(autoCheck)
+);
+
+
+EMPTY_PROTO_MESSAGE(ControlOnAppUpdateRequested);
+
+SERIALIZE_EMPTY_MESSAGE(ControlOnAppUpdateRequested);
+
 
 };  // end VrayZmqWrapper namespace
 

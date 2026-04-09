@@ -24,12 +24,12 @@
                 [
                     "3",
                     "Vector (Absolute)",
-                    "Vector displacement"
+                    "Aboslute vector displacement"
                 ],
                 [
                     "4",
                     "Vector (Object)",
-                    "Vector displacement"
+                    "Object space vector displacement"
                 ]
             ],
             "name": "Mode",

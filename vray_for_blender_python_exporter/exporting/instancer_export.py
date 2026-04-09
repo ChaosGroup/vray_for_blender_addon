@@ -14,7 +14,6 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib.blender_utils import TestBreak
 from vray_blender.lib.defs import DataArray, ExporterBase, ExporterContext, AttrPlugin
 from vray_blender.lib.names import Names
-from vray_blender.external import mmh3
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -41,21 +40,15 @@ class InstancerData:
 class Instancer:
     class Instance:
         def __init__(self, persistentId):
-            # The index is generated from the instance's persistent_id (an array of ints) by hashing it
-            # to create a unique identifier for this instance
-            self.index          = mmh3.hash(struct.pack(f'{len(persistentId)}i', *persistentId))
-
+            self.persistentId   = persistentId
             self.tm: Matrix     = None
-            self.velocity       = Matrix()
-            self.velocity.zero()
             self.nodePlugin     = ""
 
         def pack(self):
             m = marshaller.Marshaller()
 
-            m.dumpInt32(self.index)
+            m.dumpPersistentId(self.persistentId)
             m.dumpMatrix4(self.tm)
-            m.dumpMatrix4(self.velocity)
             m.dumpString(self.nodePlugin)
 
             return m.pack()

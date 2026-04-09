@@ -24,7 +24,7 @@ def onCausticsEnabled(SettingsCaustics, context, attrName):
 def exportCustom(ctx: ExporterContext, pluginDesc):
     if getattr(pluginDesc.vrayPropGroup, 'auto_save'):
         autosaveFile = getattr(pluginDesc.vrayPropGroup, "auto_save_file")
-        autosaveFile = path_utils.formatResourcePath(autosaveFile, alllowRelativePaths = ctx.allowRelativePaths)
+        autosaveFile = path_utils.formatResourcePath(autosaveFile, allowRelative=ctx.allowRelativePaths)
         path_utils.createDirectoryFromFilepath(autosaveFile)
 
     # Only 'Progressive' mode is available during IPR

@@ -17,18 +17,18 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
         from vray_blender.nodes.nodes import VRayNodeTypes # circular import protection
         from vray_blender.plugins.channel.RenderChannelsPanel import VRayChannelNodeSubtypes # circular import protection
 
-        hasWorldNodeTree = context.scene.world is not None and context.scene.world.node_tree is not None
-
-        # Indication that there isn't a node tree created
-        if not hasWorldNodeTree:
-            self.layout.column().label(icon="ERROR", text="World node tree required.")
-
         if not context.scene.world:
             # If for some reason there is no world in the scene, show
             # the UI for creating one as the render channels that will
             # be shown are a property of the world.
             self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree.")
             return
+
+        hasWorldNodeTree = context.scene.world.node_tree is not None
+
+        # Indication that there isn't a node tree created
+        if not hasWorldNodeTree:
+            self.layout.column().label(icon="ERROR", text="World node tree required.")
 
         vrayRenderChannels = context.scene.world.vray.VRayRenderChannels
 

@@ -136,6 +136,12 @@
                         }
                     },
                     {
+                        "name": "enable_blurred_denoising",
+                        "visible": {
+                            "cond": "::engine!=0"
+                        }
+                    },
+                    {
                         "name": "mode"
                     },
                     {

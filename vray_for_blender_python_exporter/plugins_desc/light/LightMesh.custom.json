@@ -369,12 +369,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform"
-            },
-            {
-                "name": "pivot_offset"
-            },
-            {
                 "name": "geometry"
             },
             {
@@ -408,7 +402,8 @@
             "user_attributes_bin",
             "noDecay",
             "map_channels",
-            "ignoreLightNormals"
+            "ignoreLightNormals",
+            "pivot_offset"
         ],
         "animatable": true
     }

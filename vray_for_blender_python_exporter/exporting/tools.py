@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
-from mathutils import Vector, Matrix 
+from mathutils import Vector, Matrix
 
 import os
 import math
@@ -13,13 +13,14 @@ from io import StringIO
 
 from vray_blender import debug
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
+from vray_blender.lib.path_utils import getV4BTempDir
 from vray_blender.nodes.tools import isCompatibleNode, isVrayNode, isVraySocket
 
 
 FLOAT_SOCK_TYPES = ( "VRaySocketFloat", "VRaySocketFloatColor", "VRaySocketFloatNoValue")
 COLOR_SOCK_TYPES = ( "VRaySocketColor", "VRaySocketColorNoValue", "VRaySocketAColor",
-                    "VRaySocketColorTexture", "VRaySocketColorMult", "VRaySocketAColor",
-                    "VRaySocketTexMulti")
+                    "VRaySocketColorTexture", "VRaySocketColorMult",
+                    "VRaySocketTexMulti", "VRaySocketColorUse")
 
 # Copied verbatim from C++
 IGNORED_PLUGINS = {
@@ -83,7 +84,7 @@ def getOutSocketSelector(sock: bpy.types.NodeSocket):
             # Plugin has more than one output. Return the name of the socket.
             return sock.vray_attr
     else:
-        # Meta nodes do not correspond to a (single) V-Ray plugin. Normally, they should be exported by 
+        # Meta nodes do not correspond to a (single) V-Ray plugin. Normally, they should be exported by
         # custom code
         return AttrPlugin.OUTPUT_DEFAULT
 
@@ -117,7 +118,7 @@ def saveShaderScript(script):
     for line in script.lines:
         scriptTxt.write(f"{line.body}\n")
 
-    filepath = os.path.join(bpy.app.tempdir, script.name)
+    filepath = os.path.join(getV4BTempDir(), script.name)
     with open(filepath, 'w') as osl_file:
         osl_file.write(scriptTxt.getvalue())
 
@@ -167,17 +168,8 @@ def getInputSocketByAttr(node, attrName):
     except AttributeError as ex:
         debug.printError(f"{node.bl_idname}::{attrName} is not a V-Ray socket")
         return None
-        
-def getNodeLinkToNode(nodeOutput, sockName, nodeType):
-    # Returns node link connecting socket to node with specific type
-    if sock := getInputSocketByName(nodeOutput, sockName):
-        # The output node of the tree is not connected to anything
-        nodeLink = getFarNodeLink(sock)
-        if nodeLink and nodeLink.from_node.bl_idname == nodeType:
-            return nodeLink
-    return None
 
-def getOutputSocketByAttr(node, attrName):
+def getOutputSocketByAttr(node, attrName) -> bpy.types.NodeSocket:
     """ Search for output socket by its 'vray_attr' field.
 
         Return:
@@ -199,7 +191,7 @@ def getGroupNode(node):
     """
 
     # Node trees of evaluated objects are also 'evaluated'. The node objects in them are
-    # different from the 'original' ones. 
+    # different from the 'original' ones.
     nodeTree = node.id_data.original
     users = bpy.context.blend_data.user_map(subset={nodeTree})
 
@@ -211,10 +203,10 @@ def getGroupNode(node):
             nodes = group.nodes
         elif isinstance(group, bpy.types.ShaderNodeTree):
             nodes = group.nodes
-        
+
         for groupNode in [n for n in nodes if n.bl_idname == 'ShaderNodeGroup']:
             groupNodeTree = groupNode.node_tree
-            
+
             if groupNodeTree.session_uid == nodeTree.session_uid:
                 # The name is guaranteed to be unique within the node tree.
                 if any(n for n in groupNodeTree.nodes if n.name == node.name):
@@ -229,10 +221,10 @@ def _isNearSocketLinkActive(l: bpy.types.NodeLink):
 
 def _getActiveNearLinks(sock: bpy.types.NodeSocket):
     """ Returns a list of all socket links that should be followed during export. """
-    
-    # The is_linked check is an optimization as well as a mitigation for a bug in 
+
+    # The is_linked check is an optimization as well as a mitigation for a bug in
     # Blender which may cause a crash. Looks like the call triggers populating an internal
-    # structure which will otherwise point to invalid entries.  
+    # structure which will otherwise point to invalid entries.
     if not sock.is_linked:
         return []
     return [l for l in sock.links if _isNearSocketLinkActive(l)]
@@ -243,7 +235,7 @@ def socketHasActiveNearLinks(socket: bpy.types.NodeSocket):
 
 
 def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
-    """ Resolve an input socket to either itself or an input socket on a node connected 
+    """ Resolve an input socket to either itself or an input socket on a node connected
         through any re-routes, muted nodes and groups.
 
         Return:
@@ -253,7 +245,7 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
     assert not toSocket.is_multi_input
 
     if toSocket.is_linked and (link := toSocket.links[0]) and _isNearSocketLinkActive(link):
-    
+
         fromNode = link.from_node
         fromSocket = link.from_socket
 
@@ -282,35 +274,35 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
             from vray_blender.lib.defs import NodeContext
             NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
             return None
-           
+
     return toSocket
 
 
 def resolveInternalLink(outSocket: bpy.types.NodeSocket):
     """ Return a resolved input socket following the best-matching internal link of a muted node. """
-    from vray_blender.nodes.utils import getPluginTypeOfNode, getPluginTypeOfNode
+    from vray_blender.nodes.utils import getPluginTypeOfNode
     from vray_blender.plugins import getPluginModule
-    
+
     node = outSocket.node
 
     if isVrayNode(node):
         if fnResolve := getattr(node, 'resolveInternalLink', None):
             return fnResolve(outSocket)
-        
+
         pluginType = getPluginTypeOfNode(node)
-        
+
         if pluginType is None:
             return None, None
-        
+
         pluginModule = getPluginModule(pluginType)
 
         if 'internal_links' not in pluginModule.Node:
             # A missing internal_links list means there are no valid internal links
             return None, None
-        
+
         # If there is no internal_links property on Node, treat all possible links as valid
-        internalLinks = pluginModule.Node.get('internal_links')  
-        
+        internalLinks = pluginModule.Node.get('internal_links')
+
         def getInputSocketNames(inputsList: list):
             if inputsList[0] == '*':
                 # case '*' => ['*']
@@ -320,16 +312,16 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
                 return inputsList
 
         inSocketNames = []
-        
+
         if '*' in internalLinks:
             # All output sockets
             inSocketNames = getInputSocketNames(internalLinks['*'])
         elif inputsList := internalLinks.get(outSocket.name, []):
             inSocketNames = getInputSocketNames(inputsList)
-            
+
         for inSockName in inSocketNames:
             if inSockName.endswith('*'):
-                # This is the prefix to a socket name and is used for nodes with sockets 
+                # This is the prefix to a socket name and is used for nodes with sockets
                 # created at runtime which are usually numbered
                 sockNamePrefix = inSockName[:-1]
                 for inSock in node.inputs:
@@ -340,8 +332,8 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
                 assert inSock, f"Invalid socket '{inSockName}' in internal links list of plugin {pluginType}"
                 return inSock, resolveNodeSocket(inSock)
 
-    else: # Cycles node    
-        # Walk all internal links and return the first match. The links are 
+    else: # Cycles node
+        # Walk all internal links and return the first match. The links are
         # ordered by priority.
         for l in node.internal_links:
             # In an internal link, to and from sockets are reversed:
@@ -350,10 +342,10 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
                 return l.to_socket, resolveNodeSocket(l.from_socket)
 
     return None, None
-        
+
 
 class FarNodeLink:
-    """ Node link that can span one or more Reroute nodes. 
+    """ Node link that can span one or more Reroute nodes.
         The interface is a drop-in replacement for bpy.types.NodeLink.
     """
     def __init__(self, fromSock: bpy.types.NodeSocket, toSock: bpy.types.NodeSocket):
@@ -363,7 +355,7 @@ class FarNodeLink:
         self.to_node      = toSock.node
 
 
-def getFarNodeLink(toSock: bpy.types.NodeSocket):
+def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
     """ Get the link between toSock and an output socket possibly
         spanning one or more Reroute nodes, groups and muted nodes.
 
@@ -375,7 +367,7 @@ def getFarNodeLink(toSock: bpy.types.NodeSocket):
         return toSock.getFarLink()
     else:
         return getFarNodeLinkImpl(toSock)
-    
+
 
 def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
     """ Get the link between toSock and an output socket possibly
@@ -385,13 +377,23 @@ def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
         If no output socket is found, return None.
     """
     assert not toSock.is_multi_input
-    
+
     if (not toSock.is_linked) or (not _isNearSocketLinkActive(toSock.links[0])):
         return None
-    
+
     if (socket := resolveNodeSocket(toSock)) and socket.is_linked:
         return FarNodeLink(socket.links[0].from_socket, toSock)
-    
+
+    return None
+
+
+def getNodeLinkToNode(nodeOutput, sockName, nodeType) -> FarNodeLink | None:
+    # Returns node link connecting socket to node with specific type
+    if sock := getInputSocketByName(nodeOutput, sockName):
+        # The output node of the tree is not connected to anything
+        nodeLink = getFarNodeLink(sock)
+        if nodeLink and nodeLink.from_node.bl_idname == nodeType:
+            return nodeLink
     return None
 
 
@@ -444,7 +446,7 @@ def getLinkedFromSocket(toSock: bpy.types.NodeSocket):
 def removeSocketLinks(sock: bpy.types.NodeSocket):
     """ Remove all links to/from an input/output socket """
     for l in sock.links:
-        sock.node.id_data.links.remove(l)    
+        sock.node.id_data.links.remove(l)
 
 
 def removeOutputSocketLinks(sock: bpy.types.NodeSocket):
@@ -462,14 +464,14 @@ def nodePluginType(node):
 
 
 def getSceneNameOfObject(obj: bpy.types.Object, scene: bpy.types.Scene):
-    """ Return the path part of the scene_name for a scene object. 
+    """ Return the path part of the scene_name for a scene object.
         The function is recursive, with scene == None for all recursive invocations
 
         @param obj   - the object for which to create scene name
         @param scene - the scene containing the object
-    """ 
+    """
     # We can use the plain object names instead of their unique names here because Blender
-    # guarantees that object names are unique. The scene name can also contain any chars, 
+    # guarantees that object names are unique. The scene name can also contain any chars,
     # so they are more human-readable than the unique names.
     name = obj.name
     if obj.parent:
@@ -477,7 +479,7 @@ def getSceneNameOfObject(obj: bpy.types.Object, scene: bpy.types.Scene):
 
     if scene:
         # 'scene' seems to be the name exported for any scene in the other DCCs. In addition,
-        # Vantage will look for 'scene', exactly as typed, when it builds the scene tree in 
+        # Vantage will look for 'scene', exactly as typed, when it builds the scene tree in
         # its outline view.
         # This should not be an issue even if there are multiple scenes in the same .blend file
         # because we always export and render only one of them.
@@ -507,17 +509,17 @@ def isObjectOrphaned(obj: bpy.types.ID):
 
 def isObjectVisible(exporterCtx, obj: bpy.types.Object):
         """ Return the visibility of an object taking into account the current rendering mode.
-            Note that the visibility of the objects used as instancers may diiffer from the 
-            visibility of the instancer itself. The first is determined by the 
-            show_instancer_for_viewport/render propperty, the second is returned by the
-            visible_get() fnuction for the viewport and hide_render property for prod renders. 
+            Note that the visibility of the objects used as instancers may differ from the
+            visibility of the instancer itself. The first is determined by the
+            show_instancer_for_viewport/render property, the second is returned by the
+            visible_get() function for the viewport and hide_render property for prod renders.
         """
         def visibleInViewport(obj: bpy.types.Object):
             return obj.visible_get() and ((not obj.is_instancer) or obj.show_instancer_for_viewport)
 
         def visibleInProd(obj: bpy.types.Object):
             evalObj = obj.evaluated_get(exporterCtx.dg)
-            return  not evalObj.hide_render and ((not obj.is_instancer) or obj.show_instancer_for_render)
+            return not evalObj.hide_render and ((not obj.is_instancer) or obj.show_instancer_for_render)
 
         if exporterCtx.interactive:
             return visibleInViewport(obj)
@@ -526,7 +528,7 @@ def isObjectVisible(exporterCtx, obj: bpy.types.Object):
 
 
 def isModifierVisible(exporterCtx, mod: bpy.types.Modifier):
-    """ Get the visibility of a modifier for the current renering mode """
+    """ Get the visibility of a modifier for the current rendering mode """
     return mod.show_viewport if exporterCtx.interactive else mod.show_render
 
 
@@ -539,30 +541,30 @@ def vec3ToTuple(vec: Vector):
 
 
 def mat4x4ToTuple(tm: Matrix):
-    """ Convert a matrix to a list of float values that can be passed to V-Ray 
-        as a value of a MATRIX or TRAMSFORM property type.
+    """ Convert a matrix to a list of float values that can be passed to V-Ray
+        as a value of a MATRIX or TRANSFORM property type.
     """
 
-    # Transpose the matrix to column-first format. The last matrix row 
+    # Transpose the matrix to column-first format. The last matrix row
     # (the last column in the block below) is not used by VRay
-    return (    tm[0][0], tm[1][0], tm[2][0], tm[3][0], 
-                tm[0][1], tm[1][1], tm[2][1], tm[3][1], 
-                tm[0][2], tm[1][2], tm[2][2], tm[3][2], 
+    return (    tm[0][0], tm[1][0], tm[2][0], tm[3][0],
+                tm[0][1], tm[1][1], tm[2][1], tm[3][1],
+                tm[0][2], tm[1][2], tm[2][2], tm[3][2],
                 tm[0][3], tm[1][3], tm[2][3], tm[3][3])
 
 
 def mat3x3ToTuple(mat: Matrix):
-    """ Convert a matrix to a list of float values that can be passed to V-Ray 
+    """ Convert a matrix to a list of float values that can be passed to V-Ray
         as a value of a MATRIX or TRANSFORM property type.
     """
-    return (    mat[0][0], mat[1][0], mat[2][0], 
-                mat[0][1], mat[1][1], mat[2][1], 
+    return (    mat[0][0], mat[1][0], mat[2][0],
+                mat[0][1], mat[1][1], mat[2][1],
                 mat[0][2], mat[1][2], mat[2][2] )
 
 
 def tupleTo4x4MatrixLayout(value):
-    """ Transforms V-Ray's 'TRANSFORM', 'MATRIX' or 'MATRIX_TEXTURE' attribute into a 
-        list with 4x4 Blender Matrix layout. V-Ray uses 3x3 for matrices and 3x4 
+    """ Transforms V-Ray's 'TRANSFORM', 'MATRIX' or 'MATRIX_TEXTURE' attribute into a
+        list with 4x4 Blender Matrix layout. V-Ray uses 3x3 for matrices and 3x4
         (matrix + translation vector) for transforms.
     """
     match len(value):
@@ -574,7 +576,7 @@ def tupleTo4x4MatrixLayout(value):
                 value[2], value[5], value[8], 0.0,
                 0.0, 0.0, 0.0, 1.0
             ]
-    
+
         case 12:
             # V-Ray transform
             return [
@@ -585,8 +587,8 @@ def tupleTo4x4MatrixLayout(value):
             ]
 
     raise Exception(f"Invalid V-Ray matrix/transform length: {len(value)}, should be 9 or 12")
-    
-   
+
+
 def matrixLayoutToMatrix(value: list[float] | tuple[float]):
     """ Convert a matrix or transform stored in a FloatVectorProp to a Matrix """
     assert len(value) == 16
@@ -600,7 +602,7 @@ def flattenMatrix(mat: Matrix):
     return [val for row in mat for val in row]
 
 def foreachGetAttr(coll: bpy.types.bpy_prop_collection, attrName: str, shape: tuple, dtype ):
-    # 'foreach_get' does not work with multudimensional arrays. 
+    # 'foreach_get' does not work with multidimensional arrays.
     # Get data as a flat array and then reshape
     buffer = np.empty(shape=math.prod(shape), dtype=dtype)
     coll.foreach_get(attrName, buffer)
@@ -609,7 +611,7 @@ def foreachGetAttr(coll: bpy.types.bpy_prop_collection, attrName: str, shape: tu
 
 
 ########### Debugging tools ########################
-from threading import Lock 
+from threading import Lock
 
 class OpTime:
     def __init__(self):
@@ -626,7 +628,7 @@ class TimeStats:
         self._opTimes = {}   # opType -> opTime
         self.lock = Lock()
         self.path = []  # Op types stack of nested invocations
-        
+
     def timeThis(self, opType, fn):
         self.path.append(opType)
 
@@ -641,20 +643,20 @@ class TimeStats:
         self.path.pop()
 
         return result
-    
+
 
     def printSummary(self):
         print(f'\n{self._name}')
         print('-' * 55)
-        
-        print(f"{'Operation':<35} {'Count':>10} {'Time':>13}")  
+
+        print(f"{'Operation':<35} {'Count':>10} {'Time':>13}")
         for opType, opTime in sorted(self._opTimes.items()):
             # Offset each nested level
             stack = opType.split(':')
             op = f"{'  ' * len(stack)}{stack[-1]}"
-            
-            print(f'{op:<35} {opTime.count:>10} {opTime.tm * 1000:>10.3f} ms')    
-        
+
+            print(f'{op:<35} {opTime.count:>10} {opTime.tm * 1000:>10.3f} ms')
+
         print('-' * 55)
 
 

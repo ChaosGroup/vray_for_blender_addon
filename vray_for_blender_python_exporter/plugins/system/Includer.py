@@ -55,7 +55,7 @@ class VRAY_OT_includer_add(VRayOperatorBase):
 
     def execute(self, context):
         vs= context.scene.vray
-        module= vs.Includer
+        module = vs.Includer
 
         module.nodes.add()
         module.nodes[-1].name= "Include Scene"
@@ -70,12 +70,12 @@ class VRAY_OT_includer_remove(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        vs= context.scene.vray
-        module= vs.Includer
+        vs = context.scene.vray
+        module = vs.Includer
 
         if module.nodes_selected >= 0:
-           module.nodes.remove(module.nodes_selected)
-           module.nodes_selected-= 1
+            module.nodes.remove(module.nodes_selected)
+            module.nodes_selected -= 1
 
         return {'FINISHED'}
 
@@ -87,15 +87,15 @@ class VRAY_OT_includer_up(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        vs= context.scene.vray
-        module= vs.Includer
+        vs = context.scene.vray
+        module = vs.Includer
 
         if module.nodes_selected <= 0:
             return {'CANCELLED'}
 
         module.nodes.move(module.nodes_selected,
                                  module.nodes_selected - 1)
-        module.nodes_selected-= 1
+        module.nodes_selected -= 1
 
         return {'FINISHED'}
 
@@ -107,15 +107,15 @@ class VRAY_OT_includer_down(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        vs= context.scene.vray
-        module= vs.Includer
+        vs = context.scene.vray
+        module = vs.Includer
 
         if module.nodes_selected < 0 or module.nodes_selected >= len(module.nodes) - 1:
             return {'CANCELLED'}
 
         module.nodes.move(module.nodes_selected,
                                  module.nodes_selected + 1)
-        module.nodes_selected+= 1
+        module.nodes_selected += 1
 
         return {'FINISHED'}
 

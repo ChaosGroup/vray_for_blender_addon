@@ -4,181 +4,217 @@
     "Widget": {
         "widgets": [
             {
-                "layout": "ROLLOUT",
-                "name": "parameters",
-                "label": "Parameters",
-                "default_closed": false,
+                "layout": "COLUMN",
                 "attrs": [
                     {
-                        "name": "tiling_factor"
+                        "name": "file_selector"
                     },
                     {
-                        "name": "twoside",
-                        "label": "Double-Sided"
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "name": "notransp",
-                        "label": "Disable Transparency"
-                    },
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "file_info",
+                                "custom_draw": "plugins.BRDF.BRDFScanned.widgetDrawFileInfo"
+                            }
+                        ]
+                    } ,
                     {
-                        "name": "triplanar",
-                        "label": "Use Triplanar Mapping"
-                    },
-                    {
-                        "name": "triplanar_random_offset",
-                        "label": "Random Offset",
-                        "active": {"cond": "::triplanar=1"}
-                    },
-                    {
-                        "name": "triplanar_random_rotation",
-                        "label": "Random Rotation",
-                        "active": {"cond": "::triplanar=1"}
-                    }
+                        "layout": "SEPARATOR"
+                    }   
                 ]
             },
             {
-                "layout": "ROLLOUT",
-                "name": "advanced",
-                "label": "Advanced",
+                "layout": "COLUMN",
+                "active": {"cond": "plugins.BRDF.BRDFScanned.hasActiveLicense"},
                 "attrs": [
-                    {
-                        "name": "trace_depth",
-                        "label": "Trace Depth"
+                   {
+                        "layout": "ROLLOUT",
+                        "name": "parameters",
+                        "label": "Parameters",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "tiling_factor"
+                            },
+                            {
+                                "name": "twoside",
+                                "label": "Double-Sided"
+                            },
+                            {
+                                "name": "notransp",
+                                "label": "Disable Transparency"
+                            },
+                            {
+                                "name": "triplanar",
+                                "label": "Use Triplanar Mapping"
+                            },
+                            {
+                                "name": "triplanar_random_offset",
+                                "label": "Random Offset",
+                                "active": {"cond": "::triplanar=1"}
+                            },
+                            {
+                                "name": "triplanar_random_rotation",
+                                "label": "Random Rotation",
+                                "active": {"cond": "::triplanar=1"}
+                            }
+                        ]
                     },
                     {
-                        "name": "cutoff",
-                        "label": "Cutoff"
+                        "layout": "ROLLOUT",
+                        "name": "advanced",
+                        "label": "Advanced",
+                        "attrs": [
+                            {
+                                "name": "trace_depth",
+                                "label": "Trace Depth"
+                            },
+                            {
+                                "name": "cutoff",
+                                "label": "Cutoff"
+                            },
+                            {
+                                "name": "bumpstart",
+                                "label": "Bump and Parallax Zone"
+                            },
+                            {
+                                "name": "DepthMul",
+                                "label": "Parallax Multiplier"
+                            },
+                            {
+                                "name": "bumpmul",
+                                "label": "Bump Multiplier"
+                            },
+                            {
+                                "name": "sssmul",
+                                "label": "SSS Multiplier"
+                            },
+                            {
+                                "name": "UnfRefl",
+                                "label": "Sampling Type"
+                            },
+                            {
+                                "name": "plain",
+                                "label": "Plain Materials Strategy"
+                            },
+                            {
+                                "name": "displace",
+                                "label": "Edges Displacement"
+                            },
+                            {
+                                "name": "NoCachedGI",
+                                "label": "No Cached Light"
+                            },
+                            {
+                                "name": "BWforGI",
+                                "label": "Prevent Color Bleeding"
+                            }
+                        ]
                     },
                     {
-                        "name": "bumpstart",
-                        "label": "Bump and Parallax Zone"
+                        "layout": "ROLLOUT",
+                        "name": "appearance",
+                        "label": "Appearance",
+                        "attrs": [
+                            {
+                                "name": "use_filter",
+                                "label": "Use Filter"
+                            },
+                            {
+                                "name": "fltstrength",
+                                "label": "Filter Strength",
+                                "active": {"cond": "::use_filter=1"}
+                            },
+                            {
+                                "name": "filtercolor",
+                                "active": {"cond": "::use_filter=1"}
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "use_paint",
+                                "label": "Use Paint"
+                            },
+                            {
+                                "name": "paintstrength",
+                                "label": "Paint Strength",
+                                "active": {"cond": "::use_paint=1"}
+                            },
+                            {
+                                "name": "paintcolor",
+                                "label": "Paint Color",
+                                "active": {"cond": "::use_paint=1"}
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "invgamma",
+                                "label": "Gamma Correction"
+                            },
+                            {
+                                "name": "saturation",
+                                "label": "Saturation"
+                            }
+                        ]
                     },
                     {
-                        "name": "DepthMul",
-                        "label": "Parallax Multiplier"
-                    },
-                    {
-                        "name": "bumpmul",
-                        "label": "Bump Multiplier"
-                    },
-                    {
-                        "name": "sssmul",
-                        "label": "SSS Multiplier"
-                    },
-                    {
-                        "name": "UnfRefl",
-                        "label": "Sampling Type"
-                    },
-                    {
-                        "name": "plain",
-                        "label": "Plain Materials Strategy"
-                    },
-                    {
-                        "name": "displace",
-                        "label": "Edges Displacement"
-                    },
-                    {
-                        "name": "NoCachedGI",
-                        "label": "No Cached Light"
-                    },
-                    {
-                        "name": "BWforGI",
-                        "label": "Prevent Color Bleeding"
-                    }
-                ]
-            },
-            {
-                "layout": "ROLLOUT",
-                "name": "appearance",
-                "label": "Appearance",
-                "attrs": [
-                    {
-                        "name": "use_filter",
-                        "label": "Use Filter"
-                    },
-                    {
-                        "name": "fltstrength",
-                        "label": "Filter Strength",
-                        "active": {"cond": "::use_filter=1"}
-                    },
-                    {
-                        "name": "filtercolor",
-                        "active": {"cond": "::use_filter=1"}
-                    },
-                    {
-                        "name": "use_paint",
-                        "label": "Use Paint"
-                    },
-                    {
-                        "name": "paintstrength",
-                        "label": "Paint Strength",
-                        "active": {"cond": "::use_paint=1"}
-                    },
-                    {
-                        "name": "paintcolor",
-                        "label": "Paint Color",
-                        "active": {"cond": "::use_paint=1"}
-                    },
-                    {
-                        "name": "invgamma",
-                        "label": "Gamma Correction"
-                    },
-                    {
-                        "name": "saturation",
-                        "label": "Saturation"
-                    }
-                ]
-            },
-            {
-                "layout": "ROLLOUT",
-                "name": "clear coat",
-                "label": "Clear Coat",
-                "attrs": [
-                    {
-                        "name": "enable_clear_coat",
-                        "label": "Enable"
-                    },
-                    {
-                        "name": "cchlight",
-                        "label": "Highlights",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccmul",
-                        "label": "Strength",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccmult",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccior",
-                        "label": "IOR",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccbump",
-                        "label": "Bump Multiplier",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccmetalrefl",
-                        "label": "Coloring",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccglossy",
-                        "label": "Glossiness",
-                        "active": {"cond": "::enable_clear_coat=1"}
-                    },
-                    {
-                        "name": "ccglossyvar",
-                        "label": "Glossiness Variation",
-                        "active": {"cond": "::enable_clear_coat=1"}
+                        "layout": "ROLLOUT",
+                        "name": "clear coat",
+                        "label": "Clear Coat",
+                        "attrs": [
+                            {
+                                "name": "enable_clear_coat",
+                                "label": "Enable"
+                            },
+                            {
+                                "name": "cchlight",
+                                "label": "Highlights",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccmul",
+                                "label": "Strength",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccmult",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccior",
+                                "label": "IOR",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccbump",
+                                "label": "Bump Multiplier",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccmetalrefl",
+                                "label": "Coloring",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccglossy",
+                                "label": "Glossiness",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            },
+                            {
+                                "name": "ccglossyvar",
+                                "label": "Glossiness Variation",
+                                "active": {"cond": "::enable_clear_coat=1"}
+                            }
+                        ]
                     }
                 ]
             }
+            
         ]
     },
     "Parameters": [
@@ -199,10 +235,26 @@
         },
         {
             "attr": "file",
-            "subtype": "FILE_PATH",
+            "subtype": "VRAY_FILE_PATH",
             "update": "onFileUpdate",
             "options": {
                 "shadowed": true
+            }
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "file",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "File"
             }
         },
         {
@@ -235,7 +287,13 @@
         {
             "attr": "trace_depth",
             "default": -1,
-            "update": "onParameterUpdate"
+            "desc": "Number of reflection bounces. A value of -1 means that the reflection bounces are controlled by the Global Max Depth parameter in the Globals Rollout.",
+            "update": "onParameterUpdate",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : -1
+            }
         },
         {
             "attr": "cutoff",
@@ -517,13 +575,61 @@
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"
+        },
+        {
+            "attr": "filtercolor_enabler",
+            "type": "COLOR_USE",
+            "bound_props": {
+                "target_prop": "filtercolor",
+                "use_prop": "use_filter"
+            },
+            "desc": "",
+            "default": false,
+            "options": {
+               "derived": true
+            },
+             "ui" : {
+                "display_name": "Filter Color"
+            }
+        },
+        {
+            "attr": "paintcolor_enabler",
+            "type": "COLOR_USE",
+            "bound_props": {
+                "target_prop": "paintcolor",
+                "use_prop": "use_paint"
+            },
+            "desc": "",
+            "default": false,
+            "options": {
+               "derived": true
+            },
+             "ui" : {
+                "display_name": "Paint Color"
+            }
+        },
+        {
+            "attr": "ccmult_enabler",
+            "type": "COLOR_USE",
+            "bound_props": {
+                "target_prop": "ccmult",
+                "use_prop": "enable_clear_coat"
+            },
+            "desc": "",
+            "default": false,
+            "options": {
+               "derived": true
+            },
+            "ui" : {
+                "display_name": "Clear Coat Multiplier"
+            }
         }
     ],
     "Node": {
         "input_sockets": [
-            { "name": "filtercolor" },
-            { "name": "paintcolor" },
-            { "name": "ccmult" },
+            { "name": "filtercolor_enabler" },
+            { "name": "paintcolor_enabler" },
+            { "name": "ccmult_enabler" },
             { "name": "uvwgen" }
         ]
     },

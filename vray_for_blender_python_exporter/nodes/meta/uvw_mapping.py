@@ -129,7 +129,7 @@ class VRayNodeUVWMapping(VRayNodeBase):
             self.mapping_node_type = 'UV'
 
         vrayNodeUpdate(self)
-       
+
 
     def _isOnlyRandomizerConnected(self):
         # Return True if all links of the output socket are to UVWGenRandomizer nodes

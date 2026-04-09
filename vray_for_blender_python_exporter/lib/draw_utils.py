@@ -14,26 +14,8 @@ from vray_blender.plugins import getPluginAttr
 from vray_blender.lib.sys_utils import isGPUEngine, importFunction
 from vray_blender.lib.condition_processor import evaluateCondition, isCondition
 
-def getContextType(context):
-    if hasattr(context, 'node') and context.node:
-        return 'NODE'
-    if hasattr(context, 'material'):
-        return 'MATERIAL'
-    return None
-
-
-def getRegionWidthFromContext(context):
-    contextType = getContextType(context)
-    if contextType == 'NODE':
-        return context.node.width
-    elif hasattr(context, 'region'):
-        return context.region.width
-    # Assume wide region width
-    return 1024
-
-
 def getAttrLabel(pluginModule, widgetAttr: dict, propGroup, node: bpy.types.Node = None):
-    """ Get the label to show for an attribute, searching the definitions at all 
+    """ Get the label to show for an attribute, searching the definitions at all
         possible levels and also applying conditions.
     """
 
@@ -42,26 +24,26 @@ def getAttrLabel(pluginModule, widgetAttr: dict, propGroup, node: bpy.types.Node
     if isCondition(label):
         # A multi-rule condition
         return evaluateCondition(propGroup, node, label)
-    
+
     if label:
         # A single-rule condition
         return attribute_utils.formatAttributeName(label)
-    
+
     if 'layout' in widgetAttr:
         # Containers do not get their labels from their 'name' property because not all
-        # containers have it. 
+        # containers have it.
         return ""
-    
+
     attrName = widgetAttr['name']
     attrDesc = getPluginAttr(pluginModule, attrName)
-    
+
     if not attrDesc:
         debug.printError(f"Failed to draw unknown plugin parameter {pluginModule.ID}::{attrName}")
     elif displayName := attribute_utils.getAttrDisplayName(attrDesc):
         return attribute_utils.formatAttributeName(displayName)
-        
+
     return attribute_utils.formatAttributeName(attrName)
-    
+
 
 def subPanel(layout: bpy.types.UILayout):
     split = layout.split(factor=0.05, align=True)
@@ -69,12 +51,12 @@ def subPanel(layout: bpy.types.UILayout):
     panel = split.column(align=True)
 
     # Right-align labels, left-align the corresponding fields around a vertical line
-    panel.use_property_split = True 
+    panel.use_property_split = True
     return panel
 
 
 def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed=True, usePropDataSrc=None, usePropName: str = None):
-    """" Draw a dynamic rollout with an optional enable/disable checkbox.
+    """ Draw a dynamic rollout with an optional enable/disable checkbox.
 
     Args:
         layout (bpy.types.UILayout): the parent layout
@@ -89,7 +71,7 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
     """
     header, body = layout.panel(uniqueID, default_closed=defaultClosed)
     header.alignment = 'LEFT'
-    
+
     if usePropDataSrc and usePropName:
         header.prop(usePropDataSrc, usePropName, text=label)
     else:
@@ -98,12 +80,12 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
     if not body:
         # Panel is closed
         return None
-    
+
     # Create a container for the children of the rollout.
-    # The empty left column of the split will be used for visual offset of the items 
+    # The empty left column of the split will be used for visual offset of the items
     # in the container.
     return subPanel(body)
-    
+
 
 
 class UIPainter:
@@ -118,10 +100,10 @@ class UIPainter:
             and fields from the property group depending on whether the plugin is part of a
             nodetree.
         """
-        
+
         if self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByAttr(self.node, attrName)):
-            # We're drawing a node and the property is exposed as a node socket, let the socket draw itself  
-            # in both the node and the property pages. This is necessary because, due to Blender limitations, 
+            # We're drawing a node and the property is exposed as a node socket, let the socket draw itself
+            # in both the node and the property pages. This is necessary because, due to Blender limitations,
             # only the values of sockets can be animated, and not the fields of the prop group of the node.
             if hasattr(socket, "draw_property"):
                 socket.draw_property(self.context, layout, label)
@@ -146,14 +128,14 @@ class UIPainter:
             label  = self._getAttrLabel(widgetAttr)
 
             if (searchType := widgetAttr.get('search_bar_for')):
-                layout.prop_search(self.propGroup, attrName,  bpy.data, searchType, text=label)
-            elif (template := getPluginAttr(self.pluginModule, attrName).get('options', {}).get('template')):
-                self._drawTemplate(layout, widgetAttr, template)
+                layout.prop_search(self.propGroup, attrName, bpy.data, searchType, text=label)
+            elif (getPluginAttr(self.pluginModule, attrName).get('options', {}).get('template')):
+                self.drawTemplate(layout, widgetAttr)
             elif self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByAttr(self.node, attrName)):
-                # If there is a socket for the attribute, draw it instead of the value from the property 
-                # group. In this way  what is shown in self.node and in the property pages will always stay in sync.
+                # If there is a socket for the attribute, draw it instead of the value from the property
+                # group. In this way what is shown in self.node and in the property pages will always stay in sync.
                 label = label if (label is not None) else socket.name
-                
+
                 if hasattr(socket, "draw_property"):
                     socket.draw_property(self.context, layout, label, expand=expand, slider=slider)
                 else:
@@ -161,10 +143,10 @@ class UIPainter:
             else:
                 # Call Blender to draw the default widget for the attribute's data type
                 layout.prop(self.propGroup, attrName, slider=slider, expand=expand, text=label)
-    
+
 
     def _drawCustomAttr(self, layout, attrName, widgetAttr):
-        """ Draw customized attribute UI depending on the atribute's data type.
+        """ Draw customized attribute UI depending on the attribute's data type.
             @returns True if the attribute was drawn, False if no custom draw procedure was found for it.
         """
         if not (attrDesc := attribute_utils.getAttrDesc(self.pluginModule, attrName)):
@@ -174,15 +156,14 @@ class UIPainter:
             label = self._getAttrLabel(widgetAttr)
             self._drawAttr(layout, attrName, label)
             return True
-            
+
         return False
 
 
-    def _drawTemplate(self, layout, widgetAttr, template):
-        from vray_blender.plugins import templates
-
+    def drawTemplate(self, layout, widgetAttr):
         templateInst = getattr(self.propGroup, widgetAttr['name'])
-        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, getAttrLabel(self.pluginModule, widgetAttr, self.propGroup))
+        label = getAttrLabel(self.pluginModule, widgetAttr, self.propGroup)
+        templateInst.draw(layout, self.context, self.pluginModule, self.propGroup, widgetAttr, label)
 
 
     def _renderDefault(self, layout: bpy.types.UILayout):
@@ -213,8 +194,8 @@ class UIPainter:
             raise Exception(f"Failed to load custom draw function {self.pluginModule.ID}::{drawFnName}")
 
         return fnDraw
-        
-        
+
+
     def _setActive(self, layout, activeCond):
         if activeCond is not None:
             isActive = evaluateCondition(self.propGroup, self.node, activeCond)
@@ -223,32 +204,32 @@ class UIPainter:
 
 
     def _renderItem(self, layout: bpy.types.UILayout, widgetAttr: dict):
-        """ Render a single plugin parameter and set its enabled state. If the parameter 
+        """ Render a single plugin parameter and set its enabled state. If the parameter
             has an associated input self.node socket, render the socket, else render the parameter itself.
-        """ 
+        """
         container = layout
         attrName = widgetAttr['name']
 
         if active := widgetAttr.get('active', None):
-            # Individual layout properties cannot be enabled/disabled. Here we create a 
+            # Individual layout properties cannot be enabled/disabled. Here we create a
             # sub-layout which will host the attribute and will be enabled/disabled
-            # instead. 
+            # instead.
             container = layout.row()
             self._setActive(container, active)
 
         # Draw non-default UI look for the attribute, if defined.
         if self._drawCustomAttr(container, attrName, widgetAttr):
             return
-        
+
         self._drawAttrWidget(container, widgetAttr)
-    
+
 
     def _renderRollout(self, layout: bpy.types.UILayout, widget) -> bpy.types.UILayout | None:
         """ Render a rollout widget.
 
         :return A container to render rollout's properties into if the rollout is open, None if
                 the rollout is closed.
-        """         
+        """
 
         label = self._getAttrLabel(widget)
         useProp = widget.get('use_prop', None)
@@ -257,21 +238,21 @@ class UIPainter:
 
         return rollout(layout, uniqueID, label, defaultClosed, self.propGroup, useProp)
 
-    
+
     def _renderContainer(self, layout: bpy.types.UILayout, widget):
-        """ Create a sub-layout(container) for the widget in an existing layout 
-            
+        """ Create a sub-layout(container) for the widget in an existing layout
+
             :param layout - the existing layout
-            :param widget - the widget for which to create the sub-layout 
+            :param widget - the widget for which to create the sub-layout
             :return the newly created layout
-        """ 
+        """
         container = layout
 
         containerType   = widget.get('layout', 'COLUMN')
         align           = widget.get('align', True)
         label           = self._getAttrLabel(widget)
         active          = widget.get('active', None)
-        
+
         match containerType:
             case 'COLUMN':
                 container = layout.column(align=align)
@@ -284,7 +265,7 @@ class UIPainter:
             case 'ROLLOUT':
                 container = self._renderRollout(layout, widget)
                 label = "" # The rollout is a special case and it shows its own label. Do not show the container label.
-        
+
         # Container may be None if we are rendering a closed Rollout widget
         if container:
             if label != "":
@@ -296,9 +277,9 @@ class UIPainter:
                 container.enabled = getattr(self.propGroup, useProp)
             else:
                 self._setActive(container, active)
-            
+
         return container
-    
+
     def _isAttributeSupportedOnGpu(self, widgetAttr):
         """ Check if the given attribute is supported by the V-Ray GPU engine.
         """
@@ -315,8 +296,8 @@ class UIPainter:
             if "layout" in widgetAttr:
                 # Widgets can be nested. A widget is recognized by the presence of the 'layout' field.
                 # Render the nested widget in its parent widget's container.
-                # Note: container flags are inherited. The subcontainer is created for the purpose of 
-                # resetting parent container flags which should not be active in the child container. 
+                # Note: container flags are inherited. The subcontainer is created for the purpose of
+                # resetting parent container flags which should not be active in the child container.
                 subContainer = container.column()
                 subContainer.use_property_split = False
                 self.renderWidget(subContainer, widgetAttr)
@@ -343,7 +324,7 @@ class UIPainter:
             container = self._renderContainer(layout, widget)
 
         if not container:
-            # The rest of the widget is hidden ( e.g. a closed rollout ). 
+            # The rest of the widget is hidden ( e.g. a closed rollout ).
             # Do not render its attributes.
             return None
 
@@ -359,7 +340,7 @@ class UIPainter:
 
         if widget.get('layout', '') == 'ROLLOUT':
             # Add some space at the end of the rollout because it is
-            # sometings difficult to separate its contents visually from 
+            # sometimes difficult to separate its contents visually from
             # the contents that follow.
             container.separator()
 
@@ -374,13 +355,13 @@ class UIPainter:
 
     def _getAttrLabel(self, widget):
         return getAttrLabel(self.pluginModule, widget, self.propGroup, self.node)
-    
-    
+
+
     def renderPluginUI(self, layout: bpy.types.UILayout):
         """ Render the custom widget UI defined in a plugin description (if found), or all visible
             plugin parameters.
 
-            @param self.node - if the plugin has a self.nodetree, the self.node in the tree to render.
+            @param node - if the plugin has a node tree, the node in the tree to render.
         """
         if widgets := self._getWidgets():
             self.renderWidgets(layout, widgets)
@@ -389,17 +370,17 @@ class UIPainter:
 
 
     def renderWidgets(self, layout: bpy.types.UILayout, widgets: dict, nodeWidgets=False):
-        """ Render a list of widgets onto the supplied layout. This need not be a the complete
+        """ Render a list of widgets onto the supplied layout. This need not be the complete
             list for a plugin, so this function allows for drawing the UI in pieces.
         """
         for widget in widgets:
             self.renderWidget(layout, widget, nodeWidgets)
 
-    
+
     def renderWidgetsSection(self, layout: bpy.types.UILayout, sectionName: str):
-        """ Render a subsection of PluginDescription::Widget by its name  """
+        """ Render a subsection of PluginDescription::Widget by its name """
         self.renderWidgets(layout, self.pluginModule.Widget[sectionName])
 
 
-    
+
 

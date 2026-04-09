@@ -261,14 +261,16 @@ class StartupConfig:
 
     @staticmethod
     def init():
+        from vray_blender.lib.blender_utils import getVRayPreferences
         if '--vray-debug-ui' in sys.argv:
             # Enables V-Ray specific UI with misc debug info and dev-time properties
             StartupConfig.debugUI = True
 
         StartupConfig.zmqServerFolder = StartupConfig._getParamValue('--vray-server-folder')
         StartupConfig.zmqServerLog = StartupConfig._getParamValue('--dumpInfoLog')
-        StartupConfig.logLevel = StartupConfig._getParamValue('--vray-log-level') or '3' # Info
+        StartupConfig.logLevel = StartupConfig._getParamValue('--vray-log-level')
 
+      
     @staticmethod
     def _getParamValue(paramName):
 

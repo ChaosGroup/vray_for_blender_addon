@@ -249,12 +249,6 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "transform"
-            },
-            {
-                "name": "pivot_offset"
-            },
-            {
                 "name": "color_colortex"
             },
             {
@@ -286,7 +280,8 @@
             "decay_near_end",
             "decay_far_on",
             "decay_far_start",
-            "decay_far_end"
+            "decay_far_end",
+            "pivot_offset"
         ],
         "animatable": true
     }

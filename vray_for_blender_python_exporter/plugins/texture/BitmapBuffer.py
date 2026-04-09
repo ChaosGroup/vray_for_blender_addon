@@ -4,8 +4,11 @@
 
 import bpy
 
-from vray_blender.nodes.utils import getNodeOfPropGroup, createBitmapTexture
 from vray_blender.lib import plugin_utils
+from vray_blender.lib.draw_utils import UIPainter
+from vray_blender.nodes.utils import getNodeOfPropGroup, createBitmapTexture, autoInitBitmapNode
+from vray_blender.plugins import getPluginModule
+
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -22,7 +25,7 @@ def nodeDraw(context, layout, node):
     bitmapBuffer = node.BitmapBuffer
 
     if bitmapBuffer.use_external_image:
-        layout.prop(bitmapBuffer, "file")
+        drawFile(context, layout, node)
     elif node.texture.image:
         layout.template_ID_preview(node.texture, "image")
     else:
@@ -42,7 +45,7 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
         row.use_property_split = True # Allow property animation
 
         if propGroup.use_external_image:
-            row.prop(propGroup, "file")
+           drawFile(context, layout, node)
         elif img := node.texture.image:
             row.template_ID(node.texture, 'image')
 
@@ -59,3 +62,13 @@ def widgetDrawFile(context, layout, propGroup, widgetAttr):
             row.template_ID(node.texture, 'image', open='image.open')
 
         col2.prop(propGroup, "use_external_image", expand=True)
+
+def drawFile(context, layout, node: bpy.types.Node):
+    pluginModule = getPluginModule('BitmapBuffer')
+    painter = UIPainter(context, pluginModule, node.BitmapBuffer, node)
+
+    # This is an unusual way to draw the widget but drawing a whole widget section
+    # here breaks the alignment for some reason.
+    fileSelectorWidget = next((w for w in pluginModule.Widget['widgets'][0]['attrs'] if w['name'] == 'file_selector'), None)
+    assert fileSelectorWidget, "File selector widget not found for V-Ray Bitmap"                          
+    painter.drawTemplate(layout, fileSelectorWidget)

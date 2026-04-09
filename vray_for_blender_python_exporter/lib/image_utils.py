@@ -4,29 +4,35 @@
 
 
 import bpy
+import os
+from collections import defaultdict
 from pathlib import Path
+
+from vray_blender import debug
 from vray_blender.lib.sys_utils import getDefaultTexturePath
 from vray_blender.lib.blender_utils import tagUsersForUpdate
-from collections import defaultdict
+from vray_blender.lib.path_utils import getV4BTempDir
+from vray_blender.plugins import getPluginModule
 
+VRAY_IMAGE_FORMATS_LIST = ('.png', '.bmp', '.tga', '.hdr', '.sgi', '.rgb', '.rgba',
+                         '.jpg', '.jpeg', '.jpe', '.exr', '.pic', '.tif', '.tiff',
+                         '.tx', '.tex', '.psd')
+def getVRayImageFormatExts():
+    # Returns ".png;.bmp;..."
+    return ";".join(VRAY_IMAGE_FORMATS_LIST)
+
+def getVRayImageFormatFilter():
+    # Returns "*.png;*.bmp;..."
+    return ";".join(['*'+ext for ext in VRAY_IMAGE_FORMATS_LIST])
 
 class _ImageTrack:
     """ Tracks the file path and update status of a packed or edited image. """
     def __init__(self, path: str = "", updated: bool = False):
         self.path = path
-        self.originalPath = ""
         self.updated = updated
 
     def isInitialized(self) -> bool:
         return self.path != ""
-
-    def removeTemporaryData(self):
-        if self.isInitialized() and (self.path not in (self.originalPath, getDefaultTexturePath())):
-            Path(self.path).unlink(missing_ok=True)
-            self.path = ""
-
-    def __del__(self):
-        self.removeTemporaryData()
 
 
 # Dictionary to track file paths of a packed or edited images.
@@ -54,8 +60,6 @@ def trackImageUpdates():
         imageTrack: _ImageTrack = _trackedImages[image.name]
 
         if image.is_dirty:
-            imageTrack.removeTemporaryData()
-
             imageTrack.path = _saveTemporaryImage(image)
             imageTrack.updated = True
 
@@ -64,24 +68,29 @@ def trackImageUpdates():
 
         else:
             if not imageTrack.isInitialized(): # Untracked image
-                imageTrack.originalPath = image.filepath
+                imageTrack.updated = False
                 if image.type == 'RENDER_RESULT':
                     imageTrack.path = getDefaultTexturePath()
                 elif (image.source == 'FILE' and image.packed_file) or image.source == "GENERATED":
                     imageTrack.path = _saveTemporaryImage(image)
                 else:
                     imageTrack.path = image.filepath
+            elif image.source == 'FILE' and not image.packed_file and image.filepath != imageTrack.path:
+                imageTrack.path = image.filepath
+                imageTrack.updated = True
+            else:
+                imageTrack.updated = False
 
-            imageTrack.updated = False
 
-
-def _getTexturePlaceholderNode(material: bpy.types.Material) -> bpy.types.Node:
+def _getTexturePlaceholderNode(material: bpy.types.Material, create: bool) -> bpy.types.Node:
     """ Returns the placeholder 'ShaderNodeTexImage' node for a material. """
     IMAGE_PLACEHOLDER_NAME = "V-Ray Texture Placeholder"
 
     nodeTree = material.node_tree
     if node := nodeTree.nodes.get(IMAGE_PLACEHOLDER_NAME):
         return node
+    if not create:
+        return False
 
     imagePlaceHolderNode = nodeTree.original.nodes.new(type='ShaderNodeTexImage')
     imagePlaceHolderNode.name = IMAGE_PLACEHOLDER_NAME
@@ -103,14 +112,26 @@ def updateTexturePlaceholderNode():
     material = obj.active_material
     activeNode = material.node_tree.nodes.active
 
-    if activeNode and (activeNode.bl_idname == "VRayNodeMetaImageTexture"):
-        imagePlaceHolderNode = _getTexturePlaceholderNode(material)
-        imagePlaceHolderNode.image = activeNode.texture.image
+    if activeNode and activeNode.bl_idname == "VRayNodeMetaImageTexture" and activeNode.texture:
+        imagePlaceHolderNode = _getTexturePlaceholderNode(material, True)
+        if imagePlaceHolderNode.image != activeNode.texture.image:
+            imagePlaceHolderNode.image = activeNode.texture.image
+    elif (imagePlaceHolderNode := _getTexturePlaceholderNode(material, False)) and imagePlaceHolderNode.image:
+        if (pluginModule := getattr(activeNode, 'vray_plugin', '')) and pluginModule != 'NONE' and getPluginModule(pluginModule).Category == 'TEXTURE':
+            imagePlaceHolderNode.image = None
 
 def _saveTemporaryImage(image: bpy.types.Image):
-    """ Saves the given image in a temporary location. """
+    """ Saves the given image to a temporary file. """
 
-    filePath = str(Path(bpy.app.tempdir + image.name).resolve())
+    if image.stereo_3d_format is None:
+        # This is a rare case with broken Image objects in Blender. The .stereo_3d_format
+        # field is populated by default when an image is created. In a user reported
+        # scenario however it is None and this causes access violation when Blender dereferences
+        # the pointer to it when saving the image.
+        debug.printError(f"Image {image.name} contains imvalid data and cannot be saved. Please consider re-creating it.")
+        return None
+
+    filePath = str(Path(os.path.join(getV4BTempDir(), image.name)).resolve())
     image.save(filepath=filePath)
 
     return filePath

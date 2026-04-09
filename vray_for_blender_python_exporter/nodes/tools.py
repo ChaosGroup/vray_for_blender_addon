@@ -41,7 +41,7 @@ def _collectLeafs(tree, ntree, n: bpy.types.Node, depth):
     for inSock in n.inputs:
         if inSock.is_linked:
             inNode = getConnectedNode(inSock)
-            if not depth in tree:
+            if depth not in tree:
                 tree[depth] = set()
             # Remove the node if it was in any of the previous levels since it can cause some weird
             # arrangements if a node is used in multiple levels.
@@ -69,32 +69,36 @@ def calculateTreeBounds(ntree):
     return (minX, minY, maxX, maxY)
 
 
-def rearrangeTree(ntree, n, depth=0, bounds=(0, 0, 0, 0)):
+def rearrangeTree(ntree: bpy.types.NodeTree, rootNode: bpy.types.Node, depth=0, bounds=(0, 0, 0, 0), appendLeft=False):
     tree = {
-        depth : { n },
+        depth : { rootNode },
     }
 
-    tree = _collectLeafs(tree, ntree, n, depth+1)
+    tree = _collectLeafs(tree, ntree, rootNode, depth+1)
     minX, minY, maxX, maxY = bounds
+    center = len(tree) * NODE_LEVEL_WIDTH / 2 - VRayNodeBase.bl_width_default
     for level in sorted(tree):
         if level == 0:
             node = next(iter(tree[0]))
-            node.location.x = n.location.x + minX - NODE_LEVEL_WIDTH
-            node.location.y = n.location.y + (maxY - minY) / 2.0
+            if appendLeft:
+                node.location.x = rootNode.location.x + minX - NODE_LEVEL_WIDTH
+            else:
+                node.location.x = rootNode.location.x + center
+            node.location.y = rootNode.location.y + (maxY - minY) / 2.0
             continue
 
         levelNodes = tree[level]
-        levelHeigth = 0
+        levelHeight = 0
 
         # Calculate full level height
         for node in levelNodes:
-            levelHeigth += _getNodeHeight(node)
+            levelHeight += _getNodeHeight(node)
 
-        levelTop        = levelHeigth + (maxY - minY) / 2.0
-        levelHeightHalf = levelHeigth / 2.0
+        levelTop        = levelHeight + (maxY - minY) / 2.0
+        levelHeightHalf = levelHeight / 2.0
 
         for node in levelNodes:
-            node.location.x = n.location.x - (level * NODE_LEVEL_WIDTH)
+            node.location.x = rootNode.location.x - (level * NODE_LEVEL_WIDTH)
             node.location.y = levelTop - levelHeightHalf
 
             levelTop -= _getNodeHeight(node)
@@ -121,11 +125,16 @@ def isVrayNodeTree(ntree: bpy.types.NodeTree, treeType: str):
 def isVraySocket(sock: bpy.types.NodeSocket):
     """ Return True if the socket has an associated V-Ray plugin attribute.
 
-        NOTE: If a plugin description has been changed between V4B versions, 
+        NOTE: If a plugin description has been changed between V4B versions,
         the newly added sockets might not have a 'vray_attr' field in the data
         loaded from an old scene.
     """
     return hasattr(sock, 'vray_attr')
+
+
+def isVrayLight(light: bpy.types.Light):
+    """ Return True if the light is one of the V-Ray types """
+    return hasattr(light, 'vray') and (light.vray.light_type != 'BLENDER')
 
 
 def isCompatibleNode(node: bpy.types.Node):
@@ -139,7 +148,7 @@ def isSameNode(node1: bpy.types.Node, node2: bpy.types.Node):
 
     if (nodeTree1 is None) or (nodeTree2 is None):
         return False
-    
+
     return  nodeTree1.session_uid == nodeTree2.session_uid and \
             node1.name == node2.name
 
@@ -172,8 +181,6 @@ def getFilterFunction(pluginType: str, filterFnName: str):
     return getattr(filterModule, filterFnName, None)
 
 
-
-
 def getLinkInfo(pluginType: str, attrName: str):
     """ Get the information defined in the plugin description for links to the socket.
 
@@ -202,7 +209,7 @@ def getLinkInfo(pluginType: str, attrName: str):
 
     return linkInfo
 
-                                                
+
 def getSocketPanelName(pluginModule: dict, vrayAttrName: str):
     """ Returns the name of the panel that the socket for the vray attribute is placed on, or None """
     return next((name for name in pluginModule.SocketPanels if vrayAttrName in pluginModule.SocketPanels[name]), None)

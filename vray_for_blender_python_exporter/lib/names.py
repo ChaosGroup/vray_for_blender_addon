@@ -105,6 +105,14 @@ class Names:
         """ Return the unique name of a data object. """
         assert isinstance(obj, bpy.types.Object) 
 
+        def modifiedData(obj: bpy.types.Object, dataName: str):
+            # Modifiers are set on the object but modify the mesh. Export its own copy 
+            # of the mesh for each modified object even if the mesh is shared between objects.
+            # Prefix the name of the mesh with the name of the object to make sure it is unique.
+            return f"{Names.object(obj)}_{dataName}" if hasModifiers else dataName
+        
+        hasModifiers = len(obj.modifiers) > 0
+
         # The data of evaluated geometry objects (such as those created or modified by Geometry Nodes)
         # may reference data of other objects, or may not have a valid vray.unique_id at all.
         # If obj.data lacks such a unique vray name, this means the data is either internally created by Blender,
@@ -112,11 +120,12 @@ class Names:
         # In this case, the name of the data object itself is used, because the original data will not be exported 
         # and its name can safely be used.
         if obj.is_evaluated and (not obj.data.vray.unique_id) and (dataName := Names._object(obj.data)):
-            return dataName
+            return modifiedData(obj, dataName) if hasModifiers else dataName
         
         if inst is None:
             # This is a non-instanced object
-            return Names._object(obj.original.data)
+            dataName = Names._object(obj.original.data)
+            return modifiedData(obj, dataName) if hasModifiers else dataName
         
         # This is an instanced object. Data objects created by the GN tree
         # don't have vray unique id so use the name of the data object itself.

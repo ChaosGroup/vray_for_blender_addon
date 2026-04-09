@@ -297,7 +297,7 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object, ins
 
 def _exportMtlOptions(exporterCtx: ExporterContext, obj: bpy.types.Object, mtl: bpy.types.Material, singleBRDFMaterial: AttrPlugin):
     """ Export the chain of plugins constituting the material options.
-        @return The last plugin in the chain, or the orininal singleBRDFMAterial if no options were specified
+        @return The last plugin in the chain, or the original singleBRDFMaterial if no options were specified
     """
 
     mtlRenderStats = _exportMtlOption(exporterCtx, obj, mtl, singleBRDFMaterial, 'MtlRenderStats', 'base_mtl')
@@ -614,10 +614,10 @@ def _needTexIntToFloatConversion(fromSockType, toSockType):
     return (fromSockType == 'VRaySocketVectorInt') and isFloatSocket(toSockType)
 
 def _needUVWGenToColorConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
-    return isUVWSocket(fromSockType) and "UVWGen" in fromAttrPlugin.pluginType and isColorSocket(toSockType) and toSockType!='VECTOR'
+    return isUVWSocket(fromSockType) and "UVWGen" in fromAttrPlugin.pluginType and isColorSocket(toSockType) and toSockType != 'VECTOR'
 
 def _needColorToUVWConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
-    return isUVWSocket(toSockType) and "UVWGen" not in fromAttrPlugin.pluginType and isColorSocket(fromSockType) and toSockType!='VECTOR'
+    return isUVWSocket(toSockType) and "UVWGen" not in fromAttrPlugin.pluginType and isColorSocket(fromSockType) and toSockType != 'VECTOR'
 
 def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAttrPlugin: AttrPlugin):
     """ Export one or more 'convert' and/or 'combine' plugins to convert
@@ -643,7 +643,7 @@ def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAt
             if hasattr(fromSock, "vray_socket_base_type"):
                 fromAttrPlugin = _exportTexConverter(nodeCtx, fromAttrPlugin, "TexColorToFloat")
             else:
-                # In Cycles Color->Float conversion seems to use percieved intensity instead of (r+g+b)/3...
+                # In Cycles Color->Float conversion seems to use perceived intensity instead of (r+g+b)/3...
                 # Note that currently TexLuminance is not exactly the same as Cycle's intensity(RGBtoBW node).
                 fromAttrPlugin = _exportTexConverter(nodeCtx, fromAttrPlugin, "TexLuminance")
         elif _needFltToClrConversion(fromSockType, toSockType, needMult):

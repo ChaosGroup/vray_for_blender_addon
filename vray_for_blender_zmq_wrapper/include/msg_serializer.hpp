@@ -133,9 +133,15 @@ static DeserializerStream& operator&& (DeserializerStream& s, Type& msg) {\
 /// Serialize a protocol message including its type.
 template <typename TMsg>
 static zmq::message_t serializeMessage(const TMsg& msg) {
-	SerializerStream stream;
-	stream && msg.getType() && msg;
-	return zmq::message_t(stream.getData(), stream.getSize());
+	SerializerStream *stream = new SerializerStream();
+	(*stream) && msg.getType() && msg;
+
+	// Transfer ownership of the stream serializer to the zmq message itself to avoid copying the
+	// whole internal buffer. After the message is sent(or sending it for some reason fails) zmq
+	// will invoke the callback function where it will be freed.
+	return zmq::message_t(stream->getData(), stream->getSize(), [](void*, void* streamPtr) {
+		delete reinterpret_cast<SerializerStream*>(streamPtr);
+	}, stream);
 }
 
 /// Deserialize a protocol message excluding its type. The type should have been

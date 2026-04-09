@@ -3,7 +3,23 @@
     "Parameters": [
         {
             "attr": "lens_file",
-            "subtype": "FILE_PATH"
+            "subtype": "VRAY_FILE_PATH",
+            "options": {
+                "animatable": false
+            }
+        },
+        {
+            "attr": "lens_file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "lens_file",
+                        "object_type": "camera"
+                    }
+                }
+            }
         },
         {
             "attr": "auto_lens_shift",
@@ -144,9 +160,25 @@
             "type": "STRING",
             "desc": "Texture to use as aperture.",
             "default": "",
-            "subtype": "FILE_PATH",
+            "subtype": "VRAY_FILE_PATH",
             "options": {
                 "derived": true
+            },
+            "ui": {
+                "display_name": "Texture"
+            }
+        },
+        {
+            "attr": "bmpaperture_tex_path_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "bmpaperture_tex_path",
+                        "object_type": "camera"
+                    }
+                }
             },
             "ui": {
                 "display_name": "Texture"
@@ -157,9 +189,25 @@
             "type": "STRING",
             "desc": "Texture to use as distortion map.",
             "default": "",
-            "subtype": "FILE_PATH",
+            "subtype": "VRAY_FILE_PATH",
             "options": {
                 "derived": true
+            },
+            "ui": {
+                "display_name": "Distortion Texture"
+            }
+        },
+        {
+            "attr": "distortion_tex_path_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "distortion_tex_path",
+                        "object_type": "camera"
+                    }
+                }
             },
             "ui": {
                 "display_name": "Distortion Texture"
@@ -383,7 +431,7 @@
                                 "default_closed": false,
                                 "attrs": [
                                     {
-                                        "name": "bmpaperture_tex_path"
+                                        "name": "bmpaperture_tex_path_selector"
                                     },
                                     {
                                         "name": "bmpaperture_resolution"
@@ -440,13 +488,13 @@
                         ]
                     },
                     {
-                        "name": "distortion_tex_path",
+                        "name": "distortion_tex_path_selector",
                         "visible": {
                             "cond": "::distortion_type=3"
                         }
                     },
                     {
-                        "name": "lens_file",
+                        "name": "lens_file_selector",
                         "visible": {
                             "cond": "::distortion_type=2"
                         }

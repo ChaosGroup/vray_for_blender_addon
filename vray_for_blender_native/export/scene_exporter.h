@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <boost/python.hpp>
+#include <nanobind/nanobind.h>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -21,17 +21,18 @@
 
 
 namespace proto = VrayZmqWrapper;
+namespace nb = nanobind;
 
 namespace VRayForBlender {
 	struct ExporterBase {
 		virtual ~ExporterBase() = default;
 
 		virtual void init(ZmqExporter* zmqExporter) = 0;
-		virtual void renderStart(RenderPass * /*renderPass*/, py::object /*cbImageUpdated*/) {}
+		virtual void renderStart(RenderPass * /*renderPass*/, nb::callable&& /*cbImageUpdated*/) {}
 		virtual void renderEnd() {}
 		virtual void renderFrame() {}
 		virtual void continueRenderSequence() {}
-		virtual void renderSequence(int /*start*/, int /*end*/, int /*step*/){}
+		virtual void renderSequence(const vray::AttrList<int>& /*sequences*/) {};
 		virtual bool isRendering() { return false; }
 		virtual bool vrsceneExportRunning() { return false; }
 		virtual int  lastRenderedFrame() { return false; }
@@ -64,21 +65,26 @@ public:
 	void     init(ExporterBase* policy, const Interop::ExporterSettings& settings);
 	void     free();
 
-	void    renderStart(RenderPass * renderPass, py::object cbImageUpdated) { m_policy->renderStart(renderPass, cbImageUpdated); }
+	void    renderStart(RenderPass * renderPass, nb::callable&& cbImageUpdated) { m_policy->renderStart(renderPass, std::move(cbImageUpdated)); }
 	void    renderEnd()                  { m_policy->renderEnd(); }
 	void    renderFrame()                { m_policy->renderFrame();}
 	void    continueRenderSequence()     { m_policy->continueRenderSequence(); }
-	void    renderSequence(int start, int end, int step)  { m_policy->renderSequence(start, end, step);}
+	void    renderSequence				 (const vray::AttrList<int>& sequences)	{ m_policy->renderSequence(sequences);}
 	bool    isRendering()                { return m_policy->isRendering(); }
 	int     lastRenderedFrame()          { return m_policy->lastRenderedFrame(); }
 	void    setRenderFrame(float frame)  { m_policy->setRenderFrame(frame); }
+
+#ifdef WITH_PROFILING
+	uint64_t getReceivedImagesCount()    { return m_exporter->getReceivedImagesCount(); }
+#endif
+
 	void    setupCallbacks()             { m_policy->setupCallbacks(); }
 	void    abortRender()                { m_policy->abortRender(); }
 
 
 	void          exportMesh(MeshDataPtr mesh, bool asyncExport);
 	void          exportHair(HairDataPtr hair);
-	void          exportPointCloud(PointCloudDataPtr pc);
+	void          exportPointCloud(PointCloudDataPtr pc, bool asyncExport);
 	void          exportSmoke(SmokeDataPtr smoke);
 	void          exportInstancer(InstancerDataPtr pc);
 	void          clearFrameData(float upToTime);
@@ -103,11 +109,10 @@ public:
 	bool          isRenderReady(); // Indicates that the final rendered image has come
 	bool          imageWasUpdated(); // True when there is updated image for drawing
 	bool          vrsceneExportRunning();
-	
+
 	ZmqExporter*  getPluginExporter() { return m_exporter.get(); };
 
-	void          setRenderStoppedCallback(py::object cbRenderStopped);
-
+	void          setRenderStoppedCallback(nb::callable&& cbRenderStopped);
 
 protected:
 	ExporterBasePtr          m_policy;
@@ -118,8 +123,6 @@ protected:
 	std::optional<TimePoint> m_tmStartExport;  // Used for the time-to-first-image metric
 	ThreadManager::Ptr       m_threadManager;
 	bool                     m_rendererStarted = false;
-	boost::python::object    m_engineRef;	    // Weak reference to a RenderEngine object
-	boost::python::object    m_cbRenderStopped;  // Weak reference to a callback executed when rendering gets stopped
 
 	std::mutex               engineUpdateMsgMtx;
 	std::string              engineUpdateMessage;

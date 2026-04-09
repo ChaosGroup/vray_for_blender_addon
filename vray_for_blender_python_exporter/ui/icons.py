@@ -65,14 +65,15 @@ _ICON_FILES = [
 
         ('VRAY_SCENE',          "VRayScene.svg"),
         ('VRAY_PROXY',          "VRayProxy.svg"),
-        ('VRAY_FUR',            "VRayFur.svg"), 
+        ('VRAY_FUR',            "VRayFur.svg"),
         ('VRAY_DECAL',          "VRayDecal.svg"),
-        
+
         ('COSMOS',              "CosmosBrowser.svg"),
         ('COSMOS_AI_GENERATOR', "CosmosAIGenerator.svg"),
         ('COSMOS_RELINK_ASSETS',"CosmosRelinkAssets.svg"),
         ('CONVERT_MATERIALS',   "VRayConvertMaterials.svg"),
         ('INFO_ABOUT',          "VRayAbout.svg"),
+        ('CHECK_FOR_UPDATES',   "VRayCheckForUpdates.svg"),
 
         ("CLOUD",               "CloudRendering.svg"),
         ('VFB',                 "VRayVFB.svg"),
@@ -80,6 +81,24 @@ _ICON_FILES = [
         ("RENDER_IPR_START",    "vray_ipr.svg"),
         ("RENDER_IPR_STOP",     "vray_ipr_stop.svg"),
         ('RENDER_IPR',          "VRayInteractiveRender.svg"),
+
+        ('MTL_VRAY',            "VRayMtl.png"),
+        ('MTL_AL_SURFACE',      "VRayAlSurface.png"),
+        ('MTL_FAST_SSS2',       "VRayFastSSS2.png"),
+        ('MTL_BLEND',           "VRayBlend.png"),
+        ('MTL_BUMP',            "VRayBump.png"),
+        ('MTL_LIGHT',           "VRayLightMtl.png"),
+        ('MTL_HAIR_NEXT',       "VRayHairNext.png"),
+        ('MTL_CAR_PAINT2',      "VRayCarPaint2.png"),
+        ('MTL_FLAKES',          "VRayFlakesMtl.png"),
+        ('MTL_SCANNED',         "VRayScanned.png"),
+        ('MTL_STOCHASTIC_FLAKES', "VRayStochasticFlakes.png"),
+        ('MTL_TOON',            "VRayToonMtl.png"),
+        ('MTL_SWITCH',          "VRaySwitch.png"),
+        ('MTL_2SIDED',          "VRay2Sided.png"),
+        ('MTL_OVERRIDE',        "VRayOverride.png"),
+        ('MTL_DISPLACEMENT',    "VRayDisplacement.png"),
+        ('MTL_VRMAT',           "VRayMatMtl.png"),
     ]
 
 

@@ -13,7 +13,7 @@ from vray_blender.plugins.geometry.GeomHair import getGeomHairPluginName
 from vray_blender.exporting.node_export import NodeContext, exportNodeTree, exportNodePlugin
 from vray_blender.exporting.plugin_tracker import TrackObj
 from vray_blender.lib.defs import AttrPlugin, ExporterBase, ExporterContext, PluginDesc
-from vray_blender.lib.export_utils import exportPluginCommon, ActiveConnectedMeshInfo, isObjectGeomUpdated
+from vray_blender.lib.export_utils import exportPluginCommon, ActiveConnectedMeshInfo
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 
 def syncFurInfo(exporterCtx: ExporterContext):
@@ -72,14 +72,12 @@ class FurExporter(ExporterBase):
 
     def addFurObjectsForExport(self):
         """ Add the fur objects for export to the furPluginDesc dictionary. """
-        for inst in self.dg.object_instances:
-            if inst.is_instance:
-                continue
-            
-            obj = inst.object
-            if obj.vray.isVRayFur:
-                furPluginDesc = self._getPluginDescOfFurObject(obj)
-                self.exportedFurPluginDesc[getObjTrackId(obj)] = obj.original, furPluginDesc
+        for furObjName in {f.parentBlObjName for f in self.activeFurInfo}:
+            furObj = bpy.data.objects.get(furObjName)
+            assert furObj, f"Fur object not found: {furObjName}"
+            evaluatedFurObj = furObj.evaluated_get(self.dg)
+            furPluginDesc = self._getPluginDescOfFurObject(evaluatedFurObj)
+            self.exportedFurPluginDesc[getObjTrackId(evaluatedFurObj)] = evaluatedFurObj, furPluginDesc
         
 
     def _getPluginDescOfFurObject(self, furObj: bpy.types.Object):

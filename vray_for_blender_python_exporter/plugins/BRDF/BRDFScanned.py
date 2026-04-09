@@ -14,8 +14,7 @@ from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.names import Names
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.nodes.tools import isVrayNodeTree
-from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, findDataObjFromNode
-from vray_blender.plugins import getPluginModule
+from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, findDataObjFromNode, getOriginalNode
 from vray_blender.vray_tools.vray_proxy import PreviewAction
 
 import bpy, json, math, os, struct, queue
@@ -26,7 +25,7 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 
 # Flag indicating if the user has a scanned materials license. Set in scannedLicenseCallback(...).
 # Note that there is a check in the ZMQ server for scanned material licensing as well.
-hasLicense = False
+_hasLicense = False
 
 def nodeInit(node: bpy.types.Node):
     vray.checkScannedLicense()
@@ -34,12 +33,28 @@ def nodeInit(node: bpy.types.Node):
 def registerScannedNodes():
     """ Called from the Load Post event handler"""
 
+    _enableSockets(_hasLicense)
+
     for tree in bpy.data.materials:
-        if isVrayNodeTree(tree.node_tree, "Material"):
+        if isVrayNodeTree(tree.node_tree, "MATERIAL"):
             for node in tree.node_tree.nodes:
                 if hasattr(node, "BRDFScanned"):
                     vray.checkScannedLicense()
                     return
+
+def _enableSockets(enable: bool):
+    for mtl in [m for m in bpy.data.materials if m.use_nodes]:
+        if not isVrayNodeTree(mtl.node_tree, "MATERIAL"):
+            continue
+
+        for node in [n for n in mtl.node_tree.nodes if n.bl_idname == 'VRayNodeBRDFScanned']:
+            # Disable all visible sockets on the node
+            for sock in [s for s in node.inputs if not s.hide and s.enabled]:
+                sock.ui_enabled = enable
+            
+
+def hasActiveLicense(propGroup: dict, node: bpy.types.Node):
+    return _hasLicense
 
 class SerializablePreset:
     def __init__(self, data):
@@ -78,7 +93,7 @@ def _dumpPreset(scannedFile: str, binFile: str):
         return f"Error generating bin file: {result.returncode}"
 
     if not os.path.exists(binFile):
-       return "Error generating bin file: tool returned success, but the file was not generated"
+        return "Error generating bin file: tool returned success, but the file was not generated"
 
     return None
 
@@ -133,32 +148,6 @@ def _scannedGlossinessToVRay(glossiness: float) -> float:
 
     return x
 
-def nodeDrawSide(context, layout: bpy.types.UILayout, node):
-    # There isn't a multiline text box in blender so we draw labels row by row.
-    propGroup = getVrayPropGroup(node)
-    layout.prop(propGroup, 'file')
-    layout.separator()
-    col = layout.column(align=True)
-    box = col.box()
-
-    brdfScannedModule = getPluginModule('BRDFScanned')
-    if not brdfScannedModule.hasLicense:
-        r = box.row(align=True)
-        r.alignment = 'RIGHT'
-        r.label(text="[No License]", icon='ERROR')
-    node = getNodeOfPropGroup(propGroup)
-    rows = node.BRDFScanned.file_info.strip().split("\n")
-    for row in rows:
-        r = box.row(align=True)
-        r.alignment = 'RIGHT'
-        r.label(text=row)
-
-    layout.separator()
-
-    col = layout.column()
-    col.enabled=brdfScannedModule.hasLicense
-    painter = UIPainter(context, brdfScannedModule, propGroup)
-    painter.renderPluginUI(col)
 
 def onFileUpdate(brdfScanned, context = None, attrName = ''):
     scannedPath = path_utils.formatResourcePath(brdfScanned.file, False)
@@ -172,7 +161,7 @@ def onFileUpdate(brdfScanned, context = None, attrName = ''):
     info, preset = _readScannedPreset(binScannedFile)
     os.remove(binScannedFile)
     if preset.result == True:
-        # plain = 3 is a compatiblity option that was added so that assets could force triplanar mapping
+        # plain = 3 is a compatibility option that was added so that assets could force triplanar mapping
         # without changing the scanned material itself in V-Ray Core.
         if preset.plain == 3:
             brdfScanned.plain = "1"
@@ -190,6 +179,7 @@ def onFileUpdate(brdfScanned, context = None, attrName = ''):
         brdfScanned.ccglossyvar = preset.orgglvar
     # Set this at the end, it's used to prevent unnecessary parameter encoding from just loading a preset.
     brdfScanned.file_info = info
+
 
 def _fillScannedPluginDesc(pluginDesc: PluginDesc, node: bpy.types.Node, propGroup):
     pluginDesc.vrayPropGroup = propGroup
@@ -222,8 +212,9 @@ def _fillScannedPluginDesc(pluginDesc: PluginDesc, node: bpy.types.Node, propGro
         pluginDesc.setAttribute("ccbump", 0.0)
     pluginDesc.setAttribute("usedmaps", usedMaps)
 
+
 def onParameterUpdate(brdfScanned, context, attrName):
-    if not getPluginModule("BRDFScanned").hasLicense:
+    if not _hasLicense:
         return
     # If the file is not set that means we are still loading a preset.
     if not brdfScanned.file_info:
@@ -246,16 +237,22 @@ def onParameterUpdate(brdfScanned, context, attrName):
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
     propGroup = getVrayPropGroup(node)
-
     pluginName = Names.treeNode(nodeCtx)
     
     # Changing the file name doesn't work in IPR so the plugin should be re-created.
     pluginReCreated = False
     filePrevValue = getShadowAttr(propGroup, 'file')
+    
     if filePrevValue != propGroup.file and nodeCtx.exporterCtx.interactive:
-      pluginReCreated = True
-      vray.pluginRemove(nodeCtx.renderer, pluginName)
-      setShadowAttr(propGroup, 'file', propGroup.file)
+        pluginReCreated = True
+        vray.pluginRemove(nodeCtx.renderer, pluginName)
+        
+        # 'node' is an evaluated object from the depsgraph. Change the value 
+        # on the original node. setShadowAttr() will not generate a new scene update
+        originalNode = getOriginalNode(node)
+        assert originalNode
+        originalPropGroup = getVrayPropGroup(originalNode)
+        setShadowAttr(originalPropGroup, 'file', originalPropGroup.file)
 
     pluginDesc = PluginDesc(pluginName, "BRDFScanned")
     _fillScannedPluginDesc(pluginDesc, node, propGroup)
@@ -279,8 +276,29 @@ def exportTreeNode(nodeCtx: NodeContext):
         plugin_utils.updateValue(nodeCtx.renderer, pluginName, "param_block", paramBlock)
     return plugin
 
+
+def widgetDrawFileInfo(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup: bpy.types.PropertyGroup, widgetAttr):
+    node = getNodeOfPropGroup(propGroup)
+    propGroup = node.BRDFScanned
+    if not _hasLicense:
+        r = layout.row(align=True)
+        r.alignment = 'RIGHT'
+        r.label(text="[No License]", icon='ERROR')
+    node = getNodeOfPropGroup(propGroup)
+    rows = node.BRDFScanned.file_info.strip().split("\n")
+    for row in rows:
+        r = layout.row(align=True)
+        r.alignment = 'RIGHT'
+        r.label(text=row)
+
+
 def scannedLicenseCallback(license):
-    getPluginModule("BRDFScanned").hasLicense = license
+    global _hasLicense
+    _hasLicense = license
+    _enableSockets(_hasLicense)
+
+
+    
 
 # Similar to the Cosmos import queue we have to forward all parameter modifications(param_block)
 # in this case coming from random threads to the main thread. Requests coming from the server

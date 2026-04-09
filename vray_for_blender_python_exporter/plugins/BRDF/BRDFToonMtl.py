@@ -79,10 +79,10 @@ def nodeInsertLink(link: bpy.types.NodeLink):
 
         if fromNode.bl_idname in normal_map_textures:
             # Set 'explicit' type to indicate that the connected texture is a normal map
-            setattr(toNode.BRDFVRayMtl, attrName, '6')
-        elif getattr(toNode.BRDFVRayMtl, attrName) == '6':
+            setattr(toNode.BRDFToonMtl, attrName, '6')
+        elif getattr(toNode.BRDFToonMtl, attrName) == '6':
             # Set default bump type
-           setattr(toNode.BRDFVRayMtl, attrName, '0')
+            setattr(toNode.BRDFToonMtl, attrName, '0')
 
 
 def nodeInit(node: bpy.types.Node):
@@ -225,17 +225,17 @@ def exportTreeNode(nodeCtx: NodeContext):
                 attrDesc = getPluginAttr(getPluginModule(_PLUGIN_TYPE), sock.vray_attr)
                 sock.exportUnlinked(nodeCtx, pluginDesc, attrDesc)
 
+    # Unit conversions for distance/intensity properties.
+    pluginDesc.setAttribute('reflect_dim_distance', node.BRDFToonMtl.reflect_dim_distance * 100)
+    if node.BRDFToonMtl.fog_mult != 0.0:
+        pluginDesc.setAttribute('fog_mult', 0.01 / node.BRDFToonMtl.fog_mult)
+
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
 def _fillCurvesMapWidgetData(nodeCtx, pluginDesc):
     """Handles the export for the Remap curves mapping widget values."""
     node = nodeCtx.node
-
-    # Unit conversion.
-    pluginDesc.vrayPropGroup.reflect_dim_distance *= 100 # cm -> m
-    if pluginDesc.vrayPropGroup.fog_mult != 0.0:
-        pluginDesc.vrayPropGroup.fog_mult = 0.01 / pluginDesc.vrayPropGroup.fog_mult # cm -> m
 
     curvesNode = cn.getCurvesNode(node)
     curveMapping = curvesNode.mapping

@@ -9,18 +9,15 @@
 #include "plugin_desc.hpp"
 
 #include <filesystem>
-#include <fstream>
-#include <limits>
+#include <ranges>
 #include <random>
 
 #include <zmq_common.hpp>
 #include <zmq_message.hpp>
 
 #include <boost/algorithm/string.hpp>
-#include <boost/python/dict.hpp>
 
 namespace fs = std::filesystem;
-
 
 using namespace VRayForBlender;
 using namespace VrayZmqWrapper;
@@ -87,8 +84,8 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 
 		if (!pixels) {
 			const auto& renderSizes = exp->m_cachedValues.renderSizes;
-			
-			vassert((renderSizes.imgWidth != 0) && (renderSizes.imgHeight != 0) 
+
+			vassert((renderSizes.imgWidth != 0) && (renderSizes.imgHeight != 0)
 				&& "Invalid render size. Call ZmqExporter::setRenderSize() first.");
 
 			w = renderSizes.imgWidth;
@@ -222,6 +219,11 @@ ZmqExporter::~ZmqExporter()
 	std::scoped_lock lock(m_imgMutex);
 	m_layerImages.clear();
 
+	const auto zmqServerPID = std::to_string(ZmqServer::get().getProcessID());
+	for (const std::string& shm : m_sharedMemoryObjects) {
+		SharedMemoryWriter::remove(zmqServerPID, shm);
+	}
+
 	Logger::debug("ZmqExporter deleted");
 }
 
@@ -259,7 +261,7 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 	case MsgType::ControlOnLogMessage:
 		processControlOnLogMessage(stream);
 		break;
-	
+
 	case MsgType::ControlOnUpdateVfbLayers:
 		processControlOnUpdateVfbLayers(stream);
 		break;
@@ -289,7 +291,7 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		processRendererOnProgress(message);
 		break;
 	}
-	
+
 	default:
 		Logger::error("Invalid message type: %1%", static_cast<int>(msgType));
 		vassert(!"Invalid message type");
@@ -303,11 +305,11 @@ void ZmqExporter::handleError(const std::string& err) {
 
 
 void ZmqExporter::processControlOnLogMessage(DeserializerStream& stream) {
-	
-	std::scoped_lock l(m_callbacksMutex); 
-	
-	assert (callback_on_message_update);
-	
+
+	std::scoped_lock l(m_callbacksMutex);
+
+	vassert (callback_on_message_update);
+
 	const auto& message = deserializeMessage<MsgControlOnLogMessage>(stream);
 
 	std::string logMsg = message.logMessage;
@@ -324,7 +326,7 @@ void ZmqExporter::processControlOnLogMessage(DeserializerStream& stream) {
 
 void ZmqExporter::processControlOnUpdateVfbLayers(DeserializerStream& stream) {
 
-	std::scoped_lock l(m_callbacksMutex); 
+	std::scoped_lock l(m_callbacksMutex);
 
 	if (callback_on_vfb_layers_updated) {
 		const auto& message = deserializeMessage<MsgControlOnUpdateVfbLayers>(stream);
@@ -382,6 +384,10 @@ void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& messag
 			}
 		}
 	}
+
+#ifdef WITH_PROFILING
+	m_receivedImagesCount++;
+#endif
 
 	if (updateHostImage && this->callback_on_rt_image_updated) {
 		// Update viewport image or render result image depending on the current rendering mode.
@@ -460,6 +466,7 @@ bool ZmqExporter::readViewportImage() {
 			Logger::error("Failed to open image ID buffer, error %1%.", m_imgIdReader->getLastError());
 			return false;
 		}
+		m_sharedMemoryObjects.insert(SHARED_IMG_ID_MAPPING_ID);
 	}
 
 	// Read the active transfer buffer ID
@@ -478,6 +485,7 @@ bool ZmqExporter::readViewportImage() {
 		Logger::debug("Failed to open image transfer buffer with ID %1%, error: %2%", imgBufferID, imgReader->getLastError());
 		return false;
 	}
+	m_sharedMemoryObjects.insert(imgBufferID);
 
 	{
 		std::scoped_lock lock(m_imgMutex);
@@ -533,7 +541,7 @@ void ZmqExporter::freeRenderer()
 
 
 bool ZmqExporter::isStopped() const {
-	return !m_client->isStopped();
+	return m_client->isStopped();
 }
 
 void ZmqExporter::clearFrameData(float upTo)
@@ -684,14 +692,16 @@ void ZmqExporter::init(const ExporterSettings & settings)
 	try {
 		RendererType type = RendererType::None;
 		ExporterType exporterType = m_settings.getExporterType();
-		
+
 		switch(exporterType){
 		case ExporterType::PREVIEW:
 			type = RendererType::Preview;
 			break;
 		case ExporterType::IPR_VIEWPORT:
 		case ExporterType::IPR_VFB:
+#ifndef VRAY_BLENDER_COMMUNITY_EDITION
 		case ExporterType::VANTAGE_LIVE_LINK:
+#endif
 			type = RendererType::RT;
 			break;
 		case ExporterType::ANIMATION:
@@ -705,6 +715,7 @@ void ZmqExporter::init(const ExporterSettings & settings)
 		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitAutoOff}));
 		m_client->send(serializeMessage(MsgRendererGetImage{static_cast<int>(RenderChannelType::RenderChannelTypeNone)}));
 
+#ifndef VRAY_BLENDER_COMMUNITY_EDITION
 		if (m_settings.drUse) {
 			int drFlags = DRFlags::EnableDr;
 			if (m_settings.drRenderOnlyOnHosts) {
@@ -722,6 +733,8 @@ void ZmqExporter::init(const ExporterSettings & settings)
 				hostsStr.pop_back(); // remove last delimiter - ;
 			m_client->send(serializeMessage(MsgRendererEnableDistributedRendering{hostsStr, (DRFlags)drFlags, m_settings.remoteDispatcher}));
 		}
+#endif // !VRAY_BLENDER_COMMUNITY_EDITION
+
 
 		m_cachedValues.renderSizes = RenderSizes();
 	}
@@ -762,21 +775,27 @@ void ZmqExporter::stop() {
 
 
 void ZmqExporter::detach() {
-	set_callback_on_image_ready(nullptr);      
-	set_callback_on_rt_image_updated(nullptr); 
-	set_callback_on_message_updated(nullptr);   
-	set_callback_on_bucket_ready(nullptr);        
+	vassert(m_client->isStopped());
+	nb::gil_scoped_acquire gil;
+
+	set_callback_on_image_ready(nullptr);
+	set_callback_on_rt_image_updated(nullptr);
+	set_callback_on_message_updated(nullptr);
+	set_callback_on_bucket_ready(nullptr);
 	set_callback_on_vfb_layers_updated(nullptr);
-	set_callback_on_render_stopped(nullptr);	  
+	set_callback_on_render_stopped(nullptr);
 	set_callback_on_async_op_complete(nullptr);
 }
 
-void ZmqExporter::renderSequence(int start, int end, int step)
+
+void ZmqExporter::renderSequence(const vray::AttrList<int>& sequences)
 {
+	vassert(sequences.getCount() != 0);
+
 	m_layerImages.clear();
 
-	m_lastRenderedFrame = start - 1;
-	m_client->send(serializeMessage(MsgRendererRenderSequence{start, end, step}));
+	m_lastRenderedFrame = (*sequences)[0] - 1;
+	m_client->send(serializeMessage(MsgRendererRenderSequence{sequences}));
 
 
 	// Production rendering could be aborted and started again.
@@ -867,7 +886,7 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 				attr.attrValue,
 				attr.flags
 			});
-			
+
 			sendPluginMsg(std::move(msg));
 		}
 	}
@@ -877,13 +896,8 @@ AttrPlugin ZmqExporter::exportPlugin(const PluginDesc& pluginDesc)
 
 
 void ZmqExporter::fireStopEvent(bool isAborted) {
-	RenderStoppedCallback cb;
-	{
-		std::scoped_lock l(m_callbacksMutex); 	
-		cb = this->callback_on_render_stopped;
-	}
-
-	if (cb) {
-		cb(isAborted);
+	std::scoped_lock l(m_callbacksMutex);
+	if (this->callback_on_render_stopped) {
+		this->callback_on_render_stopped(isAborted);
 	}
 }

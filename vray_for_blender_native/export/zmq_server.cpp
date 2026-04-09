@@ -5,18 +5,18 @@
 #include "zmq_server.h"
 #include "vassert.h"
 #include "utils/logger.hpp"
-#include "plugin_desc.hpp"
 
 #include <filesystem>
-#include <limits>
-#include <random>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include <ipc.h>
 #include <zmq_common.hpp>
 #include <zmq_message.hpp>
 
-#include <boost/python/dict.hpp>
-#include <boost/process.hpp>
+#include <boost/process/child.hpp>
 
 #include "api/interop/conversion.hpp"
 
@@ -30,6 +30,18 @@ using namespace VrayZmqWrapper;
 using namespace VRayBaseTypes;
 
 #define ZMQ_SERVER_ALLOW_ATTACH 0
+
+#ifdef _WIN32
+/// Intercepts the console close event (clicking X on the console window) to shut down
+/// ZMQ cleanly while threads are still alive. Without this, the static ZmqServer destructor
+/// would call zmq_ctx_term() after Windows has already killed all threads, causing a crash.
+static BOOL WINAPI zmqConsoleCtrlHandler(DWORD ctrlType) {
+	if (ctrlType == CTRL_CLOSE_EVENT) {
+		VRayForBlender::ZmqServer::get().stop();
+	}
+	return FALSE;
+}
+#endif
 
 #define SAFE_CALL(exp) \
 	try{\
@@ -65,14 +77,17 @@ ZmqServer::~ZmqServer() {
 
 
 void ZmqServer::start(const ZmqServerArgs& args) {
-	assert(!m_conn && "ZmqServer::start() method can only be called once.");
-	assert(nullptr != m_ctx.handle());
+	vassert(!m_conn && "ZmqServer::start() can only be called in stopped state.");
+
+#ifdef _WIN32
+	SetConsoleCtrlHandler(zmqConsoleCtrlHandler, TRUE);
+#endif
 
 	m_args = args;
 	m_ctx = zmq::context_t(1);
 
 	// Reset the stop token as this function may be called multiple times
-	std::stop_source fresh; 
+	std::stop_source fresh;
 	m_stopSource.swap(fresh);
 
 	runServer();
@@ -95,6 +110,13 @@ void ZmqServer::stop() {
 		m_processRunner.join();
 	}
 	m_stopSource = std::stop_source();
+
+	// Since we store python refs in the list we need to destroy the list in GIL. Check if m_pyCallbacks
+	// is empty, stop is also called from the destructor of ZmqServer i.e. after Py_Finalize.
+	if (!m_pyCallbacks.empty()) {
+		nb::gil_scoped_acquire gil;
+		m_pyCallbacks.clear();
+	}
 
 	Logger::info("Blender: communication channel stopped.");
 }
@@ -122,28 +144,29 @@ void ZmqServer::sendMessage(zmq::message_t &&msg, bool allowServerToStealFocus)
 }
 
 
-void ZmqServer::setPythonCallback(const std::string &name, py::object callback)
+void ZmqServer::setPythonCallback(const std::string &name, nb::callable&& callback)
 {
 	std::scoped_lock lock(m_lock);
-	m_pyCallbacks[name] = callback;
+	m_pyCallbacks[name] = std::move(callback);
 }
 
 
-py::object ZmqServer::getPythonCallback(const std::string &name)
+nb::handle ZmqServer::getPythonCallback(const std::string &name)
 {
 	std::scoped_lock lock(m_lock);
 
-	if(m_pyCallbacks.find(name) != m_pyCallbacks.end()) {
-		return m_pyCallbacks[name];
+	auto cbIter = m_pyCallbacks.find(name);
+	if(cbIter != m_pyCallbacks.end()) {
+		return cbIter->second;
 	}
 
 	Logger::warning("No python callback with name '%1%'", name);
-	return py::object();
+	return nb::callable();
 }
 
 
 zmq::context_t& ZmqServer::context() {
-	assert(m_conn && "Zmq context not initialized. Call ZmqServer::start() method first.");
+	vassert(m_conn && "Zmq context not initialized. Call ZmqServer::start() method first.");
 	return m_ctx;
 }
 
@@ -180,26 +203,24 @@ bool ZmqServer::licenseAcquired() const
 
 
 void ZmqServer::runServer() {
-
+	Logger::get().setLogLevel((Logger::LogLevel)m_args.logLevel);
 	m_processRunner = std::thread([this](std::stop_token stopToken) {
 
 		while(!stopToken.stop_requested()) {
-#ifndef _WIN32
-			// On Unix systems in case the server crashes we need to manually remove the old shared file,
-			// otherwise we would instantly read the old zmq server port in obtainServerEndpointInfo(...).
-			if (m_zmqServerPID != 0) {
-				SharedMemoryWriter::remove(std::to_string(m_zmqServerPID), SHARED_PORT_MAPPING_ID);
-			}
-#endif
-
 			bp::child zmqServer = startServerProcess();
 			bool started = false;
-			
+
 			if (zmqServer.running()) {
 				if (obtainServerEndpointInfo(zmqServer.id())) {
-					Logger::info("ZmqServer started. Process ID: %1%. Port: %2%", m_zmqServerPID.load(), m_zmqServerPort.load());
 					m_zmqServerPID = zmqServer.id();
-					
+					Logger::info("ZmqServer started. Process ID: %1%. Port: %2%", m_zmqServerPID.load(), m_zmqServerPort.load());
+#ifndef _WIN32
+					// On Unix systems in case the server crashes we need to manually remove the old shared file,
+					// otherwise we would instantly read the old zmq server port in obtainServerEndpointInfo(...).
+					if (m_zmqServerPID != 0) {
+						SharedMemoryWriter::remove(std::to_string(m_zmqServerPID), SHARED_PORT_MAPPING_ID);
+					}
+#endif
 					startControlConn();
 					started = true;
 				}
@@ -264,7 +285,6 @@ void ZmqServer::runServer() {
 }
 
 bp::child ZmqServer::startServerProcess() {
-
 	// Add environment variables VRayZmqServer process needs to the current environment.
 	auto env = boost::this_process::environment();
 	env["VRAY_ZMQSERVER_APPSDK_PATH"] = m_args.vrayLibPath;
@@ -313,10 +333,17 @@ bool ZmqServer::obtainServerEndpointInfo(int zmqServerPID) {
 
 	SharedMemoryReader reader(std::to_string(zmqServerPID), SHARED_PORT_MAPPING_ID);
 
-	if ( reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT)) &&
-			reader.read(ZMQ_SERVER_ENDPOINT_READ_TIMEOUT, &zmqServerPort)) {
-		m_zmqServerPort = zmqServerPort;
-		return true;
+	if (reader.open(std::chrono::milliseconds(HANDSHAKE_TIMEOUT))) {
+		// Since we don't lock in ShmReader::open on Unix systems it's possible that the memory is mapped before
+		// the writer writes our data and we end up seeing the old data(i.e. the zeroes from the shm::truncate).
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(HANDSHAKE_TIMEOUT);
+		while (std::chrono::steady_clock::now() < deadline) {
+			if (reader.read(ZMQ_SERVER_ENDPOINT_READ_TIMEOUT, &zmqServerPort) && (zmqServerPort > 0)) {
+					m_zmqServerPort = zmqServerPort;
+					return true;
+			}
+			std::this_thread::sleep_for(10ms);
+		}
 	}
 
 	Logger::error("Failed to obtain endpoint info from ZmqServer, error: %1%, Reconnecting.", reader.getLastError());
@@ -364,7 +391,7 @@ void ZmqServer::startControlConn() {
 
 void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& message)
 {
-	WithGIL gil; // This is needed for safe python dictionary creation(the asset import queue)
+	nb::gil_scoped_acquire gil; // This is needed for safe python dictionary creation(in the CosmosSettings struct)
 
 	CosmosAssetSettings cosmosSettings;
 	cosmosSettings.matFile = message.materialFile;
@@ -379,10 +406,10 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 	const auto& assetNames = *assetData;
 	const auto& assetLocations = *assetLocationsData;
 
-	assert(assetNames.size() == assetLocations.size());
+	vassert(assetNames.size() == assetLocations.size());
 
 	for (size_t i = 0; i < assetNames.size(); i++) {
-		cosmosSettings.locationsMap[assetNames[i]] = assetLocations[i];
+		cosmosSettings.locationsMap[assetNames[i].c_str()] = assetLocations[i];
 	}
 
 	switch (message.assetType) {
@@ -405,14 +432,16 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 
 
 void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlOnCosmosDownloadedAssets& message) {
-	py::list relinkedPaths = toPyList(message.relinkedPaths);
+	nb::gil_scoped_acquire gil;
+	nb::list relinkedPaths = toPyList(message.relinkedPaths);
 	invokePythonCallback("setCosmosDownloadAssets", getPythonCallback("setCosmosDownloadAssets"), int(message.downloadStatus), relinkedPaths);
 }
 
 
 void ZmqServer::processControlOnScannedEncodedParameters(const MsgControlOnScannedEncodedParameters& message) {
 	if (message.licensed) {
-		py::list paramBlock = toPyList(message.encodedParams);
+		nb::gil_scoped_acquire gil;
+		nb::list paramBlock = toPyList(message.encodedParams);
 		invokePythonCallback("scannedParamBlock", getPythonCallback("scannedParamBlock"), message.materialId, message.nodeName, paramBlock);
 	}
 }
@@ -500,9 +529,20 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 		case MsgType::ControlOnGetComputeDevices:{
 			const auto& message = deserializeMessage<MsgControlOnGetComputeDevices>(stream);
 			int deviceType = static_cast<int>(message.deviceType);
-			py::list computeDevices = toPyList(message.computeDevices);
-			py::list defaultDeviceStates = toPyList(message.defaultDeviceStates);
+			nb::gil_scoped_acquire gil;
+			nb::list computeDevices = toPyList(message.computeDevices);
+			nb::list defaultDeviceStates = toPyList(message.defaultDeviceStates);
 			invokePythonCallback("updateComputeDevices", getPythonCallback("updateComputeDevices"), deviceType, computeDevices, defaultDeviceStates);
+			break;
+		}
+		case MsgType::ControlOnAutoUpdateCheckChanged:{
+			const auto& message = deserializeMessage<MsgControlOnAutoUpdateCheckChanged>(stream);
+			const bool autoCheck = message.autoCheck;
+			invokePythonCallback("autoUpdateCheckChanged", getPythonCallback("autoUpdateCheckChanged"), autoCheck);
+			break;
+		}
+		case MsgType::ControlOnAppUpdateRequested:{
+			invokePythonCallback("appUpdateRequested", getPythonCallback("appUpdateRequested"));
 			break;
 		}
 		default:

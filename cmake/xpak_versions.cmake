@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-set(APPSDK_XPAK_VERSION "72009.20260128" )
+set(APPSDK_XPAK_VERSION "73001.20260403" )
 
 set(QT_XPAK "AppSDKQT6")
 if (WIN32)
@@ -33,7 +33,7 @@ elseif(BLENDER_VER STREQUAL "4.4")
 	set(BLENDER_SDK_XPAK "Blender_SDK_4_4" )
 elseif(BLENDER_VER STREQUAL "4.5")
 	set(BLENDER_SDK_XPAK "Blender_SDK_4_4" )
-elseif(BLENDER_VER STREQUAL "5.0")
+elseif(BLENDER_VER VERSION_GREATER_EQUAL "5.0")
 	set(BLENDER_SDK_XPAK "Blender_SDK_5_0" )
 else()
 	message(FATAL_ERROR "Invalid BLENDER_VER '${BLENDER_VER}'")

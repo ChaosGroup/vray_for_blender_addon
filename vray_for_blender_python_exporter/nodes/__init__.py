@@ -7,12 +7,12 @@ __all__ = [ 'importing' ]
 
 def _getModules():
     """ Modules requiring registration/unregistration """
+    from vray_blender.nodes import tree
     from vray_blender.nodes import meta
     from vray_blender.nodes import sockets
     from vray_blender.nodes import specials
     from vray_blender.nodes import nodes
     from vray_blender.nodes import operators
-    from vray_blender.nodes import tree
     from vray_blender.nodes import docs
 
     return (

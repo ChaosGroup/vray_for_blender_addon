@@ -94,7 +94,10 @@ class MotionBlurBuilder:
         self._getFrameData(frameEnd).frameForRenderRef = baseFrame
 
 
-    def initialize(self, scene, commonSettings, exportOnly: bool = True):
+    def initialize(self, scene, exporterCtx):
+        commonSettings = exporterCtx.commonSettings
+        exportOnly = exporterCtx.exportOnly
+
         assert scene.camera and isCamera(scene.camera), "Motion blur interval cannot be calculated without a camera"
         
         # Filling a dictionary with all objects with overridden motion blur samples
@@ -111,7 +114,7 @@ class MotionBlurBuilder:
 
         currentCamera = scene.camera
         anim = commonSettings.animation
-        for baseFrame in range(anim.frameStart, anim.frameEnd + 1, anim.frameStep):
+        for baseFrame in anim.frames:
             # If the scene is not going to be rendered (when writing to a .vrscene file), interval frames are calculated for all cameras.
             # This ensures that all of them have the necessary frames for motion blur generation.
             if exportOnly:

@@ -85,7 +85,7 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
             # is a simple multiplier for the color. Do not show the color in this case.
             row = layout.split(factor=0.935, align=True)
             row.prop(self, 'multiplier', text=text)
-        else :
+        else:
             row = layout.split(factor=0.3, align=True)
             row.prop(self, 'value', text="")
             row = row.split(factor=0.9)

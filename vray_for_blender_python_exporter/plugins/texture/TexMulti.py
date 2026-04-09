@@ -3,17 +3,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-import bpy 
+import bpy
 import mathutils
+import os
 
 from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr, getInputSocketByName
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import  PluginDesc, NodeContext
 from vray_blender.lib.names import Names
+from vray_blender.lib.image_utils import getVRayImageFormatFilter, VRAY_IMAGE_FORMATS_LIST
+from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.nodes.operators.sockets import VRayNodeAddCustomSocket, VRayNodeDelCustomSocket
-from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult
-from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup
+from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult, moveExtendSocketToBottom
+from vray_blender.nodes.links import vrayNodeInsertLink
+from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup, createNode, DisableAutoConnect
+from vray_blender.nodes.tools import deselectNodes
 from vray_blender.plugins.templates.common import VRAY_OT_simple_button
 from vray_blender.lib.mixin import VRayOperatorBase
 
@@ -70,7 +75,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
 
     def getFarLink(self):
         return super().getFarLink() if self.use else None
-        
+
     def copy(self, dest):
         dest.id = self.id
         dest.use = self.use
@@ -91,8 +96,15 @@ class VRAY_OT_node_texmulti_socket_add(VRayNodeAddCustomSocket, VRayOperatorBase
 
     def execute(self, context: bpy.types.Context):
         selectedObjectTagUpdate(self, context)
-        VRayNodeAddCustomSocket.execute(self, context)
-        context.node.inputs[-1].id = max((s.id for s in _getTexSockets(context.node))) + 1
+        node = context.node
+
+        humanIndex = len(_getTexSockets(node)) + 1
+        newSock = addInput(node, 'VRaySocketTexMulti', _getTexSockName(humanIndex))
+        newSock.id = max([s.id for s in _getTexSockets(node)] + [0]) + 1
+
+        # Move the extend socket to the end
+        moveExtendSocketToBottom(node)
+
         return {'FINISHED'}
 
 
@@ -113,6 +125,87 @@ class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, VRayOperatorBase
         return {'FINISHED'}
 
 
+class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
+    bl_idname      = 'vray.node_texmulti_add_from_folder'
+    bl_label       = "Add Textures"
+    bl_description = "Add textures from a folder"
+    bl_options     = { 'INTERNAL', 'UNDO' }
+
+    directory: bpy.props.StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE', 'HIDDEN'})
+    files: bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'SKIP_SAVE', 'HIDDEN'})
+    filter_glob: bpy.props.StringProperty(default=getVRayImageFormatFilter(), options={'HIDDEN'})
+    relative: bpy.props.BoolProperty(name="Relative Path", default=True)
+
+    node_name: bpy.props.StringProperty(options={'SKIP_SAVE', 'HIDDEN'})
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        if not context.space_data or context.space_data.type != 'NODE_EDITOR':
+            return {'CANCELLED'}
+        ntree = context.space_data.edit_tree
+        if not ntree:
+            return {'CANCELLED'}
+
+        node = ntree.nodes.get(self.node_name)
+        if not node or not node.bl_idname == 'VRayNodeTexMulti':
+            return {'CANCELLED'}
+
+        if not os.path.isdir(self.directory):
+            return {'CANCELLED'}
+
+        files = [f.name for f in self.files if f.name.lower().endswith(VRAY_IMAGE_FORMATS_LIST)]
+        files.sort()
+
+        if not files:
+            self.report({'ERROR'}, 'No valid images selected')
+            return {'FINISHED'}
+
+        deselectNodes(ntree)
+
+        with DisableAutoConnect():
+            # Clear existing non-linked texture sockets
+            texSockets = _getTexSockets(node)
+            for s in reversed(texSockets):
+                if not s.is_linked:
+                    node.inputs.remove(s)
+
+            startIndex = len(_getTexSockets(node))
+
+            for i, file in enumerate(files):
+                filename = bpy.path.basename(file)
+                filepath = os.path.join(self.directory, filename)
+                filepath = bpy.path.abspath(filepath)
+                if not os.path.exists(filepath):
+                    continue
+
+                imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
+                imageNode.label = filename
+
+                imageBlockName = bpy.path.display_name_from_filepath(filepath)
+                if self.relative:
+                    relativePath = tryGetRelativePath(filepath)
+                    filepath = relativePath if relativePath is not None else filepath
+                image = bpy.data.images.load(filepath, check_existing=True)
+                imageNode.texture.image = image
+                imageNode.texture.image.name = imageBlockName
+
+                humanIndex = startIndex + i + 1
+                sockName = _getTexSockName(humanIndex)
+                newSock = addInput(node, 'VRaySocketTexMulti', sockName)
+                newSock.id = humanIndex
+
+                ntree.links.new(imageNode.outputs['Color'], newSock)
+
+                imageNode.location.x = node.location.x - 400
+                imageNode.location.y = node.location.y - (i * 300)
+
+        selectedObjectTagUpdate(node, context)
+
+        return {'FINISHED'}
+
 
 def nodeRegister():
     """ Register additional member-functions on the node class """
@@ -121,6 +214,10 @@ def nodeRegister():
         'onRemoveTexture' : onRemoveTexture
     }
 
+def addTexMultiExtendSocket(node):
+    sockExtend = addInput(node, 'VRaySocketExtend', "")
+    sockExtend.add_operator = 'vray.node_texmulti_socket_add'
+    sockExtend.del_operator = 'vray.node_texmulti_socket_del'
 
 def nodeInit(node: bpy.types.Node):
     DEFAULT_SOCKETS = 5
@@ -134,7 +231,26 @@ def nodeInit(node: bpy.types.Node):
         clr = 1.0 - (1.0 / DEFAULT_SOCKETS) * i
         texSock.value = mathutils.Color((clr, clr, clr))
 
+    addTexMultiExtendSocket(node)
     getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != "30")
+
+
+def nodeInsertLink(link: bpy.types.NodeLink):
+    node = link.to_node
+    if link.to_socket.bl_idname == 'VRaySocketExtend':
+        from_socket = link.from_socket
+        ntree = node.id_data
+
+        humanIndex = len(_getTexSockets(node)) + 1
+        newSock = addInput(node, 'VRaySocketTexMulti', _getTexSockName(humanIndex))
+        newSock.id = max([s.id for s in _getTexSockets(node)] + [0]) + 1
+
+        # Move the extend socket to the end
+        moveExtendSocketToBottom(node)
+
+        # Update the link to use the new socket by creating a new link and removing the old one
+        ntree.links.new(from_socket, newSock)
+        ntree.links.remove(link)
 
 
 def nodeDraw(context: bpy.types.Context, layout: bpy.types.UILayout, node: bpy.types.Node):
@@ -142,13 +258,20 @@ def nodeDraw(context: bpy.types.Context, layout: bpy.types.UILayout, node: bpy.t
     row = split.row(align=True)
     row.operator('vray.node_texmulti_socket_add', icon="ADD", text="Add Texture")
     row.operator('vray.node_texmulti_socket_del', icon="REMOVE", text="")
+    op = row.operator('vray.node_texmulti_add_from_folder', icon='FILE_FOLDER', text='')
+    op.node_name = node.name
+
     layout.separator()
 
 
 def widgetDrawTexMap(context, layout, propGroup, widgetAttr):
     node = getNodeOfPropGroup(propGroup)
 
-    layout.operator('vray.node_texmulti_socket_add', icon="ADD", text="Add Texture")
+    row = layout.row(align=True)
+    row.operator('vray.node_texmulti_socket_add', icon="ADD", text="Add Texture")
+    op = row.operator('vray.node_texmulti_add_from_folder', icon='FILE_FOLDER', text='')
+    op.node_name = node.name
+
     layout.separator()
     panel = layout
 
@@ -200,7 +323,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginDesc.setAttribute('random_mode', _getRandomMode(node))
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=[])
-    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc) 
+    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
 def onUpdateMode(src, context: bpy.types.Context, attrName: str):
@@ -264,6 +387,7 @@ def getRegClasses():
         VRaySocketTexMulti,
         VRAY_OT_node_texmulti_socket_add,
         VRAY_OT_node_texmulti_socket_del,
+        VRAY_OT_node_texmulti_add_from_folder,
     )
 
 
