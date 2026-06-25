@@ -7,13 +7,13 @@ import bpy
 
 from vray_blender import plugins
 from vray_blender.engine import resetActiveIprRendering
-from vray_blender.exporting.tools import getFarNodeLink
+from vray_blender.exporting.world_export import sockConnectedToDenoiser
 from vray_blender.lib import class_utils, draw_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.operators import sockets as SocketOperators
 from vray_blender.nodes.sockets import addInput, addOutput, moveExtendSocketToBottom
 from vray_blender.nodes.links import vrayNodeInsertLink
-from vray_blender.nodes.utils import autoConnectNode
+from vray_blender.nodes.utils import autoConnectNode, getNodeByType
 from vray_blender.ui import classes
 
 
@@ -102,8 +102,7 @@ class VRayNodeRenderChannels(VRayNodeBase):
         super().update()
         # If there is a new denoiser channel or an existing one is disconnected,
         # the viewport renderer (if there is such running) should be reset
-        hasDenoiser = any(sock for sock in self.inputs if (link := getFarNodeLink(sock)) and \
-                              (link.from_node.bl_idname == "VRayNodeRenderChannelDenoiser"))
+        hasDenoiser = any(sock for sock in self.inputs if sockConnectedToDenoiser(sock))
 
         if hasDenoiser != self.hasDenoiser:
             resetActiveIprRendering()
@@ -170,6 +169,43 @@ class VRayNodeRenderChannelDenoiser(VRayNodeBase):
         layout.use_property_split = True
         uiPainter.renderPluginUI(layout)
 
+
+class VRAY_OT_show_denoiser_advanced_settings(VRayOperatorBase):
+    """ Open a popup with the full property page of the V-Ray Denoiser
+        render channel node from the active world's node tree.
+    """
+    bl_idname      = 'vray.show_denoiser_advanced_settings'
+    bl_label       = "Denoiser Advanced Settings"
+    bl_description = "Show advanced settings of the V-Ray Denoiser render channel"
+    bl_options     = {'INTERNAL'}
+
+    _POPUP_WIDTH = 450
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_popup(self, width=self._POPUP_WIDTH)
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def draw(self, context):
+        layout = self.layout
+        world = context.scene.world
+
+        if not (world and world.node_tree):
+            layout.label(text="Requires a V-Ray World node tree.", icon='ERROR')
+            return
+
+        denoiserNode = getNodeByType(world.node_tree, 'VRayNodeRenderChannelDenoiser')
+        propGroup = world.vray.RenderChannelDenoiser
+        pluginModule = plugins.PLUGINS['RENDERCHANNEL']['RenderChannelDenoiser']
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        painter = draw_utils.UIPainter(context, pluginModule, propGroup, denoiserNode)
+        painter.renderPluginUI(layout)
+
+
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##
 ##     ## ##       ##         ##  ##          ##    ##     ##  ##   ##     ##     ##  ##     ## ####  ##
@@ -182,6 +218,7 @@ def getRegClasses():
     return (
         VRAY_OT_node_renderchannels_socket_add,
         VRAY_OT_node_renderchannels_socket_del,
+        VRAY_OT_show_denoiser_advanced_settings,
         VRayNodeRenderChannels,
         VRayNodeRenderChannelDenoiser,
     )

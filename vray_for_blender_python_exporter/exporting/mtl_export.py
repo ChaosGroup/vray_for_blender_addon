@@ -5,11 +5,13 @@
 import bpy
 
 from vray_blender.exporting.node_export import *
+from vray_blender.exporting.node_export import _exportBrdfLightConverter, _exportUVWGenToBrdfConverter
 from vray_blender.exporting.tools import *
 from vray_blender.lib.defs import *
-from vray_blender.exporting.plugin_tracker import TrackObj, getObjTrackId, log as trackerLog
+from vray_blender.exporting.plugin_tracker import TrackObj, TrackNode, getObjTrackId, getNodeTrackId, log as trackerLog
 from vray_blender.exporting.update_tracker import UpdateTarget, UpdateTracker, UpdateFlags
 from vray_blender.nodes import utils as NodesUtils
+from vray_blender.plugins import findPluginModule
 
 
 def getMtlTopologyUpdates():
@@ -21,7 +23,7 @@ def getMtlTopologyUpdates():
 def _getMtlsOfTextures(textureNames: list[str]):
         """ Return the materials in whose node trees the texture names are used.
 
-          NOTE: This is hackish, but for the moment we don't know how to make Blender generate 
+          NOTE: This is hackish, but for the moment we don't know how to make Blender generate
           depsgraph updates for the node tree.
     """
         result = set()
@@ -89,6 +91,7 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
         for mtlId in (exporterCtx.exportedMtls.keys() & updatedMtlIDs):
             del exporterCtx.exportedMtls[mtlId]
 
+DEFAULT_MATERIAL_NAME = "defaultMtl"
 
 class MtlExporter(ExporterBase):
     """ Export all objects in a depsgraph
@@ -132,8 +135,18 @@ class MtlExporter(ExporterBase):
                 mtl = viewLayer.material_override
                 outputNode, isVRayMtl = self._getMtlOutputNode(mtl)
 
-        mtlId = getObjTrackId(mtl)
+        if not outputNode:
+            NodeContext.registerError(f"Output node not found in {'V-Ray' if isVRayMtl else 'Cycles'} material tree")
+            return None, SceneStats()
 
+        def _getOutputNodeLink():
+            sockName = 'Material' if isVRayMtl else 'Surface'
+            sock = getInputSocketByName(outputNode, sockName)
+            assert sock, "Material output node has no input socket"
+
+            return getFarNodeLink(sock)
+
+        mtlId = getObjTrackId(mtl)
         if mtlId in self.exportedMtls:
             return self.exportedMtls[mtlId], SceneStats()
 
@@ -148,15 +161,7 @@ class MtlExporter(ExporterBase):
 
         nodeCtx.material = mtl
         with nodeCtx:
-            if not outputNode:
-                NodeContext.registerError(f"Output node not found in {'V-Ray' if isVRayMtl else 'Cycles'} material tree")
-                return None, SceneStats()
-
-            sockName = 'Material' if isVRayMtl else 'Surface'
-            sock = getInputSocketByName(outputNode, sockName)
-            assert sock, "Material output node has no input socket"
-
-            if not (nodeLink := getFarNodeLink(sock)):
+            if not (nodeLink  := _getOutputNodeLink()):
                 # The output node has nothing connected to it. This is a normal situation when the BRDF
                 # is changed, so don't report it to the status field.
                 NodeContext.registerError(f"No tree connected to output node in material '{mtl.name}'")
@@ -198,7 +203,7 @@ class MtlExporter(ExporterBase):
 
         for obj in self.dg.objects:
             # Only export V-Ray materials
-            for mtl in [s.material for s in obj.material_slots if s.material.vray.is_vray_class]:
+            for mtl in [s.material for s in obj.material_slots if s.material and s.material.vray.is_vray_class]:
                 _, mtlStats = self.exportMtl(mtl)
                 if mtlStats:
                     stats += mtlStats
@@ -238,13 +243,29 @@ class MtlExporter(ExporterBase):
             defaultBrdfDesc.setAttribute("diffuse", AColor((0.5, 0.5, 0.5)))
             defaultBrdf = export_utils.exportPlugin(exporterCtx, defaultBrdfDesc)
 
-            defaultMtlDesc = PluginDesc("defaultMtl", "MtlSingleBRDF")
+            defaultMtlDesc = PluginDesc(DEFAULT_MATERIAL_NAME, "MtlSingleBRDF")
             defaultMtlDesc.setAttribute("brdf", defaultBrdf)
-            defaultMtlDesc.setAttribute("sceneName", ["DEFAULT_MATERIAL"])
+            defaultMtlDesc.setAttribute("scene_name", ["DEFAULT_MATERIAL"])
             defaultMaterial = export_utils.exportPlugin(exporterCtx, defaultMtlDesc)
             exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = defaultMaterial
             return defaultMaterial
 
+
+    def _exportBRDFToonOverrideForOutlines(self, nodeCtx: NodeContext, outlinesNode, baseBrdf: AttrPlugin) -> AttrPlugin:
+        """ Export a BRDFToonOverride node connected to the Material Output's Outlines socket.
+            Mirrors C4D's exportBRDFToonOverridePlugin: all node sockets are exported normally
+            except base_brdf, which is set programmatically to the material's own BRDF.
+        """
+        pluginType = 'BRDFToonOverride'
+        plDesc = PluginDesc(Names.treeNode(nodeCtx), pluginType)
+
+        if hasattr(outlinesNode, pluginType):
+            plDesc.vrayPropGroup = getattr(outlinesNode, pluginType)
+
+        exportNodeTree(nodeCtx, plDesc, skippedSockets=('base_brdf',))
+        plDesc.setAttribute('base_brdf', baseBrdf)
+
+        return exportPluginWithStats(nodeCtx, plDesc)
 
     def _exportMtlSingleBRDF(self, nodeCtx: NodeContext, brdfPlugin: AttrPlugin):
         pluginType = 'MtlSingleBRDF'
@@ -255,8 +276,37 @@ class MtlExporter(ExporterBase):
         # BSDF plugin (e.g. brdfPlugin is empty) because in this case the object will
         # be rendered in black. If there is no MtlSingleBRDF referenced by the object node,
         # the object will be invisible and this might be confusing to the user.
-        plDesc.setAttribute('scene_name', [pluginName])
-        plDesc.setAttribute('brdf', brdfPlugin)
+        # scene_name uses the friendly Blender material name so CryptoMaterial picker
+        # resolves names like "Material.001" - matches Cycles' behavior.
+        plDesc.setAttribute('scene_name', [nodeCtx.rootObj.name])
+
+        # Allow textures/colors/UVWGens connected directly to the Material Output's
+        # Material socket (e.g. from Preview Node / Ctrl+Shift+LMB on a TexBitmap,
+        # or solo mode on a UVWGen). This path bypasses _exportConverters because
+        # the Material slot is exported via exportVRayNode directly, so we wrap
+        # here. compensateExposure keeps the preview visible across camera exposure.
+        if not brdfPlugin.isEmpty() \
+                and (pluginModule := findPluginModule(brdfPlugin.pluginType)):
+            if pluginModule.TYPE == 'TEXTURE':
+                brdfPlugin = _exportBrdfLightConverter(nodeCtx, brdfPlugin)
+            elif pluginModule.TYPE == 'UVWGEN':
+                brdfPlugin = _exportUVWGenToBrdfConverter(nodeCtx, brdfPlugin)
+
+        # Check for Outlines socket - mirrors C4D MtlSingleBRDF outlines handling.
+        # If a BRDFToonOverride node is connected, wrap the BRDF with it before passing
+        # to MtlSingleBRDF. The BRDFToonOverride receives base_brdf = the original BRDF.
+        brdfForMtl = brdfPlugin
+        outputNode = nodeCtx.node
+        if (outlinesSock := getInputSocketByName(outputNode, 'Outlines')) \
+                and (outlinesLink := getFarNodeLink(outlinesSock)) \
+                and outlinesLink.from_node.vray_plugin == 'BRDFToonOverride':
+            outlinesNode = outlinesLink.from_node
+            with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(outlinesNode)):
+                with nodeCtx.push(outlinesNode), nodeCtx.pushGroupPath(outlinesLink.groupPath):
+                    brdfForMtl = self._exportBRDFToonOverrideForOutlines(nodeCtx, outlinesNode, brdfPlugin)
+                    nodeCtx.cacheNodePlugin(outlinesNode, brdfForMtl)
+
+        plDesc.setAttribute('brdf', brdfForMtl)
         singleBrdfPlugin = exportPluginWithStats(nodeCtx, plDesc)
 
         if not brdfPlugin.isEmpty():
@@ -268,7 +318,6 @@ class MtlExporter(ExporterBase):
 
 
     def _exportMtlOptions(self, nodeCtx, mtl, singleBRDFMtl):
-        
         mtlNext = self._exportMtlOption(nodeCtx, mtl, singleBRDFMtl, 'MtlMaterialID', 'base_mtl')
         mtlNext = self._exportMtlOption(nodeCtx, mtl, mtlNext, 'MtlRenderStats', 'base_mtl')
         mtlNext = self._exportMtlOption(nodeCtx, mtl, mtlNext, 'MtlWrapper', 'base_material')
@@ -276,13 +325,14 @@ class MtlExporter(ExporterBase):
 
         return mtlNext
 
-    def _exportMtlOption(self, nodeCtx: NodeContext, mtl, mtlPlugin: AttrPlugin, pluginType: str, baseMtlName: str):
+
+    def _exportMtlOption(self, nodeCtx: NodeContext, mtl: bpy.types.Material, mtlPlugin: AttrPlugin, pluginType: str, baseMtlName: str):
         propGroup = getattr(mtl.vray, pluginType)
-        
+
         if propGroup.use:
             pluginName = Names.pluginObject(pluginType, Names.object(mtl))
             plDesc = PluginDesc(pluginName, pluginType)
-            
+
             # Material options set on the material override the ones set on the object
             plDesc.vrayPropGroup = propGroup
             plDesc.setAttribute(baseMtlName, mtlPlugin)
@@ -297,7 +347,7 @@ class MtlExporter(ExporterBase):
     def prunePlugins(self):
         """ Delete all plugins associated with removed, orphaned or updated materials """
         assert(self.interactive)
-        
+
         def forgetNodes(mtlId, nodeIds):
              if not nodeIds:
                  return

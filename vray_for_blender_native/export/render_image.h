@@ -8,6 +8,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <memory>
 
 namespace VRayForBlender {
 
@@ -47,8 +48,8 @@ struct ImageRegion {
 /// @param sourceRegion - the region in the source image
 /// @param options - specifies additional actions to be performed on the destination
 void updateImageRegion(
-	void * __restrict dest, ImageSize destSize, ImageRegion destRegion,
-	const void * __restrict source, ImageSize sourceSize, ImageRegion sourceRegion,
+	float* dest, ImageSize destSize, ImageRegion destRegion,
+	const float* source, ImageSize sourceSize, ImageRegion sourceRegion,
 	ImageRegion::Options options = ImageRegion::Options::NONE
 );
 
@@ -62,37 +63,49 @@ struct RenderImage {
 		, updated(0)
 	{}
 
-	RenderImage(const RenderImage&) = delete;
-	RenderImage& operator=(const RenderImage&) = delete;
+	RenderImage(const RenderImage&) = default;
+	RenderImage& operator=(const RenderImage&) = default;
 
-	static RenderImage deepCopy(const RenderImage& source);
+	RenderImage(RenderImage&& other) noexcept = default;
+	RenderImage& operator=(RenderImage&& other) noexcept = default;
 
-	RenderImage(RenderImage&& other) noexcept;
-	RenderImage& operator=(RenderImage&& other) noexcept;
+	virtual ~RenderImage() = default;
 
-	virtual ~RenderImage();
+	operator bool () const { return !!m_pixels; }
 
-	operator bool () const;
-
-	float* release  ();
 	void    reset    ();
 
-
 	void   updateRegion(const float* source, ImageRegion destRegion);
-	void   clamp(float max = 1.0f, float val = 1.0f);
-	void   resetAlpha();
-	// gets the center width X height image out of the original, if target is bigger - does nothings
-	void   cropTo(int width, int height);
 
 	void   resetUpdated() { updated = 0.f; }
 
+	/// Set the pixel buffer. Updates both the owning holder and the const read pointer.
+	void setPixels(std::shared_ptr<float[]> holder) {
+		m_pixels = std::move(holder);
+		pixels = m_pixels.get();
+	}
+
+	/// Non-owning: wrap an external buffer (e.g. Blender's RenderPass).
+	/// The caller is responsible for the buffer's lifetime.
+	void setPixelsNonOwning(float* buffer) {
+		m_pixels = std::shared_ptr<float[]>(buffer, [](float*) {});
+		pixels = buffer;
+	}
+
+	/// Mutable access to the pixel buffer for writing (memcpy, memset, updateRegion).
+	float* writablePixels() { return m_pixels.get(); }
+
 public:
 
-	float* pixels; ///< data of the image
+	const float* pixels; ///< Read-only pointer to pixel data. Use writablePixels() for mutation.
+
 	int    w; ///< width in pixels
 	int    h; ///< height in pixels
 	int    channels; ///< channels count (usually 1, 3 or 4)
 	float  updated; ///< will hold % of updated area
+
+private:
+	std::shared_ptr<float[]> m_pixels; ///< Owns (or ref-counts) the pixel buffer.
 };
 
 float* jpegToPixelData(unsigned char* data, int size, int& channels);

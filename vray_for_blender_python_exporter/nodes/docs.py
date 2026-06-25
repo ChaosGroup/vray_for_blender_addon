@@ -146,7 +146,7 @@ def _getDocsMapping():
     _registerNode('RenderChannelCoatReflection', '117637566')
     _registerNode('RenderChannelCoverage', '117637660')
     _registerNode('RenderChannelCryptomatte', '117637514')
-    _registerNode('RenderChannelDenosier', '117637666')
+    _registerNode('RenderChannelDenoiser', '117637666')
     _registerNode('RenderChannelDiffuse', '117637572')
     _registerNode('RenderChannelDRBucket', '117637501')
     _registerNode('RenderChannelExtraTex', '117637634')
@@ -214,7 +214,7 @@ def _getDocsMapping():
     _registerSettings('RTEngine*', '117638327#GPU-Texture-Options')
 
     _registerExporter('device_type', '117638321')
-    _registerExporter('use_gpu_rtx', '117638321')
+    _registerExporter('gpu_device_type', '117638321')
 
     _registerExporter('use_custom_thread_count', '117639386')
     _registerExporter('custom_thread_count', '117639386')

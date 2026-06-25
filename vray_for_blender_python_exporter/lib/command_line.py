@@ -56,7 +56,9 @@ def parseCommandLine():
     parser = argparse.ArgumentParser(description="V-Ray for Blender CLI")
 
     # Merge Blender and V-Ray's list into one
-    argslist = sys.argv.remove('--') if '--' in sys.argv else sys.argv
+    if '--' in sys.argv:
+        sys.argv.remove('--')
+    argslist = sys.argv
                                
     parser.add_argument("-o", "--render-output", dest="output", type=str)
     parser.add_argument("-F", "--render-format", dest="img_format", type=str)

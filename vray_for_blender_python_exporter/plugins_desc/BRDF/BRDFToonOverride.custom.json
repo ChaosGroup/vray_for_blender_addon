@@ -1,0 +1,152 @@
+{
+    "ID": "BRDFToonOverride",
+    "Name" : "V-Ray Outlines",
+    "Parameters": [
+        {
+            "attr": "innerLineControl",
+            "default": false
+        },
+        {
+            "attr": "lineColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "lineColor",
+            "tex_prop": "lineColor_tex",
+            "desc": "Color of the outline",
+            "default": [0.0, 0.0, 0.0]
+        },
+        {
+            "attr": "lineColorInner_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "lineColorInner",
+            "tex_prop": "lineColorInner_tex",
+            "desc": "Color of the inner lines",
+            "default": [0.0, 0.0, 0.0]
+        },
+        {
+            "attr": "lineWidth_tex",
+            "default": 1.5,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "lineWidthInner_tex",
+            "default": 1.5,
+            "ui": {
+                "soft_min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "opacity_tex",
+            "desc": "Opacity of the cartoon line",
+            "default": 1.0
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "outline",
+                "label": "Outline",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "lineColor_colortex",
+                        "label": "Line Color"
+                    },
+                    {
+                        "name": "lineWidth_tex",
+                        "label": "Line Width"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "innerLineControl"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::innerLineControl!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "lineColorInner_colortex",
+                                "label": "Inner Line Color"
+                            },
+                            {
+                                "name": "lineWidthInner_tex",
+                                "label": "Inner Line Width"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "opacity_tex"
+                    },
+                    {
+                        "name": "outerOverlapThreshold"
+                    },
+                    {
+                        "name": "normalThreshold"
+                    },
+                    {
+                        "name": "overlapThreshold"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "innerLineControl"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {
+                "name": "lineColor_colortex",
+                "label": "Line Color"
+            },
+            {
+                "name": "lineWidth_tex",
+                "label": "Line Width"
+            },
+            {
+                "name": "lineColorInner_colortex",
+                "label": "Inner Line Color",
+                "visible": {"cond": "::innerLineControl!=0", "default": false}
+            },
+            {
+                "name": "lineWidthInner_tex",
+                "label": "Inner Line Width",
+                "visible": {"cond": "::innerLineControl!=0", "default": false}
+            },
+            {
+                "name": "opacity_tex",
+                "label": "Line Opacity"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "lineColor",
+            "lineColor_tex",
+            "lineColorInner",
+            "lineColorInner_tex",
+            "opacity"
+        ]
+    }
+}

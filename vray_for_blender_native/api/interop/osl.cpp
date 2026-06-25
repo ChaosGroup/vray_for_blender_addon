@@ -121,7 +121,7 @@ void PyOSLParam::setStringSockValFromParam(const OSL::OSLQuery::Parameter* param
 bool PyOSLParam::init(const OSL::OSLQuery::Parameter* param)
 {
 	OIIO_NAMESPACE_USING
-		if (!param && (param->varlenarray || param->isstruct || param->type.arraylen > 1)) {
+		if (!param || param->varlenarray || param->isstruct || param->type.arraylen > 1) {
 			/* skip unsupported types or null parameters */
 			return false;
 		}

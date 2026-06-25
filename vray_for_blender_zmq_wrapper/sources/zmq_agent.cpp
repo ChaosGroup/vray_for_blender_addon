@@ -240,13 +240,13 @@ void ZmqAgent::sendPending(zmq::poller_t<>& pollerSend) {
 
 		vassert(zmq::event_flags::pollout == events[0].events);
 
-		zmq::multipart_t* multiMsg = msgBufferItems[sent];
-		for (const zmq::message_t& msg : *multiMsg) {
+		zmq::multipart_t& multiMsg = *msgBufferItems[sent];
+		for (const zmq::message_t& msg : multiMsg) {
 			sentBytes += msg.size();
 		}
 
 		zmq::socket_ref& sockOut = events[0].socket;
-		[[maybe_unused]] const bool res = multiMsg->send(sockOut);
+		[[maybe_unused]] const bool res = multiMsg.send(sockOut);
 
 		// For blocking sockets, any failure is reported as an exception
 		vassert(res && "EAGAIN on a blocking socket");

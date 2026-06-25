@@ -16,9 +16,10 @@ from vray_blender.lib.image_utils import getVRayImageFormatFilter, VRAY_IMAGE_FO
 from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.nodes.operators.sockets import VRayNodeAddCustomSocket, VRayNodeDelCustomSocket
 from vray_blender.nodes.sockets import addInput, RGBA_SOCKET_COLOR, VRaySocketColorMult, moveExtendSocketToBottom
-from vray_blender.nodes.links import vrayNodeInsertLink
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getUpdateCallbackPropertyContext, getNodeOfPropGroup, createNode, DisableAutoConnect
 from vray_blender.nodes.tools import deselectNodes
+from vray_blender.nodes.group.utils import VRAY_GROUP_TREE_TYPE, VRAY_GROUP_NODE_TYPE
+from vray_blender.nodes.group.node import syncGroupNodeSockets
 from vray_blender.plugins.templates.common import VRAY_OT_simple_button
 from vray_blender.lib.mixin import VRayOperatorBase
 
@@ -35,6 +36,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
     id: bpy.props.IntProperty(
         name = "ID",
         description = "For modes that use IDs, specifies the ID that corresponds to each texture",
+        min = 0,
         update = selectedObjectTagUpdate
     )
 
@@ -48,6 +50,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
     def draw_impl(self, context, layout, node, text):
         split = layout.split(factor=0.6)
         left = split.column()
+        left.enabled = self.use
 
         texSplit = left.split(factor=0.4)
         texSplit.prop(self, 'value', text='')
@@ -60,6 +63,7 @@ class VRaySocketTexMulti(VRaySocketColorMult):
         row.alignment = 'RIGHT'
 
         col2 = row.column()
+        col2.enabled = self.use
         col2.prop(self, 'id', text='')
         row.separator(factor=1)
         col3 = row.column()
@@ -136,11 +140,27 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
     filter_glob: bpy.props.StringProperty(default=getVRayImageFormatFilter(), options={'HIDDEN'})
     relative: bpy.props.BoolProperty(name="Relative Path", default=True)
 
+    wrap_mode: bpy.props.EnumProperty(
+        name="Grouping",
+        description="How to organize the loaded texture nodes",
+        items=[
+            ('NONE',  "None",  "Leave texture nodes loose in the tree"),
+            ('FRAME', "Frame", "Wrap the texture nodes in a Frame called 'Textures'"),
+            ('GROUP', "Group", "Wrap the texture nodes in a Node Group"),
+        ],
+        default='FRAME',
+    )
+
     node_name: bpy.props.StringProperty(options={'SKIP_SAVE', 'HIDDEN'})
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'relative')
+        layout.prop(self, 'wrap_mode')
 
     def execute(self, context):
         if not context.space_data or context.space_data.type != 'NODE_EDITOR':
@@ -165,6 +185,26 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
 
         deselectNodes(ntree)
 
+        # In GROUP mode, image nodes live inside a new group tree.
+        # The group node sits in the parent tree and feeds TexMulti.
+        groupNode = None
+        groupTree = None
+        groupOutputNode = None
+        targetTree = ntree
+        if self.wrap_mode == 'GROUP':
+            groupTree = bpy.data.node_groups.new("Textures", VRAY_GROUP_TREE_TYPE)
+            groupTree.vray.tree_type = 'GROUP'
+            groupInputNode = groupTree.nodes.new('NodeGroupInput')
+            groupOutputNode = groupTree.nodes.new('NodeGroupOutput')
+            groupInputNode.location  = (-700, 0)
+            groupOutputNode.location = (250, 0)
+
+            groupNode = ntree.nodes.new(VRAY_GROUP_NODE_TYPE)
+            groupNode.node_tree = groupTree
+            groupNode.location = (node.location.x - 400, node.location.y)
+            groupNode.width = 230
+            targetTree = groupTree
+
         with DisableAutoConnect():
             # Clear existing non-linked texture sockets
             texSockets = _getTexSockets(node)
@@ -174,6 +214,8 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
 
             startIndex = len(_getTexSockets(node))
 
+            createdImageNodes = []
+            createdTexSockets = []
             for i, file in enumerate(files):
                 filename = bpy.path.basename(file)
                 filepath = os.path.join(self.directory, filename)
@@ -181,7 +223,7 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
                 if not os.path.exists(filepath):
                     continue
 
-                imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
+                imageNode = createNode(targetTree, "VRayNodeMetaImageTexture")
                 imageNode.label = filename
 
                 imageBlockName = bpy.path.display_name_from_filepath(filepath)
@@ -196,11 +238,40 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
                 sockName = _getTexSockName(humanIndex)
                 newSock = addInput(node, 'VRaySocketTexMulti', sockName)
                 newSock.id = humanIndex
+                createdTexSockets.append(newSock)
 
-                ntree.links.new(imageNode.outputs['Color'], newSock)
+                if self.wrap_mode == 'GROUP':
+                    # Add an OUTPUT interface socket named by filename (without
+                    # extension) and wire image.Color into the newly-added
+                    # GroupOutput input (which lives just before __extend__).
+                    sockLabel = os.path.splitext(filename)[0] or filename
+                    groupTree.interface.new_socket(
+                        name=sockLabel, in_out='OUTPUT', socket_type='NodeSocketColor'
+                    )
+                    groupTree.links.new(imageNode.outputs['Color'], groupOutputNode.inputs[-2])
+                    imageNode.location.x = -400
+                    imageNode.location.y = -(i * 300)
+                else:
+                    ntree.links.new(imageNode.outputs['Color'], newSock)
+                    imageNode.location.x = node.location.x - 400
+                    imageNode.location.y = node.location.y - (i * 300)
 
-                imageNode.location.x = node.location.x - 400
-                imageNode.location.y = node.location.y - (i * 300)
+                createdImageNodes.append(imageNode)
+
+            if self.wrap_mode == 'FRAME' and createdImageNodes:
+                frameNode = ntree.nodes.new('NodeFrame')
+                frameNode.label = 'Textures'
+                for n in createdImageNodes:
+                    n.parent = frameNode
+
+            if self.wrap_mode == 'GROUP' and createdImageNodes:
+                # Build the exterior sockets on the group node from the interface
+                # we just populated, then wire each one to the matching TexMulti
+                # texture socket.
+                syncGroupNodeSockets(groupNode)
+                for i, texSock in enumerate(createdTexSockets):
+                    if i < len(groupNode.outputs):
+                        ntree.links.new(groupNode.outputs[i], texSock)
 
         selectedObjectTagUpdate(node, context)
 

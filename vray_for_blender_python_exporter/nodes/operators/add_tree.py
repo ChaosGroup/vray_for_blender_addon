@@ -202,8 +202,8 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
     bl_description = "Add a new V-Ray material"
     bl_options     = {'INTERNAL', 'UNDO'}
 
-    nodeType: bpy.props.StringProperty(name="Node Type", default="")
-    nodeLabel: bpy.props.StringProperty(name="Node Label", default="")
+    nodeType: bpy.props.StringProperty(name="Node Type", default="", options={'SKIP_SAVE'})
+    nodeLabel: bpy.props.StringProperty(name="Node Label", default="", options={'SKIP_SAVE'})
 
     def execute(self, context):
         if ob := getattr(context, 'active_object'):

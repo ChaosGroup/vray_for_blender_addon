@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Mapping, TypeVar, Dict
+from dataclasses import dataclass, field
+from typing import Mapping, Optional, TypeVar, Dict
 import bpy, mathutils
 from numpy import ndarray
 
@@ -22,6 +22,7 @@ class RendererMode:
     Bake        = 4
     Viewport    = 5
     Vantage     = 6
+    ProxyExport = 7
 
 
 class ExporterType:
@@ -36,6 +37,8 @@ class ProdRenderMode:
     EXPORT_VRSCENE = 0
     RENDER = 1
     CLOUD_SUBMIT = 2
+    EXPORT_PROXY = 3
+
 
 class RenderMaskState:
     def __init__(self, mode: str, clearMask: bool,  renderMaskData: list):
@@ -106,6 +109,15 @@ class UIRegionContext:
             self.window:   bpy.types.Window = window
             self.view3d:   bpy.types.SpaceView3D  = view3d
             self.region3d: bpy.types.RegionView3D = view3d.region_3d
+
+
+@dataclass
+class ProxyExportSettings:
+    """Settings and mutable state used only for RendererMode.ProxyExport."""
+
+    exportOnlySelected: bool = False
+    proxyMaterialSlots: list[tuple[int, str | None]] = field(default_factory=list)
+    proxyMaterialSlotOffsets: dict[str, int] = field(default_factory=dict)
 
 
 class ExporterContext:
@@ -264,7 +276,7 @@ class ExporterContext:
 
         # A list of the emissive materials in the scene. Used to create LightSelects for the emissive materials
         # when 'Separate emissive materials' is active in the LighMix options.
-        # The data type is tuple(emissivePluginName, attrName, nodeName)
+        # The data type is tuple(emissivePluginName, attrName, nodeName, materialName)
         self.emissiveMaterials = []
 
         # A stack of the objects that are being currently exported.
@@ -282,13 +294,17 @@ class ExporterContext:
         # UI context data
         self.uiRegionContext: UIRegionContext = None
 
-        # For convenience and conformance with Blender's workflow, production render jobs 
-        # may be started as animation from the keyboard even if the rendering mode set in 
-        # the Output properties is not 'Animation'.
-        self.forceAnimation = False
+        # Per-job override of the scene's animation mode. 'AUTO' means "use Exporter.animation_mode";
+        # 'ANIMATION' forces animation; 'FRAME' forces single frame.
+        self.forceAnimationMode: str = 'AUTO'
 
         # Tracks and updates the progress of the scene export. It is used only when exporting a .vrscene file.
         self.exportProgress = ExporterContext._ExportingProgress()
+
+        # Lazily-built map of {Object: collection_name} for cryptomatte layer name export.
+        # Built once per export pass via _buildObjectCollectionMap() and shared with child exporters.
+        self.objCollectionMap: dict | None = None
+        self.proxyExportSettings = ProxyExportSettings()
 
 
     def _copyConstruct(self, other: ExporterContext):
@@ -325,8 +341,11 @@ class ExporterContext:
         self.activeLightMixNode     = other.activeLightMixNode
         self.updatedMtlWithDisplacement = other.updatedMtlWithDisplacement
         self.uiRegionContext             = other.uiRegionContext
-        self.forceAnimation         = other.forceAnimation
+        self.forceAnimationMode     = other.forceAnimationMode
+        self.exportProgress         = other.exportProgress
+        self.objCollectionMap       = other.objCollectionMap
         self.exportProgress     = other.exportProgress
+        self.proxyExportSettings = other.proxyExportSettings
 
     @property
     def viewport(self):
@@ -357,8 +376,12 @@ class ExporterContext:
         return self.rendererMode == RendererMode.Bake
 
     @property
+    def isProxyExport(self):
+        return self.rendererMode == RendererMode.ProxyExport
+
+    @property
     def isAnimation(self):
-        return self.production and (self.forceAnimation or self.commonSettings.animation.use)
+        return self.production and self.commonSettings.animation.use
 
     @property
     def sceneObjects(self):
@@ -400,7 +423,6 @@ class ExporterContext:
         linkedCollections = [c for c in bpy.data.collections if c.library is not None]
         for c in linkedCollections:
             self.allObjects.update(c.all_objects)
-
 
         self.dgUpdates = {
             'geometry':  set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_geometry)),
@@ -708,7 +730,14 @@ class NodeContext:
         self.object_context = None
 
         # Cache of exported (reachable) nodes to prevent duplicate exports.
-        self._exportedNodes: Dict[bpy.types.Node, AttrPlugin] = {}
+        # Key: (node, group_instance_path). The node object (not id()) is used so the
+        # dict keeps it alive -- preventing wrapper GC and address reuse causing false hits.
+        self._exportedNodes: Dict[tuple, AttrPlugin] = {}
+
+        # The group instance path currently active during export.
+        # Tuple of VRayNodeGroup nodes entered from the root tree to reach the node
+        # being exported.  Set by NodeContext.pushGroupPath().
+        self._groupInstancePath: tuple = ()
 
         # The nodetree being exported
         self.ntree: bpy.types.NodeTree
@@ -740,15 +769,11 @@ class NodeContext:
     def _pushNode(self, node: bpy.types.Node):
         self.nodes.append(node)
 
+    def _cacheKey(self, node: bpy.types.Node) -> tuple:
+        return (node, self._groupInstancePath)
+
     def _popNode(self):
         assert self.nodes, "Nodes stack is empty"
-
-        # Use a warning instead of "assert self.node in self._exportedNodes"
-        # because if an error occurs in the export code, the node plugin won't be cached.
-        # This would trigger the assertion, preventing the actual error from being printed.
-        if self.node not in self._exportedNodes:
-            debug.printWarning(f"Node named '{self.node.name}' is not cached!")
-
         self.nodes.pop()
 
     def push(self, node: bpy.types.Node):
@@ -783,12 +808,35 @@ class NodeContext:
         """ Caches the AttrPlugin of already exported V-Ray node.
             If the node doesn't have corresponding AttrPlugin, an empty one is added.
         """
-        self._exportedNodes[node] = attrPlugin
+        self._exportedNodes[self._cacheKey(node)] = attrPlugin
 
     def getCachedNodePlugin(self, node: bpy.types.Node):
         """ If the given node is cached returns its AttrPlugin, otherwise it returns None
         """
-        return self._exportedNodes.get(node, None)
+        return self._exportedNodes.get(self._cacheKey(node), None)
+
+    def pushGroupPath(self, groupPath: tuple):
+        """ Context manager: set the group instance path for the duration of exporting
+            a node that lives inside the given group nodes.  Also pushes to the module-level
+            stack in tools.py so that resolveNodeSocket can use it for fresh calls.
+        """
+        from vray_blender.exporting.tools import _groupExportStack
+
+        class _GroupPathCtx:
+            def __init__(ctx):
+                ctx._old = self._groupInstancePath
+
+            def __enter__(ctx):
+                self._groupInstancePath = tuple(groupPath)
+                _groupExportStack.append(self._groupInstancePath)
+                return ctx
+
+            def __exit__(ctx, *_):
+                if _groupExportStack:
+                    _groupExportStack.pop()
+                self._groupInstancePath = ctx._old
+
+        return _GroupPathCtx()
 
     @staticmethod
     def registerError(msg: str):

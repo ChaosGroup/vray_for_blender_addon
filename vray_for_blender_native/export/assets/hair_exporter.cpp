@@ -10,7 +10,6 @@
 #include "export/assets/blender_types.h"
 #include <vector>
 
-
 using namespace VRayBaseTypes;
 
 namespace VRayForBlender::Assets
@@ -29,37 +28,36 @@ void mul_m4_v3(const float M[4][4], float* r)
 
 /// @brief Get strand attributes
 /// @param [in] hair
-/// @param [out] vertCounts - Point counts per strand
+/// @param [out] pointCounts - Point counts per strand
 /// @param [out] pointRadii - Strand radius at each point
 void getStrandAttributes(const Interop::HairData& hair, std::vector<int>& pointCounts, std::vector<float>& pointRadii) {
-	const int pts = static_cast<int>(hair.points.size());
-	int strands = 0;
-
-	strands = static_cast<int>(hair.strandSegments.size());
-	pointCounts.assign(hair.strandSegments.data(), hair.strandSegments.data() + strands);
+	if (!hair.strandOffsets.empty()) {
+		// CURVES: raw Blender curve_offsets - compute per-strand point counts as diffs
+		const int strands = static_cast<int>(hair.strandOffsets.size()) - 1;
+		pointCounts.resize(strands);
+		for (int i = 0; i < strands; ++i)
+			pointCounts[i] = hair.strandOffsets[i + 1] - hair.strandOffsets[i];
+	} else {
+		// PARTICLES: pre-computed per-strand counts
+		const int strands = static_cast<int>(hair.strandSegments.size());
+		pointCounts.assign(hair.strandSegments.data(), hair.strandSegments.data() + strands);
+	}
 
 	if (!hair.pointRadii.empty()) {
+		const int pts = static_cast<int>(hair.points.size());
 		pointRadii.assign(hair.pointRadii.data(), hair.pointRadii.data() + pts);
 	}
 }
 
 
 /// @brief Get point coordinates for each strand
-AttrListVector getStrandPoints(const HairData& hair, const std::vector<int>& pointCountsPerStrand) {
+AttrListVector getStrandPoints(const HairData& hair) {
 	AttrListVector points;
 	const int pts = static_cast<int>(hair.points.size());
-	const int strands = static_cast<int>(pointCountsPerStrand.size());
 
 	points.resize(pts);
 
-	const float* ptsPtr = reinterpret_cast<const float*>(hair.points.data());
-	AttrVector* resPtr = *points;
-
-	for (int si = 0; si < strands; ++si) {
-		std::memcpy(resPtr, ptsPtr, pointCountsPerStrand[si] * sizeof(AttrVector));
-		ptsPtr += 3 * pointCountsPerStrand[si];
-		resPtr += pointCountsPerStrand[si];
-	}
+	std::memcpy(*points, hair.points.data(), pts * sizeof(AttrVector));
 
 	return points;
 }
@@ -67,20 +65,19 @@ AttrListVector getStrandPoints(const HairData& hair, const std::vector<int>& poi
 
 /// @brief Get UVs of root points for each strand
 AttrListVector getStrandUVs(const HairData& hair, int strands) {
-	const int uvs = static_cast<int>(hair.uvs.size() / 2);
-
 	AttrListVector strandUVs;
 
 	if (!hair.uvs.empty()) {
+		const int uvs = static_cast<int>(hair.uvs.size() / 2);
 		strandUVs.resize(uvs);
 		const float* uvsPtr = hair.uvs.data();
+		AttrVector* dst = *strandUVs;
 
-		int uvi = 0;
 		for (int si = 0; si < strands; ++si) {
-			(*strandUVs)[si].x = uvsPtr[uvi];
-			(*strandUVs)[si].y = uvsPtr[uvi+1];
-			(*strandUVs)[si].z = 0.0f;
-			uvi += 2;
+			dst->x = *uvsPtr++;
+			dst->y = *uvsPtr++;
+			dst->z = 0.0f;
+			++dst;
 		}
 	}
 
@@ -96,17 +93,12 @@ AttrListVector getStrandColors(const HairData& hair, const std::vector<int>& poi
 		colors.reserve(static_cast<int>((hair.totalParticles - hair.firstToExport) * hair.maxSteps));
 		const float* srcPtr = hair.vertColors.data();
 
-		int vi = 0;
 		const int strands = static_cast<int>(pointCountsPerStrand.size());
 
 		for (int si = 0; si < strands; ++si) {
 			// Set the same color for all vertices of the current strand
-			const float clr[3] = { *srcPtr, *(srcPtr + 1), *(srcPtr + 2) };
-
-			for (size_t step = 0; step < pointCountsPerStrand[si]; ++step){
-				colors.append(clr);
-			}
-			vi += pointCountsPerStrand[si];
+			const AttrVector clr{srcPtr[0], srcPtr[1], srcPtr[2]};
+			colors.fill(clr, pointCountsPerStrand[si]);
 			srcPtr += 3;
 		}
 	}
@@ -151,11 +143,7 @@ AttrValue exportParticleHair(const HairData& hair, ZmqExporter& exporter) {
 			maxSegments = cache->segments;
 		} else if (part < totalCurrent + totalChild && hair.psys->childcache) {
 			cache = hair.psys->childcache[part - totalCurrent];
-
-			if (cache->segments < 0)
-				maxSegments = 0;
-			else
-				maxSegments = cache->segments;
+			maxSegments = std::max(0, cache->segments);
 		} else {
 			continue;
 		}
@@ -188,14 +176,15 @@ AttrValue exportParticleHair(const HairData& hair, ZmqExporter& exporter) {
 		}
 		pointCounts.append(pointsForStrand);
 
+		const float invSteps = pointsForStrand > 1 ? 1.0f / (pointsForStrand - 1) : 0.0f;
 		if (hair.shape == 0) {
-			const float shapeStep = (hair.tipRadius - hair.rootRadius) / (pointsForStrand - 1);
+			const float shapeStep = (hair.tipRadius - hair.rootRadius) * invSteps;
 			for (int j = 0; j < pointsForStrand; ++j) {
 				pointRadii.append(hair.rootRadius + shapeStep * j);
 			}
 		} else {
 			for (int j = 0; j < pointsForStrand; ++j) {
-				const float t = 1.0f - (float)j / (pointsForStrand - 1);
+				const float t = 1.0f - j * invSteps;
 				const float val = std::pow(t, shapeExp) * (hair.rootRadius - hair.tipRadius) + hair.tipRadius;
 				pointRadii.append(val);
 			}
@@ -235,12 +224,11 @@ AttrValue exportGeomHair(const HairData& hair, ZmqExporter& exporter) {
 	getStrandAttributes(hair, /*r*/pointCountsPerStrand, /*r*/pointRadii);
 
 	const int strandCount = int(pointCountsPerStrand.size());
-	AttrListVector  vertices = getStrandPoints(hair, pointCountsPerStrand);
+	AttrListVector  vertices = getStrandPoints(hair);
 	AttrListVector  strandUVs = getStrandUVs(hair, strandCount);
 	AttrListVector  strandColors = getStrandColors(hair, pointCountsPerStrand);
 	AttrListFloat	radii(std::move(pointRadii));
 	AttrListInt		pointCounts(std::move(pointCountsPerStrand));
-
 
 	PluginDesc hairDesc(hair.name, "GeomMayaHair");
 	hairDesc.add("num_hair_vertices", pointCounts);

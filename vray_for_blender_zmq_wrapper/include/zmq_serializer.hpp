@@ -37,6 +37,10 @@ public:
 		return stream.data();
 	}
 
+	void reserve(size_t additionalBytes) {
+		stream.reserve(stream.size() + additionalBytes);
+	}
+
 private:
 	std::vector<char> stream;
 };
@@ -107,29 +111,15 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrMapChannels & map) {
 	stream << static_cast<int>(map.data.size());
 	for (auto & channel : map.data) {
-		stream << channel.vertices << channel.faces << channel.name;
-	}
-	return stream;
-}
-
-
-inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrInstancer::Item & instItem) {
-	return stream << instItem.index << instItem.tm << instItem.vel << instItem.node;
-}
-
-
-inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrInstancer & inst) {
-	stream << inst.frameNumber << inst.data.getCount();
-	if (!inst.data.empty()) {
-		for (auto & item : *(inst.data.getData())) {
-			stream << item;
-		}
+		stream << channel.vertices << channel.faces << channel.name << channel.channelId;
 	}
 	return stream;
 }
 
 
 inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrImage & image) {
+	// Pre-reserve to avoid reallocation when appending the pixel data.
+	stream.reserve(image.size + 6 * sizeof(int));
 	stream << image.imageType << image.size << image.width << image.height << image.x << image.y;
 	stream.write(image.data.get(), image.size);
 	return stream;
@@ -140,6 +130,10 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 	stream << set.sourceType << static_cast<int>(set.images.size());
 	for (const auto &img : set.images) {
 		stream << img.first << img.second;
+	}
+	stream << static_cast<int>(set.metadata.size());
+	for (const auto &kv : set.metadata) {
+		stream << kv.first << kv.second;
 	}
 	return stream;
 }
@@ -170,7 +164,6 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 	case ValueTypeListString: stream << value.as<AttrListString>(); break;
 	case ValueTypeListPlugin: stream << value.as<AttrListPlugin>(); break;
 	case ValueTypeListValue: stream << value.as<AttrListValue>(); break;
-	case ValueTypeInstancer: stream << value.as<AttrInstancer>(); break;
 	case ValueTypeMapChannels: stream << value.as<AttrMapChannels>(); break;
 	default: vassert(!"Missing SerializerStream::operator<< for some ValueType");
 	}

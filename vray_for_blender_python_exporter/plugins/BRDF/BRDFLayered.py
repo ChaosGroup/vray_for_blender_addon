@@ -15,6 +15,7 @@ from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink
 from vray_blender.nodes.sockets import addInput, addOutput, getHiddenInput, moveExtendSocketToBottom
 from vray_blender.nodes.utils import getVrayPropGroup
+from vray_blender.nodes.links import scheduleFixMisdirectedLink
 from vray_blender.plugins import getPluginModule
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -43,30 +44,23 @@ def nodeInit(node: bpy.types.Node):
     addOutput(node, 'VRaySocketBRDF', "BRDF")
 
 
-_ScheduledUpdates = set()
-
 def nodeUpdate(node: bpy.types.Node):
-    def _validateLinks():
-        _ScheduledUpdates.discard(node.as_pointer())
-
-        if not node or not node.id_data:
-            return
-
-        transpSock = node.inputs.get("Transparency Tex")
-        if transpSock and transpSock.is_linked:
-            baseMatSock = node.inputs.get("Base Material")
-            if baseMatSock and not baseMatSock.is_linked:
-                link = transpSock.links[0]
-                if link.from_socket.bl_idname in {'VRaySocketBRDF', 'VRaySocketMtl'}:
-                    node.id_data.links.new(link.from_socket, baseMatSock)
-                    node.id_data.links.remove(link)
-
-    # When creating a BRDFLayered on top on an existing node link between materials it will get connected
+    # When creating a BRDFLayered on top of an existing node link between materials it will get connected
     # to the Transparency socket. In this case insert_link doesn't get called so we do it here manually.
-    nodePtr = node.as_pointer()
-    if nodePtr not in _ScheduledUpdates:
-        _ScheduledUpdates.add(nodePtr)
-        bpy.app.timers.register(_validateLinks)
+    scheduleFixMisdirectedLink(node, "Transparency Tex", "Base Material", {'VRaySocketBRDF', 'VRaySocketMtl'})
+
+
+def addCoatLayer(node: bpy.types.Node) -> bpy.types.NodeSocket:
+    """ Add a new coat layer to a BRDFLayered node.
+        Returns the new BRDF input socket.
+    """
+    newIndex = _getLayersCount(node) + 1
+    brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(newIndex)
+    newBrdfSock = addInput(node, 'VRaySocketBRDF', brdfSockName)
+    addInput(node, 'VRaySocketColor', weightSockName).setValue((0.5, 0.5, 0.5))
+    addInput(node, 'VRaySocketWeight', opacitySockName, visible=False).setValue(1.0)
+    moveExtendSocketToBottom(node)
+    return newBrdfSock
 
 
 def nodeInsertLink(link: bpy.types.NodeLink):
@@ -74,20 +68,7 @@ def nodeInsertLink(link: bpy.types.NodeLink):
     if link.to_socket.bl_idname == 'VRaySocketExtend':
         from_socket = link.from_socket
         ntree = node.id_data
-
-        layersCount = _getLayersCount(node)
-        newIndex = layersCount + 1
-
-        brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(newIndex)
-
-        newBrdfSock = node.inputs.new('VRaySocketBRDF',  brdfSockName)
-        node.inputs.new('VRaySocketColor', weightSockName).setValue((0.5, 0.5, 0.5))
-        opacitySocket = node.inputs.new('VRaySocketWeight', opacitySockName)
-        opacitySocket.setValue(1.0)
-        opacitySocket.hide = True
-
-        moveExtendSocketToBottom(node)
-
+        newBrdfSock = addCoatLayer(node)
         # Update the link to use the new socket by creating a new link and removing the old one
         ntree.links.new(from_socket, newBrdfSock)
         ntree.links.remove(link)
@@ -165,23 +146,7 @@ class VRAY_OT_node_add_brdf_layered_sockets(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        node = context.node
-
-        layersCount = _getLayersCount(node)
-        newIndex = layersCount + 1
-
-        brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(newIndex)
-
-        node.inputs.new('VRaySocketBRDF',  brdfSockName)
-        node.inputs.new('VRaySocketColor', weightSockName).setValue((0.5, 0.5, 0.5))
-        opacitySocket = node.inputs.new('VRaySocketWeight', opacitySockName)
-        opacitySocket.setValue(1.0)
-        opacitySocket.hide = True
-
-        # Move the extend socket to the end
-        from vray_blender.nodes.sockets import moveExtendSocketToBottom
-        moveExtendSocketToBottom(node)
-
+        addCoatLayer(context.node)
         return {'FINISHED'}
 
 

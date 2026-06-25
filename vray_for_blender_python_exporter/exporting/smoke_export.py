@@ -5,6 +5,7 @@
 import bpy
 from array import array
 import copy
+import os
 from mathutils import Matrix
 
 from vray_blender.exporting import tools
@@ -54,7 +55,7 @@ class SmokeExporter(ExporterBase):
 
         curFrame = bpy.context.scene.frame_current
         currentCacheFileName = "fluid_data_" + '0'*(4-len(str(curFrame))) + str(curFrame) + ".vdb"
-        data.cacheDir = bpy.path.abspath(fluidModif.domain_settings.cache_directory + "\\data\\" + currentCacheFileName)
+        data.cacheDir = bpy.path.abspath(os.path.join(fluidModif.domain_settings.cache_directory, "data", currentCacheFileName))
         transf = copy.deepcopy(obj.matrix_world)
 
         # TODO: currently the smoke has an offset and this transformation serves to correct it
@@ -86,6 +87,8 @@ class SmokeExporter(ExporterBase):
 
         self.objTracker.trackPlugin(objTrackId, pluginName)
         self.objTracker.trackPlugin(objTrackId, f'{pluginName}@PhxShaderCache')
-        self.objTracker.trackPlugin(objTrackId, '__PhxShaderGlobalVolume__')
+
+        # Deletion of the '__PhxShaderGlobalVolume__' plugin causes an internal V-Ray error.
+        # self.objTracker.trackPlugin(objTrackId, '__PhxShaderGlobalVolume__')
 
         return AttrPlugin(pluginName)

@@ -13,11 +13,14 @@ from vray_blender import debug
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 def onCausticsEnabled(SettingsCaustics, context, attrName):
-    # SettingsCaustics creates channel on enablement and needs reset to be properly visualized
+    # SettingsCaustics creates channel on enablement and needs reset to be properly visualized 
     for iprRenderer in (VRayRendererIprViewport, VRayRendererIprVfb):
         if iprRenderer.isActive() and SettingsCaustics.on:
             iprRenderer.reset()
-            debug.report("WARNING", "Caustics will be forced to 'Progressive' mode during interactive rendering")
+            # debug.report() invokes bpy.ops.vray.report(...).
+            # Calling bpy.ops.* synchronously from inside a property update callback is unsafe.
+            # For that reason, we use debug.reportAsync() instead.
+            debug.reportAsync("WARNING", "Caustics will be forced to 'Progressive' mode during interactive rendering")
             return
 
 

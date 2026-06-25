@@ -37,7 +37,10 @@
                         "name": "config_src"
                     },
                     {
-                        "name": "config_file"
+                        "name": "config_file",
+                        "active": {
+                            "cond": "::config_src=0;::config_src=2"
+                        }
                     },
                     {
                         "name": "inout_type"
@@ -52,6 +55,7 @@
                 "name": "color space",
                 "label": "Color Space",
                 "default_closed": false,
+                "visible": {"cond": "::mode=0"},
                 "attrs": [
                     {
                         "name": "colorspace_in",
@@ -67,6 +71,7 @@
                 "layout": "ROLLOUT",
                 "name": "look",
                 "label": "Look",
+                "visible": {"cond": "::mode=5"},
                 "attrs": [
                     {
                         "name": "look_input_colorspace"

@@ -6,10 +6,12 @@ import bpy
 
 def run():
     for scene in bpy.data.scenes:
+        if not scene.world:
+            continue
         denoiser = scene.world.vray.RenderChannelDenoiser
-        nodeDenoiser = scene.world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser
-        denoiser.viewport_enabled = nodeDenoiser.enabled and denoiser.enabled
-        denoiser.viewport_engine = denoiser.engine
+        # Only Intel and NVIDIA denoisers are supported with Intel(1) being the default
+        scene.vray.Exporter.viewport_denoiser_engine = '2' if denoiser.engine == '2' else '1'
+
 
 def check():
     for scene in bpy.data.scenes:

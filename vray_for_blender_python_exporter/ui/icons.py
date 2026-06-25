@@ -4,6 +4,7 @@
 
 import bpy
 import bpy.utils.previews
+from mathutils import Color
 
 import os
 
@@ -112,6 +113,39 @@ _UI_ICONS = {}
 def getIcon(idIcon: str):
     """ Get Blender's ID of a custom icon """
     return _VRAY_ICONS[idIcon].icon_id
+
+    
+def getSolidColorIcon(colorLinear):
+    """ Get the ID of a dynamic icon with the specified color """
+    import struct
+
+    iconKey = "_SOLID_COLOR_ICON"
+    size = 16
+
+    if iconKey not in _VRAY_ICONS:
+        # Create a new icon. Blender draws all icons in turn, so it is OK to hand
+        # the same icon with updated color for each call site.
+        icon = _VRAY_ICONS.new(iconKey)
+        icon.icon_size = (size, size)
+        icon.is_icon_custom = True
+    else:
+        icon = _VRAY_ICONS[iconKey]
+
+    # Convert scene linear to perceptual color, which is always sRGB
+    # in Blender's color picker.  
+    perceptualColor = Color.from_scene_linear_to_srgb(colorLinear)
+
+    r = int(max(0.0, min(1.0, perceptualColor.r)) * 255)
+    g = int(max(0.0, min(1.0, perceptualColor.g)) * 255)
+    b = int(max(0.0, min(1.0, perceptualColor.b)) * 255)
+    
+    pixelUnsigned = (255 << 24) | (b << 16) | (g << 8) | r
+    pixelSigned = struct.unpack('i', struct.pack('I', pixelUnsigned))[0]
+
+    pixels = [pixelSigned] * (size * size)
+    icon.icon_pixels = pixels
+
+    return icon.icon_id
 
 
 def getUIIcon(element: bpy.types.Struct):

@@ -49,6 +49,8 @@ def widgetDrawRamp(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
         box = layout.box()
         socket_label = sock.identifier
         box.label(text=socket_label)
+        if not ramp_node.texture:
+            continue
         box.template_color_ramp(ramp_node.texture, 'color_ramp')
 
         # Draw all point textures for current color ramp

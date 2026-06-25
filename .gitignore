@@ -1,0 +1,20 @@
+installOut/
+
+.DS_Store
+
+# Some common names of folders on dev machines which should be excluded
+build/
+install/
+/**/bin
+/**/bin_
+.vscode/
+vs-chromium-project.txt
+develop/
+
+.vs/
+.venv/
+.zed/
+
+.gemini/
+.geminiignore
+.claude

@@ -17,6 +17,7 @@ from vray_blender.plugins import PLUGIN_MODULES
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 
+
 class VRayRenderEngine(bpy.types.RenderEngine):
     bl_idname = 'VRAY_RENDER_RT'
     bl_label = "V-Ray"
@@ -24,7 +25,7 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     # Render engine supports being used for rendering previews of materials, lights and worlds
     bl_use_preview = True
 
-    # Don’t expose Cycles and Eevee shading nodes in the node editor
+    # Don't expose Cycles and Eevee shading nodes in the node editor
     # user interface, so own nodes can be used instead
     bl_use_shading_nodes_custom = True
 
@@ -63,6 +64,10 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         # used for rendering. Because each renderer is attached to a specific area, this will allow
         # us to know to never render in the area unless the render engine is recreated.
         self._inactiveViewport = False
+
+        # Unsupported Cryptomatte id_types we've already warned about, to avoid duplicate
+        # warnings when multiple Cryptomatte channel nodes share the same id_type.
+        self._warnedCryptoIdTypes: set[str] = set()
 
 
     def __del__(self):
@@ -103,7 +108,6 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             VRayRenderEngine.viewportRenderer.stop(block=False)
             VRayRenderEngine.viewportRenderer = None
 
-        VRayRenderEngine.mainVrayRenderer = None
 
     @staticmethod
     def startInteractiveRenderer(uiRegionContext: UIRegionContext):
@@ -240,6 +244,73 @@ class VRayRenderEngine(bpy.types.RenderEngine):
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VRayRenderEngine::view_draw()")
+
+    def update_render_passes(self, scene: bpy.types.Scene, viewLayer: bpy.types.ViewLayer):
+        if self.is_preview or self.iprRenderer:
+            return
+        # Blender 5.1's compositor node_declare can fire from after_liblink_id_process
+        # mid-file-load, when the world's bNodeTree typeinfo hasn't been bound yet.
+        # Touching world.node_tree then crashes inside rna_NodeTree_refine.
+        from vray_blender import events
+        if events.isBlendFileLoading():
+            return
+
+        if not scene.vray.Exporter.image_to_blender:
+            return
+
+        from vray_blender.nodes import utils as NodesUtils
+        from vray_blender.engine.render_elements import (
+            enumerateCryptomatteNodes, cryptomattePassName,
+            enumerateObjectSelectNodes, objectSelectPassName,
+            enumerateGenericChannelNodes, enumerateSpecialPasses,
+            OBJECT_SELECT_SUBINDEX_MATTE, OBJECT_SELECT_SUBINDEX_FILTER, OBJECT_SELECT_SUBINDEX_ALPHA,
+        )
+
+        world = scene.world
+        if not world or not world.node_tree:
+            return
+        if not NodesUtils.getChannelsOutputNode(world.node_tree):
+            return
+
+        self.register_pass(scene, viewLayer, "Combined", 4, "RGBA", "COLOR")
+
+        for _cryptoNode, instanceName, typePrefix, idType, numPasses in enumerateCryptomatteNodes(world):
+            if idType not in ("0", "1") and idType not in self._warnedCryptoIdTypes:
+                debug.report("WARNING",
+                    f"Cryptomatte id_type '{idType}' is not fully supported in Blender's compositor. "
+                    "Only 'Node name' (Object) and 'Node material name' (Material) modes work with "
+                    "Blender's Cryptomatte picking. Falling back to CryptoObject.")
+                self._warnedCryptoIdTypes.add(idType)
+            for layerIdx in range(numPasses):
+                self.register_pass(scene, viewLayer,
+                                   cryptomattePassName(typePrefix, instanceName, layerIdx),
+                                   4, "RGBA", "COLOR")
+
+        for _, instanceName in enumerateObjectSelectNodes(world):
+            self.register_pass(scene, viewLayer,
+                               objectSelectPassName(instanceName, OBJECT_SELECT_SUBINDEX_MATTE),
+                               4, "RGBA", "COLOR")
+            self.register_pass(scene, viewLayer,
+                               objectSelectPassName(instanceName, OBJECT_SELECT_SUBINDEX_FILTER),
+                               4, "RGBA", "COLOR")
+            self.register_pass(scene, viewLayer,
+                               objectSelectPassName(instanceName, OBJECT_SELECT_SUBINDEX_ALPHA),
+                               1, "A", "VALUE")
+
+        # Every channel node the user wired: one Blender pass per (V-Ray plugin) instance,
+        # named after the plugin's `name` attribute. Distinct names = independent passes.
+        for _node, _channelType, instanceName, reType in enumerateGenericChannelNodes(world):
+            if reType == "color":
+                self.register_pass(scene, viewLayer, instanceName, 3, "RGB", "COLOR")
+            elif reType == "vector":
+                self.register_pass(scene, viewLayer, instanceName, 3, "XYZ", "VECTOR")
+            else:
+                self.register_pass(scene, viewLayer, instanceName, 1, "Z", "VALUE")
+
+        # Effects Result (always) and Denoised (when wired). Both are color passes.
+        # Same enumerator drives subscription in renderer_prod_base so the two can't drift.
+        for passName, _channelType, _instanceName in enumerateSpecialPasses(world):
+            self.register_pass(scene, viewLayer, passName, 3, "RGB", "COLOR")
 
 
     # We are in background mode, so override UI settings with supported arugments

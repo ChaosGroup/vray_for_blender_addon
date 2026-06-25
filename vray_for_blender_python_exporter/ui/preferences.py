@@ -5,12 +5,19 @@
 import bpy
 import json
 import os
+import platform
 import sys
 from vray_blender import version
 from vray_blender.lib import blender_utils, sys_utils
 from vray_blender.plugins.system.compute_devices import ComputeDevices
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.ui.community_edition import drawCELimitedFeatureIcon
+
+if sys.platform == "win32":
+    # The psutil we ship is currently broken on macos. It takes into account numa nodes
+    # and is only used for the total thread count message we show the user, but we should
+    # be fine with os.cpu_count on most MacOS machines.
+    from vray_blender.external import psutil
 
 def getVRayCloudPath():
     """
@@ -138,6 +145,56 @@ class VRayRenderNode(bpy.types.PropertyGroup):
     )
 
 
+class VRAY_OT_switch_license_type(bpy.types.Operator):
+    """ Toggle the Community / Commercial license selection and restart the
+        VRayZmqServer process so the new license type is applied. """
+    bl_idname      = "vray.switch_license_type"
+    bl_label       = "Switch License Type"
+    bl_description = "Switch between Commercial and Community editions. The V-Ray server will be restarted to apply the new license type"
+    bl_options     = {'INTERNAL'}
+
+    @staticmethod
+    def _isRenderRunning():
+        """ Return True if any V-Ray renderer is currently active.
+            Mirrors the set of renderer slots cleared by VRayRenderEngine.resetAll().
+        """
+        from vray_blender.engine.render_engine import VRayRenderEngine
+        return any((
+            VRayRenderEngine.prodRenderer,
+            VRayRenderEngine.previewRenderer,
+            VRayRenderEngine.viewportRenderer,
+            VRayRenderEngine.iprRenderer,
+        ))
+
+    def invoke(self, context, event):
+        # Only prompt when an active render would be aborted by the restart.
+        if self._isRenderRunning():
+            return context.window_manager.invoke_props_dialog(self, width=400)
+        return self.execute(context)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="A V-Ray render is currently running.", icon='ERROR')
+        layout.label(text="Switching the license type will restart the V-Ray server")
+        layout.label(text="and abort the active render. Continue?")
+
+    def execute(self, context):
+        from vray_blender.engine.zmq_process import ZMQ
+        from vray_blender.engine.render_engine import VRayRenderEngine
+
+        prefs = context.preferences.addons[VRayExporterPreferences.bl_idname].preferences
+        prefs.community_edition = not prefs.community_edition
+
+        # Make sure no renderers are using the about-to-die ZmqServer.
+        VRayRenderEngine.resetAll()
+
+        # Restart the server so the new -license value is picked up.
+        ZMQ.stop()
+        ZMQ.ensureRunning()
+
+        return {'FINISHED'}
+
+
 class VRayExporterPreferences(bpy.types.AddonPreferences):
     bl_idname = "vray_blender"
 
@@ -169,7 +226,9 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
     vantage_port: bpy.props.IntProperty(
         name = "Port",
         default = 20703,
-        description = "V-Ray Vantage Live Link port"
+        description = "V-Ray Vantage Live Link port",
+        min = 1,
+        max = 65535
     )
 
     use_remote_dispatcher: bpy.props.BoolProperty(
@@ -284,6 +343,12 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         default = 0
     )
 
+    community_edition: bpy.props.BoolProperty(
+        name = "Community Edition",
+        description = "Run V-Ray for Blender as the Community Edition. Features that are not available in CE are disabled while this is enabled",
+        default = False
+    )
+
     def _drawAboutPanel(self, layout):
         from vray_blender.menu import VRAY_OT_show_account_status
         box = layout.box()
@@ -305,6 +370,12 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             rowAccount = subLayout.row()
             rowAccount.label(text="Chaos Account settings")
             rowAccount.operator(VRAY_OT_show_account_status.bl_idname, text="Open")
+
+            rowLicense = subLayout.row()
+            currentLicense = "Community" if self.community_edition else "Commercial"
+            switchTarget   = "Commercial" if self.community_edition else "Community"
+            rowLicense.label(text=f"License: {currentLicense} Edition")
+            rowLicense.operator(VRAY_OT_switch_license_type.bl_idname, text=f"Use {switchTarget} Edition")
 
             rowCloudBinary = subLayout.row()
             if self.detect_vray_cloud:
@@ -369,10 +440,41 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             subLayout.prop(self, 'mtl_use_roughness')
             subLayout.prop(self, 'auto_check_for_updates')
 
+    def _drawPerformancePanel(self, layout, context):
+        box = layout.box()
+        header, subLayout = box.panel(idname="performance", default_closed=True)
+        header.label(text="Performance")
+        if not subLayout:
+            return
+
+        split = subLayout.split(factor=0.05, align=True)
+        split.column()
+        panel = split.column(align=True)
+        panel.separator()
+
+        vrayExporter = context.scene.vray.Exporter
+
+        subLayout = panel.column()
+        subLayout.use_property_split = True
+        subLayout.use_property_decorate = False
+
+        subLayout.prop(vrayExporter, 'use_custom_thread_count', text='Thread Mode')
+        threadCount = psutil.cpu_count() if sys.platform == "win32" else os.cpu_count()
+        infoRow = subLayout.row()
+        infoRow.alignment = 'RIGHT'
+        infoRow.label(text=f"The system has {threadCount} CPU threads")
+        threadsRow = subLayout.row()
+        threadsRow.enabled = vrayExporter.use_custom_thread_count == 'FIXED'
+        threadsRow.prop(vrayExporter, 'custom_thread_count', text='Threads')
+        if platform.system() != "Linux":
+            subLayout.separator()
+            subLayout.prop(vrayExporter, 'lower_thread_priority', text='Lower Thread Priority')
+
     def _drawGeneralPanel(self, layout, context):
         self._drawAboutPanel(layout)
         self._drawTelemetryPanel(layout)
         self._drawAdditionalSettingsPanel(layout)
+        self._drawPerformancePanel(layout, context)
 
     def _drawLoggingPanel(self, layout, context):
         box = layout.box()
@@ -409,8 +511,10 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
                 subLayout.prop(computeDevices, "gpuDeviceType")
                 subLayout.separator()
 
+                from vray_blender.plugins.system.compute_devices import getDeviceCollectionByType
                 deviceType = computeDevices.gpuDeviceType
-                if devicesList := getattr(computeDevices, "devicesCUDA" if deviceType == "0" else "devicesOptix"):
+                devicesAttr = getDeviceCollectionByType(deviceType)
+                if devicesList := getattr(computeDevices, devicesAttr):
                     for device in devicesList:
                         deviceRow = subLayout.row()
                         deviceRow.prop(device, "deviceEnabled", text=device.deviceName)
@@ -427,7 +531,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         labelRow = headerRow.row()
         labelRow.label(text="V-Ray Distributed Rendering")
         labelRow.enabled = not vray.isCommunityEdition()
-        
+
         if vray.isCommunityEdition():
             drawCELimitedFeatureIcon(headerRow)
 
@@ -492,6 +596,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 def getRegClasses():
     return (
         VRayRenderNode,
+        VRAY_OT_switch_license_type,
         VRayExporterPreferences,
     )
 

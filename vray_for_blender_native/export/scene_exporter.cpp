@@ -59,9 +59,20 @@ void SceneExporter::init(ExporterBase* policy, const ExporterSettings& settings)
 			case proto::RendererAsyncOp::ExportVrscene:
 				m_vrsceneExportInProgress = false;
 				break;
+			case proto::RendererAsyncOp::ExportVrmesh: {
+				std::lock_guard<std::mutex> lk(m_proxyExportWaitMtx);
+				m_lastProxyExportResult = success;
+				m_lastProxyExportMessage = success ? std::string{} : message;
+				m_proxyExportInProgress = false;
+				break;
+			}
 
 			default:
 				vassert("Invalid async operation type.");
+			}
+
+			if (op == proto::RendererAsyncOp::ExportVrmesh) {
+				m_proxyExportCv.notify_all();
 			}
 
 			if (!success) {
@@ -135,6 +146,12 @@ void SceneExporter::setCameraName(const std::string& cameraName)
 }
 
 
+void SceneExporter::setResumableRendering(bool enabled, const std::string& outputFileName, int autosaveSeconds, bool deleteOnSuccess)
+{
+	m_exporter->setResumableRendering(enabled, outputFileName, autosaveSeconds, deleteOnSuccess);
+}
+
+
 void SceneExporter::syncView(const ViewSettings& viewSettings)
 {
 	m_exporter->syncView(viewSettings);
@@ -183,11 +200,17 @@ float SceneExporter::getRenderProgress() const
 }
 
 
+void SceneExporter::requestRenderChannel(int channelType, const std::string& pluginInstanceName, int subIndex)
+{
+	m_exporter->requestRenderChannel(channelType, pluginInstanceName, subIndex);
+}
+
+
 void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 {
 	if (asyncExport) {
 		m_wg->add(1);
-		m_threadManager->addTask([this, mesh](int, const volatile bool &)mutable{
+		m_threadManager->addTask([this, mesh](int, const std::atomic<bool> &)mutable{
 			NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
 
 			PluginDesc pluginDesc(mesh->name, "GeomStaticMesh");
@@ -219,7 +242,7 @@ void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 void SceneExporter::exportHair(HairDataPtr hair)
 {
 	m_wg->add(1);
-	m_threadManager->addTask([this, hair](int, const volatile bool &) mutable {
+	m_threadManager->addTask([this, hair](int, const std::atomic<bool> &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
 
 		ScopeTimer tm("exportHair");
@@ -237,7 +260,7 @@ void SceneExporter::exportHair(HairDataPtr hair)
 void SceneExporter::exportSmoke(SmokeDataPtr smoke)
 {
 	m_wg->add(1);
-	m_threadManager->addTask([this, smoke](int, const volatile bool &) mutable {
+	m_threadManager->addTask([this, smoke](int, const std::atomic<bool> &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
 
 		using Matrix = float[4][4];
@@ -260,7 +283,7 @@ void SceneExporter::exportPointCloud(PointCloudDataPtr pc, bool asyncExport)
 {
 	if (asyncExport) {
 		m_wg->add(1);
-		m_threadManager->addTask([this, pc](int, const volatile bool &) mutable {
+		m_threadManager->addTask([this, pc](int, const std::atomic<bool> &) mutable {
 			NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
 
 			ScopeTimer tm("exportPointCloud");
@@ -284,7 +307,7 @@ void SceneExporter::exportPointCloud(PointCloudDataPtr pc, bool asyncExport)
 void SceneExporter::exportInstancer(InstancerDataPtr inst)
 {
 	m_wg->add(1);
-	m_threadManager->addTask([this, inst](int, const volatile bool &) mutable {
+	m_threadManager->addTask([this, inst](int, const std::atomic<bool> &) mutable {
 		NotifyTaskDone<CondWaitGroup> doneTask(*m_wg);
 
 		ScopeTimer tm("exportInstancer");
@@ -340,6 +363,26 @@ int SceneExporter::writeVrscene(const ExportSceneSettings& exportSettings)
 		return result;
 	}
 	return false;
+}
+
+std::pair<bool, std::string> SceneExporter::exportProxy(const ProxyExportSettings& proxySettings)
+{
+	bool inProgress = false;
+
+	if (!m_proxyExportInProgress.compare_exchange_strong(inProgress, true)) {
+		return {false, "A proxy export is already in progress."};
+	}
+
+	const int result = m_exporter->exportProxy(proxySettings);
+	if (!result) {
+		m_proxyExportInProgress.store(false);
+		return {false, "Failed to send proxy export request."};
+	}
+
+	std::unique_lock<std::mutex> lock(m_proxyExportWaitMtx);
+	m_proxyExportCv.wait(lock, [this] { return !m_proxyExportInProgress.load(); });
+
+	return { m_lastProxyExportResult, m_lastProxyExportMessage };
 }
 
 

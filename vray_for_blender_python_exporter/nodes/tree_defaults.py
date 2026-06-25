@@ -28,7 +28,8 @@ def addWorldNodeTree(world: bpy.types.World):
 
 
     # Setting use_nodes to True will synchronously add a node tree to the node.
-    world.use_nodes = True
+    if hasattr(world, 'use_nodes'):
+        world.use_nodes = True
     ntree = world.node_tree
     ntree.use_fake_user = True
 

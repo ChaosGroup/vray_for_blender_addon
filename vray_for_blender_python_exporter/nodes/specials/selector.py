@@ -58,9 +58,21 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
         return result
                 
 
+    def copy(self, node: bpy.types.Node):
+        if node.bl_idname != 'VRayNodeMultiSelect':
+            return
+        self.selectedItems.clear()
+        for srcItem in node.selectedItems:
+            dstItem = self.selectedItems.add()
+            dstItem.name       = srcItem.name
+            dstItem.objectPtr  = srcItem.objectPtr
+            dstItem.objectType = srcItem.objectType
+            dstItem.enabled    = srcItem.enabled
+        self.activeItem = node.activeItem
+
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         self.drawSelectorUI(context, layout, dataProvider=context.scene, dataProperty='objects', listLabel="Object List")
-        
+
 
     def onFilterObject(self: bpy.types.Node, obj):
         # Return the poll (filter) function for the Object Select field
@@ -90,7 +102,8 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
 
     # Node.update() override
     def update(self):
-        # Mark as disabled the items that are not compatible with the socket(s) the output of 
+        super().update()
+        # Mark as disabled the items that are not compatible with the socket(s) the output of
         # this node is linked to.
         inputSockets = [l.to_socket for l in getActiveOutputFarNodeLinks(self.outputs[0])]
         
@@ -170,6 +183,11 @@ class VRayNodeSelectObject(VRayNodeBase):
     
     def init(self, context):
         addOutput(self, 'VRaySocketObject', "Object")
+
+    def copy(self, node: bpy.types.Node):
+        if node.bl_idname == 'VRayNodeSelectObject':
+            self.objectPtr  = node.objectPtr
+            self.objectName = node.objectName
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
         layout.prop_search(self, 'objectPtr',

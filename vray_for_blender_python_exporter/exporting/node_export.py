@@ -8,9 +8,10 @@ import mathutils
 from vray_blender.lib import export_utils, lib_utils
 from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
 from vray_blender.lib.names import Names
+from vray_blender.lib.sys_utils import getUvGridTexturePath
 from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId
-from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeMtlMulti, exportVRayNodeShaderScript
+from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeShaderScript
 from vray_blender.exporting.node_exporters.uvw_node_export import exportVRayNodeUVWGenRandomizer, exportVRayNodeUVWMapping
 from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isVraySocket, isCompatibleNode
 
@@ -77,7 +78,8 @@ def exportSocket(nodeCtx: NodeContext, inSocket: bpy.types.NodeSocket):
     if link := getFarNodeLink(inSocket):
         return exportSocketLink(nodeCtx, link)
 
-    return inSocket.value
+    resolvedSock = resolveNodeSocket(inSocket)
+    return resolvedSock.value if resolvedSock else inSocket.value
 
 
 def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
@@ -85,6 +87,11 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     """ Export V-Ray node using its custom function if it has one or with '_exportArbitraryNode' otherwise
     """
     node = nodeCtx.node
+
+    # Group nodes are traversed transparently by resolveNodeSocket().
+    # If we got here, the group has no valid output connection.
+    if node.bl_idname in ('VRayNodeGroup', 'NodeGroupInput', 'NodeGroupOutput'):
+        return AttrPlugin()
 
     # Currently the list of compatible nodes contains only cycles nodes and
     # group/re-route which are skipped by the export anyways.
@@ -102,8 +109,6 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
             return exportVRayNodeBRDFBump(nodeCtx)
         case "VRayNodeMtlOSL":
             return exportVRayNodeShaderScript(nodeCtx)
-        case "VRayNodeMtlMulti":
-            return exportVRayNodeMtlMulti(nodeCtx)
         case "VRayPluginListHolder":
             return _exportVRayPluginListHolder(nodeCtx)
         case "VRayNodeSelectObject":
@@ -141,7 +146,8 @@ def exportVRayNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
 
     # Change the current context
     nodeFromCache = True
-    with nodeCtx.push(node):
+    groupPath = getattr(nodeLink, 'groupPath', ())
+    with nodeCtx.push(node), nodeCtx.pushGroupPath(groupPath):
         # Check if the node is already exported.
         # When one node is connected to multiple sockets it will be iterated more than once.
         # For cycles nodes the node cache is skipped since the output logic is handled there,
@@ -197,6 +203,48 @@ def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     return attrPlugin
 
 
+def _resolveGroupInputSocket(sock):
+    """ If sock is connected (possibly through reroutes) to a NodeGroupInput,
+        and the corresponding group node input socket is unlinked, return that
+        group node input socket. Otherwise return None.
+    """
+    if not sock.is_linked:
+        return None
+
+    resolved = resolveNodeSocket(sock)
+    if resolved and not resolved.is_linked and resolved.node and resolved.node.bl_idname in ('VRayNodeGroup', 'ShaderNodeGroup'):
+        return resolved
+    return None
+
+
+def _getGroupInputOverrideSocket(sock):
+    """ If sock is connected (possibly through reroutes) to a NodeGroupInput,
+        return the corresponding group node input socket (even if that socket
+        IS linked from outside). Used to read multiplier/use overrides from
+        the group node exterior.
+        Unlike resolveNodeSocket, this does NOT traverse past the group node
+        boundary — it stops at the group node's input socket.
+        Returns None if sock is not connected through a GroupInput.
+    """
+    current = sock
+    while current.is_linked:
+        link = current.links[0]
+        fromNode = link.from_node
+        if fromNode.bl_idname == 'NodeReroute':
+            current = fromNode.inputs[0]
+            continue
+        if fromNode.bl_idname == 'NodeGroupInput':
+            groupNode = getGroupNode(fromNode)
+            if not groupNode:
+                return None
+            idx = next((i for i, s in enumerate(fromNode.outputs) if s == link.from_socket), None)
+            if idx is not None and idx < len(groupNode.inputs):
+                return groupNode.inputs[idx]
+            return None
+        break
+    return None
+
+
 def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
     """ Export values set to the input sockets of the node. If the socket is connected,
         export the linked node. Otherwise, export the value explicitly set to the node.
@@ -238,6 +286,10 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
         if link := getFarNodeLink(sock):
             if sockValue := exportSocketLink(nodeCtx, link):
                 sock.exportLinked(plDesc, pluginParam, sockValue)
+        elif (groupSock := _resolveGroupInputSocket(sock)) is not None:
+            # The socket is connected through a GroupInput to an unlinked
+            # group node input. Export the value from the group node's socket.
+            groupSock.exportUnlinked(nodeCtx, plDesc, pluginParam)
         else:
             sock.exportUnlinked(nodeCtx, plDesc, pluginParam)
 
@@ -348,7 +400,7 @@ def _exportMtlMulti(exporterCtx: ExporterContext, obj: bpy.types.Object, mtlPlug
     matPluginName = Names.pluginObject("multi_mtl", Names.object(obj, instance))
 
     mtlMultiDesc = PluginDesc(matPluginName, "MtlMulti")
-    mtlMultiDesc.setAttribute("mtls_list", [AttrPlugin(mtl.name) for mtl in mtlPlugins])
+    mtlMultiDesc.setAttribute("mtls_list", list(mtlPlugins))
     mtlMultiDesc.setAttribute("ids_list", [num for num in range(len(mtlPlugins))])
     mtlMultiDesc.setAttribute("wrap_id", True)
 
@@ -368,12 +420,13 @@ def fillNodePluginDesc(exporterCtx: ExporterContext,
                        geomPlugin = None,
                        hasValidGeometry: bool = True,
                        instance: bpy.types.DepsgraphObjectInstance = None):
-    if not hasValidGeometry:
-        # No valid geometry is available. No need to set any materials to the plugin.
-        # Also, if any of the materials has MtlDisplacement set, combining it with empty geometry will cause an error.
+
+    if not hasValidGeometry or exporterCtx.isProxyExport:
+        # No valid geometry: no materials (avoids MtlDisplacement on empty geometry).
+        # Proxy export: geometry-only; materials are not written to the .vrmesh path.
         matPlugin = AttrPlugin()
     else:
-        # Export empty material plugin(s) for the node. They will be filled in later by the 
+        # Export empty material plugin(s) for the node. They will be filled in later by the
         # material export procedure
         matPlugin = _exportObjMaterials(exporterCtx, obj, instance)
 
@@ -392,15 +445,16 @@ def fillNodePluginDesc(exporterCtx: ExporterContext,
         else:
             nodeDesc.setAttribute("nsamples", exporterCtx.commonSettings.mbSamples)
 
+    scene = exporterCtx.dg.scene
     if geomPlugin:
         # In the instancer case, geomPlugin is the instancer plugin
         sceneName = geomPlugin.name
         scenePath = f"scene/{geomPlugin.name}"
     else:
         sceneName = obj.name
-        scene = exporterCtx.dg.scene
         scenePath = getSceneNameOfObject(obj, scene)
-    nodeDesc.setAttribute("scene_name", [sceneName, scenePath])
+
+    nodeDesc.setAttribute("scene_name", buildObjectSceneName(sceneName, scenePath, obj, exporterCtx))
     if userAttributes := obj.vray.UserAttributes.getAsString():
         nodeDesc.setAttribute('user_attributes', userAttributes)
 
@@ -619,6 +673,68 @@ def _needUVWGenToColorConversion(fromSockType, toSockType, fromAttrPlugin: AttrP
 def _needColorToUVWConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
     return isUVWSocket(toSockType) and "UVWGen" not in fromAttrPlugin.pluginType and isColorSocket(fromSockType) and toSockType != 'VECTOR'
 
+def _needUVWGenToBrdfConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
+    """UVWGen → BRDF socket: build a TexBitmap on a UV-grid image driven by the
+       UVWGen, then wrap it in a BRDFLight. Lets solo mode preview a UVWGen
+       directly on the Material Output's BRDF slot.
+    """
+    return isUVWSocket(fromSockType) and "UVWGen" in (fromAttrPlugin.pluginType or "") \
+        and toSockType == 'VRaySocketBRDF'
+
+def _needColorToBrdfConversion(fromSockType, toSockType, fromAttrPlugin: AttrPlugin):
+    """Texture/color → BRDF socket: wrap the source in a BRDFLight so the color
+       lights up visibly in a preview. Only fires when the source plugin is
+       actually a texture (not already a BRDF). Matches the preview-operator
+       use case (Ctrl+Shift+LMB on a texture → Material Output).
+    """
+    if toSockType != 'VRaySocketBRDF':
+        return False
+    if not (isColorSocket(fromSockType) or isFloatSocket(fromSockType)):
+        return False
+    # Already a BRDF (or a BRDF-like wrapper) — nothing to wrap.
+    pluginType = fromAttrPlugin.pluginType or ""
+    if pluginType.startswith("BRDF"):
+        return False
+    return True
+
+def _exportBrdfLightConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+    """Wrap a color/texture plugin in a BRDFLight so it can drive a BRDF slot.
+       compensateExposure=True keeps the preview visible across camera exposure.
+    """
+    pluginName = Names.nextVirtualNode(nodeCtx, "BRDFLight")
+    plDesc = PluginDesc(pluginName, "BRDFLight")
+    plDesc.attrs['color'] = fromPlugin
+    plDesc.attrs['compensateExposure'] = True
+    plDesc.attrs['affect_gi'] = False
+
+    return exportPluginWithStats(nodeCtx, plDesc)
+
+def _exportUVWGenToBrdfConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+    """UVWGen → BRDF: build a TexBitmap on a built-in UV-grid image driven by
+       the source UVWGen, then wrap it in a BRDFLight so the grid lights up
+       visibly in solo mode.
+    """
+    bufName = Names.nextVirtualNode(nodeCtx, "BitmapBuffer")
+    bufDesc = PluginDesc(bufName, "BitmapBuffer")
+    bufDesc.attrs['file'] = getUvGridTexturePath()
+    bufDesc.attrs['transfer_function'] = "2"  # sRGB
+    bufDesc.attrs['rgb_color_space'] = "lin_srgb"
+    bufPlugin = exportPluginWithStats(nodeCtx, bufDesc)
+
+    bmpName = Names.nextVirtualNode(nodeCtx, "TexBitmap")
+    bmpDesc = PluginDesc(bmpName, "TexBitmap")
+    bmpDesc.attrs['uvwgen'] = fromPlugin
+    bmpDesc.attrs['bitmap'] = bufPlugin
+    bmpPlugin = exportPluginWithStats(nodeCtx, bmpDesc)
+
+    lightName = Names.nextVirtualNode(nodeCtx, "BRDFLight")
+    lightDesc = PluginDesc(lightName, "BRDFLight")
+    lightDesc.attrs['color'] = bmpPlugin
+    lightDesc.attrs['compensateExposure'] = True
+    lightDesc.attrs['affect_gi'] = False
+
+    return exportPluginWithStats(nodeCtx, lightDesc)
+
 def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAttrPlugin: AttrPlugin):
     """ Export one or more 'convert' and/or 'combine' plugins to convert
         between the data types of two linked sockets.
@@ -631,8 +747,11 @@ def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAt
     fromSockType    = getVRayBaseSockType(fromSock)
     toSockType      = getVRayBaseSockType(toSock)
 
-    # Multiplier is defined on the 'to' socket
-    if hasattr(toSock, 'computeLinkMultiplier') and ((mult := toSock.computeLinkMultiplier()) is not None):
+    # Multiplier is defined on the 'to' socket. If the socket is connected
+    # through a GroupInput, read from the group node's exterior socket instead,
+    # as that's where the user sets the multiplier.
+    multSock = _getGroupInputOverrideSocket(toSock) or toSock
+    if hasattr(multSock, 'computeLinkMultiplier') and ((mult := multSock.computeLinkMultiplier()) is not None):
         needMult = True
 
     asFloat = isFloatSocket(toSockType)
@@ -656,8 +775,12 @@ def _exportConverters(nodeCtx: NodeContext, toSock: bpy.types.NodeSocket, fromAt
             fromAttrPlugin = _exportUVWToColorConverter(nodeCtx, fromAttrPlugin)
         elif _needColorToUVWConversion(fromSockType, toSockType, fromAttrPlugin):
             fromAttrPlugin = _exportColorToUVWConverter(nodeCtx, fromAttrPlugin)
+        elif _needUVWGenToBrdfConversion(fromSockType, toSockType, fromAttrPlugin):
+            fromAttrPlugin = _exportUVWGenToBrdfConverter(nodeCtx, fromAttrPlugin)
+        elif _needColorToBrdfConversion(fromSockType, toSockType, fromAttrPlugin):
+            fromAttrPlugin = _exportBrdfLightConverter(nodeCtx, fromAttrPlugin)
         if needMult:
-            fromAttrPlugin = _exportCombineTexture(nodeCtx, toSock.value, fromAttrPlugin, mult, asFloat)
+            fromAttrPlugin = _exportCombineTexture(nodeCtx, multSock.value, fromAttrPlugin, mult, asFloat)
 
     return fromAttrPlugin
 

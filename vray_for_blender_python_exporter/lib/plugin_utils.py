@@ -32,8 +32,21 @@ CROSS_DEPENDENCIES = {}
 # Key that serves to describe a comment into a *.custom.json plugin description
 DESC_COMMENT_KEY = "//Comment"
 
-# Set to True when the env var for disabling AI features is set
-DISABLE_GEN_AI = (os.getenv("CHAOS_DISABLE_GEN_AI") == "1") or vray.isCommunityEdition()
+# True if the CHAOS_DISABLE_GEN_AI env var is set. Captured once at import
+# (env var changes during the addon lifetime don't matter), unlike the CE
+# state which can flip at runtime via the addon preference.
+_GEN_AI_DISABLED_BY_ENV = (os.getenv("CHAOS_DISABLE_GEN_AI") == "1")
+
+
+def isGenAIDisabled():
+    """ Return True if generative-AI features should be disabled.
+
+        AI features are disabled either by the CHAOS_DISABLE_GEN_AI environment
+        variable or by running in Community Edition. The CE check is re-evaluated
+        on every call so that toggling the license type at runtime takes effect
+        without restarting Blender.
+    """
+    return _GEN_AI_DISABLED_BY_ENV or vray.isCommunityEdition()
 
 # {pluginType: [attribute_name, ...]} that matches a plugin type to a list of its template attributes
 TEMPLATE_ATTRIBUTES = defaultdict(list)

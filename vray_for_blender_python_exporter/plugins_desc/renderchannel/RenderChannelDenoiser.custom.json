@@ -18,33 +18,6 @@
         {
             "attr": "engine",
             "update": "onUpdateEngine"
-        },
-        {
-            "attr": "viewport_enabled",
-            "type": "BOOL",
-            "default": false,
-            "desc" : "True to enable the viewport denoising",
-            "update": "onUpdateViewportEngine",
-            "options": {
-                "derived": true
-            }
-        },
-        {
-            "attr": "viewport_engine",
-            "type": "ENUM",
-            "desc" : "The denoising engine to use. The default V-Ray denoiser (0) is slower but may produce better results and has a version that runs on CPUs. The NVIDIA AI denoiser (1) is very fast but may be less accurate and requires a compatible NVIDIA GPU. The Intel Open Image Denoise (2) is fast and runs on CPUs (it utilizes advanced instructions sets like AVX2, AVX512). Note that the three denoising engines use slightly different render elements",
-            "items":
-            [
-                [ "0", "V-Ray", "Default V-Ray denoiser" ],
-                [ "2", "Intel", "Intel Open Image Denoise" ],
-                [ "1", "NVIDIA", "NVIDIA AI denoiser" ],
-                [ "3", "NVIDIA(upscaling)", "NVIDIA AI upscaling denoiser" ]
-            ],
-            "update": "onUpdateViewportEngine",
-            "default": "2",
-            "options": {
-                "derived": true
-            }
         }
     ],
     "Widget": {

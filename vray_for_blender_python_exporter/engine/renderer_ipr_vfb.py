@@ -6,7 +6,7 @@ import bpy
 import time
 
 from vray_blender import debug
-from vray_blender.lib import blender_utils
+from vray_blender.lib import blender_utils, path_utils
 from vray_blender.lib.defs import RendererMode, ExporterType, UIRegionContext
 from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase, exportViewportView
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
@@ -29,6 +29,11 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     # The resolution from the scene render settings from the last export. Used to detect if the resolution has changed.
     _lastResolution = None
 
+    # One-shot suppression flag for depsgraph_update_post-driven IPR re-export.
+    # Set by VfbEventHandler when applying VFB-originated changes (e.g. render region)
+    # that the renderer already knows about, to prevent a redundant round-trip export.
+    skipNextDepsgraphExport = False
+
     def __init__(self, uiRegionContext: UIRegionContext):
         super().__init__(False, uiRegionContext, bpy.context)
 
@@ -48,6 +53,10 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     @bpy.app.handlers.persistent
     def _exportOnIprUpdatePost(e):
         """ Exporting of scene on every depsgrpah update """
+        if VRayRendererIprVfb.skipNextDepsgraphExport:
+            VRayRendererIprVfb.skipNextDepsgraphExport = False
+            return
+
         from vray_blender.engine.render_engine import VRayRenderEngine
 
         if iprRenderer := VRayRenderEngine.iprRenderer:
@@ -63,7 +72,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     @staticmethod
     def isActive():
         """ Return True if an interactive renderer is currently active """
-        return  VRayRendererIprVfb._activeRenderer != None   
+        return VRayRendererIprVfb._activeRenderer is not None
 
     @staticmethod
     def getActiveRenderer():
@@ -146,6 +155,10 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         if self.renderer == 0:
             # ZmqServer still starting
             return
+
+        # The ZMQ connection is live at this point, so updateScenePath is guaranteed to be received.
+        # _onLoadPost may have sent it before the connection was established, so resend it here.
+        vray.updateScenePath(path_utils.getScenePath())
         
         def onStopped(isAborted):
             if isAborted:

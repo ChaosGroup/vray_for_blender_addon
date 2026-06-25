@@ -82,7 +82,7 @@ def getWinRegistry(path: str, key_name: str, registry_root=None) -> str:
     return None
 
 def parseIni(filename):
-    """ Parse an .ini file. Note that this funciton is only written to 
+    """ Parse an .ini file. Note that this function is only written to
     be able to parse the telemetry config.ini file and not all files.
     """
     config = {}
@@ -138,7 +138,8 @@ def readUserFile(filename, dirName):
     if not os.path.exists(filepath):
         return ""
 
-    return open(filepath, 'r').read()
+    with open(filepath, 'r') as f:
+        return f.read()
 
 
 def getVRsceneTemplate(filename,):
@@ -203,6 +204,9 @@ def getVfbDefaultSettingsPath():
 
 def getDefaultTexturePath():
     return os.path.join(_getResourcesPath(), "defaultTexture.png")
+
+def getUvGridTexturePath():
+    return os.path.join(_getResourcesPath(), "uv_grid.png")
 
 def copyToClipboard(text):
     if 'WINDIR' in os.environ:

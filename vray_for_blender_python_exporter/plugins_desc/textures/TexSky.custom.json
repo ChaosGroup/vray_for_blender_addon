@@ -91,7 +91,7 @@
                     {
                         "name": "ozone",
                         "active": {
-                            "cond": "::sky_model!=5"
+                            "cond": "::sky_model=1;::sky_model=2;::sky_model=3"
                         }
                     },
                     {

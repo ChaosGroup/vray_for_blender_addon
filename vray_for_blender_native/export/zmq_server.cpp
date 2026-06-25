@@ -305,6 +305,7 @@ bp::child ZmqServer::startServerProcess() {
 		"-vfbSettings",	   m_args.vfbSettingsFile,
 		"-pluginVersion",  m_args.pluginVersion,
 		"-blenderVersion", m_args.blenderVersion,
+		"-license",        m_args.licenseType,
 		"-noHeartbeat",
 		m_args.headlessMode ? "-headlessMode" : "",
 		m_args.enableQtLogs ? "-enableQtLogging" : ""
@@ -400,6 +401,11 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 	cosmosSettings.packageId = message.packageId;
 	cosmosSettings.revisionId = message.revisionId;
 	cosmosSettings.isAnimated = message.isAnimated;
+	cosmosSettings.planeWidth = message.planeWidth;
+	cosmosSettings.planeHeight = message.planeHeight;
+	cosmosSettings.applyTriplanarMapping = message.applyTriplanarMapping;
+	cosmosSettings.texRealWorldWidth = message.texRealWorldWidth;
+	cosmosSettings.texRealWorldHeight = message.texRealWorldHeight;
 
 	const AttrListString::DataArrayPtr assetData=message.assetNames.getData();
 	const AttrListString::DataArrayPtr assetLocationsData=message.assetLocations.getData();
@@ -424,6 +430,9 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 			break;
 		case ImportedAssetType::Extras:
 			cosmosSettings.assetType = "Extras";
+			break;
+		case ImportedAssetType::ParallaxInterior:
+			cosmosSettings.assetType = "ParallaxInterior";
 			break;
 	}
 
@@ -545,6 +554,44 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 			invokePythonCallback("appUpdateRequested", getPythonCallback("appUpdateRequested"));
 			break;
 		}
+		case MsgType::ControlOnLightMixTransferToScene: {
+			const auto& message = deserializeMessage<MsgControlOnLightMixTransferToScene>(stream);
+			auto callback = getPythonCallback("lightMixTransferToScene");
+			if (!callback.is_none()) {
+				nb::gil_scoped_acquire gil;
+				nb::list pyChanges;
+				for (const auto& c : message.changes) {
+					pyChanges.append(nb::make_tuple(c.pluginName, c.colorR, c.colorG, c.colorB, c.intensityMult, c.enabled));
+				}
+				invokePythonCallback("lightMixTransferToScene", callback, pyChanges);
+			}
+			break;
+		}
+		case MsgType::ControlOnVFBMenu: {
+			const auto& message = deserializeMessage<MsgControlOnVFBMenu>(stream);
+			invokePythonCallback("vfbMenu", getPythonCallback("vfbMenu"), message.mode, message.targetName, message.objectName, message.distance);
+			break;
+		}
+		case MsgType::ControlOnAddRenderElementToScene: {
+			const auto& message = deserializeMessage<MsgControlOnAddRenderElementToScene>(stream);
+			invokePythonCallback("addRenderElementToScene", getPythonCallback("addRenderElementToScene"), message.renderElementType);
+			break;
+		}
+		case MsgType::ControlOnVFBShowMessagesWindow: {
+			invokePythonCallback("vfbShowMessagesWindow", getPythonCallback("vfbShowMessagesWindow"));
+			break;
+		}
+		case MsgType::ControlOnVFBRenderRegionChanged: {
+			const auto& message = deserializeMessage<MsgControlOnVFBRenderRegionChanged>(stream);
+			invokePythonCallback("vfbRenderRegionChanged",
+				getPythonCallback("vfbRenderRegionChanged"),
+				message.x, message.y, message.width, message.height, message.enabled);
+			break;
+		}
+		case MsgType::ControlOnSwitchLicenseToCommunity:
+			invokePythonCallback("switchLicenseToCommunity", getPythonCallback("switchLicenseToCommunity"));
+			break;
+
 		default:
 			break;
 	}

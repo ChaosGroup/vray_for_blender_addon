@@ -69,7 +69,7 @@ def exportTreeNode(nodeCtx: NodeContext):
 
         texBitmapPluginDesc.setAttribute("uvwgen", uvwPlugin)
 
-    commonNodesExport.exportNodeTree(nodeCtx, texBitmapPluginDesc, ("uvwgen"))
+    commonNodesExport.exportNodeTree(nodeCtx, texBitmapPluginDesc, ("uvwgen",))
     texBitmapPluginDesc.setAttribute("bitmap", pluginBitmapBuffer)
 
     return commonNodesExport.exportPluginWithStats(nodeCtx, texBitmapPluginDesc)

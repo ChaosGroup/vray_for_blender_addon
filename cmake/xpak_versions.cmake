@@ -2,13 +2,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-set(APPSDK_XPAK_VERSION "73001.20260403" )
+set(APPSDK_XPAK_VERSION "73005.20260529" )
 
 set(QT_XPAK "AppSDKQT6")
 if (WIN32)
 	set(QT_XPAK_VERSION "6.5.3.1002" )
-else()
+elseif (APPLE)
 	set(QT_XPAK_VERSION "6.5.3.1001" )
+else()
+	set(QT_XPAK_VERSION "6.5.3.1003" )
 endif()
 set(RAPIDJSON_XPAK_VERSION "1.1.0.1001" )
 

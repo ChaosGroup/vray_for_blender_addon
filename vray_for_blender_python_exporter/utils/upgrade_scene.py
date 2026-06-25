@@ -347,7 +347,7 @@ def upgradeScene(upgradeInfo: dict):
 
     logVerboseMsg("Updating scene worlds ...")
     for world in bpy.data.worlds:
-        if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
+        if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world, upgradeInfo):
             logVerboseMsg(f"Updating world '{world.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = world.node_tree,
                                             nodeTreeName = world.name,
@@ -377,7 +377,7 @@ def sceneNeedsUpgrade(upgradeInfo: dict):
             return True
 
     for world in bpy.data.worlds:
-        if world.use_nodes and _hasUpgradeableNodes(world, upgradeInfo):
+        if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world, upgradeInfo):
            return True
 
     for group in bpy.data.node_groups:

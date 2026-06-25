@@ -53,6 +53,7 @@
                 "layout": "ROLLOUT",
                 "name": "camera",
                 "label": "Camera",
+                "panel_prop": {"wm_data": "common_tab", "name": "panel_globals_camera_open"},
                 "attrs": [
                     {
                         "layout": "COLUMN",

@@ -328,11 +328,6 @@ def _wrapperSocketSetItem(self, value):
     propGroup = getattr(self.node, self.getPluginName())
     setattr(propGroup, self.vray_attr, value)
 
-# UNUSED
-def _wrapperSocketSetItemWithConv(self, value, convFunc):
-    propGroup = getattr(self.node, self.getPluginName())
-    setattr(propGroup, self.vray_attr, convFunc(value))
-
 
 def _wrapperSocketGetItem(self):
     propGroup = getattr(self.node, self.getPluginName())
@@ -411,14 +406,17 @@ class VRaySocket(bpy.types.NodeSocket):
     def getPluginName(self):
         """ Get the name of the plugin that the socket is associated with. """
 
-         # This check is for backwards compatibility,
-         # all newly created sockets will use VRaySocket.vray_plugin instead of node.vray_plugin
-        if self.vray_plugin:
+        # All newly created sockets cache the plugin name in VRaySocket.vray_plugin.
+        # Fall through if the cached name no longer maps to a property group on the
+        # node - this happens when a variant's base_plugin_type changes between
+        # addon versions (e.g. Reflection IOR went from RenderChannelGlossiness to
+        # RenderChannelColor) and existing scenes still have the old name cached.
+        if self.vray_plugin and hasattr(self.node, self.vray_plugin):
             return self.vray_plugin
-        
+
         if hasattr(self.node, 'vray_plugin'):
             return self.node.vray_plugin
-        
+
         return 'NONE'
 
     def draw(self, context, layout, node, text):
@@ -429,11 +427,35 @@ class VRaySocket(bpy.types.NodeSocket):
         row = layout.row()
         row.enabled = self.ui_enabled
         row.alignment = layout.alignment
-        
+
+        # When connected to a GroupInput inside a group tree, just show the label
+        # (no value widget). This matches Cycles behavior and avoids showing
+        # stale values that are actually controlled from the group node exterior.
+        if self._isConnectedToGroupInput():
+            row.label(text=self._sockLabel())
+            return
+
         if fnDraw := getattr(self, 'draw_impl', None):
             fnDraw(context, row, node, self._sockLabel())
         else:
             row.label(text=self._sockLabel())
+
+    def _isConnectedToGroupInput(self):
+        """ Return True if this input socket is linked (possibly through
+            reroutes) to a NodeGroupInput node.
+        """
+        if self.is_output or not self.is_linked:
+            return False
+        current = self
+        while current.is_linked:
+            fromNode = current.links[0].from_node
+            if fromNode.bl_idname == 'NodeGroupInput':
+                return True
+            if fromNode.bl_idname == 'NodeReroute':
+                current = fromNode.inputs[0]
+                continue
+            break
+        return False
 
 
     def _sockLabel(self):
@@ -487,16 +509,20 @@ class VRaySocketRollout(VRaySocket):
     )
 
     def updateIsOpen(self, context: bpy.types.Context):
+        from vray_blender.nodes.utils import computeSocketVisibility
+
         pluginName = self.getPluginName()
         pluginModule = getPluginModule(pluginName)
         panelSockets = pluginModule.SocketPanels.get(self.vray_attr, [])
+        propGroup = getVrayPropGroup(self.node)
+        sockDescByAttr = {s['name']: s for s in pluginModule.Node.get('input_sockets', [])}
 
         for sockAttrName in panelSockets:
             sock = next((s for s in self.node.inputs if s.vray_attr == sockAttrName), None)
-
             if sock:
-                show = self.is_open or sock.is_linked
-                sock.hide = not show
+                hide, _ = computeSocketVisibility(sock, sockDescByAttr.get(sockAttrName),
+                                                  self.node, pluginModule, propGroup)
+                sock.hide = hide
             # Do nothing if the socket is missing. This is a normal situation right
             # after the rollout socket is created because its is_open property is
             # set before any of the sokets it groups have been added to the node.
@@ -1073,11 +1099,11 @@ class VRaySocketPluginUse(VRaySocketUse):
         layout.prop(self, 'use', text=attrLabel, expand=expand, slider=slider)
 
     def draw_impl(self, context, layout, node, text):
-        layout.active = self.use
-        split = layout.split()
-        row = split.row(align=True)
-        row.label(text=text)
-        row.prop(self, 'use', text="")
+        split = layout.split(factor=0.9)
+        labelPart = split.column()
+        labelPart.enabled = self.use
+        labelPart.label(text=text)
+        split.prop(self, 'use', text="")
 
     @classmethod
     def draw_color_simple(cls):
@@ -1135,27 +1161,27 @@ class VRaySocketColorUse(VRaySocketMult):
         colorSocket.value = value
     
     def draw_impl(self, context, layout, node, text):
-        colColor = layout.split(factor=0.3)
-        
         targetAttrName, useAttrName = self._getBoundProperty()
-        
-        # Get the label to show from the tagret attribute
-        propGroup     = getVrayPropGroup(self.node)
-        pluginModule  = getPluginModule(self.getPluginName())
-        targetAttr    = getPluginAttr(pluginModule, targetAttrName)
-        label         = getAttrDisplayName(targetAttr)
+        propGroup    = getVrayPropGroup(self.node)
+        pluginModule = getPluginModule(self.getPluginName())
+        targetAttr   = getPluginAttr(pluginModule, targetAttrName)
+        label        = getAttrDisplayName(targetAttr)
+        use          = getattr(propGroup, useAttrName)
 
-        # Show the UI dimmed but leave it enabled so that the user could
-        # still manipulate it.
-        colColor.active = getattr(propGroup, useAttrName)
+        colColor = layout.split(factor=0.3)
 
-        colColor.prop(propGroup, targetAttrName, text="")
+        colorPart = colColor.column()
+        colorPart.enabled = use
+        colorPart.prop(propGroup, targetAttrName, text="")
+
         colLabel = colColor.split(factor=0.9)
-        
+
+        labelPart = colLabel.column()
+        labelPart.enabled = use
         if self.hasActiveFarLink():
-            colLabel.prop(self, 'multiplier', text=label)
+            labelPart.prop(self, 'multiplier', text=label)
         else:
-            colLabel.label(text=label)
+            labelPart.label(text=label)
 
         colUse = colLabel.column()
         colUse.prop(propGroup, useAttrName, text="")
@@ -1191,7 +1217,7 @@ class VRaySocketColorUse(VRaySocketMult):
     @classmethod
     def draw_color_simple(cls):
         return RGBA_SOCKET_COLOR
-    
+
 
 ##     ## ########  ######  ########  #######  ########
 ##     ## ##       ##    ##    ##    ##     ## ##     ##
@@ -1424,6 +1450,11 @@ class VRaySocketObjectProps(VRayValueSocket):
     def draw_color_simple(cls):
         return OBJ_PROP_SOCKET_COLOR
 
+    def copy(self, dest):
+        # No `value` property to copy; this socket is a pass-through marker
+        # used to wire object property flags between nodes.
+        pass
+
 
 class VRaySocketPlugin(VRayValueSocket):
     bl_idname = 'VRaySocketPlugin'
@@ -1460,11 +1491,11 @@ class VRaySocketRenderChannel(VRaySocketUse):
     )
 
     def draw_impl(self, context, layout, node, text):
-        layout.active = self.use
-        split = layout.split()
-        row = split.row(align=True)
-        row.label(text=text)
-        row.prop(self, 'use', text="")
+        split = layout.split(factor=0.9)
+        labelPart = split.column()
+        labelPart.enabled = self.use
+        labelPart.label(text=text)
+        split.prop(self, 'use', text="")
 
     @classmethod
     def draw_color_simple(cls):
@@ -1506,11 +1537,11 @@ class VRaySocketEffect(VRaySocketUse):
     )
 
     def draw_impl(self, context, layout, node, text):
-        layout.active = self.use
-        split = layout.split()
-        row = split.row(align=True)
-        row.label(text=text)
-        row.prop(self, 'use', text="")
+        split = layout.split(factor=0.9)
+        labelPart = split.column()
+        labelPart.enabled = self.use
+        labelPart.label(text=text)
+        split.prop(self, 'use', text="")
 
     @classmethod
     def draw_color_simple(cls):
@@ -1566,6 +1597,13 @@ class VRaySocketTransform(VRayValueSocket):
             value = self.value.to_3x3()
 
         pluginDesc.setAttribute(attrDesc['attr'], value)
+
+    def copy(self, dest):
+        # Transform sockets are effectively pass-through: their value is a
+        # 4x4 matrix that's almost always driven by an upstream transform
+        # node, not edited directly. Copying the raw matrix between sockets
+        # also trips Blender's matrix-assign validation on some versions.
+        pass
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##

@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import math
+
 import bpy
 
 from vray_blender.exporting import node_export as commonNodesExport
@@ -81,8 +83,8 @@ def exportTreeNode(nodeCtx: NodeContext):
     # Register the material as emissive if self illumination is active.
     node = nodeCtx.node
 
-    if node.BRDFVRayMtl.self_illumination != (0.0, 0.0, 0.0):
-        nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name))
+    if not all(math.isclose(c, 0.0) for c in node.BRDFVRayMtl.self_illumination[:3]):
+        nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name, nodeCtx.material.name))
 
     # Always use GGX for OpenPBR.
     if node.BRDFVRayMtl.option_shading_model=="1":

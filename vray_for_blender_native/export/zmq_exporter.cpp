@@ -82,7 +82,7 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 	if (img.imageType == VRayBaseTypes::AttrImage::ImageType::RGBA_REAL && img.isBucket()) {
 		// Merge in the bucket
 
-		if (!pixels) {
+		if (!*this) {
 			const auto& renderSizes = exp->m_cachedValues.renderSizes;
 
 			vassert((renderSizes.imgWidth != 0) && (renderSizes.imgHeight != 0)
@@ -92,8 +92,8 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 			h = renderSizes.imgHeight;
 			channels = 4;
 
-			pixels = new float[w * h * channels];
-			memset(pixels, 0, w * h * channels * sizeof(float));
+			setPixels(std::shared_ptr<float[]>(new float[w * h * channels]));
+			memset(writablePixels(), 0, w * h * channels * sizeof(float));
 
 			resetUpdated();
 		}
@@ -109,69 +109,22 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 		this->channels = clrChannels;
 		this->w = img.width;
 		this->h = img.height;
-		delete[] this->pixels;
-		this->pixels = imgData;
+		setPixels(std::shared_ptr<float[]>(imgData));
 	}
-	else if (img.imageType == VRayBaseTypes::AttrImage::ImageType::RGBA_REAL ||
-		       img.imageType == VRayBaseTypes::AttrImage::ImageType::RGB_REAL ||
-		       img.imageType == VRayBaseTypes::AttrImage::ImageType::BW_REAL) {
-
-		bool change_pointer = true;
-
-		const float * imgData = reinterpret_cast<const float *>(img.data.get());
-		float * myImage = nullptr;
-		int clrChannels = 0;
-
-		switch (img.imageType) {
-		case VRayBaseTypes::AttrImage::ImageType::RGBA_REAL:
-			if (this->w == img.width && this->h == img.height && this->channels == 4) {
-				memcpy(this->pixels, imgData, img.width * img.height * 4 * sizeof(float));
-				change_pointer = false;
-			}
-			else {
-
-				clrChannels = 4;
-				myImage = new float[img.width * img.height * clrChannels];
-				memcpy(myImage, imgData, img.width * img.height * clrChannels * sizeof(float));
-			}
-
-			break;
-		case VRayBaseTypes::AttrImage::ImageType::RGB_REAL:
-			clrChannels = 3;
-			myImage = new float[img.width * img.height * clrChannels];
-
-			for (int c = 0; c < img.width * img.height; ++c) {
-				const float * source = imgData + (c * 4);
-				float * dest = myImage + (c * channels);
-
-				dest[0] = source[0];
-				dest[1] = source[1];
-				dest[2] = source[2];
-			}
-
-			break;
-		case VRayBaseTypes::AttrImage::ImageType::BW_REAL:
-			clrChannels = 1;
-			myImage = new float[img.width * img.height * clrChannels];
-
-			for (int c = 0; c < img.width * img.height; ++c) {
-				const float * source = imgData + (c * 4);
-				float * dest = myImage + (c * clrChannels);
-
-				dest[0] = source[0];
-			}
-
-			break;
-		default:
-			Logger::warning("MISSING IMAGE FORMAT CONVERTION FOR %1%", static_cast<int>(img.imageType));
-		}
-
-		if (change_pointer) {
-			this->channels = clrChannels;
+	else if (img.imageType == VRayBaseTypes::AttrImage::ImageType::RGBA_REAL) {
+		// Server-side sendImages only emits RGBA_REAL or JPG for the AttrImage fallback
+		// path; RGB_REAL / BW_REAL are reserved for SHM-only element delivery and never
+		// reach this handler. AColor data is always 4 floats per pixel.
+		const float* imgData = reinterpret_cast<const float*>(img.data.get());
+		if (this->w == img.width && this->h == img.height && this->channels == 4) {
+			memcpy(writablePixels(), imgData, img.width * img.height * 4 * sizeof(float));
+		} else {
+			auto myImage = std::shared_ptr<float[]>(new float[img.width * img.height * 4]);
+			memcpy(myImage.get(), imgData, img.width * img.height * 4 * sizeof(float));
+			this->channels = 4;
 			this->w = img.width;
 			this->h = img.height;
-			delete[] pixels;
-			this->pixels = myImage;
+			setPixels(std::move(myImage));
 		}
 	}
 }
@@ -179,7 +132,9 @@ void ZmqExporter::ZmqRenderImage::update(const VRayBaseTypes::AttrImage &img, Zm
 
 
 ///////////////// ZMQ EXPORTER ////////////////////
-ZmqExporter::ZmqExporter(ExporterType exporterType) {
+ZmqExporter::ZmqExporter(ExporterType exporterType)
+	: m_zmqServerPID(std::to_string(ZmqServer::get().getProcessID()))
+{
 	Logger::info("Connect ZmqExporter");
 
 	m_client = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateRoutingId(), exporterType, true);
@@ -219,9 +174,8 @@ ZmqExporter::~ZmqExporter()
 	std::scoped_lock lock(m_imgMutex);
 	m_layerImages.clear();
 
-	const auto zmqServerPID = std::to_string(ZmqServer::get().getProcessID());
 	for (const std::string& shm : m_sharedMemoryObjects) {
-		SharedMemoryWriter::remove(zmqServerPID, shm);
+		SharedMemoryWriter::remove(m_zmqServerPID, shm);
 	}
 
 	Logger::debug("ZmqExporter deleted");
@@ -230,23 +184,55 @@ ZmqExporter::~ZmqExporter()
 
 RenderImage ZmqExporter::getRenderChannelImage(RenderChannelType channelType) {
 
-	RenderImage img;
-
 	std::scoped_lock lock(m_imgMutex);
 
 	auto imgIter = m_layerImages.find(channelType);
 
 	if (imgIter != m_layerImages.end()) {
-		imgIter = m_layerImages.find(channelType);
-
-		if (imgIter != m_layerImages.end()) {
-			RenderImage &storedImage = imgIter->second;
-			if (storedImage.pixels) {
-				img = std::move(RenderImage::deepCopy(storedImage));
-			}
+		RenderImage &storedImage = imgIter.value();
+		if (storedImage.pixels) {
+			return storedImage; // Shallow copy
 		}
 	}
-	return img;
+	return RenderImage();
+}
+
+
+void ZmqExporter::setElementDestinations(std::vector<std::pair<PerInstanceKey, ElementDestination>> destinations) {
+	std::scoped_lock lock(m_imgMutex);
+	m_elementDestinations.clear();
+	// Insert all entries, including those with a null buffer (lazy Blender allocation).
+	// processRendererOnElementReady distinguishes "no destination registered" (genuine
+	// routing-key mismatch) from "destination registered but buffer not yet allocated"
+	// (expected during lazy alloc); collapsing the two via a filter here loses that signal.
+	for (auto& entry : destinations) {
+		m_elementDestinations.insert(std::move(entry));
+	}
+}
+
+
+void ZmqExporter::clearElementDestinations() {
+	std::scoped_lock lock(m_imgMutex);
+	m_elementDestinations.clear();
+	// Drop the SHM reader so the next render reopens after any server-side recreate
+	// (resolution-change rebuild). The element SHM name is stable; the underlying
+	// segment may have been replaced.
+	m_elementReader.reset();
+}
+
+
+void ZmqExporter::setRenderBuffer(float* buffer, int width, int height, int channels) {
+	std::scoped_lock lock(m_imgMutex);
+	auto& layer = m_layerImages[RenderChannelType::RenderChannelTypeNone];
+	if (buffer) {
+		// Non-owning: Blender owns this buffer. update() will write directly here.
+		layer.setPixelsNonOwning(buffer);
+		layer.w        = width;
+		layer.h        = height;
+		layer.channels = channels;
+	} else {
+		layer.reset();
+	}
 }
 
 
@@ -289,6 +275,11 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 	case MsgType::RendererOnProgress: {
 		const auto& message = deserializeMessage<MsgRendererOnProgress>(stream);
 		processRendererOnProgress(message);
+		break;
+	}
+	case MsgType::RendererOnElementReady: {
+		const auto& message = deserializeMessage<MsgRendererOnElementReady>(stream);
+		processRendererOnElementReady(message);
 		break;
 	}
 
@@ -353,13 +344,12 @@ void ZmqExporter::processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& me
 
 
 void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& message) {
-	std::scoped_lock lockCallbacks(m_callbacksMutex);
-
-	bool ready = message.imageSet.sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
 	bool updateHostImage = false;
 
-	if (m_settings.getExporterType() == ExporterType::IPR_VIEWPORT) {
-		if (readViewportImage()) {
+	// imgId >= 0 means the server sent a shared-memory notification (no serialized pixel data).
+	// This is used for both viewport and production full-frame images.
+	if (message.imgId >= 0 && message.imageSet.images.empty()) {
+		if (readViewportImage(message.imgId, message.bufferIndex)) {
 			updateHostImage = true;
 		}
 	} else {
@@ -372,30 +362,46 @@ void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& messag
 					this
 				);
 			}
+
+			// Store metadata (e.g. Cryptomatte manifest); per-instance manifests
+			// arrive under key "cryptomatte.<instanceName>".
+			for (const auto &kv : message.imageSet.metadata) {
+				m_metadata[kv.first] = kv.second;
+			}
 		}
 
 		for (const auto &img : message.imageSet.images) {
 			// for result buckets use on bucket ready, otherwise rt image updated callback
-			if (img.first == RenderChannelType::RenderChannelTypeNone && img.second.isBucket() && this->callback_on_bucket_ready) {
-				this->callback_on_bucket_ready(img.second);
+			if (img.first == RenderChannelType::RenderChannelTypeNone && img.second.isBucket()) {
+				std::scoped_lock lockCallbacks(m_callbacksMutex);
+				if (this->callback_on_bucket_ready) {
+					this->callback_on_bucket_ready(img.second);
+				}
 			}
 			else {
 				updateHostImage = true;
 			}
 		}
+
 	}
 
 #ifdef WITH_PROFILING
 	m_receivedImagesCount++;
 #endif
 
-	if (updateHostImage && this->callback_on_rt_image_updated) {
-		// Update viewport image or render result image depending on the current rendering mode.
-		this->callback_on_rt_image_updated();
+	if (updateHostImage) {
+		std::scoped_lock lockCallbacks(m_callbacksMutex);
+		if (this->callback_on_rt_image_updated) {
+			this->callback_on_rt_image_updated();
+		}
 	}
 
-	if (ready && this->callback_on_image_ready) {
-		this->callback_on_image_ready();
+	const bool ready = message.imageSet.sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
+	if (ready) {
+		std::scoped_lock lockCallbacks(m_callbacksMutex);
+		if (this->callback_on_image_ready) {
+			this->callback_on_image_ready();
+		}
 	}
 }
 
@@ -414,7 +420,15 @@ void ZmqExporter::processRendererOnChangeState(const proto::MsgRendererOnChangeS
 		this->m_lastRenderedFrame = message.lastRenderedFrame;
 		break;
 	case RendererState::Done:
-		// This is called when the whole rendering job is done
+		// When image_to_blender is off the server suppresses MsgRendererOnImage, so the
+		// Python wait loop's m_renderFinished is never set via that path - drive it from
+		// the state change instead. The OnImage path handles the streaming case.
+		if (!m_imageToBlender) {
+			std::scoped_lock lockCallbacks(m_callbacksMutex);
+			if (this->callback_on_image_ready) {
+				this->callback_on_image_ready();
+			}
+		}
 		break;
 
 	default:
@@ -437,77 +451,160 @@ void ZmqExporter::processRendererOnProgress(const proto::MsgRendererOnProgress& 
 }
 
 
-/// Read an image published by ZmqServer in a shared memory region.
-/// @return true if the image was read successfully
-bool ZmqExporter::readViewportImage() {
+void ZmqExporter::processRendererOnElementReady(const proto::MsgRendererOnElementReady& message) {
+	using namespace std::chrono_literals;
+	// Stay well under the server's 1000ms RendererElementDone timeout so the done message
+	// still lands in time even if both the SHM-open and readInPlace waits run out back to back.
+	static const auto SHARED_ACCESS_WAIT = 500ms;
+
+	// The server blocks the next emit on MsgRendererElementDone. We MUST send it on every
+	// path through this function - otherwise the server times out (1s), warns, and may
+	// reuse the SHM region before we finish reading.
+	struct ScopedDoneSender {
+		ZmqExporter* exporter;
+		int          subIndex;
+		~ScopedDoneSender() {
+			proto::MsgRendererElementDone done;
+			done.subIndex = subIndex;
+			if (exporter->m_client) {
+				exporter->m_client->send(serializeMessage(done));
+			}
+		}
+	} scopedDoneSender{this, message.subIndex};
+
+	// Lazily open the element SHM region. The reader is dropped on renderEnd so the
+	// next render reopens fresh; the server destroys + recreates under the same name
+	// when the buffer needs to grow.
+	if (!m_elementReader) {
+		const auto bufferID = getElementBufferID();
+		m_elementReader = std::make_unique<ImageReader>(m_zmqServerPID, bufferID);
+		if (!m_elementReader->open(SHARED_ACCESS_WAIT)) {
+			Logger::warning("Failed to open element SHM region %1%", bufferID);
+			m_elementReader.reset();
+			return;  // ScopedDoneSender still fires.
+		}
+	}
+
+	// Look up the destination registered by ProductionExporter::setElementPasses.
+	ElementDestination dest;
+	bool haveDest = false;
+	{
+		std::scoped_lock lock(m_imgMutex);
+		auto it = m_elementDestinations.find(PerInstanceKey{message.pluginInstanceName, message.subIndex});
+		if (it != m_elementDestinations.end()) {
+			dest = it->second;
+			haveDest = true;
+		}
+
+		if (!message.metadataKey.empty()) {
+			m_metadata[message.metadataKey] = message.metadataValue;
+		}
+	}
+
+	if (!haveDest) {
+		Logger::warning("Element ready for '%1%' subIndex %2%: no registered destination (Blender pass not requested)",
+			message.pluginInstanceName, message.subIndex);
+	} else if (!dest.buffer) {
+		// Expected during Blender's lazy pass-buffer allocation - the pass was registered
+		// but ibuf->float_buffer.data wasn't materialized yet. Data is dropped this frame;
+		// next render iteration usually has the buffer in place.
+		Logger::debug("Element ready for '%1%' subIndex %2%: destination registered but pass ibuf not allocated yet",
+			message.pluginInstanceName, message.subIndex);
+	}
+
+	const size_t expectedBytes = static_cast<size_t>(message.width)
+	                           * static_cast<size_t>(message.height)
+	                           * static_cast<size_t>(message.channels)
+	                           * sizeof(float);
+
+	m_elementReader->readInPlace(SHARED_ACCESS_WAIT, [&](const void* src, size_t capacity) {
+		if (!haveDest || !dest.buffer) {
+			return;  // No destination - just release the lock.
+		}
+		if (message.width != dest.width || message.height != dest.height || message.channels != dest.channels) {
+			Logger::warning("Element '%1%' subIndex %2%: dimension mismatch (msg %3%x%4%x%5% vs dest %6%x%7%x%8%); skipping",
+				message.pluginInstanceName, message.subIndex,
+				message.width, message.height, message.channels,
+				dest.width, dest.height, dest.channels);
+			return;
+		}
+		const size_t bytes = std::min(expectedBytes, capacity);
+		::memcpy(dest.buffer, src, bytes);
+	});
+}
+
+
+/// Read an image published by ZmqServer from one of the two double-buffered shared memory regions.
+/// @param imgID       Generation counter from the server - changes on every viewport resize.
+/// @param bufferIndex Which half of the double-buffer the server just finished writing (0 or 1).
+/// @return true if the image was read successfully.
+bool ZmqExporter::readViewportImage(int imgID, int bufferIndex) {
 	using namespace std::chrono_literals;
 	using ImageBuffer = ImageReader::ImageBuffer;
 
 	static const auto SHARED_ACCESS_WAIT = 100ms;
 
-	// The transfer machanism is using 2 types of shared buffers - an ID buffer and one or more data buffers.
-	// The server will set the last rendered image data to a data buffer and publish the data buffer's name
-	// to the ID buffer. The client will read the active data buffer name from the ID buffer and then read
-	// the image data from the data buffer. This two step process is necessary because the data buffer has
-	// to be recreated when the size of the image changes (i.e. when the viewport is resized). Both client
-	// and server need to close the shared memory object before its name becomes available for reuse. It is
-	// not practical to set up another coordination mechanism for this, and it would incur delays in the
-	// processing.
+	if (imgID != m_imgId) {
+		// The server has recreated the shared memory buffers (image was resized).
+		// Viewport uses double buffering (2 slots); production uses a single buffer.
+		m_imgId = imgID;
 
-	const auto zmqServerPID = std::to_string(ZmqServer::get().getProcessID());
+		const bool doubleBuffered = (m_settings.getExporterType() == ExporterType::IPR_VIEWPORT);
+		const int bufferCount = doubleBuffered ? 2 : 1;
 
-	if (!m_imgIdReader || !m_imgIdReader->isValid()) {
-		// Create a reader for the image transfer buffer ID shared region. The ID buffer will live as long
-		// as the renderer on the server is alive so we store a reference to it.
-		m_imgIdReader = std::make_unique<ImgIdReader>(zmqServerPID, SHARED_IMG_ID_MAPPING_ID);
+		for (int i = 0; i < 2; ++i) {
+			if (i < bufferCount) {
+				// Each generation reserves 2 buffer ID slots (for double buffering),
+				// so generation N uses IDs [N*2, N*2+1]. This keeps IDs unique across
+				// generations even if only one slot is used (production).
+				const auto bufferID = getImageBufferID(imgID * 2 + i);
+				m_imgReaders[i] = std::make_unique<ImgReader>(m_zmqServerPID, bufferID);
 
-		if (!m_imgIdReader->open(SHARED_ACCESS_WAIT)) {
-			// ZmqServer may have crashed
-			Logger::error("Failed to open image ID buffer, error %1%.", m_imgIdReader->getLastError());
-			return false;
+				if (!m_imgReaders[i]->open(SHARED_ACCESS_WAIT)) {
+					Logger::debug("Failed to open image transfer buffer %1%, error: %2%", bufferID, m_imgReaders[i]->getLastError());
+					m_imgReaders[i].reset();
+				}
+				m_sharedMemoryObjects.insert(bufferID);
+			} else {
+				m_imgReaders[i].reset();
+			}
 		}
-		m_sharedMemoryObjects.insert(SHARED_IMG_ID_MAPPING_ID);
 	}
 
-	// Read the active transfer buffer ID
-	int imgID = 0;
-	if (!m_imgIdReader->read(SHARED_ACCESS_WAIT, &imgID)) {
-		Logger::error("Failed to read image transfer buffer ID, cannot acquire lock.");
+	auto& reader = m_imgReaders[bufferIndex];
+	if (!reader) {
 		return false;
 	}
 
-	// Use the ID we just read to open the correct image transfer buffer. Do not keep references to the data
-	// buffer after the data is read as the next image might be published to a different buffer.
-	const auto imgBufferID = getImageBufferID(imgID);
-	auto imgReader = std::make_unique<ImgReader>(zmqServerPID, imgBufferID);
+	// Access the layer without m_imgMutex. This is safe because:
+	//  - For viewport: only this thread (ZMQ agent) ever writes to the viewport layer.
+	//  - For production: setRenderBuffer() writes at renderStart (before any image
+	//    callbacks fire) and renderEnd (after rendering stops), so it is always
+	//    lifecycle-sequenced before or after this code, never concurrent.
+	// The lock is taken only when dimensions have changed and the pointer must be
+	// updated, so that getRenderChannelImage() on the Python thread sees a consistent state.
+	// This avoids holding m_imgMutex during the shared memory read (which acquires its
+	// own interprocess lock), eliminating double-lock contention in the steady state.
+	auto& layer = m_layerImages[RenderChannelType::RenderChannelTypeNone];
 
-	if (!imgReader->open(SHARED_ACCESS_WAIT)) {
-		Logger::debug("Failed to open image transfer buffer with ID %1%, error: %2%", imgBufferID, imgReader->getLastError());
+	// With double buffering the server writes to the OTHER slot while we read this one,
+	// so there is no write/read race on the shared memory itself.
+	ImageBuffer buffer = reader->read(SHARED_ACCESS_WAIT, ImageBuffer{layer.w, layer.h, layer.writablePixels()});
+
+	if (!buffer.hasData()) {
+		// Buffer exists but no frame has been written to it yet.
 		return false;
 	}
-	m_sharedMemoryObjects.insert(imgBufferID);
 
-	{
+	if (buffer.data != layer.writablePixels()) {
+		// Image dimensions changed - a new buffer was allocated by the IPC reader.
+		// Lock m_imgMutex to update the layer's pointer and dimensions atomically
+		// with respect to getRenderChannelImage() on the Python thread.
 		std::scoped_lock lock(m_imgMutex);
-
-		// Read the image data
-		auto& layer = m_layerImages[RenderChannelType::RenderChannelTypeNone];
-
-		ImageBuffer buffer = imgReader->read(SHARED_ACCESS_WAIT, ImageBuffer{layer.w, layer.h, layer.pixels});
-
-		if (!buffer.hasData()) {
-			// The buffer has beed created by the server but no image has been copied to it yet.
-			return false;
-		}
-
-		if (buffer.data != layer.pixels) {
-			// A new buffer has been created for the data because the image format has changed.
-			delete[] layer.pixels;
-			layer.pixels = static_cast<float*>(buffer.data);
-			layer.w = buffer.width;
-			layer.h = buffer.height;
-			layer.channels = 4;
-		}
+		layer.setPixels(std::shared_ptr<float[]>(static_cast<float*>(buffer.data)));
+		layer.w = buffer.width;
+		layer.h = buffer.height;
+		layer.channels = 4;
 	}
 
 	return true;
@@ -521,16 +618,25 @@ RenderImage ZmqExporter::getImage() {
 
 RenderImage ZmqExporter::getPass(const std::string& name)
 {
-	RenderImage image;
-
 	if (name == "Combined") {
-		image = getImage();
+		return getImage();
 	}
-	else if (name == "Depth") {
-		image = getRenderChannelImage(RenderChannelTypeVfbZdepth);
+	if (name == "Depth") {
+		return getRenderChannelImage(RenderChannelTypeVfbZdepth);
 	}
+	return RenderImage();
+}
 
-	return image;
+
+void ZmqExporter::requestRenderChannel(int channelType, const std::string& pluginInstanceName, int subIndex) {
+	m_client->send(serializeMessage(MsgRendererGetImage{channelType, pluginInstanceName, subIndex}));
+}
+
+
+std::string ZmqExporter::getMetadata(const std::string& key) const {
+	std::scoped_lock lock(m_imgMutex);
+	auto it = m_metadata.find(key);
+	return it != m_metadata.end() ? it->second : "";
 }
 
 
@@ -562,25 +668,25 @@ void VRayForBlender::ZmqExporter::abortRender()
 	m_client->send(serializeMessage(MsgRendererAbort{}));
 }
 
-void ZmqExporter::pluginCreate(const std::string& pluginName, const std::string& pluginType, bool allowTypeChanges)
+void ZmqExporter::pluginCreate(std::string pluginName, std::string pluginType, bool allowTypeChanges)
 {
-	m_client->send(serializeMessage(MsgPluginCreate{pluginName, pluginType, allowTypeChanges}));
+	m_client->send(serializeMessage(MsgPluginCreate{std::move(pluginName), std::move(pluginType), allowTypeChanges}));
 	m_dirty = true;
 }
 
 
-void ZmqExporter::pluginRemove(const std::string& pluginName)
+void ZmqExporter::pluginRemove(std::string pluginName)
 {
-	m_client->send(serializeMessage(MsgPluginRemove{pluginName}));
+	m_client->send(serializeMessage(MsgPluginRemove{std::move(pluginName)}));
 	m_dirty = true;
 }
 
 
-void ZmqExporter::pluginUpdate(const std::string& pluginName, const std::string& attrName, const AttrValue& value, bool animatable, bool forceUpdate, bool recreate)
+void ZmqExporter::pluginUpdate(std::string pluginName, std::string attrName, const AttrValue& value, bool animatable, bool forceUpdate, bool recreate)
 {
 	MsgPluginUpdate msg{
-		pluginName,
-		attrName,
+		std::move(pluginName),
+		std::move(attrName),
 		value
 	};
 	msg.setAnimatable(animatable);
@@ -675,6 +781,13 @@ void ZmqExporter::setCameraName(const std::string &cameraName)
 }
 
 
+void ZmqExporter::setResumableRendering(bool enabled, const std::string &outputFileName, int autosaveSeconds, bool deleteOnSuccess)
+{
+	m_client->send(serializeMessage(MsgRendererSetResumableRendering{enabled, outputFileName, autosaveSeconds, deleteOnSuccess}));
+	m_dirty = true;
+}
+
+
 void ZmqExporter::commitChanges()
 {
 	if (m_dirty){
@@ -699,9 +812,7 @@ void ZmqExporter::init(const ExporterSettings & settings)
 			break;
 		case ExporterType::IPR_VIEWPORT:
 		case ExporterType::IPR_VFB:
-#ifndef VRAY_BLENDER_COMMUNITY_EDITION
 		case ExporterType::VANTAGE_LIVE_LINK:
-#endif
 			type = RendererType::RT;
 			break;
 		case ExporterType::ANIMATION:
@@ -715,7 +826,6 @@ void ZmqExporter::init(const ExporterSettings & settings)
 		m_client->send(serializeMessage(MsgRendererSetCommitAction{CommitAction::CommitAutoOff}));
 		m_client->send(serializeMessage(MsgRendererGetImage{static_cast<int>(RenderChannelType::RenderChannelTypeNone)}));
 
-#ifndef VRAY_BLENDER_COMMUNITY_EDITION
 		if (m_settings.drUse) {
 			int drFlags = DRFlags::EnableDr;
 			if (m_settings.drRenderOnlyOnHosts) {
@@ -733,8 +843,6 @@ void ZmqExporter::init(const ExporterSettings & settings)
 				hostsStr.pop_back(); // remove last delimiter - ;
 			m_client->send(serializeMessage(MsgRendererEnableDistributedRendering{hostsStr, (DRFlags)drFlags, m_settings.remoteDispatcher}));
 		}
-#endif // !VRAY_BLENDER_COMMUNITY_EDITION
-
 
 		m_cachedValues.renderSizes = RenderSizes();
 	}
@@ -747,7 +855,11 @@ void ZmqExporter::init(const ExporterSettings & settings)
 /// Start rendering the scene
 void ZmqExporter::start()
 {
-	m_layerImages.clear();
+	{
+		std::scoped_lock lock(m_imgMutex);
+		m_layerImages.clear();
+		m_metadata.clear();
+	}
 
 	// The view settings should not be set if not changed. Set them to their default values
 	// to make sure that none is skipped later due to lack of changes.
@@ -761,7 +873,7 @@ void ZmqExporter::start()
 	m_client->send(serializeMessage(MsgRendererSetViewportImageFormat{static_cast<AttrImage::ImageType>(viewSettings.viewportImageType)}));
 	m_client->send(serializeMessage(MsgRendererSetRenderMode{viewSettings.renderMode}));
 
-	m_client->send(serializeMessage(MsgRendererStart{}));
+	m_client->send(serializeMessage(MsgRendererStart{m_imageToBlender}));
 
 	// Production rendering could be aborted and started again.
 	// For that reason this flag should be cleared.
@@ -792,10 +904,14 @@ void ZmqExporter::renderSequence(const vray::AttrList<int>& sequences)
 {
 	vassert(sequences.getCount() != 0);
 
-	m_layerImages.clear();
+	{
+		std::scoped_lock lock(m_imgMutex);
+		m_layerImages.clear();
+		m_metadata.clear();
+	}
 
 	m_lastRenderedFrame = (*sequences)[0] - 1;
-	m_client->send(serializeMessage(MsgRendererRenderSequence{sequences}));
+	m_client->send(serializeMessage(MsgRendererRenderSequence{sequences, m_imageToBlender}));
 
 
 	// Production rendering could be aborted and started again.
@@ -858,6 +974,21 @@ int ZmqExporter::exportVrscene(const ExportSceneSettings& settings)
 	}
 
 	m_client->send(serializeMessage(MsgRendererExportScene{exportSettings}));
+	return true;
+}
+
+int ZmqExporter::exportProxy(const ProxyExportSettings& settings)
+{
+	MsgRendererExportProxy message;
+	message.filePath = settings.filePath;
+	message.elementsPerVoxel = settings.elementsPerVoxel;
+	message.previewFaces = settings.previewFaces;
+	message.previewType = settings.previewType;
+	message.animOn = settings.animOn ? 1 : 0;
+	message.startFrame = settings.startFrame;
+	message.endFrame = settings.endFrame;
+
+	m_client->send(serializeMessage(message));
 	return true;
 }
 

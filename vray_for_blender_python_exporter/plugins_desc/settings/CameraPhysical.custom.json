@@ -217,7 +217,6 @@
     "Type": "CAMERA",
     "Options": {
         "excluded_parameters": [
-            "enable_thin_lens_equation",
             "subdivs",
             "dof_display_threshold",
             "targeted",

@@ -25,8 +25,9 @@ def nodeDraw(context, layout, node):
     # unselected, hence the < 2 check.
     if (len(context.selected_objects) < 2) and ob and (ob.type == 'MESH'):
         if isObjectVrayProxy(ob):
-            # Show the selector if multiple objects of a different type
-            col.prop(propGroup, 'uvw_channel', text="UVW Channel")
+            if ob.data.uv_layers:
+                # Proxy has named UV layers from the proxy file (e.g. vray_channel_id_0, vray_channel_id_1)
+                col.prop_search(propGroup, 'uv_set_name', ob.data, 'uv_layers', text="UV Layer")
         else:
             col.prop_search(propGroup, 'uv_set_name', ob.data, 'uv_layers', text="UV Layer")
     

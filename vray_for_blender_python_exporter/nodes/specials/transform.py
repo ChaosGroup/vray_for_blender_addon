@@ -71,6 +71,9 @@ class VRayNodeTransform(VRayNodeBase):
             _drawVectorSock(self, 'Offset', layout)
             _drawVectorSock(self, 'Scale', layout)
 
+    def copy(self, srcNode):
+        self.invert = srcNode.invert
+
     def getValue(self, context: bpy.types.Context):
         
         if ob := self._getConnectedObject(context):
@@ -129,6 +132,9 @@ class VRayNodeMatrix(VRayNodeBase):
         layout.prop(self, 'invert')
         _drawVectorSock(self, 'Rotation', layout)
         _drawVectorSock(self, 'Scale', layout)
+
+    def copy(self, srcNode):
+        self.invert = srcNode.invert
 
     def getValue(self):
         rotate = _getVectorSocketValue(self, 'Rotation')
@@ -204,6 +210,10 @@ class VRayNodeVector(VRayNodeBase):
         layout.prop(self, 'useDegrees')
         # layout in column to enable multiple selections for vector properties
         layout.row().column().prop(self, "valueDegrees" if self.useDegrees else "value", text="")
+
+    def copy(self, srcNode):
+        self.value[:] = srcNode.value
+        self.useDegrees = srcNode.useDegrees
 
     def getValue(self):
         # Convert self.vector (a bpy_float[3]) to a mathutils.Vector,

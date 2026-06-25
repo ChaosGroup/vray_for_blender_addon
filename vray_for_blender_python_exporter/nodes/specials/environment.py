@@ -9,6 +9,7 @@ from vray_blender.lib.sys_utils import isGPUEngine
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.nodes import updateNodeMutedState
 from vray_blender.nodes.sockets import RGBA_SOCKET_COLOR, addInput, addOutput, VRayValueSocket
+from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.plugins import getPluginModule, getPluginAttr
 
 
@@ -24,6 +25,7 @@ class VRayNodeWorldOutput(VRayNodeBase):
     def update(self):
         if self.mute:
             self.mute = False
+        super().update()
 
     def init(self, context):
         addInput(self, 'VRaySocketObject', "Environment")
@@ -44,13 +46,15 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
         max = 1.0,
         soft_min = 0.0,
         soft_max = 1.0,
-        default = (0.0, 0.0, 0.0)
+        default = (0.0, 0.0, 0.0),
+        update = selectedObjectTagUpdate
     )
 
     use: bpy.props.BoolProperty(
         name        = "Use",
         description = "Use override",
-        default     = False
+        default     = False,
+        update      = selectedObjectTagUpdate
     )
 
     multiplier: bpy.props.FloatProperty(
@@ -60,6 +64,7 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
         default     = 1.0,
         soft_min    = 0.0,
         soft_max    = 1.0,
+        update      = selectedObjectTagUpdate
     )
 
     def draw(self, context, layout, node, text):
@@ -71,26 +76,36 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
 
     def _drawCPU(self, context, layout, node, text):
         row = layout.split(factor=0.3)
-        row.prop(self, 'value', text="")
+        colorCol = row.column()
+        colorCol.enabled = self.use
+        colorCol.prop(self, 'value', text="")
         col = row.split(factor=0.9)
-        col.prop(self, 'multiplier', text=text)
+        multCol = col.column()
+        multCol.enabled = self.use
+        multCol.prop(self, 'multiplier', text=text)
         colUse = col.column()
         colUse.prop(self, 'use', text="")
     
 
     def _drawGPU(self, context, layout: bpy.types.UILayout, node, text):
-        
+
         if self.hasActiveFarLink():
             # For GPU renders, the blend between texture and color does not work. The _mult property
             # is a simple multiplier for the color. Do not show the color in this case.
             row = layout.split(factor=0.935, align=True)
-            row.prop(self, 'multiplier', text=text)
+            multCol = row.column()
+            multCol.enabled = self.use
+            multCol.prop(self, 'multiplier', text=text)
         else:
             row = layout.split(factor=0.3, align=True)
-            row.prop(self, 'value', text="")
+            valueCol = row.column()
+            valueCol.enabled = self.use
+            valueCol.prop(self, 'value', text="")
             row = row.split(factor=0.9)
-            row.prop(self, 'multiplier', text=text)
-            
+            multCol = row.column()
+            multCol.enabled = self.use
+            multCol.prop(self, 'multiplier', text=text)
+
         colUse = row.column()
         colUse.alignment = 'RIGHT'
         colUse.prop(self, 'use', text="")
@@ -119,9 +134,21 @@ class VRayNodeEnvironment(VRayNodeBase):
     vray_type   = 'NONE'
     vray_plugin = 'NONE'
 
+    def copy(self, srcNode):
+        for srcSock in srcNode.inputs:
+            dstSock = next((s for s in self.inputs if s.name == srcSock.name), None)
+            if dstSock is None:
+                continue
+            for attr in ('value', 'use', 'multiplier'):
+                if hasattr(srcSock, attr):
+                    try:
+                        setattr(dstSock, attr, getattr(srcSock, attr))
+                    except (TypeError, AttributeError):
+                        pass
+
     def init(self, context):
         plugin = getPluginModule('SettingsEnvironment')
-        
+
         bgColorDefault = getPluginAttr(plugin, 'bg_tex')['default'][:3]
         giColorDefault = getPluginAttr(plugin, 'gi_tex')['default'][:3]
         reflectColorDefault = getPluginAttr(plugin, 'reflect_tex')['default'][:3]
@@ -138,6 +165,7 @@ class VRayNodeEnvironment(VRayNodeBase):
 
 
     def update(self):
+        super().update()
         self.id_data.update_tag()
         updateNodeMutedState(self)
 

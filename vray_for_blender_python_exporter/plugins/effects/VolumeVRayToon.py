@@ -11,7 +11,7 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.nodes.curves_node import addCurvesUpdateCallback
+from vray_blender.nodes.curves_node import addCurvesUpdateCallback, copyCurvesData, createCurvesNode, getCurvesNode, hasCurvesNode, removeCurvesNode
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -25,15 +25,16 @@ def onUpdateInnerLine(updateSource, context: bpy.types.Context, attrName: str ):
 
     sockLineColor.enabled = drawInnerLine
     sockLineWidth.enabled = drawInnerLine
-    
+
     if not drawInnerLine:
         removeSocketLinks(sockLineColor)
         removeSocketLinks(sockLineWidth)
 
 
-_CURVE_NODES_TREE_NAME = ".volumeVRayToonTree" # name for hidden node tree containing ShaderNodeRGBCurve nodes
 _CURVE_ATTRIBUTES = {'depth_curve': 'depth', 'angular_curve': 'angular'}
 _CURVE_TYPES = ('depth', 'angular')
+_OLD_CURVE_NODES_TREE_NAME = ".volumeVRayToonTree"
+
 
 def nodeInit(node: bpy.types.Node):
     node.assignStaticId() # The static id is needed for the name of the curves node
@@ -42,65 +43,64 @@ def nodeInit(node: bpy.types.Node):
     # Unfortunately, The current "bpy" API does not allow direct creation of a CurveMapping object.
     # To work around this, we create a ShaderNodeRGBCurve in a hidden node tree and use its widget.
     for curveType in _CURVE_TYPES:
-        _createCurvesNode(node, curveType)
+        curvesNode = createCurvesNode(node, f'_{curveType}')
+        curve = curvesNode.mapping.curves[3]
+        curve.points[0].location[1] = 1.0
+        curve.points[1].location[1] = 0.0
 
 
 def nodeFree(node: bpy.types.Node):
     for curveType in _CURVE_TYPES:
-        curvesNode = _getCurvesNode(node, curveType)
-        bpy.msgbus.clear_by_owner(curvesNode)
-        bpy.data.node_groups[_CURVE_NODES_TREE_NAME].nodes.remove(curvesNode)    
+        removeCurvesNode(node, f'_{curveType}')
 
 
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
     copyNode.assignStaticId() # The static id is needed for the name of the curves node
 
-
     for curveType in _CURVE_TYPES:
-        _createCurvesNode(copyNode, curveType)
-        copyCurvesNode = _getCurvesNode(copyNode, curveType)
-        origCurvesNode = _getCurvesNode(origNode, curveType)
-
-        for i, curve in enumerate(origCurvesNode.mapping.curves):
-                copyCurve = copyCurvesNode.mapping.curves[i]
-
-                # By default, CurveMapping contains a minimum of 2 points. 
-                # This ensures that the curve in origNode cannot have fewer points than the one in copyCurve.         
-                while len(copyCurve.points) < len(curve.points):
-                    copyCurve.points.new(0, 0)
-
-                for j, point in enumerate(curve.points):
-                    copyCurve.points[j].location = point.location
-                    copyCurve.points[j].handle_type = point.handle_type
+        copyCurvesData(getCurvesNode(origNode, f'_{curveType}'), createCurvesNode(copyNode, f'_{curveType}'))
 
 
 def drawCurveTemplate(context, layout, propGroup, widgetAttr):
     node = getNodeOfPropGroup(propGroup)
-    
+
     curveType = _CURVE_ATTRIBUTES.get(widgetAttr['name'])
-    curvesNode = _getCurvesNode(node, curveType)
+    curvesNode = getCurvesNode(node, f'_{curveType}')
     layout.template_curve_mapping(curvesNode, "mapping", type='NONE')
-    
+
+
+def _ensureCurvesNodes(node: bpy.types.Node):
+    """Ensure curve nodes exist. For old scenes that used a separate curves tree, migrate the data."""
+    for curveType in _CURVE_TYPES:
+        if hasCurvesNode(node, f'_{curveType}'):
+            continue
+        curvesNode = createCurvesNode(node, f'_{curveType}')
+        # Try to restore data from the old per-plugin tree used before curves were moved to curves_node.py.
+        oldTree = bpy.data.node_groups.get(_OLD_CURVE_NODES_TREE_NAME)
+        if oldTree and (oldNode := oldTree.nodes.get(f"{node.vray_plugin}_{curveType}_{node.static_id}")):
+            copyCurvesData(oldNode, curvesNode)
+        else:
+            curve = curvesNode.mapping.curves[3]
+            curve.points[0].location[1] = 1.0
+            curve.points[1].location[1] = 0.0
+
+
+def registerNodeCurves(node: bpy.types.Node):
+    """Register update callbacks for a single VolumeVRayToon node."""
+    _ensureCurvesNodes(node)
+    for curveType in _CURVE_TYPES:
+        addCurvesUpdateCallback(node, getCurvesNode(node, f'_{curveType}'))
 
 
 def exportTreeNode(nodeCtx: NodeContext):
     node = nodeCtx.node
-
-    # We subscribe again on every export because if the msgbus subscription is initialized in nodeInit(),
-    # on closing and reloading the scene the subscription is cleared.
-    # Another solution would be to search all node trees for VRayNodeVolumeVRayToon,
-    # but this would unnecessarily spread the code and add complexity.
-    # TODO find more elegant solution
     propGroup = getVrayPropGroup(node)
     pluginName = Names.treeNode(nodeCtx)
     pluginDesc = PluginDesc(pluginName, node.vray_plugin)
     pluginDesc.vrayPropGroup = propGroup
-    
+
     for curveType in _CURVE_TYPES:
-        curvesNode = _getCurvesNode(node, curveType)
-
-        addCurvesUpdateCallback(node, curvesNode)
-
+        curvesNode = getCurvesNode(node, f'_{curveType}')
         curve  = curvesNode.mapping.curves[3]
 
         pluginDesc.setAttribute(f"{curveType}CurvePositions", [point.location[0] for point in curve.points])
@@ -117,25 +117,3 @@ def exportTreeNode(nodeCtx: NodeContext):
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
-
-
-def _getCurvesNodeName(node, curveType: str):
-    return f"{node.vray_plugin}_{curveType}_{node.static_id}"
-
-
-def _getCurvesNode(node, curveType: str):
-    return bpy.data.node_groups[_CURVE_NODES_TREE_NAME].nodes[_getCurvesNodeName(node, curveType)]
-
-
-def _createCurvesNode(node, curveType: str):
-    if _CURVE_NODES_TREE_NAME not in bpy.data.node_groups:
-        bpy.data.node_groups.new(_CURVE_NODES_TREE_NAME, "ShaderNodeTree")
-
-    toonTree = bpy.data.node_groups[_CURVE_NODES_TREE_NAME]
-    toonTree.use_fake_user=True
-    curvesNode = toonTree.nodes.new("ShaderNodeRGBCurve")
-    curvesNode.name = _getCurvesNodeName(node, curveType)
-
-    curve  = curvesNode.mapping.curves[3]
-    curve.points[0].location[1] = 1.0
-    curve.points[1].location[1] = 0.0

@@ -5,11 +5,12 @@
 #ifndef VRAY_FOR_BLENDER_BASE_TYPES_H
 #define VRAY_FOR_BLENDER_BASE_TYPES_H
 
+#include <algorithm>
 #include <cmath>
-#include <vector>
-#include <string>
 #include <cstring>
-#include <unordered_map>
+#include <string>
+#include <vector>
+#include <tsl/robin_map.h>
 #include <memory>
 #include <initializer_list>
 #include "vassert.h"
@@ -126,7 +127,28 @@ enum RenderChannelType {
 	RenderChannelTypeVfbDenoised,
 	RenderChannelTypeVfbWorldbumpnormal,
 	RenderChannelTypeVfbDefocusamount,
+	RenderChannelTypeVfbEffectsResult = 153,
+	RenderChannelTypeVfbToon,
+	RenderChannelTypeVfbRendertime = 157,
+	RenderChannelTypeVfbCryptomatte,
+	RenderChannelTypeVfbLightingAnalysis = 160,
 	RenderChannelTypeVfbLightSelect = 163,
+	RenderChannelTypeVfbVrmtlmetalness = 165,
+	RenderChannelTypeVfbLightMix = 178,
+	RenderChannelTypeVfbToonLighting = 180,
+	RenderChannelTypeVfbToonSpecular,
+	RenderChannelTypeVfbVrmtlsheencolor = 183,
+	RenderChannelTypeVfbRawSheenReflection,
+	RenderChannelTypeVfbSheenFilter,
+	RenderChannelTypeVfbVrmtlsheenglossiness,
+	RenderChannelTypeVfbSheenReflAlpha,
+	RenderChannelTypeVfbCoatReflAlpha,
+	RenderChannelTypeVfbVrmtlcoatcolor,
+	RenderChannelTypeVfbRawCoatReflection,
+	RenderChannelTypeVfbCoatFilter,
+	RenderChannelTypeVfbVrmtlcoatglossiness,
+	RenderChannelTypeVfbSheenReflection = 194,
+	RenderChannelTypeVfbCoatReflection,
 };
 
 
@@ -161,7 +183,6 @@ enum ValueType {
 
 	ValueTypeListValue,
 
-	ValueTypeInstancer,
 	ValueTypeMapChannels,
 };
 
@@ -185,6 +206,7 @@ struct AttrSimpleType {
 	ValueType getType() const;
 	AttrSimpleType(): value() {}
 	AttrSimpleType(const T & val): value(val) {}
+	AttrSimpleType(T && val): value(std::move(val)) {}
 
 	operator const T & () const {
 		return value;
@@ -251,6 +273,28 @@ typedef AttrSimpleType<float> AttrFloat;
 typedef AttrSimpleType<double> AttrDouble;
 typedef AttrSimpleType<bool> AttrBool;
 
+/// Pixel data for an image or image region.
+///
+/// Ownership model for `data`:
+///   AttrImage operates in two modes, both using shared_ptr<char[]>:
+///
+///   1. OWNING - the constructor or set() allocate a new buffer and memcpy into it.
+///      The shared_ptr uses the default deleter (delete[]).  The AttrImage fully owns
+///      the pixel memory and frees it when the last copy is destroyed.
+///
+///   2. NON-OWNING VIEW - viewOf() wraps a caller-owned buffer in a shared_ptr with
+///      a no-op deleter [](char*){}.  No memory is freed when the AttrImage is destroyed.
+///      The caller must guarantee the buffer outlives all uses of the AttrImage.
+///
+///      This is used in two places:
+///        - Server side (sendImages / onBucketReady): VRay's VRayImage owns the pixels.
+///          viewOf() avoids copying before serialization. The VRayImage stays alive
+///          through serializeMessage() which completes synchronously.
+///        - Client side (deserializer): the ZMQ message buffer owns the pixels.
+///          A shared_ptr with no-op deleter points into the zmq::message_t payload.
+///          The message stays alive for the entire handleMsg() -> processRendererOnImage()
+///          -> update() call chain, which copies the data into its final destination
+///          before handleMsg() returns and the ZMQ message is freed.
 struct AttrImage {
 	enum ImageType {
 		NONE = 0,
@@ -270,6 +314,7 @@ struct AttrImage {
 	    , imageType(NONE)
 	{}
 
+	/// Owning constructor: allocates a new buffer and copies imgData into it.
 	AttrImage(const void *data, size_t size, AttrImage::ImageType type, int width, int height, int x = -1, int y = -1)
 	    : data(nullptr)
 	    , size(size)
@@ -286,13 +331,31 @@ struct AttrImage {
 		return x != -1 && y != -1;
 	}
 
+	/// Owning: allocate a private buffer and copy imgData into it.
 	void set(const void * imgData, size_t dataSize) {
 		this->data.reset(new char[dataSize]);
 		this->size = dataSize;
 		::memcpy(this->data.get(), imgData, dataSize);
 	}
 
-	std::shared_ptr<char[]> data; ///< Image bytes data
+	/// Non-owning: wrap an external buffer with a no-op deleter.
+	/// The caller must ensure the buffer outlives any use of the returned
+	/// AttrImage (including serialization and deserialization on the receiving end).
+	static AttrImage viewOf(void* imgData, size_t dataSize, ImageType type,
+	                        int width, int height, int x = -1, int y = -1)
+	{
+		AttrImage img;
+		img.data    = std::shared_ptr<char[]>(static_cast<char*>(imgData), [](char*) {});
+		img.size    = dataSize;
+		img.imageType = type;
+		img.width   = width;
+		img.height  = height;
+		img.x       = x;
+		img.y       = y;
+		return img;
+	}
+
+	std::shared_ptr<char[]> data; ///< Pixel bytes. See class comment for ownership model.
 	size_t size; ///< Size in bytes
 	int width; ///< Width in pixels
 	int height; ///< Height in pixels
@@ -317,8 +380,10 @@ struct AttrImageSet {
 	    : sourceType(sourceType)
 	{}
 
-	std::unordered_map<RenderChannelType, AttrImage, std::hash<int>> images;
+	tsl::robin_map<RenderChannelType, AttrImage, std::hash<int>> images;
 	ImageSourceType sourceType;
+	std::unordered_map<std::string, std::string> metadata; ///< Key-value metadata (e.g. Cryptomatte manifest, keyed
+	                                                       ///< by "cryptomatte" or "cryptomatte.<instanceName>" for multi-instance).
 };
 
 struct AttrColor {
@@ -582,8 +647,15 @@ struct AttrList {
 		m_Ptr.get()->push_back(value);
 	}
 
+	void fill(const T &value, int count) {
+		auto* vec = m_Ptr.get();
+		const size_t oldSize = vec->size();
+		vec->resize(oldSize + count);
+		std::fill_n(vec->data() + oldSize, count, value);
+	}
+
 	void prepend(const T &value) {
-		m_Ptr.get()->insert(0, value);
+		m_Ptr.get()->insert(m_Ptr.get()->begin(), value);
 	}
 
 	int getCount() const {
@@ -690,30 +762,13 @@ struct AttrMapChannels {
 		AttrListVector vertices;
 		AttrListInt    faces;
 		std::string    name;
+		int            channelId = -1; // Explicit channel ID; -1 means use list position
 	};
 	typedef std::vector<AttrMapChannel> MapChannelsList;
 
 	MapChannelsList data;
 };
 
-
-struct AttrInstancer {
-
-	ValueType getType() const {
-		return ValueType::ValueTypeInstancer;
-	}
-
-	struct Item {
-		int            index;
-		AttrTransform  tm;
-		AttrTransform  vel;
-		AttrPlugin     node;
-	};
-	typedef AttrList<Item> Items;
-
-	float frameNumber;
-	Items data;
-};
 
 const int ATTR_DATA_SIZE = max_type_sizeof<
 AttrColor,
@@ -725,7 +780,6 @@ AttrTransform,
 AttrPlugin,
 AttrList<int>, // all lists have same sizeof
 AttrMapChannels,
-AttrInstancer,
 AttrImage,
 AttrImageSet,
 AttrSimpleType<int>,
@@ -750,6 +804,11 @@ struct AttrValue {
 	AttrValue(const std::string & attrValue) {
 		type = ValueTypeString;
 		new(asPtr<AttrSimpleType<std::string>>())AttrSimpleType<std::string>(attrValue);
+	}
+
+	AttrValue(std::string && attrValue) {
+		type = ValueTypeString;
+		new(asPtr<AttrSimpleType<std::string>>())AttrSimpleType<std::string>(std::move(attrValue));
 	}
 
 	AttrValue(const char * attrValue) {
@@ -828,7 +887,6 @@ struct AttrValue {
 		case ValueTypeListString:    new(asPtr<AttrListString>())AttrListString(); break;
 		case ValueTypeListPlugin:    new(asPtr<AttrListPlugin>())AttrListPlugin(); break;
 		case ValueTypeListValue:     new(asPtr<AttrListValue>())AttrListValue(); break;
-		case ValueTypeInstancer:     new(asPtr<AttrInstancer>())AttrInstancer(); break;
 		case ValueTypeMapChannels:   new(asPtr<AttrMapChannels>())AttrMapChannels(); break;
 		case ValueTypeImageSet:      new(asPtr<AttrImageSet>())AttrImageSet(); break;
 		default: memset(data, 0, ATTR_DATA_SIZE); break;
@@ -850,7 +908,6 @@ struct AttrValue {
 		case ValueTypeListString:    new(asPtr<AttrListString>())AttrListString(other.as<AttrListString>()); break;
 		case ValueTypeListPlugin:    new(asPtr<AttrListPlugin>())AttrListPlugin(other.as<AttrListPlugin>()); break;
 		case ValueTypeListValue:     new(asPtr<AttrListValue>())AttrListValue(other.as<AttrListValue>()); break;
-		case ValueTypeInstancer:     new(asPtr<AttrInstancer>())AttrInstancer(other.as<AttrInstancer>()); break;
 		case ValueTypeMapChannels:   new(asPtr<AttrMapChannels>())AttrMapChannels(other.as<AttrMapChannels>()); break;
 		case ValueTypeImageSet:      new(asPtr<AttrImageSet>())AttrImageSet(other.as<AttrImageSet>()); break;
 		default: memcpy(data, other.data, ATTR_DATA_SIZE); break; // others are POD so we can memcpy
@@ -872,7 +929,6 @@ struct AttrValue {
 		case ValueTypeListString:    as<AttrListString>().~AttrListString(); break;
 		case ValueTypeListPlugin:    as<AttrListPlugin>().~AttrListPlugin(); break;
 		case ValueTypeListValue:     as<AttrListValue>().~AttrListValue(); break;
-		case ValueTypeInstancer:     as<AttrInstancer>().~AttrInstancer(); break;
 		case ValueTypeMapChannels:   as<AttrMapChannels>().~AttrMapChannels(); break;
 		case ValueTypeImageSet:      as<AttrImageSet>().~AttrImageSet(); break;
 		default: break; // nothing to do
@@ -907,7 +963,6 @@ struct AttrValue {
 		case ValueTypeListString:    return "ListString";
 		case ValueTypeListPlugin:    return "ListPlugin";
 		case ValueTypeListValue:     return "ListValue";
-		case ValueTypeInstancer:     return "Instancer2";
 		case ValueTypeMapChannels:   return "Map Channels";
 		default:
 			break;

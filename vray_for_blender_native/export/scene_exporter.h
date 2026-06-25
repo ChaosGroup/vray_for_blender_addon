@@ -7,11 +7,13 @@
 #include <nanobind/nanobind.h>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <span>
 #include <string>
+#include <utility>
 
 
 #include "render_image.h"
@@ -28,7 +30,8 @@ namespace VRayForBlender {
 		virtual ~ExporterBase() = default;
 
 		virtual void init(ZmqExporter* zmqExporter) = 0;
-		virtual void renderStart(RenderPass * /*renderPass*/, nb::callable&& /*cbImageUpdated*/) {}
+		virtual void renderStart(RenderPass * /*renderPass*/, nb::callable&& /*cbImageUpdated*/, bool /*imageToBlender*/) {}
+		virtual void setElementPasses(const nb::list& /*passes*/) {}
 		virtual void renderEnd() {}
 		virtual void renderFrame() {}
 		virtual void continueRenderSequence() {}
@@ -65,7 +68,7 @@ public:
 	void     init(ExporterBase* policy, const Interop::ExporterSettings& settings);
 	void     free();
 
-	void    renderStart(RenderPass * renderPass, nb::callable&& cbImageUpdated) { m_policy->renderStart(renderPass, std::move(cbImageUpdated)); }
+	void    renderStart(RenderPass * renderPass, nb::callable&& cbImageUpdated, bool imageToBlender) { m_policy->renderStart(renderPass, std::move(cbImageUpdated), imageToBlender); }
 	void    renderEnd()                  { m_policy->renderEnd(); }
 	void    renderFrame()                { m_policy->renderFrame();}
 	void    continueRenderSequence()     { m_policy->continueRenderSequence(); }
@@ -92,10 +95,12 @@ public:
 	void          startExport(int threadCount);
 	void          finishExport(bool interactive);
 	int           writeVrscene(const ExportSceneSettings& exportSettings);
+	std::pair<bool, std::string> exportProxy(const ProxyExportSettings& proxySettings);
 	void          startStatsCollection();
 	void          endStatsCollection(bool printStats, const std::string& title);
 	void          setRenderSizes(const proto::RenderSizes& sizeData);
 	void          setCameraName(const std::string& cameraName);
+	void          setResumableRendering(bool enabled, const std::string& outputFileName, int autosaveSeconds, bool deleteOnSuccess = false);
 	void          syncView(const ViewSettings& viewSettings);
 	void          openVFB();
 	void          setVfbAlwaysOnTop(bool alwaysOnTop);
@@ -103,7 +108,10 @@ public:
 
 	RenderImage   getImage();
 	RenderImage   getRenderPassImage(const std::string& passName);
-	float          getRenderProgress() const;
+	float         getRenderProgress() const;
+	void          requestRenderChannel(int channelType, const std::string& pluginInstanceName = "", int subIndex = 0);
+	std::string   getMetadata(const std::string& key) const { return m_exporter->getMetadata(key); }
+	void          setElementPasses(const nb::list& passes) { m_policy->setElementPasses(passes); }
 
 	std::string   getEngineUpdateMessage(); // Returns status of the renderring in text
 	bool          isRenderReady(); // Indicates that the final rendered image has come
@@ -128,6 +136,12 @@ protected:
 	std::string              engineUpdateMessage;
 
 	std::atomic_bool         m_vrsceneExportInProgress = false; // Waiting for response to a requested .vrscene export operation
+	std::atomic_bool         m_proxyExportInProgress = false;   // Waiting for response to a requested .vrmesh export operation
+
+	std::mutex               m_proxyExportWaitMtx;
+	std::condition_variable  m_proxyExportCv;
+	bool                     m_lastProxyExportResult = false;
+	std::string              m_lastProxyExportMessage;
 };
 
 }

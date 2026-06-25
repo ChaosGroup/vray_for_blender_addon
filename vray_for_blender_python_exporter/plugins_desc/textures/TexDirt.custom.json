@@ -13,7 +13,7 @@
         {
             "attr": "radius",
             "desc": "Determines the size of the area (in scene units) where the dirt effect is produced.",
-            "default": 50.0
+            "default": 0.1
         },
         {
             "attr": "distribution",

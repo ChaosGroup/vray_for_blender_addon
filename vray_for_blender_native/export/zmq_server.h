@@ -14,7 +14,8 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include <nanobind/stl/unordered_map.h>
+
+#include <tsl/robin_map.h>
 
 #include <stop_token>
 #include <string>
@@ -29,7 +30,6 @@
 #pragma clang diagnostic pop
 #endif
 
-#include <unordered_map>
 
 // Forward declarations
 struct PluginDesc;
@@ -134,7 +134,7 @@ private:
 	mutable std::mutex m_lock;				  /// Synchronize internal state
 	mutable std::recursive_mutex m_lockConn;  /// Synchronize access to the zmq agent
 
-	std::unordered_map<std::string, nb::callable> m_pyCallbacks; /// Stores python callbacks
+	tsl::robin_map<std::string, nb::callable> m_pyCallbacks; /// Stores python callbacks
 
 	std::atomic_bool m_mainRendererCreated = false; /// Flag for indication that the main renderer in the ZMQ server is created
 	std::atomic_bool m_licenseAcquired = false; /// Flag for indication of license acquisition

@@ -26,7 +26,12 @@ MeshData::MeshData(nb::object obj) :
 	loops              (fromDataArray<unsigned int>(obj.attr("loops"))),
 	loopTris           (fromDataArray<unsigned int[3]>(obj.attr("loopTris"))),
 	loopTriPolys       (fromDataArray<unsigned int>(obj.attr("loopTriPolys"))),
+	cornerEdges        (fromDataArray<int>(obj.attr("cornerEdges"))),
+	edgeCreases        (maybeFromDataArray<float>  (obj.attr("edgeCreases"))),
+	edgeVertices       (maybeFromDataArray<int[2]> (obj.attr("edgeVertices"))),
+	vertexCreases      (maybeFromDataArray<float>  (obj.attr("vertexCreases"))),
 	polyMtlIndices     (fromDataArray<unsigned int>(obj.attr("polyMtlIndices"))),
+	mtlIdOffset        (nb::cast<int>(obj.attr("mtlIdOffset"))),
 	normals			   (fromDataArray<float[3]>(obj.attr("normals"))),
 	uvLayers           (fromUVAttrLayersArr(obj.attr("loopUVs"))),
 	colorLayers        (fromAttrLayersArr(obj.attr("loopColors"))),
@@ -48,16 +53,17 @@ MeshData::MeshData(nb::object obj) :
 }
 
 HairData::HairData(nb::object obj) :
-	name			(nb::cast<std::string>(obj.attr("name"))),
-	type			(nb::cast<std::string>(obj.attr("type"))),
-	widthsInPixels	(nb::cast<bool>(obj.attr("widthsInPixels"))),
-	useHairBSpline	(nb::cast<bool>(obj.attr("useHairBSpline"))),
-	points			(fromDataArray<float[3]>(obj.attr("points"))),
-	pointRadii		(fromNdArray<float>(obj.attr("pointRadii"))),
-	strandSegments	(fromNdArray<int>(obj.attr("strandSegments"))),
-	uvs				(fromNdOrDataArray<float>(obj.attr("uvs"), type == "CURVES")),
-	vertColors		(fromNdArray<float>(obj.attr("vertColors"))),
-	ref				(obj),
+	name            (nb::cast<std::string>(obj.attr("name"))),
+	type            (nb::cast<std::string>(obj.attr("type"))),
+	widthsInPixels  (nb::cast<bool>(obj.attr("widthsInPixels"))),
+	useHairBSpline  (nb::cast<bool>(obj.attr("useHairBSpline"))),
+	points          (fromDataArray<float[3]>(obj.attr("points"))),
+	pointRadii      (fromNdOrDataArray<float>(obj.attr("pointRadii"), type == "CURVES")),
+	strandSegments  (fromNdArray<int>(obj.attr("strandSegments"))),
+	strandOffsets   (fromDataArray<int>(obj.attr("strandOffsets"))),
+	uvs             (fromNdOrDataArray<float>(obj.attr("uvs"), type == "CURVES")),
+	vertColors      (fromNdArray<float>(obj.attr("vertColors"))),
+	ref             (obj),
 	psys            ((ParticleSystem*)(size_t)nb::cast<size_t>(obj.attr("psys"))),
 	firstToExport   (nb::cast<int>(obj.attr("firstToExport"))),
 	totalParticles  (nb::cast<int>(obj.attr("totalParticles"))),
@@ -81,10 +87,12 @@ PointCloudData::PointCloudData(nb::object obj) :
 
 InstancerData::InstancerData(nb::object obj) :
 	name		(nb::cast<std::string>(obj.attr("name"))),
-	frame		(nb::cast<int>(obj.attr("frame"))),
 	itemCount	(nb::cast<int>(obj.attr("count"))),
-	data		(fromDataArray<char>(obj.attr("arr"))),
-	ref			(obj)
+	ids		(obj.attr("ids")),
+	tms		(obj.attr("tms")),
+	meshes		(obj.attr("meshes")),
+	indices		(obj.attr("indices")),
+	ref		(obj)
 {}
 
 

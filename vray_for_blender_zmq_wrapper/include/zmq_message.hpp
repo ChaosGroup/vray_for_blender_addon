@@ -97,6 +97,7 @@ enum class MsgType : char {
 	RendererLoadScene,
 	RendererAppendScene,
 	RendererExportScene,
+	RendererExportProxy,
 	RendererSetRenderMode,
 	RendererSetCurrentTime,
 	RendererSetCurrentFrame,
@@ -111,6 +112,8 @@ enum class MsgType : char {
 	RendererSetCropRegion,
 	RendererRenderSequence,
 	RendererContinueSequence,
+	RendererSetResumableRendering,
+	RendererElementDone,            ///< Client -> server: element SHM buffer consumed; safe to overwrite.
 	LastRendererMessage,
 
 	// Renderer events
@@ -120,6 +123,7 @@ enum class MsgType : char {
 	RendererOnChangeState,
 	RendererOnAsyncOpComplete,
 	RendererOnProgress,
+	RendererOnElementReady,
 	LastRendererEvent,
 
 	// Control messages
@@ -133,7 +137,7 @@ enum class MsgType : char {
 	ControlOnCosmosDownloadSize,
 	ControlOnCosmosDownloadAssets,
 	ControlOnCosmosDownloadedAssets,
-	ControlOnCosmosUpdateSceneName,
+	ControlOnUpdateScenePath,
 
 	// Scanned materials
 	ControlOnScannedLicenseCheck,
@@ -147,10 +151,13 @@ enum class MsgType : char {
 	ControlUpdateVfbLayers,
 	ControlShowVfb,
 	ControlResetVfbToolbar,
+	ControlSetVfbRenderRegion,
 	ControlGetComputeDevices,
 	ControlSetComputeDevices,
 	ControlSetUpdateAvailable,
 	ControlLogVfbMessage,
+	ControlClearVfbImage,
+	ControlSetVisualDebugger,
 	LastControlMessage,
 
 	// Control events
@@ -165,6 +172,12 @@ enum class MsgType : char {
 	ControlOnGetComputeDevices,
 	ControlOnAutoUpdateCheckChanged,
 	ControlOnAppUpdateRequested,
+	ControlOnLightMixTransferToScene,
+	ControlOnVFBMenu,
+	ControlOnAddRenderElementToScene,
+	ControlOnVFBShowMessagesWindow,
+	ControlOnVFBRenderRegionChanged,
+	ControlOnSwitchLicenseToCommunity,
 	LastControlEvent,
 
 	// Compute devices
@@ -202,7 +215,8 @@ enum class RendererState : char {
 /// Asyncronous operations for which a RendererOnAsyncOpComplete message will be sent to the client
 enum class RendererAsyncOp: char {
 	None,
-	ExportVrscene		// Export .vrscene
+	ExportVrscene,		// Export .vrscene
+	ExportVrmesh		// Export .vrmesh
 };
 
 
@@ -211,7 +225,8 @@ enum class ImportedAssetType : char {
 	Material,
 	VRMesh,
 	HDRI,
-	Extras
+	Extras,
+	ParallaxInterior
 };
 
 
@@ -228,7 +243,8 @@ enum class ComputeDeviceType : int {
 	CUDA = 0,
 	Optix = 1,
 	Metal = 2,
-	LastDevice = Metal
+	HIP = 3,
+	LastDevice = HIP
 };
 
 enum class VfbMessageLevel : int {
@@ -465,10 +481,51 @@ SERIALIZE_MESSAGE(PluginReplace,
 /// MsgImage
 PROTO_MESSAGE(RendererOnImage,
 	vray::AttrImageSet imageSet;
+	int imgId = -1;
+	int bufferIndex = 0;  ///< Which of the two double-buffers was written (0 or 1)
 );
 
 SERIALIZE_MESSAGE(RendererOnImage,
-	PARAM(imageSet);
+	PARAM(imageSet)
+	PARAM(imgId)
+	PARAM(bufferIndex)
+);
+
+
+/// MsgRendererElementReady - per-element shared-memory notification. The pixel data is
+/// already in the element SHM region; this message tells the client which slot to copy
+/// from and where it goes.
+PROTO_MESSAGE(RendererOnElementReady,
+	std::string pluginInstanceName;  ///< V-Ray plugin instance name (the `name` attribute).
+	int subIndex = 0;                ///< Cryptomatte layer, ObjectSelect 0/1/2, or 0 for generic.
+	int width    = 0;
+	int height   = 0;
+	int channels = 0;                ///< 1, 3, or 4.
+	int imageType = 0;               ///< VRayBaseTypes::AttrImage::ImageType cast to int.
+	std::string metadataKey;         ///< Optional metadata key (e.g. "cryptomatte.<instance>"). Empty if absent.
+	std::string metadataValue;
+);
+
+SERIALIZE_MESSAGE(RendererOnElementReady,
+	PARAM(pluginInstanceName)
+	PARAM(subIndex)
+	PARAM(width)
+	PARAM(height)
+	PARAM(channels)
+	PARAM(imageType)
+	PARAM(metadataKey)
+	PARAM(metadataValue)
+);
+
+
+/// Client -> server: per-element SHM consumed; the server may overwrite the slot
+/// for the next layer. Required because multiple layers reuse one SHM region.
+PROTO_MESSAGE(RendererElementDone,
+	int subIndex = 0;
+);
+
+SERIALIZE_MESSAGE(RendererElementDone,
+	PARAM(subIndex)
 );
 
 
@@ -500,8 +557,17 @@ SERIALIZE_EMPTY_MESSAGE(RendererFree);
 
 
 /// MsgRendererStart
-EMPTY_PROTO_MESSAGE(RendererStart);
-SERIALIZE_EMPTY_MESSAGE(RendererStart);
+/// imageToBlender = false suppresses both the Combined image and per-element emits
+/// for the duration of this render - Blender allocates no pass buffers and V-Ray's
+/// VFB is the only consumer. The client sets it from scene.vray.Exporter.image_to_blender
+/// before calling vray.renderStart().
+PROTO_MESSAGE(RendererStart,
+	bool imageToBlender = true;
+);
+
+SERIALIZE_MESSAGE(RendererStart,
+	PARAM(imageToBlender)
+);
 
 
 /// MsgRendererStop
@@ -592,6 +658,26 @@ SERIALIZE_MESSAGE(RendererExportScene,
 	PARAM(exportSettings)
 );
 
+/// MsgRendererExportProxy
+PROTO_MESSAGE(RendererExportProxy,
+	std::string filePath;
+	int elementsPerVoxel = 64;
+	int previewFaces = 10000;
+	int previewType = 3; //!< @see VRay::ProxyCreateParams::PreviewTypes (0-3)
+	int animOn = 0;
+	int startFrame = 0;
+	int endFrame = 0;
+);
+
+SERIALIZE_MESSAGE(RendererExportProxy,
+	PARAM(filePath)
+	PARAM(elementsPerVoxel)
+	PARAM(previewFaces)
+	PARAM(previewType)
+	PARAM(animOn)
+	PARAM(startFrame)
+	PARAM(endFrame)
+);
 
 /// MsgRendererSetRenderMode
 PROTO_MESSAGE(RendererSetRenderMode,
@@ -635,11 +721,15 @@ SERIALIZE_MESSAGE(RendererClearFrameValues,
 
 /// MsgRendererGetImage
 PROTO_MESSAGE(RendererGetImage,
-	int renderElementType; // VRay::RenderElement::Type
+	int         renderElementType;   // VRay::RenderElement::Type
+	std::string pluginInstanceName;  // V-Ray plugin instance name; empty selects the first match.
+	int         subIndex      = 0;   // Cryptomatte layer index, or ObjectSelect 0=matte/1=filter/2=alpha.
 );
 
 SERIALIZE_MESSAGE(RendererGetImage,
 	PARAM(renderElementType)
+	PARAM(pluginInstanceName)
+	PARAM(subIndex)
 );
 
 
@@ -660,6 +750,19 @@ PROTO_MESSAGE(RendererSetCurrentCamera,
 
 SERIALIZE_MESSAGE(RendererSetCurrentCamera,
 	PARAM(cameraName)
+);
+
+
+/// MsgRendererSetResumableRendering
+PROTO_MESSAGE(RendererSetResumableRendering,
+	bool        enabled;
+	std::string outputFileName;
+	int         autosaveSeconds;
+	bool        deleteOnSuccess;
+);
+
+SERIALIZE_MESSAGE(RendererSetResumableRendering,
+	PARAM(enabled) PARAM(outputFileName) PARAM(autosaveSeconds) PARAM(deleteOnSuccess)
 );
 
 
@@ -716,10 +819,12 @@ SERIALIZE_MESSAGE(RendererSetCropRegion,
 /// MsgRendererRenderSequence
 PROTO_MESSAGE(RendererRenderSequence,
 	vray::AttrListInt sequence;
+	bool imageToBlender = true;
 );
 
 SERIALIZE_MESSAGE(RendererRenderSequence,
 	PARAM(sequence)
+	PARAM(imageToBlender)
 );
 
 
@@ -876,13 +981,13 @@ SERIALIZE_MESSAGE(ControlOnCosmosDownloadedAssets,
 	PARAM(downloadStatus)
 );
 
-/// MsgControlOnCosmosUpdateSceneName
-PROTO_MESSAGE(ControlOnCosmosUpdateSceneName,
-	std::string sceneName;
+/// MsgControlOnUpdateScenePath
+PROTO_MESSAGE(ControlOnUpdateScenePath,
+	std::string scenePath;
 );
 
-SERIALIZE_MESSAGE(ControlOnCosmosUpdateSceneName,
-	PARAM(sceneName)
+SERIALIZE_MESSAGE(ControlOnUpdateScenePath,
+	PARAM(scenePath)
 );
 
 /// MsgControlOnImportAsset
@@ -896,6 +1001,15 @@ PROTO_MESSAGE(ControlOnImportAsset,
 	std::string packageId;
 	uint32_t revisionId;
 	bool isAnimated;
+	// Plane dimensions in centimeters for ParallaxInterior assets; zero otherwise.
+	double planeWidth;
+	double planeHeight;
+	// Whether the Cosmos browser requested wrapping material textures in TexTriPlanar.
+	bool applyTriplanarMapping;
+	// Real-world texture dimensions in centimeters supplied by Cosmos; zero when unknown.
+	// Used to derive the triplanar size when applyTriplanarMapping is true.
+	float texRealWorldWidth;
+	float texRealWorldHeight;
 );
 
 SERIALIZE_MESSAGE(ControlOnImportAsset,
@@ -908,6 +1022,11 @@ SERIALIZE_MESSAGE(ControlOnImportAsset,
 	PARAM(packageId)
 	PARAM(revisionId)
 	PARAM(isAnimated)
+	PARAM(planeWidth)
+	PARAM(planeHeight)
+	PARAM(applyTriplanarMapping)
+	PARAM(texRealWorldWidth)
+	PARAM(texRealWorldHeight)
 );
 
 /// MsgControlOnScannedLicenseCheck
@@ -1026,6 +1145,37 @@ SERIALIZE_MESSAGE(ControlShowVfb,
 EMPTY_PROTO_MESSAGE(ControlResetVfbToolbar);
 SERIALIZE_EMPTY_MESSAGE(ControlResetVfbToolbar);
 
+/// MsgControlClearVfbImage - clears the VFB image. Sent by the client on a new
+/// scene load and at the start of IPR VFB / PROD renders without a render region
+/// so the previous frame is wiped before fresh pixels arrive.
+EMPTY_PROTO_MESSAGE(ControlClearVfbImage);
+SERIALIZE_EMPTY_MESSAGE(ControlClearVfbImage);
+
+/// MsgControlSetVfbRenderRegion - sets the VFB Render Region rectangle and toolbar
+/// button state. When 'enabled' is false (or width/height are invalid), the render
+/// region is cleared (renders the whole image) and the toolbar button is turned off.
+/// imgWidth/imgHeight set the VFB image size at the same time so the region coords
+/// are interpreted against a known canvas; pass <= 0 to leave the image size as-is.
+PROTO_MESSAGE(ControlSetVfbRenderRegion,
+	int  x;
+	int  y;
+	int  width;
+	int  height;
+	int  imgWidth;
+	int  imgHeight;
+	bool enabled;
+);
+
+SERIALIZE_MESSAGE(ControlSetVfbRenderRegion,
+	PARAM(x)
+	PARAM(y)
+	PARAM(width)
+	PARAM(height)
+	PARAM(imgWidth)
+	PARAM(imgHeight)
+	PARAM(enabled)
+);
+
 /// MsgControlOnStartViewportRender
 EMPTY_PROTO_MESSAGE(ControlOnStartViewportRender);
 SERIALIZE_EMPTY_MESSAGE(ControlOnStartViewportRender);
@@ -1114,6 +1264,115 @@ SERIALIZE_MESSAGE(ControlOnAutoUpdateCheckChanged,
 EMPTY_PROTO_MESSAGE(ControlOnAppUpdateRequested);
 
 SERIALIZE_EMPTY_MESSAGE(ControlOnAppUpdateRequested);
+
+
+/// MsgControlOnSwitchLicenseToCommunity - fired when the user clicks the
+/// "Switch to Community Edition" button in the no-license dialog. Tells
+/// Blender to flip the community_edition preference and restart the server.
+EMPTY_PROTO_MESSAGE(ControlOnSwitchLicenseToCommunity);
+
+SERIALIZE_EMPTY_MESSAGE(ControlOnSwitchLicenseToCommunity);
+
+
+/// Data for a single light mix change, mirrors VRay::LightMixChange
+/// with plugin name instead of VRay::Plugin reference.
+struct LightMixChangeData {
+	std::string pluginName;
+	float colorR = 1.f;
+	float colorG = 1.f;
+	float colorB = 1.f;
+	float intensityMult = 1.f;
+	bool enabled = true;
+};
+
+/// MsgControlOnLightMixTransferToScene
+PROTO_MESSAGE(ControlOnLightMixTransferToScene,
+	std::vector<LightMixChangeData> changes;
+);
+
+static SerializerStream& operator&& (SerializerStream& s, const MsgControlOnLightMixTransferToScene& msg) {
+	s << static_cast<int>(msg.changes.size());
+	for (const auto& c : msg.changes) {
+		s << c.pluginName << c.colorR << c.colorG << c.colorB << c.intensityMult << c.enabled;
+	}
+	return s;
+}
+
+static DeserializerStream& operator&& (DeserializerStream& s, MsgControlOnLightMixTransferToScene& msg) {
+	int count;
+	s >> count;
+	msg.changes.resize(count);
+	for (auto& c : msg.changes) {
+		s >> c.pluginName >> c.colorR >> c.colorG >> c.colorB >> c.intensityMult >> c.enabled;
+	}
+	return s;
+}
+
+
+/// VFB context menu action modes
+enum class VFBMenuMode : int {
+	SelectObject = 1,
+	SelectMaterial = 2,
+	SetFocusPoint = 3
+};
+
+/// MsgControlOnVFBMenu - sent when user selects a VFB context menu action
+PROTO_MESSAGE(ControlOnVFBMenu,
+	int mode;
+	std::string targetName;      // Node plugin name (for object selection) or material plugin name
+	std::string objectName;      // Node plugin name of the object owning the material (material selection only)
+	double distance;
+);
+
+SERIALIZE_MESSAGE(ControlOnVFBMenu,
+	PARAM(mode)
+	PARAM(targetName)
+	PARAM(objectName)
+	PARAM(distance)
+);
+
+
+/// MsgControlOnAddRenderElementToScene
+PROTO_MESSAGE(ControlOnAddRenderElementToScene,
+	int renderElementType;
+);
+
+SERIALIZE_MESSAGE(ControlOnAddRenderElementToScene,
+	PARAM(renderElementType)
+);
+
+
+/// MsgControlOnVFBShowMessagesWindow
+EMPTY_PROTO_MESSAGE(ControlOnVFBShowMessagesWindow);
+SERIALIZE_EMPTY_MESSAGE(ControlOnVFBShowMessagesWindow);
+
+
+/// MsgControlOnVFBRenderRegionChanged - sent when the VFB render region changes
+PROTO_MESSAGE(ControlOnVFBRenderRegionChanged,
+	int  x;
+	int  y;
+	int  width;
+	int  height;
+	bool enabled;
+);
+
+SERIALIZE_MESSAGE(ControlOnVFBRenderRegionChanged,
+	PARAM(x)
+	PARAM(y)
+	PARAM(width)
+	PARAM(height)
+	PARAM(enabled)
+);
+
+
+/// MsgControlSetVisualDebugger
+PROTO_MESSAGE(ControlSetVisualDebugger,
+	bool enable;
+);
+
+SERIALIZE_MESSAGE(ControlSetVisualDebugger,
+	PARAM(enable)
+);
 
 
 };  // end VrayZmqWrapper namespace

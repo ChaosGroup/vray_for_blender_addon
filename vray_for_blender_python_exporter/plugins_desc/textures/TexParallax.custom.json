@@ -1,0 +1,136 @@
+{
+    "ID": "TexParallax",
+    "Name": "V-Ray Parallax",
+    "Subtype": "UTILITY",
+    "Parameters": [
+      {
+          "attr": "layer1_depth",
+          "default": 0.0
+      },
+      {
+          "attr": "layer2_depth",
+          "default": 25.0
+      },
+      {
+          "attr": "layer3_depth",
+          "default": 50.0
+      },
+      {
+          "attr": "layer4_depth",
+          "default": 75.0
+      }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "parallax_map"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROW",
+                        "attrs": [
+                            {
+                                "name": "flip_horizontal"
+                            },
+                            {
+                                "name": "flip_vertical"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "width_ratio"
+                    },
+                    {
+                        "name": "depth"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "layer1_on",
+                                "label": "Layer 1"
+                            },
+                            {
+                                "name": "layer1_depth",
+                                "label": "Depth %",
+                                "active": {
+                                    "cond": "::layer1_on!=0"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "layer2_on",
+                                "label": "Layer 2"
+                            },
+                            {
+                                "name": "layer2_depth",
+                                "label": "Depth %",
+                                "active": {
+                                    "cond": "::layer2_on!=0"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "layer3_on",
+                                "label": "Layer 3"
+                            },
+                            {
+                                "name": "layer3_depth",
+                                "label": "Depth %",
+                                "active": {
+                                    "cond": "::layer3_on!=0"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "BOX",
+                        "attrs": [
+                            {
+                                "name": "layer4_on",
+                                "label": "Layer 4"
+                            },
+                            {
+                                "name": "layer4_depth",
+                                "label": "Depth %",
+                                "active": {
+                                    "cond": "::layer4_on!=0"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "parallax_map"
+            }
+        ],
+        "internal_links": {
+            "*": ["Parallax Map"]
+        }
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": []
+    }
+}

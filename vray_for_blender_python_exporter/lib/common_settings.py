@@ -6,6 +6,7 @@ import bpy
 import sys
 import math
 from pathlib import Path
+from typing import Optional
 
 from vray_blender.lib import blender_utils
 from vray_blender.lib import settings_defs as defs
@@ -97,16 +98,38 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath="", viewLayerNa
     return settings, None
 
 
+def getAnimationFrames(scene: bpy.types.Scene, viewLayerName: str = "") -> list[int]:
+    """ Returns the frames to render for a normal (non-vrscene-export) animation render job.
+        Uses use_frame_range to choose between the scene frame range and a custom frame list
+        expression. Filters by the view layer's enabled state when viewLayerName is provided.
+        Returns [] if the frame expression is empty or invalid.
+
+        Note: frame_step is applied only for the scene range; custom frame list expressions
+        specify frames explicitly so frame_step is not relevant there.
+    """
+    vrayExporter = scene.vray.Exporter
+    if vrayExporter.use_frame_range:
+        frames = list(range(scene.frame_start, scene.frame_end + 1, scene.frame_step))
+    else:
+        frames = parseFramesToFlatList(vrayExporter.frames_list) or []
+
+    if viewLayerName:
+        if vlFCurve := blender_utils.getViewLayerUseFCurve(viewLayerName):
+            frames = [f for f in frames if vlFCurve.evaluate(f)]
+
+    return frames
+
+
 class CommonSettings:
     """ This class is used to gather, once per update cycle, the UI settings that are
         used by different exporters but not necessarily exported by them.
     """
-    def __init__(self, scene: bpy.types.Scene, renderEngine: bpy.types.RenderEngine,
-                    isInteractive: bool, viewLayerName: str = "", exportOnly: bool = False, forceAnimation: bool = False):
+    def __init__(self, scene: bpy.types.Scene,
+                    isInteractive: bool, isPreview: bool = False,
+                    viewLayerName: str = "", exportOnly: bool = False,
+                    forceAnimationMode: str = 'AUTO'):
 
-        # renderEngine will be None in case of interactive rendering.
-        self.renderEngine = renderEngine
-        self.isPreview = renderEngine and renderEngine.is_preview
+        self.isPreview = isPreview
 
         # Viewport and Interactive renders are both "interactive",
         # so isInteractive will be true on both cases
@@ -119,7 +142,7 @@ class CommonSettings:
         self.exportOnly   = exportOnly
         self.animation   = AnimationSettings()
         self.files       = FileOutputSettings()
-        self.forceAnimation = forceAnimation
+        self.forceAnimationMode = forceAnimationMode
 
 
     def updateFromScene(self):
@@ -170,7 +193,8 @@ class CommonSettings:
 
 
     def isCloudSubmit(self):
-        prodRenderer = self.renderEngine.prodRenderer
+        from vray_blender.engine.render_engine import VRayRenderEngine
+        prodRenderer = VRayRenderEngine.prodRenderer
         return prodRenderer and prodRenderer.renderMode == ProdRenderMode.CLOUD_SUBMIT
 
     def _updateAnimation(self):
@@ -182,9 +206,9 @@ class CommonSettings:
         if isProductionRendering:
             animSettings = self.vrayExporter.animationSettingsVrsceneExport
             vrsceneExport = self.exportOnly and not self.isCloudSubmit()
-            
-            if self.forceAnimation:
-                animationMode = 'ANIMATION'
+
+            if self.forceAnimationMode != 'AUTO':
+                animationMode = self.forceAnimationMode
             elif vrsceneExport:
                 if animSettings.exportAnimation:
                     animationMode = 'ANIMATION'
@@ -192,33 +216,26 @@ class CommonSettings:
                 animationMode = self.vrayExporter.animation_mode
 
             if animationMode == 'ANIMATION':
-                def getFrameRangeMode():
-                    if vrsceneExport:
-                        return animSettings.frameRangeMode
-                    elif self.vrayExporter.use_frame_range:
-                        return "SCENE_RANGE"
-                    return "CUSTOM_FRAMES"
-
-                match getFrameRangeMode():
-                    case "CUSTOM_RANGE":
-                        self.animation.frames = list(range(animSettings.customFrameStart, animSettings.customFrameEnd + 1, animSettings.customFrameStep))
-                    case "CUSTOM_FRAMES":
-                        frameExprStr = animSettings.customFramesList if vrsceneExport else self.vrayExporter.frames_list
-                        if frames :=  parseFramesToFlatList(frameExprStr):
-                            self.animation.frames = frames
-                        else:
-                            raise Exception("Invalid frames list")
-                    case "SCENE_RANGE":
-                        self.animation.frames = list(range(self.scene.frame_start, self.scene.frame_end + 1, self.scene.frame_step))
-                    case _:
-                        assert False, "Invalid frame range mode"
-  
                 assert self.viewLayerName, "Rendering animation without view layer information"
-                
-                
-                if vlFCurve := blender_utils.getViewLayerUseFCurve(self.viewLayerName):
-                    # Filter the animation frames by the view layer enabled state
-                    self.animation.frames = [frame for frame in self.animation.frames if vlFCurve.evaluate(frame)]
+
+                if vrsceneExport:
+                    match animSettings.frameRangeMode:
+                        case "CUSTOM_RANGE":
+                            frames = list(range(animSettings.customFrameStart, animSettings.customFrameEnd + 1, animSettings.customFrameStep))
+                        case "CUSTOM_FRAMES":
+                            if not (frames := parseFramesToFlatList(animSettings.customFramesList)):
+                                raise Exception("Invalid frames list")
+                        case "SCENE_RANGE":
+                            frames = list(range(self.scene.frame_start, self.scene.frame_end + 1, self.scene.frame_step))
+                        case _:
+                            assert False, "Invalid frame range mode"
+                    if vlFCurve := blender_utils.getViewLayerUseFCurve(self.viewLayerName):
+                        frames = [f for f in frames if vlFCurve.evaluate(f)]
+                    self.animation.frames = frames
+                else:
+                    self.animation.frames = getAnimationFrames(self.scene, self.viewLayerName)
+                    if not self.vrayExporter.use_frame_range and not self.animation.frames:
+                        raise Exception("Invalid frames list")
 
  
         self.animation.use = (animationMode != 'FRAME')
@@ -298,11 +315,15 @@ class CommonSettings:
                 if sys.platform == "darwin":
                     return defs.RenderMode.RtGpuMetal if self._interactive else defs.RenderMode.ProductionGpuMetal
                 else:
-                    if self.vrayExporter.use_gpu_rtx:
-                        # OPTIX
-                        renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
-                    else:
-                        # CUDA
-                        renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
+                    match self.vrayExporter.gpu_device_type:
+                        case 'RTX':
+                            renderMode = defs.RenderMode.RtGpuOptiX if self._interactive else defs.RenderMode.ProductionGpuOptiX
+                        case 'HIP' if sys.platform == 'win32':
+                            renderMode = defs.RenderMode.RtGpuHIP if self._interactive else defs.RenderMode.ProductionGpuHIP
+                        case _:
+                            # Includes 'CUDA' and 'HIP' on non-Windows hosts (HIP is only
+                            # valid on Windows; the value is preserved on other platforms
+                            # for round-trip safety but rendered using CUDA).
+                            renderMode = defs.RenderMode.RtGpuCUDA if self._interactive else defs.RenderMode.ProductionGpuCUDA
 
         return renderMode

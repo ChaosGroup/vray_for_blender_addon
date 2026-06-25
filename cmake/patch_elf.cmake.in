@@ -18,3 +18,4 @@ execute_process(COMMAND patchelf --set-rpath $ORIGIN @APPSDK_BIN_DIR@/QtWebEngin
 execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqxcb.so RESULT_VARIABLE result)
 execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqminimal.so RESULT_VARIABLE result)
 execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqoffscreen.so RESULT_VARIABLE result)
+execute_process(COMMAND patchelf --set-rpath $ORIGIN/.. @APPSDK_BIN_DIR@/platforms/libqwayland-generic.so RESULT_VARIABLE result)

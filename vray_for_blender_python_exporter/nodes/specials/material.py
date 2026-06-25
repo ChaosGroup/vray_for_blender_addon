@@ -5,14 +5,15 @@
 
 import bpy
 
-
 from vray_blender import plugins, osl
 from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.lib import draw_utils, class_utils
+from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
-from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs
+from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs, moveExtendSocketToBottom
 from vray_blender.nodes.nodes import vrayNodeInit, vrayNodeDraw, vrayNodeDrawSide
 from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode, autoConnectNode
+from vray_blender.nodes.links import getPluginModule, scheduleFixMisdirectedLink, vrayNodeInsertLink
 from vray_blender.ui import classes
 
 
@@ -23,6 +24,7 @@ class VRaySocketMtlMulti(VRayValueSocket):
     value: bpy.props.IntProperty(
         name = "ID",
         description = "This is the value used to loop the texture through the list of materials.",
+        min = 0,
         update = selectedObjectTagUpdate
     )
 
@@ -49,6 +51,12 @@ class VRaySocketMtlMulti(VRayValueSocket):
     @classmethod
     def draw_color_simple(cls):
         return MATERIAL_SOCKET_COLOR
+
+
+def addMtlMultiExtendSocket(node):
+    sockExtend = addInput(node, 'VRaySocketExtend', "")
+    sockExtend.add_operator = 'vray.node_mtlmulti_socket_add'
+    sockExtend.del_operator = 'vray.node_mtlmulti_socket_del'
 
 
 def _getMtlNodeFromOperatorContext(context: bpy.types.Context):
@@ -114,7 +122,28 @@ class VRayNodeMtlMulti(VRayNodeBase):
         default     =  False
     )
 
-    materials: bpy.props.IntProperty(default=2)
+    materials: bpy.props.IntProperty(default=2, options={'HIDDEN'})
+
+    def copy(self, srcNode):
+        while self.materials < srcNode.materials:
+            self.addMaterial()
+        for i in range(1, self.materials + 1):
+            sockName = f"Material {i}"
+            if sockName in self.inputs and sockName in srcNode.inputs:
+                dstSock = self.inputs[sockName]
+                srcSock = srcNode.inputs[sockName]
+                dstSock.value = srcSock.value
+                dstSock.enabled = srcSock.enabled
+
+    def _fixMisdirectedLink(self):
+        # When creating a MtlMulti on top of an existing node link between materials it will get
+        # connected to the Switch Texture socket. In this case insert_link doesn't get called so
+        # we do it here manually.
+        scheduleFixMisdirectedLink(self, "Switch Texture", "Material 1", {'VRaySocketMtl', 'VRaySocketBRDF'})
+
+    def update(self):
+        super().update()
+        self._fixMisdirectedLink()
 
     def init(self, context):
         addInput(self, 'VRaySocketFloatNoValue', "Switch Texture", 'mtlid_gen_float', "MtlMulti")
@@ -126,6 +155,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
             mtlSock.setValue(humanIndex)
             mtlSock.enabled = True
 
+        addMtlMultiExtendSocket(self)
         addOutput(self, 'VRaySocketMtl', "Material")
         autoConnectNode(self)
 
@@ -137,13 +167,26 @@ class VRayNodeMtlMulti(VRayNodeBase):
         sockMtl.setValue(humanIndex)
         sockMtl.enabled = True
         self.materials += 1
+        moveExtendSocketToBottom(self)
 
+
+    def insert_link(self, link: bpy.types.NodeLink):
+        def _doInsert(link):
+            if link.to_socket.bl_idname == 'VRaySocketExtend':
+                from_socket = link.from_socket
+                ntree = self.id_data
+                self.addMaterial()
+                ntree.links.new(from_socket, self.inputs[f"Material {self.materials}"])
+                ntree.links.remove(link)
+
+        vrayNodeInsertLink(self, link, _doInsert)
 
     def draw_buttons(self, context, layout):
         """ Draw node """
         split = layout.split()
         col = split.column()
-        col.prop(self, 'wrap_id', text="Loop Materials")
+        painter = UIPainter(context, getPluginModule('MtlMulti'), self.MtlMulti, self)
+        painter.drawAttr(col, 'wrap_id', 'Loop Materials') 
 
         split = layout.split()
         row = split.row(align=True)

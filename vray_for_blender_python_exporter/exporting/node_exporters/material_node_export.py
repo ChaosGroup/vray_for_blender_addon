@@ -70,11 +70,10 @@ def exportVRayNodeShaderScript(nodeCtx: NodeContext):
     pluginName = Names.treeNode(nodeCtx)
     pluginDesc = PluginDesc(pluginName, pluginType)
 
-    scriptPath = ""
     if node.mode == "INTERNAL":
         scriptPath = saveShaderScript(node.script)
-        
-    scriptPath = bpy.path.abspath(node.filepath)
+    else:
+        scriptPath = bpy.path.abspath(node.filepath)
 
     pluginDesc.setAttribute("input_parameters", _buildShaderScriptArgumentList(nodeCtx, scriptPath))
     pluginDesc.setAttribute("shader_file", scriptPath)
@@ -87,48 +86,3 @@ def exportVRayNodeShaderScript(nodeCtx: NodeContext):
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
-
-def exportVRayNodeMtlMulti(nodeCtx: NodeContext):
-    pluginName = Names.treeNode(nodeCtx)
-    pluginDesc = PluginDesc(pluginName, "MtlMulti")
-
-    node = nodeCtx.node
-    texSock = node.inputs['Switch Texture']
-    if link := getFarNodeLink(texSock):
-        switchID = commonNodesExport.exportLinkedSocket(nodeCtx, link.to_socket)
-    else:
-        switchID = node.MtlMulti.switch_id
-
-    mtlSockets = [s for s in node.inputs if s.bl_idname == 'VRaySocketMtlMulti' and s.enabled and s.hasActiveFarLink()]
-    mtlIDs = []
-    linkedMtls = []
-    
-    for sock in mtlSockets:
-        brdfPlugin = commonNodesExport.exportLinkedSocket(nodeCtx, sock)
-        mtlPlugin = exportMtlSingleBrdf(nodeCtx, brdfPlugin)
-        linkedMtls.append(mtlPlugin)
-        mtlIDs.append(sock.value)
-
-    pluginDesc.setAttributes({
-        "ids_list": mtlIDs,
-        "mtls_list": linkedMtls,
-        "mtlid_gen_float" : switchID
-    }) 
-
-    pluginDesc.vrayPropGroup = getattr(nodeCtx.node, node.vray_plugin)
-    return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
-
-
-def exportMtlSingleBrdf(nodeCtx: NodeContext, brdfPlugin: AttrPlugin):
-    """ Export a MtlSingleBRDF plugin for a brdf plugin """
-    pluginType = 'MtlSingleBRDF'
-    pluginName = Names.nextVirtualNode(nodeCtx, pluginType)
-    plDesc = PluginDesc(pluginName, pluginType)
-    
-    plDesc.setAttributes({
-        'brdf'                    : brdfPlugin,
-        'scene_name'              : [pluginName]
-    })
-
-    return commonNodesExport.exportPluginWithStats(nodeCtx, plDesc)
- 

@@ -67,6 +67,6 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup
 
     if not propGroup.enable_vignetting:
-        pluginDesc.setAttribute("vignetting", 0)
+        pluginDesc.setAttribute("vignetting", 0.0)
 
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)

@@ -78,10 +78,12 @@
                     },
                     {
                         "name": "sides_num",
-                        "label": "Number of Blades"
+                        "label": "Number of Blades",
+                        "active": {"cond": "::sides_on!=0"}
                     },
                     {
-                        "name": "rotation"
+                        "name": "rotation",
+                        "active": {"cond": "::sides_on!=0"}
                     },
                     {
                         "name": "anisotropy"

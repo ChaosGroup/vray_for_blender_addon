@@ -4,13 +4,11 @@
 
 
 import re
-import datetime
 import uuid
 
 import bpy
 
 from vray_blender import debug
-from vray_blender.lib import path_utils
 
 
 # Match Blender light to V-Ray plugin
@@ -113,60 +111,6 @@ def cleanString(s, stripSigns=True):
     return s
 
 
-# This function will substitute special format sequences with
-# the corresponding values
-#
-def getDefFormatDict():
-    blendFileName = None
-    sceneName     = None
-    cameraName    = None
-
-    # During registration bpy.data is not yet ready
-    if type(bpy.data) is bpy.types.BlendData:
-        scene = bpy.context.scene
-
-        # Blend-file name without extension
-        blendFileName = path_utils.getFilename(bpy.data.filepath, ext=False) if bpy.data.filepath else "default"
-
-        blendFileName = cleanString(blendFileName, stripSigns=False)
-        sceneName     = cleanString(scene.name)
-        cameraName    = cleanString(scene.camera.name) if scene.camera else None
-
-    formatDict = {
-        '$C': ("Camera Name", cameraName if cameraName else "CameraName"),
-        '$S': ("Scene Name", sceneName),
-        '$F': ("Blendfile Name", blendFileName),
-    }
-
-    return formatDict
-
-
-def formatVariablesDesc():
-    FormatVariablesDict = getDefFormatDict()
-
-    format_vars = ["%s - %s" % (v, FormatVariablesDict[v][0]) for v in FormatVariablesDict]
-
-    format_help = "; ".join(format_vars)
-    format_help += "; Any time variable (see Python's \"datetime\" module help)"
-
-    return format_help
-
-
-def formatName(s, formatDict=None):
-    if not formatDict:
-        formatDict = getDefFormatDict()
-
-    for v in formatDict:
-        s = s.replace(v, formatDict[v][1])
-
-    t = datetime.datetime.now()
-    for v in re.findall(r"%\w", s):
-        try:
-            s = s.replace(v, t.strftime(v))
-        except:
-            pass
-
-    return s
 
 
 def getPropGroup(parentID, propGroupPath):
@@ -212,7 +156,7 @@ def parseFrames(inputString: str, fnAppendFrame, fnAppendRange):
                     debug.printError("Negative frame number in frames list")
                     return None
                 fnAppendFrame(flatFrameList, startFrame)
-        except:
+        except Exception:
             debug.printError(f"Invalid frame range specification: {inputString}")
             return None
         

@@ -20,6 +20,11 @@ def _mtlEditorUpdatePreview(self, context):
     if self.materialListIndexPrev != self.materialListIndex:
         self.materialListIndexPrev = self.materialListIndex
 
+def _onImageToBlenderUpdate(self, context):
+    from vray_blender.engine import forceCompositorRefresh
+    forceCompositorRefresh()
+
+
 def _stereoToggleUpdate(self, context):
         scene = context.scene
         vrayScene = scene.vray
@@ -41,6 +46,9 @@ def _stereoToggleUpdate(self, context):
 
 def _displayVfbOnTopUpdate(self, context):
     vray.setVfbOnTop(self.display_vfb_on_top)
+
+def _enableVisualDebuggerUpdate(self, context):
+    vray.setVisualDebuggerEnabled(self.enable_visual_debugger)
 
 
 # Custom export animation settings as a separate property group
@@ -89,11 +97,47 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         default = "SCENE_RANGE"
     )
 
+
+def _syncLinkedDenoiserEngine(exporter, context):
+    from vray_blender.nodes.utils import getChannelsOutputNode
+    from vray_blender.exporting.world_export import sockConnectedToDenoiser
+    
+    world = context.scene.world
+    
+    if not world or not world.node_tree:
+        return
+    
+    channelsNode = getChannelsOutputNode(world.node_tree)
+    
+    if channelsNode and any(sock for sock in channelsNode.inputs if sockConnectedToDenoiser(sock)):
+        world.vray.RenderChannelDenoiser.engine = exporter.viewport_denoiser_engine
+
+
+def _viewportEngineUpdate(self, context):
+    from vray_blender.engine import resetViewportIprRendering
+    
+    if self.linked_denoiser:
+        _syncLinkedDenoiserEngine(self, context)
+    
+    resetViewportIprRendering()
+
+
+def _linkedDenoiserUpdate(self, context):
+    if self.linked_denoiser:
+        _syncLinkedDenoiserEngine(self, context)
+
+
 class VRayExporter(bpy.types.PropertyGroup):
     experimental: bpy.props.BoolProperty(
         name        = "Experimental",
         description = "Enable experimental options",
         default     = False
+    )
+
+    enable_group_nodes: bpy.props.BoolProperty(
+        name        = "Group Nodes",
+        description = "Enable V-Ray group node support",
+        default     = True
     )
 
     spherical_harmonics: bpy.props.EnumProperty(
@@ -179,6 +223,83 @@ class VRayExporter(bpy.types.PropertyGroup):
         name = "File path",
         default = '',
         description = "Path to the exported .vrscene file"
+    )
+
+    export_proxy_file_path: bpy.props.StringProperty(
+        name = "File path",
+        default = '',
+        description = "Path to the exported .vrmesh file"
+    )
+
+    export_proxy_scope: bpy.props.EnumProperty(
+        name = "Export",
+        description = "Choose whether proxy export includes the whole scene or only selected objects",
+        items = (
+            ('SELECTION', "Selected Objects", "Export only selected objects"),
+            ('WHOLE_SCENE', "Whole Scene", "Export all eligible scene objects"),
+        ),
+        default = 'SELECTION'
+    )
+
+    export_proxy_add_to_scene: bpy.props.BoolProperty(
+        name = "Add Proxy to Scene",
+        description = "After export, import the .vrmesh as a V-Ray Proxy object at the 3D cursor",
+        default = False,
+    )
+
+    export_proxy_remove_exported_objects: bpy.props.BoolProperty(
+        name = "Remove Exported Objects",
+        description = "After a successful export, delete the source objects that were written to the proxy",
+        default = False,
+    )
+
+    export_proxy_elements_per_voxel: bpy.props.IntProperty(
+        name = "Elements per Voxel",
+        description = "Target number of triangles in each voxel before subdivision (0 uses exporter default)",
+        default = 0,
+        min = 0,
+    )
+
+    export_proxy_preview_faces: bpy.props.IntProperty(
+        name = "Preview Faces",
+        description = "Approximate number of preview mesh triangles (0 disables preview geometry)",
+        default = 10000,
+        min = 0,
+    )
+
+    export_proxy_preview_type: bpy.props.EnumProperty(
+        name = "Preview Type",
+        description = "Method used to build the proxy preview mesh",
+        items = (
+            ('0', "Face Sampling", "Fastest; copies faces; triangles may look disconnected"),
+            ('1', "Clustering", "Grid-based vertex reduction; robust on disconnected geometry"),
+            ('2', "Edge Collapse", "Best quality where the mesh is connected; slower"),
+            ('3', "Combined", "Clustering then edge collapse; recommended default"),
+        ),
+        default = '3',
+    )
+
+    export_proxy_animation_range: bpy.props.EnumProperty(
+        name = "Animation Range",
+        description = "Whether the proxy stores a single frame or a frame range",
+        items = (
+            ('CURRENT_FRAME', "Current Frame", "Export geometry for the current frame only"),
+            ('FRAME_RANGE', "Frame Range", "Export an animated proxy using start and end frame"),
+        ),
+        default = 'CURRENT_FRAME',
+    )
+
+    export_proxy_start_frame: bpy.props.IntProperty(
+        name = "Start Frame",
+        description = "First frame when Animation Range is set to Frame Range",
+        default = 0,
+    )
+
+    export_proxy_end_frame: bpy.props.IntProperty(
+        name = "End Frame",
+        description = "Last frame when Animation Range is set to Frame Range",
+        default = 10,
+        min = 0,
     )
 
     export_material_preview_scene: bpy.props.BoolProperty(
@@ -277,8 +398,9 @@ class VRayExporter(bpy.types.PropertyGroup):
 
     image_to_blender: bpy.props.BoolProperty(
         name = "Image To Blender",
-        description = "Pass image to Blender on render end (EXR file format is used)",
-        default = False
+        description = "Pass the final rendered image to Blender on render end",
+        default = True,
+        update = _onImageToBlenderUpdate
     )
 
     ########  ########   #######   ######  ########  ######   ######
@@ -413,10 +535,18 @@ class VRayExporter(bpy.types.PropertyGroup):
         default = False
     )
 
+    enable_visual_debugger: bpy.props.BoolProperty(
+        name = "Visual Debugger",
+        description = "Enable V-Ray visual debugger",
+        default = False,
+        update = _enableVisualDebuggerUpdate,
+        options = set()
+    )
+
     debug_threads: bpy.props.IntProperty(
         name = "Exporter threads",
         description = "Exporter threads count",
-        default = 2,
+        default = 4,
         min = 1,
         max = 64
     )
@@ -443,8 +573,8 @@ class VRayExporter(bpy.types.PropertyGroup):
 
     vray_cloud_job_name: bpy.props.StringProperty(
         name = "Job",
-        description = "Chaos Cloud Job Name",
-        default = "$F"
+        description = "Chaos Cloud Job Name. Supports placeholder expansion.",
+        default = "$file"
     )
 
     # Unused, left for compatibility reasons and should be removed in a later release.
@@ -466,10 +596,42 @@ class VRayExporter(bpy.types.PropertyGroup):
         options = set()
     )
 
-    use_gpu_rtx: bpy.props.BoolProperty(
-        name = "Use RTX (no CPU, Slower start)",
-        default = False,
+
+    gpu_device_type: bpy.props.EnumProperty(
+        name = "GPU Device",
+        description = "GPU backend used by V-Ray GPU rendering",
+        items = (
+            ('CUDA', "CUDA", "Use CUDA for GPU rendering"),
+            ('RTX',  "RTX",  "Use RTX (OptiX) for GPU rendering"),
+            ('HIP',  "HIP",  "Use HIP for GPU rendering"),
+        ),
+        default = 'CUDA',
         options = set()
+    )
+
+    viewport_denoiser_enabled: bpy.props.BoolProperty(
+        name = "Enable Viewport Denoising",
+        description = "True to enable the viewport denoising",
+        default = True,
+        update = _viewportEngineUpdate
+    )
+
+    viewport_denoiser_engine: bpy.props.EnumProperty(
+        name = "Denoiser Engine",
+        description = "The denoising engine to use for viewport rendering",
+        items = [
+            ('1', "NVIDIA", "NVIDIA AI denoiser"),
+            ('2', "Intel", "Intel Open Image Denoise"),
+        ],
+        default = '2',
+        update = _viewportEngineUpdate
+    )
+
+    linked_denoiser: bpy.props.BoolProperty(
+        name = "Linked Denoiser",
+        description = "When enabled, changes to the Viewport denoiser engine will automatically update the Production denoiser settings",
+        default = False,
+        update = _linkedDenoiserUpdate
     )
 
 def getRegClasses():

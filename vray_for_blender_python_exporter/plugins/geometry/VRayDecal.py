@@ -446,6 +446,8 @@ def drawDecalGizmoCallback():
         return
     if not obj.visible_in_viewport_get(bpy.context.space_data):
         return
+    if not bpy.context.space_data.overlay.show_overlays:
+        return
 
     vrayDecal = getDecalPropGroup(obj)
 
@@ -519,8 +521,6 @@ def drawDecalGizmoCallback():
     gpu.state.line_width_set(oldWidth)
 
 _drawHandler = None
-_originalPolls = {}
-
 
 def _getCylinderParams(vrayDecal: bpy.types.PropertyGroup):
     bend = max(vrayDecal.bend, 0.01)
@@ -539,37 +539,6 @@ def _getCylinderParams(vrayDecal: bpy.types.PropertyGroup):
     return innerRadius, outerRadius, startAngle, endAngle, heightOffset
 
 
-def _hidePanels():
-    """ Remove the standard panels from Properties->Data for VRayDecal objects """
-
-    for panel in bpy.types.Panel.__subclasses__():
-        if getattr(panel, 'bl_context', None) == 'data':
-            if not hasattr(panel, 'poll'):
-                continue
-
-            if panel in _originalPolls:
-                continue
-
-            originalPoll = panel.poll
-            _originalPolls[panel] = originalPoll
-
-            def makePoll(orig):
-                def vrayPoll(cls, context):
-                    obj = context.object
-                    if obj and hasattr(obj, 'vray') and obj.vray.isVRayDecal:
-                        return False
-                    return orig(context)
-                return vrayPoll
-
-            panel.poll = classmethod(makePoll(originalPoll))
-
-
-def _restorePanels():
-    for panel, orig in _originalPolls.items():
-        panel.poll = orig
-    _originalPolls.clear()
-
-
 def getRegClasses():
     return (
         DecalBBoxGizmoGroup,
@@ -581,8 +550,6 @@ def getRegClasses():
 def register():
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
-
-    _hidePanels()
 
     global _drawHandler
     if _drawHandler is None:
@@ -596,8 +563,6 @@ def register():
 def unregister():
     for regClass in getRegClasses():
         bpy.utils.unregister_class(regClass)
-
-    _restorePanels()
 
     global _drawHandler
     if _drawHandler is not None:

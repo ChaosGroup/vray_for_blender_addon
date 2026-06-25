@@ -7,14 +7,17 @@ cmake_minimum_required(VERSION 3.25 FATAL_ERROR)
 project(VRayForBlender)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_INSTALL_MESSAGE LAZY)
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(common_macros)
 
 set_build_configurations()
 
-
-set(BLENDER_VER         ""  CACHE STRING  "Blender version in format major.minor, e.g. 4.2")
+set(BLENDER_VER         ""  CACHE STRING  "Blender version in format major.minor, e.g. 5.1")
+if("${BLENDER_VER}" STREQUAL "")
+    message(FATAL_ERROR "BLENDER_VER not defined - please set in format 'major.minor', e.g. 5.1")
+endif()
 
 set(_default_addon_path "")
 if (WIN32)
@@ -31,16 +34,10 @@ set(INSTALL_LOCAL       ON  CACHE BOOL    "Configure Install step")
 set(WITH_DR2            ON  CACHE BOOL    "Enable DR2")
 set(CUSTOM_APPSDK_ROOT  ""  CACHE PATH    "Root directory of the App SDK (optional)")
 set(WITH_PROFILING      "None" CACHE STRING "Profiling features to enable")
-set(BUILD_MOD           "ADV" CACHE STRING "Build modification (ADV, CE)")
 set(WITH_OSL            OFF CACHE BOOL    "Enables OSL materials")
 set(WITH_DYNAMIC_DEOPT  OFF CACHE BOOL    "Enable MSVS /dynamicdeopt")
 set(NANOBIND_LIBDIR     ""  CACHE STRING  "Path to Nanobind library")
-set_property(CACHE BUILD_MOD PROPERTY STRINGS ADV CE)
 set_property(CACHE WITH_PROFILING PROPERTY STRINGS None Profiling Messages All)
-
-if (BUILD_MOD STREQUAL "CE")
-    add_compile_definitions(VRAY_BLENDER_COMMUNITY_EDITION)
-endif()
 
 if (MSVC)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN NOGDI _CRT_SECURE_NO_WARNINGS)
@@ -96,10 +93,6 @@ endif()
 
 if (MSVC AND MSVC_VERSION GREATER_EQUAL 1940)
     add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
-endif()
-
-if(NOT ${BLENDER_VER})
-    message(FATAL_ERROR "BLENDER_VER not defined")
 endif()
 
 string(REPLACE "." ";" BLENDER_VER_LIST ${BLENDER_VER})

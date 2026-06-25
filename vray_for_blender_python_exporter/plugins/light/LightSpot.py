@@ -5,7 +5,6 @@
 import bpy
 
 from vray_blender.lib import plugin_utils
-from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext
 from vray_blender.exporting.light_export import ANGLE_EPSILON
 
@@ -16,15 +15,12 @@ def nodeUpdate(node: bpy.types.Node):
     if node.mute:
         node.mute = False
 
+
 def onUpdateAttribute(src, context: bpy.types.Context, attrName: str):
 
     if (lamp := context.active_object) and ((lamp.type != 'LIGHT') or (lamp.data.type != 'SPOT')):
         return
-    
-    if attrName in ('color_mode', 'temperature'):
-        onUpdateColorTemperature(src, 'LightSpot', attrName)
-        return
-    
+
     propContext = getUpdateCallbackPropertyContext(src, 'LightSpot')
     
     # This function will be called when the user changes the vaues of the light properties directly

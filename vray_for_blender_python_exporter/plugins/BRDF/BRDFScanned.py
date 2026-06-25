@@ -174,7 +174,7 @@ def onFileUpdate(brdfScanned, context = None, attrName = ''):
         brdfScanned.depthmul = preset.depthmul
         brdfScanned.ccbump = preset.ccbump
         brdfScanned.ccmul = preset.ccmul
-        brdfScanned.enable_clear_coat = math.isclose(preset.ccior, 1.0)
+        brdfScanned.enable_clear_coat = not math.isclose(preset.ccior, 1.0)
         brdfScanned.ccglossy = _scannedGlossinessToVRay(preset.orggls)
         brdfScanned.ccglossyvar = preset.orgglvar
     # Set this at the end, it's used to prevent unnecessary parameter encoding from just loading a preset.

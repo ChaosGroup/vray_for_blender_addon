@@ -379,7 +379,8 @@
                     },
                     {
                         "name": "gtr_gamma",
-                        "visible": {"cond": "::option_shading_model=0"}
+                        "visible": {"cond": "::option_shading_model=0"},
+                        "active": {"cond": "::brdf_type=4"}
                     },
                     {
                         "name": "metalness"
@@ -398,11 +399,12 @@
                                 "name": "fresnel"
                             },
                             {
-                                "name": "fresnel_ior_lock"
+                                "name": "fresnel_ior_lock",
+                                "active": {"cond": "::fresnel=1"}
                             },
                             {
                                 "name": "fresnel_ior",
-                                "active": {"cond": "::fresnel_ior_lock=0"}
+                                "active": {"cond": "::fresnel=1,::fresnel_ior_lock=0"}
                             }
                         ]
                     },

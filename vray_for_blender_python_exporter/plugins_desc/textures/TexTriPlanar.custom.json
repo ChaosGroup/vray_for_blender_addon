@@ -114,7 +114,10 @@
                         "name": "random_frame_rotation"
                     },
                     {
-                        "name": "random_mode"
+                        "name": "random_mode",
+                        "active": {
+                            "cond": "::random_texture_offset=1;::random_texture_rotation=1;::random_axis=1;::random_frame_rotation=1"
+                        }
                     }
                 ]
             }

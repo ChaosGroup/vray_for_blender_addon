@@ -30,7 +30,7 @@
 		}
 	#else // not _WIN32
 		fprintf(stderr, "ASSERT: Terminating application.\n");
-		raise(SIGTRAP)
+		raise(SIGTRAP);
 	#endif // _WIN32
 	}
 

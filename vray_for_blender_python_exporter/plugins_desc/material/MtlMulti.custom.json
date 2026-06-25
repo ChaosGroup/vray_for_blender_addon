@@ -52,7 +52,8 @@
                 "attrs": [
                     {
                         "name": "switch_id",
-                        "label": "Switch ID"
+                        "label": "Switch ID",
+                        "active": { "cond": "plugins.material.MtlMulti.switchIdActive" }
                     },
                     {
                         "layout": "ROW",

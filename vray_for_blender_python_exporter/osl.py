@@ -51,11 +51,10 @@ def get_stdosl_path():
 
 def update_script_node(node, report):
 
-    script = ""
     if node.mode == "INTERNAL":
         script = saveShaderScript(node.script)
-        
-    script = bpy.path.abspath(node.filepath)
+    else:
+        script = bpy.path.abspath(node.filepath)
 
     oslParamList = vray.getOslScriptParameters(script)
     

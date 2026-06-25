@@ -2,7 +2,13 @@
     "ID": "SettingsOutput",
     "Parameters": [
         {
+            "attr" : "img_file",
+            "desc" : "Output image filename. Supports placeholder expansion.",
+            "type" : "STRING"
+        },
+        {
             "attr": "img_dir",
+            "desc": "Output image directory. Supports placeholder expansion.",
             "subtype": "DIR_PATH"
         },
         {
@@ -69,6 +75,36 @@
             "default": true,
             "desc": "Show warning dialog when rendered images will be overwritten",
             "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "resumable_rendering",
+            "default": false,
+            "desc": "Saves the rendering progress or resumes rendering if a resumable file is found",
+            "name": "Resumable Rendering",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "resumable_delete_on_success",
+            "default": false,
+            "desc": "Automatically deletes the resumable file after the frame completes successfully",
+            "name": "Delete on Success",
+            "type": "BOOL",
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "resumable_autosave_interval",
+            "default": 0.0,
+            "desc": "Interval in minutes, at which to save the resumable file for progressive rendering. If set to 0, the file will only be saved at the end",
+            "name": "Autosave Interval (min.)",
+            "type": "FLOAT",
             "options": {
                 "derived": true
             }

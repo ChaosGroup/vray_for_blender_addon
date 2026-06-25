@@ -98,7 +98,12 @@ void Logger::setLogLevel(LogLevel value)
 void Logger::run()
 {
 	while (m_isRunning) {
-		if (m_queue.empty()) {
+		bool empty;
+		{
+			std::scoped_lock lock(m_queueLock);
+			empty = m_queue.empty();
+		}
+		if (empty) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 		else {

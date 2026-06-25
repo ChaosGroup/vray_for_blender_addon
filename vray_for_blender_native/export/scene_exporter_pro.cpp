@@ -60,7 +60,46 @@ void ProductionExporter::setupCallbacks()
 
 void ProductionExporter::cb_on_image_ready()
 {
+	// updateImage() bails on m_renderFinished, so push the final frame before setting it.
+	updateImage();
 	m_renderFinished = true;
+}
+
+
+void ProductionExporter::setElementPasses(const nb::list& passes)
+{
+	// Python tuple shape: (pass_ptr, channelType, pluginInstanceName, subIndex).
+	m_elementPasses.clear();
+	m_elementPasses.reserve(passes.size());
+
+	std::vector<std::pair<ZmqExporter::PerInstanceKey, ZmqExporter::ElementDestination>> destinations;
+	destinations.reserve(passes.size());
+
+	for (size_t i = 0; i < passes.size(); i++) {
+		const auto entry = nb::cast<nb::tuple>(passes[i]);
+		const size_t passPtr             = nb::cast<size_t>(entry[0]);
+		const int    channelType         = nb::cast<int>(entry[1]);
+		const auto   pluginInstanceName  = nb::cast<std::string>(entry[2]);
+		const int    subIndex            = nb::cast<int>(entry[3]);
+		auto* pass = reinterpret_cast<RenderPass*>(passPtr);
+		m_elementPasses.push_back({
+			pass,
+			channelType,
+			pluginInstanceName,
+			subIndex,
+		});
+
+		// Lazily-unallocated ibufs (float_buffer.data == nullptr) yield a null buffer
+		// and are silently dropped on the read side.
+		ZmqExporter::ElementDestination dest;
+		dest.buffer   = (pass->ibuf && pass->ibuf->float_buffer.data) ? pass->ibuf->float_buffer.data : nullptr;
+		dest.width    = pass->rectx;
+		dest.height   = pass->recty;
+		dest.channels = pass->channels;
+		destinations.push_back({ZmqExporter::PerInstanceKey{pluginInstanceName, subIndex}, dest});
+	}
+
+	m_exporter->setElementDestinations(std::move(destinations));
 }
 
 
@@ -97,7 +136,7 @@ void ProductionExporter::cb_on_vfb_layers_updated(const std::string& layersJson)
 	}
 }
 
-void ProductionExporter::renderStart(RenderPass *renderPass, nb::callable&& cbImageUpdated)
+void ProductionExporter::renderStart(RenderPass *renderPass, nb::callable&& cbImageUpdated, bool imageToBlender)
 {
 	m_lastImageUpdate = high_resolution_clock::now();
 
@@ -105,8 +144,25 @@ void ProductionExporter::renderStart(RenderPass *renderPass, nb::callable&& cbIm
 
 	// Setting the pixel data to the RenderPass Blender object is prohibitively slow
 	// to do in Python. Therefore we are forced to do it through a pointer to the
-	// native structure
+	// native structure. When imageToBlender is false, Python passes nullptr - the
+	// server will suppress all image/element emits and we leave the render buffer
+	// detached so nothing can write into a stale Blender pass.
 	m_renderPass = renderPass;
+
+	m_exporter->setImageToBlender(imageToBlender);
+
+	if (renderPass) {
+		// Point the main render layer at Blender's buffer so ZmqRenderImage::update()
+		// writes directly there - eliminating the memcpy in updateImage().
+		m_exporter->setRenderBuffer(
+			renderPass->ibuf->float_buffer.data,
+			renderPass->rectx,
+			renderPass->recty,
+			renderPass->channels
+		);
+	} else {
+		m_exporter->setRenderBuffer(nullptr, 0, 0, 0);
+	}
 }
 
 
@@ -131,7 +187,11 @@ void ProductionExporter::renderEnd()
 	}
 
 	m_renderFinished = true;
+	// Release the reference to Blender's buffer before the render pass is freed.
+	m_exporter->setRenderBuffer(nullptr, 0, 0, 0);
+	m_exporter->clearElementDestinations();
 	m_renderPass = nullptr;
+	m_elementPasses.clear();
 }
 
 
@@ -184,12 +244,19 @@ void VRayForBlender::ProductionExporter::abortRender()
 	m_exporter->abortRender();
 }
 
-/// Set image data to the render pass and call the screen update handler in Python
+/// Notify the Python add-on that the render pass buffer has new data.
+/// ZmqRenderImage::update() normally writes directly into Blender's buffer
+/// (set up via setRenderBuffer in renderStart), so no copy is needed here.
 void ProductionExporter::updateImage()
 {
+	if (m_renderFinished || !m_exporter->getImageToBlender()) {
+		return;
+	}
+
 	// The exporter's isRendering() method should be checked before accessing the render pass buffer,
 	// because there will not be a valid reference to the buffer if rendering has been aborted.
-	if (m_exporter->isRendering() && !m_imageUpdateCallback.is_none() && !m_renderFinished) {
+	vassert(m_renderPass);
+	if (m_exporter->isRendering() && !m_imageUpdateCallback.is_none() && m_renderPass) {
 		const RenderImage& layerImg = m_exporter->getImage();
 		if (layerImg.channels != m_renderPass->channels){
 			// TODO: figure out when RenderPass might not be RGBA
@@ -198,11 +265,14 @@ void ProductionExporter::updateImage()
 			return;
 		}
 
-		const int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
-		const int destSizeY = std::min(layerImg.h, m_renderPass->recty);
-
+		// Normally the data is already in Blender's buffer (written there by ZmqRenderImage::update()).
+		// Fall back to copying if dimensions changed mid-render and ZmqRenderImage reallocated.
 		float* dest = m_renderPass->ibuf->float_buffer.data;
-		::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
+		if (layerImg.pixels != dest) {
+			const int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
+			const int destSizeY = std::min(layerImg.h, m_renderPass->recty);
+			::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
+		}
 
 		// Notify Python add-on that the image is written to the render pass buffer and can be
 		// updated on the screen

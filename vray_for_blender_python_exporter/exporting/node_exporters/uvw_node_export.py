@@ -50,16 +50,17 @@ def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
 
         @returns A newly exported plugin on the first invocation, a cached copy after that.
     """
-    DEFAULT_PLUGIN_TYPE = 'UVWGenEnironment'
+    DEFAULT_PLUGIN_TYPE = 'UVWGenEnvironment'
 
-    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
+    isDomeLocked = len(nodeCtx.nodes) and nodeCtx.nodes[0].bl_idname == 'VRayNodeLightDome' \
+        and getInputSocketByAttr(nodeCtx.nodes[0], 'dome_lock_texture').value
+
+    if isDomeLocked or not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
         uvwGenEnv = PluginDesc('defaultUVWGenEnvironment', 'UVWGenEnvironment')
 
         assert len(nodeCtx.nodes), "This function should not be executed with NodeContext without nodes"
 
-        if nodeCtx.nodes[0].bl_idname == 'VRayNodeLightDome' and getInputSocketByAttr(nodeCtx.nodes[0], 'dome_lock_texture').value:
-            # A separate default UVWGenEnvironment is created when LightDome::dome_lock_texture is enabled,
-            # as it requires a unique uvw_matrix to account for the light's rotation.
+        if isDomeLocked:
             uvwGenEnv.name = f'defaultUVWGenEnvironment_{ Names.object(nodeCtx.rootObj) }'
 
             _, rotQuat, _ = nodeCtx.sceneObj.matrix_world.decompose()
@@ -69,7 +70,8 @@ def exportDefaultUVWGenEnvironment(nodeCtx: NodeContext):
 
 
         plugin = commonNodesExport.exportPluginWithStats(nodeCtx, uvwGenEnv)
-        nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
+        if not isDomeLocked:
+            nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
 
     return plugin
 
@@ -123,5 +125,18 @@ def exportVRayNodeUVWMapping(nodeCtx: NodeContext):
         mappingItems = getAttrDesc(pluginModule, 'mapping_type')['items']
         if uvwPluginDesc.getAttribute('mapping_type') not in [k[0] for k in mappingItems]:
             uvwPluginDesc.setAttribute('mapping_type', 'spherical', True)
+
+    elif uvwPluginType == 'UVWGenMayaPlace2dTexture':
+        # uv_set_name holds a UV layer name selected via prop_search (e.g. 'vray_channel_id_1').
+        # Convert it to an integer uvw_channel. The geometry exporter ensures 'vray_channel_id_N'
+        # UV layers are placed at map_channel position N, so the original channel ID is correct
+        # for both proxy objects and converted meshes.
+        uvSetName = getattr(node, uvwPluginType).uv_set_name
+        if uvSetName.startswith('vray_channel_id_'):
+            try:
+                uvwPluginDesc.setAttribute('uvw_channel', int(uvSetName[len('vray_channel_id_'):]))
+                uvwPluginDesc.setAttribute('uv_set_name', '')
+            except ValueError:
+                pass
 
     return commonNodesExport.exportPluginWithStats(nodeCtx, uvwPluginDesc)

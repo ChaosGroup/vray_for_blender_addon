@@ -113,7 +113,10 @@ def exportCustom(exporterCtx: ExporterContext, pluginDesc: PluginDesc):
             if propGroup.render_mask_mode == '2':
                 selected = set(propGroup.object_selector.getSelectedItems(exporterCtx.ctx, asIncludes=True))
             else:
-                selected = {o for o in exporterCtx.ctx.selected_objects if filterRenderMasks(o)}
+                if exporterCtx.production:
+                    selected = {o for o in exporterCtx.commonSettings.scene.objects if o.select_get() and filterRenderMasks(o)}
+                else:
+                    selected = {o for o in exporterCtx.ctx.selected_objects if filterRenderMasks(o)}
 
             # V-Ray Fur requires special handling because we need to add the gizmo objects to the render mask
             # instead of the V-Ray Fur object.
@@ -154,6 +157,10 @@ def exportCustom(exporterCtx: ExporterContext, pluginDesc: PluginDesc):
                 'render_mask_texture': AttrPlugin(),
                 "render_mask_objects": [],
             })
+
+    if exporterCtx.viewport:
+        pluginDesc.setAttribute('progressive_effectsUpdate', 100)
+        pluginDesc.setAttribute('progressive_autoswitch_effectsresult', True)
 
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
 

@@ -22,6 +22,21 @@ def _updateComputeDevicesCallback(deviceType: int, deviceNames: list[str], defau
     bpy.app.timers.register(_updateComputeDevices)
 
 
+def _onSwitchLicenseToCommunity():
+    """ Called from the ZmqServer (on a worker thread) when the user clicks
+        "Switch to Community Edition" in the no-license dialog. Defer the
+        actual switch onto the main thread because Blender operators and
+        preference writes must run there.
+    """
+    def _runOperator():
+        # 'EXEC_DEFAULT' bypasses the operator's invoke() (and its in-render
+        # confirmation popup). The operator flips the community_edition
+        # preference and restarts the ZmqServer with the new -license arg.
+        bpy.ops.vray.switch_license_type('EXEC_DEFAULT')
+        return None  # one-shot timer
+    bpy.app.timers.register(_runOperator)
+
+
 class ZMQProcess:
     """ The ZMQ server process is started on the local machine and uses the Blender
         console for its output.
@@ -88,7 +103,7 @@ class ZMQProcess:
 
          # VFB start button callback
         self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport \
-            else VfbEventHandler.startProdRender(forceAnimation=False, uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext())
+            else VfbEventHandler.startProdRender(forceAnimationMode='AUTO', uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext())
         
         vray.setRenderStartCallback(self.renderStartCallback)
 
@@ -101,6 +116,22 @@ class ZMQProcess:
         self._updateVFBLayers = lambda vfbLayers: VfbEventHandler.updateVfbLayers(vfbLayers)
         vray.setVfbLayersUpdateCallback(self._updateVFBLayers)
 
+        self._lightMixTransferToScene = lambda changes: VfbEventHandler.onLightMixTransferToScene(changes)
+        vray.setLightMixTransferToSceneCallback(self._lightMixTransferToScene)
+
+        self._vfbMenu = lambda mode, targetName, objectName, distance: VfbEventHandler.onVfbMenu(mode, targetName, objectName, distance)
+        vray.setVfbMenuCallback(self._vfbMenu)
+
+        self._addRenderElementToScene = lambda renderElementType: VfbEventHandler.addRenderElementToScene(renderElementType)
+        vray.setAddRenderElementToSceneCallback(self._addRenderElementToScene)
+
+        self._vfbShowMessagesWindow = lambda: VfbEventHandler.showMessagesWindow()
+        vray.setVfbShowMessagesWindowCallback(self._vfbShowMessagesWindow)
+
+        self._vfbRenderRegionChanged = lambda x, y, w, h, enabled: \
+            VfbEventHandler.onVfbRenderRegionChanged(x, y, w, h, enabled)
+        vray.setVfbRenderRegionChangedCallback(self._vfbRenderRegionChanged)
+
         self._updateComputeDevices = lambda deviceType, deviceNames, defaultDeviceStates: _updateComputeDevicesCallback(deviceType, deviceNames, defaultDeviceStates)
         vray.setUpdateComputeDevicesCallback(self._updateComputeDevices)
         
@@ -109,6 +140,9 @@ class ZMQProcess:
 
         self._appUpdateRequested = lambda: checkForUpdates(force=True, showDialog=True)
         vray.setAppUpdateRequestedCallback(self._appUpdateRequested)
+
+        self._switchLicenseToCommunity = _onSwitchLicenseToCommunity
+        vray.setSwitchLicenseToCommunityCallback(self._switchLicenseToCommunity)
 
 
     def stop(self):
@@ -168,6 +202,7 @@ class ZMQProcess:
         args.appSDKPath          = sys_utils.getAppSdkPath()
         args.pluginVersion       = "".join(bl_info['version'])
         args.blenderVersion      = f'{bpy.app.version[0]}.{bpy.app.version[1]},{bpy.app.version[2]}'
+        args.licenseType         = "community" if vray.isCommunityEdition() else "commercial"
 
         debug.printInfo("Starting ZmqServer process ...")
 

@@ -9,6 +9,7 @@ from vray_blender import plugins
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.nodes import sockets as SocketUtils, utils as NodeUtils
 from vray_blender.nodes.nodes import vrayNodeUpdate
+from vray_blender.lib.image_utils import subscribeToBitmapImageUpdates
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
 
@@ -32,30 +33,46 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
 
         syncObjectUniqueName(self, reset=True)
         NodeUtils.autoInitBitmapNode(self)
+        subscribeToBitmapImageUpdates(self)
 
     def copy(self, node):
+        # Try to capture the texture ID now (same-scene copies, including group operations
+        # where the source node is removed synchronously before the timer fires).
+        # This fails for cross-scene copies where the node isn't fully set up yet.
+        try:
+            srcTexture = node.texture
+        except Exception:
+            srcTexture = None
+
         def _createTexture():
             hasTexture = bool(self.texture)
             NodeUtils.createBitmapTexture(self)
 
             if hasTexture:
-                if hasattr(node.texture, 'image'):
+                tex = srcTexture
+                if tex is None:
+                    # srcTexture wasn't captured (cross-scene copy); node is still alive here.
+                    try:
+                        tex = node.texture
+                    except ReferenceError:
+                        tex = None
+                if tex is not None and hasattr(tex, 'image'):
                     # The node is copied from the current scene. Link the texture to the
                     # original texture image.
-                    self.texture.image = node.texture.image
-                else:
-                    # The node is copied from a different scene. The texture image is not copied, so
-                    # it will be empty in the copy.
-                    pass
+                    self.texture.image = tex.image
+                # else: The node is copied from a different scene; texture image is not copied.
 
             syncObjectUniqueName(self, reset=True)
+            subscribeToBitmapImageUpdates(self)
 
-        # The 'texture' property of the node is still not valid here. Execute the
-        # reattachment asynchronously.
+        # Pre-5.1: the 'texture' property isn't valid yet, defer to a timer.
+        # 5.1+: the timer fires after Blender's cross-instance paste has torn
+        # down the source struct, causing a use-after-free — do the work
+        # synchronously instead.
         if bpy.app.version < (5, 1, 0):
-            # In Blender 5.1 this crashes instantly when copying the bitmap, it seems to have been fixed at
-            # some point and this isn't necessary... Or at least I couldn't find a case where it doesn't work.
             bpy.app.timers.register(_createTexture)
+        else:
+            _createTexture()
 
 
     def draw_buttons(self, context, layout):

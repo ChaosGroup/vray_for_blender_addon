@@ -40,28 +40,55 @@ def register():
         if kmBlender.keymaps.get('Screen'):
             kmActive = wm.keyconfigs['Blender'].keymaps['Screen'].keymap_items
 
-    if kmActive is None:
-        # No keymap has been found that defines the 'Render' shortcut. Do not register a shortcut for V-Ray.
-        return
-    
-    # Get the addon's 'private' keyconfig - the one that is active only when the addon is active.
-    kconfVray = wm.keyconfigs.addon.keymaps
-    
-    # Make sure there is a 'Screen' keymap in the addon's keyconfig. This is where we will register
-    # V-Ray's 'Render' shortcut
-    kmVray = kconfVray.get('Screen', kconfVray.new(name='Screen')).keymap_items
+    if kmActive is not None:
+        # Get the addon's 'private' keyconfig - the one that is active only when the addon is active.
+        kconfVray = wm.keyconfigs.addon.keymaps
 
-    # For rendering with V-Ray, register the same shortcut key which is registered for the built-in Blender 
-    # 'render' operartor. If no key is registered, do not register any key for V-Ray.
-    if ('vray.render' not in kmVray) and ('render.render' in kmActive):
-        for blenderKeymap in [i for i in kmActive if i.idname == 'render.render']:
-            vrayKeymap = kmVray.new_from_item(blenderKeymap)
-            vrayKeymap.idname = 'vray.render'
-            vrayKeymap.properties.animation = blenderKeymap.properties.animation
+        # Make sure there is a 'Screen' keymap in the addon's keyconfig. This is where we will register
+        # V-Ray's 'Render' shortcut
+        kmVray = kconfVray.get('Screen', kconfVray.new(name='Screen')).keymap_items
+
+        # For rendering with V-Ray, register the same shortcut key which is registered for the built-in Blender
+        # 'render' operator. If no key is registered, do not register any key for V-Ray.
+        if ('vray.render' not in kmVray) and ('render.render' in kmActive):
+            for blenderKeymap in [i for i in kmActive if i.idname == 'render.render']:
+                vrayKeymap = kmVray.new_from_item(blenderKeymap)
+                vrayKeymap.idname = 'vray.render'
+                vrayKeymap.properties.forceMode = "ANIMATION" if blenderKeymap.properties.animation else "FRAME"
+
+    _registerGroupNodeKeymaps()
+
+
+def _registerGroupNodeKeymaps():
+    """ Register keymaps for V-Ray group node operations in the Node Editor. """
+    if bpy.app.background:
+        return
+
+    wm = bpy.context.window_manager
+    kconfVray = wm.keyconfigs.addon.keymaps
+
+    km = kconfVray.get('Node Editor', kconfVray.new(name='Node Editor', space_type='NODE_EDITOR'))
+    items = km.keymap_items
+
+    # Ctrl+G: Make group from selected nodes
+    if 'vray.node_group_make' not in items:
+        items.new('vray.node_group_make', 'G', 'PRESS', ctrl=True)
+
+    # Ctrl+Alt+G: Ungroup selected group nodes
+    if 'vray.node_group_ungroup' not in items:
+        items.new('vray.node_group_ungroup', 'G', 'PRESS', ctrl=True, alt=True)
+
+    # Ctrl+Shift+G: Insert selected nodes into active group
+    if 'vray.node_group_insert' not in items:
+        items.new('vray.node_group_insert', 'G', 'PRESS', ctrl=True, shift=True)
+
+    # Tab: Enter/exit group
+    if 'vray.node_group_edit' not in items:
+        items.new('vray.node_group_edit', 'TAB', 'PRESS')
 
 
 def unregister():
-    # The keymap will be automatically removed when Blender is restarted 
+    # The keymap will be automatically removed when Blender is restarted
     # after the add-on is unregistered. Until then, it will live under different name
     # (idname vs name) regardless of whether we remove it here or not.
     pass

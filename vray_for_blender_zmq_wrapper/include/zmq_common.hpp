@@ -14,7 +14,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2033;
+static const int ZMQ_PROTOCOL_VERSION = 2038;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -155,10 +155,40 @@ inline std::string Msg(TArgs&&... args) {
 // These should be the same in both client and server.
 static const std::string SHARED_PORT_MAPPING_ID       = "endp";    // Listening endpoint info
 static const std::string SHARED_IMG_BUFFER_MAPPING_ID = "imgbuf";  // Image transfer buffer
-static const std::string SHARED_IMG_ID_MAPPING_ID	  = "imgid"; // The ID of the image transfer buffer
+static const std::string SHARED_IMG_ID_MAPPING_ID     = "imgid"; // The ID of the image transfer buffer
+static const std::string SHARED_ELEM_ID_MAPPING_ID    = "elem";  // The ID of the per-element transfer buffer
 
 inline std::string getImageBufferID(int imgID) {
 	return SHARED_IMG_ID_MAPPING_ID + "_" + std::to_string(imgID);
 }
 
-};  // end VrayZmqWrapper namespace 
+/// Per-render-element SHM region name. There is exactly one element buffer per renderer
+/// (shared by all elements in the frame, written/read serially), so the name is fixed --
+/// the server destroys + recreates under the same name when the buffer needs to grow.
+inline std::string getElementBufferID() {
+	return SHARED_ELEM_ID_MAPPING_ID;
+}
+
+
+/// Routing key for per-instance render-element images shared across the IPC protocol:
+/// V-Ray plugin `name` + sub-layer index (Cryptomatte rank, ObjectSelect 0/1/2, 0 otherwise).
+/// Both server and client identify element images by this pair; defining it once here
+/// keeps the two sides in sync without duplicating the FNV combiner.
+struct PerInstanceKey {
+	std::string instanceName;
+	int         subIndex = 0;
+
+	bool operator==(const PerInstanceKey& o) const {
+		return subIndex == o.subIndex && instanceName == o.instanceName;
+	}
+};
+
+struct PerInstanceKeyHash {
+	size_t operator()(const PerInstanceKey& k) const {
+		size_t h = std::hash<std::string>{}(k.instanceName);
+		h ^= std::hash<int>{}(k.subIndex) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+		return h;
+	}
+};
+
+};  // end VrayZmqWrapper namespace

@@ -159,7 +159,7 @@ public:
 	// Intended to be used with lambda which will capture all neded data
 	// must obey stop flag asap, threadIndex == -1 means calling thread (thCount
 	// == 0)
-	using Task = std::function<void(int threadIndex, const volatile bool &cancel)>;
+	using Task = std::function<void(int threadIndex, const std::atomic<bool> &cancel)>;
 
 	enum class Priority {
 		LOW,
@@ -210,7 +210,7 @@ public:
 	std::condition_variable m_queueCondVar;  ///< cond var for threads to wait for new tasks
 	std::deque<Task> m_tasks;                ///< queue of the pending tasks
 	std::vector<std::thread> m_workers;      ///< all worker threads created for this instace
-	volatile bool m_stop;     ///< if set to true, will stop all threads, also passed
+	std::atomic<bool> m_stop;     ///< if set to true, will stop all threads, also passed
 	                          ///< to each task as a cancellation token
 };
 

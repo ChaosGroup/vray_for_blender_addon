@@ -104,7 +104,7 @@ def run():
             _upgradeNodeTree(light.node_tree, light.name)
 
     for world in bpy.data.worlds:
-        if world.use_nodes and _hasUpgradeableNodes(world):
+        if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world):
             _upgradeNodeTree(world.node_tree, world.name)
 
     for group in bpy.data.node_groups:

@@ -128,7 +128,8 @@
                 "label": "Bump",
                 "attrs": [
                     {
-                        "name": "bump_amount"
+                        "name": "bump_amount",
+                        "active": {"cond": "::bump_type!=6"}
                     },
                     {
                         "name": "bump_type"

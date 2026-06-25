@@ -2,39 +2,59 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import bpy, platform, os, sys
+import bpy, sys
 from bpy.types import Context
 
 from vray_blender.engine import ZMQ
 from vray_blender.lib import draw_utils
 from vray_blender.lib.sys_utils import StartupConfig, activeRendererExists
-from vray_blender.operators import VRAY_OT_render
+from vray_blender.operators import VRAY_OT_cloud_submit, VRAY_OT_jump_to_setting, VRAY_OT_render, VRAY_OT_set_render_mode
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
 from vray_blender.ui.classes import pollEngine, RenderPanelGroups
-from vray_blender.ui.icons import getIcon
+from vray_blender.ui.icons import getIcon, getUIIcon
 from vray_blender.utils.update_checker import UpdateStatus
 from vray_blender.version import getAddonVersion, formatNumericVersion
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.ui.community_edition import drawCELimitedFeatureIcon, addCEPricingURLInfo
 
-if sys.platform == "win32":
-    # The psutil we ship is currently broken on macos. It takes into account numa nodes
-    # and is only used for the total thread count message we show the user, but we should
-    # be fine with os.cpu_count on most MacOS machines.
-    from vray_blender.external import psutil
-
 _GI_ENGINE_BRUTE_FORCE = '2'
 _GI_ENGINE_LIGHT_CACHE = '3'
 
-def getRenderIcon(vrayExporter):
-    renderIcon = 'RENDER_ANIMATION'
-    if vrayExporter.animation_mode == 'FRAME':
-        renderIcon = 'NONE'
-    return renderIcon
+class VRAY_MT_render_dropdown(bpy.types.Menu):
+    """ Dropdown next to the Render button in the V-Ray render panel.
+        Each entry changes the main Render button's mode without starting a render.
+    """
+    bl_idname = "VRAY_MT_render_dropdown"
+    bl_label  = "Render"
+    bl_description = "Switch between 'Render' and 'Render Animation' modes."
+
+    def draw(self, context):
+        opStill = self.layout.operator(VRAY_OT_set_render_mode.bl_idname, text="Render",
+                                       icon_value=getUIIcon(VRAY_OT_render))
+        opStill.mode = 'FRAME'
+        opAnim  = self.layout.operator(VRAY_OT_set_render_mode.bl_idname, text="Render Animation",
+                                       icon_value=getUIIcon(VRAY_OT_render))
+        opAnim.mode  = 'ANIMATION'
 
 
-               
+class VRAY_MT_gpu_device_type(bpy.types.Menu):
+    """ Dropdown for the GPU backend selector in the V-Ray render panel.
+        The underlying gpu_device_type EnumProperty keeps 'HIP' as a valid identifier
+        on every OS so scenes round-trip cleanly, but HIP is only offered as a choice
+        on Windows where V-Ray's HIP runtime is actually shipped.
+    """
+    bl_idname = "VRAY_MT_gpu_device_type"
+    bl_label  = "GPU Device"
+    bl_description = "Select the GPU device type to use for rendering."
+
+    def draw(self, context):
+        vrayExporter = context.scene.vray.Exporter
+        self.layout.prop_enum(vrayExporter, "gpu_device_type", 'CUDA')
+        self.layout.prop_enum(vrayExporter, "gpu_device_type", 'RTX')
+        if sys.platform == 'win32':
+            self.layout.prop_enum(vrayExporter, "gpu_device_type", 'HIP')
+
 
 class VRAY_PT_Context(classes.VRayRenderPanel):
     """ PROPERTIES->Render panel header"""
@@ -49,7 +69,6 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
     def draw(self, context: bpy.types.Context):
         layout = self.layout
         scene  = context.scene
-        rd     = scene.render
 
         self._drawRendererSelector(context)
         layout.separator()
@@ -63,13 +82,25 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
             layout.label(text=message, icon="INFO")
 
         if not vrayBake.use:
-            # RENDER button
-            renderCol = layout.column()
-            renderCol.enabled = vray.isInitialized()
-            renderCol.operator(VRAY_OT_render.bl_idname, text="Render") 
-            renderCol.separator()
+            row = layout.row(align=False)
 
-        # Render panel group switcher (Globals, GI, Sampler, System) 
+            wmVray = context.window_manager.vray
+            buttonMode = wmVray.render_button_mode
+            buttonLabel = "Render Animation" if buttonMode == 'ANIMATION' else "Render"
+
+            renderGroup = row.row(align=True)
+            renderGroup.enabled = vray.isInitialized()
+            opMain = renderGroup.operator(VRAY_OT_render.bl_idname, text=buttonLabel,
+                                          icon_value=getUIIcon(VRAY_OT_render))
+            opMain.forceMode = buttonMode
+            renderGroup.menu(VRAY_MT_render_dropdown.bl_idname, text="", icon='DOWNARROW_HLT')
+
+            row.operator(VRAY_OT_cloud_submit.bl_idname, text="Submit to Cloud",
+                         icon_value=getUIIcon(VRAY_OT_cloud_submit))
+
+            layout.separator()
+
+        # Render panel group switcher (Common, Sampler, GI, Globals, System)
         layout.prop(context.window_manager.vray, 'ui_render_context', expand=True)
         layout.separator()
 
@@ -96,30 +127,22 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
 
             if vrayExporter.device_type == 'GPU':
                 if sys.platform != "darwin":
-                    layoutDevice.separator()
-                    gpuDeviceRow = layoutDevice.row()
-                    gpuDeviceRow.alignment = 'CENTER'
+                    gpuDeviceRow = layoutDevice.split(factor=0.4)
+                    gpuDeviceRow.alignment = 'RIGHT'
                     gpuDeviceRow.label(text="GPU Device")
-
-                    gpuDeviceBox = gpuDeviceRow.box()
-                    gpuDeviceBox.alignment = 'CENTER'
-                    gpuDeviceBox.scale_y = 0.5  # This scale makes GPU Device aligned vertically
-                    gpuDeviceBox.label(text='RTX' if vrayExporter.use_gpu_rtx else 'CUDA')
-                    devicesRow = gpuDeviceRow
-
-                    # Adding the use_gpu_rtx prop into new centered row,
-                    # so it can be aligned with the "GPU Device" label.
-                    rtxRow = layoutDevice.row()
-                    rtxRow.alignment = 'CENTER'
-                    rtxRow.scale_x = 2
-                    rtxRow.prop(vrayExporter, "use_gpu_rtx")
+                    valueSplit = gpuDeviceRow.split(factor=0.45, align=True)
+                    deviceItems = vrayExporter.bl_rna.properties['gpu_device_type'].enum_items
+                    deviceLabel = deviceItems[vrayExporter.gpu_device_type].name
+                    valueSplit.menu(VRAY_MT_gpu_device_type.bl_idname, text=deviceLabel)
+                    valueSplit.operator(
+                        "vray.open_preferences",
+                        text="Devices", icon="PREFERENCES"
+                    ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
                 else:
-                    devicesRow = layoutDevice.row()
-                    devicesRow.alignment = 'RIGHT'
-                devicesRow.operator(
-                    "vray.open_preferences",
-                    text="Devices", icon="PREFERENCES"
-                ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
+                    layoutDevice.operator(
+                        "vray.open_preferences",
+                        text="Devices", icon="PREFERENCES"
+                    ).menu_tab = 'PREFERENCES_MENU_GPU_DEVICES'
             
 
     def _drawAboutBox(self, context: bpy.types.Context):   
@@ -148,7 +171,78 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
                 op = rightCol.operator("vray.url_open", text=f"v{formatNumericVersion(UpdateStatus.version)}", icon='URL')
                 op.url = UpdateStatus.downloadURL
                 op.description = "Go to V-Ray for Blender downloads page"
-    
+
+
+class VRAY_PT_Common_Rendering(classes.VRayRenderPanel):
+    bl_label = "Rendering"
+    bl_panel_groups = RenderPanelGroups
+
+    # (label, quick BoolProperty name on wm.vray, jump-target enum value)
+    _QUICK_TOGGLES = (
+        ("Auto Exposure",      "quick_auto_exposure",      "AUTO_EXPOSURE"),
+        ("Auto White Balance", "quick_auto_white_balance", "AUTO_WHITE_BALANCE"),
+        ("Motion Blur",        "quick_motion_blur",        "MOTION_BLUR"),
+        ("Caustics",           "quick_caustics",           "CAUSTICS"),
+    )
+
+    def draw(self, context):
+        commonUI = context.window_manager.vray.common_tab
+        layout = self.layout
+
+        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True, align=False)
+        for label, propName, target in self._QUICK_TOGGLES:
+            row = grid.row(align=True)
+            row.prop(commonUI, propName, text=label)
+            opRow = row.row(align=True)
+            opRow.alignment = 'RIGHT'
+            opRow.operator(VRAY_OT_jump_to_setting.bl_idname, text="", icon='PRESET').target = target
+
+
+class VRAY_PT_Common_Denoiser(classes.VRayRenderPanel):
+    bl_label = "Denoiser"
+    bl_panel_groups = RenderPanelGroups
+
+    def _getDenoiserChannel(self, context):
+        if context.scene.world:
+            return context.scene.world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser
+        return None
+
+    def drawPanelCheckBox(self, context):
+        if context.scene.world:
+            denoiserChannel = self._getDenoiserChannel(context)
+            if not denoiserChannel.enabled:
+                self.layout.prop(denoiserChannel, 'enabled', text="")
+            else:
+                denoiserPropGroup = context.scene.world.vray.RenderChannelDenoiser
+                self.layout.prop(denoiserPropGroup, 'enabled', text="")
+
+    def draw_header_preset(self, context):
+        if context.scene.world:
+            row = self.layout.row()
+            row.alignment = 'RIGHT'
+            row.enabled = self._getDenoiserChannel(context).enabled
+            row.operator('vray.show_denoiser_advanced_settings', text="", icon='PRESET', emboss=False)
+
+    def draw(self, context):
+        if not context.scene.world:
+            self.layout.label(text="Requires a V-Ray World node tree.", icon="ERROR")
+            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree")
+            return
+
+        layout = draw_utils.subPanel(self.layout)
+        layout.use_property_decorate = False
+
+        denoiserChannel = self._getDenoiserChannel(context)
+        denoiserPropGroup = context.scene.world.vray.RenderChannelDenoiser
+
+        layout.active = denoiserChannel.enabled and denoiserPropGroup.enabled
+        layout.prop(denoiserPropGroup, 'engine')
+        if denoiserPropGroup.engine == '0':
+            layout.prop(denoiserPropGroup, 'preset')
+
+        layout.separator()
+
+
 ########  ########    ###    ##       ######## #### ##     ## ########
 ##     ## ##         ## ##   ##          ##     ##  ###   ### ##
 ##     ## ##        ##   ##  ##          ##     ##  #### #### ##
@@ -182,11 +276,13 @@ class VRAY_PT_Device(classes.VRayRenderPanel):
 class VRAY_PT_Globals(classes.VRayRenderPanel):
     bl_label   = "Globals"
     bl_panel_groups = RenderPanelGroups
+    
+    # Needed for the force-open workaround in `VRAY_OT_jump_to_setting`.
+    bl_idname = "VRAY_PT_Globals"
+    bl_options = set()
 
     def draw(self, context):
-        cameraLayout = self.layout.column()
-
-        cameraLayoutContainer  = self.drawSection(context, cameraLayout, "SettingsCameraGlobal", "camera")
+        cameraLayoutContainer  = self.drawSection(context, self.layout, "SettingsCameraGlobal", "camera")
         if cameraLayoutContainer:
             cameraLayoutContainer.use_property_split = False
             self.drawPlugin(context, cameraLayoutContainer, "SettingsMotionBlur")
@@ -224,6 +320,7 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
                 boxDebug.prop(vrayExporter, 'zmq_port')
                 boxDebug.prop(vrayExporter, "debug_threads")
                 boxDebug.prop(vrayExporter, "debug_log_times")
+                boxDebug.prop(vrayExporter, "enable_visual_debugger")
                 boxDebug.separator()
                 row = boxDebug.row(align=True)
                 row.prop(vrayExporter, 'export_scene_file_path', text='Vrscene path')
@@ -239,34 +336,12 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
         # col.prop(vrayExporter, 'calculate_instancer_velocity')
         # layout.prop(vrayExporter, 'subsurf_to_osd')
 
-        layout.prop(vrayExporter, 'display_vfb_on_top', text="VFB Always On Top")
+        settingsImageSampler = context.scene.vray.SettingsImageSampler
+        layout.prop(settingsImageSampler, 'progressive_effectsUpdate', text='Image Effects Update Freq.')
+        layout.prop(settingsImageSampler, 'progressive_autoswitch_effectsresult', text='Autoswitch to Effects Result')
+        layout.prop(vrayExporter, 'image_to_blender')
 
-        layout.separator()
-
-class VRAY_PT_Performance(classes.VRayRenderPanel):
-    bl_label   = "Performance"
-    bl_options = {'DEFAULT_CLOSED'}
-    bl_panel_groups = RenderPanelGroups
-
-    def draw(self, context):
-        layout = draw_utils.subPanel(self.layout)
-        layout.use_property_decorate = False
-        vrayExporter = context.scene.vray.Exporter
-        layout.prop(vrayExporter, 'use_custom_thread_count', text='Thread Mode')
-        row = layout.row()
-        row.alignment = 'RIGHT'
-        if sys.platform == "win32":
-            row.label(text=f"The system has {psutil.cpu_count()} CPU threads")
-        else:
-            row.label(text=f"The system has {os.cpu_count()} CPU threads")
-        row = layout.row()
-        row.enabled = vrayExporter.use_custom_thread_count == 'FIXED'
-        row.prop(vrayExporter, 'custom_thread_count', text='Threads')
-        if platform.system() != "Linux":
-            layout.separator()
-            layout.prop(vrayExporter, 'lower_thread_priority', text='Lower Thread Priority')
-        layout.separator()
-
+        layout.prop(vrayExporter, 'display_vfb_on_top', text='VFB Always On Top')
 
  ######   #######  ##        #######  ########     ##     ##    ###    ##    ##    ###     ######   ######## ##     ## ######## ##    ## ########
 ##    ## ##     ## ##       ##     ## ##     ##    ###   ###   ## ##   ###   ##   ## ##   ##    ##  ##       ###   ### ##       ###   ##    ##   
@@ -279,6 +354,7 @@ class VRAY_PT_ColorManagement(classes.VRayRenderPanel):
     bl_label = "Color Management"
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
+    bl_order = 1 # Should be after the Globals panel
 
     vrayPlugins = ["SettingsUnitsInfo"]
 
@@ -541,8 +617,13 @@ class VRAY_PT_SettingsCaustics(classes.VRayRenderPanel):
     bl_label = "Caustics"
     bl_options = {'DEFAULT_CLOSED'}
     bl_panel_groups = RenderPanelGroups
+    bl_idname = "VRAY_PT_SettingsCaustics"
+
+    # Encoded highlight key used by the Common > Rendering "Caustics" jump button.
+    _HIGHLIGHT_KEY = "SettingsCaustics.on"
 
     def drawPanelCheckBox(self, context):
+        self.layout.alert = draw_utils.isHighlighted(self._HIGHLIGHT_KEY)
         self.layout.prop(context.scene.vray.SettingsCaustics, 'on', text="")
 
     def draw(self, context):
@@ -562,7 +643,13 @@ class VRAY_PT_SettingsCaustics(classes.VRayRenderPanel):
 
 def getRegClasses():
     return (
+        VRAY_MT_render_dropdown,
+        VRAY_MT_gpu_device_type,
         VRAY_PT_Context,
+
+        # Common
+        VRAY_PT_Common_Rendering,
+        VRAY_PT_Common_Denoiser,
 
         # Render
         VRAY_PT_Device,
@@ -582,7 +669,6 @@ def getRegClasses():
         VRAY_PT_ColorManagement,
         # System
         VRAY_PT_Exporter,
-        VRAY_PT_Performance,
         VRAY_PT_DR,
     )
 

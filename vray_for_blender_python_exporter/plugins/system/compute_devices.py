@@ -12,6 +12,31 @@ class DeviceType:
     CUDA = "0"
     RTX = "1"
     METAL = "2"
+    HIP = "3"
+
+
+def getDeviceCollectionByType(deviceType: str) -> str:
+    """Map a gpuDeviceType (preferences) string value to the matching device collection
+    attribute on the ComputeDevices property group. Apple uses the dedicated
+    devicesMetal collection. Falls back to the CUDA collection for unknown types."""
+    return {
+        DeviceType.CUDA:  "devicesCUDA",
+        DeviceType.RTX:   "devicesOptix",
+        DeviceType.METAL: "devicesMetal",
+        DeviceType.HIP:   "devicesHIP",
+    }.get(deviceType, "devicesCUDA")
+
+
+def getDeviceTypeByName(deviceName: str) -> str:
+    """Map a device name (e.g. the scene Exporter.gpu_device_type value 'CUDA',
+    'RTX' or 'HIP') to the matching DeviceType id. Falls back to CUDA for
+    unknown names."""
+    return {
+        'CUDA': DeviceType.CUDA,
+        'RTX':  DeviceType.RTX,
+        'HIP':  DeviceType.HIP,
+    }.get(deviceName, DeviceType.CUDA)
+
 
 def updateEnabledComputeDevices(context):
     blender_utils.markPreferencesDirty(context)
@@ -21,17 +46,18 @@ def updateEnabledComputeDevices(context):
 
     if not computeDevices.devicesUpdatingEnabled:
         return
-    if sys.platform != "darwin":
-        deviceIsRTX = computeDevices.gpuDeviceType == DeviceType.RTX
-        devicesList = computeDevices.devicesOptix if deviceIsRTX else computeDevices.devicesCUDA
-    else:
-        devicesList = computeDevices.devicesMetal
 
-    deviceType = DeviceType.METAL if sys.platform == "darwin" else computeDevices.gpuDeviceType
+    if sys.platform == "darwin":
+        deviceType = DeviceType.METAL
+    else:
+        deviceType = computeDevices.gpuDeviceType
+
+    devicesList = getattr(computeDevices, getDeviceCollectionByType(deviceType))
     vray.setComputeDevices([d.deviceId for d in devicesList if d.deviceEnabled], int(deviceType))
 
     # Reset the active ipr rendering ensuring that the changes has taken effect.
-    if sys.platform == "darwin" or context.scene.vray.Exporter.use_gpu_rtx == deviceIsRTX:
+    sceneDeviceType = getDeviceTypeByName(context.scene.vray.Exporter.gpu_device_type)
+    if sys.platform == "darwin" or sceneDeviceType == deviceType:
         resetActiveIprRendering()
 
 
@@ -68,10 +94,11 @@ class ComputeDevices(bpy.types.PropertyGroup):
 
     gpuDeviceType: bpy.props.EnumProperty(
         name="GPU Device Type",
-        description="Choose between CUDA and RTX for GPU rendering",
+        description="Choose between CUDA, RTX and HIP for GPU rendering",
         items=(
             (DeviceType.CUDA, "CUDA", "Use CUDA for GPU rendering"),
             (DeviceType.RTX, "RTX", "Use RTX for GPU rendering (if supported)"), # Optix
+            *(((DeviceType.HIP, "HIP", "Use HIP for AMD GPU rendering (if supported)"),) if sys.platform == "win32" else ()),
         ),
         default='0'
     )
@@ -94,6 +121,12 @@ class ComputeDevices(bpy.types.PropertyGroup):
         type=ComputeDeviceSelector
     )
 
+    devicesHIP: bpy.props.CollectionProperty(
+        name="Compute Devices HIP",
+        description="Collection of available HIP compute devices",
+        type=ComputeDeviceSelector
+    )
+
     def updateComputeDeviceSelectors(self, devicesType: int, deviceNames: list[str], defaultDeviceStates: list[bool]):
         """ Update the compute device selectors
 
@@ -103,10 +136,10 @@ class ComputeDevices(bpy.types.PropertyGroup):
             defaultDeviceStates (list[bool]): A list of the enabled states of the devices to update
         """
 
-        if sys.platform != "darwin":
-            devices = self.devicesCUDA if str(devicesType) == DeviceType.CUDA else self.devicesOptix
-        else:
+        if sys.platform == "darwin":
             devices = self.devicesMetal
+        else:
+            devices = getattr(self, getDeviceCollectionByType(str(devicesType)))
 
         # Save previous states of device selectors that are in deviceType
         devicePreviousState = { d.deviceName: d.deviceEnabled for d in devices }

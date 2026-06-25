@@ -172,6 +172,16 @@
         ]
     },
     "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "map_type"
+                    }
+                ]
+            }
+        ],
         "input_sockets" : [
             {
                 "name": "bump_tex_color"

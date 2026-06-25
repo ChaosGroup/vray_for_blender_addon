@@ -52,13 +52,15 @@
                 "layout": "ROLLOUT",
                 "name": "Motion Blur",
                 "label": "Motion Blur",
+                "panel_prop": {"wm_data": "common_tab", "name": "panel_globals_motion_blur_open"},
                 "attrs": [
                     {
                         "name": "on",
                         "label": "Enable Motion Blur"
                     },
                     {
-                        "name": "camera_motion_blur"
+                        "name": "camera_motion_blur",
+                        "active": {"cond": "::on=1"}
                     },
                     {
                         "name": "duration",

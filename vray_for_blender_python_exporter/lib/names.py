@@ -135,12 +135,23 @@ class Names:
     @staticmethod
     def struct(obj: bpy.types.Struct):
         """ Return the unique name for an object that is not a subclass of bpy.types.ID, e.g. bpy.types.Node. """
-        if not hasattr(obj, "unique_id"):
-            if hasattr(obj, "vray"):
-                return obj.vray.unique_id
-            else:
-                raise Exception(f"Attempt to export a non-vray object: {obj.bl_idname}::{obj.name}")
-        return obj.unique_id
+        def readUniqueId(target):
+            if hasattr(target, "unique_id"):
+                return target.unique_id
+            if hasattr(target, "vray"):
+                return target.vray.unique_id
+            raise Exception(f"Attempt to export a non-vray object: {target.bl_idname}::{target.name}")
+
+        uniqueId = readUniqueId(obj)
+        if not uniqueId and isinstance(obj, bpy.types.Node):
+            # On first render of Cycles nodes right after their creation, the evaluated copy
+            # of the node does not have its unique_id set because syncUniqueNames() was called
+            # AFTER the evaluated depsgraph has been created. Fall back to using the original node, 
+            # which was populated by syncUniqueNames(). Mirrors Names._object()'s use of .original.
+            origTree = obj.id_data.original
+            if (origNode := origTree.nodes.get(obj.name)) is not None and origNode is not obj:
+                uniqueId = readUniqueId(origNode)
+        return uniqueId
     
 
     @staticmethod
@@ -162,6 +173,9 @@ class Names:
         else:
             debug.printError(f"Name requested for non-vray node tree: {nodeCtx.ntree.name}")
                              
+        if nodeCtx._groupInstancePath:
+            groupPart = '|'.join(n.name for n in nodeCtx._groupInstancePath)
+            return f"{ntreeRootName}|{groupPart}|{Names.struct(nodeCtx.node)}"
         return f"{ntreeRootName}|{Names.struct(nodeCtx.node)}"
         
 
@@ -301,7 +315,7 @@ def syncUniqueNamesForPreview(dg: bpy.types.Depsgraph):
 
         if isinstance(id, bpy.types.Object):
             # Walk material node trees and set unique ids to the nodes
-            for slot in [s for s in id.material_slots if hasattr(s.material.node_tree, 'nodes')]:
+            for slot in [s for s in id.material_slots if s.material and hasattr(s.material.node_tree, 'nodes')]:
                 for node in slot.material.node_tree.nodes:
                     syncObjectUniqueName(node, reset=False)
 
@@ -335,7 +349,7 @@ def syncObjectUniqueName(obj: bpy.types.ID | bpy.types.Node, reset: bool):
     """ Sync the uniqe name for a single object. """
     
     # Order of checking is important, because node trees are not of type VRayEntity. 
-    # We need to process them before any VRayEntity-speecific fields ar checked.
+    # We need to process them before any VRayEntity-specific fields ar checked.
     if ntree := getattr(obj, 'node_tree', None):
         syncObjectUniqueName(ntree, reset)
     
@@ -358,20 +372,25 @@ def syncObjectUniqueName(obj: bpy.types.ID | bpy.types.Node, reset: bool):
 
     # VRay nodes do not have a 'vray' field, check 'vray_type' instead
     if isinstance(obj, bpy.types.Node):
-        def setUniqueId(obj):
-            if reset or obj.isNewlyAdded():
-                uniqueId = _createUniqueName(obj.name)
-                obj.setUniqueId(uniqueId)
+        # Capture the node's name before passing the (possibly evaluated) target into
+        # setUniqueId — for non-V-Ray nodes the target is the .vray PropertyGroup,
+        # whose own 'name' attribute is empty.
+        nodeName = obj.name
 
-                # If the property group is attached to a node, set the ID of the parent node 
+        def setUniqueId(target):
+            if reset or target.isNewlyAdded():
+                uniqueId = _createUniqueName(nodeName)
+                target.setUniqueId(uniqueId)
+
+                # If the property group is attached to a node, set the ID of the parent node
                 # to it. It will be needed to reach the node from the property group in event
                 # callbacks.
-                if hasattr(obj, 'vray_plugin') and (propGroup := getattr(obj, obj.vray_plugin, None)):
+                if hasattr(target, 'vray_plugin') and (propGroup := getattr(target, target.vray_plugin, None)):
                     propGroup.parent_node_id = uniqueId
 
                 # Some nodes may have more than 1 plugin property group
-                for propGroupName in getattr(obj, "vray_plugins_list", []):
-                    getattr(obj, propGroupName).parent_node_id = uniqueId
+                for propGroupName in getattr(target, "vray_plugins_list", []):
+                    getattr(target, propGroupName).parent_node_id = uniqueId
 
         if isVrayNode(obj):
             setUniqueId(obj)

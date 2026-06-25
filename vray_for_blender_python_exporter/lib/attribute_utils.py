@@ -28,19 +28,18 @@ class AttributeContext:
 
 
 def copyPropGroupValues(srcPropGroup, destPropGroup, pluginModule):
-    # Copy property values from  the source PropGroup to the destination PropGroup 
-    for attrName, attrType in [(a['attr'], a['type']) for a in pluginModule.Parameters]:
-        if attrName not in srcPropGroup.__annotations__:
+    for a in pluginModule.Parameters:
+        attrName, attrType = a['attr'], a['type']
+        if attrType == 'TEMPLATE':
+            try:
+                getattr(srcPropGroup, attrName).copy(getattr(destPropGroup, attrName))
+            except AttributeError:
+                pass
             continue
-
-        if (attrType == 'TEMPLATE'):
-            srcAttr = getattr(srcPropGroup, attrName)
-            destAttr = getattr(destPropGroup, attrName)
-            srcAttr.copy(destAttr)
-            continue
-
-        val = getattr(srcPropGroup, attrName)
-        setattr(destPropGroup, attrName, val)
+        try:
+            setattr(destPropGroup, attrName, getattr(srcPropGroup, attrName))
+        except AttributeError:
+            pass
 
 # Create an additional pointer property to be used for property search UI.
 # It updates the original string property with the object name when changed.
@@ -132,7 +131,7 @@ def convertVRayValueToUI(attrDesc, value, doUnitsConversion=True):
         if units == 'centimeters':
             return value * 0.01
         elif units == 'millimeters':
-            return value * 0.01 * 0.01
+            return value * 0.001
         elif units == 'degrees':
             return math.radians(value)
 
@@ -158,7 +157,7 @@ def convertUIValueToVRay(attrDesc, value):
         if units == 'centimeters':
             return value * 100
         elif units == 'millimeters':
-            return value * 100 * 100
+            return value * 1000
         elif units == 'degrees':
             return math.degrees(value)
 
@@ -388,14 +387,14 @@ def setAttrSubtype(attrArgs, attrDesc, pluginModule):
         quantityType = ui.get('quantityType', '')
         units = ui.get('units', '')
         if not quantityType:
-            if units in ('meters', 'centimeters', 'millimiters'):
+            if units in ('meters', 'centimeters', 'millimeters'):
                 attrArgs['subtype'] = 'DISTANCE'
                 attrArgs['unit'] = 'LENGTH'
             elif units in ('radians', 'degrees'):
                 attrArgs['subtype'] = 'ANGLE'
                 attrArgs['unit'] = 'ROTATION'
         elif quantityType == 'distance':
-            assert units in ('', 'meters', 'centimeters', 'millimiters')
+            assert units in ('', 'meters', 'centimeters', 'millimeters')
             attrArgs['subtype'] = 'DISTANCE'
             attrArgs['unit'] = 'LENGTH'
         elif quantityType == 'angle':
@@ -458,6 +457,27 @@ def _setAttrDefault(attrArgs, attrDesc, pluginModule):
             debug.printWarning(f"Default value {attrArgs['default']} for ENUM {pluginModule.ID}::{attrName} is invalid. Setting default to the first item of the enum")
             attrArgs['default'] = attrDesc['items'][0][0]
 
+
+
+def getBlenderDefault(param):
+    """Convert a JSON parameter's 'default' to the format registered in Blender.
+    Mirrors _setAttrDefault so reset operators can use the same values.
+    Returns None if the param has no default or the type can't be converted.
+    """
+    if 'default' not in param:
+        return None
+    attrType = param['type']
+    raw = param['default_in_CE'] if vray.isCommunityEdition() and 'default_in_CE' in param else param['default']
+    val = convertVRayValueToUI(param, raw)
+    if attrType in ('COLOR', 'ACOLOR', 'TEXTURE', 'COLOR_TEXTURE', 'OUTPUT_TEXTURE'):
+        return toColor(val)
+    if attrType in ('VECTOR', 'VECTOR_TEXTURE'):
+        return mathutils.Vector(val[:])
+    if attrType in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE'):
+        if len(val) in (9, 12):
+            return tupleTo4x4MatrixLayout(val)
+        return None
+    return val
 
 
 def setAttrLimits(attrArgs, attrDesc):
@@ -637,7 +657,7 @@ def _addShadowAttrToClassMembers(attrArgs, attrDesc, classMembers, pluginType):
     }
 
     if attrType == 'ENUM':
-        shadowAttrArgs['items'] = (tuple(item) for item in attrDesc['items'])
+        shadowAttrArgs['items'] = tuple(tuple(item) for item in attrDesc['items'])
 
     try:
         attrFunc = TypeToProp[attrType]
@@ -662,81 +682,79 @@ def _getValueWrapper(pluginModule, propGroup, attrName, fnSetName: str):
     return None
 
 
-def _isEnumItemDisabled(propGroup, attrName, item, disabledItems):
-    """ Check if an enum item is in the list of disabled items """
-    def getEnumIdentifier(item):
-        return propGroup.bl_rna.properties[attrName].enum_items[item].identifier
-
-    if getEnumIdentifier(item) in disabledItems:
-        return True
-    return False
-
-
-def _getEnumValueByIdentifier(propGroup, attrName, identifier):
-    """ Get the value of an enum item by its identifier """
-    for item in propGroup.bl_rna.properties[attrName].enum_items:
-        if item.identifier == identifier:
-            return item.value
-    return -1
-
-
 def _setEnumAttribute(attrDesc, attrArgs, attrName):
-    def getItemTuple(item):
-        if vray.isCommunityEdition() and item[0] in attrDesc.get('items_disabled_in_CE', []):
-            item[1] += " (inactive)"
-            if 'items_disabled_in_CE_tooltip' in attrDesc:
-                item[2] = attrDesc['items_disabled_in_CE_tooltip']
-        return tuple(item)
+    """ Configure the 'items' (and, for CE-restricted enums, the value access)
+        of an ENUM property.
 
-    # JSON parser returns lists but EnumProperty types expects tuples
-    attrArgs['items'] = (getItemTuple(item) for item in attrDesc['items'])
+        Most enums use a static items tuple. Enums that declare
+        'items_disabled_in_CE' instead use a dynamic items callback so that the
+        '(inactive)' label and CE tooltip update live when the license type is
+        toggled at runtime, plus get/set wrappers that re-evaluate Community
+        Edition on every access to block selection of disabled items and to
+        inject the (CE-aware) default value.
+    """
+    disabledIds = attrDesc.get('items_disabled_in_CE', [])
 
-    # Add getter and setter wrappers for enum items that are disabled in Community Edition
-    if ('items_disabled_in_CE' in attrDesc) and vray.isCommunityEdition():
-        defaultValue = attrArgs['default']
-        itemsDisabledInCE = attrDesc['items_disabled_in_CE']
+    if not disabledIds:
+        # Static enum. JSON parser returns lists but EnumProperty expects tuples.
+        attrArgs['items'] = tuple(tuple(item) for item in attrDesc['items'])
+        return
 
-        if bpy.app.version[0] < 5:
-            # Support for Blender 4.5 and older.
-            # Note: This could be removed after Blender 4.5 is no longer supported.
-            setFunction = attrArgs.get('set', None)
-            def setEnumWrapper(propGroup, value):
-                if _isEnumItemDisabled(propGroup, attrName, value, itemsDisabledInCE):
-                    debug.reportAsync('WARNING', getCELimitedFeatureMsg())
-                    return
-                if setFunction:
-                    setFunction(propGroup, value)
-                else:
-                    propGroup[attrName] = value
+    baseItems   = [tuple(item) for item in attrDesc['items']]   # (id, name, desc)
+    tooltip     = attrDesc.get('items_disabled_in_CE_tooltip')
+    defaultId   = str(attrDesc.get('default', baseItems[0][0]))
+    defaultIdCE = attrDesc.get('default_in_CE')                 # may be None
 
-            getFunction = attrArgs.get('get', None)
-            def getEnumWrapper(propGroup):
-                defaultItem = _getEnumValueByIdentifier(propGroup, attrName, defaultValue)
-                currentItem = propGroup.get(attrName, defaultItem)
-                
-                if _isEnumItemDisabled(propGroup, attrName, currentItem, itemsDisabledInCE):
-                    return defaultItem
-                if getFunction:
-                    return getFunction(propGroup)
-                return currentItem
-            
-            attrArgs['set'] = lambda propGroup, value: setEnumWrapper(propGroup, value)
-            attrArgs['get'] = lambda propGroup: getEnumWrapper(propGroup)
+    # Blender assigns enum int values by position; these items are never filtered
+    # or reordered, so value == index. Build the maps once instead of querying
+    # bl_rna at runtime (which is unreliable for dynamic-items enums).
+    valueToId = {i: it[0] for i, it in enumerate(baseItems)}
+    idToValue = {it[0]: i for i, it in enumerate(baseItems)}
 
+    # The list returned by an items callback must stay referenced in Python or
+    # Blender will read freed string memory. Keep it alive in the closure and
+    # return the same list object on every call.
+    itemsCache = []
+    def itemsCallback(self, context):
+        ce = vray.isCommunityEdition()
+        itemsCache.clear()
+        for id, name, desc in baseItems:
+            if ce and id in disabledIds:
+                itemsCache.append((id, f"{name} (inactive)", tooltip or desc))
+            else:
+                itemsCache.append((id, name, desc))
+        return itemsCache
+
+    def effectiveDefaultValue():
+        id = defaultIdCE if (defaultIdCE and vray.isCommunityEdition()) else defaultId
+        return idToValue.get(id, 0)
+
+    # Preserve any custom get/set the attribute may already define.
+    userGet = attrArgs.get('get')
+    userSet = attrArgs.get('set')
+
+    def getEnum(self):
+        default = effectiveDefaultValue()
+        current  = self.get(attrName, default)
+        if vray.isCommunityEdition() and valueToId.get(current) in disabledIds:
+            return default
+        return userGet(self) if userGet else current
+
+    def setEnum(self, value):
+        if vray.isCommunityEdition() and valueToId.get(value) in disabledIds:
+            debug.reportAsync('WARNING', getCELimitedFeatureMsg())
+            return
+        if userSet:
+            userSet(self, value)
         else:
-            def filterDisabledItem(propGroup, value, acceptableValue, showWarning: bool = True):
-                if _isEnumItemDisabled(propGroup, attrName, value, itemsDisabledInCE):
-                    if showWarning:
-                        debug.reportAsync('WARNING', getCELimitedFeatureMsg())
-                    return acceptableValue
-                return value
+            self[attrName] = value
 
-            attrArgs['get_transform'] = lambda propGroup, value, _: filterDisabledItem(
-                propGroup, value, _getEnumValueByIdentifier(propGroup, attrName, defaultValue), showWarning=False
-            )
-            attrArgs['set_transform'] = lambda propGroup, newValue, oldValue, _: filterDisabledItem(
-                propGroup, newValue, oldValue
-            )
+    attrArgs['items'] = itemsCallback
+    attrArgs['get']   = getEnum
+    attrArgs['set']   = setEnum
+    # A callable 'items' cannot be combined with a static 'default'; the default
+    # is injected by getEnum instead.
+    attrArgs.pop('default', None)
 
 
 def getSettingsOutputImgFormatAttrDesc():
@@ -769,7 +787,9 @@ def getSettingsOutputImgFormatAttrDesc():
         'description': attrDesc.get('desc', ''),
         'default': attrDesc.get('default', attrDesc['items'][0][0]),
     }
+    # img_format declares 'items_disabled_in_CE', so _setEnumAttribute installs a
+    # dynamic items callback and get/set wrappers and pops 'default'. Leave
+    # attrArgs['items'] as the callable - do not convert it to a tuple.
     _setEnumAttribute(attrDesc, attrArgs, 'img_format')
-    attrArgs['items'] = tuple(attrArgs['items'])
 
     return attrArgs

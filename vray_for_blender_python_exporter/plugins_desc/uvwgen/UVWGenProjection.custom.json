@@ -108,7 +108,8 @@
                         "name": "type"
                     },
                     {
-                        "name": "object_space"
+                        "name": "object_space",
+                        "active": {"cond": "::type!=8"}
                     },
                     {
                         "name": "u_angle",

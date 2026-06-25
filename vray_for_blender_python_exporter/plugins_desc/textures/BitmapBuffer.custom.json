@@ -105,7 +105,10 @@
                         "label": "Filter"
                     },
                     {
-                        "name": "interpolation"
+                        "name": "interpolation",
+                        "active": {
+                            "cond": "::filter_type!=-1"
+                        }
                     },
                     {
                         "name": "filter_blur",

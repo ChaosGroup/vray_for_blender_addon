@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import os
+
 import bpy
 
 from vray_blender import debug
@@ -48,18 +50,21 @@ class VRayBatchBakeItem(bpy.types.PropertyGroup):
     width: bpy.props.IntProperty(
         name = "Width",
         default = 512,
+        min = 1,
         update = _fixSquareResolution
     )
 
     height: bpy.props.IntProperty(
         name = "Height",
-        default = 512
+        default = 512,
+        min = 1
     )
 
     dilation: bpy.props.FloatProperty(
         name = "Dilation",
         description = "Number of pixels to expand around the geometry",
-        default = 2.0
+        default = 2.0,
+        min = 0.0
     )
 
     flip_derivs: bpy.props.BoolProperty(
@@ -83,15 +88,15 @@ class VRayBatchBakeItem(bpy.types.PropertyGroup):
     img_dir: bpy.props.StringProperty(
         name    = "Directory Path",
         subtype = 'DIR_PATH',
-        default = "//bake_$F",
-        description = "Output directory (Variables: %s; $O - Object name)" % lib_utils.formatVariablesDesc(),
+        default = "//bake_$file",
+        description = "Output directory. Supports placeholder expansion.",
         options = pathOptions
     )
 
     img_file: bpy.props.StringProperty(
         name    = "File Name",
-        default = "bake_$O",
-        description = "Output filename (Variables: %s; $O - Object name)" % lib_utils.formatVariablesDesc()
+        default = "bake_$object",
+        description = "Output filename. Supports placeholder expansion."
     )
 
     img_format: bpy.props.EnumProperty(
@@ -183,9 +188,10 @@ class VRAY_OT_batch_bake_add_selection(VRayOperatorBase):
 class VRAY_PT_Bake(classes.VRayOutputPanel):
     """ Location: Render -> Render -> Bake  """
 
-    bl_label = "Bake"
+    bl_label = "Texture Bake"
     bl_options = {'DEFAULT_CLOSED'}
-    bl_icon = "VRAY_PLACEHOLDER"
+    bl_icon = "NONE"
+    vray_icon = "VRAY_PLACEHOLDER"
 
     def draw(self, context):
         # The Bake panel has 2 modes:
@@ -236,8 +242,13 @@ class VRAY_PT_Bake(classes.VRayOutputPanel):
         colRight.prop(dataSrc, 'flip_derivs')
 
         layout.separator()
-        layout.prop(dataSrc, 'img_dir')
-        layout.prop(dataSrc, 'img_file')
+
+        from vray_blender.ui.properties_output import _drawPathPropWithPlaceholders
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        _drawPathPropWithPlaceholders(layout, dataSrc, 'img_dir',  "Output Path", target_prop_group="BAKE")
+        _drawPathPropWithPlaceholders(layout, dataSrc, 'img_file', "Filename", target_prop_group="BAKE")
+
         layout.prop(dataSrc, 'img_format')
 
 
@@ -245,14 +256,21 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
     """ This operator runs a bake render job for one or multiple scene objects.
 
         It implements both 'INVOKE_DEFAULT' and 'EXECUTE_DEFAULT' verbs.
-        * In 'INVOKE_DEFAULT' mode, it behaves as amodal operator. It will show the progress
-          in the UI and will handle cancellation requests by the user.
-        * 'EXECUTE_DEFAULT' is meant to be used in headless mode. It will carry out all tasks
-          in blocking mode.
+        * In 'INVOKE_DEFAULT' mode, it behaves as a modal operator. It will show the
+          progress in the UI and handle cancellation requests by the user.
+        * 'EXECUTE_DEFAULT' is meant to be used in headless mode. It will carry out all
+          tasks in blocking mode.
     """
     bl_idname      = "vray.batch_bake"
     bl_label       = "Batch Bake"
     bl_description = "Batch bake tool"
+
+    class _ErrorType:
+        NoError    = 0
+        FileExists = 1
+        InvalidFolderName = 2
+
+    errorType: bpy.props.IntProperty(default=_ErrorType.NoError, options={'HIDDEN'})
 
     _timer = None
     _items = []
@@ -264,15 +282,69 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
     _backupAutoSaveRender = False
 
 
+    def _checkOutputInfo(self, context: bpy.types.Context) -> bool:
+        """ Return True if the bake can proceed, False if existing files would be
+            overwritten (sets self.errorType so the dialog can report it).
+        """
+        from vray_blender.lib.path_utils import (PathExpander, checkOutputFileExists,
+                                                  setSessionExpander, clearSessionExpander)
+
+        self.errorType = __class__._ErrorType.NoError
+        clearSessionExpander()
+
+        if not context.scene.vray.SettingsOutput.output_overwrite_warn:
+            return True
+
+        frame = context.scene.frame_current
+
+        # Build one expander for all objects: static values (datetime, resolution, etc.)
+        # are computed once and reused across the object loop.
+        # Store it in the session so the exporter uses the same values.
+        expander = PathExpander(context)
+        setSessionExpander(expander)
+
+        for obj, dataSrc in self._items:
+            imgFmt = int(dataSrc.img_format)
+
+            imgDir  = expander.expand(dataSrc.img_dir, frame)
+            imgFile = os.path.basename(expander.expandFilename(dataSrc.img_file, imgFmt, frame=frame))
+            
+            # Replace $object after the expansion has beed performed because the object name
+            # could contain a valid placeholder string.
+            objName = lib_utils.cleanString(obj.name, stripSigns=False)
+            imgDir  = imgDir.replace('$object', objName)
+            imgFile = imgFile.replace('$object', objName)
+
+            if not imgDir or not imgFile:
+                continue
+            
+            try:
+                os.makedirs(imgDir, exist_ok=True)
+            except Exception as exc:
+                self.errorType = __class__._ErrorType.InvalidFolderName
+                self.errorMsg = str(exc)
+                return False
+
+            if existingFiles := set(os.listdir(imgDir)) if os.path.isdir(imgDir) else set():
+                if checkOutputFileExists(existingFiles, imgFile, frame, needFrameNumber=False):
+                    self.errorType = __class__._ErrorType.FileExists
+                    return False
+
+        return True
+
+
     def invoke(self, context: bpy.types.Context, event):
         self._collectData(context)
 
         if not self._items:
-            debug.report('ERROR', "Bake texture operation ont started: No object selected.")
+            debug.report('ERROR', "Bake texture operation not started: No object selected.")
             return {'CANCELLED'}
 
+        if not self._checkOutputInfo(context):
+            return context.window_manager.invoke_props_dialog(self, width=400)
+
         # Report messages shown from the timer handler are delayed until the rendering
-        # completes, so we need to show the one for the first object here
+        # completes, so we need to show the one for the first object here.
         obj = self._items[0][0]
         debug.report('INFO', f"Baking object {obj.name} [1 of {len(self._items)}] ...")
 
@@ -285,6 +357,13 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         wm.modal_handler_add(self)
 
         return {'RUNNING_MODAL'}
+
+
+    def draw(self, context: bpy.types.Context):
+        layout = self.layout
+        layout.label(text="One or more existing bake output files will be overwritten.")
+        layout.label(text="Proceed?")
+        layout.prop(context.scene.vray.SettingsOutput, "output_overwrite_warn", text="Always ask me.")
 
 
     def modal(self, context: bpy.types.Context, event: bpy.types.Event):
@@ -350,7 +429,7 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         for item in self._items:
             try:
                 obj, dataSrc = item
-                self._startBake(context, obj, dataSrc, block = True)
+                self._startBake(context, obj, dataSrc, block=True)
 
             except Exception as e:
                 errMsg = f"Error baking object {obj.name_full}"
@@ -372,17 +451,14 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
             self.report({'ERROR'}, f"Bake texture: UV Map is not defined for object {obj.name_full}")
             return False
 
-        formatDict = lib_utils.getDefFormatDict()
-        formatDict['$O'] = ("Object Name", lib_utils.cleanString(obj.name, stripSigns=False))
-
         bakeItem = batchBake.active_item
         bakeItem.ob             = obj
         bakeItem.width          = dataSrc.width
         bakeItem.height         = dataSrc.height
         bakeItem.dilation       = dataSrc.dilation
         bakeItem.flip_derivs    = dataSrc.flip_derivs
-        bakeItem.img_file       = lib_utils.formatName(dataSrc.img_file, formatDict)
-        bakeItem.img_dir        = lib_utils.formatName(dataSrc.img_dir,  formatDict)
+        bakeItem.img_file       = dataSrc.img_file
+        bakeItem.img_dir        = dataSrc.img_dir
         bakeItem.img_format     = dataSrc.img_format
 
         vrayScene.BakeView.uv_channel = 0

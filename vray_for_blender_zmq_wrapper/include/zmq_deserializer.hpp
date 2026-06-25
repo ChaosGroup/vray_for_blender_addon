@@ -65,7 +65,8 @@ private:
 
 template <typename T>
 DeserializerStream & operator>>(DeserializerStream & stream, T & value) {
-	stream.read(reinterpret_cast<char*>(&value), sizeof(value));
+	[[maybe_unused]] bool ok = stream.read(reinterpret_cast<char*>(&value), sizeof(value));
+	vassert(ok && "Deserialization read failed: stream exhausted");
 	return stream;
 }
 
@@ -73,6 +74,7 @@ DeserializerStream & operator>>(DeserializerStream & stream, T & value) {
 inline DeserializerStream & operator>>(DeserializerStream & stream, std::string & value) {
 	int size = 0;
 	stream >> size;
+	vassert(size >= 0 && "Negative string size in deserialization");
 
 	value.assign(stream.getCurrent(), static_cast<size_t>(size));
 	stream.forward(value.size());
@@ -96,6 +98,7 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 	list.init();
 	int size = 0;
 	stream >> size;
+	vassert(size >= 0 && "Negative list size in deserialization");
 
 	list.getData()->resize(size);
 	memcpy(list.getData()->data(), stream.getCurrent(), size * sizeof(Q));
@@ -141,35 +144,20 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 	mapChannels.data.reserve(size);
 	for (int c = 0; c < size; ++c) {
 		VRayBaseTypes::AttrMapChannels::AttrMapChannel channel;
-		stream >> channel.vertices >> channel.faces >> channel.name;
+		stream >> channel.vertices >> channel.faces >> channel.name >> channel.channelId;
 		mapChannels.data.push_back(std::move(channel));
 	}
 	return stream;
 }
 
 
-inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrInstancer::Item & instItem) {
-	return stream >> instItem.index >> instItem.tm >> instItem.vel >> instItem.node;
-}
-
-
-inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrInstancer & inst) {
-	int size = 0;
-	stream >> inst.frameNumber >> size;
-	inst.data.init();
-	inst.data.getData()->reserve(size);
-	for (int c = 0; c < size; ++c) {
-		VRayBaseTypes::AttrInstancer::Item item;
-		stream >> item;
-		inst.data.append(item);
-	}
-	return stream;
-}
-
 
 inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrImage & image) {
 	stream >> image.imageType >> image.size >> image.width >> image.height >> image.x >> image.y;
-	image.set(stream.getCurrent(), image.size);
+	// Non-owning view into the ZMQ message buffer - avoids a memcpy+allocation.
+	// Safe because the ZMQ message outlives processRendererOnImage() and all update()
+	// calls that consume this data before handleMsg() returns.
+	image.data = std::shared_ptr<char[]>(const_cast<char*>(stream.getCurrent()), [](char*) {});
 	stream.forward(image.size);
 	return stream;
 }
@@ -184,6 +172,14 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 		VRayBaseTypes::AttrImage img;
 		stream >> type >> img;
 		set.images.emplace(type, std::move(img));
+	}
+
+	int metaCount = 0;
+	stream >> metaCount;
+	for (int c = 0; c < metaCount; c++) {
+		std::string key, value;
+		stream >> key >> value;
+		set.metadata.emplace(std::move(key), std::move(value));
 	}
 	return stream;
 }
@@ -215,12 +211,11 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 	case ValueTypeListString: stream >> value.as<AttrListString>(); break;
 	case ValueTypeListPlugin: stream >> value.as<AttrListPlugin>(); break;
 	case ValueTypeListValue: stream >> value.as<AttrListValue>(); break;
-	case ValueTypeInstancer: stream >> value.as<AttrInstancer>(); break;
 	case ValueTypeMapChannels: stream >> value.as<AttrMapChannels>(); break;
 	default: vassert(!"Missing DeserializerStream::operator>> for some ValueType"); break;
 	}
 	return stream;
 }
 
-};  // end VrayZmqWrapper namespace 
+};  // end VrayZmqWrapper namespace
 

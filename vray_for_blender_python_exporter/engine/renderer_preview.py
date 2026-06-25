@@ -11,10 +11,11 @@ from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 
 from vray_blender import debug
 from vray_blender.lib.common_settings import CommonSettings, collectExportSceneSettings
-from vray_blender.lib.defs import ExporterContext, NodeContext, PluginDesc, ExporterContext, ExporterType, ProdRenderMode
+from vray_blender.lib.defs import ExporterContext, NodeContext, PluginDesc, ExporterType, ProdRenderMode
 from vray_blender.lib.names import Names, syncUniqueNamesForPreview
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.lib.export_utils import exportPlugin
+from vray_blender.exporting import world_export
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -28,7 +29,7 @@ class VRayRendererPreview(VRayRendererProdBase):
 
 
     def abort(self):
-        """ Abort the rendering job, if it is running. This method can be called from 
+        """ Abort the rendering job, if it is running. This method can be called from
             any context.
         """
         with self.lock:
@@ -41,41 +42,41 @@ class VRayRendererPreview(VRayRendererProdBase):
     def render(self, engine: bpy.types.RenderEngine, dg: bpy.types.Depsgraph):
         with self.lock:
             self.renderer = self._createRenderer(ExporterType.PREVIEW)
-            
-        # In production mode we always perform a full export which only adds data to the scene. 
+
+        # In production mode we always perform a full export which only adds data to the scene.
         # Clearing the scene will ensure that no remnants of a previous scene are left around.
         vray.clearScene(self.renderer)
-        
+
         # Common settings don't change during the animation, collect up front
-        commonSettings = CommonSettings(dg.scene, engine, isInteractive = False)
+        commonSettings = CommonSettings(dg.scene, isInteractive = False, isPreview = True)
         commonSettings.updateFromScene()
 
         exporterCtx = self._getExporterContext(engine, dg, commonSettings)
         exporterCtx.renderer = self.renderer
         syncUniqueNamesForPreview(exporterCtx.dg)
         exporterCtx.calculateObjectVisibility()
-        
+
         # Obtain a rendering target from Blender and set it to the C++ renderer
         self._renderStart(exporterCtx)
         success = False
-        
+
         try:
             VRayRendererPreview._syncView(exporterCtx)
-            
+
             self._renderScene(engine, exporterCtx)
             success = True
         except Exception as ex:
             self._reportError(engine, f"{str(ex)} See log for details")
             debug.printExceptionInfo(ex, "VRayRendererPreview::render()")
-        
+
         with self.lock:
             self._renderEnd(engine, success)
-        
-   
+
+
     def _renderScene(self, engine: bpy.types.RenderEngine, exporterCtx: ExporterContext):
         """ Export and render the current frame."""
         scene = exporterCtx.dg.scene
-        
+
         vray.setRenderFrame(self.renderer, scene.frame_current)
         self._export(engine, exporterCtx)
 
@@ -91,20 +92,24 @@ class VRayRendererPreview(VRayRendererProdBase):
             if engine.test_break():
                 vray.abortRender(self.renderer)
                 return False
-                
-            # It is usual for previews to be aborted so keep the abort check mechanism 
+
+            # It is usual for previews to be aborted so keep the abort check mechanism
             # responsive by sleeping for just a short interval.
             time.sleep(0.03)
 
 
     def _exportSceneAdjustments(self, exporterCtx: ExporterContext):
         """ An override to some of the plugins's attributes is needed when exporting preview scene. """
-            
+
+        # The 'Floor' object is only present in material preview scenes, not world/light previews.
+        dg = exporterCtx.dg
+        if dg.objects.get('Floor') is None:
+            return
+
         # The 'Floor' object in the scene doesn't have a V-Ray material attached to it
         # For that BRDFVRayMtl with TexChecker is attached to the Floor object node
-        dg = exporterCtx.dg
         floor = dg.objects['Floor']
-        
+
         nodeCtx = NodeContext(exporterCtx)
         nodeCtx.rootObj = floor.active_material
 
@@ -123,7 +128,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         brdfFloor.setAttribute("diffuse", texCheckerPlugin)
         brdfPlugin = exportPlugin(exporterCtx, brdfFloor)
 
-        floorMtlName = Names.object(floor.active_material) 
+        floorMtlName = Names.object(floor.active_material)
         mtlSingleBrdfFloor = PluginDesc(floorMtlName, "MtlSingleBRDF")
         mtlSingleBrdfFloor.setAttribute("brdf", brdfPlugin)
         floorMtlPlugin = exportPlugin(exporterCtx, mtlSingleBrdfFloor)
@@ -134,17 +139,25 @@ class VRayRendererPreview(VRayRendererProdBase):
         updateValue(exporterCtx.renderer, floorNodeName, "material", floorMtlPlugin)
 
         # The default intensity of the lights in the scene is too small and for that, it is increased
-        squaredLight = dg.objects['SquaredLight']
-        circularLight = dg.objects['CircularLight']
+        if squaredLight := dg.objects.get('SquaredLight'):
+            updateValue(exporterCtx.renderer, Names.objectData(squaredLight), "intensity", 20)
+        if circularLight := dg.objects.get('CircularLight'):
+            updateValue(exporterCtx.renderer, Names.objectData(circularLight), "intensity", 100)
 
-        updateValue(exporterCtx.renderer, Names.objectData(squaredLight), "intensity", 20)
-        updateValue(exporterCtx.renderer, Names.objectData(circularLight), "intensity", 100)
-        
 
     def _exportWorld(self, exporterCtx: ExporterContext):
-        # World tree should not be exported during Preview rendering.
-        return
-    
+        dg = exporterCtx.dg
+        if dg.scene.world is None:
+            return
+
+        # For material previews, respect the "Preview World" toggle (material.use_preview_world).
+        # If the flag is off on all materials in the scene, skip world export.
+        if dg.objects.get('Floor') is not None:
+            if not any(mtl.use_preview_world for obj in dg.objects for slot in obj.material_slots if (mtl := slot.material) is not None):
+                return
+
+        world_export.WorldExporter(exporterCtx).export()
+
 
     def _writeVrscene(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine, scenePath="", isCloudExport=False):
         """ Export the preview scene to a .vrscene file """
@@ -153,7 +166,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         vrayExporter = scene.vray.Exporter
         assert vrayExporter.export_material_preview_scene
 
-        # Reuse the path set for the .vrscene for the interactive scene, but 
+        # Reuse the path set for the .vrscene for the interactive scene, but
         # add the '_preview' suffix. This is only available in in debug mode, so
         # no need for other user-controllable options here.
         exportPath = Path(vrayExporter.export_scene_file_path)

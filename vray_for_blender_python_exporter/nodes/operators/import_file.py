@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import math
 import os
 import bpy
 from pathlib import PurePath
@@ -20,6 +21,7 @@ from vray_blender.lib import blender_utils, path_utils
 from vray_blender.lib.lib_utils import getUUID, LightTypeToPlugin, LightBlenderToVrayPlugin
 from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.plugins.geometry.VRayDecal import createDecalObject, generateDecalPreviewMesh
+from vray_blender.bin.VRayBlenderLib import CosmosAssetSettings
 from pathlib import Path
 
 def _createMaterial(mtlName):
@@ -57,7 +59,154 @@ def _assignMaterialsToSlots(multiMtlDesc, obj, mtlNameOverrides:dict[str, str]):
         slotCounter += 1
 
 
-def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssign: bpy.types.Object = None, locationsMap: dict[str, str] = None):
+def _createEmptyMaterialSlotsFromProxy(obj: bpy.types.Object, shaders: list):
+    """ Create empty material slots on a proxy object based on the shader info from the proxy file.
+        Slot ordering matches shader IDs so that face material indices align correctly.
+
+    Args:
+        obj: The proxy object to add slots to.
+        shaders: List of shader descriptors [{'name': str, 'id': int}, ...].
+    """
+    if not shaders:
+        return
+
+    # Sort by shader ID so slot indices match material ID assignments
+    sortedShaders = sorted(shaders, key=lambda s: s['id'])
+
+    slotCounter = 0
+    for shader in sortedShaders:
+        # Fill gaps with empty slots (same pattern as _assignMaterialsToSlots)
+        while slotCounter < shader['id']:
+            obj.data.materials.append(None)
+            slotCounter += 1
+
+        # Create a named empty slot
+        obj.data.materials.append(None)
+        slotCounter += 1
+
+
+def _isTexturePlugin(pluginType: str) -> bool:
+    """ True if a V-Ray plugin type produces a texture (a color/value sample). """
+    from vray_blender.plugins import getPluginModule
+    try:
+        return getPluginModule(pluginType).TYPE == 'TEXTURE'
+    except Exception:
+        return False
+
+
+def _applyRealWorldScaleToUVWGens(vrsceneDict: list, widthCm: float, heightCm: float):
+    """ Right-multiply every UVWGenChannel/UVWGenObject's uvw_transform by diag(1/w, 1/h, 1).
+
+    Used in combination with a TexTriPlanar wrap (size=1.0) to handle the case with non-uniform
+    real-world tile dimensions in some Cosmos assets.
+
+    Transform encoding in vrsceneDict matches the .vrmat parser output:
+        ((v0, v1, v2), translation)
+    where v0/v1/v2 are the matrix's column basis vectors (image of X/Y/Z axes). Right-
+    multiplying by diag(sU, sV, 1) scales those columns by (sU, sV, 1) respectively.
+    """
+    scaleU = 1.0 / widthCm if widthCm > 0.0 else 1.0
+    scaleV = 1.0 / heightCm if heightCm > 0.0 else 1.0
+    if scaleU == 1.0 and scaleV == 1.0:
+        return
+
+    identityMatrix = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    zeroTranslation = (0.0, 0.0, 0.0)
+
+    for plugin in vrsceneDict:
+        if plugin.get('ID') not in ('UVWGenChannel', 'UVWGenObject'):
+            continue
+
+        attrs = plugin.setdefault('Attributes', {})
+        existing = attrs.get('uvw_transform')
+
+        if existing is None:
+            matrix, translation = identityMatrix, zeroTranslation
+        else:
+            matrix, translation = existing
+
+        v0, v1, v2 = matrix
+        attrs['uvw_transform'] = (
+            (
+                (v0[0] * scaleU, v0[1] * scaleU, v0[2] * scaleU),
+                (v1[0] * scaleV, v1[1] * scaleV, v1[2] * scaleV),
+                v2,
+            ),
+            translation,
+        )
+
+
+def _wrapTexturesInTriPlanar(vrsceneDict: list, rootPluginNames: list[str], size: float):
+    """ BFS the material plugin graph and wrap every top-level texture in a TexTriPlanar.
+
+    Descends through non-texture plugins (BRDFs, materials, UVW generators, etc.) and, when it
+    reaches a texture-producing plugin, replaces the reference with a freshly created TexTriPlanar
+    whose `texture_x` points at the original texture. Wrapped textures are not descended into so
+    nested compositing stays intact. Already-TexTriPlanar plugins are left alone to avoid
+    double-wrapping.
+    """
+    nameToDesc = {p['Name']: p for p in vrsceneDict}
+    triplanarCounter = [0]
+    visited: set[str] = set()
+    queue: list[str] = [n for n in rootPluginNames if n in nameToDesc]
+
+    def wrapReference(value: str) -> str:
+        # value is "pluginName" or "pluginName::output". Replace with a new TexTriPlanar that
+        # references the original texture and return the new reference string, preserving the
+        # caller's requested output socket so downstream connections keep their semantics
+        # (e.g. ::out_intensity for a float input).
+        pluginName, sep, outSuffix = value.partition("::")
+        refDesc = nameToDesc.get(pluginName)
+        if refDesc is None:
+            return value
+        if refDesc['ID'] == 'TexTriPlanar':
+            return value
+        if not _isTexturePlugin(refDesc['ID']):
+            # Non-texture reference: descend into it during BFS, leave the reference alone.
+            if pluginName not in visited:
+                queue.append(pluginName)
+            return value
+
+        triplanarCounter[0] += 1
+        triplanarName = f"{pluginName}@TriPlanar{triplanarCounter[0]}"
+        triplanarDesc = {
+            'ID': 'TexTriPlanar',
+            'Name': triplanarName,
+            'Attributes': {
+                'texture_x': pluginName,
+                'size': size,
+                'blend': 0.1,
+                'blend_method': 1,
+            },
+        }
+        vrsceneDict.append(triplanarDesc)
+        nameToDesc[triplanarName] = triplanarDesc
+        return f"{triplanarName}{sep}{outSuffix}" if sep else triplanarName
+
+    while queue:
+        pluginName = queue.pop(0)
+        if pluginName in visited:
+            continue
+        visited.add(pluginName)
+
+        pluginDesc = nameToDesc.get(pluginName)
+        if pluginDesc is None:
+            continue
+
+        attrs = pluginDesc.get('Attributes', {})
+        for attrName, attrValue in list(attrs.items()):
+            if isinstance(attrValue, str) and attrValue and attrValue.partition("::")[0] in nameToDesc:
+                attrs[attrName] = wrapReference(attrValue)
+            elif isinstance(attrValue, list) and attrValue and all(
+                isinstance(item, str) and item.partition("::")[0] in nameToDesc for item in attrValue
+            ):
+                attrs[attrName] = [wrapReference(item) for item in attrValue]
+
+
+def importMaterials(filePath, objectForMatAssign: bpy.types.Object = None,
+                   locationsMap: dict[str, str] = None, forceDefaultUVChannel: bool = False,
+                   cosmosAssetContext: CosmosAssetSettings | None = None):
+    """ Import V-Ray materials from a .vrmat/.vrscene file. """
     debug.printInfo(f'Importing materials from "{filePath}"')
 
     vrsceneDict = {}
@@ -68,7 +217,7 @@ def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssig
         vrsceneDict = parseVrmat(filePath)
 
     # Fix any plugin params that need special handling, e.g. version upgrades etc.
-    NodesImport.fixPluginParams(vrsceneDict, materialAssetsOnly=not objectForMatAssign)
+    NodesImport.fixPluginParams(vrsceneDict, forceDefaultUVChannel=forceDefaultUVChannel)
 
     # A list of all top-level V-Ray materials.
     MaterialTypeFilter = {
@@ -82,19 +231,54 @@ def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssig
         'Mtl2Sided',
     }
 
-    # Collect material names based on selected
-    # base material type
+    # Collect the names of all material-type plugins, then keep only the top-level ones.
     #
-    materialNames = []
+    # A material plugin is "top-level" only if no other material plugin references it.
+    # Nested materials (e.g. Mtl2Sided.front, or a material used as MtlSingleBRDF.brdf)
+    # are imported recursively as nodes of their parent, so importing them again as
+    # standalone materials would create spurious duplicates. This happens with assets
+    # whose hierarchy is e.g. MtlSingleBRDF -> Mtl2Sided -> MtlSingleBRDF.
+    #
+    # Only references made by plugins in MaterialTypeFilter count as "consuming" a
+    # material. MtlMulti is intentionally not in the filter, so its sub-material
+    # references do NOT mark them as nested - each MtlMulti sub-material stays
+    # top-level and is imported separately (as the slot-assignment logic expects).
     mtlNameOverrides = {}       # Map of renamed materials originalName -> newName.
                                 # Used to deal with duplicate material names in different assets
 
-    for pluginDesc in vrsceneDict:
-        pluginType  = pluginDesc['ID']
-        pluginName  = pluginDesc['Name']
+    materialPluginNames = {p['Name'] for p in vrsceneDict if p['ID'] in MaterialTypeFilter}
 
-        if pluginType in MaterialTypeFilter:
-            materialNames.append(pluginName)
+    referencedMaterials = set()
+    for pluginDesc in vrsceneDict:
+        if pluginDesc['ID'] not in MaterialTypeFilter:
+            continue
+        for attrValue in pluginDesc.get('Attributes', {}).values():
+            values = attrValue if isinstance(attrValue, list) else [attrValue]
+            for value in values:
+                if isinstance(value, str) and value.partition("::")[0] in materialPluginNames:
+                    referencedMaterials.add(value.partition("::")[0])
+
+    materialNames = [p['Name'] for p in vrsceneDict
+                     if p['ID'] in MaterialTypeFilter and p['Name'] not in referencedMaterials]
+
+    if cosmosAssetContext and cosmosAssetContext.applyTriplanarMapping and materialNames:
+        # Cosmos provides both width and height. TexTriPlanar's `size` is a single scalar, so
+        # for non-uniform tiles use TexTriPlanar as a pure projection (size=1.0) and bake the
+        # per-axis tile size into every UVWGen's uvw_transform as diag(1/widthCm, 1/heightCm, 1).
+        # For uniform/missing dimensions, just use the width as the triplanar size.
+        hasNonUniform = (
+            cosmosAssetContext.texRealWorldWidth > 0.0
+            and cosmosAssetContext.texRealWorldHeight > 0.0
+            and cosmosAssetContext.texRealWorldWidth != cosmosAssetContext.texRealWorldHeight
+        )
+        if hasNonUniform:
+            triplanarSize = 1.0
+            _applyRealWorldScaleToUVWGens(vrsceneDict, cosmosAssetContext.texRealWorldWidth, cosmosAssetContext.texRealWorldHeight)
+        elif cosmosAssetContext.texRealWorldWidth > 0.0:
+            triplanarSize = cosmosAssetContext.texRealWorldWidth
+        else:
+            triplanarSize = 1.0
+        _wrapTexturesInTriPlanar(vrsceneDict, materialNames, triplanarSize)
 
     for mtlName in materialNames:
         debug.printInfo(f"Importing material: {mtlName}")
@@ -109,8 +293,10 @@ def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssig
             debug.printInfo(f"Material name already exists, changing to {mtlName}")
 
         mtl = _createMaterial(mtlName)
-        mtl.vray.cosmos_package_id = packageId
-        mtl.vray.cosmos_revision_id = revisionId
+
+        if cosmosAssetContext:
+            mtl.vray.cosmos_package_id = cosmosAssetContext.packageId
+            mtl.vray.cosmos_revision_id = cosmosAssetContext.revisionId
 
         ntree = mtl.node_tree
         importContext = NodesImport.ImportContext(ntree, vrsceneDict, locationsMap = locationsMap)
@@ -135,7 +321,7 @@ def importMaterials(filePath, packageId: str, revisionId: str, objectForMatAssig
 
         _checkNodeTree(mtl.node_tree, f"Material {mtl.name}")
 
-        if not objectForMatAssign:
+        if cosmosAssetContext and not objectForMatAssign:
             debug.report('INFO', f"Cosmos material imported: {mtlName}")
 
     if objectForMatAssign:
@@ -281,13 +467,13 @@ def importDecal(settings):
         NodesTools.rearrangeTree(objTree, decalOutputNode)
         NodesTools.deselectNodes(objTree)
 
-        importMaterials(settings.matFile, settings.packageId, settings.revisionId, objectForMatAssign=obj, locationsMap=settings.locationsMap)
+        importMaterials(settings.matFile, objectForMatAssign=obj, locationsMap=settings.locationsMap, cosmosAssetContext=settings)
 
     if obj:
         blender_utils.selectObject(obj)
 
 
-def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
+def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0, outMetadata: dict = None):
     if not os.path.exists(filePath):
         return None, f"File not found: {filePath}"
 
@@ -321,7 +507,7 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     context.collection.objects.link(ob)
     vrayAsset = ob.vray.VRayAsset
 
-    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, proxyFilePath, animFrame=0.0):
+    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, proxyFilePath, animFrame=0.0, outMetadata=outMetadata):
         return None, err
 
     vrayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Proxy"]
@@ -332,8 +518,9 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0):
     return ob, None
 
 
-def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: str, packageId = '', revisionId = 0,
-                 lightPath="", locationsMap: dict[str, str]=None, useRelPath=False, scaleUnit=1.0):
+def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: str,
+                            locationsMap: dict[str, str]=None, useRelPath=False, scaleUnit=1.0, select=True,
+                            cosmosAssetContext: CosmosAssetSettings | None = None):
     """ Import a VRayProxy object from a .vrmesh or .abc file.
         This function will create a new scene object and load the preview mesh for it.
 
@@ -341,37 +528,117 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
         context (bpy.types.Context):
         matPath (str): Path to a .vrmat file with the materials for the object
         meshPath (str): Absolute path to the .vrmesh file
-        lightPath (str, optional): Path to a .vrmat file with the light propeties. Defaults to "".
         locationsMap (dict(str, str), optional): A map of the resources used by the proxy (textures, materials etc) to
                                                 fully resolved file paths for each resource. Defaults to None.
         useRelPath (bool, optional): The file paths are in Blender's relative notation. Defaults to False.
         scaleUnit (float, optional): Scale unit for the model in meters. Defaults to 1.0.
+        select (bool, optional): True if the created object should be selected as active object.
+        cosmosAssetContext (optional): The cosmos import context containing metadata about the imported asset.
 
     Returns:
         tuple[object, str]: A tuple containing the created object (or None on failure) and an error message (empty string on success).
     """
     assert not path_utils.isRelativePath(meshPath)
 
-    objProxy, err = _importVRayProxy(context, meshPath, useRelPath, scaleUnit)
+    metadata = {}
+    objProxy, err = _importVRayProxy(context, meshPath, useRelPath, scaleUnit, outMetadata=metadata)
 
     if err:
         return None, err
 
     assert objProxy is not None
-    objProxy.data.vray.cosmos_package_id = packageId
-    objProxy.data.vray.cosmos_revision_id = revisionId
 
-    if os.path.exists(matPath):
-        importMaterials(matPath, packageId, revisionId, objectForMatAssign = objProxy, locationsMap=locationsMap)
+    # Create empty material slots from proxy shader metadata so users can assign materials
+    # to the correct slots. Skip if a material file exists or this is a Cosmos import,
+    # as importMaterials will create and assign the slots itself.
+    isCosmos = cosmosAssetContext is not None
+    hasMaterialFile = os.path.exists(matPath)
+    if not isCosmos and not hasMaterialFile:
+        if shaders := metadata.get('shaders'):
+            _createEmptyMaterialSlotsFromProxy(objProxy, shaders)
 
-    if lightPath and os.path.exists(lightPath):
-        _importLights(context, objProxy, lightPath, packageId, revisionId, locationsMap)
+    if hasMaterialFile:
+        importMaterials(matPath, objectForMatAssign = objProxy, locationsMap = locationsMap, cosmosAssetContext = cosmosAssetContext)
 
-    # Make sure the main proxy object is selected. The selection might have been changed
-    # if operators were executed during import which only work with the active object.
-    blender_utils.selectObject(objProxy)
+    if select:
+        # Make sure the main proxy object is selected. The selection might have been changed
+        # if operators were executed during import which only work with the active object.
+        blender_utils.selectObject(objProxy)
 
     return objProxy, ""
+
+
+def importCosmosCompositeAsset(cosmosAssetContext: CosmosAssetSettings, scaleUnit=1.0):
+    """ Import a Chaos Cosmos composite asset. It can contain V-Ray Proxy with materials and in some cases Lights.
+
+    Args:
+        cosmosAssetContext: The cosmos import context containing metadata about the imported asset.
+        scaleUnit: (float, optional): Scale unit for the model in meters. Defaults to 1.0.
+    Returns:
+        tuple[object, str]: A tuple containing the created object (or None on failure) and an error message (empty string on success).
+    """
+    assert cosmosAssetContext is not None
+
+    objProxy, err = importProxyFromMeshFile(bpy.context,
+                                            cosmosAssetContext.matFile,
+                                            cosmosAssetContext.objFile,
+                                            locationsMap=cosmosAssetContext.locationsMap,
+                                            scaleUnit=scaleUnit,
+                                            cosmosAssetContext=cosmosAssetContext)
+
+    if err:
+        return None, err
+
+    assert objProxy is not None
+    objProxy.data.vray.cosmos_package_id = cosmosAssetContext.packageId
+    objProxy.data.vray.cosmos_revision_id = cosmosAssetContext.revisionId
+
+    if cosmosAssetContext.lightFile and os.path.exists(cosmosAssetContext.lightFile):
+        _importLights(bpy.context, objProxy, cosmosAssetContext.lightFile, cosmosAssetContext.packageId, cosmosAssetContext.revisionId, cosmosAssetContext.locationsMap)
+
+    return objProxy, ""
+
+
+def importParallaxInterior(cosmosAssetContext: CosmosAssetSettings):
+    """ Import a Cosmos Parallax Interior asset as a native Blender plane.
+
+    Parallax Interior assets ship with plane-dimension metadata; we create the plane
+    ourselves instead of loading the .vrmesh proxy for better render performance.
+    The parallax material (containing a TexParallax node) is imported from the
+    accompanying .vrmat and assigned to the plane's first material slot.
+    """
+    from vray_blender.lib import attribute_utils
+
+    assert cosmosAssetContext is not None
+
+    width = attribute_utils.scaleToSceneLengthUnit(cosmosAssetContext.planeWidth, "centimeters")
+    height = attribute_utils.scaleToSceneLengthUnit(cosmosAssetContext.planeHeight, "centimeters")
+
+    # Parallax Interiors are typically building windows/facades, authored to stand
+    # vertically in the scene. Cosmos assets follow the Z-up, Y-forward convention,
+    # so we create the plane on the XZ plane with its normal along +Y by rotating
+    # the default (XY-plane, normal +Z) plane 90 degrees around X.
+    bpy.ops.mesh.primitive_plane_add(size=1.0,
+                                     location=bpy.context.scene.cursor.location,
+                                     rotation=(math.pi / 2, 0.0, 0.0))
+    planeObj = bpy.context.active_object
+    planeObj.name = f"ParallaxInterior@{Path(cosmosAssetContext.matFile).stem}"
+    # Scale in local axes: widthM along local X, heightM along local Y (which maps
+    # to world Z after the 90-degree X rotation).
+    planeObj.scale = (width, height, 1.0)
+    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+
+    if os.path.exists(cosmosAssetContext.matFile):
+        importMaterials(cosmosAssetContext.matFile,
+                        objectForMatAssign=planeObj,
+                        locationsMap=cosmosAssetContext.locationsMap,
+                        forceDefaultUVChannel=True,
+                        cosmosAssetContext=cosmosAssetContext)
+
+    planeObj.data.vray.cosmos_package_id = cosmosAssetContext.packageId
+    planeObj.data.vray.cosmos_revision_id = cosmosAssetContext.revisionId
+
+    blender_utils.selectObject(planeObj)
 
 
 def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):

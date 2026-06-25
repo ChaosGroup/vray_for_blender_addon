@@ -4,7 +4,6 @@
 
 
 import mathutils
-import math
 
 from vray_blender import debug
 from vray_blender.lib.defs import AColor
@@ -40,4 +39,4 @@ def opacityToTransparency(clr):
             return mathutils.Color((1.0 - clr[0], 1.0 - clr[1], 1.0 - clr[2]))
         case _:
             debug.printError(f"opacityToTransparency: Invalid color size: {len(clr)}")
-
+    
