@@ -6,6 +6,10 @@
 
 #include <numeric>
 
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>
+
 #include "export/plugin_desc.hpp"
 #include "export/zmq_exporter.h"
 
@@ -69,8 +73,6 @@ AttrList<T> arrayToAttrList(const T* src, int count)
 } // end anonymous namespace
 
 
-
-
 namespace VRayForBlender::Assets
 {
 
@@ -111,46 +113,63 @@ AttrValue exportPointCloud(const PointCloudData& pc, ZmqExporter& exporter)
 
 AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 {
-	AttrInstancer instancer;
-	instancer.frameNumber = exporter.getCurrentFrame();
-	instancer.data.resize(inst.itemCount);
+	const int N = inst.itemCount;
 
-	using Matrix = float[4][4];
+	AttrListTransform transforms(N);
+	AttrListInt       instanceIds(N);
+	AttrListPlugin    meshes;
+	AttrListInt       indices(N);
 
-	// Unpack data from buffer.
-	const char* ptr = &inst.data[0];
+	{
+		nb::gil_scoped_acquire gil;
 
-	for (int i = 0; i < inst.itemCount; ++i){
-		AttrInstancer::Item& item = (*instancer.data)[i];
+		static_assert(sizeof(AttrTransform) == 12 * sizeof(float), "AttrTransform layout must be 12 contiguous floats");
+		auto tmsArr = nb::cast<nb::ndarray<float,   nb::c_contig>>(inst.tms);
+		auto idsArr = nb::cast<nb::ndarray<int32_t, nb::c_contig>>(inst.ids);
+		auto idxArr = nb::cast<nb::ndarray<int32_t, nb::c_contig>>(inst.indices);
 
-		// Read persistentId and hash it. We assume it is always 8 ints long.
-		const int persistentIdSize = 8 * sizeof(int);
+		nb::list pyMeshes = nb::cast<nb::list>(inst.meshes);
+		meshes.reserve(static_cast<int>(nb::len(pyMeshes)));
+		for (auto m : pyMeshes)
+			meshes.append(AttrPlugin(nb::cast<std::string>(m)));
 
-		uint32_t hash = 0;
-		MurmurHash3_x86_32(ptr, persistentIdSize, 0, &hash);
-		item.index = static_cast<int>(hash);
+		const float*   tmsSrc = tmsArr.data();
+		const int32_t* idSrc  = idsArr.data();
+		const int32_t* idxSrc = idxArr.data();
+		nb::gil_scoped_release noGIL;
 
-		ptr += persistentIdSize;
+		memcpy(*transforms, tmsSrc, N * sizeof(AttrTransform));
 
-		// Read transformation
-		item.tm = AttrTransform(*reinterpret_cast<const Matrix*>(ptr));
-		ptr += sizeof(Matrix);
+		int* idDst = *instanceIds;
+		constexpr int persistentIdBytes = 8 * sizeof(int32_t);
+		for (int i = 0; i < N; ++i) {
+			uint32_t hash = 0;
+			MurmurHash3_x86_32(idSrc + i * 8, persistentIdBytes, 0, &hash);
+			idDst[i] = static_cast<int>(hash);
+		}
 
-		item.vel = AttrTransform::zero();
-
-		// Read node name
-		const int nameLen = *reinterpret_cast<const int*>(ptr);
-		ptr += sizeof(int);
-
-		item.node = AttrPlugin(std::string(ptr, nameLen));
-		ptr += nameLen;
+		memcpy(*indices, idxSrc, N * sizeof(int32_t));
 	}
 
-	PluginDesc instancerDesc(inst.name, "Instancer2");
-	instancerDesc.add("instances", instancer);
-	instancerDesc.add("visible", true);
-	instancerDesc.add("use_time_instancing", false);
-	instancerDesc.add("shading_needs_ids", true);
+	AttrListValue sources;
+	sources.append(meshes);
+	sources.append(indices);
+
+	PluginDesc instancerDesc(inst.name, "GeomInstancer");
+	instancerDesc.add("transforms", transforms);
+	instancerDesc.add("instance_ids", instanceIds);
+	instancerDesc.add("sources", sources);
+
+	// Export VRAY_EXPLICIT_INSTANCE_ID for randomized shading.
+	if (N > 0) {
+		AttrListValue explicitIdAttr;
+		explicitIdAttr.append(AttrValue("VRAY_EXPLICIT_INSTANCE_ID"));
+		explicitIdAttr.append(instanceIds);
+
+		AttrListValue userAttributes;
+		userAttributes.append(explicitIdAttr);
+		instancerDesc.add("user_attributes", userAttributes);
+	}
 
 	return exporter.exportPlugin(instancerDesc);
 }

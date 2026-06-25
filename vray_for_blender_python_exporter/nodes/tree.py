@@ -59,7 +59,6 @@ class VRayNodeTreeObjectBase(VRayEntity, bpy.types.NodeTree):
 
     @classmethod
     def poll(cls, context):
-        # Do not show in Node Tree Editors list
         return False
 
     @classmethod
@@ -147,9 +146,27 @@ class VRayNodeTreeEditor(bpy.types.NodeTree):
         return (None, None, None)
 
 
+_OBJECT_TREE_TYPES = {'OBJECT', 'FUR', 'DECAL'}
+
+def iterVRayNodeTrees():
+    """Yield all VRay node trees in the scene.
+
+    Covers material, world, and light node trees, plus object-level VRay trees
+    (displacement, fur, decal) stored as node groups.
+    """
+    for collection in (bpy.data.materials, bpy.data.worlds, bpy.data.lights):
+        for item in collection:
+            if ntree := getattr(item, 'node_tree', None):
+                yield ntree
+
+    for ng in bpy.data.node_groups:
+        if hasattr(ng, 'vray') and ng.vray.tree_type in _OBJECT_TREE_TYPES:
+            yield ng
+
+
 def upgradeTrees():
     for world in bpy.data.worlds:
-        if world.vray.is_vray_class and world.use_nodes and not world.node_tree.vray.tree_type:
+        if world.vray.is_vray_class and getattr(world, 'use_nodes', False) and not world.node_tree.vray.tree_type:
             world.node_tree.vray.tree_type = 'WORLD'
     for material in bpy.data.materials:
         if material.vray.is_vray_class and material.use_nodes and not material.node_tree.vray.tree_type:

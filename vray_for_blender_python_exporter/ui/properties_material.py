@@ -7,16 +7,30 @@ import bpy
 
 from vray_blender.ui      import classes
 from vray_blender.nodes import utils as NodesUtils
+from vray_blender.nodes.group.utils import VRAY_EDITOR_TREE_TYPES
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui.icons import getUIIcon
 from vray_blender.menu import VRAY_OT_convert_materials
 
-def getMaterialPanelNode(tree):
-    node = NodesUtils.getActiveTreeNode(tree, "MATERIAL")
-    if node:
+
+def getActiveTreeForMaterial(context, mtl):
+    """ Return the tree currently edited in a V-Ray node editor for `mtl`, or its root tree. """
+    for area in context.screen.areas:
+        if area.type != 'NODE_EDITOR':
+            continue
+        space = area.spaces.active
+        if (space.tree_type in VRAY_EDITOR_TREE_TYPES
+                and space.id == mtl
+                and space.edit_tree is not None):
+            return space.edit_tree
+    return mtl.node_tree
+
+
+def getMaterialPanelNode(context, mtl):
+    if node := NodesUtils.getActiveTreeNode(getActiveTreeForMaterial(context, mtl), "MATERIAL"):
         return node
 
-    output = NodesUtils.getOutputNode(tree, "MATERIAL")
+    output = NodesUtils.getOutputNode(mtl.node_tree, "MATERIAL")
     if not output:
         return None
 
@@ -26,17 +40,13 @@ def getMaterialPanelNode(tree):
 def renderMaterialPanel(mtl, context, layout: bpy.types.UILayout):
     assert mtl.vray.is_vray_class, "Can draw property pages for V-Ray materials only"
 
-    if not (activeNode := getMaterialPanelNode(mtl.node_tree)):
+    if not (activeNode := getMaterialPanelNode(context, mtl)):
         return
 
     layout.use_property_split = True
     layout.use_property_decorate = True
     box = layout.box()
     box.label(text=f'  {activeNode.bl_label}')
-    layout.separator()
-
-    layout.prop(mtl, "diffuse_color", text="Viewport Color")
-
     layout.separator()
 
     if activeNode.bl_idname == 'VRayNodeOutputMaterial':
@@ -179,10 +189,8 @@ class VRAY_PT_mtl_material_render_stats(classes.VRayMaterialPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        if context.material:
-            sel = [n for n in context.material.node_tree.nodes if n.select]
-            return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
-        return False
+        sel = [n for n in context.material.node_tree.nodes if n.select]
+        return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
     def drawPanelCheckBox(self, context):
         mtl = context.material
@@ -209,10 +217,8 @@ class VRAY_PT_mtl_material_wrapper(classes.VRayMaterialPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        if context.material:
-            sel = [n for n in context.material.node_tree.nodes if n.select]
-            return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
-        return False
+        sel = [n for n in context.material.node_tree.nodes if n.select]
+        return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
     def drawPanelCheckBox(self, context):
         mtl = context.material
@@ -239,11 +245,8 @@ class VRAY_PT_material_id(classes.VRayMaterialPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        if context.material:
-            sel = [n for n in context.material.node_tree.nodes if n.select]
-            return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
-        return False
-
+        sel = [n for n in context.material.node_tree.nodes if n.select]
+        return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
     def drawPanelCheckBox(self, context):
         mtl = context.material
@@ -270,10 +273,8 @@ class VRAY_PT_mtl_material_round_edges(classes.VRayMaterialPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        if context.material:
-            sel = [n for n in context.material.node_tree.nodes if n.select]
-            return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
-        return False
+        sel = [n for n in context.material.node_tree.nodes if n.select]
+        return sel and (sel[0].bl_idname == 'VRayNodeOutputMaterial')
 
     def drawPanelCheckBox(self, context):
         mtl = context.material

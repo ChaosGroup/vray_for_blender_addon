@@ -23,6 +23,7 @@ class HairData:
         self.widthsInPixels = False
         self.useHairBSpline = False
         self.strandSegments  = np.empty(shape=0, dtype=np.int32)
+        self.strandOffsets   = DataArray()
         self.pointRadii      = np.empty(shape=0, dtype=np.float32)
         self.vertColors      = np.empty(shape=0, dtype=np.float32)
 
@@ -63,14 +64,12 @@ class HairExporter(ExporterBase):
         # segments in the last curve
         numCurves = len(curves.curve_offset_data) - 1
 
-        # Offset of the strand in the points vector
-        # TODO: See if we can optimize this as well.
-        strandOffsets = tools.foreachGetAttr(curves.curve_offset_data, "value", shape=(numCurves + 1,), dtype=np.int32)
-        strandSegments = np.ediff1d(strandOffsets)
+        # Zero-copy pointer directly into Blender's curve_offsets int array.
+        # C++ will compute per-strand point counts as diffs from these offsets.
+        strandOffsets = DataArray(curves.curve_offset_data[0].as_pointer(), numCurves + 1)
 
-        # Radius of the strand at each point
-        # TODO: See if we can optimize this as well.
-        pointRadiuses = tools.foreachGetAttr(curves.points, "radius", shape=(totalPoints,), dtype=np.float32)
+        # Zero-copy pointer directly into Blender's radius attribute storage.
+        pointRadiuses = DataArray.fromAttribute(curves, "radius")
 
         # UVs of strand roots ( the anchor points to the parent surface )
         # These are so far the only UVs we can obtain from Blender
@@ -82,7 +81,7 @@ class HairExporter(ExporterBase):
         data.widthsInPixels = False
         data.useHairBSpline = True
         data.points         = points
-        data.strandSegments = strandSegments
+        data.strandOffsets  = strandOffsets
         data.pointRadii     = pointRadiuses
         data.uvs            = uvs
 
@@ -133,6 +132,7 @@ class HairExporter(ExporterBase):
         uvIndex = -1
         activeLayerIndex = -1
         if objMesh:
+            self.objectsWithTempMeshes.append(evaluatedObj)
             uvLayers = objMesh.uv_layers
             if activeUV := HairExporter.findActiveUV(uvLayers):
                 uvIndex = uvLayers.find(activeUV.name)

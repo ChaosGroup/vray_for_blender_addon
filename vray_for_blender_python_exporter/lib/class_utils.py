@@ -101,15 +101,17 @@ def registerClass(regClass):
 
 
 def _getActiveSocketAttributes(pluginModule):
-    """ Get all attributes fo a plugin for which an implcit update callback should be registered """
+    """ Get all attributes fo a plugin for which an implicit update callback should be registered """
     from vray_blender.lib.condition_processor import UIConditionConverter, isCondition
 
     attributes = set()
     inputSockets = pluginModule.Node.get('input_sockets', [])
-    
+    activeConditions = ['visible', 'active']
+
     for sockDesc in inputSockets:
-        if (visible := sockDesc.get('visible', None)) and isCondition(visible):
-            attributes.update(UIConditionConverter.getActiveProperties(visible))
+        for condName in activeConditions:
+            if (cond := sockDesc.get(condName, None)) and isCondition(cond):
+                attributes.update(UIConditionConverter.getActiveProperties(cond))
 
 
     return attributes

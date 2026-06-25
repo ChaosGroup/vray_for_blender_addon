@@ -20,8 +20,8 @@ from vray_blender.plugins import PLUGINS
  ######   #######  ##    ##    ##    ######## ##     ##    ##
 
 class VRAY_PT_context_fur(classes.VRayFurPanel):
-    bl_label   = ""
-    bl_options = {'HIDE_HEADER'}
+    bl_label  = "V-Ray Fur"
+    vray_icon = "VRAY_FUR"
 
     def draw(self, context):
         layout = self.layout

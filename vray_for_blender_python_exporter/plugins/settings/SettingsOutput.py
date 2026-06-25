@@ -11,9 +11,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 
 from vray_blender import debug
 from vray_blender.lib.defs import ExporterContext, ExporterBase, PluginDesc, AttrListValue
-from vray_blender.lib import export_utils
-from vray_blender.lib import plugin_utils
-from vray_blender.lib import path_utils
+from vray_blender.lib import export_utils, lib_utils, plugin_utils, path_utils
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.names import Names
@@ -33,11 +31,15 @@ class SettingsOutputExporter(ExporterBase):
         self.settings: CommonSettings = ctx.commonSettings
         self.viewParams = activeCameraViewParams
         self.prevViewParams = prevViewParams
+        self._pathExpander = None
 
 
     def export(self):
         if self.isAnimation and not self.fullExport:
-            # Output settings should not change during an animation
+            # Output sizes and animation settings must not change during animation,
+            # but output paths are re-evaluated per frame to support camera markers,
+            # current time etc.
+            self._updateOutputPathsForFrame()
             return
 
         if (not self.fullExport) and (self.prevViewParams is not None) \
@@ -94,6 +96,18 @@ class SettingsOutputExporter(ExporterBase):
         return result
 
 
+    def _updateOutputPathsForFrame(self):
+        """ During animation, re-evaluate output paths per frame so $camera tracks camera-marker switches. """
+        pluginDesc = PluginDesc(Names.singletonPlugin("SettingsOutput"), "SettingsOutput")
+        pluginDesc.vrayPropGroup = self.scene.vray.SettingsOutput
+        self._fillOutputPaths(pluginDesc.vrayPropGroup, pluginDesc)
+
+        pluginName = pluginDesc.name
+        for attr in ('img_file', 'img_dir'):
+            if (val := pluginDesc.getAttribute(attr)) is not None:
+                plugin_utils.updateValue(self.renderer, pluginName, attr, val)
+
+
     def _fillRenderSizes(self, pluginDesc):
         # NOTE: It may seem odd that the render sizes are set both here and in ViewExporter. Unfortunately,
         # VRay AppSDK does not define a clear path for setting render sizes in all circumstances. Setting
@@ -120,6 +134,25 @@ class SettingsOutputExporter(ExporterBase):
         })
 
 
+    def _getPathExpander(self):
+        """ Return the PathExpander for the current render job, creating it on first call.
+
+            If the pre-render overwrite check already built an expander (via _checkOutputInfo),
+            that instance is reused so datetime and other static values are identical between
+            the check and the export. The global session slot is cleared after consumption so
+            a stale expander from a previous render can't bleed in when _checkOutputInfo is
+            bypassed (e.g. programmatic renders).
+
+            allowRelative is NOT baked in here; callers must pass it explicitly to
+            expand() / expandFilename() so the same instance works for both file-existence
+            checks (allowRelative=False) and export-only paths (allowRelative=self.exportOnly).
+        """
+        if self._pathExpander is None:
+            stored = path_utils.getSessionExpander()
+            path_utils.clearSessionExpander()
+            self._pathExpander = stored if stored is not None else path_utils.PathExpander(self.ctx)
+        return self._pathExpander
+
     def _fillOutputPaths(self, propGroup, pluginDesc):
         # In case of an error or early return, make sure the plugin has valid values
         pluginDesc.setAttribute('img_file', "")
@@ -132,23 +165,37 @@ class SettingsOutputExporter(ExporterBase):
         imgDir = ""
         imgFmt = 0
 
+        currentFrame = int(self.currentFrame)
+
+        expander = self._getPathExpander()
+        viewLayerName = self.dg.view_layer_eval.name
+
         if self.bake:
             bakeItem = self.scene.vray.BatchBake.active_item
             imgFmt = int(bakeItem.img_format)
-            imgFile = path_utils.getOutputFileName(self.ctx, bakeItem.img_file, imgFmt, allowRelative=self.exportOnly)
-            imgDir = path_utils.expandPathVariables(self.ctx, bakeItem.img_dir)
+            objName = lib_utils.cleanString(bakeItem.ob.name, stripSigns=False)
+            
+            imgFile = expander.expandFilename(bakeItem.img_file, imgFmt,
+                                              frame=currentFrame, viewLayerName=viewLayerName,
+                                              allowRelative=self.exportOnly)
+            imgDir = expander.expand(bakeItem.img_dir, currentFrame, viewLayerName=viewLayerName,
+                                     allowRelative=self.exportOnly)
+            imgDir = imgDir.replace("$object", objName)
+            imgFile = imgFile.replace("$object", objName)
             pluginDesc.setAttribute("img_file_needFrameNumber", False)
         else:
-            imgDir = propGroup.img_dir
             multipleLayers = len(self.scene.view_layers) > 1
-            viewLayerName = self.dg.view_layer_eval.name if multipleLayers else ""
 
             imgFmt = int(propGroup.img_format)
-            imgFile = path_utils.getOutputFileName(self.ctx, propGroup.img_file, imgFmt, viewLayerName, allowRelative=self.exportOnly)
-            imgDir = path_utils.expandPathVariables(self.ctx, propGroup.img_dir)
+            imgFileBase = path_utils.withLayerSuffix(propGroup.img_file, viewLayerName if multipleLayers else None)
+            imgFile = expander.expandFilename(imgFileBase, imgFmt,
+                                              frame=currentFrame, viewLayerName=viewLayerName,
+                                              allowRelative=self.exportOnly)
+            imgDir = expander.expand(propGroup.img_dir, currentFrame, viewLayerName=viewLayerName,
+                                     allowRelative=self.exportOnly)
 
-        if self.isAnimation:
-            pluginDesc.setAttribute("img_file_needFrameNumber", True)
+            if self.isAnimation and not path_utils.hasFrameToken(imgFileBase):
+                pluginDesc.setAttribute("img_file_needFrameNumber", True)
 
         IMAGE_FORMAT_EXR = 5
         if imgFmt == IMAGE_FORMAT_EXR and not propGroup.relements_separateFiles:

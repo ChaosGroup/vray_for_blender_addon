@@ -7,9 +7,10 @@ import bpy
 import subprocess
 import os
 import pathlib
+import shutil
 import threading
 
-from vray_blender.lib import lib_utils, blender_utils
+from vray_blender.lib import blender_utils, path_utils
 from vray_blender import debug
 
 
@@ -34,7 +35,7 @@ class VCloudJob:
         cmd.append(self.project)
 
         cmd.append("--name")
-        cmd.append(lib_utils.formatName(self.name))
+        cmd.append(path_utils.PathExpander(bpy.context).expand(self.name))
 
         cmd.append("--sceneFile")
         cmd.append(self.sceneFile)
@@ -71,14 +72,13 @@ class VCloudJob:
             )
 
             def runCloudSubmit(process):
-                stdout, stderr = process.communicate()
-                if process.returncode != 0:
-                    bpy.app.timers.register(lambda: debug.report("ERROR", "Chaos Cloud failed to submit job, check the console" + stderr))
-                scenePath = pathlib.Path(self.sceneFile)
-                scenePath.with_suffix(".vrdata").unlink(missing_ok=True)
-                scenePath.with_suffix(".vrfiles").unlink(missing_ok=True)
-                scenePath.unlink(missing_ok=True)
-                scenePath.parent.rmdir()
+                try:
+                    stdout, stderr = process.communicate()
+                    if process.returncode != 0:
+                        bpy.app.timers.register(lambda: debug.report("ERROR", "Chaos Cloud failed to submit job, check the console" + stderr))
+                finally:
+                    # Owns cleanup of the temp scene dir on both success and failure paths.
+                    shutil.rmtree(pathlib.Path(self.sceneFile).parent, ignore_errors=True)
 
             threading.Thread(target=runCloudSubmit, args=(process,), daemon=True).start()
         else:

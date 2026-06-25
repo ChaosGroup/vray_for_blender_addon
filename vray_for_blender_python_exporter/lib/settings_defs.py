@@ -12,9 +12,11 @@ class RenderMode:
     RtGpuCUDA           = 4
     RtGpuOptiX          = 7
     RtGpuMetal          = 8
+    RtGpuHIP            = 10
     ProductionGpuCUDA   = 104
     ProductionGpuOptiX  = 107
     ProductionGpuMetal  = 108
+    ProductionGpuHIP    = 110
 
 class ImageType:
     NoImage   = 0
@@ -48,13 +50,6 @@ class VRayVerboseLevel:
 class DeviceType:
     CPU = 0
     GPU = 1
-
-     
-class GIEngine:
-    IrradianceMap      = 0
-    BruteForce         = 2
-    LightCache         = 3
-    Sphericalharmonics = 4
 
 class PhysicalCameraType:
     Still       = 0

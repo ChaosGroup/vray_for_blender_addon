@@ -6,13 +6,13 @@
 bl_info = {
     "name"        : "V-Ray For Blender",
     "author"      : "Chaos Software",
-    "blender"     : (4, 4, 0), # this should be the earliest version currently supported by the plugin
+    "blender"     : (4, 5, 0), # this should be the earliest version currently supported by the plugin
     "location"    : "Info header, render engine menu",
     "description" : "V-Ray render engine integration",
     "doc_url"     : "https://documentation.chaos.com/space/VBLD",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "30", "00")
+    "version"     : ("7", "30", "20")
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data
@@ -21,7 +21,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 39
+UPGRADE_NUMBER = 46
 
 try:
     import numpy as np
@@ -40,6 +40,23 @@ except:
         subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "numpy"])
         subprocess.check_call([sys.executable, "-m", "pip", "install", f"numpy=={oldNumpyVersion}"])
 
+# Install a Python implementation of isCommunityEdition on the native
+# VRayBlenderLib module so that `vray.isCommunityEdition()` call sites
+# resolve to a runtime check against the addon preference. This must run
+# before any submodule that calls isCommunityEdition at import time
+# (e.g. lib.plugin_utils, utils.update_checker).
+from vray_blender.bin import VRayBlenderLib as vray
+
+def _isCommunityEdition():
+    import bpy
+    try:
+        return bool(bpy.context.preferences.addons["vray_blender"].preferences.community_edition)
+    except (KeyError, AttributeError):
+        # Preferences are not yet registered (e.g. during early addon load).
+        return False
+
+vray.isCommunityEdition = _isCommunityEdition
+
 from vray_blender import debug
 from vray_blender import plugins
 from vray_blender import operators
@@ -51,8 +68,7 @@ from vray_blender import keymap
 from vray_blender import ui
 from vray_blender import events
 from vray_blender import utils
-
-from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.lib import image_utils
 
 _isRegistered = False
 
@@ -113,7 +129,8 @@ def _getModules():
         nodes,
         proxy,
         keymap,
-        utils
+        utils,
+        image_utils
     )
 
 
@@ -123,12 +140,6 @@ def register():
 
     # Init VRayBlenderLib first as it sets up the logging subsystem
     initVRay()
-    
-    # Do the check after initializing VRayBlenderLib so that we could use it to print pretty logs
-    if vray.isCommunityEdition() and bpy.app.background:
-        debug.printError("Community Edition of V-Ray for Blender cannot be used in headless mode")
-        vray.exit()
-        return
     
     debug.register()
 

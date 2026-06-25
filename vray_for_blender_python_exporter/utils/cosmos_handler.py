@@ -11,7 +11,7 @@ from vray_blender.lib.lib_utils import getLightPropGroup
 from vray_blender.lib.blender_utils import selectObject
 from vray_blender.lib.image_utils import untrackImage
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.nodes.operators.import_file import  importDecal, importHDRI, importMaterials, importProxyFromMeshFile
+from vray_blender.nodes.operators.import_file import  importDecal, importHDRI, importMaterials, importParallaxInterior, importCosmosCompositeAsset
 from vray_blender.nodes.utils import getNodeByType, treeHasNodes, DisableAutoConnect
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -100,33 +100,33 @@ class CosmosHandler:
         resolvedPath = bpy.path.abspath(path)
         return resolvedPath if not os.path.exists(resolvedPath) else None
 
-    def downloadMissingAssets(self, operator: bpy.types.Operator, context: bpy.types.Context):
+    def startDownload(self) -> bool:
+        """ Kick off the asset download. Returns False if there is nothing to download. """
         if not self.relinked:
-            return { 'FINISHED' }
+            return False
         self.downloadStatus = CosmosDownloadStatus.Downloading
-
         vray.downloadMissingAssets()
-        # Just block blender until download is completed. There's a qt dialog where progress
-        # is shown along with a way to cancel the download.
-        while self.downloadStatus == CosmosDownloadStatus.Downloading:
-            time.sleep(0.1)
+        return True
 
+    def applyDownloadResult(self):
+        """ Apply the download result once downloadStatus leaves Downloading. Returns an operator result dict. """
         if self.downloadStatus == CosmosDownloadStatus.Cancelled:
-            return { 'CANCELLED' }
+            return {'CANCELLED'}
 
         if self.downloadStatus == CosmosDownloadStatus.Aborted:
-            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Download has failed. No assets have been relinked.")
+            bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Download has failed. No assets have been relinked.")
+            return {'FINISHED'}
 
         if self.downloadStatus == CosmosDownloadStatus.Timeout:
-            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Asset relinking has timed out.")
+            bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Asset relinking has timed out.")
+            return {'FINISHED'}
 
         for i, assetPath in enumerate(self.relinkedAssets):
-            # If download was aborted paths for unavailable assets will remain empty
             if assetPath:
                 self.unresolvedCallbacks[i](assetPath)
 
         debug.printInfo(f'{len(self.unresolvedCallbacks)} assets have been successfully relinked')
-        return { 'FINISHED' }
+        return {'FINISHED'}
 
     def abortDownload(self):
         self.downloadStatus = CosmosDownloadStatus.Aborted
@@ -253,14 +253,10 @@ def assetImportTimerFunction():
                         if not os.path.exists(settings.matFile):
                             debug.printError(f"VRmat file {settings.matFile} does not exist")
                             continue
-                        importMaterials(settings.matFile, settings.packageId, settings.revisionId, locationsMap=settings.locationsMap)
+                        importMaterials(filePath=settings.matFile, locationsMap=settings.locationsMap, forceDefaultUVChannel=True, cosmosAssetContext=settings)
 
                     case "VRMesh":
-                        ob, err = importProxyFromMeshFile(bpy.context,
-                                                settings.matFile, settings.objFile, lightPath=settings.lightFile,
-                                                packageId=settings.packageId, revisionId=settings.revisionId,
-                                                locationsMap=settings.locationsMap,
-                                                scaleUnit=COSMOS_SCALE_UNIT)
+                        ob, err = importCosmosCompositeAsset(cosmosAssetContext=settings, scaleUnit=COSMOS_SCALE_UNIT)
                         if err:
                             debug.printError(err)
 
@@ -280,6 +276,12 @@ def assetImportTimerFunction():
 
                     case "Extras":
                         importDecal(settings)
+
+                    case "ParallaxInterior":
+                        if not os.path.exists(settings.matFile):
+                            debug.printError(f"VRmat file {settings.matFile} does not exist")
+                            continue
+                        importParallaxInterior(settings)
 
                 bpy.ops.ed.undo_push(message="Import Cosmos " + settings.assetType)
     except Exception as e:

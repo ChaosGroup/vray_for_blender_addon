@@ -11,6 +11,7 @@ def _getModules():
     from vray_blender.nodes import meta
     from vray_blender.nodes import sockets
     from vray_blender.nodes import specials
+    from vray_blender.nodes import group
     from vray_blender.nodes import nodes
     from vray_blender.nodes import operators
     from vray_blender.nodes import docs
@@ -22,6 +23,7 @@ def _getModules():
         specials,
         sockets,
         meta,
+        group,  # After sockets (V-Ray socket types available), before nodes (menus need it)
         nodes,
         docs,
     )

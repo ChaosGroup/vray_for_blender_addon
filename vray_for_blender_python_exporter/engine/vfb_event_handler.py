@@ -6,6 +6,7 @@ import bpy
 import json
 import threading
 from collections import deque
+from typing import Optional
 
 from vray_blender.engine.zmq_process import ZMQProcess
 from vray_blender.lib import sys_utils, image_utils
@@ -30,6 +31,12 @@ class _Event:
     UpgradeScene            = 11    # Run a scene version upgrade
     RenderVantageStart      = 12    # Start Vantage Live Link
     RenderVantageStop       = 13    # Stop Vantage Live Link
+    LightMixTransferToScene = 14    # Transfer VFB Light Mix changes back to scene
+    VFBMenu                 = 15    # VFB context menu action (select object/material, set focus)
+    AddRenderElementToScene = 16    # Add render element (denoiser/light mix) to the world node tree
+    ShowMessagesWindow      = 17    # Open the Blender system console (Windows only)
+    ExportProxy             = 18    # Export selected scene geometry to .vrmesh
+    VFBRenderRegionChanged  = 19    # Mirror VFB render region changes to scene.render.border_*
 
 DrawHandlers = []
 
@@ -57,6 +64,16 @@ class _VfbEventHandler:
         self._lightMixSupported  = False   # Flag to indicate if LightMix settings are supported (After a valid RenderChannelLightMix plugin is exported and rendered)
         self._lightMixSettings   = None    # Stores LightMix settings until a valid RenderChannelLightMix plugin is exported and rendered  
 
+        # Latest VFB render region payload (x, y, width, height, enabled).
+        # Stored separately from the event queue because addEvent() collapses
+        # consecutive duplicates by event type and would discard intermediate drag updates.
+        self._lastVfbRenderRegion = None
+
+        # Last (x, y, width, height, enabled) payload sent to VFB by
+        # syncVfbRenderRegionFromScene(). Used to deduplicate redundant sends and to
+        # break the VFB -> scene.render.border_* -> depsgraph_update_pre -> VFB feedback loop.
+        self._lastSentVfbRenderRegion = None
+
 
     def addEvent(self, eventType, *args, **kwargs):
         """ Add an event to the event queue. The event will be processed in a valid Blender context.
@@ -64,7 +81,7 @@ class _VfbEventHandler:
         """
         with self._lock:
             # Only add the event if it is not a duplicate of the last one received.
-            if (not self._eventQueue) or (self._eventQueue[-1] != eventType):
+            if (not self._eventQueue) or (self._eventQueue[-1].eventType != eventType):
                 self._eventQueue.append(_EventInfo(eventType, *args,  **kwargs))
 
 
@@ -81,6 +98,10 @@ class _VfbEventHandler:
         DrawHandlers.append(bpy.types.SpaceView3D.draw_handler_add(self._exportInteractiveViewport, (), 'WINDOW', 'POST_PIXEL'))
 
     def reset(self):
+        for handler in DrawHandlers:
+            bpy.types.SpaceView3D.draw_handler_remove(handler, 'WINDOW')
+        DrawHandlers.clear()
+
         with self._lock:
             self._eventQueue     = deque()
             self._vfbLayersJson  = ""
@@ -88,6 +109,8 @@ class _VfbEventHandler:
             self._redrawViewport = False
             self._lightMixSupported = False
             self._lightMixSettings = None
+            self._lastVfbRenderRegion = None
+            self._lastSentVfbRenderRegion = None
 
 
     def stop(self):
@@ -119,8 +142,8 @@ class _VfbEventHandler:
         """ Stop interactive rendering """
         self.addEvent(_Event.RenderInteractiveStop)
 
-    def startProdRender(self, forceAnimation: bool, uiRegionContext: UIRegionContext):
-        """ Start production rendering """
+    def startProdRender(self, forceAnimationMode: str = 'AUTO', uiRegionContext: UIRegionContext = None):
+        """ Start production rendering. """
         from vray_blender.engine.renderer_prod import VRayRendererProd
 
         if self._isEventInQueue(_Event.RenderProd) or VRayRendererProd.isActive():
@@ -129,7 +152,7 @@ class _VfbEventHandler:
             return
         self.stopViewportRender()
         self.stopInteractiveRender()
-        self.addEvent(_Event.RenderProd, forceAnimation=forceAnimation, uiRegionContext=uiRegionContext)
+        self.addEvent(_Event.RenderProd, forceAnimationMode=forceAnimationMode, uiRegionContext=uiRegionContext)
 
     def stopVantageLiveLink(self):
         self.addEvent(_Event.RenderVantageStop)
@@ -139,6 +162,12 @@ class _VfbEventHandler:
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.ExportVrscene, uiRegionContext=uiRegionContext)
+
+    def exportProxy(self):
+        """ Export V-Ray Proxy (.vrmesh) """
+        self.stopViewportRender()
+        self.stopInteractiveRender()
+        self.addEvent(_Event.ExportProxy, uiRegionContext=None)
 
     def cloudSubmit(self, uiRegionContext: UIRegionContext):
         """ Submit scene to Chaos cloud """
@@ -154,6 +183,41 @@ class _VfbEventHandler:
     def upgradeScene(self):
         """ Run a scene upgrade """
         self.addEvent(_Event.UpgradeScene)
+
+    def onLightMixTransferToScene(self, changes):
+        """ Queue light mix transfer to scene event """
+        self.addEvent(_Event.LightMixTransferToScene, changes)
+
+    def onVfbMenu(self, mode, targetName, objectName, distance):
+        """ Queue VFB context menu action """
+        self.addEvent(_Event.VFBMenu, mode, targetName, objectName, distance)
+
+    def addRenderElementToScene(self, renderElementType: int):
+        """ Handle VFB 'Add Render Element to Scene' button click """
+        self.addEvent(_Event.AddRenderElementToScene, renderElementType)
+
+    def showMessagesWindow(self):
+        """ Open the Blender system console (Windows only) """
+        self.addEvent(_Event.ShowMessagesWindow)
+
+    def onVfbRenderRegionChanged(self, x, y, width, height, enabled):
+        """ Mirror VFB render region change to scene.render.border_*.
+
+            Defense in depth: the server already suppresses the echo of our
+            own syncVfbRenderRegionFromScene() write, but if anything slips
+            through we also compare against the rgn portion of the last
+            payload we sent (ignoring imgWidth/imgHeight) so a redundant
+            scene.render.border_* write here is avoided.
+        """
+        payload = (x, y, width, height, enabled)
+        with self._lock:
+            sent = self._lastSentVfbRenderRegion
+            if sent is not None:
+                sentX, sentY, sentW, sentH, _imgW, _imgH, sentEnabled = sent
+                if payload == (sentX, sentY, sentW, sentH, sentEnabled):
+                    return
+            self._lastVfbRenderRegion = payload
+        self.addEvent(_Event.VFBRenderRegionChanged)
 
     def setLightMixSupported(self, supported: bool):
         """ Mark LightMix settings as supported """
@@ -207,8 +271,8 @@ class _VfbEventHandler:
         """ Update VFB settings """
         with self._lock:
             self._vfbSettingsJson = vfbSettingsJson
-            self._saveVfbSettings()
             self._redrawViewport = True
+        self._saveVfbSettings()
 
 
     def getVfbLayers(self):
@@ -271,6 +335,9 @@ class _VfbEventHandler:
                 case _Event.CloudSubmit:
                     processed = self.startProdRenderSync(ProdRenderMode.CLOUD_SUBMIT, *event.args, **event.kwargs)
 
+                case _Event.ExportProxy:
+                    processed = self.startProdRenderSync(ProdRenderMode.EXPORT_PROXY, *event.args, **event.kwargs)
+
                 case _Event.RenderInteractive:
                     self.setLightMixSupported(True)
                     self._startInteractiveRender(*event.args, **event.kwargs)
@@ -290,6 +357,20 @@ class _VfbEventHandler:
                 case _Event.RenderVantageStop:
                     self._stopVantageLiveLink()
 
+                case _Event.LightMixTransferToScene:
+                    self._applyLightMixTransferToScene(*event.args)
+
+                case _Event.VFBMenu:
+                    self._handleVfbMenu(*event.args)
+
+                case _Event.AddRenderElementToScene:
+                    self._addRenderElementToScene(*event.args)
+
+                case _Event.ShowMessagesWindow:
+                    self._showMessagesWindow()
+
+                case _Event.VFBRenderRegionChanged:
+                    self._handleVfbRenderRegionChanged()
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::_handleQueuedEvent()")
@@ -327,13 +408,14 @@ class _VfbEventHandler:
             vfbConf.write(json.dumps(uiSettings, indent=4))
 
 
-    def startProdRenderSync(self, renderMode: int, forceAnimation = False, uiRegionContext = None, block = False):
+    def startProdRenderSync(self, renderMode: int, forceAnimationMode: str = 'AUTO', uiRegionContext = None, block = False):
         """ Invoke the production render operator
 
         Args:
             renderMode (int): one of the ProdRenderMode members
-            forceAnimation (bool, optional): force rendering animation even if the mode currently
-                                             selected in the UI is not ANIMATION.
+            forceAnimationMode (str, optional): override the scene's animation mode for
+                                             this job. One of `'FRAME'` / `'ANIMATION'`, or
+                                             `'AUTO'` to use the scene's `Exporter.animation_mode`.
             block (bool, optional): Run the render operator in blocking mode.
 
         Returns:
@@ -348,7 +430,7 @@ class _VfbEventHandler:
 
         # Blender would not let the 'Render' operator run without a camera. Check here in order
         # to avoid the exception log that would be printed otherwise.
-        if not scene.camera:
+        if (renderMode != ProdRenderMode.EXPORT_PROXY) and (not scene.camera):
             action = "export" if renderMode == ProdRenderMode.EXPORT_VRSCENE else "render"
             debug.reportError(f'Cannot {action} a scene without a camera. Add a camera to the scene and try again.')
             return True
@@ -366,7 +448,7 @@ class _VfbEventHandler:
             return True
 
         # Cancel rendering if there are cameras markers with different types in the part of the timeline that is for rendering.
-        if (renderMode == ProdRenderMode.RENDER) and (not renderCamerasHaveSameType(forceAnimation)):
+        if (renderMode == ProdRenderMode.RENDER) and (not renderCamerasHaveSameType(forceAnimationMode)):
             return True
 
         # Lock the UI for the duration of the job. If the UI is not locked while a render job is running
@@ -380,14 +462,16 @@ class _VfbEventHandler:
         # If inside a 3D viewport, the 'use_viewport' parameter will make the renderer use the layers
         # and camera of the viewport.
         VRayRendererProd.renderMode = renderMode
-        VRayRendererProd.forceAnimation = forceAnimation
+        VRayRendererProd.forceAnimationMode = forceAnimationMode
         VRayRendererProd.fakeViewLayerKeyframe = None
         VRayRendererProd.uiRegionContext = uiRegionContext
 
-        useAnimation = scene.vray.Exporter.animation_mode == 'ANIMATION'
         if renderMode == ProdRenderMode.EXPORT_VRSCENE:
             useAnimation = scene.vray.Exporter.animationSettingsVrsceneExport.exportAnimation
-        useAnimation |= forceAnimation
+        elif forceAnimationMode == 'AUTO':
+            useAnimation = scene.vray.Exporter.animation_mode == 'ANIMATION'
+        else:
+            useAnimation = (forceAnimationMode == 'ANIMATION')
 
         if useAnimation:
             # Workaround: Ensure rendering initiates for every view layer, including those disabled at the current frame.
@@ -416,7 +500,8 @@ class _VfbEventHandler:
         renderModeName = {
             ProdRenderMode.CLOUD_SUBMIT: "Submit to cloud",
             ProdRenderMode.EXPORT_VRSCENE: "Scene export",
-            ProdRenderMode.RENDER: "Render"
+            ProdRenderMode.RENDER: "Render",
+            ProdRenderMode.EXPORT_PROXY: "Proxy export"
         }[renderMode]
         bpy.context.preferences.view.render_display_type = lastRenderDisplayType
 
@@ -462,6 +547,183 @@ class _VfbEventHandler:
     def _stopVantageLiveLink(self):
         from vray_blender.engine.render_engine import VRayRenderEngine
         VRayRenderEngine.stopVantageLiveLink()
+
+    def _applyLightMixTransferToScene(self, changes):
+        """ Apply light mix changes from VFB back to the Blender scene """
+        from vray_blender.engine.light_mix_transfer import applyLightMixChanges
+        try:
+            applyLightMixChanges(changes)
+        except Exception as ex:
+            debug.printExceptionInfo(ex, "VfbEventHandler::_applyLightMixTransferToScene()")
+
+    def _handleVfbMenu(self, mode, targetName, objectName, distance):
+        """ Handle VFB context menu action """
+        from vray_blender.engine.vfb_menu import handleVfbMenuAction
+        try:
+            handleVfbMenuAction(mode, targetName, objectName, distance)
+        except Exception as ex:
+            debug.printExceptionInfo(ex, "VfbEventHandler::_handleVfbMenu()")
+
+    def _addRenderElementToScene(self, renderElementType: int):
+        """ Add a render element to the world node tree from a VFB button click.
+            renderElementType: 0 = LightMix, 1 = Denoiser
+        """
+        RENDER_ELEMENT_TYPE_LIGHTMIX = 0
+        RENDER_ELEMENT_TYPE_DENOISER = 1
+
+        NODE_NAMES = {
+            RENDER_ELEMENT_TYPE_LIGHTMIX: 'VRayNodeRenderChannelLightMix',
+            RENDER_ELEMENT_TYPE_DENOISER: 'VRayNodeRenderChannelDenoiser',
+        }
+
+        nodeName = NODE_NAMES.get(renderElementType)
+        if nodeName is None:
+            debug.printWarning(f"VfbEventHandler: Unsupported render element type {renderElementType}")
+            return
+
+        try:
+            world = bpy.context.scene.world
+            if not world:
+                from vray_blender.nodes import tree_defaults
+                tree_defaults.addWorldNodeTree(None)
+                world = bpy.context.scene.world
+
+            # Use the existing RenderChannelIndicator property to add the node.
+            # Setting 'enabled = True' triggers _setRenderChannelEnabled which handles
+            # all node tree creation (world tree, output node, channels container, render channel node).
+            indicator = getattr(world.vray.VRayRenderChannels, nodeName, None)
+            if indicator is None:
+                debug.printWarning(f"VfbEventHandler: Render channel indicator not found for {nodeName}")
+                return
+
+            if not indicator.enabled:
+                indicator.enabled = True
+
+
+        except Exception as ex:
+            debug.printExceptionInfo(ex, "VfbEventHandler::_addRenderElementToScene()")
+
+    def _showMessagesWindow(self):
+        """ Open the Blender system console. Only available on Windows. """
+        import sys
+        if sys.platform == 'win32':
+            try:
+                bpy.ops.wm.console_toggle()
+            except Exception as ex:
+                debug.printExceptionInfo(ex, "VfbEventHandler::_showMessagesWindow()")
+
+    def _handleVfbRenderRegionChanged(self):
+        """ Apply the most recent VFB render region sizes to the Blender
+            scene's camera-view render border (scene.render.border_*).
+        """
+
+        from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
+        from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+
+        if VRayRendererIprViewport.isActive():
+            return
+
+        with self._lock:
+            payload = self._lastVfbRenderRegion
+            self._lastVfbRenderRegion = None
+
+        if payload is None:
+            return
+
+        rs = bpy.context.scene.render
+        # When 'Crop to Border' is enabled, the border represents a final output crop,
+        # not a render region. Ignore the incoming VFB region change here.
+        if rs.use_crop_to_border:
+            return
+       
+        if VRayRendererIprVfb.isActive():
+            VRayRendererIprVfb.skipNextDepsgraphExport = True
+
+        x, y, width, height, enabled = payload
+
+        resW = rs.resolution_x * rs.resolution_percentage / 100.0
+        resH = rs.resolution_y * rs.resolution_percentage / 100.0
+
+
+        if (not enabled) or width <= 0 or height <= 0 or resW <= 0 or resH <= 0:
+            rs.use_border = False
+        else:
+            # VFB origin is top-left (y down); Blender border origin is bottom-left (y up).
+            rs.border_min_x = max(0.0, min(1.0, x / resW))
+            rs.border_max_x = max(0.0, min(1.0, (x + width) / resW))
+            rs.border_min_y = max(0.0, min(1.0, (resH - (y + height)) / resH))
+            rs.border_max_y = max(0.0, min(1.0, (resH - y) / resH))
+            rs.use_border = True
+
+        # Seed the deduplication cache so the depsgraph_update_pre-triggered syncVfbRenderRegionFromScene
+        # from the property writes above recognizes this round-trip and skips
+        # re-sending the same region back to VFB.
+        with self._lock:
+            self._lastSentVfbRenderRegion = self._computeVfbRenderRegionPayload(rs)
+
+
+    @staticmethod
+    def _computeVfbRenderRegionPayload(rs):
+        """ Compute the (x, y, width, height, imgWidth, imgHeight, enabled)
+            tuple that mirrors scene.render.border_* in VFB pixel space
+            (origin top-left). The image size is the scene resolution
+            (resolution_x/y * resolution_percentage); the server uses it to
+            size the VFB canvas alongside the region.
+
+            Returns the 'disabled' payload (0, 0, 0, 0, resW, resH, False)
+            when the border is off or 'Crop to Border' is active, and
+            (0, 0, 0, 0, 0, 0, False) when the resolution is invalid.
+        """
+        resW = int(rs.resolution_x * rs.resolution_percentage / 100)
+        resH = int(rs.resolution_y * rs.resolution_percentage / 100)
+
+        if resW <= 0 or resH <= 0:
+            return (0, 0, 0, 0, 0, 0, False)
+
+        if (not rs.use_border) or rs.use_crop_to_border:
+            return (0, 0, 0, 0, resW, resH, False)
+
+        # Flip Y: Blender border origin is bottom-left, VFB is top-left.
+        x = round(rs.border_min_x * resW)
+        y = round((1.0 - rs.border_max_y) * resH)
+        w = round((rs.border_max_x - rs.border_min_x) * resW)
+        h = round((rs.border_max_y - rs.border_min_y) * resH)
+        return (x, y, w, h, resW, resH, True)
+
+
+    def syncVfbRenderRegionFromScene(self):
+        """ Push the scene's camera-view render region (scene.render.border_* +
+            use_border + use_crop_to_border + resolution) to VFB via
+            vray.setVfbRenderRegion(). Skipped while any render is running -
+            during render the region is driven by the export pipeline.
+
+            Deduplicates redundant sends and breaks the
+            VFB -> scene.render.border_* -> depsgraph_update_pre -> VFB feedback loop via
+            the _lastSentVfbRenderRegion cache.
+        """
+        from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
+        from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+        from vray_blender.engine.renderer_prod import VRayRendererProd
+
+        if VRayRendererProd.isActive() \
+                or VRayRendererIprVfb.isActive() \
+                or VRayRendererIprViewport.isActive():
+            return
+
+        scene = getattr(bpy.context, 'scene', None)
+        if scene is None:
+            return
+
+        payload = self._computeVfbRenderRegionPayload(scene.render)
+
+        with self._lock:
+            if payload == self._lastSentVfbRenderRegion:
+                return
+            self._lastSentVfbRenderRegion = payload
+
+        from vray_blender.bin import VRayBlenderLib as vray
+        vray.setVfbRenderRegion(*payload)
+
 
     def _exportInteractiveViewport(self):
         """ Exporting of scene on every Viewport change """

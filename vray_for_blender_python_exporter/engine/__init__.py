@@ -72,6 +72,18 @@ def resetViewportIprRendering():
 
     VRayRendererIprViewport.reset()
 
+
+def forceCompositorRefresh():
+    """ Flip a built-in Blender pass to make Blender re-call update_render_passes() on the
+        active engine. Used when our channel set changes outside of Blender's depsgraph
+        notification flow (e.g. user adds/removes a channel node, denoiser engine flips).
+        Single toggle (no reset) - toggling back doubles the cost of every channel checkbox click.
+    """
+    viewLayer = getattr(bpy.context, "view_layer", None)
+    if viewLayer is None:
+        return
+    viewLayer.use_pass_normal = not viewLayer.use_pass_normal
+
 def register():
     import atexit
     atexit.unregister(_engineExit)

@@ -144,7 +144,7 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
 
 
 def _convertMaterialFromDict(importContext: ImportContext):
-    fixPluginParams(importContext.vrsceneDict, True)
+    fixPluginParams(importContext.vrsceneDict, forceDefaultUVChannel=True)
     deselectNodes(importContext.nodeTree)
 
     bounds = calculateTreeBounds(importContext.nodeTree)
@@ -177,15 +177,13 @@ def _removeVRayNodes(nodeTree: bpy.types.NodeTree):
         nodeTree.nodes.remove(n)
 
 
-def fixPluginParams(vrsceneDict: dict, materialAssetsOnly: bool):
+def fixPluginParams(vrsceneDict: dict, forceDefaultUVChannel: bool):
     """ Fix any plugin parameters that need special handling.
 
-    materialAssetsOnly(bool) : True if the asset being imported is a material (has no geometry).
-                               Geometry models have their channels explicitly set so we don't want
-                               to change the indices.
+    forceDefaultUVChannel(bool) : True if the uvw_channel indices should be overwritten to -1.
     """
 
-    if materialAssetsOnly:
+    if forceDefaultUVChannel:
         for uvwGenChannel in [v for v in vrsceneDict if v['ID'] == 'UVWGenChannel']:
             # V4B and Cosmos materials often disagree on what the indexes of the UVW maps should be.
             # Cosmos usually starts from 1 while V4B expects 0. This is fine for geometry assets imported
@@ -310,7 +308,7 @@ def _getOutputSocketNameByAttr(pluginType: str, outputAttrName: str):
             if label := outputSocketDesc.get('label'):
                 return label
             else:
-                return attribute_utils.formatAttributeName(outputSocketDesc)['name']
+                return attribute_utils.formatAttributeName(outputSocketDesc['name'])
 
     else:
         pluginOutputParams = [a for a in pluginModule.Parameters if a['type'] in attribute_types.NodeOutputTypes]

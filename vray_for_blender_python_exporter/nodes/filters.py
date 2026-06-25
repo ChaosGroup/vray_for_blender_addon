@@ -41,7 +41,7 @@ def filterTexDistanceTargets(obj: bpy.types.Object):
 
 
 def filterRenderMasks(obj):
-    # NOTE: Unsupported plugins 
-    #  - Instancer2  - unsupported in V-Ray
-    #  - Text/Curve  - unsupported in V-Ray, because they are exported as Instancer2
+    # NOTE: Unsupported plugins
+    #  - GeomInstancer  - unsupported in V-Ray
+    #  - Text/Curve  - unsupported in V-Ray, because they are exported as GeomInstancer
     return not obj.is_instancer and (obj.type in GEOMETRY_OBJECT_TYPES) and (obj.type not in ['CURVE', 'FONT'])

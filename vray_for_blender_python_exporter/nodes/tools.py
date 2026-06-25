@@ -15,9 +15,12 @@ SOCKET_HEIGHT = 15
 def _getNodeHeight(node: bpy.types.Node) -> float:
     height = node.height + 50
 
-    if node.vray_plugin == 'TexBitmap':
+    # Stock Blender nodes (NodeReroute, NodeFrame, Cycles nodes via the
+    # compatibility shim) don't carry `vray_plugin`. Read it defensively.
+    plugin = getattr(node, 'vray_plugin', None)
+    if plugin == 'TexBitmap':
         height += 120
-    elif node.vray_plugin == 'TexGradRamp':
+    elif plugin == 'TexGradRamp':
         height += 80
 
     for inp in node.inputs:
@@ -115,6 +118,7 @@ def addVRayNodeTreeSettings(ntree: bpy.types.ShaderNodeTree, treeType: str):
 
 
 def isVrayNode(node: bpy.types.Node):
+    # All nodes have a 'vray' attribute, only V-Ray nodes have 'vray_type'
     return hasattr(node, 'vray_type')
 
 

@@ -9,10 +9,14 @@ from bl_ui.space_node import NODE_HT_header
 from vray_blender import debug
 from vray_blender.lib import blender_utils
 from vray_blender.nodes.utils import getLightOutputNode
+from vray_blender.nodes.group.utils import isGroupNodesEnabled, VRAY_GROUP_NODE_TYPE
+from vray_blender.nodes.operators.wrangler.poll import hasEditTree
 from vray_blender.ui.properties_material import renderMaterialSelector
 from vray_blender.lib.mixin import VRayOperatorBase
 
 originalNodeEditorDraw = None
+originalContextMenuDraw = None
+originalNodeMenuDraw = None
 
 def _redrawNodeEditor():
     if area := next((a for a in bpy.context.screen.areas if a.type == 'NODE_EDITOR'), None):
@@ -197,7 +201,12 @@ def _drawVRayNodeCompositorAndToolSettings(layout, context, snode):
     if is_compositor:
         layout.prop(snode, "pin", text="", emboss=False)
 
-    layout.operator("node.tree_path_parent", text="", icon='FILE_PARENT')
+    # Use our own path-pop operator instead of Blender's tree_path_parent
+    # which jumps to root for custom tree types.
+    if len(snode.path) > 1:
+        layout.operator("vray.node_group_path_jump", text="", icon='FILE_PARENT').depth = len(snode.path) - 2
+    else:
+        layout.label(text="", icon='FILE_PARENT')
 
     # Backdrop
     if is_compositor:
@@ -221,6 +230,29 @@ def _drawVRayNodeCompositorAndToolSettings(layout, context, snode):
 
 
 # Function that draws custom header only for Vray Node Editors
+def _drawVRayGroupBreadcrumbs(layout, snode):
+    """ Draw breadcrumb path when inside a V-Ray group node. """
+    if len(snode.path) <= 1:
+        return
+
+    row = layout.row(align=True)
+    for i, pathItem in enumerate(snode.path):
+        if i > 0:
+            row.label(text="", icon='RIGHTARROW_THIN')
+
+        # Use the material/world/light name for the root entry instead of "Shader Nodetree"
+        if i == 0 and snode.id:
+            name = snode.id.name
+        else:
+            name = pathItem.node_tree.name
+
+        if i < len(snode.path) - 1:
+            props = row.operator("vray.node_group_path_jump", text=name)
+            props.depth = i
+        else:
+            row.label(text=name)
+
+
 def vrayHeaderDrawSwitch(panel, context):
     if context.space_data.tree_type == "VRayNodeTreeEditor":
         layout = panel.layout
@@ -229,6 +261,7 @@ def vrayHeaderDrawSwitch(panel, context):
         _drawVRayNodeEditorMenus(layout, context)
         _drawVRayNodeSelection(layout, context, snode)
         _drawVRayNodeCompositorAndToolSettings(layout, context, snode)
+        _drawVRayGroupBreadcrumbs(layout, snode)
 
     else:
         originalNodeEditorDraw(panel, context)
@@ -244,22 +277,252 @@ def unregisterVrayHeaderDrawSwitch():
     NODE_HT_header.draw = originalNodeEditorDraw
 
 
+# ---------------------------------------------------------------------------
+# Right-click context menu & top-bar Node menu overrides
+#
+# Blender's NODE_MT_context_menu.draw and NODE_MT_node.draw are hardcoded to
+# call node.group_make / node.group_insert / node.group_edit / node.group_ungroup
+# / node.tree_path_parent. In V-Ray editors we must use V-Ray's parallel
+# operators (vray.node_group_*) so group bookkeeping stays consistent.
+# We can't remove individual layout items from a built-in draw(), so we
+# mirror the menus and swap the group entries.
+# ---------------------------------------------------------------------------
+
+def _isVRayEditor(context):
+    space = context.space_data
+    return bool(space and space.type == 'NODE_EDITOR'
+                and space.tree_type == 'VRayNodeTreeEditor')
+
+
+def _drawVRayGroupOps(layout, context, *, isContextMenu):
+    """ Draw V-Ray's group operators. Returns True if any entry was drawn.
+        - Top-bar Node menu (isContextMenu=False): all four ops shown
+          unconditionally, mirroring Blender's NODE_MT_node behaviour.
+        - Right-click context menu (isContextMenu=True): Edit/Ungroup gated on
+          the active node being a V-Ray group, plus Exit Group and Separate
+          (Move/Copy) when inside a group.
+    """
+    if not isGroupNodesEnabled():
+        return False
+
+    snode = context.space_data
+    isNested = len(snode.path) > 1
+    activeNode = context.active_node
+
+    layout.operator('vray.node_group_make', text="Make Group", icon='NODETREE')
+    layout.operator('vray.node_group_insert', text="Insert Into Group")
+
+    showEditUngroup = (not isContextMenu) or (
+        activeNode and activeNode.bl_idname == VRAY_GROUP_NODE_TYPE)
+    if showEditUngroup:
+        layout.operator('vray.node_group_edit', text="Edit Group")
+        layout.operator('vray.node_group_ungroup', text="Ungroup")
+
+    if isContextMenu and isNested:
+        # Replaces node.tree_path_parent which jumps to root for custom trees.
+        layout.operator('vray.node_group_path_jump', text="Exit Group",
+                        icon='FILE_PARENT').depth = len(snode.path) - 2
+        layout.operator('vray.node_group_separate', text="Separate (Move)").mode = 'MOVE'
+        layout.operator('vray.node_group_separate', text="Separate (Copy)").mode = 'COPY'
+
+    return True
+
+
+def _drawVRayContextMenu(menu, context):
+    """ V-Ray replacement for NODE_MT_context_menu.draw.
+        Mirrors Blender's menu but swaps node.group_* / node.tree_path_parent
+        with the vray.node_group_* equivalents.
+    """
+    snode = context.space_data
+    isNested = len(snode.path) > 1
+    selectedCount = len(context.selected_nodes)
+
+    layout = menu.layout
+
+    if selectedCount == 0:
+        layout.operator_context = 'INVOKE_DEFAULT'
+        layout.menu("NODE_MT_add", icon='ADD')
+        layout.operator("node.clipboard_paste", text="Paste", icon='PASTEDOWN')
+
+        layout.separator()
+        layout.operator("node.find_node", text="Find...", icon='VIEWZOOM')
+
+        layout.separator()
+        layout.operator("node.links_cut")
+        layout.operator("node.links_mute")
+
+        if isNested:
+            layout.separator()
+            layout.operator('vray.node_group_path_jump', text="Exit Group",
+                            icon='FILE_PARENT').depth = len(snode.path) - 2
+
+        if hasEditTree(context):
+            layout.separator()
+            layout.menu("VRAY_MT_WR_menu", icon='NODETREE')
+        return
+
+    layout.operator("node.clipboard_copy", text="Copy", icon='COPYDOWN')
+    layout.operator("node.clipboard_paste", text="Paste", icon='PASTEDOWN')
+    layout.operator_context = 'INVOKE_DEFAULT'
+    layout.operator("node.duplicate_move", icon='DUPLICATE')
+
+    layout.separator()
+    layout.operator("node.delete", icon='X')
+    layout.operator_context = 'EXEC_REGION_WIN'
+    layout.operator("node.delete_reconnect", text="Dissolve")
+
+    if selectedCount > 1:
+        layout.separator()
+        layout.operator("node.link_make").replace = False
+        layout.operator("node.link_make", text="Make and Replace Links").replace = True
+        layout.operator("node.links_detach")
+
+    layout.separator()
+    if _drawVRayGroupOps(layout, context, isContextMenu=True):
+        layout.separator()
+
+    layout.operator("node.join", text="Join in New Frame")
+    layout.operator("node.detach", text="Remove from Frame")
+
+    layout.separator()
+    props = layout.operator("wm.call_panel", text="Rename...")
+    props.name = "TOPBAR_PT_name"
+    props.keep_open = False
+
+    layout.separator()
+    layout.menu("NODE_MT_context_menu_select_menu")
+    layout.menu("NODE_MT_context_menu_show_hide_menu")
+
+    if hasEditTree(context):
+        layout.separator()
+        layout.menu("VRAY_MT_WR_menu", icon='NODETREE')
+
+    activeNode = context.active_node
+    if activeNode:
+        layout.separator()
+        props = layout.operator("wm.doc_view_manual", text="Online Manual", icon='URL')
+        props.doc_id = activeNode.bl_idname
+
+
+def _drawVRayNodeMenu(menu, context):
+    """ V-Ray replacement for NODE_MT_node.draw (top-bar Node menu).
+        Mirrors Blender's menu but swaps node.group_* with vray.node_group_*.
+    """
+    layout = menu.layout
+
+    layout.operator("transform.translate").view2d_edge_pan = True
+    layout.operator("transform.rotate")
+    layout.operator("transform.resize")
+
+    layout.separator()
+    layout.operator("node.clipboard_copy", text="Copy", icon='COPYDOWN')
+    layout.operator_context = 'EXEC_DEFAULT'
+    layout.operator("node.clipboard_paste", text="Paste", icon='PASTEDOWN')
+    layout.operator_context = 'INVOKE_REGION_WIN'
+    props = layout.operator("node.duplicate_move", icon='DUPLICATE')
+    props.NODE_OT_translate_attach.TRANSFORM_OT_translate.view2d_edge_pan = True
+    props = layout.operator("node.duplicate_move_linked")
+    props.NODE_OT_translate_attach.TRANSFORM_OT_translate.view2d_edge_pan = True
+
+    layout.separator()
+    layout.operator("node.delete", icon='X')
+    layout.operator("node.delete_reconnect")
+
+    layout.separator()
+    layout.operator("node.join", text="Join in New Frame")
+    layout.operator("node.detach", text="Remove from Frame")
+    # Added in Blender 5.0
+    if hasattr(bpy.types, 'NODE_OT_join_nodes'):
+        layout.operator("node.join_nodes", text="Join Group Inputs")
+    if hasattr(bpy.types, 'NODE_OT_join_named'):
+        layout.operator("node.join_named")
+
+    layout.separator()
+    props = layout.operator("wm.call_panel", text="Rename...")
+    props.name = "TOPBAR_PT_name"
+    props.keep_open = False
+
+    layout.separator()
+    layout.operator("node.link_make").replace = False
+    layout.operator("node.link_make", text="Make and Replace Links").replace = True
+    layout.operator("node.links_cut")
+    layout.operator("node.links_detach")
+    layout.operator("node.links_mute")
+
+    layout.separator()
+    if _drawVRayGroupOps(layout, context, isContextMenu=False):
+        layout.separator()
+
+    # NODE_MT_swap was added in Blender 5.0; V-Ray populates it via the hook
+    # in nodes.py.
+    if hasattr(bpy.types, 'NODE_MT_swap'):
+        layout.menu("NODE_MT_swap")
+    layout.menu("NODE_MT_context_menu_show_hide_menu")
+
+
+def vrayContextMenuDrawSwitch(menu, context):
+    if _isVRayEditor(context):
+        _drawVRayContextMenu(menu, context)
+    else:
+        originalContextMenuDraw(menu, context)
+
+
+def vrayNodeMenuDrawSwitch(menu, context):
+    if _isVRayEditor(context):
+        _drawVRayNodeMenu(menu, context)
+    else:
+        originalNodeMenuDraw(menu, context)
+
+
+def registerVrayMenuSwitches():
+    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node
+    global originalContextMenuDraw, originalNodeMenuDraw
+    originalContextMenuDraw = NODE_MT_context_menu.draw
+    originalNodeMenuDraw = NODE_MT_node.draw
+    NODE_MT_context_menu.draw = vrayContextMenuDrawSwitch
+    NODE_MT_node.draw = vrayNodeMenuDrawSwitch
+
+
+def unregisterVrayMenuSwitches():
+    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node
+    if originalContextMenuDraw is not None:
+        NODE_MT_context_menu.draw = originalContextMenuDraw
+    if originalNodeMenuDraw is not None:
+        NODE_MT_node.draw = originalNodeMenuDraw
+
+
+class VRAY_OT_node_group_path_jump(bpy.types.Operator):
+    bl_idname  = 'vray.node_group_path_jump'
+    bl_label   = "Jump to Group Path"
+    bl_description = "Navigate to this level in the group hierarchy"
+
+    depth: bpy.props.IntProperty()
+
+    def execute(self, context):
+        space = context.space_data
+        # Pop path entries until we reach the target depth
+        while len(space.path) > self.depth + 1:
+            space.path.pop()
+        return {'FINISHED'}
 
 
 def getRegClasses():
     return (
         VRAY_OT_show_ntree,
-        VRAY_OT_ntree_sync_name
+        VRAY_OT_ntree_sync_name,
+        VRAY_OT_node_group_path_jump,
     )
 
 
 def register():
     registerVrayHeaderDrawSwitch()
+    registerVrayMenuSwitches()
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
 
 
 def unregister():
+    unregisterVrayMenuSwitches()
     unregisterVrayHeaderDrawSwitch()
     for regClass in getRegClasses():
         bpy.utils.unregister_class(regClass)

@@ -4,8 +4,9 @@
 
 import bpy
 from vray_blender import debug
+from vray_blender.engine import forceCompositorRefresh
 from vray_blender.lib.mixin import VRayNodeBase
-from vray_blender.nodes.sockets import addInput
+from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.nodes import tree_defaults
@@ -27,38 +28,49 @@ VRayChannelNodeSubtypes = (
     "RAW"
 )
 
-def _createRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
+def _createRenderChannel(channelsNode: bpy.types.Node, nodeName: str):
+    # The channels container may live inside a VRayGroup, in which case the
+    # new channel node and its link must be added to that group's tree, not the
+    # world tree. Use the container's id_data so both cases work.
+    tree = channelsNode.id_data
 
-    deselectNodes(worldTree)
+    deselectNodes(tree)
 
-    renderChannel = worldTree.nodes.new(nodeName)
-    renderChannel.location.x = channelsNode.location.x - 200
-    sockPos = 0
+    renderChannel = tree.nodes.new(nodeName)
 
-    for sock in channelsNode.inputs:
-        if not sock.is_linked:
-            break
-        sockPos += 1
+    targetSock = next(
+        (s for s in channelsNode.inputs if not s.is_linked and s.bl_idname == 'VRaySocketRenderChannel'),
+        None
+    )
 
-    if sockPos == len(channelsNode.inputs):
-        addInput(channelsNode, "VRaySocketRenderChannel", f"Channel {sockPos + 1}")
+    if targetSock is None:
+        sockCount = sum(1 for s in channelsNode.inputs if s.bl_idname == 'VRaySocketRenderChannel')
+        targetSock = addInput(channelsNode, 'VRaySocketRenderChannel', f"Channel {sockCount + 1}")
+        moveExtendSocketToBottom(channelsNode)
+
+    sockPos = sum(1 for s in channelsNode.inputs if s.bl_idname == 'VRaySocketRenderChannel' and s.is_linked)
 
     renderChannel.location.y = channelsNode.location.y - (80 * sockPos)
     renderChannel.location.x = channelsNode.location.x - VRayNodeBase.bl_width_default - 50
 
-    worldTree.links.new(renderChannel.outputs['Channel'], channelsNode.inputs[sockPos])
+    tree.links.new(renderChannel.outputs['Channel'], targetSock)
 
 
-def _removeRenderChannel(worldTree: bpy.types.NodeTree, channelsNode: bpy.types.Node, nodeName: str):
+def _removeRenderChannel(channelsNode: bpy.types.Node, nodeName: str):
     for inputSock in channelsNode.inputs:
         if inputSock.is_linked and inputSock.links[0].from_node.bl_idname == nodeName:
-            worldTree.nodes.remove(inputSock.links[0].from_node)
+            # The matched channel node may live in a different tree than the
+            # world tree (e.g. inside a VRayGroup containing the channels
+            # container). Remove from whichever tree actually owns it.
+            channelNode = inputSock.links[0].from_node
+            channelNode.id_data.nodes.remove(channelNode)
             channelsNode.inputs.remove(inputSock)
 
     channelCnt = 1
     for inputSock in channelsNode.inputs:
-        inputSock.name = f"Channel {channelCnt}"
-        channelCnt += 1
+        if inputSock.bl_idname != 'VRaySocketExtend':
+            inputSock.name = f"Channel {channelCnt}"
+            channelCnt += 1
 
 
 def _getConnectedChannelsNode(worldTree: bpy.types.NodeTree):
@@ -95,9 +107,14 @@ def _setRenderChannelEnabled(self, useRenderChannel: bool):
                 worldTree.links.new(outputNode.inputs['Channels'], channelsOutputNode.outputs['Channels'])
 
             if useRenderChannel:
-                _createRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+                _createRenderChannel(channelsOutputNode, self.nodeName)
             else:
-                _removeRenderChannel(worldTree, channelsOutputNode, self.nodeName)
+                _removeRenderChannel(channelsOutputNode, self.nodeName)
+
+        # Blender doesn't expose an API to invalidate its render-pass cache after
+        # channels are added/removed in our world tree; the helper toggles a built-in
+        # pass off-and-on which forces a re-call of update_render_passes().
+        forceCompositorRefresh()
 
 
 def _getRenderChannelEnabled(self):

@@ -34,10 +34,10 @@ class SettingsExporter(ExporterBase):
             # Most plugins only need to be exported once. The following list has the ones
             # that can change during interactive rendering.
             toExport = {'SettingsLightLinker'}
-            
+
         for pluginType in toExport:
             self.exportPlugin(pluginType)
-        
+
         return self.stats
 
 

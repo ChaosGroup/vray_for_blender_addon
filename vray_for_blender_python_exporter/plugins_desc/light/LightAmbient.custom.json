@@ -34,7 +34,6 @@
                 ]
             ],
             "type": "ENUM",
-            "update": "onUpdateAttribute",
             "options": {
                 "derived": true
             }
@@ -44,7 +43,6 @@
             "default": 6500.0,
             "desc": "Color temperature in K",
             "type": "FLOAT",
-            "update": "onUpdateAttribute",
             "ui": {
                 "spin_step": 100,
                 "min": 800,
@@ -99,7 +97,21 @@
         },
         {
             "attr": "shadowBias",
-            "default" : 0.005
+            "default": 0.005
+        },
+        {
+            "attr": "color_temp_control",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateColorTemperature",
+                    "args": {
+                        "color_mode": "color_mode",
+                        "color_bound_property": "color_colortex",
+                        "temperature_bound_property": "temperature"
+                    }
+                }
+            }
         }
     ],
     "Widget": {
@@ -117,26 +129,7 @@
                         "layout": "SEPARATOR"
                     },
                     {
-                        "layout": "ROW",
-                        "attrs": [
-                            {
-                                "name": "color_mode",
-                                "expand": true
-                            }
-                        ]
-                    },
-                    {
-                        "name": "color_colortex",
-                        "label": "Color",
-                        "active": {
-                            "cond": "::color_mode=0"
-                        }
-                    },
-                    {
-                        "name": "temperature",
-                        "active": {
-                            "cond": "::color_mode=1"
-                        }
+                        "name": "color_temp_control"
                     },
                     {
                         "layout": "SEPARATOR"
@@ -249,7 +242,8 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "color_colortex"
+                "name": "color_colortex",
+                "active": {"cond": "::color_mode=0"}
             },
             {
                 "name": "shadowColor_colortex"

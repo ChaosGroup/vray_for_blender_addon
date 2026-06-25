@@ -14,7 +14,8 @@
 #include <zmq_message.hpp>
 #include <zmq_agent.h>
 
-#include <unordered_set>
+#include <tsl/robin_map.h>
+#include <tsl/robin_set.h>
 #include <functional>
 #include <atomic>
 #include <map>
@@ -42,8 +43,7 @@ class ZmqExporter{
 	using RenderChannelType = VRayBaseTypes::RenderChannelType;
 	using AttrPlugin        = VRayBaseTypes::AttrPlugin;
 	using ImgReader         = VrayZmqWrapper::ImageReader;
-	using ImgIdReader       = VrayZmqWrapper::SharedMemoryReader;
-	using ImgIdReaderPtr    = std::unique_ptr<ImgIdReader>;
+	using ImgReaderPtr      = std::unique_ptr<ImgReader>;
 
 	using UpdateMessageCb  = std::function<void(const std::string&)>;
 	using BucketReadyCb    = std::function<void(const VRayBaseTypes::AttrImage&)>;
@@ -60,7 +60,23 @@ class ZmqExporter{
 		void update(const VRayBaseTypes::AttrImage &img, ZmqExporter *exp);
 	};
 
-	using ImageMap = std::unordered_map<RenderChannelType, ZmqRenderImage, std::hash<int>>;
+	using ImageMap = tsl::robin_map<RenderChannelType, ZmqRenderImage, std::hash<int>>;
+
+public:
+	/// Routing key shared with the server (defined in zmq_common.hpp).
+	using PerInstanceKey = VrayZmqWrapper::PerInstanceKey;
+
+	/// Non-owning Blender pass-buffer destination, registered via setElementDestinations().
+	struct ElementDestination {
+		float* buffer = nullptr;
+		int    width    = 0;
+		int    height   = 0;
+		int    channels = 0;
+	};
+
+private:
+	using PerInstanceKeyHash = VrayZmqWrapper::PerInstanceKeyHash;
+	using ElementDestinationMap = tsl::robin_map<PerInstanceKey, ElementDestination, PerInstanceKeyHash>;
 
 	// Cache values set directly through the VRayRenderer interface
 	// (not through the plugin system), so that we could skip updates
@@ -84,6 +100,12 @@ public:
 	void        stop();
 	void        detach();
 
+	/// Toggles whether the server emits the Combined image and per-element data to this
+	/// client for the next render. Mirrors scene.vray.Exporter.image_to_blender. The
+	/// value is read by start() when serializing MsgRendererStart.
+	void        setImageToBlender(bool enabled) { m_imageToBlender = enabled; }
+	bool        getImageToBlender() const { return m_imageToBlender; }
+
 	void        renderSequence(const vray::AttrList<int>& sequences);
 	void        continueRenderSequence();
 	void        stopRendering();
@@ -92,6 +114,7 @@ public:
 	bool        isRendering() const { return m_isRendering; }
 
 	int         exportVrscene(const ExportSceneSettings& exportSettings);
+	int         exportProxy(const ProxyExportSettings& proxySettings);
 	void        clearFrameData(float upTo);
 	void        clearScene();
 	void        abortRender();
@@ -101,17 +124,31 @@ public:
 	float       getRenderProgress() const;
 
 	// Export API
-	void        pluginCreate(const std::string& pluginName, const std::string& pluginType, bool allowTypeChanges);
-	void        pluginRemove(const std::string& pluginName);
-	void        pluginUpdate(const std::string& pluginName, const std::string& attrName, const VRayBaseTypes::AttrValue& value, bool animatable, bool forceUpdate = false, bool recreate = false);
+	void        pluginCreate(std::string pluginName, std::string pluginType, bool allowTypeChanges);
+	void        pluginRemove(std::string pluginName);
+	void        pluginUpdate(std::string pluginName, std::string attrName, const VRayBaseTypes::AttrValue& value, bool animatable, bool forceUpdate = false, bool recreate = false);
 	void        sendPluginMsg(zmq::message_t&& message);
 
 	RenderImage getImage        ();
 	RenderImage getPass         (const std::string& name);
 	RenderImage getRenderChannelImage(RenderChannelType channelType);
-	void        setRenderSize   (const proto::RenderSizes &sizes);
-	void        setCameraName   (const std::string &cameraSceneName);
-	void        commitChanges   ();
+
+	/// Register pass-buffer write targets for incoming MsgRendererOnElementReady messages.
+	/// Entries with a null buffer are silently dropped (lazy Blender allocation).
+	void setElementDestinations(std::vector<std::pair<PerInstanceKey, ElementDestination>> destinations);
+	void clearElementDestinations();
+	void        requestRenderChannel(int channelType, const std::string& pluginInstanceName = "", int subIndex = 0);
+	std::string getMetadata(const std::string& key) const;
+
+	/// Point the main render layer at an externally-owned pixel buffer (e.g. Blender's RenderPass
+	/// ibuf) so that ZmqRenderImage::update() writes directly into it with no extra copy.
+	/// Call with buffer=nullptr to release the reference (e.g. on renderEnd).
+	void        setRenderBuffer (float* buffer, int width, int height, int channels);
+
+	void        setRenderSize          (const proto::RenderSizes &sizes);
+	void        setCameraName          (const std::string &cameraSceneName);
+	void        setResumableRendering  (bool enabled, const std::string &outputFileName, int autosaveSeconds, bool deleteOnSuccess = false);
+	void        commitChanges          ();
 
 	void        setCurrentFrame(float frame);
 	float       getCurrentFrame() const;
@@ -133,7 +170,7 @@ public:
 	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_async_op_complete = cb; }
 
 private:
-	bool readViewportImage  ();
+	bool readViewportImage  (int imgID, int bufferIndex);
 
 	void handleMsg(const zmq::message_t& msg);
 	void handleError(const std::string& err);
@@ -145,6 +182,7 @@ private:
 	void processRendererOnChangeState(const proto::MsgRendererOnChangeState& message);
 	void processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message);
 	void processRendererOnProgress(const proto::MsgRendererOnProgress& message);
+	void processRendererOnElementReady(const proto::MsgRendererOnElementReady& message);
 
 	void fireStopEvent(bool isAborted);
 
@@ -162,14 +200,18 @@ private:
 
 	bool              m_dirty = true;  // Set to true if scene has to be re-rendered
 	std::atomic<bool> m_isRendering = false;
+	bool              m_imageToBlender = true; ///< Mirror of scene.vray.Exporter.image_to_blender for the next start().
 	std::atomic<int>  m_exportedCount = 0;  // Number of exported plugins
 
-	std::mutex        m_imgMutex;        // Ensures the image is not changed while it is read
-	std::mutex        m_zmqClientMutex;
+	mutable std::mutex m_imgMutex;       // Ensures the image is not changed while it is read
 	std::mutex        m_callbacksMutex;  // Guards (de)registering of callbacks
 
 	ImageMap          m_layerImages;
-	ImgIdReaderPtr    m_imgIdReader;
+	ElementDestinationMap m_elementDestinations;   ///< Pass-buffer write targets for the SHM element path. Guarded by m_imgMutex.
+	std::unordered_map<std::string, std::string> m_metadata; ///< Metadata from render elements (e.g. Cryptomatte)
+	int               m_imgId = -1;
+	ImgReaderPtr      m_imgReaders[2];  ///< One reader per double-buffer slot
+	ImgReaderPtr      m_elementReader;  ///< Reader for the per-element SHM region. Lazy-opened, dropped on renderEnd.
 
 	float             m_currentSceneFrame = 0;
 	float             m_renderProgress = 0.0;     // Fraction of job done in [0, 1]
@@ -179,7 +221,8 @@ private:
 	std::mutex m_statsMutex;
 
 	ValueCache m_cachedValues;
-	std::unordered_set<std::string> m_sharedMemoryObjects;
+	std::string m_zmqServerPID;  // Cached PID string, set once in constructor
+	tsl::robin_set<std::string> m_sharedMemoryObjects;
 
 #ifdef WITH_PROFILING
 	std::atomic<uint64_t> m_receivedImagesCount = 0;

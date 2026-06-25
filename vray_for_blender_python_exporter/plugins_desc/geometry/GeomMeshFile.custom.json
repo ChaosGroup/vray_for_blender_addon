@@ -253,7 +253,8 @@
                                 "name": "compute_normals"
                             },
                             {
-                                "name": "smooth_angle"
+                                "name": "smooth_angle",
+                                "active": {"cond": "::compute_normals!=0"}
                             },
                             {
                                 "name": "flip_normals"

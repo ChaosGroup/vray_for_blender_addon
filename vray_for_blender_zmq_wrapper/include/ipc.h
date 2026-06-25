@@ -6,8 +6,10 @@
 
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -21,6 +23,8 @@
 #endif
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,12 +98,12 @@ class SharedMemoryWriter : public SharedMemoryBase
 public:
 	// A helper struct for scatter/gather writes
 	struct Buffer {
-		const void*  data   = nullptr;
-		const size_t size   = 0;
+		const void* data = nullptr;
+		size_t size = 0;
 	};
 
 public:
-	SharedMemoryWriter(const std::string& id, const std::string& name);
+	SharedMemoryWriter(const std::string& id, const std::string& name, bool clearSharedObjects=true);
 	~SharedMemoryWriter();
 
 	/// Try to create the shared memory region with write access
@@ -118,6 +122,17 @@ public:
 	/// @param buffers - scattered buffers
 	void write(const std::vector<Buffer> buffers);
 
+	/// Hand the mapped pointer to `fill` under the lock so it can write straight into SHM.
+	/// `fill` is invoked as `fill(void* dst, size_t capacity)` and may write at most
+	/// `capacity` bytes starting at `dst`. Templated so the callable is inlined and no
+	/// std::function heap allocation happens on the hot path.
+	template<class Fn>
+	void writeInPlace(Fn&& fill) {
+		boost::interprocess::scoped_lock<NamedLock> lock(*m_lock);
+		auto& block = getPayload();
+		std::forward<Fn>(fill)(block.data, block.size);
+	}
+
 	/// Remove an existing shared file, used on Unix systems for clean-up between process restarts.
 	/// @param id The id of the mapped file.
 	/// @param name The base name of the mapped file.
@@ -127,6 +142,7 @@ private:
 	/// Internal implementation which relies on the caller to provide synchronization.
 	void writeImpl(const void* data);
 
+	bool m_clearSharedObjects;
 };
 
 
@@ -147,6 +163,22 @@ public:
 	/// @param data    - start address of a memory block to copy the whole shared region to
 	/// @returns true if the red is successful, false if the lock could not be acquired
 	bool read(std::chrono::milliseconds timeout, void* data);
+
+	/// Hand the mapped pointer to `consume` under the lock. Pairs with writeInPlace.
+	/// Returns true if the lock was acquired before the timeout. Templated so the
+	/// callable is inlined and no std::function heap allocation happens on the hot path.
+	template<class Fn>
+	bool readInPlace(std::chrono::milliseconds timeout, Fn&& consume) {
+		namespace pt = boost::posix_time;
+		const auto deadline = pt::second_clock::universal_time() + pt::milliseconds(timeout.count());
+		boost::interprocess::scoped_lock<NamedLock> lock(*m_lock, deadline);
+		if (!lock) {
+			return false;
+		}
+		auto& block = getPayload();
+		std::forward<Fn>(consume)(block.data, block.size);
+		return true;
+	}
 };
 
 

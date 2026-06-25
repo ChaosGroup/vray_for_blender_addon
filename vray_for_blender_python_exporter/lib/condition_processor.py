@@ -4,7 +4,7 @@
 
 
 ######################################################################################
-# This package procides code for compiling and evaliating the conditional expressions
+# This package provides code for compiling and evaliating the conditional expressions
 # used in plugin description JSON files.
 ######################################################################################
 
@@ -173,22 +173,26 @@ class UIConditionCompiler:
             invoked later with a plugin data object as its parameter. 
         """
 
-        label = sockDesc.get('label')
-        visible = sockDesc.get('visible')
-
-        hasLabelConditions = (label is not None) and isCondition(label)
-        hasVisibleCondition = (visible is not None) and isCondition(visible)
+        # Condition name => Allow custom function
+        conditions = [
+            ('label', True),
+            ('visible', False),
+            ('active', False)
+        ]
 
         locator = f"{self.pluginDesc['ID']}::{sockDesc['name']}"
         
-        if hasLabelConditions:
-            self._compileCondition(label, f"{locator}::label")
-
-        if hasVisibleCondition:
-            # Visibility conditions require an update function to be registered for each
+        for condInfo in conditions:
+            condName = condInfo[0]
+            # Some conditions require an update function to be registered for each
             # property that is part of the condition. We cannot easily parse that from 
-            # custoom functions, so we disallow them in this case.
-            self._compileCondition(visible, f"{locator}::visible", allowCustomFunctions=False)
+            # custom functions, so disallow the custom function.
+            allowCustomFunc = condInfo[1]
+
+            cond = sockDesc.get(condName)
+
+            if (cond is not None) and isCondition(cond):
+                self._compileCondition(cond, f"{locator}::{condName}", allowCustomFunctions=allowCustomFunc)
 
 
 

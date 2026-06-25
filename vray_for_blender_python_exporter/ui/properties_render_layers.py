@@ -11,7 +11,8 @@ from vray_blender.lib import lib_utils, draw_utils, plugin_utils
 
 class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
     bl_label    = "Render Channels"
-    bl_icon     = "VRAY_PLACEHOLDER"
+    bl_icon     = "NONE"
+    vray_icon   = "VRAY_PLACEHOLDER"
 
     def draw(self, context):
         from vray_blender.nodes.nodes import VRayNodeTypes # circular import protection
@@ -39,7 +40,7 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
         col = split.column()
 
         specialChannels = [ "LightMix", "Denoiser" ]
-        if not plugin_utils.DISABLE_GEN_AI:
+        if not plugin_utils.isGenAIDisabled():
             specialChannels.append("Enhancer")
         for channel in specialChannels:
             col.prop(getattr(vrayRenderChannels, f"VRayNodeRenderChannel{channel}"), "enabled")
@@ -152,10 +153,10 @@ class VRAY_PT_LightLister(classes.VRayRenderLayersPanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
-        split= layout.split()
-        col= split.column()
+        split = layout.split()
+        col = split.column()
 
         if bpy.data.lights:
             for lamp in bpy.data.lights:
@@ -203,29 +204,29 @@ class VRAY_PT_Includer(classes.VRayRenderLayersPanel):
         self.layout.prop(Includer, 'use', text="")
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
-        row= layout.row()
+        row = layout.row()
 
-        vs= context.scene.vray
-        module= vs.Includer
+        vs = context.scene.vray
+        module = vs.Includer
 
-        layout.active= module.use
+        layout.active = module.use
 
         row.template_list("VRAY_UL_Use", "", module, 'nodes', module, 'nodes_selected', rows=5)
 
-        col= row.column()
-        sub= col.row()
-        subsub= sub.column(align=True)
+        col = row.column()
+        sub = col.row()
+        subsub = sub.column(align=True)
         subsub.operator('vray.includer_add',    text="", icon="ADD")
         subsub.operator('vray.includer_remove', text="", icon="REMOVE")
-        sub= col.row()
-        subsub= sub.column(align=True)
+        sub = col.row()
+        subsub = sub.column(align=True)
         subsub.operator("vray.includer_up",   icon='TRIA_UP',   text="")
         subsub.operator("vray.includer_down", icon='TRIA_DOWN', text="")
 
         if module.nodes_selected >= 0 and len(module.nodes) > 0:
-            render_node= module.nodes[module.nodes_selected]
+            render_node = module.nodes[module.nodes_selected]
 
             layout.separator()
 

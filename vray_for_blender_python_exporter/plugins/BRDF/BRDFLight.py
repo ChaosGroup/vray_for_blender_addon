@@ -39,7 +39,7 @@ def exportTreeNode(nodeCtx: NodeContext):
         pluginDesc.setAttribute("transparency", opacityToTransparency(opacityRGBA))
 
     # Register the material as emissive. This information will be used by the LightMix
-    nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name))
+    nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name, nodeCtx.material.name))
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=(sockOpacity.vray_attr,))
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)

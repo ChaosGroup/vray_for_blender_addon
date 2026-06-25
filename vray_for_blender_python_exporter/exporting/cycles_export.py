@@ -684,7 +684,7 @@ def _exportCyclesGlossyBsdf(nodeCtx: NodeContext):
     else:
         texFloatOpName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
         texFloatOpDesc = PluginDesc(texFloatOpName, "TexFloatOp")
-        texFloatOpDesc.setAttribute("float_a", anisotropy)
+        texFloatOpDesc.setAttribute("float_a", _exportCyclesLinkedSocket(nodeCtx, rotationSocket))
         texFloatOpDesc.setAttribute("float_b", 0.25)
         texFloatOpDesc.setAttribute("mode", 2) # sum
         anisotropyRotation = _exportCyclesPluginWithStats(nodeCtx, texFloatOpDesc)
@@ -932,13 +932,13 @@ def _exportCyclesMathNode(nodeCtx: NodeContext):
             case 'MAXIMUM': mode = 8
             case 'FLOOR' | 'TRUNCATE': mode = 12
             case 'CEIL' | 'ROUND': mode = 10
-            case 'SINE': mode = 4
+            case 'SINE': mode = 5
             case 'COSINE': mode = 6
             case 'TANGENT': mode = 18
             case 'ARCSINE': mode = 19
             case 'ARCCOSINE': mode = 20
             case 'ARCTANGENT': mode = 21
-            case 'ARCTAN2 ': mode = 22
+            case 'ARCTAN2': mode = 22
             case 'MODULO': mode = 17
 
             case 'FRACT':
@@ -1119,7 +1119,7 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
         # [GPU_BROKEN_MODIFIED_IMAGES_RELOAD_IPR]
         updateValue(nodeCtx.exporterCtx.renderer, bitmapBufferName, 'file', AttrPlugin(forceUpdate=True))
     
-    bitmapBufferDesc.setAttribute("file", bpy.path.abspath(imagePath))
+    bitmapBufferDesc.setAttribute("file", imagePath)
 
     match node.interpolation:
         case 'Linear':
@@ -1178,14 +1178,17 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
     if not isEnvironment and nodeLink.from_socket.name == "Alpha":
         return bitmapPluginAlphaOutput
 
-    if image and image.alpha_mode in ('PREMUL', 'STRAIGHT'):
-        texAColorOpName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
-        texAColorOpDesc = PluginDesc(texAColorOpName, "TexAColorOp")
-        texAColorOpDesc.setAttribute("color_a", bitmapPlugin)
-        texAColorOpDesc.setAttribute("mult_a", bitmapPluginAlphaOutput)
-        return _exportCyclesPluginWithStats(nodeCtx, texAColorOpDesc)
+    # Only STRAIGHT files need RGB premultiplied here. PREMUL already has alpha
+    # baked into RGB on disk; multiplying again would darken every pixel.
+    if image is None or image.alpha_mode != 'STRAIGHT' \
+            or image.colorspace_settings.is_data:
+        return bitmapPlugin
 
-    return bitmapPlugin
+    texAColorOpName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
+    texAColorOpDesc = PluginDesc(texAColorOpName, "TexAColorOp")
+    texAColorOpDesc.setAttribute("color_a", bitmapPlugin)
+    texAColorOpDesc.setAttribute("mult_a", bitmapPluginAlphaOutput)
+    return _exportCyclesPluginWithStats(nodeCtx, texAColorOpDesc)
 
 def _exportCyclesUVWMapNode(nodeCtx: NodeContext):
     node: bpy.types.ShaderNodeNormalMap = nodeCtx.node
@@ -1475,7 +1478,7 @@ def _exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
 
             input = _exportCyclesPluginWithStats(nodeCtx, rgbSplineDesc, True)
     else:
-        if "UVWGen" in input.pluginType:
+        if isinstance(input, AttrPlugin) and input.pluginType.startswith("UVWGen"):
             input = _exportUVWToColor(nodeCtx, input)
 
     simpleSpline = _detectSimpleSpline(curveMapping.curves[0]) and _detectSimpleSpline(curveMapping.curves[1]) and _detectSimpleSpline(curveMapping.curves[2])
@@ -1521,7 +1524,7 @@ def _exportCyclesMappingNode(nodeCtx: NodeContext):
         nodeCtx.pushUVWTransform(transform)
         sockValue = _exportCyclesLinkedSocket(nodeCtx, vectorSocket)
         nodeCtx.popUVWTransform()
-        if isinstance(sockValue, AttrPlugin) and "UVWGen" in sockValue.pluginType:
+        if isinstance(sockValue, AttrPlugin) and sockValue.pluginType.startswith("UVWGen"):
             return sockValue
     else:
         return Vector(_getSocketValue(vectorSocket, SocketValueType.Color)) @ transform
@@ -1814,7 +1817,7 @@ def _exportCyclesSeperateXYZNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     texDesc = PluginDesc(pluginName, "TexAColorOp")
     vectorSocket = nodeCtx.node.inputs["Vector"]
     value = _exportCyclesLinkedSocket(nodeCtx, vectorSocket) if _isSocketTexture(vectorSocket) else _getSocketValue(vectorSocket, SocketValueType.Color)
-    if value is not None and isinstance(value, AttrPlugin) and "UVWGen" in value.pluginType:
+    if value is not None and isinstance(value, AttrPlugin) and value.pluginType.startswith("UVWGen"):
         value = _exportUVWToColor(nodeCtx, value)
     texDesc.setAttribute("color_a", value)
     texAColorOp = _exportCyclesPluginWithStats(nodeCtx, texDesc)
@@ -1851,7 +1854,7 @@ def _exportLayerWeightBias(nodeCtx: NodeContext, input: AttrPlugin):
             return texFloatOp
     else:
         blend = _getSocketValue(blendSocket, SocketValueType.Float)
-        if math.isclose(blend, 0.5):
+        if not math.isclose(blend, 0.5):
             blend = _clamp(blend, 0.0, 1.0 - 1e-5)
             if blend < 0.5:
                 blend = 2.0 * blend
@@ -2074,8 +2077,9 @@ def _exportCyclesGammaNode(nodeCtx: NodeContext):
     gammaSocket = nodeCtx.node.inputs["Gamma"]
     if _isSocketTexture(gammaSocket):
         invertName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
-        invertDesc = PluginDesc("TexFloatOp", invertName)
+        invertDesc = PluginDesc(invertName, "TexFloatOp")
         invertDesc.setAttribute("float_a", 1.0)
+        _exportCyclesFloatAttribute(nodeCtx, invertDesc, gammaSocket, "float_b")
         invertDesc.setAttribute("mode", 1) # ratio
         gamma = _exportCyclesPluginWithStats(nodeCtx, invertDesc)
         gamma = _wrapFloatToColor(nodeCtx, gamma)

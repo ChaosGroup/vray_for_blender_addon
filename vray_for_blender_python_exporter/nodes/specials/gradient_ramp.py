@@ -11,7 +11,7 @@ from vray_blender.lib.export_utils import exportPluginCommon, commonNodesExport
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.lib.names import Names
 from vray_blender.nodes import color_ramp
-from vray_blender.nodes.sockets import addInput, removeInputs, VRaySocket, VRaySocketAColor
+from vray_blender.nodes.sockets import addInput, addOutput, removeInputs, VRaySocket, VRaySocketAColor
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 
 
@@ -227,7 +227,7 @@ class VRayNodeColorRamp(VRayNodeBase):
     def init(self, context):
         """Creates the output socket and sockets for each ramp point element."""
         self._create_fake_texture()
-        self.outputs.new(VRaySocketColorRamp.bl_idname, "Ramp")
+        addOutput(self, VRaySocketColorRamp.bl_idname, "Ramp")
 
         _manageRampSockets(self, self.texture.color_ramp)
 
@@ -237,14 +237,57 @@ class VRayNodeColorRamp(VRayNodeBase):
             self: The newly created node.
             node: The original node that this one is copied from.
         """
+        if not hasattr(self.id_data, 'vray'):
+            return
+
+        srcTexture = node.texture
+
+        if srcTexture is None or not hasattr(srcTexture, 'color_ramp'):
+            # Source texture wasn't transferred or is a bare ID (cross-scene paste); create a fresh one.
+            bpy.app.timers.register(self._create_fake_texture)
+            return
+
+        # Snapshot ramp data synchronously. srcTexture is guaranteed alive here,
+        # but may be freed by the time the timer fires (e.g. Make Group deletes
+        # source nodes via bpy.data.textures.remove(), which ignores use_fake_user).
+        srcColorMode = srcTexture.color_ramp.color_mode
+        srcInterp    = srcTexture.color_ramp.interpolation
+        srcHueInterp = getattr(srcTexture.color_ramp, 'hue_interpolation', None)
+        srcElements  = [(e.position, tuple(e.color)) for e in srcTexture.color_ramp.elements]
+
+        # Detect Blender's Ctrl+D shallow copy: before copy() is called Blender
+        # copies all properties, so self.texture is the same data block as srcTexture.
+        # In copyNodesBetweenTrees, init() runs first and creates an independent texture.
+        needsFreshTexture = self.texture is srcTexture
+
         def assignTexture():
             """Callback for the timer. Can't use lambda as it needs to assign value."""
-            self.texture = node.texture.copy()
+            if needsFreshTexture:
+                # Shared texture from Ctrl+D: make this node independent.
+                color_ramp.createRampTexture(self, "texture")
+
+            ramp = self.texture.color_ramp
+            ramp.color_mode    = srcColorMode
+            ramp.interpolation = srcInterp
+            if srcHueInterp is not None:
+                try:
+                    ramp.hue_interpolation = srcHueInterp
+                except AttributeError:
+                    pass
+            while len(ramp.elements) < len(srcElements):
+                ramp.elements.new(0.0)
+            for i, (pos, col) in enumerate(srcElements):
+                ramp.elements[i].position = pos
+                ramp.elements[i].color    = col
+
             color_ramp.registerColorRamp(self, 'texture', self.texture)
+
         bpy.app.timers.register(assignTexture)
 
     def free(self):
         """Clean up on removal."""
+        if not self.texture:
+            return
         color_ramp.unregisterColorRamp(self, 'texture', self.texture)
         self.texture.use_fake_user = False
         bpy.data.textures.remove(self.texture)
@@ -333,19 +376,11 @@ def registerColorRamps():
     Called from the Load Post event handler.
     Adds all ColorRamp nodes to a list for sync. Used with Undo/Redo as well.
     """
-    nodeTrees = (
-        (bpy.data.materials, 'MATERIAL'),
-        (bpy.data.worlds, 'WORLD'),
-        (bpy.data.lights, 'LIGHT')
-    )
-
-    for tree in nodeTrees:
-        for item in tree[0]:
-            if not item.node_tree:
-                continue
-            for node in item.node_tree.nodes:
-                if node.bl_idname == VRayNodeColorRamp.bl_idname:
-                    color_ramp.registerColorRamp(node, 'texture', node.texture)
+    from vray_blender.nodes.tree import iterVRayNodeTrees
+    for ntree in iterVRayNodeTrees():
+        for node in ntree.nodes:
+            if node.bl_idname == VRayNodeColorRamp.bl_idname and node.texture:
+                color_ramp.registerColorRamp(node, 'texture', node.texture)
 
 
 def syncColorRamps():

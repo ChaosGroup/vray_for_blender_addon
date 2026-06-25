@@ -282,6 +282,9 @@ def drawFurPreview():
     if space3d.shading.type != 'SOLID':
         return
 
+    if not space3d.show_object_viewport_curves:
+        return
+
     # Don't draw fur preview if the user is in edit mode.
     if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':
         return
@@ -316,6 +319,9 @@ def _generateHairRootsBuffers(scene: bpy.types.Scene, depsgraph: bpy.types.Depsg
             continue
 
         obj = inst.object
+        if not isinstance(obj.data, bpy.types.Mesh):
+            continue
+
         dataID = id(obj.data)
         if dataID not in iteratedInstGeom:
             iteratedInstGeom[dataID] = Names.objectData(obj, inst if inst.is_instance else None)

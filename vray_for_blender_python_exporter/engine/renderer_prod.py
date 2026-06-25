@@ -5,6 +5,7 @@
 import threading
 import time
 import bpy
+from typing import Optional
 
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 from vray_blender.exporting.update_tracker import UpdateTracker
@@ -23,7 +24,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 ## VRayRendererProd
 #############################
 
-FRAME_EXPORT_SLEEP_TIME = 0.1
+FRAME_EXPORT_SLEEP_TIME = 0.02
 
 class VRayRendererProd(VRayRendererProdBase):
     """ Final (or 'production' in VRay lingo) renderer implementation.
@@ -39,8 +40,8 @@ class VRayRendererProd(VRayRendererProdBase):
     # Type of job ("Scene export", "Render" or "Cloud submit")
     renderMode = ProdRenderMode.RENDER 
 
-    # This field will be set to the value of vray.render operator's 'animation' property.
-    forceAnimation = False
+    # Per-job override of the scene's animation mode. 'AUTO' means "use Exporter.animation_mode".
+    forceAnimationMode: str = 'AUTO'
 
     # Fake view layer use keyframe that will be set before the rendering starts.    
     fakeViewLayerKeyframe: float | None  = None
@@ -119,11 +120,13 @@ class VRayRendererProd(VRayRendererProdBase):
                     self._submitToCloud(engine)
                 case ProdRenderMode.EXPORT_VRSCENE:
                     self._writeVrscene(scene, engine)
+                case ProdRenderMode.EXPORT_PROXY:
+                    success = self._exportProxy(scene, engine)
                 case ProdRenderMode.RENDER:
                     errMsg = self._render(scene, engine)
                     success = not bool(errMsg)
                 case _:
-                    assert False, "Invalid render mode in PROD renderer: {__class__.renderMode}"
+                    assert False, f"Invalid render mode in PROD renderer: {__class__.renderMode}"
 
         except TestBreak.Exception:
             debug.printInfo("Interrupted by user")
@@ -178,9 +181,11 @@ class VRayRendererProd(VRayRendererProdBase):
                     vray.continueRenderSequence(self.renderer)
 
                 self._waitFrameRenderEnd(engine, frame)
+                self._postRender(engine)
                 self._persistState(self.exporterCtx)
 
             if renderingStarted:
+                engine.update_progress(1.0)
                 self._reportInfo(engine, "Animation exported.")
             else:
                 return "No frames selected for rendering"
@@ -222,17 +227,17 @@ class VRayRendererProd(VRayRendererProdBase):
         
         scene = bpy.context.scene
 
-        commonSettings = CommonSettings(scene, engine,
+        commonSettings = CommonSettings(scene,
                                         isInteractive = False,
                                         viewLayerName = depsgraph.view_layer_eval.name,
                                         exportOnly = __class__._exportOnly(),
-                                        forceAnimation = __class__.forceAnimation)
+                                        forceAnimationMode = __class__.forceAnimationMode)
 
         commonSettings.updateFromScene()
 
         self.exporterCtx = self._getExporterContext(engine, depsgraph, commonSettings)
         # Value was overridden in the vray.render operator
-        self.exporterCtx.forceAnimation = __class__.forceAnimation
+        self.exporterCtx.forceAnimationMode = __class__.forceAnimationMode
 
         if self.exporterCtx.isAnimation and (len(commonSettings.animation.frames) == 0):
             self._reportInfo(engine, f"View layer '{depsgraph.view_layer_eval.name}' is not enabled for the selected frames")
@@ -240,8 +245,11 @@ class VRayRendererProd(VRayRendererProdBase):
 
         with VRayRendererProd._instanceLock:
             if not self.renderer:
-
-                exporterType =  ExporterType.ANIMATION if self.exporterCtx.isAnimation else ExporterType.PROD
+                isProxyAnimationExport = (
+                    __class__.renderMode == ProdRenderMode.EXPORT_PROXY
+                    and scene.vray.Exporter.export_proxy_animation_range == 'FRAME_RANGE'
+                )
+                exporterType = ExporterType.ANIMATION if (self.exporterCtx.isAnimation or isProxyAnimationExport) else ExporterType.PROD
                 self.renderer = self._createRenderer(exporterType)
 
                 def onStopped():
@@ -252,7 +260,9 @@ class VRayRendererProd(VRayRendererProdBase):
 
         self.exporterCtx.renderer = self.renderer
 
-        # In production mode we always perform a full export which only adds data to the scene. 
+        vray.startExport(self.renderer, bpy.context.scene.vray.Exporter.debug_threads)
+
+        # In production mode we always perform a full export which only adds data to the scene.
         # Clearing the scene will ensure that no remnants of a previous scene are left around.
         vray.clearScene(self.renderer)
         UpdateTracker.clear()
@@ -281,6 +291,10 @@ class VRayRendererProd(VRayRendererProdBase):
             engine.update_progress(progress)
             time.sleep(FRAME_EXPORT_SLEEP_TIME)
 
+        # Render data has fully arrived; finalize cryptomatte metadata and
+        # dynamically-registered passes (e.g. Effects Result) before end_result.
+        self._postRender(engine)
+
         debug.printDebug("End single-frame render.")
 
 
@@ -288,7 +302,9 @@ class VRayRendererProd(VRayRendererProdBase):
         from vray_blender.exporting.cloud_job import VCloudJob
         import os, tempfile
 
-        # Create temporary vrscene file used only for cloud submissions
+        # Create temporary vrscene file used only for cloud submissions.
+        # Cleanup of tempDir is owned by the background submit thread in VCloudJob,
+        # because submitToCloud() spawns a subprocess and returns immediately.
         tempDir = tempfile.mkdtemp(dir=getV4BTempDir())
         baseScenePath = os.path.join(tempDir, "cloud_export.vrscene").replace("\\", "/")
         scenePath = self._writeVrscene(bpy.context.scene, engine, baseScenePath, isCloudExport=True)
@@ -297,7 +313,11 @@ class VRayRendererProd(VRayRendererProdBase):
             return
 
         job = VCloudJob(bpy.context.scene, scenePath)
-        job.submitToCloud() # This function waits for the submission to finish
+        job.submitToCloud()
+
+    def _exportProxy(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine):
+        from vray_blender.proxy import runProxyFileExport
+        return runProxyFileExport(scene, self.exporterCtx, engine)
 
 
 
@@ -342,9 +362,7 @@ class VRayRendererProd(VRayRendererProdBase):
             __class__.testBreak(engine)
 
             if nextFrame is not None and nextFrame == vray.getLastRenderedFrame(self.renderer):
-                totalFrames = len(frames)
-                if totalFrames > 1:
-                    engine.update_progress(currentIdx / (totalFrames - 1))
+                engine.update_progress((currentIdx + 1) / len(frames))
                 return
 
             time.sleep(FRAME_EXPORT_SLEEP_TIME)
@@ -368,8 +386,7 @@ class VRayRendererProd(VRayRendererProdBase):
 
         self._export(engine, self.exporterCtx)
 
-        # Clear per-frame caches.
-        self.exporterCtx.exportedMtls.clear()
+        return True
 
 
     def _getFrameRange(self, scene):
@@ -399,10 +416,11 @@ class VRayRendererProd(VRayRendererProdBase):
             self.exporterCtx.exportProgress.setTotalObjectsAndFrames(self.exporterCtx)
             self._export(engine, self.exporterCtx)
         else:
-            for frame in self._getFrameRange(scene):
-                self.exporterCtx.exportProgress.setTotalObjectsAndFrames(self.exporterCtx)
+            allFrames = list(self._getFrameRange(scene))
+            for i, frame in enumerate(allFrames):
                 self._exportAnimationFrame(engine, frame)
                 self.exporterCtx.fullExport = False
+                engine.update_progress((i + 1) / len(allFrames))
 
         self._reportInfo(engine, "Animation exported.")
 
@@ -459,4 +477,4 @@ class VRayRendererProd(VRayRendererProdBase):
 
     @staticmethod
     def _exportOnly():
-        return __class__.renderMode in (ProdRenderMode.EXPORT_VRSCENE, ProdRenderMode.CLOUD_SUBMIT)
+        return __class__.renderMode in (ProdRenderMode.EXPORT_VRSCENE, ProdRenderMode.CLOUD_SUBMIT, ProdRenderMode.EXPORT_PROXY)

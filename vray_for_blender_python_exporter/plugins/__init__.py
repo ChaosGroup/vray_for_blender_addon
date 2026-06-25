@@ -619,22 +619,135 @@ class VRayScene(VRayEntity, bpy.types.PropertyGroup):
         )
     )
 
+# Quick-toggle proxies for the Common > Rendering panel. They mirror underlying
+# scene-level V-Ray properties so a single Blender checkbox can flip an enum or
+# combine multiple parameter writes.
+def _getQuickAutoExposure(self):
+    return bpy.context.scene.vray.SettingsCameraGlobal.auto_exposure != "0"
+
+def _setQuickAutoExposure(self, value):
+    bpy.context.scene.vray.SettingsCameraGlobal.auto_exposure = "1" if value else "0"
+
+def _getQuickAutoWhiteBalance(self):
+    return bpy.context.scene.vray.SettingsCameraGlobal.auto_white_balance
+
+def _setQuickAutoWhiteBalance(self, value):
+    bpy.context.scene.vray.SettingsCameraGlobal.auto_white_balance = bool(value)
+
+def _getQuickMotionBlur(self):
+    return bpy.context.scene.vray.SettingsMotionBlur.on
+
+def _setQuickMotionBlur(self, value):
+    bpy.context.scene.vray.SettingsMotionBlur.on = bool(value)
+
+def _getQuickCaustics(self):
+    return bpy.context.scene.vray.SettingsCaustics.on
+
+def _setQuickCaustics(self, value):
+    vrayScene = bpy.context.scene.vray
+    vrayScene.SettingsCaustics.on = bool(value)
+    if value:
+        # Bucket samplers (Fixed rate / Adaptive / Adaptive subdivision) -> "New map".
+        # Progressive sampler -> Progressive caustics.
+        vrayScene.SettingsCaustics.mode = "2" if vrayScene.SettingsImageSampler.type == "3" else "0"
+
+
+class VRayCommonTabUI(bpy.types.PropertyGroup):
+    """ UI-only state for the Common tab: quick-toggle proxies, force-open flags
+        for nested rollouts, and highlight (alert) state used when redirecting
+        the user to a deeply-nested parameter.
+    """
+
+    # Quick-toggle BoolProperty proxies for the Common > Rendering rollout.
+    quick_auto_exposure: bpy.props.BoolProperty(
+        name        = "Auto Exposure",
+        description = "Enable Automatic exposure correction (requires Light cache to be ON for interactive rendering)",
+        get         = _getQuickAutoExposure,
+        set         = _setQuickAutoExposure,
+    )
+
+    quick_auto_white_balance: bpy.props.BoolProperty(
+        name        = "Auto White Balance",
+        description = "Enable automatic white balance",
+        get         = _getQuickAutoWhiteBalance,
+        set         = _setQuickAutoWhiteBalance,
+    )
+
+    quick_motion_blur: bpy.props.BoolProperty(
+        name        = "Motion Blur",
+        description = "Enable Motion blur for non V-Ray Cameras",
+        get         = _getQuickMotionBlur,
+        set         = _setQuickMotionBlur,
+    )
+
+    quick_caustics: bpy.props.BoolProperty(
+        name        = "Caustics",
+        description = "Enable Caustics",
+        get         = _getQuickCaustics,
+        set         = _setQuickCaustics,
+    )
+
+    # Programmatic open/close state for inner rollouts driven by `layout.panel_prop`.
+    # The settings buttons in the Common > Rendering rollout flip these to True when
+    # redirecting the user to a deeply-nested parameter.
+    panel_globals_camera_open: bpy.props.BoolProperty(
+        name    = "Camera Rollout Open",
+        default = True,
+    )
+
+    panel_globals_motion_blur_open: bpy.props.BoolProperty(
+        name    = "Motion Blur Rollout Open",
+        default = False,
+    )
+
+    # Highlight state used to render an alert wrapper around a single parameter
+    # when the user clicks a "settings" button in Common > Rendering. The value
+    # is set by `VRAY_OT_jump_to_setting` and cleared by a one-shot timer it
+    # schedules, so no separate timestamp is needed.
+    # Encoded as "<PluginID>.<attr>" e.g. "SettingsCameraGlobal.auto_exposure".
+    highlight_target: bpy.props.StringProperty(
+        name    = "Highlight Target",
+        default = "",
+    )
+
+
 class VRayWindowManager(bpy.types.PropertyGroup):
     ui_render_context: bpy.props.EnumProperty(
         name = "Render Context Panels",
         description = "Show render panels group",
         items = (
+            ('4', "Common", ""), # The id is '4' in for backward compatibility.
             ('0', "Sampler", ""),
             ('1', "GI", ""),
             ('2', "Globals", ""),
             ('3', "System", ""),
         ),
-        default = '0'
+        default = '4'
+    )
+
+    # UI-only state. Tracks the last item the user picked from the Render-button dropdown
+    # so the main Render button label and behavior reflect that choice. NOT a persistent
+    # scene setting — `Exporter.animation_mode` remains the authoritative scene-level value.
+    render_button_mode: bpy.props.EnumProperty(
+        name = "Render Button Mode",
+        description = "Last render mode picked from the Render button dropdown",
+        items = (
+            ('FRAME',     "Render",           "Render a single frame"),
+            ('ANIMATION', "Render Animation", "Render the animation range"),
+        ),
+        default = 'FRAME',
     )
 
     vrayscene_warning_shown: bpy.props.BoolProperty(
         default = False,
         description = "The warning about VRayScene objects in IPR was already shown to the user"
+    )
+
+    # Sub-group holding all UI state used by the Common tab.
+    common_tab: bpy.props.PointerProperty(
+        name = "Common Tab UI",
+        type = VRayCommonTabUI,
+        description = "UI-only state for the Common tab"
     )
 
 class VRayFur(VRayEntity, bpy.types.PropertyGroup):
@@ -658,7 +771,7 @@ class VRayFur(VRayEntity, bpy.types.PropertyGroup):
 
     make_thinner: bpy.props.BoolProperty(
         name        = "Make Thinner",
-        description = "Make hair thiner to the end",
+        description = "Make hair thinner to the end",
         default     = False
     )
 
@@ -729,7 +842,9 @@ def register():
     global PLUGIN_MODULES
 
     from vray_blender.plugins import templates
+    from vray_blender.plugins.light import light_tools
     templates.register()
+    light_tools.register()
 
     # Load plugin descriptions from the json definition files exported from Vray
     if plugin_utils.loadPluginDescriptions() == 0:
@@ -996,6 +1111,7 @@ def register():
     )
 
 
+    bpy.utils.register_class(VRayCommonTabUI)
     bpy.utils.register_class(VRayWindowManager)
     bpy.types.WindowManager.vray = bpy.props.PointerProperty(
         name = "V-Ray Settings",
@@ -1014,11 +1130,15 @@ def unregister():
 
     bpy.utils.unregister_class(VRayScene)
     bpy.utils.unregister_class(VRayWindowManager)
+    bpy.utils.unregister_class(VRayCommonTabUI)
 
     for pluginName in PLUGIN_MODULES:
         plugin = PLUGIN_MODULES[pluginName]
         if hasattr(plugin, 'unregister'):
             plugin.unregister()
+
+    from vray_blender.plugins.light import light_tools
+    light_tools.unregister()
 
     del bpy.types.Camera.vray
     del bpy.types.Light.vray

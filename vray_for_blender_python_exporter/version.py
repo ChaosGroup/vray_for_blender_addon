@@ -223,7 +223,7 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
         upgradeModule = None
 
         if (upgradeModule := importModule(upgradeScriptModule)) is None:
-            debug.reportError(f"Scene version updatecheck failed. See console log for details.", exc=e)
+            debug.reportError(f"Scene version updatecheck failed. See console log for details.")
             return False
 
         try:

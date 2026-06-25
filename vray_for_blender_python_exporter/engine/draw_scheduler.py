@@ -84,6 +84,9 @@ class VRay_OT_draw_viewport_timer(VRayOperatorBase):
             # ensuring it doesn't alter the render result's appearance.
             self.switchViewTransformToStandard()
             if vray.imageWasUpdated(VRayRendererIprViewport.getActiveRenderer()):
+                instance = VRayRendererIprViewport.getActiveInstance()
+                if instance is not None:
+                    instance._imageUpdatePending = True
                 if context.area:
                     context.area.tag_redraw()
 

@@ -6,7 +6,7 @@ from vray_blender.exporting.plugin_tracker import TrackObj, TrackNode, getObjTra
 from vray_blender.exporting.tools import *
 from vray_blender.exporting.node_export import *
 from vray_blender.lib import export_utils
-from vray_blender.lib.plugin_utils import updateValue, DISABLE_GEN_AI
+from vray_blender.lib.plugin_utils import updateValue, isGenAIDisabled
 from vray_blender.lib.defs import *
 from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes import utils as NodesUtils
@@ -24,6 +24,28 @@ ENVIRONMENT_OVERRIDES = (
 )
 
 
+def _exportToonOutlinesVolume(nodeCtx: NodeContext):
+    """ Return a singleton VolumeVRayToon AttrPlugin if any material uses the Outlines socket,
+        otherwise return None.  Mirrors C4D's addOutlinesToonVolume/updateSettingsEnvironment:
+        a single VolumeVRayToon with toonMaterialOnly=2 activates outlines for every object
+        whose material has a BRDFToonOverride connected to the Material Output Outlines socket.
+    """
+    hasToonOutlines = any(
+        (outNode := NodesUtils.getOutputNode(mtl.node_tree, 'MATERIAL'))
+        and (sock := getInputSocketByName(outNode, 'Outlines'))
+        and sock.is_linked
+        for mtl in bpy.data.materials
+        if mtl.use_nodes and mtl.node_tree
+    )
+
+    if not hasToonOutlines:
+        return None
+
+    plDesc = PluginDesc('_outlinesVolumeVRayToon', 'VolumeVRayToon')
+    plDesc.setAttribute('toonMaterialOnly', 2)
+    return export_utils.exportPlugin(nodeCtx.exporterCtx, plDesc)
+
+
 def _getExportedEffectsList(nodeCtx: NodeContext):
     """ Parses all effect nodes and sets the 'environment_volume' attribute of SettingsEnvironment plugin """
 
@@ -39,7 +61,7 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
             return []
 
         with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(effectsNode)):
-            with nodeCtx.push(effectsNode):
+            with nodeCtx.push(effectsNode), nodeCtx.pushGroupPath(link.groupPath):
                 if nodeCtx.getCachedNodePlugin(effectsNode) is None:
                     nodeCtx.cacheNodePlugin(effectsNode)
                     for inSock in effectsNode.inputs:
@@ -52,69 +74,81 @@ def _getExportedEffectsList(nodeCtx: NodeContext):
 
 
 
-def _sockConnectedToDenoiser(sock):
+def sockConnectedToDenoiser(sock: bpy.types.NodeSocket):
     link = getFarNodeLink(sock)
     return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelDenoiser"
 
-def _sockConnectedToCryptomatte(sock):
+def sockConnectedToCryptomatte(sock: bpy.types.NodeSocket):
     link = getFarNodeLink(sock)
     return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelCryptomatte"
 
-def _sockConnectedToEnhancer(sock):
+def sockConnectedToObjectSelect(sock: bpy.types.NodeSocket):
+    link = getFarNodeLink(sock)
+    return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelObjectSelect"
+
+def sockConnectedToEnhancer(sock: bpy.types.NodeSocket):
     link = getFarNodeLink(sock)
     return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelEnhancer"
 
-def _getViewportDenoiserEngine(world: bpy.types.World):
-    viewportEngine = world.vray.RenderChannelDenoiser.viewport_engine
-    upscaling = False
-    if viewportEngine == "3":
-        viewportEngine = "1"
-        upscaling = True
-    return viewportEngine, upscaling
-
 def _exportViewportDenoiser(nodeCtx: NodeContext):
+    # Export denoiser for the viewport. Except for the engine selection, 
+    # always use the default settings in order to have the best performance.
     denoiserPluginName = Names.singletonPlugin("RenderChannelDenoiser")
-    viewportDenoiserEngine, upscaling = _getViewportDenoiserEngine(nodeCtx.rootObj)
-    # Export denoiser manually for viewport renders if no denoiser node is available.
+    viewportDenoiserEngine = nodeCtx.scene.vray.Exporter.viewport_denoiser_engine
     pluginDesc = PluginDesc(denoiserPluginName, "RenderChannelDenoiser")
     pluginDesc.setAttribute("enabled", True)
     pluginDesc.setAttribute("engine", viewportDenoiserEngine)
-    pluginDesc.setAttribute("upscaling", upscaling)
     export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
+
+
+def _exportSettingsRenderChannels(nodeCtx: NodeContext):
+    propGroup = nodeCtx.scene.vray.SettingsRenderChannels
+    settingsRenderChannels = PluginDesc(Names.singletonPlugin('SettingsRenderChannels'), "SettingsRenderChannels")
+    settingsRenderChannels.setAttribute("unfiltered_fragment_method", propGroup.unfiltered_fragment_method)
+    settingsRenderChannels.setAttribute("deep_merge_mode", propGroup.deep_merge_mode)
+    settingsRenderChannels.setAttribute("deep_merge_coeff", propGroup.deep_merge_coeff)
+
+    export_utils.exportPlugin(nodeCtx.exporterCtx, settingsRenderChannels)
 
 class WorldExporter(ExporterBase):
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
         self.exported = set()
         self.nodeTracker = ctx.nodeTrackers['WORLD']
-        self.denoiserExported = False
 
     def _getNodeContext(self, world: bpy.types.World):
         nodeCtx = NodeContext(self, None, self.ctx.scene, self.renderer)
         nodeCtx.nodeTracker = self.nodeTrackers["WORLD"]
-        nodeCtx.ntree = world.node_tree
         nodeCtx.rootObj = world
+        if world is not None:
+            nodeCtx.ntree = world.node_tree
 
         return nodeCtx
 
     def _exportRenderChannels(self, nodeCtx: NodeContext):
-        """ Export the SettingsRenderChannels and RenderChannelXXX plugins along 
+        """ Export the SettingsRenderChannels and RenderChannelXXX plugins along
             with any associated node trees.
-            Returns true if a denoiser render element was exported.
         """
         # NOTE: There is no need to track any  plugins here, because render channels
         # (except the denoiser channel which is handled specifically)
         # are only exported in production using full export.
 
-        if not (channelsNode := NodesUtils.getChannelsOutputNode(nodeCtx.ntree)):
-            return []
+        # Resolve the channels node via the world output's Channels socket so we
+        # also capture the group path when the node lives inside a VRayGroup.
+        # This runs outside the world-output push, so look the output node up
+        # directly rather than reading nodeCtx.node.
+        worldOutput = NodesUtils.getOutputNode(nodeCtx.ntree, 'WORLD')
+        if not worldOutput:
+            return
+        channelsSock = getInputSocketByName(worldOutput, 'Channels')
+        if not (channelsSock and (channelsLink := getFarNodeLink(channelsSock))):
+            return
+        channelsNode = channelsLink.from_node
 
         exportSettingsPlugin = False
 
         # Export channel plugins and their node trees
-        viewportDenoiserEnabled = nodeCtx.scene.world.vray.RenderChannelDenoiser.viewport_enabled
-
-        with nodeCtx.push(channelsNode):
+        with nodeCtx.push(channelsNode), nodeCtx.pushGroupPath(channelsLink.groupPath):
             if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
                 nodeCtx.cacheNodePlugin(channelsNode)
                 for channelLink in [getFarNodeLink(s) for s in channelsNode.inputs]:
@@ -122,37 +156,27 @@ class WorldExporter(ExporterBase):
                         continue
 
                     inSock = channelLink.to_socket
-                    if nodeCtx.exporterCtx.vantage and (_sockConnectedToCryptomatte(inSock) or _sockConnectedToEnhancer(inSock)):
+                    if nodeCtx.exporterCtx.vantage and (sockConnectedToCryptomatte(inSock) or sockConnectedToEnhancer(inSock)):
                         continue
-                    if DISABLE_GEN_AI and _sockConnectedToEnhancer(inSock):
+                    if isGenAIDisabled() and sockConnectedToEnhancer(inSock):
                         continue
 
-                    if not nodeCtx.exporterCtx.viewport or (_sockConnectedToDenoiser(inSock) and viewportDenoiserEnabled):
+                    if not nodeCtx.exporterCtx.viewport:
                         exportSocketLink(nodeCtx, channelLink)
                         exportSettingsPlugin = True
 
-        # Only the denoiser render element is exported for viewport IPR.
-        self.denoiserExported = nodeCtx.exporterCtx.viewport and exportSettingsPlugin
-        if self.denoiserExported:
-            # The viewport parameters serve as overrides for the denoiser node.
-            denoiserPluginName = Names.singletonPlugin("RenderChannelDenoiser")
-            viewportDenoiserEngine, upscaling = _getViewportDenoiserEngine(nodeCtx.rootObj)
-            updateValue(nodeCtx.renderer, denoiserPluginName, "engine", int(viewportDenoiserEngine))
-            updateValue(nodeCtx.renderer, denoiserPluginName, "optix_use_upscale", upscaling)
-
         # Export the SettingsRenderChannels plugin if any of its sockets are connected
         if exportSettingsPlugin:
-            propGroup = nodeCtx.scene.vray.SettingsRenderChannels
-            settingsRenderChannels = PluginDesc(Names.singletonPlugin('SettingsRenderChannels'), "SettingsRenderChannels")
-            settingsRenderChannels.setAttribute("unfiltered_fragment_method", propGroup.unfiltered_fragment_method)
-            settingsRenderChannels.setAttribute("deep_merge_mode", propGroup.deep_merge_mode)
-            settingsRenderChannels.setAttribute("deep_merge_coeff", propGroup.deep_merge_coeff)
+            _exportSettingsRenderChannels(nodeCtx)
 
-            export_utils.exportPlugin(nodeCtx.exporterCtx, settingsRenderChannels)
 
-    def _exportWorld(self, world: bpy.types.World):
-        if not world or not world.node_tree:
-            return
+    def _exportWorld(self, nodeCtx: NodeContext) -> bool:
+        """ Returns True if the world is a valid V-Ray world that owns environment settings export. """
+        world = nodeCtx.rootObj
+        assert world is not None
+
+        if not world.node_tree:
+            return False
 
         nodeOutput = NodesUtils.getOutputNode(world.node_tree, 'WORLD')
 
@@ -162,13 +186,12 @@ class WorldExporter(ExporterBase):
                 debug.report(severity="WARNING",
                              msg=f"The World tree '{world.name}' has a V-Ray Output node but no V-Ray node tree."\
                                 " Check if 'Use V-Ray World Nodes' has been pressed")
-            return
+            return False
 
         if not nodeOutput:
             debug.printError(f"Output node not found in world tree '{world.name}'")
-            return
+            return False
 
-        nodeCtx = self._getNodeContext(world)
         with (  nodeCtx,
                 nodeCtx.push(nodeOutput),
                 TrackObj(self.nodeTracker, getObjTrackId(world)),
@@ -177,25 +200,46 @@ class WorldExporter(ExporterBase):
                 nodeCtx.cacheNodePlugin(nodeOutput)
                 self._exportEnvironmentSettings(nodeCtx)
 
-        # Render channel export is kept outside the 'Tracking' scope,  
-        # as they should be exported only once and remain unchanged.  
+        # Render channel export is kept outside the 'Tracking' scope,
+        # as they should be exported only once and remain unchanged.
         # Removing them during interactive rendering could cause V-Ray to crash.
-        if self.fullExport:
+        if self.fullExport and not self.preview:
             # We are not currently exporting render elements other than the Color image and denoiser in the viewport.
             self._exportRenderChannels(nodeCtx)
 
+        return True
+
+
+    def _exportOutlinesWithoutWorld(self, nodeCtx: NodeContext):
+        """ Export the outline toon volume and a minimal SettingsEnvironment when there is no V-Ray world.
+            Needed because _exportEnvironmentSettings (which normally handles this) only runs with a V-Ray world.
+        """
+
+        if toonVolume := _exportToonOutlinesVolume(nodeCtx):
+            envDesc = PluginDesc(Names.singletonPlugin("SettingsEnvironment"), "SettingsEnvironment")
+            envDesc.setAttribute("environment_volume", [toonVolume])
+            export_utils.exportPlugin(self, envDesc)
+
 
     def export(self):
-        if self.ctx.scene.world is None:
-            return
+        worldValid = False
+        world = self.ctx.scene.world
+        if world is not None:
+            world = world.evaluated_get(self.dg)
+        nodeCtx = self._getNodeContext(world)
 
-        world = self.ctx.scene.world.evaluated_get(self.dg)
+        if world is not None:
+            worldValid = self._exportWorld(nodeCtx)
 
-        self._exportWorld(world)
-        if self.viewport and self.fullExport and not self.denoiserExported and world.vray.RenderChannelDenoiser.viewport_enabled:
-            # If not render elements were exported then we need to export a denoiser plugin for viewport IPR manually.
-            nodeCtx = self._getNodeContext(world)
+        # Export viewport denoiser if enabled as _exportWorld won't export any
+        # render channels for viewport renders.
+        if (self.viewport and self.fullExport 
+                and self.ctx.scene.vray.Exporter.viewport_denoiser_enabled):
             _exportViewportDenoiser(nodeCtx)
+            _exportSettingsRenderChannels(nodeCtx)
+
+        if not worldValid:
+            self._exportOutlinesWithoutWorld(nodeCtx)
 
     def _exportEnvironmentSettings(self, nodeCtx: NodeContext):
         """ Gets settings from 'Environment' node and applies them to SettingsEnvironment plugin """
@@ -203,6 +247,11 @@ class WorldExporter(ExporterBase):
 
         # Parse all effect nodes and sets the 'environment_volume' attribute of SettingsEnvironment plugin
         environmentVolume = _getExportedEffectsList(nodeCtx)
+
+        # Add a singleton VolumeVRayToon when any material uses the Outlines socket
+        if toonVolume := _exportToonOutlinesVolume(nodeCtx):
+            environmentVolume.append(toonVolume)
+
         pluginDesc.setAttribute("environment_volume", environmentVolume)
 
         globalLightLevel = self.ctx.scene.world.vray.global_light_level
@@ -213,39 +262,39 @@ class WorldExporter(ExporterBase):
 
         if envLink := getFarNodeLink(envSock):
             envNode = envLink.from_node
-            
+
             if envNode.bl_idname != "VRayNodeEnvironment":
                 debug.printError("Environment: 'Environment' socket must be connected to 'Environment' node!")
                 return
 
             # Overrides
-            with nodeCtx.push(envNode):
+            with nodeCtx.push(envNode), nodeCtx.pushGroupPath(envLink.groupPath):
                 if nodeCtx.getCachedNodePlugin(envNode) is not None: # Node is already exported
                     return
 
                 for input in ENVIRONMENT_OVERRIDES:
-                    colorAttrName   = input[0] 
-                    texAttrName     = input[1] 
-                    texMultAttrName = input[2] 
-                    texUseAttrName  = input[3] 
-                
+                    colorAttrName   = input[0]
+                    texAttrName     = input[1]
+                    texMultAttrName = input[2]
+                    texUseAttrName  = input[3]
+
                     sock = getInputSocketByAttr(envNode, texAttrName)
 
                     color = sock.value
                     mult = sock.multiplier
-                    
+
                     if sock.use:
                         if link := getFarNodeLink(sock):
                             tex = exportSocketLink(nodeCtx, link)
                         else:
                             # On GPU, the 'xxx_color' properties do not work correctly. As a workaround, export the color as a plugin.
                             texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexColorConstant"), "TexColorConstant")
-                            
-                            # The multiplier property works as a blend factor on CPU and as a multplier 
+
+                            # The multiplier property works as a blend factor on CPU and as a multplier
                             # on the GPU so we always export it as 1 and apply the multiplication to the color itself.
                             multColor = AColor((color.r * mult, color.g * mult, color.b * mult, 1.0))
                             texPlugin.setAttribute("color", multColor)
-                            
+
                             tex = exportPluginWithStats(nodeCtx, texPlugin)
                             mult = 1.0
                     else:
@@ -258,11 +307,11 @@ class WorldExporter(ExporterBase):
                     pluginDesc.setAttribute(texAttrName, tex)
                     pluginDesc.setAttribute(texMultAttrName, mult)
                     pluginDesc.setAttribute(texUseAttrName, sock.use)
-        
+
                 nodeCtx.cacheNodePlugin(envNode)
-        
+
         exportPluginWithStats(nodeCtx, pluginDesc)
-        
+
 
     def prunePlugins(self):
         """ Delete all plugins associated with removed, orphaned or updated worlds """
@@ -274,7 +323,7 @@ class WorldExporter(ExporterBase):
         # Remove from VRay the worlds with node trees whose topology has been updated.
         # They will be fully re-exported during the current update cycle
         topologyUpdates = self._getTopologyUpdates()
-        updatedWorlds = [w for w in activeWorlds if self.fullExport or (w.name in topologyUpdates)]
+        updatedWorlds = [w for w in activeWorlds if self.fullExport or (getObjTrackId(w) in topologyUpdates)]
 
         self._pruneNodeTreePlugins(updatedWorlds)
 
@@ -283,11 +332,11 @@ class WorldExporter(ExporterBase):
         """ Remove plugins for 'World' node trees """
         if not self.interactive:
             return
-        
+
         def forgetNodes(worldId, nodeIds):
             if not nodeIds:
                 return
-            
+
             for nodeId in nodeIds:
                 for pluginName in self.nodeTracker.getNodePlugins(worldId, nodeId):
                     vray.pluginRemove(self.renderer, pluginName)
@@ -301,7 +350,7 @@ class WorldExporter(ExporterBase):
             # Render Channel nodes should be removed only during full export, otherwise the renderer will crash
             if (not self.fullExport) and (channelsNode := NodesUtils.getChannelsOutputNode(w.node_tree)):
                 channelTrackIds = getConnectedTrackIds(channelsNode)
-                nodesForRemoval = [n for n in nodesForRemoval if n not in channelTrackIds] 
+                nodesForRemoval = [n for n in nodesForRemoval if n not in channelTrackIds]
 
             forgetNodes(trackId, nodesForRemoval)
 
@@ -317,6 +366,6 @@ class WorldExporter(ExporterBase):
         topologyUpdates = [ u.id for u in self.dg.updates if isinstance(u.id, bpy.types.World) \
                                                             and u.id.node_tree in ntreesWithUpdatedTopology]
 
-        return [t.name for t in topologyUpdates]
+        return [getObjTrackId(t) for t in topologyUpdates]
 
 

@@ -81,8 +81,9 @@ def getPropGroupOfNode(node: bpy.types.Node):
 
 def getPluginTypeOfNode(node: bpy.types.Node):
     """ Returns the vray plugin type associated with the node """
-    if node.vray_plugin and node.vray_plugin != 'NONE':
-        return node.vray_plugin
+    vrayPlugin = getattr(node, 'vray_plugin', None)
+    if vrayPlugin and vrayPlugin != 'NONE':
+        return vrayPlugin
     return None
 
 
@@ -487,12 +488,77 @@ def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree)
     return False
 
 
+def tagGroupTreeUsers(groupTree):
+    """ Propagate an update from a GROUP tree to all materials/worlds that (transitively) use it.
+        Called whenever a node or socket inside a group tree changes, so IPR re-exports.
+    """
+    visited = set()
+
+    def _propagate(tree):
+        tid = id(tree)
+        if tid in visited:
+            return
+        visited.add(tid)
+
+        for ntree in bpy.data.node_groups:
+            if not hasattr(ntree, 'vray'):
+                continue
+            for node in ntree.nodes:
+                if node.bl_idname == 'VRayNodeGroup' and node.node_tree == tree:
+                    if ntree.vray.tree_type == 'GROUP':
+                        _propagate(ntree)
+                    break
+
+        for mtl in bpy.data.materials:
+            if not mtl.node_tree:
+                continue
+            for node in mtl.node_tree.nodes:
+                if node.bl_idname == 'VRayNodeGroup' and node.node_tree == tree:
+                    if not lib_utils.isRestrictedContext(bpy.context):
+                        UpdateTracker.tagMtlTopology(bpy.context, mtl)
+                    tagRedrawPropertyEditor()
+                    mtl.update_tag()
+                    break
+
+        for world in bpy.data.worlds:
+            if not world.node_tree:
+                continue
+            for node in world.node_tree.nodes:
+                if node.bl_idname == 'VRayNodeGroup' and node.node_tree == tree:
+                    world.update_tag()
+                    break
+
+        _OBJECT_TREE_TYPES = {'OBJECT', 'FUR', 'DECAL'}
+        for ng in bpy.data.node_groups:
+            if not hasattr(ng, 'vray') or ng.vray.tree_type not in _OBJECT_TREE_TYPES:
+                continue
+            for node in ng.nodes:
+                if node.bl_idname == 'VRayNodeGroup' and node.node_tree == tree:
+                    ng.update_tag()
+                    # Tag objects that reference this object tree so
+                    # obj_export sees them in dgUpdates['shading']. Mirrors
+                    # the non-group path in selectedObjectTagUpdate (~line 598).
+                    tagUsersForUpdate(ng)
+                    break
+
+    _propagate(groupTree)
+
+
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """ Triggers an update of the currently selected object or node tree and a redraw of the
         property editor. This function is set as the 'update' callback of node sockets
         and properties. It is needed because Blender does not generate update events
         for changes to custom node trees.
     """
+    # If the change originates inside a GROUP tree, propagate to all parent materials
+    # and worlds right away. This works regardless of context.active_object state.
+    ntree = getattr(self, 'id_data', None)
+    if ntree and isinstance(ntree, bpy.types.NodeTree) and ntree.vray.tree_type == 'GROUP':
+        ntree.update_tag()
+        tagGroupTreeUsers(ntree)
+        tagRedrawPropertyEditor()
+        return
+
     activeEditor = context.scene.vray.ActiveNodeEditorType
 
     if isinstance(self, bpy.types.Node):
@@ -525,7 +591,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                         if _nodeConnectedToObjOutput(node, ob.vray.ntree):
                             tagUsersForUpdate(ob.vray.ntree)
 
-                elif (activeEditor == 'SHADER') and (mtl := ob.active_material) and mtl.node_tree: # We are parsing material node tree
+                elif (mtl := ob.active_material) and mtl.node_tree:
 
                     srcType = type(self).__name__
 
@@ -552,32 +618,69 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
 
 
             case 'LIGHT':
-                if activeEditor == 'SHADER':
-                    # A Light node's property has changed
-                    UpdateTracker.tagUpdate(ob.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
+                # A Light node's property has changed
+                UpdateTracker.tagUpdate(ob.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
 
-                    # For lights, it is currently not possible to tag the node trees, so tag the object
-                    # itself. This will trigger a node tree update
-                    ob.update_tag()
+                # For lights, it is currently not possible to tag the node trees, so tag the object
+                # itself. This will trigger a node tree update
+                ob.update_tag()
 
     tagRedrawPropertyEditor()
 
 
+def computeSocketVisibility(sock, sockDesc, node, pluginModule, propGroup):
+    """ Compute (hide, enabled) for an input socket from its `visible` condition
+        AND the open state of its parent rollout panel. A linked socket is always shown.
+        `enabled` reflects only the condition (the socket is logically active);
+        `hide` additionally suppresses display when the rollout is collapsed.
+    """
+    from vray_blender.lib.condition_processor import evaluateCondition, isCondition
+    from vray_blender.nodes.tools import getSocketPanelName
+
+    enabled = True
+    if sockDesc and (cond := sockDesc.get('visible')) and isCondition(cond):
+        enabled = evaluateCondition(propGroup, node, cond)
+
+    hide = not enabled
+    if enabled and not sock.is_linked:
+        if panelName := getSocketPanelName(pluginModule, sock.vray_attr):
+            rolloutSock = next((s for s in node.inputs
+                                if s.bl_idname == 'VRaySocketRollout' and s.vray_attr == panelName), None)
+            if rolloutSock and not rolloutSock.is_open:
+                hide = True
+
+    return hide, enabled
+
+
 def activeAttributeUpdateCallback(propGroup, pluginModule, attrName: str):
     """ Callback for 'active' socket attributes' (i.e. attributes with conditions) """
+    from vray_blender.lib.condition_processor import evaluateCondition, isCondition
+    from vray_blender.exporting.tools import removeSocketLinks, getInputSocketByAttr
+
     inputSockets = pluginModule.Node.get('input_sockets', [])
 
     node = getNodeOfPropGroup(propGroup)
-    for sockDesc in inputSockets:
-        if (visibleCond := sockDesc.get('visible', None)) and isCondition(visibleCond):
-            visible = evaluateCondition(propGroup, node, visibleCond)
-            sock = getInputSocketByAttr(node, sockDesc['name'])
+    if not node:
+        return
 
-            if (sock.hide != (not visible)) or (sock.enabled != visible):
-                if sock.hide:
+    for sockDesc in inputSockets:
+        sock = getInputSocketByAttr(node, sockDesc['name'])
+
+        # Handle visibility
+        if (visibleCond := sockDesc.get('visible', None)) and isCondition(visibleCond):
+            hide, enabled = computeSocketVisibility(sock, sockDesc, node, pluginModule, propGroup)
+
+            if (sock.hide != hide) or (sock.enabled != enabled):
+                if not enabled:
                     removeSocketLinks(sock)
-                sock.hide = not visible
-                sock.enabled = visible
+                sock.hide = hide
+                sock.enabled = enabled
+
+        # Handle active state
+        if (activeCond := sockDesc.get('active', None)) and isCondition(activeCond):
+            active = evaluateCondition(propGroup, node, activeCond)
+            if sock.ui_enabled != active:
+                sock.ui_enabled = active
 
 
 def customAttributeUpdateCallback(propGroup, context: bpy.types.Context, pluginModule, attrName, updateFuncPath: str):
@@ -630,12 +733,10 @@ def tagObjectsForMaterial(mtl: bpy.types.Material):
 
 def tagRedrawArea(areaType):
     """ Tag area for redraw """
-    if not hasattr(bpy.context.screen, 'areas'):
-        return
-
-    for area in bpy.context.screen.areas:
-        if area.type == areaType:
-            area.tag_redraw()
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == areaType:
+                area.tag_redraw()
 
 def tagRedrawPropertyEditor():
     """ Tag property pages area for redraw """
@@ -819,29 +920,36 @@ def autoConnectNode(node: bpy.types.Node):
 
     elif ntree.vray.tree_type == 'MATERIAL':
         if outputNode := getOutputNode(ntree, 'MATERIAL'):
-            targetSocket = outputNode.inputs.get("Material")
-            autoLinkSocket = None
-            if targetSocket:
-                if not targetSocket.is_linked:
-                    autoLinkSocket = targetSocket
-                if targetSocket.is_linked and (link := getFarNodeLink(targetSocket)):
-                    if (wrapperNode := link.from_node) and (sockName := MATERIAL_WRAPPER_SOCKETS.get(wrapperNode.bl_idname, '')):
-                        sock = wrapperNode.inputs.get(sockName)
-                        if sock and not sock.is_linked:
-                            autoLinkSocket = sock
+            # BRDFToonOverride auto-connects to the dedicated Outlines socket
+            if getattr(node, 'vray_plugin', '') == 'BRDFToonOverride':
+                outlinesSock = outputNode.inputs.get("Outlines")
+                if outlinesSock and not outlinesSock.is_linked:
+                    if sourceSocket := node.outputs.get("BRDF"):
+                        ntree.links.new(sourceSocket, outlinesSock)
+            else:
+                targetSocket = outputNode.inputs.get("Material")
+                autoLinkSocket = None
+                if targetSocket:
+                    if not targetSocket.is_linked:
+                        autoLinkSocket = targetSocket
+                    if targetSocket.is_linked and (link := getFarNodeLink(targetSocket)):
+                        if (wrapperNode := link.from_node) and (sockName := MATERIAL_WRAPPER_SOCKETS.get(wrapperNode.bl_idname, '')):
+                            sock = wrapperNode.inputs.get(sockName)
+                            if sock and not sock.is_linked:
+                                autoLinkSocket = sock
 
-            if autoLinkSocket:
-                vrayType = getattr(node, 'vray_type', 'NONE')
-                if vrayType in {'BRDF', 'MATERIAL'}:
-                    # Find the primary output socket
-                    sourceSocket = None
-                    if vrayType == 'BRDF':
-                        sourceSocket = node.outputs.get("BRDF")
-                    elif vrayType == 'MATERIAL':
-                        sourceSocket = node.outputs.get("Material") or node.outputs.get("Ci")
+                if autoLinkSocket:
+                    vrayType = getattr(node, 'vray_type', 'NONE')
+                    if vrayType in {'BRDF', 'MATERIAL'}:
+                        # Find the primary output socket
+                        sourceSocket = None
+                        if vrayType == 'BRDF':
+                            sourceSocket = node.outputs.get("BRDF")
+                        elif vrayType == 'MATERIAL':
+                            sourceSocket = node.outputs.get("Material") or node.outputs.get("Ci")
 
-                    if sourceSocket:
-                        ntree.links.new(sourceSocket, autoLinkSocket)
+                        if sourceSocket:
+                            ntree.links.new(sourceSocket, autoLinkSocket)
 
     elif ntree.vray.tree_type == 'WORLD':
         if vrayType := getattr(node, 'vray_type', 'NONE'):
@@ -883,3 +991,120 @@ def autoConnectNode(node: bpy.types.Node):
 
 def getVrayPropGroup(node: bpy.types.Node):
     return getattr(node, getattr(node, 'vray_plugin', ''), None)
+
+
+# ---------------------------------------------------------------------------
+# V-Ray node state copying
+# ---------------------------------------------------------------------------
+
+# Nodes that expose more than one V-Ray PropertyGroup. For the common case,
+# the single PropertyGroup name matches `node.vray_plugin`.
+_MULTI_PROPGROUP_NODES = {
+    'VRayNodeMetaImageTexture': ('BitmapBuffer', 'TexBitmap'),
+    'VRayNodeUVWMapping': (
+        'UVWGenMayaPlace2dTexture', 'UVWGenObject',
+        'UVWGenEnvironment',        'UVWGenProjection',
+    ),
+}
+
+
+def getVRayPropGroupNames(node: bpy.types.Node):
+    """ Return the V-Ray PropertyGroup attribute names exposed by this node.
+        Most V-Ray nodes have a single group named after `vray_plugin`; a
+        handful of meta nodes expose several, listed in _MULTI_PROPGROUP_NODES.
+    """
+    if names := _MULTI_PROPGROUP_NODES.get(node.bl_idname):
+        return names
+    plugin = getattr(node, 'vray_plugin', 'NONE')
+    return (plugin,) if plugin != 'NONE' else ()
+
+
+def copyVRayPropGroup(srcNode: bpy.types.Node, targetNode: bpy.types.Node, propType: str):
+    """ Copy a single V-Ray PropertyGroup and its associated meta sockets
+        from srcNode to targetNode.
+
+        - Iterates over target annotations so only properties the target
+          actually has are assigned (robust to src/target version drift).
+        - TEMPLATE-typed attributes are copied via their own `.copy()`.
+        - Meta sockets (those whose `vray_attr` is not backed by a property
+          in this group) are copied via each socket's `.copy()`.
+    """
+    # Import locally — vray_blender.plugins has a heavy import graph and
+    # utils.py is imported very early during addon load.
+    from vray_blender.plugins import getPluginModule, getPluginAttr
+
+    sourceProps = getattr(srcNode,    propType, None)
+    targetProps = getattr(targetNode, propType, None)
+    if sourceProps is None or targetProps is None:
+        return
+    if not hasattr(targetProps, '__annotations__'):
+        return
+
+    sourcePropNames = set(sourceProps.__annotations__.keys())
+    pluginModule = getPluginModule(propType)
+
+    # Copy shadow attrs (e.g. `option_use_roughness_shadow_`) before their
+    # mains. Some plugins (BRDFVRayMtl) register `update=` callbacks on the
+    # main attr that, when fired, invert sibling values (glossiness <-> roughness)
+    # if the shadow doesn't yet match. Pre-seeding the shadow makes the
+    # `hasShadowedAttrChanged` guard in those callbacks short-circuit.
+    targetKeys = list(targetProps.__annotations__.keys())
+    shadowKeys = [k for k in targetKeys if k.endswith('_shadow_')]
+    mainKeys = [k for k in targetKeys if not k.endswith('_shadow_')]
+
+    for propName in shadowKeys + mainKeys:
+        if propName not in sourcePropNames:
+            continue
+        # parent_node_id was set by vrayNodeInit to point the propgroup at
+        # the new (destination) node's unique_id. Copying it would replace
+        # it with the source node's unique_id, breaking getNodeOfPropGroup
+        # — and update= callbacks that resolve the node through the propgroup
+        # (e.g. TexTriPlanar's onUpdateMode) would then receive None.
+        if propName == 'parent_node_id':
+            continue
+        try:
+            srcProp = getattr(sourceProps, propName)
+            attrDesc = getPluginAttr(pluginModule, propName) if pluginModule else None
+            if attrDesc and attrDesc.get('type') == 'TEMPLATE':
+                dstProp = getattr(targetProps, propName, None)
+                if dstProp is not None and hasattr(srcProp, 'copy'):
+                    srcProp.copy(dstProp)
+            else:
+                setattr(targetProps, propName, srcProp)
+        except (TypeError, AttributeError, ValueError) as ex:
+            debug.printDebug(f"copyVRayPropGroup: failed to copy '{propType}.{propName}': {ex}")
+
+    # Meta sockets — sockets with vray_attr but not backed by a property
+    # in this group. They carry their own state (multiplier, use, etc.).
+    for srcSocket in srcNode.inputs:
+        if not hasattr(srcSocket, 'vray_attr'):
+            continue
+        if srcSocket.vray_attr in sourcePropNames:
+            continue
+        if fnCopy := getattr(srcSocket, 'copy', None):
+            targetSocket = next(
+                (s for s in targetNode.inputs
+                 if (not s.is_linked) and (s.name.lower() == srcSocket.name.lower())),
+                None,
+            )
+            if targetSocket:
+                try:
+                    fnCopy(targetSocket)
+                except (TypeError, AttributeError) as ex:
+                    debug.printDebug(f"copyVRayPropGroup: failed to copy meta socket '{srcSocket.name}': {ex}")
+
+
+def copyVRayNodeState(srcNode: bpy.types.Node, targetNode: bpy.types.Node):
+    """ Copy all V-Ray PropertyGroup values and meta sockets from srcNode
+        to targetNode, handling multi-propgroup meta nodes.
+    """
+    # VRayNodeUVWMapping's active PropertyGroup is gated on mapping_node_type,
+    # so set that first.
+    if srcNode.bl_idname == 'VRayNodeUVWMapping':
+        try:
+            targetNode.mapping_node_type = srcNode.mapping_node_type
+        except (TypeError, AttributeError):
+            pass
+
+    for propType in getVRayPropGroupNames(srcNode):
+        copyVRayPropGroup(srcNode, targetNode, propType)

@@ -39,8 +39,12 @@ class VRAY_MT_help(bpy.types.Menu):
         opHelpSite.url = 'https://support.chaos.com'
         opHelpSite.description = 'Open the Chaos support center'
 
+        opCloudPortal = self.layout.operator('vray.url_open', text='Chaos Cloud Portal', icon='URL')
+        opCloudPortal.url = 'https://cloud.chaos.com'
+        opCloudPortal.description = 'Open the Chaos Cloud portal'
+
         opIdeasPortal = self.layout.operator('vray.url_open', text='V-Ray Ideas Portal', icon='URL')
-        opIdeasPortal.url = 'http://chaos.com/ideas/vray-blender'
+        opIdeasPortal.url = 'https://chaos.com/ideas/vray-blender'
         opIdeasPortal.description = 'Open the V-Ray for Blender ideas portal'
 
         self.layout.separator()
@@ -132,6 +136,7 @@ class VRAY_MT_tools(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
+        self.layout.operator(VRAY_OT_make_shadow_catcher.bl_idname)
 
 
 class VRAY_MT_main(bpy.types.Menu):
@@ -203,7 +208,7 @@ class VRAY_OT_open_collaboration(VRayOperatorBase):
     def description(cls, context, properties):
         return getLimitedFeatureDescription(cls.bl_description)
 
-from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy, CosmosBrowserPage
+from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy, CosmosBrowserPage, CosmosDownloadStatus
 
 class VRAY_OT_open_cosmos_browser(VRayOperatorBase):
     bl_idname       = "vray.open_cosmos_browser"
@@ -247,8 +252,19 @@ class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
         return pollEngine(context) and not activeRendererExists()
 
     def execute(self, context: bpy.types.Context):
-        cosmosHandler.downloadMissingAssets(self, context)
-        return { 'FINISHED' }
+        if not cosmosHandler.startDownload():
+            return {'FINISHED'}
+        self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        if event.type != 'TIMER':
+            return {'RUNNING_MODAL'}  # consume all events — user input is blocked
+        if cosmosHandler.downloadStatus == CosmosDownloadStatus.Downloading:
+            return {'RUNNING_MODAL'}
+        context.window_manager.event_timer_remove(self._timer)
+        return cosmosHandler.applyDownloadResult()
 
     def invoke(self, context, event):
         return cosmosHandler.checkMissingAssets(self, context, event)
@@ -287,6 +303,31 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
         self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
         self.layout.label(text="they will be deleted before the conversion.")
 
+class VRAY_OT_make_shadow_catcher(VRayOperatorBase):
+    bl_idname      = "vray.make_shadow_catcher"
+    bl_label       = "Make Shadow Catcher"
+    bl_description = "Make selected objects shadow catchers"
+    bl_options     = { "UNDO" }
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def execute(self, context):
+        objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+
+        if not objects:
+            self.report({'WARNING'}, "No object selected, please select geometry to make shadow catcher")
+            return {'CANCELLED'}
+
+        for obj in objects:
+            props = obj.vray.VRayObjectProperties
+            props.matte_surface            = True
+            props.shadows                  = True
+            props.alpha_contribution       = -1
+            props.matte_for_secondary_rays = "2"
+
+        return {'FINISHED'}
 
 class VRAY_OT_vantage_live_link(VRayOperatorBase):
     bl_idname       = "vray.vantage_live_link"
@@ -392,11 +433,12 @@ def _drawMainMenu(self, context):
     layout.menu(VRAY_MT_main.bl_idname)
 
 
-def _drawExportAsVrsceneMenuItem(self, context):
+def _drawExportAsVrayFileMenuItem(self, context):
     layout = self.layout.column()
-    layout.operator_context = 'INVOKE_DEFAULT'
-    layout.operator('vray.export_vrscene', text='V-Ray (.vrscene)')
     layout.active = not vray.isCommunityEdition()
+    layout.operator_context = 'INVOKE_DEFAULT'
+    layout.operator('vray.export_vrscene', text='V-Ray Scene (.vrscene)')
+    layout.operator('vray.export_vrmesh', text='V-Ray Proxy (.vrmesh)')
 
 
 def _getRegClasses():
@@ -406,6 +448,7 @@ def _getRegClasses():
         VRAY_OT_open_cosmos_ai_generator,
         VRAY_OT_relink_cosmos_assets,
         VRAY_OT_convert_materials,
+        VRAY_OT_make_shadow_catcher,
         # VRAY_OT_vantage_live_link,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
@@ -428,12 +471,12 @@ def register():
         bpy.utils.register_class(regClass)
 
     bpy.types.TOPBAR_MT_editor_menus.append(_drawMainMenu)
-    bpy.types.TOPBAR_MT_file_export.append(_drawExportAsVrsceneMenuItem)
+    bpy.types.TOPBAR_MT_file_export.append(_drawExportAsVrayFileMenuItem)
 
 
 def unregister():
     for regClass in _getRegClasses():
         bpy.utils.unregister_class(regClass)
 
-    bpy.types.TOPBAR_MT_file_export.remove(_drawExportAsVrsceneMenuItem)
+    bpy.types.TOPBAR_MT_file_export.remove(_drawExportAsVrayFileMenuItem)
     bpy.types.TOPBAR_MT_editor_menus.remove(_drawMainMenu)

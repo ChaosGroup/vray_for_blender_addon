@@ -13,9 +13,7 @@ from vray_blender.nodes import utils as NodesUtils
 
 class VRAY_PT_WorldPreview(classes.VRayWorldPanel):
     bl_label = "Preview"
-    bl_options = {'HIDE_HEADER'}
-
-    COMPAT_ENGINES = {'VRAY_RENDER_PREVIEW', 'VRAY_RENDER_RT'}
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         self.layout.template_preview(context.world)
@@ -58,7 +56,7 @@ class VRAY_PT_ContextWorld(classes.VRayPanel):
 
 def getRegClasses():
     return (
-        # VRAY_PT_WorldPreview,
+        VRAY_PT_WorldPreview,
         VRAY_PT_ContextWorld,
     )
 

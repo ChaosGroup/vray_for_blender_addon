@@ -97,6 +97,7 @@ add_compile_definitions(
 )
 
 add_library(${PROJECT_NAME} STATIC "${SOURCES};${HEADERS}")
+target_link_libraries(${PROJECT_NAME} tsl::robin_map)
 link_with_zmq(${PROJECT_NAME})
 
 if(WIN32 AND CMAKE_C_COMPILER_ID MATCHES "MSVC")

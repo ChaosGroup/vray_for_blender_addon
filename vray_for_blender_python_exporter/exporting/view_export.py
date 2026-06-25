@@ -523,8 +523,9 @@ class ViewExporter(ExporterBase):
             camera view or, if no camera is selected, from the viewport settings.
         """
 
+        rs = self.scene.render
         viewParams = self._getViewFromViewport()
-        viewParams.calcRenderSizes(regionRender=self.iprVFB and not self.scene.render.use_crop_to_border)
+        viewParams.calcRenderSizes(regionRender=self.iprVFB and (rs.use_border and not rs.use_crop_to_border))
 
         return viewParams
 
@@ -825,7 +826,7 @@ class ViewExporter(ExporterBase):
             viewParams.regionSize = viewParams.regionStart = Size()
             viewParams.crop = False
 
-        viewParams.calcRenderSizes(regionRender=not self.scene.render.use_crop_to_border)
+        viewParams.calcRenderSizes(regionRender=rs.use_border and not rs.use_crop_to_border)
 
         self._fillCameraData(cameraObject, viewParams)
         ct.aspectCorrectForFovOrtho(viewParams)
@@ -893,7 +894,8 @@ class ViewExporter(ExporterBase):
             "fov"                : viewParams.renderView.fov,
             "film_width"         : filmWidth,
             "lens_shift"         : lensShift,
-            "focus_distance"     : focusDist
+            "focus_distance"     : focusDist,
+            "enable_thin_lens_equation": False
         })
 
 

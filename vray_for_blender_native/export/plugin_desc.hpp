@@ -5,9 +5,9 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
 
 #include <base_types.h>
+#include <tsl/robin_map.h>
 
 
 struct PluginAttr {
@@ -30,7 +30,7 @@ struct PluginAttr {
 
 
 struct PluginDesc {
-	using PluginAttrs = std::unordered_map<std::string, PluginAttr>;
+	using PluginAttrs = tsl::robin_map<std::string, PluginAttr>;
 	using AttrValue   = VRayBaseTypes::AttrValue;
 
 	PluginDesc(	const std::string& plugin_name,
@@ -50,7 +50,7 @@ struct PluginDesc {
 	}
 
 	void add(const std::string& attrName, const AttrValue& attrValue, const float& time = 0.0f) {
-		add(PluginAttr(attrName, attrValue, time));
+		add(PluginAttr(attrName, attrValue, false, time));
 	}
 
 	std::string  pluginName;    ///< The name of the instance of this plugin

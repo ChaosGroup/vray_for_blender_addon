@@ -9,6 +9,8 @@ import math
 
 from mathutils import Matrix
 
+from typing import Optional
+
 from vray_blender import debug
 from vray_blender.lib import blender_utils
 from vray_blender.lib.settings_defs import StereoOutputLayout, StereoViewMode, PhysicalCameraType
@@ -303,7 +305,7 @@ class CameraParams:
                 case 'SUN':
                     self.lens = DEFAULT_LENS_FOCAL_LENGTH + 3.5
                 case _:
-                    debug.printWarning(f"Unknowm light type: {cameraObj.data.type}")
+                    debug.printWarning(f"Unknown light type: {cameraObj.data.type}")
 
 
     def setFromView3d(self, dg: bpy.types.Depsgraph, v3d: bpy.types.SpaceView3D, rv3d: bpy.types.RegionView3D):
@@ -454,7 +456,7 @@ def isDomeCamera(obj):
 
 def isOrthographicCamera(camera: bpy.types.Camera):
     settingsCamera = camera.vray.SettingsCamera
-    return  (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == '7' )
+    return (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == '7' )
 
 
 def isSameCamera(camera1: bpy.types.Object, camera2: bpy.types.Object):
@@ -625,13 +627,16 @@ def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
     return intervalCenter, mbDuration
 
 
-def renderCamerasHaveSameType(forceAnimation: bool):
+def renderCamerasHaveSameType(forceAnimationMode: str):
     """ Check if all cameras marked in the render range have the same type """
 
     scene = bpy.context.scene
 
     # If not in animation mode, there is only one camera for rendering.
-    isAnimation = forceAnimation or (scene.vray.Exporter.animation_mode == 'ANIMATION')
+    if forceAnimationMode == 'AUTO':
+        isAnimation = scene.vray.Exporter.animation_mode == 'ANIMATION'
+    else:
+        isAnimation = (forceAnimationMode == 'ANIMATION')
 
     if not isAnimation:
         return True

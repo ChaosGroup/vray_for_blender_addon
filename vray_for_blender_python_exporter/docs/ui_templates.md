@@ -93,8 +93,18 @@ Properties:
 - `object_type` - the type of the property holder object. Can be one of:
     - shader_node  - for all shader tree nodes and lights without node trees
     - camera
-    - settings 
+    - settings
 
+### TemplateColorTemperature
+
+A template for selecting between RGB color and color temperature in V-Ray lights.
+
+**Exports:** the color value. If in Temperature mode, the color is derived from the temperature Kelvin value.
+
+Properties:
+- `color_mode` - name of the enum property for selection between Color ('0') and Temperature ('1').
+- `color_bound_property` - name of the color property (usually a COLOR_TEXTURE meta-property) to update.
+- `temperature_bound_property` - name of the float property for the temperature value in Kelvin.
 
 
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "ipc.h"
+#include "vassert.h"
 #include <thread>
 #include <chrono>
 
@@ -58,12 +59,16 @@ std::string SharedMemoryBase::createUniqueName(const std::string& objName) const
 // SharedMemoryWriter
 ////////////////////////////////////////////
 
-SharedMemoryWriter::SharedMemoryWriter(const std::string& id, const std::string& name) :
-	SharedMemoryBase(id, name)
+SharedMemoryWriter::SharedMemoryWriter(const std::string& id, const std::string& name, bool clearSharedObjects) :
+	SharedMemoryBase(id, name), m_clearSharedObjects(clearSharedObjects)
 {
 }
 
 SharedMemoryWriter::~SharedMemoryWriter() {
+	if (!m_clearSharedObjects) {
+		return;
+	}
+
 #ifndef _WIN32
 	{
 		// First delete the shared memory object.
@@ -135,6 +140,12 @@ void SharedMemoryWriter::write(const std::vector<Buffer> buffers) {
 
 	auto& block = getPayload();
 	auto writePtr = block.data;
+
+#ifdef VASSERT_ENABLED
+	size_t totalSize = 0;
+	for (const auto& buf : buffers) { totalSize += buf.size; }
+	vassert(totalSize <= block.size && "Scatter/gather write exceeds shared memory capacity");
+#endif
 
 	for( const auto& buf : buffers) {
 		::memcpy(writePtr, buf.data, buf.size);
@@ -208,7 +219,6 @@ bool SharedMemoryReader::read(std::chrono::milliseconds timeout, void* data) {
 
 	return false;
 }
-
 
 
 ////////////////////////////////////////////

@@ -42,17 +42,6 @@ ExporterPtr mainExporter;
 std::list<ExporterPtr> previewExporters;
 
 
-// Indicates that this is a community edition build VRayBlenderLib.
-bool isCommunityEdition()
-{
-#ifdef VRAY_BLENDER_COMMUNITY_EDITION
-	return true;
-#else
-	return false;
-#endif 
-}
-
-
 /// Check renderer parameter and return the exporter object
 inline VRayForBlender::SceneExporter* getExporter(const nb::object& renderer)
 {
@@ -91,10 +80,6 @@ void init(const std::string& logFile)
 
 
 std::pair<bool, std::string> start(const ZmqServerArgs& args) {
-	if (args.headlessMode && isCommunityEdition()) {
-		return {false, "Community Edition of V-Ray for Blender cannot be run in headless mode"};
-	}
-
 	VRayForBlender::ZmqServer::get().start(args);
 	return {true, ""};
 }
@@ -291,6 +276,30 @@ void resetVfbToolbar()
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlResetVfbToolbar{}), true);
 }
 
+// Clears the VFB image. Used on scene load and at the start of IPR VFB / PROD
+// renders without a render region so the previous frame is wiped before fresh
+// pixels arrive.
+void clearVfbImage()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlClearVfbImage{}), true);
+}
+
+// Sets the VFB Render Region rectangle, the VFB image size and toolbar button state.
+// When 'enabled' is false (or width/height are non-positive), the render region is
+// cleared (renders the whole image) and the VFB Render Region toolbar button is
+// turned off.
+// imgWidth/imgHeight set the VFB image size at the same time so the region coords
+// are interpreted against a known canvas; pass <= 0 to leave the image size as-is.
+void setVfbRenderRegion(int x, int y, int width, int height, int imgWidth, int imgHeight, bool enabled)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlSetVfbRenderRegion{x, y, width, height, imgWidth, imgHeight, enabled}), true);
+}
+
+void setVisualDebuggerEnabled(bool enable)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlSetVisualDebugger{enable}));
+}
+
 // Sets VFB alwaysOnTop state
 void setVfbOnTop(bool alwaysOnTop)
 {
@@ -324,160 +333,123 @@ void setVfbOnTopWithRenderer(const nb::object& renderer, bool alwaysOnTop)
 	exporter->setVfbAlwaysOnTop(alwaysOnTop);
 }
 
-void pluginCreate(const nb::object& renderer, const std::string& name, const std::string& pluginType, bool allowTypeChanges)
+void pluginCreate(const nb::object& renderer, std::string name, std::string pluginType, bool allowTypeChanges)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginCreate(name, pluginType, allowTypeChanges);
+	exporter->getPluginExporter()->pluginCreate(std::move(name), std::move(pluginType), allowTypeChanges);
 }
 
-void pluginRemove(const nb::object& renderer, const std::string& name)
+void pluginRemove(const nb::object& renderer, std::string name)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginRemove(name);
-}
-
-
-void pluginUpdateInt(const nb::object& renderer, const std::string& name, const std::string& attrName, int value, bool animatable=true)
-{
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
+	exporter->getPluginExporter()->pluginRemove(std::move(name));
 }
 
 
-void pluginUpdateFloat(const nb::object& renderer, const std::string& name, const std::string& attrName, float value, bool animatable=true)
+/// Common helper for all plugin property updates. Moves name/attrName through to the exporter.
+template<typename T>
+void pluginUpdateAttr(const nb::object& renderer, std::string name, std::string attrName, T value, bool animatable = true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
+	exporter->getPluginExporter()->pluginUpdate(std::move(name), std::move(attrName),
+	                                            vray::AttrValue(std::move(value)), animatable);
 }
 
-
-void pluginUpdateString(const nb::object& renderer, const std::string& name, const std::string& attrName, const std::string& value, bool animatable=true)
+// Multi-arg wrappers: construct the typed value from separate Python args, then forward.
+void pluginUpdateColor(const nb::object& renderer, std::string name, std::string attrName, float r, float g, float b, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrValue(value), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrColor(r, g, b), animatable);
 }
 
-
-void pluginUpdateColor(const nb::object& renderer, const std::string& name, const std::string& attrName, float r, float g, float b, bool animatable=true)
+void pluginUpdateAColor(const nb::object& renderer, std::string name, std::string attrName, float r, float g, float b, float a, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrColor(r, g, b), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrAColor(vray::AttrColor(r, g, b), a), animatable);
 }
 
-
-void pluginUpdateAColor(const nb::object& renderer, const std::string& name, const std::string& attrName, float r, float g, float b, float a, bool animatable=true)
+void pluginUpdateIntVector(const nb::object& renderer, std::string name, std::string attrName, int x, int y, int z, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrAColor(vray::AttrColor(r, g, b), a), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrList<int>{x, y, z}, animatable);
 }
 
-void pluginUpdateIntVector(const nb::object& renderer, const std::string& name, const std::string& attrName, int x, int y, int z, bool animatable=true)
+void pluginUpdateVector(const nb::object& renderer, std::string name, std::string attrName, float x, float y, float z, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>{x, y, z}, animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrVector{x, y, z}, animatable);
 }
 
-
-void pluginUpdateVector(const nb::object& renderer, const std::string& name, const std::string& attrName, float x, float y, float z, bool animatable=true)
+// List wrappers: convert Python list, then forward.
+void pluginUpdateStringList(const nb::object& renderer, std::string name, std::string attrName, const nb::object& list)
 {
-	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrVector{x, y, z}, animatable);
-}
-
-
-void pluginUpdateStringList(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& list)
-{
-	auto* exporter = getExporter(renderer);
 	std::vector<std::string> vec = toVector<std::string>(list);
-
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<std::string>(std::move(vec)), false);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrList<std::string>(std::move(vec)), false);
 }
 
-void pluginUpdatePluginList(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& list, bool animatable=true)
+void pluginUpdatePluginList(const nb::object& renderer, std::string name, std::string attrName, const nb::object& list, bool animatable=true)
 {
-	auto *exporter = getExporter(renderer);
 	vray::AttrListPlugin pluginList;
+
+	if (nb::hasattr(list, "__len__")) {
+		pluginList.reserve(static_cast<int>(nb::len(list)));
+	}
 
 	for (const nb::handle& item : list) {
 		pluginList.append(nb::cast<vray::AttrPlugin>(item));
 	}
-
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, pluginList, animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), pluginList, animatable);
 }
 
-
-void pluginUpdateList(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::list& list, std::string listElemTypes, bool animatable=true)
+void pluginUpdateList(const nb::object& renderer, std::string name, std::string attrName, const nb::list& list, std::string listElemTypes, bool animatable=true)
 {
-	auto *exporter = getExporter(renderer);
 	vray::AttrListValue attrList;
-
 	auto listElemTypesIt = listElemTypes.begin();
 	pyListToAttrList(attrList, listElemTypesIt, list);
-
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, attrList, animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), attrList, animatable);
 }
 
-
-void pluginResetValue(const nb::object& renderer, const std::string& name, const std::string& attrName)
+void pluginResetValue(const nb::object& renderer, std::string name, std::string attrName)
 {
-	auto *exporter = getExporter(renderer);
-	// Somewhat unclear what to use for animatable here... We use this for way too many things...
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrPlugin(), true);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrPlugin(), true);
 }
 
-
-void pluginUpdateIntList(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& list, bool animatable=true)
+void pluginUpdateIntList(const nb::object& renderer, std::string name, std::string attrName, const nb::object& list, bool animatable=true)
 {
-	auto *exporter = getExporter(renderer);
 	std::vector<int> vec = toVector<int>(list);
-
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<int>(std::move(vec)), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrList<int>(std::move(vec)), animatable);
 }
 
-
-void pluginUpdateFloatList(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& list, bool animatable=true)
+void pluginUpdateFloatList(const nb::object& renderer, std::string name, std::string attrName, const nb::object& list, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
 	std::vector<float> vec = toVector<float>(list);
-
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrList<float>(std::move(vec)), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrList<float>(std::move(vec)), animatable);
 }
 
-
-void pluginUpdateMatrix(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& mat, bool animatable=true)
+// Matrix/Transform wrappers: decode Python matrix, then forward.
+void pluginUpdateMatrix(const nb::object& renderer, std::string name, std::string attrName, const nb::object& mat, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-
 	const auto& vec = fromMat<3>(mat);
-
 	typedef float Matrix3[3][3];
 	const Matrix3* m = reinterpret_cast<const Matrix3*>(vec.data());
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrMatrix(*m), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrMatrix(*m), animatable);
 }
 
-
-void pluginUpdateTransform(const nb::object& renderer, const std::string& name, const std::string& attrName, const nb::object& mat, bool animatable=true)
+void pluginUpdateTransform(const nb::object& renderer, std::string name, std::string attrName, const nb::object& mat, bool animatable=true)
 {
-	auto* exporter = getExporter(renderer);
-
 	const auto& vec = fromMat<4>(mat);
-
 	typedef float Matrix4[4][4];
 	const Matrix4* m = reinterpret_cast<const Matrix4*>(vec.data());
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrTransform(*m), animatable);
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrTransform(*m), animatable);
 }
 
-
-void pluginUpdatePluginDesc(const nb::object& renderer, const std::string& name, const std::string& attrName, const vray::AttrPlugin& valuePlugin, bool animatable=true, bool forceUpdate=false)
+// Special cases that need forceUpdate/recreate flags.
+void pluginUpdatePluginDesc(const nb::object& renderer, std::string name, std::string attrName, const vray::AttrPlugin& valuePlugin, bool animatable=true, bool forceUpdate=false)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, valuePlugin, animatable, forceUpdate);
+	exporter->getPluginExporter()->pluginUpdate(std::move(name), std::move(attrName), valuePlugin, animatable, forceUpdate);
 }
 
-void pluginReCreateAttr(const nb::object& renderer, const std::string& name, const std::string& attrName, bool animatable=true)
+void pluginReCreateAttr(const nb::object& renderer, std::string name, std::string attrName, bool animatable=true)
 {
 	auto* exporter = getExporter(renderer);
-	exporter->getPluginExporter()->pluginUpdate(name, attrName, vray::AttrPlugin(), animatable, false, true);
+	exporter->getPluginExporter()->pluginUpdate(std::move(name), std::move(attrName), vray::AttrPlugin(), animatable, false, true);
 }
 
 
@@ -583,6 +555,17 @@ void setCameraName(const nb::object& renderer, const nb::object& cameraName)
 }
 
 
+// Configure resumable rendering before a production render starts.
+// outputFileName - pass "" to let V-Ray derive the path from SettingsOutput.img_file
+// autosaveSeconds - interval for saving intermediate .vrprog files (0 = only at end)
+void setResumableRendering(const nb::object& renderer, bool enabled,
+	const std::string& outputFileName, int autosaveSeconds, bool deleteOnSuccess)
+{
+	auto* exporter = getExporter(renderer);
+	exporter->setResumableRendering(enabled, outputFileName, autosaveSeconds, deleteOnSuccess);
+}
+
+
 void syncViewSettings(const nb::object& renderer, const ViewSettings& viewSettings)
 {
 	auto* exporter = getExporter(renderer);
@@ -595,6 +578,13 @@ int writeVrscene(const nb::object& renderer, const ExportSceneSettings& exportSe
 {
 	auto* exporter = getExporter(renderer);
 	return exporter->writeVrscene(exportSettings);
+}
+
+std::pair<bool, std::string> exportProxyFile(const nb::object& renderer, const ProxyExportSettings& proxySettings)
+{
+	auto* exporter = getExporter(renderer);
+	nb::gil_scoped_release noGIL;
+	return exporter->exportProxy(proxySettings);
 }
 
 
@@ -636,10 +626,9 @@ nb::object getImageImpl(const nb::object& renderer, const std::string& renderPas
 
 		const size_t shape[3] = { (size_t)image.w, (size_t)image.h, (size_t)image.channels };
 
-		// Note that we do not pass a stride on purpose... I couldn't get nanobind to make c_contiguious array otherwise...
-		float* pixels = image.release();
-		nb::capsule owner(pixels, [](void* p) noexcept {
-			delete[] static_cast<float*>(p);
+		const float* pixels = image.pixels;
+		nb::capsule owner(new RenderImage(std::move(image)), [](void* p) noexcept {
+			delete static_cast<RenderImage*>(p);
 		});
 
 		return nb::ndarray<nb::numpy, const float, nb::c_contig>(
@@ -711,9 +700,9 @@ void setCosmosDownloadAssets(nb::callable downloadAssetsCallback)
 	ZmqServer::get().setPythonCallback("setCosmosDownloadAssets", std::move(downloadAssetsCallback));
 }
 
-/// Updates the Cosmos import info after a scene change
-void updateCosmosSceneName(const std::string& sceneName) {
-	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnCosmosUpdateSceneName{sceneName}));
+/// Updates the V-Ray scene path after a scene change
+void updateScenePath(const std::string& scenePath) {
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnUpdateScenePath{scenePath}));
 }
 
 void checkScannedLicense() {
@@ -775,6 +764,36 @@ void setVfbLayersUpdateCallback(nb::callable vfbLayersUpdateCallback)
 	ZmqServer::get().setPythonCallback("vfbLayersUpdate", std::move(vfbLayersUpdateCallback));
 }
 
+/// Sets callback executed when "Transfer to Scene" is clicked in VFB Light Mix
+void setLightMixTransferToSceneCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("lightMixTransferToScene", std::move(callback));
+}
+
+/// Sets callback executed when a VFB context menu action is selected
+void setVfbMenuCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vfbMenu", std::move(callback));
+}
+
+/// Sets callback executed when VFB "Add Render Element to Scene" button is clicked
+void setAddRenderElementToSceneCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("addRenderElementToScene", std::move(callback));
+}
+
+/// Sets callback executed when VFB "Show Messages Window" button is clicked
+void setVfbShowMessagesWindowCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vfbShowMessagesWindow", std::move(callback));
+}
+
+/// Sets callback executed when the VFB render region changes
+void setVfbRenderRegionChangedCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vfbRenderRegionChanged", std::move(callback));
+}
+
 /// Updating VFB layers
 void setVfbLayers(const std::string& vfbLayers)
 {
@@ -788,14 +807,34 @@ void logVfbMessage(const int level, const std::string& message)
 }
 
 
-// Start production rendering session
-void renderStart(const nb::object& renderer, size_t renderResultPtr, nb::object onImageUpdated)
+void requestRenderChannel(const nb::object& renderer, int channelType,
+                          const std::string& pluginInstanceName, int subIndex)
+{
+	getExporter(renderer)->requestRenderChannel(channelType, pluginInstanceName, subIndex);
+}
+
+
+void setElementPasses(const nb::object& renderer, const nb::list& passes)
+{
+	getExporter(renderer)->setElementPasses(passes);
+}
+
+
+std::string getMetadata(const nb::object& renderer, const std::string& key)
+{
+	return getExporter(renderer)->getMetadata(key);
+}
+
+
+// Start production rendering session. imageToBlender=false suppresses pixel transfer
+// for the whole render - pass renderResultPtr=0 and onImageUpdated=None alongside it.
+void renderStart(const nb::object& renderer, size_t renderResultPtr, nb::object onImageUpdated, bool imageToBlender)
 {
 	auto* exporter = getExporter(renderer);
 
 	auto cbImageUpdated = onImageUpdated.is_none() ? nb::callable() : nb::cast<nb::callable>(onImageUpdated);
 
-	exporter->renderStart(reinterpret_cast<RenderPass *>(renderResultPtr), std::move(cbImageUpdated));
+	exporter->renderStart(reinterpret_cast<RenderPass *>(renderResultPtr), std::move(cbImageUpdated), imageToBlender);
 }
 
 
@@ -901,6 +940,11 @@ void setAppUpdateRequestedCallback(nb::callable appUpdateRequestedCallback)
 	ZmqServer::get().setPythonCallback("appUpdateRequested", std::move(appUpdateRequestedCallback));
 }
 
+void setSwitchLicenseToCommunityCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("switchLicenseToCommunity", std::move(callback));
+}
+
 NB_MODULE(VRayBlenderLib, m)
 {
 	m.def(FUN(init),                    nb::arg("logFile"));
@@ -910,7 +954,6 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(isInitialized));
 	m.def(FUN(isRunning));
 	m.def(FUN(hasLicense));
-	m.def(FUN(isCommunityEdition));
 
 	m.def(FUN(getMainRenderer),         nb::arg("settings"));
 	m.def(FUN(createPreviewRenderer),   nb::arg("settings"));
@@ -926,7 +969,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(setCosmosDownloadAssets), nb::arg("setCosmosDownloadAssets"));
 	m.def(FUN(calculateDownloadSize),   nb::arg("packageId"), nb::arg("revisionId"), nb::arg("missingTextures"));
 	m.def(FUN(downloadMissingAssets));
-	m.def(FUN(updateCosmosSceneName),   nb::arg("sceneName"));
+	m.def(FUN(updateScenePath),   nb::arg("scenePath"));
 
 	m.def(FUN(checkScannedLicense));
 	m.def(FUN(setScannedLicenseCallback),    nb::arg("scannedLicenseCallback"));
@@ -936,6 +979,9 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(openVFB));
 	m.def(FUN(closeVFB));
 	m.def(FUN(resetVfbToolbar));
+	m.def(FUN(clearVfbImage));
+	m.def(FUN(setVfbRenderRegion), nb::arg("x"), nb::arg("y"), nb::arg("width"), nb::arg("height"), nb::arg("imgWidth"), nb::arg("imgHeight"), nb::arg("enabled"));
+	m.def(FUN(setVisualDebuggerEnabled),     nb::arg("enable"));
 	m.def(FUN(setVfbOnTop),                  nb::arg("alwaysOnTop"));
 	m.def(FUN(showUserDialog),               nb::arg("json"));
 	m.def(FUN(setTelemetryState),            nb::arg("anonymousState_a"), nb::arg("personalizedState"));
@@ -949,16 +995,22 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(setVfbSettingsUpdateCallback), nb::arg("vfbSettingsUpdateCallback"));
 	m.def(FUN(setAutoUpdateChangedCallback), nb::arg("autoUpdateChangedCallback"));
 	m.def(FUN(setAppUpdateRequestedCallback), nb::arg("appUpdateRequestedCallback"));
+	m.def(FUN(setSwitchLicenseToCommunityCallback), nb::arg("switchLicenseToCommunityCallback"));
 
 	m.def(FUN(setVfbLayersUpdateCallback),   nb::arg("vfbLayersUpdateCallback"));
+	m.def(FUN(setLightMixTransferToSceneCallback), nb::arg("lightMixTransferToSceneCallback"));
+	m.def(FUN(setVfbMenuCallback),           nb::arg("vfbMenuCallback"));
+	m.def(FUN(setAddRenderElementToSceneCallback), nb::arg("addRenderElementCallback"));
+	m.def(FUN(setVfbShowMessagesWindowCallback), nb::arg("vfbShowMessagesWindowCallback"));
+	m.def(FUN(setVfbRenderRegionChangedCallback), nb::arg("vfbRenderRegionChangedCallback"));
 	m.def(FUN(setVfbLayers),                 nb::arg("vfbLayers"));
 	m.def(FUN(logVfbMessage),                nb::arg("level"), nb::arg("message"));
 
 	m.def(FUN(pluginCreate),           nb::arg("renderer"), nb::arg("pluginName"), nb::arg("pluginType"), nb::arg("allowTypeChanges") = false);
 	m.def(FUN(pluginRemove),           nb::arg("renderer"), nb::arg("pluginName"));
-	m.def(FUN(pluginUpdateInt),        nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
-	m.def(FUN(pluginUpdateFloat),      nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
-	m.def(FUN(pluginUpdateString),     nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
+	m.def("pluginUpdateInt",           &pluginUpdateAttr<int>,         nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
+	m.def("pluginUpdateFloat",         &pluginUpdateAttr<float>,       nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
+	m.def("pluginUpdateString",        &pluginUpdateAttr<std::string>, nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("attrValue"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateColor),      nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateAColor),     nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("r"), nb::arg("g"), nb::arg("b"), nb::arg("a"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateIntVector),  nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("x"), nb::arg("y"), nb::arg("z"), nb::arg("animatable") = true);
@@ -985,10 +1037,14 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(startExport),            nb::arg("renderer"), nb::arg("threadCount"));
 	m.def(FUN(finishExport),           nb::arg("renderer"), nb::arg("interactive"));
 	m.def(FUN(writeVrscene),           nb::arg("renderer"), nb::arg("exportSettings"));
+	m.def(FUN(exportProxyFile),		nb::arg("renderer"), nb::arg("proxySettings"));
 	m.def(FUN(startStatsCollection),   nb::arg("renderer"));
 	m.def(FUN(endStatsCollection),     nb::arg("renderer"), nb::arg("printStats"), nb::arg("title"));
 	m.def(FUN(setRenderSizes),         nb::arg("renderer"), nb::arg("sizeData"));
 	m.def(FUN(setCameraName),          nb::arg("renderer"), nb::arg("cameraName"));
+	m.def(FUN(setResumableRendering),  nb::arg("renderer"), nb::arg("enabled"),
+	                                   nb::arg("outputFileName") = "", nb::arg("autosaveSeconds") = 0,
+	                                   nb::arg("deleteOnSuccess") = false);
 	m.def(FUN(syncViewSettings),       nb::arg("renderer"), nb::arg("viewSettings"));
 
 	m.def(FUN(getOslScriptParameters), nb::arg("script"));
@@ -999,7 +1055,12 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(isRenderReady),          nb::arg("renderer"));
 	m.def(FUN(imageWasUpdated),        nb::arg("renderer"));
 
-	m.def(FUN(renderStart),            nb::arg("renderer"), nb::arg("renderResult"), nb::arg("onImageUpdated").none());
+	m.def(FUN(requestRenderChannel),   nb::arg("renderer"), nb::arg("channelType"),
+	                                   nb::arg("pluginInstanceName") = std::string(),
+	                                   nb::arg("subIndex") = 0);
+	m.def(FUN(setElementPasses),       nb::arg("renderer"), nb::arg("passes"));
+	m.def(FUN(getMetadata),            nb::arg("renderer"), nb::arg("key"));
+	m.def(FUN(renderStart),            nb::arg("renderer"), nb::arg("renderResult"), nb::arg("onImageUpdated").none(), nb::arg("imageToBlender") = true);
 	m.def(FUN(renderEnd),              nb::arg("renderer"));
 	m.def(FUN(renderFrame),            nb::arg("renderer"));
 	m.def(FUN(setRenderFrame),         nb::arg("renderer"), nb::arg("frame"));
@@ -1077,7 +1138,8 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(ZmqServerArgs, vrayLibPath)
 		.ADD_RW_PROPERTY(ZmqServerArgs, appSDKPath)
 		.ADD_RW_PROPERTY(ZmqServerArgs, pluginVersion)
-		.ADD_RW_PROPERTY(ZmqServerArgs, blenderVersion);
+		.ADD_RW_PROPERTY(ZmqServerArgs, blenderVersion)
+		.ADD_RW_PROPERTY(ZmqServerArgs, licenseType);
 
 	nb::class_<ExportSceneSettings>(m, "ExportSceneSettings")
 		.def(nb::init<>())
@@ -1089,6 +1151,16 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(ExportSceneSettings, pluginTypes)
 		.ADD_RW_PROPERTY(ExportSceneSettings, hostAppString)
 		.ADD_RW_PROPERTY(ExportSceneSettings, filePath);
+
+	nb::class_<ProxyExportSettings>(m, "ProxyExportSettings")
+		.def(nb::init<>())
+		.ADD_RW_PROPERTY(ProxyExportSettings, filePath)
+		.ADD_RW_PROPERTY(ProxyExportSettings, elementsPerVoxel)
+		.ADD_RW_PROPERTY(ProxyExportSettings, previewFaces)
+		.ADD_RW_PROPERTY(ProxyExportSettings, previewType)
+		.ADD_RW_PROPERTY(ProxyExportSettings, animOn)
+		.ADD_RW_PROPERTY(ProxyExportSettings, startFrame)
+		.ADD_RW_PROPERTY(ProxyExportSettings, endFrame);
 
 	nb::class_<HostInfo>(m, "HostInfo")
 		.def(nb::init<>())
@@ -1108,7 +1180,12 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, packageId)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, revisionId)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
-		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap);
+		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, planeWidth)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, planeHeight)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, applyTriplanarMapping)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, texRealWorldWidth)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, texRealWorldHeight);
 #ifdef WITH_DR2
     m.attr("withDR2") = true;
 #else

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import bpy
 from vray_blender import debug
-from vray_blender.nodes.nodes import getPluginModule, vrayNodeCopy
-from vray_blender.plugins import getPluginAttr
+from vray_blender.nodes.nodes import vrayNodeCopy
+from vray_blender.nodes.utils import copyVRayPropGroup
 
 # Nodes which do not need conversion or for which the conversion is not yet implemented.
 SKIPPED_NODES = {
@@ -46,39 +46,6 @@ class NodeLink:
     toNodeName: str
     toSockName: str
     toSockAttr: str
-
-
-def _copyPropGroup(srcNode, targetNode, propType):
-    # Copy the V-Ray property group
-    sourceProps = getattr(srcNode, propType)
-    targetProps = getattr(targetNode, propType)
-
-    if not hasattr(targetProps, "__annotations__"):
-        debug.printDebug(f"\tNo anotations for Node {srcNode}")
-        return
-
-    propGroupPropertyNames = sourceProps.__annotations__.keys()
-    pluginModule = getPluginModule(propType)
-    
-
-    for propName in targetProps.__annotations__.keys():
-        if propName in propGroupPropertyNames:
-            srcProp = getattr(sourceProps, propName)
-            if (attrDesc := getPluginAttr(pluginModule, propName)) and (attrDesc['type'] == 'TEMPLATE'):
-                # Templates need special handling. Call their 'copy' method, if defined
-                targetProp = getattr(targetProps, propName, None)
-                assert targetProp
-                if hasattr(srcProp, 'copy'):
-                    srcProp.copy(targetProp)
-            else:
-                setattr(targetProps, propName, srcProp)
-
-    # Copy meta sockets (the ones not directly backed by vray properties)
-    for srcSocket in [s for s in srcNode.inputs if hasattr(s, 'vray_attr')]:
-        if srcSocket.vray_attr not in propGroupPropertyNames:
-            if fnCopy := getattr(srcSocket, 'copy', None):
-                if targetSocket := next((s for s in targetNode.inputs if (not s.is_linked) and (s.name.lower() == srcSocket.name.lower())), None):
-                    fnCopy(targetSocket)
 
 
 def _createNodeLinks(nodeTree, nodeLinks, failedLinks):
@@ -124,7 +91,7 @@ def _convertNodes(nodesForConversion, nodeTree, failedNodes):
             match nodeInfo['type']:
                 case "VRayNodeMetaImageTexture":
                     for prop in {"BitmapBuffer", "TexBitmap"}:
-                        _copyPropGroup(node, newNode, prop)
+                        copyVRayPropGroup(node, newNode, prop)
                     newNode.texture = node.texture
                 case "VRayNodeUVWMapping":
                     newNode.mapping_node_type = node.mapping_node_type
@@ -133,9 +100,9 @@ def _convertNodes(nodesForConversion, nodeTree, failedNodes):
                         'UVWGenObject',
                         'UVWGenEnvironment',
                         'UVWGenProjection'}:
-                        _copyPropGroup(node, newNode, prop)
+                        copyVRayPropGroup(node, newNode, prop)
                 case _:
-                    _copyPropGroup(node, newNode, node.vray_plugin)
+                    copyVRayPropGroup(node, newNode, node.vray_plugin)
                     pass
         
             # Call the custom copy procedure AFTER the properties have been copied so that it could 
@@ -233,7 +200,7 @@ def run():
     debug.printDebug("==================")
     if bpy.data.worlds:
         for world in bpy.data.worlds:
-            if world.use_nodes:
+            if getattr(world, 'use_nodes', False):
                 debug.printDebug(f"WORLD: {world.name}")
                 replaceNodeTree(world.node_tree, world.name)
     debug.printDebug("\n")

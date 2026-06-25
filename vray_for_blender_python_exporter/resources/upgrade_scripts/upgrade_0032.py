@@ -4,11 +4,11 @@
 
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeScene, sceneNeedsUpgrade
-from vray_blender.resources.upgrade_scripts.upgrade_0001 import _copyPropGroup
+from vray_blender.nodes.utils import copyVRayPropGroup
 
 def _copyBitmapTex(ctx: UpgradeContext, oldNode: VRayNodeBase, newNode: VRayNodeBase):
     newNode.texture = oldNode.texture
-    _copyPropGroup(oldNode, newNode, 'BitmapBuffer')
+    copyVRayPropGroup(oldNode, newNode, 'BitmapBuffer')
     # TexBitmap properties are copied by upgradeScene()
 
 

@@ -1,0 +1,122 @@
+
+{
+    "Desciption" : "TexParallax",
+    "ID" : "TexParallax",
+    "Name" : "Parallax",
+    "Parameters" :
+    [
+        {
+            "attr" : "parallax_map",
+            "default" : [ 0.50, 0.50, 1.0, 1.0 ],
+            "desc" : "Source texture with parallax layout",
+            "type" : "TEXTURE"
+        },
+        {
+            "attr" : "flip_horizontal",
+            "default" : false,
+            "desc" : "Flip horizontal",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "flip_vertical",
+            "default" : false,
+            "desc" : "Flip vertical",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "width_ratio",
+            "default" : 1.0,
+            "desc" : "Width ratio",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 5.0,
+                "min" : 0.2000000029802322
+            }
+        },
+        {
+            "attr" : "depth",
+            "default" : 1.0,
+            "desc" : "Depth",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 10.0,
+                "min" : 0.1000000014901161
+            }
+        },
+        {
+            "attr" : "layer1_on",
+            "default" : false,
+            "desc" : "Mid layer 1 on",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "layer1_depth",
+            "default" : 0.0,
+            "desc" : "Mid layer 1 depth %",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        {
+            "attr" : "layer2_on",
+            "default" : false,
+            "desc" : "Mid layer 2 on",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "layer2_depth",
+            "default" : 0.250,
+            "desc" : "Mid layer 2 depth %",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        {
+            "attr" : "layer3_on",
+            "default" : false,
+            "desc" : "Mid layer 3 on",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "layer3_depth",
+            "default" : 0.50,
+            "desc" : "Mid layer 3 depth %",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        {
+            "attr" : "layer4_on",
+            "default" : false,
+            "desc" : "Mid layer 4 on",
+            "type" : "BOOL"
+        },
+        {
+            "attr" : "layer4_depth",
+            "default" : 0.750,
+            "desc" : "Mid layer 4 depth %",
+            "type" : "FLOAT",
+            "ui" :
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" :
+    {
+        "widgets" : []
+    }
+}

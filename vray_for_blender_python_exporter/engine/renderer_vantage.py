@@ -213,8 +213,8 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
             try:
                 commandLine = [vantageExecutable]
                 if version := _getFileVersion(vantageExecutable):
-                    majorVersion=version >> 16
-                    minorVersion=version & 0xffff
+                    majorVersion = version >> 16
+                    minorVersion = version & 0xffff
                     if majorVersion > 2 or (majorVersion == 2 and minorVersion >= 6):
                         commandLine.append("-skipHome")
 
@@ -239,7 +239,7 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
                     if failedAttempts >= maxFailedAttempts:
                         return VantageInitStatus.VantageConnectionFailed
 
-                    failedAttempts+=1
+                    failedAttempts += 1
                     continue
                 vantageState = vantageStatus.state
             if not vantageState or vantageState == "Startup" or vantageState == "LoadingScene":
@@ -272,14 +272,17 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
     def _initRenderer(self):
         self._createRenderer(ExporterType.VANTAGE_LIVE_LINK)
 
+        if self.renderer == 0:
+            return
+
         def onStopped(isAborted):
             if isAborted:
                bpy.app.timers.register(lambda: debug.reportError("Connection to renderer lost. Restart Vantage Live Link."))
-               VfbEventHandler.stopVantageLiveLink() 
+            VfbEventHandler.stopVantageLiveLink()
 
         self.cbRenderStopped = lambda isAborted: onStopped(isAborted)
         vray.setRenderStoppedCallback(self.renderer, self.cbRenderStopped)
-        
+
         VRayRendererIprVfb._activeRenderer = self.renderer
 
 def drawCallbackVantage():

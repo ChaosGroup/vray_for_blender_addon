@@ -56,22 +56,26 @@
                         "name": "enable_flakes"
                     },
                     {
-                        "name": "num_flakes"
+                        "name": "num_flakes",
+                        "active": {"cond": "::enable_flakes=1"}
                     },
                     {
                         "name": "hilight_glossiness"
                     },
                     {
-                        "name": "blur_angle"
+                        "name": "blur_angle",
+                        "active": {"cond": "::enable_flakes=1"}
                     },
                     {
                         "name": "reflect_filter"
                     },
                     {
-                        "name": "mapping_type"
+                        "name": "mapping_type",
+                        "active": {"cond": "::enable_flakes=1"}
                     },
                     {
-                        "name": "map_channel"
+                        "name": "map_channel",
+                        "active": {"cond": "::enable_flakes=1,::mapping_type=0"}
                     },
                     {
                         "name": "flake_scale"

@@ -9,6 +9,7 @@ import os
 import math
 import numpy as np
 import time
+from collections import deque
 from io import StringIO
 
 from vray_blender import debug
@@ -137,6 +138,22 @@ def isObjectNonMeshClipper(obj: bpy.types.Object):
     vrayClipper = obj.vray.VRayClipper
     return vrayClipper and vrayClipper.enabled and not vrayClipper.use_obj_mesh
 
+def isProxyConvertibleGeometryType(obj: bpy.types.Object) -> bool:
+    """True if export produces GeomStaticMesh, GeomMayaHair, or GeomParticleSystem (proxy .vrmesh)."""
+    match obj.type:
+        case 'MESH' | 'META' | 'SURFACE' | 'FONT' | 'CURVE':
+            if isObjectVrayScene(obj) or isObjectVrayProxy(obj) or isObjectVRayDecal(obj):
+                return False
+            if isObjectNonMeshClipper(obj):
+                return False
+            return True
+        case 'POINTCLOUD':
+            return True
+        case 'CURVES':
+            return not obj.vray.isVRayFur
+        case _:
+            return False
+
 def getVRayBaseSockType(sock):
     if hasattr(sock, "vray_socket_base_type"):
         return sock.vray_socket_base_type
@@ -204,7 +221,7 @@ def getGroupNode(node):
         elif isinstance(group, bpy.types.ShaderNodeTree):
             nodes = group.nodes
 
-        for groupNode in [n for n in nodes if n.bl_idname == 'ShaderNodeGroup']:
+        for groupNode in [n for n in nodes if n.bl_idname in ('ShaderNodeGroup', 'VRayNodeGroup')]:
             groupNodeTree = groupNode.node_tree
 
             if groupNodeTree.session_uid == nodeTree.session_uid:
@@ -216,7 +233,8 @@ def getGroupNode(node):
 
 
 def _isNearSocketLinkActive(l: bpy.types.NodeLink):
-    return l.is_valid and (not l.is_muted) and (not l.is_hidden)
+    return l.is_valid and (not l.is_muted) and (not l.is_hidden) and \
+            (not isVraySocket(l.to_socket) or l.to_socket.ui_enabled)
 
 
 def _getActiveNearLinks(sock: bpy.types.NodeSocket):
@@ -234,6 +252,79 @@ def socketHasActiveNearLinks(socket: bpy.types.NodeSocket):
     return any(_getActiveNearLinks(socket))
 
 
+# Stack of group instance paths set by the export loop (node_export.py) when it enters
+# the export of a node that lives inside a group tree.  Each entry is a tuple of
+# VRayNodeGroup nodes representing the path from the root tree to the current group.
+# Used by _resolveNodeSocketImpl so that a fresh getFarNodeLink call made while
+# exporting an inner node still knows which group instance it came from.
+_groupExportStack: list = []
+
+
+def _resolveNodeSocketImpl(
+    toSocket: bpy.types.NodeSocket,
+    _groupStack: tuple = (),
+) -> tuple:
+    """ Internal implementation.  Returns (resolved_socket_or_None, group_path_at_return).
+
+        _groupStack accumulates the VRayNodeGroup nodes entered during this recursive
+        traversal.  It is separate from _groupExportStack, which reflects the group
+        context established by the outer export loop.
+    """
+    if toSocket.is_linked and (link := toSocket.links[0]) and _isNearSocketLinkActive(link):
+
+        fromNode   = link.from_node
+        fromSocket = link.from_socket
+
+        if fromNode.mute:
+            _, resolvedSock = resolveInternalLink(fromSocket)
+            return resolvedSock, _groupStack
+
+        elif fromNode.bl_idname == "NodeReroute":
+            return _resolveNodeSocketImpl(fromNode.inputs[0], _groupStack)
+
+        elif fromNode.bl_idname in ("ShaderNodeGroup", "VRayNodeGroup"):
+            nodeGroup = fromNode.node_tree
+            if not nodeGroup:
+                return None, _groupStack
+            groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+            if not groupOutput:
+                return None, _groupStack
+            for idx, outSocket in enumerate(fromNode.outputs):
+                if outSocket == fromSocket:
+                    return _resolveNodeSocketImpl(groupOutput.inputs[idx], _groupStack + (fromNode,))
+            return None, _groupStack
+
+        elif fromNode.bl_idname == "NodeGroupInput":
+            # Determine the outer group node.  Prefer the in-traversal stack, then the
+            # export-loop context, and fall back to the slower user_map search.
+            if _groupStack:
+                outerGroupNode = _groupStack[-1]
+                newStack       = _groupStack[:-1]
+            elif _groupExportStack:
+                ctxPath        = _groupExportStack[-1]
+                outerGroupNode = ctxPath[-1] if ctxPath else None
+                newStack       = ctxPath[:-1]
+            else:
+                outerGroupNode = getGroupNode(fromNode)
+                newStack       = ()
+
+            if not outerGroupNode:
+                # GroupInput copied outside a group, or no context available.
+                return None, newStack
+
+            for idx, outSocket in enumerate(fromNode.outputs):
+                if outSocket == fromSocket:
+                    break
+            return _resolveNodeSocketImpl(outerGroupNode.inputs[idx], newStack)
+
+        elif not isCompatibleNode(fromNode):
+            from vray_blender.lib.defs import NodeContext
+            NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
+            return None, _groupStack
+
+    return toSocket, _groupStack
+
+
 def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
     """ Resolve an input socket to either itself or an input socket on a node connected
         through any re-routes, muted nodes and groups.
@@ -243,39 +334,8 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
         to an unsupported node.
     """
     assert not toSocket.is_multi_input
-
-    if toSocket.is_linked and (link := toSocket.links[0]) and _isNearSocketLinkActive(link):
-
-        fromNode = link.from_node
-        fromSocket = link.from_socket
-
-        if fromNode.mute:
-            _, resolvedSock = resolveInternalLink(fromSocket)
-            return resolvedSock
-        elif fromNode.bl_idname == "NodeReroute":
-            return resolveNodeSocket(fromNode.inputs[0])
-        elif fromNode.bl_idname == "ShaderNodeGroup":
-            nodeGroup = fromNode.node_tree
-            groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
-            for idx, outSocket in enumerate(fromNode.outputs):
-                if outSocket == fromSocket:
-                    break
-            return resolveNodeSocket(groupOutput.inputs[idx])
-        elif fromNode.bl_idname == "NodeGroupInput":
-            groupNode = getGroupNode(fromNode)
-            if not groupNode:
-                # This might happen if a GroupInput node was copied outside a group.
-                return None
-            for idx, outSocket in enumerate(fromNode.outputs):
-                if outSocket == fromSocket:
-                    break
-            return resolveNodeSocket(groupNode.inputs[idx])
-        elif not isCompatibleNode(fromNode):
-            from vray_blender.lib.defs import NodeContext
-            NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
-            return None
-
-    return toSocket
+    socket, _ = _resolveNodeSocketImpl(toSocket)
+    return socket
 
 
 def resolveInternalLink(outSocket: bpy.types.NodeSocket):
@@ -348,11 +408,15 @@ class FarNodeLink:
     """ Node link that can span one or more Reroute nodes.
         The interface is a drop-in replacement for bpy.types.NodeLink.
     """
-    def __init__(self, fromSock: bpy.types.NodeSocket, toSock: bpy.types.NodeSocket):
+    def __init__(self, fromSock: bpy.types.NodeSocket, toSock: bpy.types.NodeSocket,
+                 groupPath: tuple = ()):
         self.from_socket  = fromSock
         self.to_socket    = toSock
         self.from_node    = fromSock.node
         self.to_node      = toSock.node
+        # Tuple of VRayNodeGroup nodes that were entered to reach from_node.
+        # Non-empty when from_node lives inside one or more group trees.
+        self.groupPath    = groupPath
 
 
 def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
@@ -381,8 +445,13 @@ def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
     if (not toSock.is_linked) or (not _isNearSocketLinkActive(toSock.links[0])):
         return None
 
-    if (socket := resolveNodeSocket(toSock)) and socket.is_linked:
-        return FarNodeLink(socket.links[0].from_socket, toSock)
+    # Seed the group stack from the export-loop context so that nodes inside a
+    # group are still associated with the correct group instance even when
+    # getFarNodeLink is called fresh (not through an initial group traversal).
+    initialStack = _groupExportStack[-1] if _groupExportStack else ()
+    socket, groupPath = _resolveNodeSocketImpl(toSock, initialStack)
+    if socket and socket.is_linked:
+        return FarNodeLink(socket.links[0].from_socket, toSock, groupPath=groupPath)
 
     return None
 
@@ -487,6 +556,48 @@ def getSceneNameOfObject(obj: bpy.types.Object, scene: bpy.types.Scene):
 
     return name
 
+
+def _buildObjectCollectionMap(scene: bpy.types.Scene) -> dict:
+    """ BFS the collection hierarchy once, returning {session_uid: collection_path} for the deepest
+        direct collection each object belongs to. The path includes the full collection hierarchy,
+        e.g. 'Buildings/Residential'. Uses coll.objects (direct membership only —
+        Blender does not inherit collection membership through the hierarchy).
+    """
+    result: dict = {}  # session_uid -> (depth, path)
+    queue = deque([(scene.collection, 0, "")])
+    while queue:
+        coll, depth, path = queue.popleft()
+        if coll is not scene.collection:
+            collPath = f"{path}/{coll.name}" if path else coll.name
+            for ob in coll.objects:
+                uid = ob.original.session_uid
+                cur = result.get(uid)
+                if cur is None or depth > cur[0]:
+                    result[uid] = (depth, collPath)
+            for child in coll.children:
+                queue.append((child, depth + 1, collPath))
+        else:
+            for child in coll.children:
+                queue.append((child, depth + 1, path))
+    return {uid: p for uid, (_, p) in result.items()}
+
+
+def buildObjectSceneName(name: str, scenePath: str, obj: bpy.types.Object, exporterCtx) -> list:
+    """ Build the full scene_name list for a V-Ray Node or light plugin. """
+    if exporterCtx.objCollectionMap is None:
+        exporterCtx.objCollectionMap = _buildObjectCollectionMap(exporterCtx.dg.scene)
+    collPath = exporterCtx.objCollectionMap.get(obj.original.session_uid)
+    if collPath:
+        # Insert the collection hierarchy between "scene/" and the object path,
+        # so Vantage shows collections as groups in its outline.
+        scenePath = f"scene/{collPath}/{scenePath[len('scene/'):]}"
+    assetRoot = obj
+    while assetRoot.parent:
+        assetRoot = assetRoot.parent
+    return [name, scenePath,
+            f"layer/{collPath or 'Scene'}",
+            f"asset/{assetRoot.name}"]
+
 def isNodeConnected(node):
     return any(len(o.links) > 0 for o in node.outputs)
 
@@ -521,7 +632,7 @@ def isObjectVisible(exporterCtx, obj: bpy.types.Object):
             evalObj = obj.evaluated_get(exporterCtx.dg)
             return not evalObj.hide_render and ((not obj.is_instancer) or obj.show_instancer_for_render)
 
-        if exporterCtx.interactive:
+        if exporterCtx.interactive or exporterCtx.isProxyExport:
             return visibleInViewport(obj)
         else:
             return visibleInProd(obj)

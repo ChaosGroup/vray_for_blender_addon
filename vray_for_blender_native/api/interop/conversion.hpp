@@ -47,6 +47,7 @@ vray::AttrList<T> toAttrList(const nb::list &pyList)
 {
 	nb::gil_scoped_acquire gil;
 	vray::AttrList<T> attrList;
+	attrList.reserve(static_cast<int>(pyList.size()));
 
 	for (auto elem : pyList) {
 		T extractedVal = nb::cast<T>(elem);
@@ -65,6 +66,12 @@ proto::RenderSizes fromRenderSizes (const nb::object& obj);
 template<typename T>
 inline std::vector<T> toVector(const nb::object& iterable)
 {
+	if constexpr (std::is_arithmetic_v<T>) {
+		if (nb::isinstance<nb::ndarray<T, nb::c_contig>>(iterable)) {
+			auto arr = nb::cast<nb::ndarray<T, nb::c_contig>>(iterable);
+			return std::vector<T>(arr.data(), arr.data() + arr.size());
+		}
+	}
 	return nb::cast<std::vector<T>>(iterable);
 }
 
@@ -85,6 +92,15 @@ std::span<const T> fromDataArray(const nb::object& arr)
 	const size_t count = nb::cast<size_t>(arr.attr("count"));
 
 	return std::span<const T>(ptr, count);
+}
+
+
+template <class T>
+std::span<const T> maybeFromDataArray(const nb::object& arr)
+{
+	const size_t count = nb::cast<size_t>(arr.attr("count"));
+	if (count == 0) return {};
+	return fromDataArray<T>(arr);
 }
 
 

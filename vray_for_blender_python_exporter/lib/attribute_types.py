@@ -221,7 +221,7 @@ TypeToProp = {
     'PLUGIN'                : bpy.props.StringProperty,
     'OBJECT'                : bpy.props.PointerProperty,
     'PLUGIN_LIST'           : bpy.props.PointerProperty,
-    'INCLUDE_EXCLULDE_LIST' : bpy.props.PointerProperty,
+    'INCLUDE_EXCLUDE_LIST'  : bpy.props.PointerProperty,
     'BRDF_USE'              : bpy.props.BoolProperty,
     'COLOR_USE'             : bpy.props.BoolProperty,
 
@@ -250,6 +250,9 @@ CompatibleNonVrayNodes = {
     'NodeReroute',
 
     'ShaderNodeGroup',
+    'VRayNodeGroup',
+    'NodeGroupInput',
+    'NodeGroupOutput',
 
     # Cycles
     'ShaderNodeBsdfPrincipled', # almost full(no tangent, a few parameters that don't have gpu support)

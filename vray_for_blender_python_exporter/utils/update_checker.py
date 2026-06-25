@@ -20,12 +20,11 @@ from vray_blender.bin import VRayBlenderLib as vray
 
 _UPDATE_CONFIG_URL = "https://config.static.chaos.com/vblender/version.json"
 
-if vray.isCommunityEdition:
-    _PRODUCT_NAME = f"{bl_info['name']} Community Edition"
-    _VERSION_NAME = "CE"
-else:
-    _PRODUCT_NAME = bl_info['name']
-    _VERSION_NAME = "Full"
+# Update channel key inside the version config JSON. There is only one build
+# of the addon now (Community Edition is selected at runtime via the addon
+# preference, not at build time), so the version checker always polls the
+# "Full" channel.
+_VERSION_CHANNEL = "Full"
 
 # When automatic checks are enabled, they will be performed at this interval
 # during the same Blender session.
@@ -69,14 +68,14 @@ def _isAddonUpdated(versionConfig):
     """
     from vray_blender import bl_info
 
-    lastVersion    = [int(v) for v in versionConfig['VersionChecker'][_VERSION_NAME]['LastVersion'].split('.')]
+    lastVersion    = [int(v) for v in versionConfig['VersionChecker'][_VERSION_CHANNEL]['LastVersion'].split('.')]
     currentVersion = [int(v) for v in bl_info['version']]
     
     return currentVersion < lastVersion
 
 
 def _showUpdateDialog():
-    currentVersion = f"{_PRODUCT_NAME} {getBuildVersionString()}"
+    currentVersion = f"{bl_info['name']} {getBuildVersionString()}"
     latestVersion  = UpdateStatus.versionString
     hasNewVersion  = UpdateStatus.current == UpdateStatus.Available
 
@@ -115,12 +114,12 @@ def _getUpdateInfo():
         prefs.last_check_for_updates = datetime.now().timestamp()
         
         isNewVersionAvailable = _isAddonUpdated(config)
-        versionConfig = config['VersionChecker'][_VERSION_NAME]
+        versionConfig = config['VersionChecker'][_VERSION_CHANNEL]
         latestVersion = versionConfig['LastVersion']
-        
+
         UpdateStatus.current = UpdateStatus.Available if isNewVersionAvailable else UpdateStatus.NoUpdate
         UpdateStatus.version = latestVersion.split(".")
-        UpdateStatus.versionString = f"{_PRODUCT_NAME} (v{latestVersion})"
+        UpdateStatus.versionString = f"{bl_info['name']} (v{latestVersion})"
         UpdateStatus.downloadURL = versionConfig['DownloadURL']
         
         if isNewVersionAvailable:

@@ -20,14 +20,14 @@ class VRAY_PT_hair(classes.VRayParticlePanel):
         self.layout.label(text="")
 
     def draw(self, context):
-        layout= self.layout
+        layout = self.layout
 
-        particle_settings= context.particle_system.settings
+        particle_settings = context.particle_system.settings
 
-        VRayFur= particle_settings.vray.VRayFur
+        VRayFur = particle_settings.vray.VRayFur
 
-        split= layout.split()
-        col= split.column()
+        split = layout.split()
+        col = split.column()
         col.prop(VRayFur, 'width')
         col.prop(VRayFur, 'widths_in_pixels')
         col.prop(VRayFur, 'make_thinner')

@@ -17,6 +17,19 @@ _POINT_TYPES_DECODE = { v: k for k, v in _POINT_TYPES_ENCODE.items() }
 _CURVES_NODE_TREE_NAME = ".texRemapTree"
 
 
+def copyCurvesData(srcCurvesNode: bpy.types.Node, dstCurvesNode: bpy.types.Node):
+    """Copy CurveMapping data from one ShaderNodeRGBCurve to another."""
+    for i, curve in enumerate(srcCurvesNode.mapping.curves):
+        dstCurve = dstCurvesNode.mapping.curves[i]
+        while len(dstCurve.points) < len(curve.points):
+            dstCurve.points.new(0, 0)
+        for j, point in enumerate(curve.points):
+            dstCurve.points[j].location = point.location
+            dstCurve.points[j].handle_type = point.handle_type
+    dstCurvesNode.mapping.extend = srcCurvesNode.mapping.extend
+    dstCurvesNode.mapping.update()
+
+
 def curvesCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
     """Handles the logic for copying the node."""
     copyNode.assignStaticId() # The static id is needed for the name of the curves node
@@ -25,33 +38,27 @@ def curvesCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
     copyCurvesNode = getCurvesNode(copyNode)
     origCurvesNode = getCurvesNode(origNode)
 
-    for i, curve in enumerate(origCurvesNode.mapping.curves):
-        copyCurve = copyCurvesNode.mapping.curves[i]
-
-        # By default, CurveMapping contains a minimum of 2 points.
-        # This ensures that the curve in origNode cannot have fewer points than the one in copyCurve.
-        while len(copyCurve.points) < len(curve.points):
-            copyCurve.points.new(0, 0)
-
-        for j, point in enumerate(curve.points):
-            copyCurve.points[j].location = point.location
-            copyCurve.points[j].handle_type = point.handle_type
+    copyCurvesData(origCurvesNode, copyCurvesNode)
 
 
-def hasCurvesNode(node: bpy.types.Node):
+def hasCurvesNode(node: bpy.types.Node, nameSuffix=''):
     """Return True if a curves node has already been created for this node."""
     if group := bpy.data.node_groups.get(_CURVES_NODE_TREE_NAME, None):
-        return getCurvesNodeName(node) in group.nodes
+        return getCurvesNodeName(node, nameSuffix) in group.nodes
 
     return False
 
 
-def registerColorMapCurves(nodeName: str):
-    """Register update callbacks for all BRDFToonMtl nodes in the scene."""
-    for mtl in bpy.data.materials:
-        if ntree := getattr(mtl, 'node_tree', None):
-            for n in [n for n in ntree.nodes if n.bl_idname == nodeName]:
-                addCurvesUpdateCallback(n)
+def registerCurveNodes(handlers: dict):
+    """Register update callbacks for all curve-based nodes in a single pass.
+
+    handlers: {bl_idname: callable(node)} mapping node types to their registration functions.
+    """
+    from vray_blender.nodes.tree import iterVRayNodeTrees
+    for ntree in iterVRayNodeTrees():
+        for n in ntree.nodes:
+            if handler := handlers.get(n.bl_idname):
+                handler(n)
 
 
 def loadCurvesData(node: bpy.types.Node):
@@ -60,11 +67,23 @@ def loadCurvesData(node: bpy.types.Node):
     decodeMapping(node.BRDFToonMtl.curves_data, curvesNode.mapping)
 
 
-def createMtlCurvesNodes(mtl: bpy.types.Material):
-    """Create curves nodes for every Toon Material node in the tree."""
-    if ntree := getattr(mtl, 'node_tree', None):
-        for n in [n for n in ntree.nodes if n.bl_idname == 'VRayNodeBRDFToonMtl']:
-            loadCurvesData(n)
+def initImportedCurveNodes(ntree: bpy.types.NodeTree):
+    """Initialize curve nodes for all nodes in an imported node tree.
+
+    Unlike load-time registration (which assumes curves nodes already exist in .texRemapTree),
+    this creates curves nodes from stored data or defaults as appropriate for each node type.
+    """
+    from vray_blender.plugins.effects.VolumeVRayToon import registerNodeCurves as _registerToonCurves
+
+    for node in ntree.nodes:
+        if node.bl_idname == 'VRayNodeBRDFToonMtl':
+            loadCurvesData(node)
+        elif node.bl_idname == 'VRayNodeTexRemap':
+            curvesNode = createCurvesNode(node)
+            if curvesData := node.TexRemap.get('curves_data'):
+                decodeMapping(curvesData, curvesNode.mapping)
+        elif node.bl_idname == 'VRayNodeVolumeVRayToon':
+            _registerToonCurves(node)
 
 
 def encodeMapping(mapping: bpy.types.CurveMapping):
@@ -111,16 +130,16 @@ def decodeMapping(jsonData: str, mapping: bpy.types.CurveMapping):
             point.handle_type = _POINT_TYPES_DECODE[pointData['type']]
 
 
-def removeCurvesNode(node: bpy.types.Node):
+def removeCurvesNode(node: bpy.types.Node, nameSuffix=''):
     """Removes a CurvesMap node from the CurvesMap node tree."""
-    curvesNode = getCurvesNode(node)
+    curvesNode = getCurvesNode(node, nameSuffix)
     bpy.msgbus.clear_by_owner(curvesNode)
     bpy.data.node_groups[_CURVES_NODE_TREE_NAME].nodes.remove(curvesNode)
 
 
-def getCurvesNode(node: bpy.types.Node):
+def getCurvesNode(node: bpy.types.Node, nameSuffix=''):
     """Retrieves the curve node from the hidden node tree."""
-    return bpy.data.node_groups[_CURVES_NODE_TREE_NAME].nodes[getCurvesNodeName(node)]
+    return bpy.data.node_groups[_CURVES_NODE_TREE_NAME].nodes[getCurvesNodeName(node, nameSuffix)]
 
 
 def addCurvesUpdateCallback(node: bpy.types.Node, curvesNodeOverride: bpy.types.Node = None):
@@ -143,12 +162,12 @@ def addCurvesUpdateCallback(node: bpy.types.Node, curvesNodeOverride: bpy.types.
     )
 
 
-def getCurvesNodeName(node: bpy.types.Node):
+def getCurvesNodeName(node: bpy.types.Node, nameSuffix=''):
     """Retrieves the curves node name from the node."""
-    return f"{node.vray_plugin}{node.static_id}"
+    return f"{node.vray_plugin}{node.static_id}{nameSuffix}"
 
 
-def createCurvesNode(node: bpy.types.Node):
+def createCurvesNode(node: bpy.types.Node, nameSuffix=''):
     """Creates a new tree and the curves node inside it."""
     if _CURVES_NODE_TREE_NAME not in bpy.data.node_groups:
         bpy.data.node_groups.new(_CURVES_NODE_TREE_NAME, "ShaderNodeTree")
@@ -156,9 +175,9 @@ def createCurvesNode(node: bpy.types.Node):
     toonRemapTree = bpy.data.node_groups[_CURVES_NODE_TREE_NAME]
     toonRemapTree.use_fake_user = True
     curvesNode = toonRemapTree.nodes.new("ShaderNodeRGBCurve")
-    curvesNode.name = getCurvesNodeName(node)
+    curvesNode.name = getCurvesNodeName(node, nameSuffix)
 
-    addCurvesUpdateCallback(node)
+    addCurvesUpdateCallback(node, curvesNode)
 
     return curvesNode
 

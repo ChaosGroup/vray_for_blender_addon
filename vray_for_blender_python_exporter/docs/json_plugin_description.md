@@ -126,7 +126,9 @@ A list of the visible sockets on the node. Sockets are created for all non-exclu
 `name`:  	(string) The name of the property in the plugin’s json description file to bind to (the ID field)  
 `type`:    	(string) This allows to specify a different data type for the socket  
 `label`:  	(string or [condition](#conditions)) Override the label set in Parameters section  
-`desc`:    	(string) Override the description set in Parameters section
+`desc`:    	(string) Override the description set in Parameters section  
+`active`:   (bool or [condition](#conditions)) Controls whether the socket is enabled. If false, the socket is shown as disabled.  
+`visible`:  (bool or [condition](#conditions)) Controls the visibility of the socket. If false, the socket is hidden from the node.  
 
 ### **output_sockets**
 
@@ -245,6 +247,16 @@ A common widget description may look like this:
 	* `default_closed`: (bool) Optional. Set to *false* to show the rollout initially open. Default is *true.*
 
 	* `use_prop`: (string) The name of a boolean property to use as a checkbox that enables the whole rollout.
+
+	* `panel_prop`: (dict) Optional. Binds the rollout's open/closed state to a Blender `BoolProperty` so it can be controlled programmatically (e.g. flipped open by the "jump to setting" buttons in *Common > Rendering*). When present, the rollout is drawn with Blender's `layout.panel_prop` instead of `layout.panel`, and the `default_closed` attribute is ignored (the initial state is taken from the bound property's default value).
+
+		* `wm_data`: (string) A dotted path to the property group that owns the boolean, resolved relative to `bpy.context.window_manager.vray`. For example, `"common_tab"` resolves to `wm.vray.common_tab`.
+
+		* `name`: (string) The name of the `BoolProperty` on the resolved property group that stores the open/closed state.
+
+		```json
+		"panel_prop": { "wm_data": "common_tab", "name": "panel_globals_camera_open" }
+		```
 
    ``` json
 	{  

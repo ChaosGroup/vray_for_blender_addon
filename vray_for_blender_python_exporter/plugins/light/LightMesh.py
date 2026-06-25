@@ -10,7 +10,6 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
-from vray_blender.plugins.light.light_tools import onUpdateColorTemperature
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -18,10 +17,6 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 def nodeUpdate(node: bpy.types.Node):
     if node.mute:
         node.mute = False
-
-
-def onUpdateAttribute(src, context: bpy.types.Context, attrName: str):
-    onUpdateColorTemperature(src, 'LightMesh', attrName)
 
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):

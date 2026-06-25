@@ -4,6 +4,8 @@
 
 """Functionality related to the BRDF Toon Material node. Includes logic for
 node initialization, destruction, copy, update, export, and widget-specific logic. """
+import math
+
 import bpy
 
 import vray_blender.nodes.curves_node as cn
@@ -172,8 +174,13 @@ def exportTreeNode(nodeCtx: NodeContext):
     """Exports the whole node's tree to V-Ray for rendering."""
     node = nodeCtx.node
 
-    pluginDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, _PLUGIN_TYPE), _PLUGIN_TYPE)
+    pluginName = Names.treeNode(nodeCtx)
+    pluginDesc = PluginDesc(pluginName, _PLUGIN_TYPE)
     pluginDesc.vrayPropGroup = node.BRDFToonMtl
+
+    # Register as emissive if self-illumination is active
+    if not all(math.isclose(c, 0.0) for c in node.BRDFToonMtl.self_illumination[:3]):
+        nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name, nodeCtx.material.name))
 
     _fillCurvesMapWidgetData(nodeCtx, pluginDesc)
 

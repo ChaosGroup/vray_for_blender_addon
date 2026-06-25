@@ -28,6 +28,8 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             deviceType='rtx'
         case RenderMode.ProductionGpuMetal | RenderMode.RtGpuMetal:
             deviceType='metal'
+        case RenderMode.ProductionGpuHIP | RenderMode.RtGpuHIP:
+            deviceType='hip'
         case _:
             debug.printError("Unknown engine type!")
     pluginDesc.setAttribute("engine_type", deviceType)

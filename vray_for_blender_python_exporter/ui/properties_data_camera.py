@@ -11,7 +11,7 @@ from vray_blender.ui import classes
 class VRAY_PT_camera_focus_distance(classes.VRayCameraPanel):
     bl_label    = "Focus Distance"
     bl_options  = {'DEFAULT_CLOSED'}
-    bl_icon     = ""
+    bl_icon     = "NONE"
 
     def draw(self, context):
         layout = self.layout
@@ -106,6 +106,9 @@ def getRegBlenderClasses():
         properties_data_camera.DATA_PT_camera_display,
         properties_data_camera.DATA_PT_camera,
         properties_data_camera.DATA_PT_lens,
+        properties_data_camera.DATA_PT_camera_safe_areas,
+        properties_data_camera.DATA_PT_camera_safe_areas_center_cut,
+        properties_data_camera.DATA_PT_camera_background_image,
     )
 
 def register():

@@ -4,7 +4,7 @@
 		"cpu_bundle_size": 4,
 		"cpu_samples_per_pixel": 4,
 		"gpu_samples_per_pixel": 2,
-		"gpu_bundle_size ": 256,
+		"gpu_bundle_size": 256,
 		"progressive_samples_per_pixel": 1,
 		"noise_threshold": 0.05,
 		"undersampling": 4

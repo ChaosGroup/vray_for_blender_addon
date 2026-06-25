@@ -10,7 +10,7 @@ from vray_blender import debug
 from vray_blender.lib import gl_draw
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
-from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, AttrPlugin, PersistedState, 
+from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, PersistedState, 
                                     RenderMaskState, UIRegionContext, getObjTrackId, SceneStats)
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
 from vray_blender.lib.plugin_utils import updateValue, objectToAttrPlugin, stringToIntList
@@ -19,7 +19,7 @@ from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker
 from vray_blender.exporting.settings_export import SettingsExporter
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget
-from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export, fur_export
+from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export, fur_export, instancer_export
 from vray_blender.nodes.filters import filterRenderMasks
 from vray_blender.plugins.system.compute_devices import updateEnabledComputeDevices
 from vray_blender.plugins.material.MtlDisplacement import checkForUpdatedMtlWithDisplacement
@@ -32,7 +32,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 #############################
 
 def _exportObjects(ctx: ExporterContext):
-    ctx.ts.timeThis("export_objects", lambda: obj_export.run(ctx))
+    return ctx.ts.timeThis("export_objects", lambda: obj_export.run(ctx))
 
 
 def _exportMaterials(ctx: ExporterContext):
@@ -41,7 +41,13 @@ def _exportMaterials(ctx: ExporterContext):
 
 
 def _exportLights(ctx: ExporterContext):
-    ctx.ts.timeThis("export_lights", lambda: light_export.LightExporter(ctx).export())
+    lightExporter = light_export.LightExporter(ctx)
+    ctx.ts.timeThis("export_lights", lambda: lightExporter.export())
+    return lightExporter
+
+
+def _exportInstances(ctx: ExporterContext, geomExporter, lightExporter):
+    ctx.ts.timeThis("export_instances", lambda: instancer_export.run(ctx, geomExporter, lightExporter))
 
 
 def _exportSettings(ctx: ExporterContext):
@@ -83,6 +89,18 @@ def _prunePlugins(self, exporterCtx: ExporterContext):
 def _syncPlugins(self, exporterCtx: ExporterContext):
     """ Perform synchronization of plugin data before starting an export """
 
+    # Force full scene material re-export to make sure all materials are properly overriden.
+    viewLayer = exporterCtx.dg.view_layer
+    if self.persistedState.materialOverrideMode != viewLayer.vray.material_override_mode or \
+        self.persistedState.overrideMaterial != viewLayer.material_override:
+        for mtl in bpy.data.materials:
+            mtl.update_tag()
+            if mtl.node_tree:
+                mtl.node_tree.update_tag()
+            UpdateTracker.tagMtlTopology(exporterCtx.ctx, mtl)
+        self.persistedState.exportedMtls.clear()
+        exporterCtx.exportedMtls.clear()
+
     # Has to be called before syncObjVisibility for proper update of the visibility of the fur objects.
     fur_export.syncFurInfo(exporterCtx)
 
@@ -115,16 +133,6 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
     }
     for objTrackId in self.persistedState.processedObjects.difference(allObjectIds):
         self.persistedState.processedObjects.discard(objTrackId)
-
-    # Force full scene material re-export to make sure all materials are properly overriden.
-    viewLayer = exporterCtx.dg.view_layer
-
-    if self.persistedState.materialOverrideMode != viewLayer.vray.material_override_mode or \
-        self.persistedState.overrideMaterial != viewLayer.material_override:
-        for mtl in bpy.data.materials:
-            mtl.update_tag()
-            UpdateTracker.tagMtlTopology(exporterCtx.ctx, mtl)
-        exporterCtx.persistedState.exportedMtls.clear()
 
     # Check if the currently updated material contains a displacement node
     checkForUpdatedMtlWithDisplacement(exporterCtx)
@@ -281,6 +289,7 @@ class VRayRendererIprBase:
 
         # Cache & draw the most recent viewport image.
         self.drawData: gl_draw.DrawData = None
+        self._lastReceivedCount = -1
 
         # State to carry on to the next render cycle
         self.persistedState = PersistedState()
@@ -405,7 +414,7 @@ class VRayRendererIprBase:
         try:
             _syncNames(exporterCtx)
 
-            commonSettings = CommonSettings(exporterCtx.dg.scene, engine, isInteractive = True)
+            commonSettings = CommonSettings(exporterCtx.dg.scene, isInteractive = True)
             commonSettings.updateFromScene()
             exporterCtx.commonSettings = commonSettings
             exporterCtx.currentFrame = commonSettings.animation.frameCurrent
@@ -428,12 +437,14 @@ class VRayRendererIprBase:
                 exporterCtx.calculateObjectVisibility()
 
                 _syncPlugins(self, exporterCtx)
+
                 _prunePlugins(self, exporterCtx)
                 _syncRenderMask(self, exporterCtx)
                 VRayRendererIprBase._showSceneStatus(exporterCtx)
 
-                _exportObjects(exporterCtx)
-                _exportLights(exporterCtx)
+                geomExporter = _exportObjects(exporterCtx)
+                lightExporter = _exportLights(exporterCtx)
+                _exportInstances(exporterCtx, geomExporter, lightExporter)
 
                 hasCameraUpdates = any(hasattr(u.id, "type") and u.id.type == 'CAMERA' for u in exporterCtx.dg.updates)
                 if hasCameraUpdates or exporterCtx.fullExport:

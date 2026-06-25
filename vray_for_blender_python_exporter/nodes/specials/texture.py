@@ -166,7 +166,7 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
     vray_type   = 'TEXTURE'
     vray_plugin = 'TexLayeredMax'
 
-    layers: bpy.props.IntProperty()
+    layers: bpy.props.IntProperty(options={'HIDDEN'})
 
     @classmethod
     def poll(cls, context):
@@ -223,6 +223,19 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
             sockOpacity = getHiddenInput(self, f'Opacity {humanIndex}')
             sockOpacity.draw(context, row, node, text="Opacity")
 
+
+    def copy(self, srcNode):
+        while self.layers < srcNode.layers:
+            VRayNodeTexLayeredMax.addLayer(self, self.layers + 1)
+        for i in range(1, self.layers + 1):
+            srcOpacity = getHiddenInput(srcNode, f"Opacity {i}")
+            dstOpacity = getHiddenInput(self, f"Opacity {i}")
+            if srcOpacity and dstOpacity:
+                dstOpacity.value = srcOpacity.value
+            srcBlend = getHiddenInput(srcNode, f"Blend Mode {i}")
+            dstBlend = getHiddenInput(self, f"Blend Mode {i}")
+            if srcBlend and dstBlend:
+                dstBlend.value = srcBlend.value
 
     def update(self):
         vrayNodeUpdate(self)

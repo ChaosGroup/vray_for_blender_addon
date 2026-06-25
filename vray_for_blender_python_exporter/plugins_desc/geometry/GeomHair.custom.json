@@ -255,19 +255,24 @@
                         "default_closed": false,
                         "attrs": [
                             {
-                                "name": "dir_var"
+                                "name": "dir_var",
+                                "label": "Direction Variation"
                             },
                             {
-                                "name": "length_var"
+                                "name": "length_var",
+                                "label": "Gravity Variation"
                             },
                             {
-                                "name": "thickness_var"
+                                "name": "thickness_var",
+                                "label": "Tickness Variation"
                             },
                             {
-                                "name": "gravity_var"
+                                "name": "gravity_var",
+                                "label": "Gravity Variation"
                             },
                             {
-                                "name": "curl_radius_var"
+                                "name": "curl_radius_var",
+                                "label": "Curl Radius Variation"
                             }
                         ]
                     },

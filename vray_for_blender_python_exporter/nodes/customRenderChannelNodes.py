@@ -100,7 +100,7 @@ customRenderChannelNodesDesc = (
     },
     {
         "params":{
-            "alias":  112,
+            "alias":  105,
             "name": "Shadow"
         },
         "base_plugin_type": "RenderChannelColor",
@@ -135,7 +135,9 @@ customRenderChannelNodesDesc = (
             "alias":  140,
             "name": "Reflection IOR",
         },
-        "base_plugin_type": "RenderChannelGlossiness",
+        # Channel 140 (VRMTL_REFLECTIOR) is RenderChannelColor on the V-Ray side;
+        # using RenderChannelGlossiness here leaves the alias unfindable in getAll(140).
+        "base_plugin_type": "RenderChannelColor",
         "Subtype" : "ADVANCED"
     },
     {
@@ -326,7 +328,7 @@ customRenderChannelNodesDesc = (
     },
     {
         "params":{
-            "alias":  110,
+            "alias":  184,
             "name": "Raw Sheen Reflection"
         },
         "base_plugin_type": "RenderChannelColor",

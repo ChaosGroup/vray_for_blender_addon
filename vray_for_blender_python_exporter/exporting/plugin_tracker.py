@@ -49,7 +49,7 @@ class ObjTracker:
     """
     def __init__(self, type: str):
         self.type:      str                   = type  # Arbitrary description of the tracked objects' type
-        self.ids:       Dict[str, Set(str)]   = {}    # objTrackId: set(pluginId) - plugins per object
+        self.ids:       Dict[str, Set[str]]   = {}    # objTrackId: set(pluginId) - plugins per object
         self.plugins:   Dict[str, int]        = {}    # pluginId: refCount - flat plugins list with refcounts
         self.instanced: Dict[str, bool]       = {}    # objTrackId: Bool - True if the object is instanced.
 
@@ -127,6 +127,8 @@ class ObjTracker:
     # Decrement refcount on the plugin and delete from the list of tracked plugins
     # if the refcount has reached 0
     def _releasePlugin(self, pluginId):
+        if pluginId not in self.plugins:
+            return
         self.plugins[pluginId] -= 1
         if self.plugins[pluginId] == 0:
             del self.plugins[pluginId]
@@ -147,7 +149,7 @@ class NodeTracker:
     """
     def __init__(self, type: str):
         self.type:    str = type  # Arbitrary description of the tracked objects' type
-        self.nodes:   Dict[str, Dict[str, Set(str)]]   = {}   # objTrackId: dict(node name -> plugins )  object
+        self.nodes:   Dict[str, Dict[str, Set[str]]]   = {}   # objTrackId: dict(node name -> plugins )  object
 
 
     def trackNodePlugin(self, objTrackId: str, nodeTrackId: str, pluginId: str):
@@ -182,7 +184,7 @@ class NodeTracker:
     def diffNodes(self, objTrackId: str, nodeTrackIds: list[str]):
         """ Returns all tracked nodes which are not in nodeTrackIds """
         if objTrackId not in self.nodes:
-            return
+            return set()
         
         return set(self.nodes[objTrackId].keys()).difference(nodeTrackIds)
     
@@ -418,9 +420,6 @@ class FakeScopedNodeTracker:
         pass
 
     def trackNodePlugin(self, objTrackId: str, nodeTrackId: str, pluginId: str):
-        pass
-
-    def forgetNode(self, objTrackId: str, nodeTrackId: str):
         pass
 
 class FakeObjTracker:

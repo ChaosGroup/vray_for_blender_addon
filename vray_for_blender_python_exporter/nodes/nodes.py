@@ -68,13 +68,58 @@ class VRAY_OT_swap_node(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.ops.node.swap_node.poll()
+        return hasattr(bpy.ops.node, 'swap_node') and bpy.ops.node.swap_node.poll()
 
     def execute(self, context):
         with NodeUtils.DisableAutoConnect():
             bpy.ops.node.swap_node('INVOKE_DEFAULT', type=self.type)
 
         return {'FINISHED'}
+
+class VRAY_OT_add_group_node(bpy.types.Operator):
+    bl_idname = 'vray.add_group_node'
+    bl_label = 'Add V-Ray Group Node'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    group_name: bpy.props.StringProperty()
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return space and space.type == 'NODE_EDITOR' and space.edit_tree is not None
+
+    def execute(self, context):
+        ntree = bpy.data.node_groups.get(self.group_name)
+        if ntree is None:
+            self.report({'ERROR'}, f"Group '{self.group_name}' not found")
+            return {'CANCELLED'}
+
+        tree = context.space_data.edit_tree
+        node = tree.nodes.new('VRayNodeGroup')
+        node.node_tree = ntree
+
+        for n in tree.nodes:
+            n.select = False
+        node.select = True
+        tree.nodes.active = node
+
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        if self.execute(context) != {'FINISHED'}:
+            return {'CANCELLED'}
+
+        # Use cursor_location_from_region instead of view2d.region_to_view;
+        # the latter does not account for HiDPI pixel ratio on macOS.
+        space = context.space_data
+        space.cursor_location_from_region(event.mouse_region_x, event.mouse_region_y)
+        node = space.edit_tree.nodes.active
+        if node:
+            node.location = space.cursor_location
+
+        bpy.ops.node.translate_attach('INVOKE_DEFAULT')
+        return {'RUNNING_MODAL'}
+
 
 def _nodeOperator(layout, nodeType, label=None, icon=None, searchWeight=0.0, isInSwapMenu = False):
     if label is None:
@@ -125,6 +170,22 @@ def _nodeOperatorWithSearchableEnumSocket(context: bpy.types.Context, layout: bp
 
             if callbackFunc:
                 callbackFunc(props, value)
+
+
+# Blender mesh attribute data_types that map to V-Ray user-attribute texture nodes.
+_USER_COLOR_ATTR_TYPES  = {'FLOAT_COLOR', 'BYTE_COLOR'}
+_USER_SCALAR_ATTR_TYPES = {'FLOAT', 'INT', 'INT8', 'BOOLEAN'}
+_USER_ATTR_TYPES        = _USER_COLOR_ATTR_TYPES | _USER_SCALAR_ATTR_TYPES
+
+
+def _iterMeshUserAttrs(obj):
+    """ Yield (name, data_type) for exported mesh attributes whose type maps to a
+        V-Ray user-attribute texture node (TexUserColor or TexUserScalar). """
+    if not (obj and obj.type == 'MESH' and obj.data):
+        return
+    for attr in blender_utils.iterExportedMeshAttributes(obj.data):
+        if attr.data_type in _USER_ATTR_TYPES:
+            yield attr.name, attr.data_type
 
 
 def buildItemsList(nodeType, subType=None):
@@ -294,6 +355,11 @@ class NODE_MT_vray_add_material(bpy.types.Menu):
         _addMtl('MATERIAL', 'V-Ray Displacement Mtl',  icon='MTL_DISPLACEMENT')
         _addMtl('MATERIAL', 'V-Ray VRmat Mtl',         icon='MTL_VRMAT')
 
+        # Presets aren't a single node, so they don't belong in the swap submenu.
+        if not isInSwapMenu:
+            layout.separator()
+            layout.menu("VRAY_MT_WR_presets", text="V-Ray Material Presets", icon='MATERIAL')
+
     def draw(self, context):
         self.drawMenu(self.layout, context)
 
@@ -332,8 +398,49 @@ class NODE_MT_vray_add_textures(bpy.types.Menu):
         for idname, label in buildItemsList('TEXTURE'):
             _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
 
+        if not isInSwapMenu:
+            layout.menu('NODE_MT_vray_add_attributes')
+
     def draw(self, context):
         self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_attributes(bpy.types.Menu):
+    bl_label = 'Attributes'
+    bl_idname = 'NODE_MT_vray_add_attributes'
+    bl_options = { 'SEARCH_ON_KEY_PRESS' }
+
+    @classmethod
+    def poll(cls, context):
+        # Mesh user attributes are only meaningful on a material applied to a mesh,
+        # or on object-level shaders (displacement, decal, fur). They have no place
+        # in the World tree.
+        if not (_pollMaterialNodeTreeSelected(context) or _pollObjectNodeTreeSelected(context)):
+            return False
+        return any(True for _ in _iterMeshUserAttrs(context.active_object))
+
+    def draw(self, context):
+        layout = self.layout
+        # Low weight so attribute shortcuts rank below regular node matches in search.
+        searchWeight = -10.0
+
+        for name, dataType in _iterMeshUserAttrs(context.active_object):
+            isColor = dataType in _USER_COLOR_ATTR_TYPES
+            nodeType = 'VRayNodeTexUserColor' if isColor else 'VRayNodeTexUserScalar'
+            attrProp = 'TexUserColor.user_attribute' if isColor else 'TexUserScalar.user_attribute'
+
+            props = layout.operator('node.add_node', text=name, search_weight=searchWeight)
+            props.type = nodeType
+            props.use_transform = True
+
+            setting = props.settings.add()
+            setting.name = attrProp
+            setting.value = repr(name)
+
+            if isColor:
+                setting = props.settings.add()
+                setting.name = 'TexUserColor.mode'
+                setting.value = repr('1')  # Color Attribute mode
 
 
 class NODE_MT_vray_add_texture_utilities(bpy.types.Menu):
@@ -462,6 +569,7 @@ class NODE_MT_vray_add_output(bpy.types.Menu):
     def drawMenu(layout, context, isInSwapMenu = False):
         if _pollMaterialNodeTreeSelected(context):
             _nodeOperator(layout, 'VRayNodeOutputMaterial', isInSwapMenu = isInSwapMenu)
+            _nodeOperator(layout, 'VRayNodeBRDFToonOverride', isInSwapMenu = isInSwapMenu)
         if _pollWorldNodeTreeSelected(context):
             _nodeOperator(layout, 'VRayNodeWorldOutput', isInSwapMenu = isInSwapMenu)
         if _pollObjectNodeTreeSelected(context) and not _pollDecalNodeTreeSelected(context):
@@ -558,8 +666,38 @@ class NODE_MT_vray_add_layout(bpy.types.Menu):
         _nodeOperator(layout, 'NodeFrame', searchWeight=-1, isInSwapMenu = isInSwapMenu)
         _nodeOperator(layout, 'NodeReroute', isInSwapMenu = isInSwapMenu)
 
+        from vray_blender.nodes.group import isGroupNodesEnabled
+        if isGroupNodesEnabled():
+            layout.separator()
+            _nodeOperator(layout, 'VRayNodeGroup', label='V-Ray Group', isInSwapMenu = isInSwapMenu)
+
     def draw(self, context):
         self.drawMenu(self.layout, context)
+
+
+class NODE_MT_vray_add_groups(bpy.types.Menu):
+    bl_label = 'Groups'
+    bl_idname = 'NODE_MT_vray_add_groups'
+    bl_options = {'SEARCH_ON_KEY_PRESS'}
+
+    @classmethod
+    def poll(cls, context):
+        from vray_blender.nodes.group import isGroupNodesEnabled
+        return isGroupNodesEnabled()
+
+    def draw(self, context):
+        layout = self.layout
+        groups = sorted(
+            (ntree for ntree in bpy.data.node_groups
+             if hasattr(ntree, 'vray') and ntree.vray.tree_type == 'GROUP'),
+            key=lambda t: t.name,
+        )
+        if not groups:
+            layout.label(text='No groups in scene')
+            return
+        for ntree in groups:
+            props = layout.operator('vray.add_group_node', text=ntree.name)
+            props.group_name = ntree.name
 
 
 class NODE_MT_vray_add(bpy.types.Menu):
@@ -746,7 +884,15 @@ def vrayNodeUpdate(self: VRayNodeBase):
         match parentNodeTree.vray.tree_type:
             case 'MATERIAL':
                 if mtl := NodeUtils.findDataObjFromNode(bpy.data.materials, self):
-                    UpdateTracker.tagMtlTopology(bpy.context, mtl)
+                    if not lib_utils.isRestrictedContext(bpy.context):
+                        UpdateTracker.tagMtlTopology(bpy.context, mtl)
+                    # Force-redraw Properties areas so the material preview widget picks up
+                    # the dirty flag set by mtl.update_tag() below. Without this, Blender
+                    # never redraws Properties on its own when the change originates in
+                    # .texRemapTree (a hidden node group unconnected to the material's node
+                    # tree), so the preview never re-renders until the user hovers over it.
+                    NodeUtils.tagRedrawPropertyEditor()
+                    mtl.update_tag()
             case 'OBJECT':
                 if obj := NodeUtils.findDataObjFromNode(bpy.data.objects, self, isObjTreeNode=True):
                     obj.update_tag()
@@ -758,6 +904,8 @@ def vrayNodeUpdate(self: VRayNodeBase):
                     # Suppress updates for render channel nodes.
                     # They should be exported only once during the first "full" export
                     pass
+            case 'GROUP':
+                NodeUtils.tagGroupTreeUsers(parentNodeTree)
 
     parentNodeTree.update_tag()
     updateNodeMutedState(self)
@@ -1040,6 +1188,11 @@ def _drawVRayAddMenuContents(layout, isInSwapMenu = False):
     menu('selectors')
     menu('layout')
 
+    from vray_blender.nodes.group import isGroupNodesEnabled
+    if isGroupNodesEnabled():
+        layout.separator()
+        layout.menu('NODE_MT_vray_add_groups')
+
 
 def _drawVRayAddMenuHook(self, context):
     if _vrayMenuPoll(context):
@@ -1145,6 +1298,7 @@ def _getMenuClasses():
     return (
         NODE_MT_vray_add_material,
         NODE_MT_vray_add_textures,
+        NODE_MT_vray_add_attributes,
         NODE_MT_vray_add_texture_utilities,
         NODE_MT_vray_add_mapping,
         NODE_MT_vray_add_geometry,
@@ -1156,6 +1310,7 @@ def _getMenuClasses():
         NODE_MT_vray_add_effects,
         NODE_MT_vray_add_render_channels,
         NODE_MT_vray_add_layout,
+        NODE_MT_vray_add_groups,
         NODE_MT_vray_add,
     )
 
@@ -1183,9 +1338,11 @@ def register():
         bpy.types.NODE_MT_swap.append(_drawVRaySwapMenuHook)
 
     bpy.utils.register_class(VRAY_OT_swap_node)
+    bpy.utils.register_class(VRAY_OT_add_group_node)
 
 
 def unregister():
+    bpy.utils.unregister_class(VRAY_OT_add_group_node)
     if hasattr(bpy.types, 'NODE_MT_swap'):
         bpy.types.NODE_MT_swap.remove(_drawVRaySwapMenuHook)
     bpy.types.NODE_MT_add.remove(_drawVRayAddMenuHook)

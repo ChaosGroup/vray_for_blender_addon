@@ -32,6 +32,29 @@ ObjectPrefix = {
 
 NonGeometryTypes = {'LIGHT','LIGHT_PROBE','CAMERA','SPEAKER','ARMATURE','LATTICE','EMPTY'}
 
+
+def iterExportedMeshAttributes(mesh: bpy.types.Mesh):
+    """ Yield bpy.types.Attribute objects from `mesh.attributes` that the exporter
+        ships as user attributes. Skips:
+          - is_internal attributes (Blender's selection state, internal corner/edge maps, etc.)
+          - UV layer names (exported separately via mesh.uv_layers)
+          - "position"  - vertex positions, already exported as `vertices`
+          - "sharp_face" - per-face shading flag, handled via normals/smoothing
+          - layers with empty data (e.g. when the mesh is in edit mode)
+        Single source of truth for both the exporter and the node-add menu.
+    """
+    uvNames = {l.name for l in mesh.uv_layers}
+    for attr in mesh.attributes:
+        if attr.is_internal:
+            continue
+        if attr.name in uvNames:
+            continue
+        if attr.name in {'position', 'sharp_face', 'material_index', 'custom_normal'}:
+            continue
+        if len(attr.data) == 0:
+            continue
+        yield attr
+
 TypesThatSupportMaterial = {'MESH', 'CURVE', 'CURVES', 'SURFACE', 'FONT', 'META',
                             'GPENCIL', 'VOLUME', 'HAIR', 'POINTCLOUD'}
 
@@ -67,42 +90,16 @@ def getObjectList(object_names_string=None, group_names_string=None):
     if group_names_string:
         gr_names = group_names_string.split(';')
         for gr_name in gr_names:
-            if gr_name in bpy.data.groups:
-                object_list.extend(bpy.data.groups[gr_name].objects)
+            if gr_name in bpy.data.collections:
+                object_list.extend(bpy.data.collections[gr_name].objects)
 
     dupliGroup = []
     for ob in object_list:
-        if ob.dupli_type == 'GROUP' and ob.dupli_group:
-            dupliGroup.extend(ob.dupli_group.objects)
+        if ob.instance_type == 'COLLECTION' and ob.instance_collection:
+            dupliGroup.extend(ob.instance_collection.objects)
     object_list.extend(dupliGroup)
 
     return object_list
-
-
-def getCameraHideLists(camera):
-    VRayCamera = camera.data.vray
-
-    visibility = {
-        'all'     : set(),
-        'camera'  : set(),
-        'gi'      : set(),
-        'reflect' : set(),
-        'refract' : set(),
-        'shadows' : set(),
-    }
-
-    if VRayCamera.hide_from_view:
-        for hide_type in visibility:
-            if getattr(VRayCamera, 'hf_%s' % hide_type):
-                if getattr(VRayCamera, 'hf_%s_auto' % hide_type):
-                    obList = getObjectList(group_names_string='hf_%s' % camera.name)
-                else:
-                    obList = getObjectList(getattr(VRayCamera, 'hf_%s_objects' % hide_type),
-                                           getattr(VRayCamera, 'hf_%s_groups' % hide_type))
-                for o in obList:
-                    visibility[hide_type].add(o.as_pointer())
-
-    return visibility
 
 
 def getEffectsExcludeList(scene):
@@ -248,10 +245,6 @@ def selectObject(ob):
     ob.select_set(True)
 
 
-def isPreviewWorld(scene):
-    return scene.layers[7]
-
-
 def getSceneCamera(exporterCtx):
     """ Returns the active scene camera. """
     scene: bpy.types.Scene = bpy.context.scene if exporterCtx.preview else exporterCtx.dg.scene
@@ -273,7 +266,7 @@ def getFirstAvailableView3D():
 
 def getSpaceView3D(context : bpy.types.Context):
     """ If the context is 'VIEW_3D' returns its SpaceView3D """
-    return context.space_data if context.area.type == 'VIEW_3D' else None
+    return context.space_data if context.area and context.area.type == 'VIEW_3D' else None
 
 
 def isViewportRenderMode():
@@ -295,7 +288,7 @@ def generateVfbTheme(filepath):
     import mathutils
 
     def rgbToHex(color):
-        return '#%X%X%X' % (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
+        return '#%02X%02X%02X' % (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
 
     currentTheme = bpy.context.preferences.themes[0]
 
@@ -471,17 +464,36 @@ def setFloatFrame(frameController: bpy.types.RenderEngine | bpy.types.Scene, fra
     frac, whole = modf(frame)
     frameController.frame_set(int(whole), subframe=frac)
 
-def getFCurves(obj):
+def getFCurves(obj, ensure: bool = False):
+    """ Return the fcurves collection on obj.animation_data.action across Blender versions.
+
+        In 5.0+ fcurves live on a Channelbag reached via Slot -> Layer ->
+        KeyframeStrip. When `ensure` is True, the slot/channelbag are created
+        if missing (write side). When False, returns [] if any link in the
+        chain is absent (read side).
+    """
     anim = obj.animation_data
     if not anim or not anim.action:
         return []
     action = anim.action
-    if bpy.app.version >= (5, 0, 0):
-        actionSlot = obj.animation_data.action_slot
-        channelbag = anim_utils.action_get_channelbag_for_slot(action, actionSlot)
-        return channelbag.fcurves
-    else:
+    if bpy.app.version < (5, 0, 0):
         return action.fcurves
+
+    slot = anim.action_slot
+    if slot is None:
+        if not ensure:
+            return []
+        idType = obj.id_type
+        slot = anim_utils.action_get_first_suitable_slot(action, idType) \
+               or action.slots.new(idType, "Slot")
+        anim.action_slot = slot
+
+    if ensure:
+        channelbag = anim_utils.action_ensure_channelbag_for_slot(action, slot)
+    else:
+        channelbag = anim_utils.action_get_channelbag_for_slot(action, slot)
+
+    return channelbag.fcurves if channelbag else []
 
 def getViewLayerUseFCurve(viewLayerName: str):
     """ Returns the keyframes of the view layer enabled state """

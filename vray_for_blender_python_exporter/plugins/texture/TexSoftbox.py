@@ -82,19 +82,14 @@ def registerColorRamps():
     """ Called from the Load Post event handler to register all color ramps for which
         update notifications will be processed in syncColorRamps().
     """
-    nodeTrees = (
-        (bpy.data.materials, 'MATERIAL'), 
-        (bpy.data.worlds, 'WORLD'), 
-        (bpy.data.lights, 'LIGHT')
-    )
-
-    for tree in nodeTrees: 
-        for item in [it for it in tree[0] if isVrayNodeTree(it.node_tree, tree[1])]:
-            for node in [ n for n in item.node_tree.nodes if hasattr(n, 'TexSoftbox')]:
-                _registerRampsForNode(node)
+    from vray_blender.nodes.tree import iterVRayNodeTrees
+    for ntree in iterVRayNodeTrees():
+        for node in ntree.nodes:
+            if hasattr(node, 'TexSoftbox'):
+                registerNodeColorRamps(node)
                 
 
-def _registerRampsForNode(node: bpy.types.Node):
+def registerNodeColorRamps(node: bpy.types.Node):
     for attrName in _COLOR_RAMP_ATTRS:
         attrTexName = _getRampTexAttrName(attrName)
         color_ramp.registerColorRamp(node, attrTexName, getattr(node, attrTexName)) 

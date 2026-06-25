@@ -55,7 +55,8 @@ def subPanel(layout: bpy.types.UILayout):
     return panel
 
 
-def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed=True, usePropDataSrc=None, usePropName: str = None):
+def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed=True, usePropDataSrc=None, usePropName: str = None,
+            panelPropData=None, panelPropName: str = None):
     """ Draw a dynamic rollout with an optional enable/disable checkbox.
 
     Args:
@@ -65,11 +66,20 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
         defaultClosed(bool): the initial state of the rollout is closed
         usePropDataSrc: data source for the checkbox property
         usePropName: the name of the checkbox property
+        panelPropData: optional data source whose BoolProperty stores the open/closed
+            state. When provided together with `panelPropName`, the rollout uses
+            `layout.panel_prop` instead of `layout.panel`, allowing the open state
+            to be programmatically controlled (e.g. by the "settings" jump buttons
+            in Common > Rendering).
+        panelPropName: name of the BoolProperty on `panelPropData`.
 
     Returns:
         body (bpy.types.UILayout) | None: the layout for the body of the panel or None if the panel is collapsed.
     """
-    header, body = layout.panel(uniqueID, default_closed=defaultClosed)
+    if panelPropData is not None and panelPropName:
+        header, body = layout.panel_prop(panelPropData, panelPropName)
+    else:
+        header, body = layout.panel(uniqueID, default_closed=defaultClosed)
     header.alignment = 'LEFT'
 
     if usePropDataSrc and usePropName:
@@ -87,6 +97,18 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
     return subPanel(body)
 
 
+def isHighlighted(highlightKey: str) -> bool:
+    """ Return True if `highlightKey` matches the active highlight target stored
+        on `wm.vray.common_tab`. The one-shot timer registered by
+        `VRAY_OT_jump_to_setting` is responsible for clearing the target after
+        the highlight window elapses.
+    """
+    wmVray = getattr(bpy.context.window_manager, 'vray', None)
+    if wmVray is None:
+        return False
+    return wmVray.common_tab.highlight_target == highlightKey
+
+
 
 class UIPainter:
     def __init__(self, context: bpy.types.Context, pluginModule, propGroup, node: bpy.types.Node = None):
@@ -95,7 +117,7 @@ class UIPainter:
         self.propGroup = propGroup
         self.pluginModule = pluginModule
 
-    def _drawAttr(self, layout: bpy.types.UILayout, attrName, label: str):
+    def drawAttr(self, layout: bpy.types.UILayout, attrName, label: str):
         """ Draw a single attribute of the plugin. This method will select between drawing node sockets
             and fields from the property group depending on whether the plugin is part of a
             nodetree.
@@ -154,7 +176,7 @@ class UIPainter:
 
         if attrDesc['type'] in attribute_types.MetaPropertyTypes:
             label = self._getAttrLabel(widgetAttr)
-            self._drawAttr(layout, attrName, label)
+            self.drawAttr(layout, attrName, label)
             return True
 
         return False
@@ -183,7 +205,7 @@ class UIPainter:
                 continue
 
             attrName = attrDesc['attr']
-            self._drawAttr(layout, attrName, attribute_utils.getAttrDisplayName(attrDesc))
+            self.drawAttr(layout, attrName, attribute_utils.getAttrDisplayName(attrDesc))
 
 
     def getCustomDrawFunction(self, widgetAttr):
@@ -217,12 +239,38 @@ class UIPainter:
             container = layout.row()
             self._setActive(container, active)
 
+        # Apply the alert highlight when this attribute is the active
+        # jump target. We always wrap the attribute in its own row to avoid
+        # bleeding `alert` onto sibling parameters in the same column.
+        highlightKey = f"{self.pluginModule.ID}.{attrName}"
+        if isHighlighted(highlightKey):
+            container = container.row()
+            container.alert = True
+
         # Draw non-default UI look for the attribute, if defined.
         if self._drawCustomAttr(container, attrName, widgetAttr):
             return
 
         self._drawAttrWidget(container, widgetAttr)
 
+
+    def _getPanelPropData(self, widget):
+        """ Get the panel property data and name from the widget """
+        panelPropData = None
+        panelPropName = None
+        
+        if panelPropDesc := widget.get('panel_prop'):
+            dataKey = panelPropDesc.get('wm_data', '')
+            panelPropName = panelPropDesc.get('name')
+            panelPropData = getattr(self.context.window_manager, 'vray', None)
+            for part in dataKey.split('.') if dataKey else []:
+                if panelPropData is None:
+                    break
+                panelPropData = getattr(panelPropData, part, None)
+            if panelPropData is None:
+                debug.printError(f"Unable to resolve panel_prop wm_data '{dataKey}' on widget '{widget.get('name')}'")
+        
+        return panelPropData, panelPropName
 
     def _renderRollout(self, layout: bpy.types.UILayout, widget) -> bpy.types.UILayout | None:
         """ Render a rollout widget.
@@ -236,7 +284,8 @@ class UIPainter:
         uniqueID = f"{self.propGroup.as_pointer()}_{widget['name']}"
         defaultClosed = widget.get('default_closed', True)
 
-        return rollout(layout, uniqueID, label, defaultClosed, self.propGroup, useProp)
+        return rollout(layout, uniqueID, label, defaultClosed, self.propGroup, useProp,
+                       *self._getPanelPropData(widget))
 
 
     def _renderContainer(self, layout: bpy.types.UILayout, widget):

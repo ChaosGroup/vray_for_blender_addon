@@ -233,7 +233,7 @@
             "default": 2500,
             "ui": {
                 "min": 0,
-                "spft_min": 1500,
+                "soft_min": 1500,
                 "soft_max": 10000
             },
             "options": {

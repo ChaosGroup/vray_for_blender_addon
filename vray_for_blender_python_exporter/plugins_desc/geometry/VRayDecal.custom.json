@@ -87,7 +87,7 @@
         {
             "attr": "displacement_multiplier",
             "type": "FLOAT",
-            "default": 1.0,
+            "default": 0.01,
             "options": {
                 "derived": true
             },
@@ -212,125 +212,130 @@
     "Widget": {
         "widgets": [
             {
-                "layout": "COLUMN",
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
                 "attrs": [
                     {
                         "name": "decal_type"
                     },
                     {
                         "name": "enabled"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": { "cond": "::enabled=1" },
+                        "attrs": [
+                            {
+                                "name": "height",
+                                "label": "Length"
+                            },
+                            {
+                                "name": "height_offset",
+                                "label": "Length Offset"
+                            },
+                            {
+                                "name": "width"
+                            },
+                            {
+                                "name": "length",
+                                "label": "Height"
+                            },
+                            {
+                                "name": "bend",
+                                "active": {
+                                    "cond": "::decal_type=1"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "aspect_ratio_buttons",
+                                "custom_draw": "drawDecalAspectRatioButtons"
+                            },
+                            {
+                                "name": "lock_aspect_ratio"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "normal_angle"
+                            },
+                            {
+                                "name": "fade_on",
+                                "label": "Fade Out"
+                            },
+                            {
+                                "name": "fade_angle",
+                                "active": {
+                                    "cond": "::fade_on!=0"
+                                }
+                            },
+                            {
+                                "name": "z_order"
+                            },
+                            {
+                                "name": "enable_mask"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "project_on_back"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "override_user_attributes"
+                            }
+                        ]
                     }
                 ]
             },
             {
-                "layout": "COLUMN",
-                "default_closed": false,
+                "layout": "ROLLOUT",
+                "name": "Decal Objects",
+                "label": "Decal Objects",
                 "active": { "cond": "::enabled=1" },
                 "attrs": [
                     {
-                        "name": "height",
-                        "label": "Length"
+                        "name": "decal_object_selector",
+                        "list_label": "Objects List"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "Displacement",
+                "label": "Displacement",
+                "active": { "cond": "::enabled=1" },
+                "attrs": [
+                    {
+                        "name": "displacement_multiplier"
                     },
                     {
-                        "name": "height_offset",
-                        "label": "Length Offset"
+                        "name": "displacement_ignore_original",
+                        "label": "Use Only Decal Displacement"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "Bump",
+                "label": "Bump",
+                "active": { "cond": "::enabled=1" },
+                "attrs": [
+                    {
+                        "name": "decal_only_bump",
+                        "label": "Use Only Decal Bump"
                     },
                     {
-                        "name": "width"
-                    },
-                    {
-                        "name": "length",
-                        "label": "Height"
-                    },
-                    {
-                        "name": "bend",
-                        "active": {
-                            "cond": "::decal_type=1"
-                        }
-                    },
-                    {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "name": "aspect_ratio_buttons",
-                        "custom_draw": "drawDecalAspectRatioButtons"
-                    },
-                    {
-                        "name": "lock_aspect_ratio"
-                    },
-                    {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "name": "normal_angle"
-                    },
-                    {
-                        "name": "fade_on",
-                        "label": "Fade Out"
-                    },
-                    {
-                        "name": "fade_angle",
-                        "active": {
-                            "cond": "::fade_on!=0"
-                        }
-                    },
-                    {
-                        "name": "z_order"
-                    },
-                    {
-                        "name": "enable_mask"
-                    },
-                    {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "name": "project_on_back"
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "Decal Objects",
-                        "label": "Decal Objects",
-                        "attrs": [
-                            {
-                                "name": "decal_object_selector",
-                                "list_label": "Objects List"
-                            }
-                        ]
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "Displacement",
-                        "label": "Displacement",
-                        "attrs": [
-                            {
-                                "name": "displacement_multiplier"
-                            },
-                            {
-                                "name": "displacement_ignore_original",
-                                "label": "Use Only Decal Displacement"
-                            }
-                        ]
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "Bump",
-                        "label": "Bump",
-                        "attrs": [
-                            {
-                                "name": "decal_only_bump",
-                                "label": "Use Only Decal Bump"
-                            },
-                            {
-                                "name": "orig_bump_amount",
-                                "active": { "cond": "::decal_only_bump=0" }
-                            }
-                        ]
-                    },
-                    {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "name": "override_user_attributes"
+                        "name": "orig_bump_amount",
+                        "active": { "cond": "::decal_only_bump=0" }
                     }
                 ]
             }

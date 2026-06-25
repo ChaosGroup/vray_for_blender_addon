@@ -41,7 +41,7 @@ class UpdateTracker:
     @staticmethod
     def tagUpdate(obj: bpy.types.ID, target: UpdateTarget, flag: UpdateFlags):
         updatesForTarget = UpdateTracker.updates.setdefault(target, {})
-        flags = updatesForTarget.get(target, UpdateFlags.NONE)
+        flags = updatesForTarget.get(getObjTrackId(obj), UpdateFlags.NONE)
         updatesForTarget[getObjTrackId(obj)] = (flags | flag)
 
     @staticmethod

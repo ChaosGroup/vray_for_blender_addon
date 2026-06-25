@@ -4,7 +4,7 @@
     "Parameters": [
         {
             "attr" : "gradient_type",
-            "default" : "0",
+            "default" : "4",
             "desc" : "The type of gradient to use",
             "items" :
             [
@@ -210,6 +210,14 @@
         ]
     },
     "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "gradient_type" }
+                ]
+            }
+        ],
         "input_sockets": [
             { "name": "color_ramp" },
             { "name": "gradient_position" },

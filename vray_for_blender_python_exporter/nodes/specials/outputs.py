@@ -56,6 +56,7 @@ class VRayNodeObjectOutput(VRayNodeBase):
     def update(self):
         if self.mute:
             self.mute = False
+        super().update()
 
 
 class VRayNodeFurOutput(VRayNodeBase):
@@ -149,8 +150,12 @@ class VRayNodeOutputMaterial(VRayNodeBase):
         self._drawMaterialOption(context, layout, mtl.vray.MtlRoundEdges, 'MtlRoundEdges', 'Round Edges')
 
 
+    def copy(self, srcNode):
+        self.dontOverride = srcNode.dontOverride
+
     def init(self, context):
         addInput(self, 'VRaySocketMtl', "Material")
+        addInput(self, 'VRaySocketBRDF', "Outlines", 'outlines')
 
     def _drawMaterialOption(self, context, layout, propGroup, pluginType, label):
         panelUniqueId = f'{self.as_pointer()}_{pluginType}'

@@ -38,8 +38,8 @@ namespace {
 }
 
 void VRayForBlender::updateImageRegion(
-	void * __restrict dest, ImageSize destSize, ImageRegion destRegion,
-	const void * __restrict source, ImageSize sourceSize, ImageRegion sourceRegion, ImageRegion::Options options)
+	float* dest, ImageSize destSize, ImageRegion destRegion,
+	const float* source, ImageSize sourceSize, ImageRegion sourceRegion, ImageRegion::Options options)
 {
 	vassert(destRegion.w == sourceRegion.w && destRegion.h == sourceRegion.h && "Source and Destination region's sizes must be equal");
 	vassert(destSize.w >= destRegion.w && destSize.h >= destRegion.h && "Image region can't be bigger than dest size!");
@@ -59,8 +59,8 @@ void VRayForBlender::updateImageRegion(
 
 	const int copyLineSize = destRegion.w * pixelSize;
 	for (int c = 0; c < destRegion.h; c++) {
-		float * destLine = reinterpret_cast<float*>(dest) + destLineSize * (destEnd - c) + destLeftPad;
-		const float * sourceLine = reinterpret_cast<const float*>(source) + sourceLineSize * (c + sourceRegion.y) + sourceLeftPad;
+		float * destLine = dest + destLineSize * (destEnd - c) + destLeftPad;
+		const float * sourceLine = source + sourceLineSize * (c + sourceRegion.y) + sourceLeftPad;
 
 		memcpy(destLine, sourceLine, copyLineSize * sizeof(float));
 		if (options & ImageRegion::Options::CLAMP) {
@@ -72,76 +72,11 @@ void VRayForBlender::updateImageRegion(
 	}
 }
 
-RenderImage::RenderImage(RenderImage&& other) noexcept :
-	pixels(nullptr),
-	w(0),
-	h(0),
-	channels(0),
-	updated(0.f)
-{
-	*this = std::move(other);
-}
-
-RenderImage& RenderImage::operator=(RenderImage&& other) noexcept
-{
-	if (this != &other) {
-		std::swap(updated, other.updated);
-		std::swap(pixels, other.pixels);
-		std::swap(w, other.w);
-		std::swap(h, other.h);
-		std::swap(channels, other.channels);
-	}
-
-	other.reset();
-
-	return *this;
-}
-
-
-RenderImage RenderImage::deepCopy(const RenderImage &source)
-{
-	RenderImage dest;
-
-	dest.updated = source.updated;
-	dest.w = source.w;
-	dest.h = source.h;
-	dest.channels = source.channels;
-	dest.pixels = new float[source.w * source.h * source.channels];
-
-	::memcpy(dest.pixels, source.pixels, source.w * source.h * source.channels * sizeof(float));
-
-	return dest;
-}
-
-RenderImage::~RenderImage()
-{
-	reset();
-}
-
-
-float* RenderImage::release() {
-	float* tmpPixels = pixels;
-	pixels = nullptr;
-	w = h = 0;
-	channels = 0;
-
-	return tmpPixels;
-}
-
-
 void RenderImage::reset() {
-	if (pixels != nullptr) {
-		delete[] pixels;
-		pixels = nullptr;
-	}
+	setPixels(nullptr);
 
 	w = h = 0;
 	channels = 0;
-}
-
-
-RenderImage::operator bool() const {
-	return pixels != nullptr;
 }
 
 
@@ -150,50 +85,9 @@ void RenderImage::updateRegion(const float *source, ImageRegion destRegion)
 	updated += (float)(destRegion.w * destRegion.h) / std::max((float)(this->w * this->h), 1.f);
 
 	ImageSize updateSize = {destRegion.w, destRegion.h, channels};
-	updateImageRegion(pixels, ImageSize{w, h, channels}, destRegion, source, updateSize, updateSize);
+	updateImageRegion(writablePixels(), ImageSize{w, h, channels}, destRegion, source, updateSize, updateSize);
 }
 
-
-void RenderImage::resetAlpha()
-{
-	if (pixels && w && h) {
-		::resetAlpha(pixels, w, h, channels);
-	}
-}
-
-
-void RenderImage::clamp(float max, float val)
-{
-	if (pixels && w && h) {
-		::clamp(pixels, w, h, channels, max, val);
-	}
-}
-
-
-void RenderImage::cropTo(int width, int height)
-{
-	int t_width = width < this->w ? width : this->w;
-	int t_height = height < this->h ? height : this->h;
-
-	if (t_width == this->w && t_height == this->h) {
-		Logger::warning("Failed to crop image to [%1%x%2%] from [%3%x%4%]", width, height, w, h);
-		return;
-	}
-
-	float * newImg = new float[t_width * t_height * channels];
-
-	const int left_offset = (w - t_width) / 2;
-	const int top_offset = (h - t_height) / 2;
-
-	for (int r = 0; r < t_height; ++r) {
-		const float * src = pixels + ((r + top_offset) * w * channels) + left_offset * channels;
-		float * dst = newImg + (r * t_width * channels);
-		memcpy(dst, src, t_width * channels * sizeof(float));
-	}
-
-	delete[] pixels;
-	pixels = newImg;
-}
 
 namespace {
 
@@ -295,12 +189,14 @@ float * VRayForBlender::jpegToPixelData(unsigned char * data, int size, int &cha
 	jpeg_mem_src_own(&jpegInfo, data, size);
 
 	if (jpeg_read_header(&jpegInfo, TRUE) != JPEG_HEADER_OK) {
+		jpeg_destroy_decompress(&jpegInfo);
 		return nullptr;
 	}
 
 	jpegInfo.out_color_space = JCS_EXT_RGBX;
 
 	if (!jpeg_start_decompress(&jpegInfo)) {
+		jpeg_destroy_decompress(&jpegInfo);
 		return nullptr;
 	}
 

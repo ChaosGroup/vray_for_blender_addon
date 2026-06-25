@@ -8,14 +8,16 @@ def getRegModules():
         common,
         multi_select,
         include_exclude,
-        file_select
+        file_select,
+        color_temperature
     )
 
     return (
         common, # Keep this first in the list
         multi_select,
         include_exclude,
-        file_select
+        file_select,
+        color_temperature
     )
 
 
@@ -46,4 +48,6 @@ def templateFileSelect():
     from vray_blender.plugins.templates import file_select
     return file_select.TemplateFileSelect
 
-
+def templateColorTemperature():
+    from vray_blender.plugins.templates import color_temperature
+    return color_temperature.TemplateColorTemperature

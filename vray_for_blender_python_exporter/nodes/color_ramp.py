@@ -4,7 +4,7 @@
 
 import bpy
 
-from vray_blender.lib.blender_utils import getFullPathToNode, resolveNodeFromPath
+from vray_blender.lib.blender_utils import getFullPathToNode, resolveNodeFromPath, tagUsersForUpdate
 from vray_blender.lib.defs import AColor, ExporterContext, PluginDesc
 from vray_blender.lib.export_utils import exportPluginCommon
 from vray_blender.nodes import utils as NodeUtils
@@ -16,6 +16,9 @@ from vray_blender.plugins.texture import TexSoftbox
 # This list works with registerColorRamps() and syncColorRamps() callbacks called from events.py
 # Item format: {tuple(node_name, texture_name) : tuple(Node, texAttrName, Texture)
 COLOR_RAMPS: dict[tuple[str, str], tuple[bpy.types.Node, str, bpy.types.Texture]] = {}
+
+_COLOR_RAMP_ELEMENT_OWNER = object()
+
 
 def copyColorRamp(ramp: bpy.types.ColorRamp, rampCopy: bpy.types.ColorRamp):
     """ Copy the properties of a color ramp. """
@@ -58,15 +61,31 @@ def createRampTexture(node: bpy.types.Node, attrName: str = 'texture'):
 
 def _onRampUpdate(node: bpy.types.Node):
     node.id_data.update_tag()
+    tagUsersForUpdate(node.id_data)
+
+
+def _onAnyElementPositionChanged():
+    for node, _attrName, _tex in list(COLOR_RAMPS.values()):
+        _onRampUpdate(node)
 
 
 def _subscribeToRampUpdates(node: bpy.types.Node, tex: bpy.types.Texture):
     """Subscribes the message bus for changes to the texture."""
 
-    # In Blender versions < 5.0 this subscription is redundant, but
-    # it does affect the operation.
+    # Knot drag: COLORBAND widget publishes at (Texture, color_ramp_prop) level.
+    # The prop=NULL fallback in WM_msg_publish_rna_params matches this subscription.
     bpy.msgbus.subscribe_rna(
         key=tex,
+        owner=tex,
+        args=(node,),
+        notify=_onRampUpdate
+    )
+
+    # Interpolation, color_mode: published at (ColorRamp, prop) level.
+    # key=tex.color_ramp creates (RNA_ColorRamp, owner_id=tex, data=&coba, prop=NULL),
+    # matched via the prop=NULL fallback when any ramp property changes.
+    bpy.msgbus.subscribe_rna(
+        key=tex.color_ramp,
         owner=tex,
         args=(node,),
         notify=_onRampUpdate
@@ -78,6 +97,9 @@ def registerColorRamp(node: bpy.types.Node, rampAttrTexName: str, rampTexture: b
         will be called in the module of their host plugin.
     """
     COLOR_RAMPS[(getFullPathToNode(node), rampTexture.name)] = (node, rampAttrTexName, rampTexture)
+    # Clear any existing subscription before adding a new one to avoid duplicate
+    # subscriptions when both createRampTexture and registerColorRamp are called together.
+    bpy.msgbus.clear_by_owner(rampTexture)
     _subscribeToRampUpdates(node, rampTexture)
 
 
@@ -93,14 +115,27 @@ def unregisterColorRamp(node: bpy.types.Node, rampAttrTexName: str, rampTexture:
 
 def registerColorRamps():
     """ Register all color ramps in the scene for receiving updates. """
-    
-    # This function is only called when the scene gets (re)loaded. 
+
+    # This function is only called when the scene gets (re)loaded.
     # It is safe to clear any existing registration data
     # NOTE: The msgbus subscriptions are cleared automatically in this case
     COLOR_RAMPS.clear()
-    
+
     TexSoftbox.registerColorRamps()
     gradient_ramp.registerColorRamps()
+
+    # In Blender 5.0 ColorRampElement instances can't be used as subscribe_rna keys,
+    # so the type class is used instead to catch all element position changes.
+    bpy.msgbus.clear_by_owner(_COLOR_RAMP_ELEMENT_OWNER)
+    try:
+        bpy.msgbus.subscribe_rna(
+            key=(bpy.types.ColorRampElement, 'position'),
+            owner=_COLOR_RAMP_ELEMENT_OWNER,
+            args=(),
+            notify=_onAnyElementPositionChanged,
+        )
+    except Exception:
+        pass
 
 
 def syncColorRamps():

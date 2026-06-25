@@ -5,8 +5,7 @@
 #include "mesh_exporter.h"
 
 #include <array>
-#include <unordered_set>
-#include <unordered_map>
+#include <charconv>
 #include <base_types.h>
 
 #include "api/interop/types.h"
@@ -31,12 +30,12 @@ using MeshData = Interop::MeshData;
 
 struct ChanVertex
 {
-	ChanVertex() { }
+	ChanVertex() = default;
 
 	ChanVertex(const AttrVector& vec) : v(vec) {}
 
 	template <std::size_t size>
-	ChanVertex(const std::array<float, size> &data)
+	explicit ChanVertex(const std::array<float, size> &data)
 	{
 		static_assert(std::min(std::size_t(3), size) * sizeof(float) <= sizeof(AttrVector));
 		std::memcpy(&v, data.data(), std::min(std::size_t(3), size) * sizeof(float));
@@ -95,6 +94,52 @@ protected:
 
 };
 
+/// Parse the explicit V-Ray channel ID from a UV layer name following the 'vray_channel_id_N' convention.
+/// Returns N if the name matches, or -1 to indicate sequential positioning.
+static int parseUVLayerChannelId(const std::string& name) {
+	constexpr std::string_view prefix = "vray_channel_id_";
+	if (name.size() > prefix.size() && name.compare(0, prefix.size(), prefix.data()) == 0) {
+		int result = -1;
+		const char* begin = name.data() + prefix.size();
+		const char* end = name.data() + name.size();
+		if (auto [ptr, ec] = std::from_chars(begin, end, result); ec == std::errc{} && ptr == end) {
+			return result;
+		}
+	}
+	return -1;
+}
+
+
+/// Convert EDGE-domain attribute to POINT domain by averaging adjacent edge values per vertex.
+/// Matches Cycles' domain conversion: AttrDomain::Edge → AttrDomain::Point.
+static std::vector<AttrVector> edgeToPointDomain(const Interop::AttrLayer& layer, const MeshData& mesh) {
+	const size_t numVerts = mesh.vertices.size();
+	std::vector<float> ax(numVerts, 0.f), ay(numVerts, 0.f), az(numVerts, 0.f);
+	std::vector<int>   cnt(numVerts, 0);
+
+	for (size_t ci = 0; ci < mesh.loops.size(); ++ci) {
+		const unsigned int vi = mesh.loops[ci];
+		const AttrVector ev = layer.getAttrVector(static_cast<unsigned int>(mesh.cornerEdges[ci]));
+		ax[vi] += ev.x;
+		ay[vi] += ev.y;
+		az[vi] += ev.z;
+		cnt[vi]++;
+	}
+
+	std::vector<AttrVector> result;
+	result.reserve(numVerts);
+	for (size_t vi = 0; vi < numVerts; ++vi) {
+		if (cnt[vi] > 0) {
+			const float inv = 1.f / static_cast<float>(cnt[vi]);
+			result.emplace_back(ax[vi] * inv, ay[vi] * inv, az[vi] * inv);
+		} else {
+			result.emplace_back(0.f, 0.f, 0.f);
+		}
+	}
+	return result;
+}
+
+
 struct MapChannelRaw: MapChannelBase
 {
 	MapChannelRaw(const MeshData& mesh, int numFaces):
@@ -105,9 +150,9 @@ struct MapChannelRaw: MapChannelBase
 		if (numChannels) {
 			// UV
 			for (const auto& uvLayer : mesh.uvLayers) {
-
 				AttrMapChannels::AttrMapChannel &mapChannel = mapChannels.data.emplace_back();
 				mapChannel.name = uvLayer.name;
+				mapChannel.channelId = parseUVLayerChannelId(uvLayer.name);
 				mapChannel.vertices.reserve(numFaces * 3);
 				mapChannel.faces.resize(numFaces * 3);
 
@@ -123,7 +168,7 @@ struct MapChannelRaw: MapChannelBase
 				// Fill faces
 				std::vector<int>& facesVec = *mapChannel.faces.getData();
 				const int numFaceIds = static_cast<int>(facesVec.size());
-				for (int i = 0; i < int(numFaceIds); ++i) {
+				for (int i = 0; i < numFaceIds; ++i) {
 					facesVec[i] = i;
 				}
 			}
@@ -136,34 +181,46 @@ struct MapChannelRaw: MapChannelBase
 				mapChannel.faces.reserve(numFaces * 3);
 
 				std::vector<AttrVector>& vertexData = *mapChannel.vertices.getData();
-				for (int i = 0; i < int(colorLayer.elementCount); i++) {
-					vertexData.push_back(colorLayer.getAttrVector(i));
+				if (colorLayer.domain == Interop::AttrLayer::Edge) {
+					const auto perVertex = edgeToPointDomain(colorLayer, mesh);
+					vertexData.insert(vertexData.end(), perVertex.begin(), perVertex.end());
+				} else {
+					for (int i = 0; i < int(colorLayer.elementCount); i++) {
+						vertexData.push_back(colorLayer.getAttrVector(i));
+					}
 				}
 
 				// Fill faces
-				if (colorLayer.domain == Interop::AttrLayer::Corner) {
-					std::vector<int>& facesData = *mapChannel.faces.getData();
-					for (int fi = 0; fi < static_cast<int>(mesh.loopTris.size()); ++fi) {
-						const auto& ltri = mesh.loopTris[fi];
-						facesData.push_back(ltri[0]);
-						facesData.push_back(ltri[1]);
-						facesData.push_back(ltri[2]);
-					}
-				} else {
-					std::vector<int>& facesData = *mapChannel.faces.getData();
-					for (const auto& face : mesh.loopTris) {
-						const unsigned int fvi0 = mesh.loops[face[0]];
-						const unsigned int fvi1 = mesh.loops[face[1]];
-						const unsigned int fvi2 = mesh.loops[face[2]];
-						facesData.push_back(fvi0);
-						facesData.push_back(fvi1);
-						facesData.push_back(fvi2);
-					}
+				std::vector<int>& facesData = *mapChannel.faces.getData();
+				switch (colorLayer.domain) {
+					case Interop::AttrLayer::Corner:
+						for (const auto& ltri : mesh.loopTris) {
+							facesData.push_back(ltri[0]);
+							facesData.push_back(ltri[1]);
+							facesData.push_back(ltri[2]);
+						}
+						break;
+					case Interop::AttrLayer::Point:
+					case Interop::AttrLayer::Edge:
+						for (const auto& ltri : mesh.loopTris) {
+							facesData.push_back(mesh.loops[ltri[0]]);
+							facesData.push_back(mesh.loops[ltri[1]]);
+							facesData.push_back(mesh.loops[ltri[2]]);
+						}
+						break;
+					case Interop::AttrLayer::Face:
+						for (size_t fi = 0; fi < mesh.loopTris.size(); ++fi) {
+							const unsigned int pi = mesh.loopTriPolys[fi];
+							facesData.push_back(pi);
+							facesData.push_back(pi);
+							facesData.push_back(pi);
+						}
+						break;
 				}
 			}
 
 			// Store channel names
-			mapChannelsNames.resize(static_cast<int>(mapChannels.data.size()));
+			mapChannelsNames.resize(numChannels);
 			int i = 0;
 			for (const auto &mapChannel : mapChannels.data) {
 				(*mapChannelsNames)[i++] = mapChannel.name;
@@ -197,8 +254,14 @@ struct MapChannelMerge : MapChannelBase {
 			for (const Interop::AttrLayer& colorLayer : mesh.colorLayers) {
 				ChannelSet& colorSet = channelsData.emplace_back();
 
-				for (int i = 0; i < int(colorLayer.elementCount); i++) {
-					colorSet.insert(colorLayer.getAttrVector(i));
+				if (colorLayer.domain == Interop::AttrLayer::Edge) {
+					for (const auto& v : edgeToPointDomain(colorLayer, mesh)) {
+						colorSet.insert(v);
+					}
+				} else {
+					for (int i = 0; i < int(colorLayer.elementCount); i++) {
+						colorSet.insert(colorLayer.getAttrVector(i));
+					}
 				}
 			}
 		}
@@ -206,9 +269,10 @@ struct MapChannelMerge : MapChannelBase {
 
 	virtual void initAttributes(AttrListString& mapChannelNames, AttrMapChannels& mapChannels) override {
 		if (numChannels) {
-			auto processMapList = [&](const std::string& channelName, int channelIdx) {
+			auto processMapList = [&](const std::string& channelName, int channelIdx, int channelId = -1) {
 				AttrMapChannels::AttrMapChannel& mapChannel = mapChannels.data.emplace_back();
 				mapChannel.name = channelName;
+				mapChannel.channelId = channelId;
 				ChannelSet &channelSet=channelsData[channelIdx];
 				mapChannel.vertices.reserve(static_cast<int>(channelSet.size()));
 				mapChannel.faces.resize(numFaces * 3);
@@ -226,13 +290,12 @@ struct MapChannelMerge : MapChannelBase {
 
 			int mapChannelIndex = 0;
 			for (const Interop::UVAttrLayer& uvLayer : mesh.uvLayers) {
-				processMapList(uvLayer.name, mapChannelIndex++);
+				processMapList(uvLayer.name, mapChannelIndex++, parseUVLayerChannelId(uvLayer.name));
 			}
 			for (const Interop::AttrLayer& colorLayer : mesh.colorLayers) {
 				processMapList(colorLayer.name, mapChannelIndex++);
 			}
 
-			// Store channel names
 			mapChannelNames.resize(numChannels);
 			int i = 0;
 			for (const auto& mapChannel : mapChannels.data) {
@@ -255,6 +318,27 @@ private:
 namespace VRayForBlender::Assets
 {
 
+static void fillCreases(const MeshData& mesh, PluginDesc& pluginDesc);
+
+/// Resolve final channel IDs for all map channels.
+/// Channels with an explicit ID (from 'vray_channel_id_N' UV layers) keep it.
+/// Channels left at -1 are assigned sequential IDs starting above the highest
+/// explicit ID so they can never collide with a reserved one.
+static void resolveChannelIds(AttrMapChannels& mapChannels) {
+	int maxExplicitId = -1;
+	for (const auto& channel : mapChannels.data) {
+		if (channel.channelId >= 0) {
+			maxExplicitId = std::max(maxExplicitId, channel.channelId);
+		}
+	}
+	int nextId = maxExplicitId + 1;
+	for (auto& channel : mapChannels.data) {
+		if (channel.channelId < 0) {
+			channel.channelId = nextId++;
+		}
+	}
+}
+
 /// @brief Export all geometry and data layers/channels for a single Blender object of type 'MESH'
 /// as a 'GeomStaticMesh' pugin
 /// @param mesh - mesh data
@@ -271,6 +355,7 @@ void fillMeshData(const MeshData& mesh, PluginDesc &pluginDesc)
 
 	fillGeometry(mesh, pluginDesc);
 	fillChannelsData(mesh, pluginDesc);
+	fillCreases(mesh, pluginDesc);
 
 	pluginDesc.add("dynamic_geometry", mesh.options.forceDynamicGeometry);
 }
@@ -373,8 +458,8 @@ void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& faceMtlIDs
 		for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
 			// Polygon index
 			const unsigned int polyIdx = mesh.loopTriPolys[fi];
-			// Face material ID
-			faceMtlIdsPtr[fi] = mesh.polyMtlIndices[polyIdx];
+			// Face material ID (local polygon index + optional global proxy slot offset)
+			faceMtlIdsPtr[fi] = static_cast<int>(mesh.polyMtlIndices[polyIdx] + mesh.mtlIdOffset);
 		}
 	}
 }
@@ -382,7 +467,7 @@ void fillFaces(const MeshData& mesh, AttrListInt& faces, AttrListInt& faceMtlIDs
 
 void fillFaceNormalsFromFaces(const MeshData& mesh, AttrListInt& faceNormals) {
 	int* normalsFacePtr = *faceNormals;
-	for (int fi = 0; fi < mesh.loopTris.size(); fi++) {
+	for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
 		const unsigned int polyIdx = mesh.loopTriPolys[fi];
 
 		*normalsFacePtr++ = polyIdx;
@@ -412,12 +497,51 @@ void fillFaceNormalsFromVertices(const MeshData& mesh, AttrListInt& faceNormals)
 
 
 void fillFaceNormalsFromCorners(const MeshData& mesh, AttrListInt& faceNormals) {
-	int* normalsFacePtr = *faceNormals;
-	for (int fi = 0; fi < int(mesh.loopTris.size()); fi++) {
-		const auto& face = mesh.loopTris[fi];
-		// Corner normals are ordered the same way as the face vertices
-		std::memcpy(normalsFacePtr, face, sizeof(face));
-		normalsFacePtr+=3;
+	// Corner normals are ordered the same way as the face vertices
+	std::memcpy(*faceNormals, mesh.loopTris.data(), mesh.loopTris.size() * sizeof(unsigned int[3]));
+}
+
+
+static float creaseToSharpness(float crease) {
+	if (crease >= 1.0f) return 10.0f;
+	return crease / (1.0f - crease);
+}
+
+
+static void fillCreases(const MeshData& mesh, PluginDesc& pluginDesc) {
+	if (!mesh.edgeCreases.empty()) {
+		AttrListInt   ev;
+		AttrListFloat es;
+
+		for (int e = 0; e < static_cast<int>(mesh.edgeCreases.size()); ++e) {
+			const float crease = mesh.edgeCreases[e];
+			if (crease > 0.0f) {
+				ev.append(mesh.edgeVertices[e][0]);
+				ev.append(mesh.edgeVertices[e][1]);
+				es.append(creaseToSharpness(crease));
+			}
+		}
+		if (ev.getCount() > 0) {
+			pluginDesc.add("edge_creases_vertices",  ev);
+			pluginDesc.add("edge_creases_sharpness", es);
+		}
+	}
+
+	if (!mesh.vertexCreases.empty()) {
+		AttrListInt   vv;
+		AttrListFloat vs;
+
+		for (int v = 0; v < static_cast<int>(mesh.vertexCreases.size()); ++v) {
+			const float crease = mesh.vertexCreases[v];
+			if (crease > 0.0f) {
+				vv.append(v);
+				vs.append(creaseToSharpness(crease));
+			}
+		}
+		if (vv.getCount() > 0) {
+			pluginDesc.add("vertex_creases_vertices",  vv);
+			pluginDesc.add("vertex_creases_sharpness", vs);
+		}
 	}
 }
 
@@ -514,24 +638,30 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc) {
 			vassert(mapChannelIndex < int(mapChannels.data.size()));
 			vassert(colorLayer.name == mapChannels.data[mapChannelIndex].name);
 			AttrListInt& colorData = mapChannels.data[mapChannelIndex].faces;
-			if (colorLayer.domain == Interop::AttrLayer::Corner) {
-				auto& facesData = *colorData.getData();
-				for (const auto& face : mesh.loopTris) {
-					for (size_t vi = 0; vi < 3; ++vi) {
-						const AttrVector& vertexColor = colorLayer.getAttrVector(face[vi]);
-						const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, vertexColor);
-						facesData[channelVertIndex++] = faceId;
-					}
+			auto& facesData = *colorData.getData();
+
+			const std::vector<AttrVector> edgePerVertex =
+				(colorLayer.domain == Interop::AttrLayer::Edge) ? edgeToPointDomain(colorLayer, mesh) : std::vector<AttrVector>{};
+
+			auto resolveDataIndex = [&](const auto& face, size_t vi, size_t fi) -> unsigned int {
+				switch (colorLayer.domain) {
+					case Interop::AttrLayer::Corner: return face[vi];
+					case Interop::AttrLayer::Point:  return mesh.loops[face[vi]];
+					case Interop::AttrLayer::Edge:   return mesh.loops[face[vi]];
+					case Interop::AttrLayer::Face:   return mesh.loopTriPolys[fi];
 				}
-			} else {
-				auto& facesData = *colorData.getData();
-				for (const auto& face : mesh.loopTris) {
-					for (size_t vi = 0; vi < 3; ++vi) {
-						const unsigned int faceVertexIdx = mesh.loops[face[vi]];
-						const AttrVector& vertexColor = colorLayer.getAttrVector(faceVertexIdx);
-						const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, vertexColor);
-						facesData[channelVertIndex++] = faceId;
-					}
+				return 0;
+			};
+
+			for (size_t fi = 0; fi < mesh.loopTris.size(); ++fi) {
+				const auto& face = mesh.loopTris[fi];
+				for (size_t vi = 0; vi < 3; ++vi) {
+					const unsigned int dataIdx = resolveDataIndex(face, vi, fi);
+					const AttrVector vertexColor = (colorLayer.domain == Interop::AttrLayer::Edge)
+						? edgePerVertex[dataIdx]
+						: colorLayer.getAttrVector(dataIdx);
+					const int faceId = channelsData->getMapFaceVertexIndex(mapChannelIndex, vertexColor);
+					facesData[channelVertIndex++] = faceId;
 				}
 			}
 			mapChannelIndex++;
@@ -540,6 +670,7 @@ void fillChannelsData(const MeshData& mesh, PluginDesc &pluginDesc) {
 	}
 
 	if (channelsData->getNumChannels() ) {
+		resolveChannelIds(mapChannels);
 		pluginDesc.add("map_channels_names", mapChannelNames);
 		pluginDesc.add("map_channels", mapChannels);
 	}

@@ -4,6 +4,7 @@
 
 import os
 import re
+import platform
 import time
 
 import bpy
@@ -15,10 +16,7 @@ from vray_blender.lib.defs import ProdRenderMode
 from vray_blender          import debug
 
 from vray_blender.bin import VRayBlenderLib as vray
-from vray_blender.ui.classes import pollEngine, pollTreeType
 from vray_blender.ui.community_edition import drawCELimitedFeatureWarning
-from vray_blender.nodes.tools import deselectNodes
-from vray_blender.nodes.utils import createNode
 
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
@@ -27,7 +25,6 @@ from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, g
 from vray_blender.ui.community_edition import getLimitedFeatureDescription, getCELimitedFeatureMsg
 
 from vray_blender.lib.mixin import VRayOperatorBase
-
 
 ########  ########
 ##     ## ##     ##
@@ -126,15 +123,11 @@ class VRAY_OT_dr_nodes_save(VRayOperatorBase):
 
 
 class VRAY_OT_open_preferences(VRayOperatorBase):
-    bl_idname = "vray.open_preferences"
-    bl_label = "Open V-Ray Preferences"
+    bl_idname      = "vray.open_preferences"
+    bl_label       = "Open V-Ray Preferences"
     bl_description = ("Open the V-Ray preferences menu")
 
     menu_tab: bpy.props.StringProperty(default="NONE")
-
-    def execute(self, context):
-        return {'FINISHED'}
-
 
     def invoke(self, context, event):
         valid_view_modes = [
@@ -146,8 +139,9 @@ class VRAY_OT_open_preferences(VRayOperatorBase):
             prefs = blender_utils.getVRayPreferences(context)
             prefs.preferences_menu = self.menu_tab
             if self.menu_tab == 'PREFERENCES_MENU_GPU_DEVICES':
-                useRtx = bpy.context.scene.vray.Exporter.use_gpu_rtx
-                prefs.compute_devices.gpuDeviceType = '1' if useRtx else '0'
+                from vray_blender.plugins.system.compute_devices import getDeviceTypeByName
+                sceneType = bpy.context.scene.vray.Exporter.gpu_device_type
+                prefs.compute_devices.gpuDeviceType = getDeviceTypeByName(sceneType)
 
         blender_utils.showVRayPreferences()
         return {'FINISHED'}
@@ -469,42 +463,71 @@ class VRAY_OT_get_ui_mouse_position(VRayOperatorBase):
 
         return {'FINISHED'}
 
-class VRAY_OT_select_vrscene_export_file(VRayOperatorBase):
+class VRAY_OT_select_exporter_output_file_base(VRayOperatorBase):
+    """File select dialog for an Exporter output path. Subclasses set PATH_ATTR and SUFFIX."""
+    bl_options = {'INTERNAL'}
+
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+
+    # Name of the attribute in the Exporter settings to store the file path (to be set by subclasses)
+    PATH_ATTR: str = ""
+
+    # File suffix/extension for the output file, e.g., ".vrscene" or ".vrmesh" (to be set by subclasses)
+    SUFFIX: str = ""
+
+    def invoke(self, context, event):
+        from pathlib import Path
+        exporter = context.scene.vray.Exporter
+
+        if filePath := getattr(exporter, self.PATH_ATTR):
+            self.filepath = filePath
+        elif blendPath := context.blend_data.filepath:
+            self.filepath = str(Path(blendPath).with_suffix(self.SUFFIX))
+        else:
+            self.filepath = f"untitled{self.SUFFIX}"
+
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        setattr(context.scene.vray.Exporter, self.PATH_ATTR, self.filepath)
+        if context.area:
+            context.area.tag_redraw()
+        return {'FINISHED'}
+
+
+class VRAY_OT_select_vrscene_export_file(VRAY_OT_select_exporter_output_file_base):
     """ Shows a File Select dialog for selecting an output file
         for the vrscene export operation.
     """
     bl_idname       = "vray.select_vrscene_export_file"
     bl_label        = "V-Ray Select vrscene file for output"
     bl_description  = "Select an output .vrscene file"
-    bl_options      = {'INTERNAL'}
 
     filter_glob: bpy.props.StringProperty(
         default="*.vrscene",
         options={'HIDDEN'}
     )
 
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    PATH_ATTR = "export_scene_file_path"
+    SUFFIX = ".vrscene"
 
-    def invoke(self, context, event):
-        from pathlib import Path
-        exporter = context.scene.vray.Exporter
 
-        if filePath := exporter.export_scene_file_path:
-            self.filepath = filePath
-        elif blendPath := context.blend_data.filepath:
-            self.filepath = str(Path(blendPath).with_suffix(".vrscene"))
-        else:
-            self.filepath = 'untitled.vrscene'
+class VRAY_OT_select_proxy_export_file(VRAY_OT_select_exporter_output_file_base):
+    """ Shows a File Select dialog for selecting an output file
+        for the proxy export operation.
+    """
+    bl_idname       = "vray.select_proxy_export_file"
+    bl_label        = "V-Ray Select proxy file for output"
+    bl_description  = "Select an output .vrmesh file"
 
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
+    filter_glob: bpy.props.StringProperty(
+        default="*.vrmesh",
+        options={'HIDDEN'}
+    )
 
-    def execute(self, context):
-        context.scene.vray.Exporter.export_scene_file_path = self.filepath
-        if context.area:
-            context.area.tag_redraw()
-        return {'FINISHED'}
-
+    PATH_ATTR = "export_proxy_file_path"
+    SUFFIX = ".vrmesh"
 
 class VRAY_OT_render(VRAY_OT_message_box_base):
     bl_idname       = "vray.render"
@@ -520,13 +543,31 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
     errorType: bpy.props.IntProperty(default=_ErrorType.NoError, options={'HIDDEN'})
     errorMsg:  bpy.props.StringProperty() # Additional error info in case of a failed check
-    animation: bpy.props.BoolProperty(default=False)
+
+    # Per-invocation override of the scene's animation mode. 'AUTO' uses the scene's
+    # `Exporter.animation_mode`; the other values force the corresponding mode for this job
+    # without mutating the persistent property.
+    forceMode: bpy.props.EnumProperty(
+        items=(
+            ('AUTO',      '', ''),
+            ('ANIMATION', '', ''),
+            ('FRAME',     '', ''),
+        ),
+        default='AUTO',
+        options={'HIDDEN'},
+    )
 
     @classmethod
     def description(cls, context, properties):
         if vray.isInitialized():
             return cls.bl_description
         return f"{cls.bl_description}. Unavailable until V-Ray is initialized"
+
+    def _getAnimationMode(self, scene) -> str:
+        """Return the effective 'FRAME'/'ANIMATION' choice for this invocation."""
+        if self.forceMode == 'AUTO':
+            return scene.vray.Exporter.animation_mode
+        return self.forceMode
 
     def execute(self, context: bpy.types.Context):
         if vray.isInitialized():
@@ -538,7 +579,7 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
             from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
             
             uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext()
-            vfb_event_handler.VfbEventHandler.startProdRender(self.animation, uiRegionContext)
+            vfb_event_handler.VfbEventHandler.startProdRender(self.forceMode, uiRegionContext)
         else:
             debug.report('WARNING', "Can't start render job. V-Ray is not initialized")
         return {'FINISHED'}
@@ -546,12 +587,15 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
     def _checkOutputInfo(self, context):
         """ Checks if there is rendered result with the same name """
 
-        from vray_blender.external.pathvalidate import is_valid_filename
-        from vray_blender.lib.path_utils import expandPathVariables, getOutputFileName
+        from vray_blender.external.pathvalidate import is_valid_filename, is_valid_filepath
+        from vray_blender.lib.path_utils import (PathExpander, checkOutputFileExists,
+                                                  setSessionExpander, clearSessionExpander,
+                                                  withLayerSuffix, hasFrameToken)
 
         # Reset any previously set values
         self.errorType = __class__._ErrorType.NoError
         self.errorMsg = ''
+        clearSessionExpander()
 
         if not context.scene.vray.Exporter.auto_save_render:
             # The Output rollout is disabled, no images will be written to disk
@@ -559,59 +603,96 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
         settingsOutput = context.scene.vray.SettingsOutput
 
-        # Validate the output folder and try to create it
-        if not (imgDir := expandPathVariables(context, settingsOutput.img_dir)):
+        expander = PathExpander(context)
+
+        expandedFolderName = expander.expand(settingsOutput.img_dir)
+        if not settingsOutput.img_dir or not is_valid_filepath(expandedFolderName, platform=platform.system()):
             self.errorType = __class__._ErrorType.InvalidFolderName
             return False
 
-        if not settingsOutput.img_file or \
-            not is_valid_filename(expandPathVariables(context, settingsOutput.img_file)):
+        # V-Ray tokens such as <frame04> and the $frame placeholder are expanded at
+        # render time, not by us, so strip them before validating the filename.
+        expandedFileName = re.sub(r"<[^>]+>|\$frame", "0000", expander.expand(settingsOutput.img_file))
+        
+        if not settingsOutput.img_file or not is_valid_filename(expandedFileName):
             self.errorType = __class__._ErrorType.InvalidFileName
             return False
 
-
         try:
-            os.makedirs(imgDir, exist_ok=True)
+            os.makedirs(expandedFolderName, exist_ok=True)
         except Exception as exc:
             self.errorType = __class__._ErrorType.InvalidFolderName
             self.errorMsg = str(exc)
             return False
-
+        
         if not settingsOutput.output_overwrite_warn:
             return True
 
-        imgFiles = [] # When rendering multiple view layers and animations the output images will be more than one
         imgFmt = int(settingsOutput.img_format)
         viewLayers = [layer for layer in context.scene.view_layers if layer.use]
+        multipleLayers = len(viewLayers) > 1
+        isAnimation = self._getAnimationMode(context.scene) == 'ANIMATION'
+
+        # Reuse the expander built above for the whole job. $viewlayer is resolved
+        # per-call so a single instance covers all view layers without recomputing static values.
+        setSessionExpander(expander)
+
         for layer in viewLayers:
-            layerName = layer.name if len(viewLayers) > 1 else ""
-            imgFile = getOutputFileName(context,  settingsOutput.img_file, imgFmt, layerName)
+            # Pass None for single-layer renders so $viewlayer still expands to the real
+            # layer name via the context fallback, matching what the exporter writes.
+            # Pass the explicit name for multi-layer renders to get the _LayerName suffix.
+            viewLayerName = layer.name if multipleLayers else None
 
-            if context.scene.vray.Exporter.animation_mode == 'ANIMATION':
-                # Rendered results of the animation have digits representing their frame numbers.
-                # Instead of comparing the image to the files in the directory,
-                # it is matched to a regex pattern representing a file with a frame number and zeros in front of it.
-                name, extension = os.path.splitext(imgFile)
-                for frame in range(context.scene.frame_start, context.scene.frame_end + 1):
-                    # Using regex matching instead of adding zeros in front of the frame number and comparing file names
-                    # is a more reliable way to check for file existence, because the zeros in the name are generated by V-Ray
-                    # and we can't be sure how many there will be.
-                    imgFiles.append(f"^{name}.0*{frame}\\{extension}$")
+            imgFileBase = withLayerSuffix(settingsOutput.img_file, viewLayerName)
+            # Mirrors SettingsOutput.img_file_needFrameNumber: True when V-Ray appends
+            # '.NNNN' to the filename because no frame placeholder is present.
+            needFrameNumber = isAnimation and not hasFrameToken(settingsOutput.img_file)
+
+            if isAnimation:
+                # The active camera can change per-frame via camera markers, which affects
+                # paths that contain $camera. Expand paths per frame and cache directory
+                # listings so long animation ranges don't hammer the file system.
+                dirCache: dict[str, set[str]] = {}
+                frameRange = common_settings.getAnimationFrames(context.scene, layer.name)
+
+                for frame in frameRange:
+                    layerImgDir = expander.expand(settingsOutput.img_dir, frame,
+                                                  viewLayerName=viewLayerName)
+                    imgFileName = os.path.basename(expander.expandFilename(
+                        imgFileBase, imgFmt, frame=frame, viewLayerName=viewLayerName))
+
+                    if layerImgDir not in dirCache:
+                        dirCache[layerImgDir] = (
+                            set(os.listdir(layerImgDir)) if os.path.isdir(layerImgDir) else set()
+                        )
+
+                    if checkOutputFileExists(dirCache[layerImgDir], imgFileName, frame, needFrameNumber):
+                        self.errorType = __class__._ErrorType.FileExists
+                        break
             else:
-                imgFiles.append(imgFile)
+                frame = context.scene.frame_current
+                layerImgDir = expander.expand(settingsOutput.img_dir, frame,
+                                              viewLayerName=viewLayerName)
+                imgFileName = os.path.basename(expander.expandFilename(
+                    imgFileBase, imgFmt, frame=frame, viewLayerName=viewLayerName))
+                existingFiles = set(os.listdir(layerImgDir)) if os.path.isdir(layerImgDir) else set()
+                if checkOutputFileExists(existingFiles, imgFileName, frame, needFrameNumber=False):
+                    self.errorType = __class__._ErrorType.FileExists
 
-
-        if any( any(re.match(imgFile, file) for imgFile in imgFiles) for file in os.listdir(imgDir)):
-            self.errorType = __class__._ErrorType.FileExists
+            if self.errorType:
+                break
 
         return not self.errorType
 
 
     def invoke(self, context, event):
+        if self.forceMode in {'FRAME', 'ANIMATION'}:
+            context.window_manager.vray.render_button_mode = self.forceMode
+
         if not _validateFramesList(context):
             self.report({'WARNING'}, f"Invalid frames list, render aborted. See console log for details.")
             return {'CANCELLED'}
-        
+
         if not self._checkOutputInfo(context):
             # Invoking props dialog that warns the user that the new render job will
             # overwrite the render result
@@ -636,13 +717,33 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
                 layout.label(text="Do you still want to render?")
 
             case __class__._ErrorType.FileExists:
-                layout.label(text="An output image with the same name already exists.")
-                layout.label(text="Overwrite it?")
+                layout.label(text="One or more existing output images will be overwritten.")
+                layout.label(text="Proceed?")
                 layout.prop(context.scene.vray.SettingsOutput, "output_overwrite_warn", text="Always ask me.")
 
             case _:
                 assert not f'Invalid message selector: {self.errorType}'
 
+
+class VRAY_OT_set_render_mode(VRayOperatorBase):
+    """Sets the render button mode (single frame or animation) without starting a render."""
+    bl_idname      = "vray.set_render_mode"
+    bl_label       = "Set Render Mode"
+    bl_description = "Change the render button between single frame and animation mode"
+    bl_options     = {'INTERNAL'}
+
+    mode: bpy.props.EnumProperty(
+        items=(
+            ('ANIMATION', '', ''),
+            ('FRAME',     '', ''),
+        ),
+        default='FRAME',
+        options={'HIDDEN'},
+    )
+
+    def execute(self, context):
+        context.window_manager.vray.render_button_mode = self.mode
+        return {'FINISHED'}
 
 
 class VRAY_OT_render_viewport(VRayOperatorBase):
@@ -934,11 +1035,12 @@ class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
         return context.window_manager.invoke_props_dialog(self, width=400, title="Submit to Cloud", confirm_text="Submit")
 
     def draw(self, context: bpy.types.Context):
+        from vray_blender.ui.properties_output import _drawPathPropWithPlaceholders
         VRayExporter = context.scene.vray.Exporter
 
         self.layout.prop(VRayExporter, 'vray_cloud_project_name')
-        self.layout.prop(VRayExporter, 'vray_cloud_job_name')
-
+        _drawPathPropWithPlaceholders(self.layout, VRayExporter, 'vray_cloud_job_name', "Job Name",
+                                      target_prop_group="EXPORTER")
         self._cursorWrap(context)
 
 
@@ -1134,65 +1236,6 @@ class VRAY_OT_FileSelect(VRayOperatorBase, ImportHelper):
         assert False, "No callback function set"
 
 
-
-def _pollImageDragDrop(cls, context: bpy.types.Context):
-    return pollEngine(context) and context.space_data and context.space_data.type == 'NODE_EDITOR' and pollTreeType(cls, context)
-
-
-class VRAY_OT_import_drop_image(bpy.types.Operator):
-    bl_idname = "vray.import_drop_image"
-    bl_label = "Add V-Ray Bitmap"
-    options = { 'INTERNAL', 'UNDO' }
-
-    directory: bpy.props.StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE', 'HIDDEN'})
-    files: bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'SKIP_SAVE', 'HIDDEN'})
-
-    @classmethod
-    def poll(cls, context: bpy.types.Context):
-        return _pollImageDragDrop(cls, context)
-
-    def invoke(self, context, event):
-        context.space_data.cursor_location_from_region(event.mouse_region_x, event.mouse_region_y)
-
-        return self.execute(context)
-
-    def execute(self, context):
-        ntree = context.space_data.edit_tree
-        if not ntree:
-            return { 'CANCELLED' }
-
-        deselectNodes(ntree)
-        for file in self.files:
-            # For some reason in newer Blender versions the file name is relative e.g. //img.png
-            # and os.path.join(C:\dev\test, //img.png) gives us img.png
-            filename = bpy.path.basename(file.name)
-            filepath = os.path.join(self.directory, filename)
-            filepath = bpy.path.abspath(filepath)
-            if not os.path.exists(filepath):
-                continue
-
-            imageBlockName = bpy.path.display_name_from_filepath(filepath)
-            imageNode = createNode(ntree, "VRayNodeMetaImageTexture")
-            relative = path_utils.tryGetRelativePath(filepath)
-            filepath = relative if relative is not None else filepath
-            imageNode.texture.image = bpy.data.images.load(filepath)
-            imageNode.texture.image.name = imageBlockName
-            imageNode.select = True
-            imageNode.location = context.space_data.cursor_location
-            context.space_data.cursor_location.y -= 350.0
-
-        return {'FINISHED'}
-
-class VRAY_FH_image_handler(bpy.types.FileHandler):
-    bl_idname = "VRAY_FH_image_handler"
-    bl_import_operator = "vray.import_drop_image"
-    bl_file_extensions = image_utils.getVRayImageFormatExts()
-    bl_label = "V-Ray Image handler"
-
-    @classmethod
-    def poll_drop(cls, context):
-        return _pollImageDragDrop(cls, context)
-
 class VRAY_OT_testing_log_marker(bpy.types.Operator):
     bl_idname = "vray.testing_log_marker"
     bl_label = "Log marker in UI test output"
@@ -1237,6 +1280,124 @@ class VRAY_OT_CE_limited_feature_tooltip(VRayOperatorBase):
         return {'FINISHED'}
 
 
+class VRAY_OT_jump_to_setting(VRayOperatorBase):
+    """Switch to the relevant render-settings tab, expand any rollouts that contain
+       the target parameter, and highlight that parameter for a few seconds."""
+    bl_idname      = "vray.jump_to_setting"
+    bl_label       = "Show in Render Settings"
+    bl_description = "Show this parameter in Render Settings"
+    bl_options     = {'INTERNAL'}
+
+    target: bpy.props.EnumProperty(
+        name = "Target",
+        items = (
+            ('AUTO_EXPOSURE',      '', ''),
+            ('AUTO_WHITE_BALANCE', '', ''),
+            ('MOTION_BLUR',        '', ''),
+            ('CAUSTICS',           '', ''),
+        ),
+        options = {'HIDDEN'},
+    )
+
+    # Mapping from a `VRAY_OT_jump_to_setting.target` value to:
+    #   - the active render context (`window_manager.vray.ui_render_context`),
+    #   - the panel-state BoolProperties on `wm.vray.common_tab` to flip to True so
+    #     the rollouts containing the parameter are forced open via `panel_prop`,
+    #   - the highlight key consumed by `draw_utils.isHighlighted` to apply the
+    #     alert wrapper around the right parameter,
+    #   - the name of the top-level `bpy.types.Panel` class (in
+    #     `vray_blender.ui.properties_render`) that needs to be force-opened so
+    #     the user can actually see the highlighted parameter; empty string to
+    #     skip the force-open workaround.
+    _JUMP_TARGETS = {
+        'AUTO_EXPOSURE':      ('2', ('panel_globals_camera_open',),                                  'SettingsCameraGlobal.auto_exposure',     'VRAY_PT_Globals'),
+        'AUTO_WHITE_BALANCE': ('2', ('panel_globals_camera_open',),                                  'SettingsCameraGlobal.auto_white_balance','VRAY_PT_Globals'),
+        'MOTION_BLUR':        ('2', ('panel_globals_camera_open', 'panel_globals_motion_blur_open'), 'SettingsMotionBlur.on',                  'VRAY_PT_Globals'),
+        'CAUSTICS':           ('1', (),                                                              'SettingsCaustics.on',                    'VRAY_PT_SettingsCaustics'),
+    }
+
+    # How long the alert highlight stays on the target parameter.
+    _HIGHLIGHT_DURATION = 3.0
+
+    _forceOpenPending: set = set()
+
+    @staticmethod
+    def _forcePanelOpenTick():
+        """ A hack to force-open the panel on the next draw cycle.
+            Currently Blender's Python API does not expose a way to programmatically expand
+            a bpy.types.Panel whose state is collapsed.
+        """
+        from vray_blender.ui import properties_render as _properties_render
+
+        pending = list(VRAY_OT_jump_to_setting._forceOpenPending)
+        VRAY_OT_jump_to_setting._forceOpenPending.clear()
+
+        if not pending:
+            return None
+
+        # The Hack is to basically unregister and re-register the panel with a new bl_idname
+        # and no DEFAULT_CLOSED option.
+        for className in pending:
+            panelClass = getattr(_properties_render, className, None)
+            if panelClass is None:
+                continue
+
+            bpy.utils.unregister_class(panelClass)
+
+            panelClass.bl_options = set(panelClass.bl_options) - {'DEFAULT_CLOSED'}
+            panelClass.bl_idname = className + str(time.time_ns())
+            bpy.utils.register_class(panelClass)
+
+        return None
+
+
+    @staticmethod
+    def _clearHighlight():
+        """ Runs once after `_HIGHLIGHT_DURATION` seconds, clears the highlight state
+            and triggers a final redraw so the alert visuals disappear.
+        """
+        wmVray = getattr(bpy.context.window_manager, 'vray', None)
+        if wmVray is not None:
+            wmVray.common_tab.highlight_target = ""
+
+        return None
+
+
+    def _queueForcePanelOpen(self, panelClassName: str):
+        """ Queue `panelClassName` to be force-opened on the next timer tick. """
+        if not panelClassName:
+            return
+        self._forceOpenPending.add(panelClassName)
+        if not bpy.app.timers.is_registered(self._forcePanelOpenTick):
+            bpy.app.timers.register(self._forcePanelOpenTick, first_interval=0)
+
+
+    def execute(self, context):
+        targetCfg = self._JUMP_TARGETS.get(self.target)
+        if targetCfg is None:
+            return {'CANCELLED'}
+
+        renderContext, panelFlags, highlightKey, panelClassName = targetCfg
+        wmVray = context.window_manager.vray
+        commonUI = wmVray.common_tab
+
+        wmVray.ui_render_context = renderContext
+        for flagName in panelFlags:
+            setattr(commonUI, flagName, True)
+
+        commonUI.highlight_target = highlightKey
+
+        # Open the panels containing the highlighted parameter on the next draw cycle.
+        self._queueForcePanelOpen(panelClassName)
+
+        # Clear the highlight after _HIGHLIGHT_DURATION seconds.
+        if bpy.app.timers.is_registered(self._clearHighlight):
+            bpy.app.timers.unregister(self._clearHighlight)
+        bpy.app.timers.register(self._clearHighlight, first_interval=self._HIGHLIGHT_DURATION)
+
+        return {'FINISHED'}
+
+
 def getRegClasses():
     return (
         VRAY_OT_node_add,
@@ -1252,7 +1413,9 @@ def getRegClasses():
         VRAY_OT_export_scene,
         VRAY_OT_get_ui_mouse_position,
         VRAY_OT_select_vrscene_export_file,
+        VRAY_OT_select_proxy_export_file,
         VRAY_OT_render,
+        VRAY_OT_set_render_mode,
         VRAY_OT_render_interactive,
         VRAY_OT_render_interactive_stop,
         VRAY_OT_render_viewport,
@@ -1262,13 +1425,12 @@ def getRegClasses():
         VRAY_OT_copy_plugin_version,
         VRAY_OT_upgrade_scene,
 
-        VRAY_OT_import_drop_image,
         VRAY_OT_testing_log_marker,
-        VRAY_FH_image_handler,
         VRAY_OT_FileSelect,
         VRAY_OT_url_open,
         VRAY_OT_CE_limited_feature_tooltip,
         VRAY_OT_message_box,
+        VRAY_OT_jump_to_setting,
     )
 
 

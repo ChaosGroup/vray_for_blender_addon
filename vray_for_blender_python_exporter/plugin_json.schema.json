@@ -360,7 +360,8 @@
                                             "templateIncludeExclude",
                                             "templateMultiObjectSelect",
                                             "templateSingleObjectSelect",
-                                            "templateFileSelect"
+                                            "templateFileSelect",
+                                            "templateColorTemperature"
                                         ]
                                     },
                                     "custom_exporter": {
@@ -383,6 +384,15 @@
                                                 "type": "string"
                                             },
                                             "object_type": {
+                                                "type": "string"
+                                            },
+                                            "color_mode": {
+                                                "type": "string"
+                                            },
+                                            "color_bound_property": {
+                                                "type": "string"
+                                            },
+                                            "temperature_bound_property": {
                                                 "type": "string"
                                             }
                                         }
@@ -510,6 +520,12 @@
                                 "$ref": "#/$defs/paramType"
                             },
                             "visible": {
+                                "oneOf": [
+                                    { "type": "boolean" },
+                                    { "$ref": "#/$defs/singleRuleCondition" }
+                                ]
+                            },
+                            "active": {
                                 "oneOf": [
                                     { "type": "boolean" },
                                     { "$ref": "#/$defs/singleRuleCondition" }

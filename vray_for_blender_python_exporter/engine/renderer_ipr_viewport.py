@@ -30,6 +30,10 @@ class VRayRendererIprViewport(VRayRendererIprBase):
     # determine if the viewport renderer is active from any context.
     _activeRenderer = None
 
+    # A static ref to the currently active Python renderer instance. Used by the draw
+    # scheduler to set _imageUpdatePending without needing the C++ renderer handle.
+    _activeInstance: 'VRayRendererIprViewport | None' = None
+
     def __init__(self, context: bpy.types.Context):
         uiRegionContext = UIRegionContext(context.space_data, context.window)
         super().__init__(True, uiRegionContext, context)
@@ -39,6 +43,11 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
         # Cache & draw the most recent viewport image.
         self.drawData: gl_draw.DrawData = None
+
+        # Set by the draw scheduler when a new rendered image is available.
+        # Checked and cleared by _drawViewport() to avoid redundant getImage() calls
+        # and GPU texture re-creation on frames where no new image has arrived.
+        self._imageUpdatePending = True
         VfbEventHandler.setLightMixSupported(False)
 
         # FPS measurement
@@ -64,6 +73,10 @@ class VRayRendererIprViewport(VRayRendererIprBase):
     def getActiveRenderer():
         return VRayRendererIprViewport._activeRenderer
 
+    @staticmethod
+    def getActiveInstance() -> 'VRayRendererIprViewport | None':
+        return VRayRendererIprViewport._activeInstance
+
 
     @staticmethod
     def reset():
@@ -81,6 +94,8 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
             self.renderer = None
             VRayRendererIprViewport._activeRenderer = None
+            VRayRendererIprViewport._activeInstance = None
+            self._imageUpdatePending = True
 
     def _startDrawPoller(self):
         # Start a poller to trigger redraw operation when a new rendered image is received.
@@ -120,7 +135,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
             UpdateTracker.clear()
 
         if self._export(exporterCtx, engine):
-            engine.update_stats("", "View_update POC export complete")
+            engine.update_stats("", "View update complete")
 
         # Total scene export time
         endTime = time.perf_counter()
@@ -185,17 +200,27 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         engine.renderer = self.renderer
         self._startDrawPoller()
 
-        # Set a static renderer ref that can be accessed from Blender operators
+        # Set static refs that can be accessed from Blender operators and draw_scheduler.
         VRayRendererIprViewport._activeRenderer = self.renderer
+        VRayRendererIprViewport._activeInstance = self
 
 
     def _drawViewport(self, context: bpy.types.Context):
         region: bpy.types.Region = context.region
 
-        # If there is a new image, update DrawData with it.
-        image: ndarray = vray.getImage(self.renderer)
-        if image is not None:
-            self.drawData = gl_draw.DrawData(image, self.viewParams)
+        # Only fetch a new image and recreate the GPU texture when the draw scheduler
+        # has signaled that a new rendered image is available. This avoids redundant
+        # getImage() calls and expensive GPUTexture re-creation on every view_draw
+        # (e.g. during camera orbit where no new render result exists).
+        if self._imageUpdatePending:
+            self._imageUpdatePending = False
+            image: ndarray = vray.getImage(self.renderer)
+            if image is not None:
+                self.drawData = gl_draw.DrawData(image, self.viewParams)
+        elif self.drawData is not None:
+            # No new image, but viewParams may have changed (e.g. camera orbit
+            # affecting crop/offset). Update without recreating the texture.
+            self.drawData.viewParams = self.viewParams
 
         if self.drawData is None:
             # Nothing to draw ( before the first image has arrived )

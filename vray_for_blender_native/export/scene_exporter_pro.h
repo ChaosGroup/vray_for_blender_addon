@@ -31,7 +31,7 @@ public:
 	// ExporterBase interface implementation
 	void    init(ZmqExporter* zmqExporter) override;
 	void    setupCallbacks() override;
-	void    renderStart(RenderPass *renderResult, nb::callable&& imageUpdatedCallback) override;
+	void    renderStart(RenderPass *renderResult, nb::callable&& imageUpdatedCallback, bool imageToBlender) override;
 	void    renderEnd() override;
 	void    renderFrame() override;
 	void    continueRenderSequence() override;
@@ -40,6 +40,7 @@ public:
 	int     lastRenderedFrame() override;
 	void    setRenderFrame(float frame) override;
 	void    abortRender()  override;
+	void    setElementPasses(const nb::list& passes) override;
 
 	// Callbacks
 	void              cb_on_image_ready();
@@ -57,6 +58,14 @@ private:
 	nb::callable      m_imageUpdateCallback;
 	time_point        m_lastImageUpdate;
 	RenderPass*       m_renderPass = nullptr;
+
+	struct ElementPass {
+		RenderPass* pass;
+		int channelType;                ///< V-Ray RenderElement::Type
+		std::string pluginInstanceName; ///< V-Ray plugin instance name
+		int subIndex;                   ///< Cryptomatte layer or ObjectSelect 0=matte/1=filter/2=alpha
+	};
+	std::vector<ElementPass> m_elementPasses;  // Non-Combined render element passes
 };
 
 } // namespace VRayForBlender

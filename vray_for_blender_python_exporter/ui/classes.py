@@ -53,8 +53,12 @@ RenderPanelGroups = {
     '3' : (
         'VRAY_PT_Exporter',
         'VRAY_PT_SceneExporter',
-        'VRAY_PT_Performance',
         'VRAY_PT_DR',
+    ),
+    # Common
+    '4' : (
+        'VRAY_PT_Common_Rendering',
+        'VRAY_PT_Common_Denoiser',
     ),
 }
 
@@ -201,19 +205,20 @@ def drawListWidget(layout, propGroupPath, listType, defItemName, itemAddOp='DEFA
 
 class VRayPanel(bpy.types.Panel):
     COMPAT_ENGINES = VRayEngines
-    bl_icon = "" # Icon from "vray_blender.ui.icons" to be drawn in front of V-Ray rollouts.
+    bl_icon = "NONE"
+    vray_icon = "" # Key into vray_blender.ui.icons for the panel header icon.
 
-    # A list of V-Ray plugin type names to be shown on the panel. 
+    # A list of V-Ray plugin type names to be shown on the panel.
     # The order in the UI is the same as in the list.
-    vrayPlugins = [] 
+    vrayPlugins = []
 
     def drawPanelCheckBox(self, context):
         """ Override this function to draw a rollout checkbox. """
         pass
 
     def draw_header(self, context):
-        if self.bl_icon:
-            self.layout.label(icon_value=icons.getIcon(self.bl_icon), text="")
+        if self.vray_icon:
+            self.layout.label(icon_value=icons.getIcon(self.vray_icon), text="")
         self.drawPanelCheckBox(context)
 
     @classmethod
@@ -260,7 +265,8 @@ class VRayDataPanel(VRayPanel):
 
 
 class VRayGeomPanel(VRayDataPanel):
-    bl_icon = "VRAY_PLACEHOLDER"
+    bl_icon = "NONE"
+    vray_icon = "VRAY_PLACEHOLDER"
     incompatTypes  = {'LIGHT', 'CAMERA', 'SPEAKER', 'ARMATURE', 'EMPTY', 'META'}
 
     @classmethod
@@ -269,7 +275,8 @@ class VRayGeomPanel(VRayDataPanel):
 
 
 class VRayCameraPanel(VRayDataPanel):
-    bl_icon = "VRAY_PLACEHOLDER"
+    bl_icon = "NONE"
+    vray_icon = "VRAY_PLACEHOLDER"
 
     @classmethod
     def poll(cls, context):
@@ -283,7 +290,8 @@ class VRayLampPanel(VRayDataPanel):
 
 
 class VRayFurPanel(VRayDataPanel):
-    bl_icon = "VRAY_PLACEHOLDER"
+    bl_icon = "NONE"
+    vray_icon = "VRAY_PLACEHOLDER"
 
     @classmethod
     def poll(cls, context):
@@ -304,7 +312,8 @@ class VRayObjectPanel(VRayPanel):
     bl_space_type  = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context     = 'object'
-    bl_icon        = "VRAY_PLACEHOLDER"
+    bl_icon        = "NONE"
+    vray_icon      = "VRAY_PLACEHOLDER"
 
     incompatTypes  = {'LIGHT', 'CAMERA', 'SPEAKER', 'ARMATURE'}
 
@@ -523,10 +532,13 @@ class VRAY_UL_MaterialSlots(bpy.types.UIList):
         slot = item
         ma   = slot.material
 
+        layout.context_pointer_set("id", ma)
+        layout.context_pointer_set("material_slot", slot)
+
         split = layout.split(factor=0.75)
 
         if ma:
-            split.label(text=ma.name, translate=False, icon_value=icon)
+            split.prop(ma, "name", text="", emboss=False, icon_value=icon)
             split.prop(slot, 'link', text="", emboss=False, translate=False)
         else:
             split.label(text="")

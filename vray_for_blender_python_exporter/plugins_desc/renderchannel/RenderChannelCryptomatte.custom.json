@@ -33,10 +33,16 @@
                         "name": "id_type"
                     },
                     {
-                        "name": "user_attribute"
+                        "name": "user_attribute",
+                        "active": {
+                            "cond": "::id_type=3"
+                        }
                     },
                     {
                         "layout": "ROW",
+                        "active": {
+                            "cond": "::id_type=6"
+                        },
                         "attrs": [
                             {
                                 "name": "add_root_object_name",

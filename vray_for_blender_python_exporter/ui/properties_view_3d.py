@@ -9,6 +9,8 @@ from vray_blender import operators as ops
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.nodes.utils import getChannelsOutputNode
+from vray_blender.exporting.world_export import sockConnectedToDenoiser
 
 
 def drawVRayInteractiveRenderMenu(self, context):
@@ -52,18 +54,24 @@ class VRAY_PT_View_3D_Options(classes.VRayPanel):
 
         world = context.scene.world
 
-        # Indication that there isn't a node tree created
-        if (world is None) or (world.node_tree is None):
-            layout.column().label(icon="ERROR", text="Denoiser requires World Tree.")
-            self.layout.operator('vray.add_nodetree_world', text="Create a V-Ray World Node Tree")
-            return
-
-        channelsDenoiserPropGroup = world.vray.RenderChannelDenoiser
-        layout.prop(channelsDenoiserPropGroup, "viewport_enabled", text="Viewport Denoiser")
+        vrayExporter = context.scene.vray.Exporter
 
         denoiserColumn = layout.column()
-        denoiserColumn.active = channelsDenoiserPropGroup.viewport_enabled
-        denoiserColumn.prop(channelsDenoiserPropGroup, "viewport_engine", text="Engine")
+        denoiserColumn.prop(vrayExporter, "viewport_denoiser_enabled", text="Viewport Denoising")
+
+        viewportDenoiserControls = denoiserColumn.column()
+        viewportDenoiserControls.enabled = vrayExporter.viewport_denoiser_enabled
+        viewportDenoiserControls.prop(vrayExporter, "viewport_denoiser_engine", text="Denoiser Engine")
+
+        channelsNode = getChannelsOutputNode(world.node_tree) if (world and world.node_tree) else None
+        hasDenoiserNode = channelsNode is not None and \
+                            any(sock for sock in channelsNode.inputs if sockConnectedToDenoiser(sock))
+
+        linkedDenoiserActive = hasDenoiserNode
+
+        linkedRow = viewportDenoiserControls.row()
+        linkedRow.enabled = linkedDenoiserActive
+        linkedRow.prop(vrayExporter, "linked_denoiser", text="Linked Denoiser")
 
 
 def getRegClasses():
