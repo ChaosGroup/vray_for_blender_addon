@@ -148,7 +148,7 @@ if (FULL_BUILD)
 endif()
 
 # Configure the path to VRayZmqWrapper to be consumed by the Lib and Server projects
-set(VRAY_ZMQ_WRAPPER_ROOT  "${CMAKE_CURRENT_SOURCE_DIR}/vray_for_blender_zmq_wrapper" CACHE PATH "Path to V-Ray ZMQ wrapper headers")
+set(VRAY_ZMQ_WRAPPER_ROOT  "${CMAKE_CURRENT_SOURCE_DIR}/zmq_wrapper" CACHE PATH "Path to V-Ray ZMQ wrapper headers")
 set(VRAY_ZMQ_WRAPPER_LIBS  "$<TARGET_FILE_DIR:VRayZmqWrapper>" CACHE PATH "Path to ZMQ libs")
 
 fix_separators(VRAY_ZMQ_WRAPPER_ROOT)
@@ -170,26 +170,26 @@ set_target_properties(tsl::robin_map PROPERTIES
 # Open-source components
 
 # VRayZmqWrapper
-add_subdirectory(vray_for_blender_zmq_wrapper)
+add_subdirectory(zmq_wrapper)
 
 # VRayBlenderLib
-add_subdirectory(vray_for_blender_native)
+add_subdirectory(blender_lib)
 
 ####################################################
 # Closed-source components
 
 if (FULL_BUILD)
     # VRayZmqServer
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vray_for_blender_server")
-        add_subdirectory(vray_for_blender_server)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/server")
+        add_subdirectory(server)
         add_dependencies(VRayZmqServer VRayZmqWrapper)
     else()
         message(STATUS "Skipping project generation for VRayZmqServer")
     endif()
 
     # VRayTools
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vray_for_blender_tools")
-        add_subdirectory(vray_for_blender_tools)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vray_tools")
+        add_subdirectory(vray_tools)
     else()
         message(STATUS "Skipping project generation for VRayTools")
     endif()
@@ -197,12 +197,12 @@ if (FULL_BUILD)
 endif()
 
 if(INSTALL_LOCAL AND ADDON_PATH)
-    install(DIRECTORY "vray_for_blender_python_exporter/" DESTINATION "${ADDON_PATH}")
+    install(DIRECTORY "python_exporter/" DESTINATION "${ADDON_PATH}")
 endif()
 
 if (FULL_BUILD)
-    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/vray_for_blender_installator_generator)
-        add_subdirectory(vray_for_blender_installator_generator)
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/installer)
+        add_subdirectory(installer)
     else()
         message(STATUS "Skipping generation installation scripts")
     endif()

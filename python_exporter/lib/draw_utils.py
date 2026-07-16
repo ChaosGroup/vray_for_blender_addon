@@ -111,11 +111,14 @@ def isHighlighted(highlightKey: str) -> bool:
 
 
 class UIPainter:
-    def __init__(self, context: bpy.types.Context, pluginModule, propGroup, node: bpy.types.Node = None):
+    def __init__(self, context: bpy.types.Context, pluginModule, propGroup, node: bpy.types.Node = None,
+                 showAnimDecorators: bool = True):
         self.context = context
         self.node = node
         self.propGroup = propGroup
         self.pluginModule = pluginModule
+        # When False, suppress the per-property animation "dots" (e.g. in the compact N-panel).
+        self.showAnimDecorators = showAnimDecorators
 
     def drawAttr(self, layout: bpy.types.UILayout, attrName, label: str):
         """ Draw a single attribute of the plugin. This method will select between drawing node sockets
@@ -383,7 +386,7 @@ class UIPainter:
         animatable = self.pluginModule.Options.get('animatable', True)
         if not animatable:
             animatable = self.pluginModule.Options.get('use_animation_layout', False)
-        container.use_property_decorate = not nodeWidget and animatable
+        container.use_property_decorate = (not nodeWidget) and animatable and self.showAnimDecorators
 
         self.renderWidgetAttributes(widget, container)
 

@@ -36,10 +36,6 @@
                 "soft_max": 360.0,
                 "spin_step": 1.0
             }
-        },
-        {
-            "attr": "scene_name",
-            "get": "sceneNameGet"
         }
     ],
     "Type": "SETTINGS",

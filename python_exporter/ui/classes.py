@@ -54,6 +54,7 @@ RenderPanelGroups = {
         'VRAY_PT_Exporter',
         'VRAY_PT_SceneExporter',
         'VRAY_PT_DR',
+        'VRAY_PT_VRayProfiler',
     ),
     # Common
     '4' : (
@@ -87,6 +88,43 @@ def pollBase(cls, context):
 
 def pollEngine(context):
     return context.scene.render.engine in VRayEngines
+
+
+# Stock Blender panels whose poll() we have wrapped, mapped to their original poll function.
+_hiddenStockPanels = {}
+
+def hideStockPanels(panels):
+    """ Hide stock Blender panels whenever a V-Ray engine is the active renderer.
+
+        Use for stock panels that ignore COMPAT_ENGINES in their poll() and therefore cannot
+        be hidden via setVRayCompatibility() (e.g. MATERIAL_PT_lineart, RENDER_PT_context).
+        Each panel's poll() is wrapped so it returns False under V-Ray, delegating to the
+        original poll for other engines. Undo with restoreStockPanels().
+    """
+    for panel in panels:
+        if panel in _hiddenStockPanels or not hasattr(panel, 'poll'):
+            continue
+
+        originalPoll = panel.poll.__func__            # raw function(cls, context)
+        _hiddenStockPanels[panel] = originalPoll
+
+        def makePoll(origPoll):
+            def vrayPoll(cls, context):
+                if pollEngine(context):
+                    return False
+                return origPoll(cls, context)
+            return classmethod(vrayPoll)
+
+        panel.poll = makePoll(originalPoll)
+
+
+def restoreStockPanels(panels=None):
+    """ Restore the original poll() of panels patched by hideStockPanels.
+        Restores every patched panel when `panels` is None. """
+    targets = list(_hiddenStockPanels) if panels is None else list(panels)
+    for panel in targets:
+        if (originalPoll := _hiddenStockPanels.pop(panel, None)) is not None:
+            panel.poll = classmethod(originalPoll)
 
 
 def pollTreeType(cls, context):
@@ -149,6 +187,17 @@ def drawNodePanel(context, layout, node, PLUGINS):
         drawPluginUI(context, layout, propGroup, pluginModule, node)
     else:
         layout.label(text="Selected node has no properties to show.")
+
+
+def drawActiveNodePanel(context, layout, node, PLUGINS):
+    """ Draw the Properties-tab panel for the tree's active node, preferring the node's own
+        draw_buttons_ext (nodeDrawSide) - the same function the Node Editor sidebar uses - over
+        the generic auto-generated UI from drawNodePanel().
+    """
+    if hasattr(node, "draw_buttons_ext"):
+        node.draw_buttons_ext(context, layout)
+    else:
+        drawNodePanel(context, layout, node, PLUGINS)
 
 
 def ntreeWidget(layout, propGroup, label, addOp, addOpContext):

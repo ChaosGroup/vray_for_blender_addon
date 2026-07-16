@@ -312,6 +312,30 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "file",
+                        "active": {
+                            "cond": "::previewType!=Point"
+                        },
+                        "custom_draw": "widgetDrawFile"
+                    },
+                    {
+                        "name": "previewType",
+                        "label": "Preview Type"
+                    },
+                    {
+                        "name": "flip_axis"
+                    },
+                    {
+                        "name": "scale"
+                    }
+                ]
+            }
         ]
     },
     "Options": {

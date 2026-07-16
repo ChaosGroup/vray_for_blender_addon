@@ -107,9 +107,18 @@
             }
         },
         {
+            "attr": "units",
+            "update": "onUpdateUnits",
+            "options": {
+                "shadowed": true
+            }
+        },
+        {
             "attr": "intensity",
             "default": 30.0,
             "ui": {
+                "max": null,
+                "soft_max": null,
                 "spin_step": 0.1
             }
         },
@@ -303,6 +312,40 @@
                                 "name": "decay_far_end"
                             }
                         ]
+                    }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "name": "radius"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "shadows"
                     }
                 ]
             }

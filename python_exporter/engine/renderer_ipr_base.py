@@ -13,13 +13,14 @@ from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, PersistedState, 
                                     RenderMaskState, UIRegionContext, getObjTrackId, SceneStats)
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
-from vray_blender.lib.plugin_utils import updateValue, objectToAttrPlugin, stringToIntList
+from vray_blender.lib.plugin_utils import objectToAttrPlugin, stringToIntList
+from vray_blender.lib import export_utils
 from vray_blender.exporting.instancer_export import InstancerExporter
 from vray_blender.exporting.plugin_tracker import ObjTracker, ScopedNodeTracker
 from vray_blender.exporting.settings_export import SettingsExporter
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget
-from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export, fur_export, instancer_export
+from vray_blender.exporting import tools, obj_export, mtl_export, view_export, settings_export, light_export, world_export, fur_export, instancer_export, reference_collector
 from vray_blender.nodes.filters import filterRenderMasks
 from vray_blender.plugins.system.compute_devices import updateEnabledComputeDevices
 from vray_blender.plugins.material.MtlDisplacement import checkForUpdatedMtlWithDisplacement
@@ -136,6 +137,12 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
 
     # Check if the currently updated material contains a displacement node
     checkForUpdatedMtlWithDisplacement(exporterCtx)
+
+    # Transfer the material whose quick caustics parameters changed (queued from a UI update
+    # callback) into this export. Objects using it get their geometry recompiled so the caustic
+    # beam generators re-register. Clear the queue so the change is applied once.
+    exporterCtx.updatedMtlWithQuickCaustics = ExporterContext.pendingQuickCausticsMtl
+    ExporterContext.pendingQuickCausticsMtl = ""
 
 
 def _persistState(self, exporterCtx: ExporterContext):
@@ -442,6 +449,9 @@ class VRayRendererIprBase:
                 _syncRenderMask(self, exporterCtx)
                 VRayRendererIprBase._showSceneStatus(exporterCtx)
 
+                # Discover selector-referenced objects up front so the object pass exports the hidden ones.
+                reference_collector.collectReferencedObjects(exporterCtx)
+
                 geomExporter = _exportObjects(exporterCtx)
                 lightExporter = _exportLights(exporterCtx)
                 _exportInstances(exporterCtx, geomExporter, lightExporter)
@@ -454,8 +464,7 @@ class VRayRendererIprBase:
                 _exportWorld(exporterCtx)
                 _exportMaterials(exporterCtx)
 
-                if exporterCtx.fullExport and (exporterCtx.rendererMode == RendererMode.Interactive):
-                    self._linkRenderChannels(exporterCtx)
+                self._exportReferencedPluginParams(exporterCtx)
 
                 _persistState(self, exporterCtx)
 
@@ -514,10 +523,9 @@ class VRayRendererIprBase:
             obj.to_mesh_clear()
 
 
-    def _linkRenderChannels(self, exporterCtx: ExporterContext):
-        """ In order for certain plugins to affect the render channels, those render channels
-            must be explicitly listed in a parameter of the plugin. This function updates
-            the relevant plugin properties.
+    def _exportReferencedPluginParams(self, exporterCtx: ExporterContext):
+        """ Apply all plugin parameters that reference other plugins (currently render-channel links),
+            deferred until the whole scene had been exported so every plugin they reference is
+            guaranteed to exist.
         """
-        for pluginData, channelsList in exporterCtx.pluginRenderChannels.items():
-            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList)
+        export_utils.exportReferencedPluginParams(self.renderer, exporterCtx)

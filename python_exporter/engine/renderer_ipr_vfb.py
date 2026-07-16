@@ -22,7 +22,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 class VRayRendererIprVfb(VRayRendererIprBase):
     """ Interactive render engine implementation """
 
-    # A static ref to the currently active renderer. We need it in order to be able to 
+    # A static ref to the currently active renderer. We need it in order to be able to
     # determine if the viewport renderer is active from any context.
     _activeRenderer = None
 
@@ -51,7 +51,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
     @staticmethod
     @bpy.app.handlers.persistent
-    def _exportOnIprUpdatePost(e):
+    def _exportOnIprUpdatePost(scene, depsgraph):
         """ Exporting of scene on every depsgrpah update """
         if VRayRendererIprVfb.skipNextDepsgraphExport:
             VRayRendererIprVfb.skipNextDepsgraphExport = False
@@ -60,14 +60,13 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         from vray_blender.engine.render_engine import VRayRenderEngine
 
         if iprRenderer := VRayRenderEngine.iprRenderer:
-        
-            scene = bpy.context.scene
+
             currResolution = (scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage)
             if VRayRendererIprVfb._lastResolution != currResolution:
                 VRayRendererIprVfb.warnForCEResolutionLimit()
                 VRayRendererIprVfb._lastResolution = currResolution
-            
-            iprRenderer.exportScene()
+
+            iprRenderer.exportScene(depsgraph)
 
     @staticmethod
     def isActive():
@@ -77,7 +76,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
     @staticmethod
     def getActiveRenderer():
         return VRayRendererIprVfb._activeRenderer
-    
+
 
     @staticmethod
     def reset():
@@ -100,14 +99,15 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
             self.renderer = None
             VRayRendererIprVfb._activeRenderer = None
-            
+
             blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, VRayRendererIprVfb._exportOnIprUpdatePost)
             blender_utils.delEvent(bpy.app.handlers.frame_change_post, VRayRendererIprVfb._exportOnIprUpdatePost)
-            
 
-    def exportScene(self):
+
+    def exportScene(self, depsgraph=None):
         context = bpy.context
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+        if depsgraph is None:
+            depsgraph = bpy.context.evaluated_depsgraph_get()
 
         # For interactive renders, do a full export the first time only. Subsequent exports will be partial.
         isFullExport = not self.renderer
@@ -125,7 +125,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
         if not (exporterCtx := self._createExporterContext(depsgraph, isFullExport)):
             return None
-        
+
         if isFullExport:
             # Updates may have accumulated from a previous renderer session.
             UpdateTracker.clear()
@@ -138,9 +138,9 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
         if not (ctx := self._createExporterContext(dg = depsgraph, isFullExport = False)):
             return None
-        
+
         region3d = ctx.uiRegionContext.region3d
-        
+
         # If this condition is true, there is change in the viewport
         renderSizesOnly = region3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
         self.viewParams = exportViewportView(ctx, self.viewParams, renderSizesOnly)
@@ -159,7 +159,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
         # The ZMQ connection is live at this point, so updateScenePath is guaranteed to be received.
         # _onLoadPost may have sent it before the connection was established, so resend it here.
         vray.updateScenePath(path_utils.getScenePath())
-        
+
         def onStopped(isAborted):
             if isAborted:
                 bpy.app.timers.register(lambda: debug.reportError("Connection to renderer lost. Restart interactive rendering."))
@@ -179,5 +179,5 @@ class VRayRendererIprVfb(VRayRendererIprBase):
             # no longer control the view from the UI.
             VfbEventHandler.stopInteractiveRender()
             return None
-        
+
         return ctx

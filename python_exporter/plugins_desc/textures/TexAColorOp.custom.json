@@ -53,6 +53,64 @@
             "options": {
                 "derived": true
             }
+        },
+        {
+            "attr": "outputs",
+            "type": "ENUM",
+            "desc": "Output socket to show or hide",
+            "default": "red",
+            "items": [
+                ["red",                   "Red",                   "Red channel of Color A * Mult A"],
+                ["green",                 "Green",                 "Green channel of Color A * Mult A"],
+                ["blue",                  "Blue",                  "Blue channel of Color A * Mult A"],
+                ["alpha",                 "Alpha",                 "Alpha channel of Color A * Mult A"],
+                ["intensity",             "Intensity",             "Intensity of Color A * Mult A"],
+                ["result_a",              "Result A",              "Color A * Mult A"],
+                ["result_b",              "Result B",              "Color B * Mult B"],
+                ["sum",                   "Sum",                   "A + B"],
+                ["difference",            "Difference",            "A - B"],
+                ["absolute_difference",   "Absolute Difference",   "abs(A - B)"],
+                ["product",               "Product",               "A * B"],
+                ["division",              "Division",              "A / B"],
+                ["power",                 "Power",                 "A ^ B"],
+                ["minimum",               "Minimum",               "min(A, B)"],
+                ["maximum",               "Maximum",               "max(A, B)"],
+                ["average",               "Average",               "(A + B) / 2"],
+                ["lower_intensity_color", "Lower Intensity Color", "Color with lower intensity"],
+                ["greater_intensity_color","Greater Intensity Color","Color with greater intensity"],
+                ["sin",                   "Sin",                   "sin(A)"],
+                ["cos",                   "Cos",                   "cos(A)"],
+                ["tan",                   "Tan",                   "tan(A)"],
+                ["asin",                  "Asin",                  "asin(A)"],
+                ["acos",                  "Acos",                  "acos(A)"],
+                ["atan",                  "Atan",                  "atan(A)"],
+                ["atan2",                 "Atan2",                 "atan2(B, A)"],
+                ["abs",                   "Abs",                   "abs(A)"],
+                ["ceil",                  "Ceil",                  "ceil(A)"],
+                ["exp",                   "Exp",                   "exp(A)"],
+                ["floor",                 "Floor",                 "floor(A)"],
+                ["log",                   "Log",                   "log(A)"],
+                ["log10",                 "Log10",                 "log10(A)"],
+                ["sqrt",                  "Sqrt",                  "sqrt(A)"],
+                ["fmod",                  "Fmod",                  "A % B"],
+                ["bias_schlick",          "Bias Schlick",          "Bias (Schlick approximation)"],
+                ["gain_schlick",          "Gain Schlick",          "Gain (Schlick approximation)"],
+                ["bias_perlin",           "Bias Perlin",           "Bias (Perlin definition)"],
+                ["gain_perlin",           "Gain Perlin",           "Gain (Perlin definition)"]
+            ],
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "internal_separate",
+            "type": "STRING",
+            "default": "",
+            "desc": "Helper used by the 'Separate Color' menu entry to expose the RGBA channel outputs on creation",
+            "update": "onUpdateSeparate",
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {
@@ -98,6 +156,13 @@
                     }
                 ]
             }
+        ],
+        "input_sockets": [
+            { "name": "color_a",      "visible": { "cond": "::mode!=1", "default": true  } },
+            { "name": "color_b",      "visible": { "cond": "::mode!=0", "default": false } },
+            { "name": "mult_a",       "visible": { "cond": "::mode!=1", "default": true  } },
+            { "name": "mult_b",       "visible": { "cond": "::mode!=0", "default": false } },
+            { "name": "result_alpha" }
         ],
         "output_sockets":[
             {

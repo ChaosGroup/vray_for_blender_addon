@@ -206,6 +206,11 @@ void clearScene(const nb::object& renderer)
 	exporter->clearScene();
 }
 
+void clearMainBitmapCache()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlClearBitmapCache{}));
+}
+
 
 void log(const std::string& message, int level, bool raw = false)
 {
@@ -282,6 +287,28 @@ void resetVfbToolbar()
 void clearVfbImage()
 {
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlClearVfbImage{}), true);
+}
+
+// Re-applies the Lighting Analysis render element's display settings to the current render
+// in the VFB without re-rendering. No-op on the server if no render is running.
+void updateLightingAnalysis()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlUpdateLightingAnalysis{}), true);
+}
+
+// Opens Chaos Veras seeded with a captured 3D viewport image (the "Viewport Image to Veras"
+// menu command). imagePath is an absolute path to a temp image file written by the addon.
+void openVerasWithViewport(const std::string& imagePath)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOpenVerasViewport{imagePath}), true);
+}
+
+// Opens Chaos Veras seeded with the current VFB image (the "VFB Image to Veras" menu
+// command). Pressing the VFB toolbar's own Veras button is handled by the AppSDK directly
+// and does not go through this call.
+void openVerasWithVfbImage()
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOpenVerasVfb{}), true);
 }
 
 // Sets the VFB Render Region rectangle, the VFB image size and toolbar button state.
@@ -959,6 +986,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(createPreviewRenderer),   nb::arg("settings"));
 	m.def(FUN(deletePreviewRenderer),   nb::arg("renderer"));
 	m.def(FUN(clearScene),              nb::arg("renderer"));
+	m.def(FUN(clearMainBitmapCache));
 	m.def(FUN(log),                     nb::arg("message"), nb::arg("level"), nb::arg("raw") = false);
 	m.def(FUN(setLogLevel),             nb::arg("level"), nb::arg("enableQtLogs"));
 	m.def(FUN(openCollaboration),       nb::arg("hostInfo"));
@@ -980,6 +1008,9 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(closeVFB));
 	m.def(FUN(resetVfbToolbar));
 	m.def(FUN(clearVfbImage));
+	m.def(FUN(updateLightingAnalysis));
+	m.def(FUN(openVerasWithViewport), nb::arg("imagePath"));
+	m.def(FUN(openVerasWithVfbImage));
 	m.def(FUN(setVfbRenderRegion), nb::arg("x"), nb::arg("y"), nb::arg("width"), nb::arg("height"), nb::arg("imgWidth"), nb::arg("imgHeight"), nb::arg("enabled"));
 	m.def(FUN(setVisualDebuggerEnabled),     nb::arg("enable"));
 	m.def(FUN(setVfbOnTop),                  nb::arg("alwaysOnTop"));
@@ -1098,6 +1129,10 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(ExporterSettings, remoteDispatcher)
 		.ADD_RW_PROPERTY(ExporterSettings, separateFiles)
 		.ADD_RW_PROPERTY(ExporterSettings, previewDir)
+		.ADD_RW_PROPERTY(ExporterSettings, profilerMode)
+		.ADD_RW_PROPERTY(ExporterSettings, profilerMaxDepth)
+		.ADD_RW_PROPERTY(ExporterSettings, profilerOutputDirectory)
+		.ADD_RW_PROPERTY(ExporterSettings, profilerSceneName)
 		.ADD_RW_PROPERTY(ExporterSettings, drHosts)
 		.ADD_RW_PROPERTY(ExporterSettings, renderThreads);
 

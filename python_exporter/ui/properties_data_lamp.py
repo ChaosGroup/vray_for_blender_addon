@@ -6,9 +6,10 @@
 import bpy
 
 from vray_blender.ui      import classes
+from vray_blender.ui      import ui_operators
 from vray_blender.lib     import lib_utils
 from vray_blender.nodes   import utils as NodesUtils
-from vray_blender.plugins import PLUGINS, VRayLight
+from vray_blender.plugins import VRayLight, getPluginModule
 from vray_blender.plugins.templates.common import VRayObjectSelector
 
 
@@ -47,6 +48,7 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
         light  = context.light
         vrayLight = light.vray
         lightPluginType = lib_utils.getLightPluginType(light)
+        lightPluginModule = getPluginModule(lightPluginType)
 
         # Light selector dropdown    
         if context.object:
@@ -55,8 +57,9 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
             # No light is selected, show the pinned light
             layout.template_ID(context.space_data, "pin_id")
 
-        layout.separator()
-        layout.label(text=f"V-Ray Type: {lightPluginType}")
+        headerRow = layout.row(align=True)
+        headerRow.label(text=lightPluginModule.NAME)
+        ui_operators.drawPropertyPageButtons(headerRow, context, 'LIGHT')
 
         # The property values are stored in different places for light with node trees and such without
         outputNode = None
@@ -70,7 +73,7 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
 
         if lightPropGroup:
             layout.separator()
-            classes.drawPluginUI(context, layout, lightPropGroup, PLUGINS['LIGHT'][lightPluginType], outputNode)
+            classes.drawPluginUI(context, layout, lightPropGroup, lightPluginModule, outputNode)
 
 
 
@@ -82,24 +85,51 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
 ##        ##   ##  ##    ## ##       ##     ## ##     ## ##
 ######## ##     ##  ######  ########  #######  ########  ########
 
+def drawIncludeExclude(context: bpy.types.Context, layout: bpy.types.UILayout):
+    """ Draw the light's Include / Exclude controls. Shared between the Properties
+        editor panel and the node editor sidebar panel.
+    """
+    vrayLight: VRayLight = context.light.vray
+
+    layout.prop(vrayLight, 'include_exclude', text="Type", expand=True)
+
+    col = layout.column()
+    col.active = col.enabled = vrayLight.include_exclude != '0'
+    col.prop(vrayLight, 'illumination_shadow', text="From")
+
+    VRayObjectSelector.drawSelectorUI(vrayLight.objectList, context, col,
+                                      dataProvider=context.scene, dataProperty='objects',
+                                      listLabel='Objects List')
+
+
 class VRAY_PT_include_exclude(classes.VRayLampPanel):
     bl_label   = "Include / Exclude"
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
-        layout = self.layout
+        drawIncludeExclude(context, self.layout)
 
-        vrayLight: VRayLight= context.light.vray
-        
-        layout.prop(vrayLight, 'include_exclude', text="Type", expand=True)
 
-        col = layout.column()
-        col.active = col.enabled = vrayLight.include_exclude != '0'
-        col.prop(vrayLight, 'illumination_shadow', text="From")
-        
-        VRayObjectSelector.drawSelectorUI(vrayLight.objectList, context, col, 
-                                          dataProvider=context.scene, dataProperty='objects', 
-                                          listLabel='Objects List')
+class VRAY_PT_node_include_exclude(bpy.types.Panel):
+    """ Include / Exclude controls shown in the node editor sidebar, alongside the
+        light characteristics drawn for the active light node.
+    """
+    bl_space_type  = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category    = 'Node'
+    bl_label       = "Include / Exclude"
+    bl_options     = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        activeNode = context.active_node
+        return classes.pollEngine(context) \
+            and context.light is not None \
+            and activeNode is not None \
+            and getattr(activeNode, 'vray_type', None) == 'LIGHT'
+
+    def draw(self, context):
+        drawIncludeExclude(context, self.layout)
 
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
@@ -114,6 +144,7 @@ def getRegClasses():
     return (
         VRAY_PT_context_lamp,
         VRAY_PT_include_exclude,
+        VRAY_PT_node_include_exclude,
     )
 
 

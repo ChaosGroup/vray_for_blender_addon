@@ -1,0 +1,46 @@
+{
+    "Name": "V-Ray Compose Color",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "float1",
+            "ui": { "display_name": "Red" }
+        },
+        {
+            "attr": "float2",
+            "ui": { "display_name": "Green" }
+        },
+        {
+            "attr": "float3",
+            "ui": { "display_name": "Blue" }
+        },
+        {
+            "attr": "alpha",
+            "ui": { "display_name": "Alpha" }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "float1" },
+                    { "name": "float2" },
+                    { "name": "float3" },
+                    { "name": "alpha" },
+                    { "name": "invert" }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "invert" }
+                ]
+            }
+        ]
+    }
+}

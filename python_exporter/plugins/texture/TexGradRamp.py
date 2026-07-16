@@ -6,7 +6,7 @@
 import bpy
 
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.exporting.tools import getFarNodeLink, getInputSocketByAttr, FarNodeLink
+from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.defs import  PluginDesc, NodeContext
 from vray_blender.lib.names import Names

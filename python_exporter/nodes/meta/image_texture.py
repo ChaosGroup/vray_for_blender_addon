@@ -9,9 +9,36 @@ from vray_blender import plugins
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.nodes import sockets as SocketUtils, utils as NodeUtils
 from vray_blender.nodes.nodes import vrayNodeUpdate
-from vray_blender.lib.image_utils import subscribeToBitmapImageUpdates
+from vray_blender.lib.image_utils import subscribeToBitmapImageUpdates, applyDetectedSequenceRange
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
+
+
+# Our 3-entry Source dropdown. The order is also the value used by the get/set callbacks.
+_IMAGE_SOURCE_ITEMS = (
+    ('SINGLE',   "Single Image",   "A single image file"),
+    ('SEQUENCE', "Image Sequence", "Multiple image files forming an animation, numbered in their names"),
+    ('UDIM',     "UDIM Tiles",     "A tiled texture using <UDIM> or <UVTILE> tokens in the file name"),
+)
+
+# Maps Blender's Image.source to our dropdown index, and back. Generated/Movie/Viewer images
+# are shown as 'Single Image' (we export them as a single resolved/temp file).
+_BLENDER_SOURCE_TO_INDEX = {'FILE': 0, 'GENERATED': 0, 'MOVIE': 0, 'VIEWER': 0, 'SEQUENCE': 1, 'TILED': 2}
+_INDEX_TO_BLENDER_SOURCE = {0: 'FILE', 1: 'SEQUENCE', 2: 'TILED'}
+
+
+def _getImageSource(self):
+    image = self.texture.image if self.texture else None
+    return _BLENDER_SOURCE_TO_INDEX.get(image.source, 0) if image else 0
+
+
+def _setImageSource(self, value):
+    if self.texture and (image := self.texture.image):
+        wasSequence = (image.source == 'SEQUENCE')
+        image.source = _INDEX_TO_BLENDER_SOURCE.get(value, 'FILE')
+        if image.source == 'SEQUENCE' and not wasSequence:
+            # Auto-detect the frame range from the files on disk when switching to Image Sequence.
+            applyDetectedSequenceRange(self.texture.image_user, image)
 
 
 class VRayNodeMetaImageTexture(VRayNodeBase):
@@ -21,6 +48,16 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
 
     vray_type  : bpy.props.StringProperty(default='TEXTURE')
     vray_plugin: bpy.props.StringProperty(default='TexBitmap')
+
+    # Virtual property backed by node.texture.image.source - never stores its own state, so it
+    # always reflects the shared datablock and stays in sync with Blender's image editor.
+    image_source: bpy.props.EnumProperty(
+        name        = "Source",
+        description = "How the image is interpreted",
+        items       = _IMAGE_SOURCE_ITEMS,
+        get         = _getImageSource,
+        set         = _setImageSource,
+    )
 
     vray_plugins_list = ["BitmapBuffer", "TexBitmap"]
 
@@ -98,6 +135,14 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
             texPluginDesc,
             self
         )
+
+    def draw_label(self):
+        # Mirror Cycles' Image Texture node: show the loaded image's datablock name as the
+        # node label, falling back to the default label when no image is assigned. An explicit
+        # user-set label still overrides this.
+        if self.texture and (image := self.texture.image):
+            return image.name
+        return self.bl_label
 
     def update(self):
         vrayNodeUpdate(self)

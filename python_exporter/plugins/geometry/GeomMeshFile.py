@@ -9,16 +9,14 @@ from vray_blender import debug
 from vray_blender.lib import plugin_utils, export_utils
 from vray_blender.lib.blender_utils import getShadowAttr
 from vray_blender.lib.defs import PluginDesc
-from vray_blender.vray_tools.vray_proxy import isAlembicFile
+from vray_blender.vray_tools.vray_proxy import isAlembicFile, loadVRayProxyPreviewMesh
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
 def onUpdatePreviewFile(src, context, attrName):
     assert attrName == 'file'
-
-    geomMeshFile = context.active_object.data.vray.GeomMeshFile
-
+    geomMeshFile = src
     filePrevValue = getShadowAttr(geomMeshFile, 'file')
 
     if filePrevValue == geomMeshFile.file:
@@ -29,11 +27,13 @@ def onUpdatePreviewFile(src, context, attrName):
         geomMeshFile['file'] = filePrevValue
         return
 
-    bpy.ops.vray.proxy_generate_preview('EXEC_DEFAULT')
+    if err := loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current):
+        debug.reportError(err)
 
 
 def onUpdatePreview(src, context, attrName):
-    bpy.ops.vray.proxy_generate_preview('EXEC_DEFAULT')
+    if err := loadVRayProxyPreviewMesh(src, src.file, context.scene.frame_current):
+        debug.reportError(err)
 
 
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
@@ -53,4 +53,4 @@ def widgetDrawFile(context: bpy.types.Context, layout: bpy.types.UILayout, propG
     
     op = row.operator('vray.proxy_path_browser', icon='FILE_FOLDER', text="")
     op.is_proxy = True
-    op.object_name = context.active_object.name
+    op.mesh_name = context.active_object.data.name

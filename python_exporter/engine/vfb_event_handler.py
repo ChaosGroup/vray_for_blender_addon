@@ -13,7 +13,7 @@ from vray_blender.lib import sys_utils, image_utils
 from vray_blender.lib.defs import UIRegionContext, ProdRenderMode
 from vray_blender.nodes.utils import tagRedrawViewport
 from vray_blender.lib.camera_utils import renderCamerasHaveSameType, sceneResolutionLimitedByCE
-from vray_blender.lib.blender_utils import getViewLayerUseFCurve, setFloatFrame
+from vray_blender.lib.blender_utils import getViewLayerUseFCurve, setFloatFrame, getVRayPreferences
 
 from vray_blender import debug
 
@@ -175,9 +175,9 @@ class _VfbEventHandler:
         self.stopInteractiveRender()
         self.addEvent(_Event.CloudSubmit, uiRegionContext=uiRegionContext)
 
-    def reportStatus(self, severity: set, msg: str):
+    def reportStatus(self, severity: set, msg: str, delayed=False):
         """ Report to Blender's status field """
-        self.addEvent(_Event.ReportStatus, severity, msg)
+        self.addEvent(_Event.ReportStatus, severity, msg, delayed)
 
 
     def upgradeScene(self):
@@ -467,7 +467,7 @@ class _VfbEventHandler:
         VRayRendererProd.uiRegionContext = uiRegionContext
 
         if renderMode == ProdRenderMode.EXPORT_VRSCENE:
-            useAnimation = scene.vray.Exporter.animationSettingsVrsceneExport.exportAnimation
+            useAnimation = getVRayPreferences().animationSettingsVrsceneExport.exportAnimation
         elif forceAnimationMode == 'AUTO':
             useAnimation = scene.vray.Exporter.animation_mode == 'ANIMATION'
         else:

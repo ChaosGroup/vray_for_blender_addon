@@ -6,7 +6,6 @@
 # the menus but should still remain active and just not show up in node creation menus.
 HIDDEN_PLUGINS = (
     "TexFresnel",
-    "Float3ToAColor",
     "TexBlend",
     "TexColorCorrect",
     "TexVectorProduct",

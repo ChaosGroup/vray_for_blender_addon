@@ -8,15 +8,14 @@ from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
 from vray_blender.exporting.plugin_tracker import ObjTracker, FakeScopedNodeTracker
 from vray_blender.exporting.tools import FakeTimeStats
-from vray_blender.exporting import obj_export, mtl_export, light_export, settings_export, view_export, world_export, fur_export, instancer_export
+from vray_blender.exporting import obj_export, mtl_export, light_export, settings_export, view_export, world_export, fur_export, instancer_export, reference_collector
 
 from vray_blender import debug
-from vray_blender.lib import path_utils
+from vray_blender.lib import path_utils, export_utils
 from vray_blender.lib.blender_utils import TestBreak
 from vray_blender.lib.camera_utils import ViewParams
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.defs import ExporterContext, UIRegionContext, RendererMode, PersistedState, ProdRenderMode
-from vray_blender.lib.plugin_utils import updateValue
 
 from vray_blender.bin import VRayBlenderLib as vray
 
@@ -309,6 +308,9 @@ class VRayRendererProdBase:
             light_export.syncLightMeshInfo(exporterCtx)
             light_export.collectLightMixInfo(exporterCtx)
 
+            # Discover selector-referenced objects up front so the object pass exports the hidden ones.
+            reference_collector.collectReferencedObjects(exporterCtx)
+
             geomExporter = self._exportObjects(exporterCtx);   TestBreak.check(exporterCtx)
             self._exportMaterials(exporterCtx);                 TestBreak.check(exporterCtx)
             lightExporter = self._exportLights(exporterCtx);   TestBreak.check(exporterCtx)
@@ -326,8 +328,7 @@ class VRayRendererProdBase:
             self._exportWorld(exporterCtx)
             self._exportSettings(exporterCtx)
 
-            if exporterCtx.fullExport:
-                self._linkRenderChannels(exporterCtx)
+            self._exportReferencedPluginParams(exporterCtx)
 
             # Call descendant's interface
             self._exportSceneAdjustments(exporterCtx)
@@ -398,8 +399,7 @@ class VRayRendererProdBase:
 
 
     def _createRenderer(self, exporterType):
-        from vray_blender.lib.export_utils import setupDistributedRendering
-        from vray_blender.engine.render_engine import VRayRenderEngine
+        from vray_blender.lib.export_utils import setupDistributedRendering, setupVRayProfiler
 
         exporter = bpy.context.scene.vray.Exporter
 
@@ -408,6 +408,7 @@ class VRayRendererProdBase:
         settings.renderThreads    = exporter.custom_thread_count if exporter.use_custom_thread_count=='FIXED' else -1
 
         setupDistributedRendering(settings, exporterType)
+        setupVRayProfiler(settings, exporterType)
 
         if self.isPreview:
             settings.previewDir = path_utils.getPreviewDir()
@@ -418,13 +419,12 @@ class VRayRendererProdBase:
             return vray.getMainRenderer(settings)
 
 
-    def _linkRenderChannels(self, exporterCtx: ExporterContext):
-        """ In order for certain plugins to affect the render channels, those render channels
-            must be explicitly listed in a parameter of the plugin. This function updates
-            the relevant plugin properties.
+    def _exportReferencedPluginParams(self, exporterCtx: ExporterContext):
+        """ Apply all plugin parameters that reference other plugins (currently render-channel links),
+            deferred until the whole scene had been exported so every plugin they reference is
+            guaranteed to exist.
         """
-        for pluginData, channelsList in exporterCtx.pluginRenderChannels.items():
-            updateValue(self.renderer, pluginData[0], pluginData[1], channelsList)
+        export_utils.exportReferencedPluginParams(self.renderer, exporterCtx)
 
 
     def _exportObjects(self, exporterCtx: ExporterContext):

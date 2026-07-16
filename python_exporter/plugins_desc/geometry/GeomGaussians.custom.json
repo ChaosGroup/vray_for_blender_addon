@@ -1,0 +1,195 @@
+{
+    "//Comment1": "GeomGaussians is attached to the Object (not its data) because V-Ray Gaussian splats are represented by an Empty object, which has no data block.",
+    "//Comment2": "Overriding the Type to OBJECT makes the property group available as obj.vray.GeomGaussians.",
+    "//Comment3": "The Widget groups the parameters like the V-Ray for C4D layout (General / Lighting / Animation), plus Clipping and Viewport Preview groups.",
+    "//Comment4": "The preview_* and clip_* parameters are 'derived' (not exported to V-Ray): the preview_* ones drive the viewport point cloud, the clip_* ones drive a generated TexDistance used as clipping_mask.",
+    "Name": "V-Ray Gaussians",
+    "Type": "OBJECT",
+    "Parameters": [
+        {
+            "attr": "file",
+            "update": "utils.splat_preview.onSplatFileUpdate"
+        },
+        {
+            "//Comment": "Only expose the two right-handed-coordinate options (as in 3ds Max). Item 2 (Rotate XZ + Flip Y) exists in the plugin specifically for the C4D coordinate system.",
+            "attr": "flip_axis",
+            "items": [
+                [ "0", "As Is", "As Is" ],
+                [ "1", "Rotate YZ", "Rotate YZ" ]
+            ]
+        },
+        {
+            "attr": "preview_type",
+            "default": "2",
+            "desc": "Viewport preview mode for the Gaussian splat",
+            "type": "ENUM",
+            "items": [
+                [ "0", "Disabled", "Do not draw a viewport preview" ],
+                [ "1", "Bounding Box", "Draw only the bounding box of the splat" ],
+                [ "2", "Limited Point Cloud", "Draw a limited number of preview points" ],
+                [ "3", "Unlimited Point Cloud", "Draw all available preview points" ]
+            ],
+            "options": { "derived": true },
+            "update": "utils.splat_preview.onPreviewTypeUpdate"
+        },
+        {
+            "attr": "preview_auto_radius",
+            "default": true,
+            "desc": "Automatically size the preview points from the on-screen extent and point count",
+            "type": "BOOL",
+            "options": { "derived": true }
+        },
+        {
+            "attr": "preview_point_radius",
+            "default": 1.0,
+            "desc": "Size multiplier for the preview points",
+            "type": "FLOAT",
+            "ui": { "min": 0.0, "soft_max": 4.0 },
+            "options": { "derived": true }
+        },
+        {
+            "attr": "preview_point_count",
+            "default": 100000,
+            "desc": "Maximum number of preview points to draw in Limited Point Cloud mode",
+            "type": "INT",
+            "ui": { "min": 5000, "soft_max": 1000000 },
+            "options": { "derived": true }
+        },
+        {
+            "attr": "clip_object",
+            "desc": "Mesh object used to clip the Gaussian splat. A distance texture generated from this object drives the clipping mask",
+            "type": "TEMPLATE",
+            "options": {
+                "derived": true,
+                "template": {
+                    "type": "templateSingleObjectSelect",
+                    "custom_exporter": true,
+                    "args": {
+                        "collection": "objects",
+                        "filter_function": "filters.filterMeshes"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "clip_distance",
+            "default": 0.0,
+            "desc": "Distance from the clip object's surface within which the Gaussians are kept",
+            "type": "FLOAT",
+            "ui": { "min": 0.0, "soft_max": 10.0 },
+            "options": { "derived": true }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "file" },
+                    { "name": "scale" },
+                    { "name": "flip_axis" },
+                    { "name": "affect_camera" },
+                    { "name": "affect_shadows" },
+                    { "name": "affect_reflections" },
+                    { "name": "affect_refractions" },
+                    { "name": "affect_matte_surfaces" },
+                    { "name": "rgb_color_space", "label": "Color Space" },
+                    { "name": "intensity", "slider": true },
+                    { "name": "color" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "lighting",
+                "label": "Lighting",
+                "default_closed": false,
+                "use_prop": "lighting_on",
+                "attrs": [
+                    { "name": "lighting_blend", "slider": true },
+                    { "name": "lighting_shadow_blur" },
+                    { "name": "lighting_shadow_offset" },
+                    { "name": "lighting_normals_mode" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "animation",
+                "label": "Animation",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "anim_offset" },
+                    { "name": "velocity_multiplier" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "clipping",
+                "label": "Clipping",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "clip_object", "label": "Clip Object" },
+                    { "name": "clip_distance" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "viewport_preview",
+                "label": "Viewport Preview",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "preview_type", "label": "Type" },
+                    { "name": "preview_auto_radius", "active": { "cond": "::preview_type>=2" } },
+                    { "name": "preview_point_radius", "active": { "cond": "::preview_type>=2" } },
+                    { "name": "preview_point_count", "active": { "cond": "::preview_type=2" } }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "file"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "flip_axis"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "intensity",
+                        "slider": true
+                    },
+                    {
+                        "name": "color"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "affect_camera"
+                    },
+                    {
+                        "name": "affect_shadows"
+                    },
+                    {
+                        "name": "affect_reflections"
+                    },
+                    {
+                        "name": "affect_refractions"
+                    },
+                    {
+                        "name": "affect_matte_surfaces"
+                    }
+                ]
+            }
+        ]
+    }
+}

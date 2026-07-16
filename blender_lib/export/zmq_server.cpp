@@ -63,6 +63,9 @@ namespace {
 
 	static const auto		ZMQ_SERVER_RESTART_TIMEOUT = 2s;		// Time between restarts when ZmqServer process exits
 	static const auto		ZMQ_SERVER_ENDPOINT_READ_TIMEOUT = 1s;	// Timeout for reading the ZmqServer listen port number after it has been published
+	static const auto		GRACEFUL_SHUTDOWN_TIMEOUT = 30s;		// How long to wait for the server to exit on its own after requesting a graceful
+																	// shutdown, before escalating to SIGKILL. Releasing the license may take a while
+																	// on a slow network, so be generous.
 
 }
 
@@ -97,6 +100,8 @@ void ZmqServer::start(const ZmqServerArgs& args) {
 void ZmqServer::stop() {
 	Logger::info("Blender: Stopping communication channel ...");
 
+	sendMessage(serializeMessage(MsgControlShutdown{}));
+
 	m_stopSource.request_stop();
 
 	{
@@ -109,6 +114,7 @@ void ZmqServer::stop() {
 	if (m_processRunner.joinable()) {
 		m_processRunner.join();
 	}
+
 	m_stopSource = std::stop_source();
 
 	// Since we store python refs in the list we need to destroy the list in GIL. Check if m_pyCallbacks
@@ -276,9 +282,17 @@ void ZmqServer::runServer() {
 				}
 			}
 			else {
-				// Terminating the ZMQ server if a stop is requested.
-				// Otherwise, it will continue running with no way to stop it while Blender is running.
-				zmqServer.terminate();
+				// Give the server a chance to shut down gracefully (releasing its license and
+				// cleaning up the shared memory objects) before killing it.
+				const auto deadline = std::chrono::steady_clock::now() + GRACEFUL_SHUTDOWN_TIMEOUT;
+				while (zmqServer.running() && (std::chrono::steady_clock::now() < deadline)) {
+					std::this_thread::sleep_for(50ms);
+				}
+
+				if (zmqServer.running()) {
+					Logger::warning("ZmqServer did not shut down gracefully, terminating.");
+					zmqServer.terminate();
+				}
 			}
 		}
 	}, m_stopSource.get_token());

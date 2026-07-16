@@ -6,7 +6,7 @@ import bpy
 
 from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
-from vray_blender.nodes import utils as NodeUtils, specials
+from vray_blender.nodes import utils as NodeUtils, links as NodeLinks, specials
 from vray_blender.nodes.tools import isVrayNode
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.exporting.tools import resolveInternalLink
@@ -43,7 +43,7 @@ VRayNodeTypeIcon = {
 }
 
 
-from vray_blender.lib.attribute_utils import getAttrDesc
+from vray_blender.lib.attribute_utils import getAttrDesc, copyPropGroupValues
 
 def _getSearchableEnumVariants(nodePlugin, attrName, labelIdx=1):
     ''' Extract (Value, Label) from an ENUM parameter in the plugin description. '''
@@ -170,6 +170,16 @@ def _nodeOperatorWithSearchableEnumSocket(context: bpy.types.Context, layout: bp
 
             if callbackFunc:
                 callbackFunc(props, value)
+
+
+# VBLD-2305: bump these to outrank a similarly-named node in add-node search. Weight only
+# breaks ties within the top match-score group (higher = first), so Toon must beat the
+# Toon render element's 5.0.
+_SEARCH_WEIGHT_OVERRIDES = {
+    'VRayNodeTexGradRamp':    1.0,  # 'ramp' over V-Ray Color Ramp
+    'VRayNodeEnvironmentFog': 1.0,  # 'env'  over V-Ray Environment
+    'VRayNodeVolumeVRayToon': 6.0,  # 'toon' over the Toon render element (5.0)
+}
 
 
 # Blender mesh attribute data_types that map to V-Ray user-attribute texture nodes.
@@ -396,7 +406,17 @@ class NODE_MT_vray_add_textures(bpy.types.Menu):
         )
 
         for idname, label in buildItemsList('TEXTURE'):
-            _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+            _nodeOperator(layout, idname, label=label,
+                          searchWeight=_SEARCH_WEIGHT_OVERRIDES.get(idname, 0.0), isInSwapMenu = isInSwapMenu)
+
+        # Search-only aliases mapping Cycles terms to the V-Ray texture.
+        if not isInSwapMenu and getattr(context, 'is_menu_search', False):
+            _nodeOperator(layout, 'VRayNodeMetaImageTexture', label='Image', searchWeight=-1.0)  # -> V-Ray Bitmap
+            _nodeOperator(layout, 'VRayNodeTexDirt', label='Ambient Occlusion', searchWeight=-1.0)
+            # TexEdges = Wireframe / Bevel / rounded edges.
+            _nodeOperator(layout, 'VRayNodeTexEdges', label='Wireframe',   searchWeight=-1.0)
+            _nodeOperator(layout, 'VRayNodeTexEdges', label='Bevel',       searchWeight=-1.0)
+            _nodeOperator(layout, 'VRayNodeTexEdges', label='Round Edges', searchWeight=-1.0)
 
         if not isInSwapMenu:
             layout.menu('NODE_MT_vray_add_attributes')
@@ -452,6 +472,32 @@ class NODE_MT_vray_add_texture_utilities(bpy.types.Menu):
     def drawMenu(layout, context, isInSwapMenu = False):
         for idname, label in buildItemsList('TEXTURE', 'UTILITY'):
             _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+
+        if not isInSwapMenu:
+            # 'Separate Color': a Color Arithmetic (TexAColorOp) preset that comes with
+            # the Red/Green/Blue/Alpha channel outputs already exposed, so it acts as a
+            # color splitter out of the box. The outputs are revealed by the
+            # 'internal_separate' update callback when this setting is applied on creation.
+            props = _nodeOperator(layout, 'VRayNodeTexAColorOp', label='Separate Color')
+            s = props.settings.add()
+            s.name  = 'TexAColorOp.internal_separate'
+            s.value = repr('rgba')
+
+            # Search-only alias so typing 'Combine Color' also finds the Compose Color node.
+            if getattr(context, 'is_menu_search', False):
+                _nodeOperator(layout, 'VRayNodeFloat3ToAColor', label='Combine Color', searchWeight=-1.0)
+                # 'Math' -> float/color arithmetic ops.
+                _nodeOperator(layout, 'VRayNodeTexFloatOp',  label='Float Math', searchWeight=-1.0)
+                _nodeOperator(layout, 'VRayNodeTexAColorOp', label='Color Math', searchWeight=-1.0)
+
+                # 'RGB Curves' -> TexRemap (V-Ray's curve remap).
+                _nodeOperator(layout, 'VRayNodeTexRemap', label='RGB Curves', searchWeight=-1.0)
+
+                # 'Fresnel' -> Falloff preset in Fresnel mode.
+                props = _nodeOperator(layout, 'VRayNodeTexFalloff', label='Fresnel', searchWeight=-1.0)
+                s = props.settings.add()
+                s.name  = 'TexFalloff.type'
+                s.value = repr('2')  # Fresnel
 
     def draw(self, context):
         self.drawMenu(self.layout, context)
@@ -627,7 +673,8 @@ class NODE_MT_vray_add_effects(bpy.types.Menu):
     def drawMenu(layout, context, isInSwapMenu = False):
         _nodeOperator(layout, 'VRayNodeEffectsHolder', isInSwapMenu = isInSwapMenu)
         for idname, label in buildItemsList('EFFECT'):
-            _nodeOperator(layout, idname, label=label, isInSwapMenu = isInSwapMenu)
+            _nodeOperator(layout, idname, label=label,
+                          searchWeight=_SEARCH_WEIGHT_OVERRIDES.get(idname, 0.0), isInSwapMenu = isInSwapMenu)
 
     def draw(self, context):
         self.drawMenu(self.layout, context)
@@ -712,6 +759,8 @@ class NODE_MT_vray_add(bpy.types.Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator_context = 'INVOKE_DEFAULT'
+        if _drawNonVRayConversionOptions(layout, context, context.scene.vray.ActiveNodeEditorType):
+            return
         _drawVRayAddMenuContents(layout)
 
 
@@ -822,7 +871,7 @@ def vrayNodeInit(self: bpy.types.Node, context):
 
         _initTemplates(self, pluginModule)
 
-        NodeUtils.autoConnectNode(self)
+        NodeLinks.autoConnectNode(self)
     except Exception as ex:
         debug.printExceptionInfo(ex, f"Failed to init node: {self.vray_plugin}")
         raise ex
@@ -860,6 +909,14 @@ def vrayNodeFree(self: bpy.types.Node):
         # Give the node a chance to de-initialize plugin-specific state
         pluginModule.nodeFree(self)
 
+    # Light nodes sync back to the light's classic propgroup so deleting the tree keeps them
+    # (mirrors decal/fur output nodes; addLightNodeTree does the classic->node copy on create).
+    if self.vray_type == 'LIGHT':
+        light = next((l for l in bpy.data.lights if l.node_tree is self.id_data), None)
+        if light and hasattr(light.vray, self.vray_plugin):
+            copyPropGroupValues(getattr(self, self.vray_plugin),
+                                getattr(light.vray, self.vray_plugin), pluginModule)
+
 
 @classmethod
 def vrayNodePoll(cls: bpy.types.Node, nodetree: bpy.types.NodeTree):
@@ -874,10 +931,15 @@ def vrayNodeUpdate(self: VRayNodeBase):
     super(type(self), self).update()
     parentNodeTree = self.id_data
 
-    # Call custom nodeUpdate() function, if defined
-    pluginModule = getPluginModule(self.vray_plugin)
-    if hasattr(pluginModule, "nodeUpdate"):
-        pluginModule.nodeUpdate(self)
+    # If the node is not connected to the tree output, do not trigger an update.
+    if not NodeUtils.isNodeConnectedToTreeOutput(self):
+        return
+
+    if self.vray_plugin != 'NONE':
+        # Call custom nodeUpdate() function, if defined
+        pluginModule = getPluginModule(self.vray_plugin)
+        if hasattr(pluginModule, "nodeUpdate"):
+            pluginModule.nodeUpdate(self)
 
     # For V-Ray nodes, update the object whose nodetree has changed
     if hasattr(parentNodeTree, 'vray'):
@@ -1194,9 +1256,44 @@ def _drawVRayAddMenuContents(layout, isInSwapMenu = False):
         layout.menu('NODE_MT_vray_add_groups')
 
 
+def _drawNonVRayConversionOptions(layout, context, vrayType):
+    """ Show conversion buttons when material/world is not yet V-Ray.
+        Returns True if conversion buttons were drawn (no further menu items should be added). """
+    snode = context.space_data
+    pinned = snode and snode.pin and snode.id_from
+    if vrayType == 'WORLD':
+        world = snode.id_from if pinned else context.scene.world
+        if not world:
+            return True
+        if not world.vray.is_vray_class:
+            layout.operator_context = 'INVOKE_DEFAULT'
+            layout.operator("vray.add_nodetree_world", icon="NODETREE", text="New V-Ray World Nodes")
+            return True
+    elif vrayType == 'SHADER':
+        mtl = snode.id_from if pinned else (context.object.active_material if context.object else None)
+        if mtl is not None and not mtl.vray.is_vray_class:
+            layout.operator_context = 'INVOKE_DEFAULT'
+            layout.operator("vray.replace_nodetree_material", icon="NODETREE", text="Use V-Ray Material Nodes")
+            if mtl.use_nodes:
+                layout.operator("vray.convert_nodetree_material", icon="NODE_MATERIAL", text="Convert to V-Ray Material")
+            return True
+    return False
+
+
 def _drawVRayAddMenuHook(self, context):
+    if not (spaceData := context.space_data):
+        return
+    if spaceData.tree_type != 'VRayNodeTreeEditor':
+        return
+
+    vrayType = context.scene.vray.ActiveNodeEditorType
+    layout = self.layout
+
+    if _drawNonVRayConversionOptions(layout, context, vrayType):
+        return
+
     if _vrayMenuPoll(context):
-        _drawVRayAddMenuContents(self.layout)
+        _drawVRayAddMenuContents(layout)
 
 
 def _drawVRaySwapMenuHook(self, context: bpy.types.Context):

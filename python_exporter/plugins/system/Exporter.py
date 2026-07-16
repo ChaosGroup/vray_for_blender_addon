@@ -51,53 +51,6 @@ def _enableVisualDebuggerUpdate(self, context):
     vray.setVisualDebuggerEnabled(self.enable_visual_debugger)
 
 
-# Custom export animation settings as a separate property group
-class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
-    customFrameStart: bpy.props.IntProperty(
-        name = "Start Frame",
-        description = "Start frame for export (overrides scene frame start during VRScene export only)",
-        default = 1,
-        min = 0
-    )
-
-    customFrameEnd: bpy.props.IntProperty(
-        name = "End Frame",
-        description = "End frame for export (overrides scene frame end during VRScene export only)",
-        default = 250,
-        min = 0
-    )
-
-    customFrameStep: bpy.props.IntProperty(
-        name = "Frame Step",
-        description = "Frame step for export (overrides scene frame step during VRScene export only)",
-        default = 1,
-        min = 0
-    )
-
-    customFramesList: bpy.props.StringProperty(
-        name = "Frames",
-        description = "A list of frames to export (e.g. 1,3-10:3)",
-        default = ""
-    )
-
-    exportAnimation: bpy.props.BoolProperty(
-        name = "Export Animation",
-        description = "Export animation frames",
-        default = False
-    )
-
-    frameRangeMode: bpy.props.EnumProperty(
-        name='Animation Mode',
-        description='How to handle animation during export',
-        items = (
-            ("SCENE_RANGE", "Scene Range", "Use scene frame range"),
-            ("CUSTOM_RANGE", "Custom Range", "Use custom frame range"),
-            ("CUSTOM_FRAMES", "Custom Frames", "Use custom list of frames")
-        ),
-        default = "SCENE_RANGE"
-    )
-
-
 def _syncLinkedDenoiserEngine(exporter, context):
     from vray_blender.nodes.utils import getChannelsOutputNode
     from vray_blender.exporting.world_export import sockConnectedToDenoiser
@@ -219,124 +172,6 @@ class VRayExporter(bpy.types.PropertyGroup):
         default = False
     )
 
-    export_scene_file_path: bpy.props.StringProperty(
-        name = "File path",
-        default = '',
-        description = "Path to the exported .vrscene file"
-    )
-
-    export_proxy_file_path: bpy.props.StringProperty(
-        name = "File path",
-        default = '',
-        description = "Path to the exported .vrmesh file"
-    )
-
-    export_proxy_scope: bpy.props.EnumProperty(
-        name = "Export",
-        description = "Choose whether proxy export includes the whole scene or only selected objects",
-        items = (
-            ('SELECTION', "Selected Objects", "Export only selected objects"),
-            ('WHOLE_SCENE', "Whole Scene", "Export all eligible scene objects"),
-        ),
-        default = 'SELECTION'
-    )
-
-    export_proxy_add_to_scene: bpy.props.BoolProperty(
-        name = "Add Proxy to Scene",
-        description = "After export, import the .vrmesh as a V-Ray Proxy object at the 3D cursor",
-        default = False,
-    )
-
-    export_proxy_remove_exported_objects: bpy.props.BoolProperty(
-        name = "Remove Exported Objects",
-        description = "After a successful export, delete the source objects that were written to the proxy",
-        default = False,
-    )
-
-    export_proxy_elements_per_voxel: bpy.props.IntProperty(
-        name = "Elements per Voxel",
-        description = "Target number of triangles in each voxel before subdivision (0 uses exporter default)",
-        default = 0,
-        min = 0,
-    )
-
-    export_proxy_preview_faces: bpy.props.IntProperty(
-        name = "Preview Faces",
-        description = "Approximate number of preview mesh triangles (0 disables preview geometry)",
-        default = 10000,
-        min = 0,
-    )
-
-    export_proxy_preview_type: bpy.props.EnumProperty(
-        name = "Preview Type",
-        description = "Method used to build the proxy preview mesh",
-        items = (
-            ('0', "Face Sampling", "Fastest; copies faces; triangles may look disconnected"),
-            ('1', "Clustering", "Grid-based vertex reduction; robust on disconnected geometry"),
-            ('2', "Edge Collapse", "Best quality where the mesh is connected; slower"),
-            ('3', "Combined", "Clustering then edge collapse; recommended default"),
-        ),
-        default = '3',
-    )
-
-    export_proxy_animation_range: bpy.props.EnumProperty(
-        name = "Animation Range",
-        description = "Whether the proxy stores a single frame or a frame range",
-        items = (
-            ('CURRENT_FRAME', "Current Frame", "Export geometry for the current frame only"),
-            ('FRAME_RANGE', "Frame Range", "Export an animated proxy using start and end frame"),
-        ),
-        default = 'CURRENT_FRAME',
-    )
-
-    export_proxy_start_frame: bpy.props.IntProperty(
-        name = "Start Frame",
-        description = "First frame when Animation Range is set to Frame Range",
-        default = 0,
-    )
-
-    export_proxy_end_frame: bpy.props.IntProperty(
-        name = "End Frame",
-        description = "Last frame when Animation Range is set to Frame Range",
-        default = 10,
-        min = 0,
-    )
-
-    export_material_preview_scene: bpy.props.BoolProperty(
-        name = "Export material preview scene",
-        description = "Export a .vrscene for the material preview. The scene path is the vrscene path set above but with a '_preview' suffix",
-        default = False
-    )
-
-    export_scene_compressed: bpy.props.BoolProperty(
-        name = "Compressed",
-        description = "Compress geometric information so that the resulting .vrscene file is smaller. Only valid if 'Meshes in HEX Format' is enabled",
-        default = True
-    )
-
-    export_scene_hex_meshes: bpy.props.BoolProperty(
-        name = "Meshes in HEX Format",
-        description = "Write geometric information as binary data to avoid round-off errors",
-        default = True
-    )
-
-    export_scene_hex_transforms: bpy.props.BoolProperty(
-        name = "Transforms in HEX Format",
-        description = "Write object matrices information as binary data to avoid round-off errors",
-        default = True
-    )
-
-    export_scene_separate_files: bpy.props.BoolProperty(
-        name = "Separate Files",
-        description = "Write each object category to a separate file",
-        default = False
-    )
-
-    export_scene_plugin_types: bpy.props.StringProperty(
-        name = 'Export File Types',
-        description = 'Export file types separated by comma'
-    )
-
     materialListIndex: bpy.props.IntProperty(
         name        = "Material List Index",
         description = "Material list index",
@@ -384,10 +219,6 @@ class VRayExporter(bpy.types.PropertyGroup):
         name = "Use Frame Range",
         description = "Use frame range instead of explicit list of frame numbers",
         default = True
-    )
-
-    animationSettingsVrsceneExport: bpy.props.PointerProperty(
-        type=AnimationSettingsVrsceneExport
     )
 
     draft: bpy.props.BoolProperty(
@@ -638,7 +469,6 @@ def getRegClasses():
     return (
         ComputeDeviceSelector,
         ComputeDevices,
-        AnimationSettingsVrsceneExport,
         VRayExporter,
     )
 

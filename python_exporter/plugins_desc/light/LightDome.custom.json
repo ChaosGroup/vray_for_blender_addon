@@ -319,6 +319,61 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "dome_finite_on",
+                        "label": "Finite Dome"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::dome_finite_on != 0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "finite_radius"
+                            },
+                            {
+                                "name": "finite_cameraHeight"
+                            },
+                            {
+                                "name": "finite_groundBlend"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
         ]
     },
     "Node": {

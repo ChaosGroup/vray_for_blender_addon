@@ -107,6 +107,7 @@ enum class MsgType : char {
 	RendererSetCurrentCamera,
 	RendererSetCommitAction,
 	RendererSetVfbOptions,
+	RendererSetVRayProfiler,
 	RendererSetViewportImageFormat,
 	RendererSetRenderRegion,
 	RendererSetCropRegion,
@@ -158,6 +159,11 @@ enum class MsgType : char {
 	ControlLogVfbMessage,
 	ControlClearVfbImage,
 	ControlSetVisualDebugger,
+	ControlClearBitmapCache,
+	ControlUpdateLightingAnalysis,
+	ControlShutdown,                ///< Client -> server: request a graceful shutdown so destructors run and the license is released.
+	ControlOpenVerasViewport,
+	ControlOpenVerasVfb,
 	LastControlMessage,
 
 	// Control events
@@ -591,6 +597,7 @@ SERIALIZE_EMPTY_MESSAGE(RendererReset);
 EMPTY_PROTO_MESSAGE(RendererAbort);
 SERIALIZE_EMPTY_MESSAGE(RendererAbort);
 
+
 /// MsgRendererInit
 PROTO_MESSAGE(RendererInit,
 	RendererType rendererType;
@@ -686,6 +693,22 @@ PROTO_MESSAGE(RendererSetRenderMode,
 
 SERIALIZE_MESSAGE(RendererSetRenderMode,
 	PARAM(renderMode)
+);
+
+
+/// MsgRendererSetVRayProfiler
+PROTO_MESSAGE(RendererSetVRayProfiler,
+	int mode;					// VRay::VRayProfilerSettings::Mode (0 = Off)
+	int maxDepth;				// Max ray depth to profile, range [1, 8]
+	std::string outputDirectory;	// Directory for the profiler reports ("" => temp dir)
+	std::string sceneName;			// Name of the profiled scene (filename suffix)
+);
+
+SERIALIZE_MESSAGE(RendererSetVRayProfiler,
+	PARAM(mode)
+	PARAM(maxDepth)
+	PARAM(outputDirectory)
+	PARAM(sceneName)
 );
 
 
@@ -1151,6 +1174,39 @@ SERIALIZE_EMPTY_MESSAGE(ControlResetVfbToolbar);
 EMPTY_PROTO_MESSAGE(ControlClearVfbImage);
 SERIALIZE_EMPTY_MESSAGE(ControlClearVfbImage);
 
+/// MsgControlClearBitmapCache - frees all cached bitmaps. Sent by the client on scene reload.
+EMPTY_PROTO_MESSAGE(ControlClearBitmapCache);
+SERIALIZE_EMPTY_MESSAGE(ControlClearBitmapCache);
+/// MsgControlUpdateLightingAnalysis - re-applies the Lighting Analysis render element's
+/// display settings (quantity, value range, scale, display mode) to the current render in
+/// the VFB without re-rendering. Triggered by the Lighting Analysis channel's Update button.
+EMPTY_PROTO_MESSAGE(ControlUpdateLightingAnalysis);
+SERIALIZE_EMPTY_MESSAGE(ControlUpdateLightingAnalysis);
+
+/// MsgControlShutdown - request a graceful server shutdown. Sent by the client when Blender is
+/// closing or the addon is disabled, so the server runs its normal teardown (renderer destructors
+/// unlink the shared memory objects and the GUI license is released) instead of being SIGKILL'd.
+EMPTY_PROTO_MESSAGE(ControlShutdown);
+SERIALIZE_EMPTY_MESSAGE(ControlShutdown);
+
+/// MsgControlOpenVerasViewport - open Chaos Veras seeded with a captured Blender 3D
+/// viewport image. imagePath is an absolute path to a temp image (JPEG) written by the
+/// addon. Used for the "Viewport Image to Veras" menu command. Pressing the VFB toolbar's
+/// own Veras button is driven directly by the AppSDK via the setOnVerasUpload callback and
+/// needs no message.
+PROTO_MESSAGE(ControlOpenVerasViewport,
+	std::string imagePath;
+);
+SERIALIZE_MESSAGE(ControlOpenVerasViewport,
+	PARAM(imagePath)
+);
+
+/// MsgControlOpenVerasVfb - open Chaos Veras seeded with the current V-Ray Frame Buffer
+/// image. Used for the "VFB Image to Veras" menu command (as opposed to pressing the VFB
+/// toolbar's own Veras button, which the AppSDK drives directly with no message needed).
+EMPTY_PROTO_MESSAGE(ControlOpenVerasVfb);
+SERIALIZE_EMPTY_MESSAGE(ControlOpenVerasVfb);
+
 /// MsgControlSetVfbRenderRegion - sets the VFB Render Region rectangle and toolbar
 /// button state. When 'enabled' is false (or width/height are invalid), the render
 /// region is cleared (renders the whole image) and the toolbar button is turned off.
@@ -1373,7 +1429,6 @@ PROTO_MESSAGE(ControlSetVisualDebugger,
 SERIALIZE_MESSAGE(ControlSetVisualDebugger,
 	PARAM(enable)
 );
-
 
 };  // end VrayZmqWrapper namespace
 

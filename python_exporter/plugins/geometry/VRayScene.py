@@ -8,6 +8,7 @@ import bpy
 from vray_blender import debug
 from vray_blender.lib import plugin_utils, export_utils
 from vray_blender.lib.blender_utils import hasShadowedAttrChanged, getShadowAttr, updateShadowAttr, isViewportRenderMode
+from vray_blender.vray_tools.vray_proxy import loadVRayScenePreviewMesh
 from vray_blender.lib.defs import PluginDesc
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -19,23 +20,24 @@ def isEditEnabled(propGroup: dict, node: bpy.types.Node):
 
 def onUpdatePreviewFile(src, context: bpy.types.Context, attrName: str):
     assert attrName == 'filepath'
-    
-    vrayScene = context.active_object.data.vray.VRayScene
+    vrayScene = src
     filePrevValue = getShadowAttr(vrayScene, 'filepath')
 
     if filePrevValue == vrayScene.filepath:
         return
-    
+
     if not os.path.exists(bpy.path.abspath(vrayScene.filepath)):
         debug.reportError(f"File not found: {vrayScene.filepath}")
         vrayScene['filepath'] = filePrevValue
         return
-    
-    bpy.ops.vray.vrayscene_generate_preview('EXEC_DEFAULT')
+
+    if err := loadVRayScenePreviewMesh(vrayScene, bpy.path.abspath(vrayScene.filepath)):
+        debug.reportError(err)
 
 
 def onUpdatePreview(src, context: bpy.types.Context, attrName: str):
-    bpy.ops.vray.vrayscene_generate_preview('EXEC_DEFAULT')
+    if err := loadVRayScenePreviewMesh(src, bpy.path.abspath(src.filepath)):
+        debug.reportError(err)
 
 
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
@@ -62,4 +64,4 @@ def widgetDrawFilepath(context: bpy.types.Context, layout: bpy.types.UILayout, p
     row.prop(propGroup, 'filepath', text=widgetAttr.get('label', 'File Path'))
     op = row.operator('vray.proxy_path_browser', icon = 'FILE_FOLDER', text="")
     op.is_proxy = False
-    op.object_name = context.active_object.name
+    op.mesh_name = context.active_object.data.name

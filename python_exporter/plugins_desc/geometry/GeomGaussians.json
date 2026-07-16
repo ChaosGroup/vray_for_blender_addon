@@ -123,6 +123,69 @@
             {
                 "display_name" : "Start offset"
             }
+        },
+        
+        {
+            "attr" : "lighting_on",
+            "default" : false,
+            "desc" : "Enable lighting on Gaussian splats",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "lighting_blend",
+            "default" : 1.0,
+            "desc" : "How much to blend the lighting with the original splat color",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "lighting_shadow_blur",
+            "default" : 1.0,
+            "desc" : "Distance in scene units for blurring the shadows",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "lighting_shadow_offset",
+            "default" : 0.50,
+            "desc" : "Offset for the middle of the shadow blur interval",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 10.0,
+                "soft_min" : -10.0
+            }
+        },
+        
+        {
+            "attr" : "lighting_normals_mode",
+            "default" : "1",
+            "desc" : "Defines how to compute normals for lighting calculations",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Intrinsic (compute if needed)", "Intrinsic (compute if needed)" ],
+                [ "2", "Computed (force calculation)", "Computed (force calculation)" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "velocity_multiplier",
+            "default" : 1.0,
+            "desc" : "A multiplier for the velocity channel if present",
+            "type" : "FLOAT"
         }
     ],
     "Type" : "GEOMETRY",

@@ -67,6 +67,9 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
         update      = selectedObjectTagUpdate
     )
 
+    def onLinkConnected(self):
+        self.use = True
+
     def draw(self, context, layout, node, text):
         if isGPUEngine(context.scene):
             self._drawGPU(context, layout, node, text)

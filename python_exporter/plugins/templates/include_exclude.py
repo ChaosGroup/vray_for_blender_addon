@@ -10,7 +10,7 @@ from vray_blender.lib.attribute_utils import getAttrDesc
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.nodes.utils import getNodeOfPropGroup, selectedObjectTagUpdate
-from vray_blender.plugins import getPluginAttr
+from vray_blender.plugins import getPluginAttr, getPluginModule
 from vray_blender.plugins.templates import multi_select
 from vray_blender.plugins.templates.common import VRayObjectSelector
 
@@ -72,6 +72,14 @@ class TemplateIncludeExclude(multi_select.TemplateMultiObjectSelect):
             col = panel.column()
             super().draw(col, context, pluginModule, propGroup, widgetAttr, text, nested=True)
     
+
+    def resetToDefaults(self):
+        super().resetToDefaults()
+        # The inclusion mode default is derived from its bound property's default.
+        modeBoundProperty = self.getTemplateAttr('mode_bound_property')
+        inclusionAttr = getAttrDesc(getPluginModule(self.vray_plugin), modeBoundProperty)
+        self.inclusionMode = '1' if inclusionAttr['default'] else '0'
+
 
     def getInclude(self):
         return self.inclusionMode == '1'

@@ -7,7 +7,7 @@ import bpy
 
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addOutput
-from vray_blender.nodes import utils as NodeUtils
+from vray_blender.nodes import links as NodeLinks
 from vray_blender.lib import plugin_utils, draw_utils
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.plugins import PLUGINS
@@ -73,7 +73,7 @@ class VRayObjectMatteProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Matte")
-        NodeUtils.autoConnectObjectNode(self, 'Matte')
+        NodeLinks.autoConnectObjectNode(self, 'Matte')
 
 
 
@@ -97,7 +97,7 @@ class VRayObjectSurfaceProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Surface")
-        NodeUtils.autoConnectObjectNode(self, 'Surface')
+        NodeLinks.autoConnectObjectNode(self, 'Surface')
 
 
 class VRayObjectVisibilityProps(VRayObjectProps):
@@ -121,7 +121,7 @@ class VRayObjectVisibilityProps(VRayObjectProps):
 
     def init(self, context):
         addOutput(self, 'VRaySocketObjectProps', "Visibility")
-        NodeUtils.autoConnectObjectNode(self, 'Visibility')
+        NodeLinks.autoConnectObjectNode(self, 'Visibility')
 
     def fillReflectAndRefractLists(self, exporterCtx: ExporterContext, pluginDesc: PluginDesc):
         """ Fills the reflection and refraction exclusion lists with objects selected in the property panel of visibility props.

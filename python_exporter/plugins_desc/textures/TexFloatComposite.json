@@ -1,0 +1,42 @@
+
+{
+    "Desciption" : "TexFloatComposite",
+    "ID" : "TexFloatComposite",
+    "Name" : "Float Composite",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "float_a",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "float_b",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        },
+        
+        {
+            "attr" : "operation",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "factor",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE"
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

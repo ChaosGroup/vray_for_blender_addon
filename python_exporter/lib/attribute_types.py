@@ -14,6 +14,20 @@ PluginTypes = {
 }
 
 
+# Socket properties that hold structure/state rather than a user value, and so must NOT be reset
+# when resetting a node's dynamically-created sockets to defaults.
+StructuralSocketProps = frozenset({
+    'add_operator',
+    'del_operator',
+    'is_open',
+    'nest_level',
+    'ui_enabled',
+    'vray_attr',
+    'vray_plugin',
+    'vray_socket_base_type',
+})
+
+
 # Attributes won't be generated for the SkippedTypes
 SkippedTypes = {
     'LIST',
@@ -305,5 +319,5 @@ CompatibleNonVrayNodes = {
     'ShaderNodeGamma', # full
     'ShaderNodeHueSaturation', # full
     'ShaderNodeBrightContrast', # full
-    'ShaderNodeTexNoise', # none
+    'ShaderNodeTexNoise', # full
 }

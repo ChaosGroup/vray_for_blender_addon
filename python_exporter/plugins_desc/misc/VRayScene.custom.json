@@ -134,7 +134,27 @@
                     }
                 ]
             }
-       ]
+       ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "active": {
+                    "cond": "plugins.geometry.VRayScene.isEditEnabled"
+                },
+                "attrs": [
+                    {
+                        "name": "filepath",
+                        "custom_draw": "widgetDrawFilepath"
+                    },
+                    {
+                        "name": "previewType"
+                    },
+                    {
+                        "name": "flip_axis"
+                    }
+                ]
+            }
+        ]
     },
     "Type": "GEOMETRY",
     "Options": {

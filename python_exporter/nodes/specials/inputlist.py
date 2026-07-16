@@ -7,6 +7,7 @@ import bpy
 
 from ..importing import _getInputSocketNameByAttr
 from ..sockets import addInput, addOutput
+from ..links import autoConnectSingleSocket
 from ..operators import sockets as SocketOperators
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 
@@ -47,6 +48,7 @@ class VRayPluginListHolder(VRayNodeBase):
     def init(self, context):
         addInput(self, 'VRaySocketObject', "Plugin")
         addOutput(self, 'VRaySocketObjectList', "List")
+        autoConnectSingleSocket(self)
 
     def draw_buttons(self, context, layout):
         split = layout.split()

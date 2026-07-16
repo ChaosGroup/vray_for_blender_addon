@@ -360,6 +360,58 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "distribution"
+                    },
+                    {
+                        "name": "perFace",
+                        "active": {
+                            "cond": "::distribution=0"
+                        }
+                    },
+                    {
+                        "name": "perArea",
+                        "active": {
+                            "cond": "::distribution=1"
+                        }
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "length_base"
+                    },
+                    {
+                        "name": "thickness_base"
+                    },
+                    {
+                        "name": "gravity_base"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "curl_enabled"
+                    },
+                    {
+                        "name": "curl_radius",
+                        "active": {
+                            "cond": "::curl_enabled=1"
+                        }
+                    },
+                    {
+                        "name": "curl_angle",
+                        "active": {
+                            "cond": "::curl_enabled=1"
+                        }
+                    }
+                ]
+            }
         ]
     },
     "Options": {

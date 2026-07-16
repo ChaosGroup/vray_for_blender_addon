@@ -202,7 +202,7 @@ class DecalBBoxGizmoGroup(bpy.types.GizmoGroup):
             gizmo = self.gizmos.new('GIZMO_GT_move_3d')
             gizmo.draw_style = 'RING_2D'
             gizmo.use_draw_modal = True
-            gizmo.color = (0.8, 0.3, 0.3)
+            gizmo.color = _GIZMO_DEFAULT_COLOR
             gizmo.alpha = 1
             gizmo.color_highlight = (1, 1, 1)
             gizmo.alpha_highlight = 1.0
@@ -318,10 +318,47 @@ class DecalBBoxGizmoGroup(bpy.types.GizmoGroup):
         if obj is None or obj.type != 'MESH' or not obj.vray.isVRayDecal:
             return
 
+        vrayDecal = getDecalPropGroup(obj)
+        isBox = vrayDecal.decal_type == '0'
+        axes = self.axesBox if isBox else self.axesCylinder
+
+        themeUI = context.preferences.themes[0].user_interface
+        # Theme axis colors may be RGB or RGBA; keep only the RGB components for gizmo.color.
+        axisColors = (tuple(themeUI.axis_x)[:3], tuple(themeUI.axis_y)[:3], tuple(themeUI.axis_z)[:3])
+
+        # Direction the viewer is looking, pointing from the camera into the scene.
+        viewForward = None
+        if context.region_data is not None:
+            viewMatrix = mathutils.Matrix(context.region_data.view_matrix)
+            viewForward = viewMatrix.inverted().to_3x3() @ mathutils.Vector((0.0, 0.0, -1.0))
+
+        mat = context.object.matrix_world.copy()
+
         for index, gizmo in enumerate(self.gizmos):
-            mat = context.object.matrix_world.copy()
+            # The box gizmo's last point is an immovable origin point; hide it.
+            gizmo.hide = isBox and index == 5
+            if gizmo.hide:
+                continue
+
             gizmo.matrix_space = mat
             gizmo.scale_basis = 0.1 / mat.to_scale().length
+
+            color = _getGizmoAxisColor(axes[index], axisColors)
+
+            # The cylinder's two X handles (the start/end angle points) sit on the opposite side
+            # from their axis vector, so flip the normal used for the facing-away test.
+            outwardAxis = axes[index]
+            if not isBox and index in (0, 1):
+                outwardAxis = outwardAxis * -1.0
+
+            # Dim dots whose outward normal points away from the viewer, as a cue to
+            # which direction the dot resizes the gizmo.
+            if viewForward is not None:
+                outwardNormal = mat.to_quaternion() @ outwardAxis
+                if outwardNormal.dot(viewForward) > 0.0:
+                    color = tuple(c * _GIZMO_DIM_FACTOR for c in color)
+
+            gizmo.color = color
 
 
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
@@ -402,19 +439,21 @@ def linkSelectedObjects(context, decalObj: bpy.types.Object):
             decalObj.data.vray.VRayDecal.decal_object_selector.addListItem(context, obj)
 
 
-def generateDecalPreviewMesh(obj: bpy.types.Object, propGroup):
+def generateDecalPreviewMesh(obj: bpy.types.Object):
     if (not obj) or (not isObjectVRayDecal(obj)):
         # This function is called from sites that pass context.active_object to it.
         # During decal object creation, the active object may not be the decal itself.
         return
 
-    match propGroup.decal_type:
+    # Read decal_type from the propgroup the preview builders use (node output, else data).
+    decalPropGroup = getDecalPropGroup(obj)
+    match decalPropGroup.decal_type:
         case '0':
             createBoxPreviewMesh(obj)
         case '1':
             createCylinderPreviewMesh(obj)
         case _:
-            assert False, f"Unknown decal type {propGroup.decal_type}"
+            assert False, f"Unknown decal type {decalPropGroup.decal_type}"
 
 
 def onUpdateDecalLockAspectRatio(propGroup, context: bpy.types.Context, attrName: str):
@@ -435,7 +474,13 @@ def onUpdateDecalMesh(propGroup, context: bpy.types.Context, attrName: str):
             propGroup.width = length * aspectRatio
 
     ALLOW_UPDATE_ASPECT_RATIO = True
-    generateDecalPreviewMesh(context.active_object, propGroup)
+    # Resolve the decal's object from the propgroup, not context.active_object: the latter is
+    # absent/wrong when the size is edited from the V-Ray Scene Lister's Preferences window.
+    # id_data is the mesh (data propgroup) or the node tree (node propgroup) - match both.
+    idData = propGroup.id_data
+    obj = next((o for o in bpy.data.objects
+                if isObjectVRayDecal(o) and (o.data is idData or o.vray.ntree is idData)), None)
+    generateDecalPreviewMesh(obj)
 
 
 def drawDecalGizmoCallback():
@@ -521,6 +566,22 @@ def drawDecalGizmoCallback():
     gpu.state.line_width_set(oldWidth)
 
 _drawHandler = None
+
+# Default color for gizmo points not bound to a local axis (e.g. the box's immovable origin point).
+_GIZMO_DEFAULT_COLOR = (0.8, 0.3, 0.3)
+
+# Multiplier applied to the color of gizmo dots whose outward normal points away from the viewer.
+_GIZMO_DIM_FACTOR = 0.7
+
+def _getGizmoAxisColor(axis: mathutils.Vector, axisColors):
+    """ Return the theme axis color (X/Y/Z) matching the axis the gizmo point operates along.
+        'axisColors' is a tuple of the X, Y and Z theme axis colors.
+    """
+    for i in range(3):
+        if axis[i] != 0.0:
+            return axisColors[i]
+    return _GIZMO_DEFAULT_COLOR
+
 
 def _getCylinderParams(vrayDecal: bpy.types.PropertyGroup):
     bend = max(vrayDecal.bend, 0.01)

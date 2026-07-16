@@ -63,6 +63,16 @@ def addCoatLayer(node: bpy.types.Node) -> bpy.types.NodeSocket:
     return newBrdfSock
 
 
+def nodeReset(node: bpy.types.Node):
+    """ Re-apply the creation-time values to the existing coat-layer sockets (count preserved). """
+    for i in range(1, _getLayersCount(node) + 1):
+        _, weightSockName, opacitySockName = getLayerSocketNames(i)
+        if weightSock := node.inputs.get(weightSockName):
+            weightSock.setValue((0.5, 0.5, 0.5))
+        if opacitySock := getHiddenInput(node, opacitySockName):
+            opacitySock.setValue(1.0)
+
+
 def nodeInsertLink(link: bpy.types.NodeLink):
     node = link.to_node
     if link.to_socket.bl_idname == 'VRaySocketExtend':

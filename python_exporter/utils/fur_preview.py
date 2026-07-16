@@ -292,6 +292,7 @@ def drawFurPreview():
     if not furDataForDrawing:
         _generateHairRootsBuffers(bpy.context.scene, bpy.context.evaluated_depsgraph_get())
 
+    prevDepthTest = gpu.state.depth_test_get()
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.line_width_set(1.0)
 
@@ -301,6 +302,8 @@ def drawFurPreview():
                 # Don't draw fur preview for objects that are not visible in local view
                 continue
             _drawFurPreviewBatch(furObj, matrix, buffers)
+
+    gpu.state.depth_test_set(prevDepthTest)
 
 
 def _generateHairRootsBuffers(scene: bpy.types.Scene, depsgraph: bpy.types.Depsgraph):

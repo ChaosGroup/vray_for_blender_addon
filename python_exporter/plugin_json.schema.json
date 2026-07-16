@@ -269,6 +269,12 @@
                             "display_name": {
                                 "type": "string"
                             },
+                            "file_extensions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            },
                             "attributes": {
                                 "type": "array"
                             },
@@ -290,19 +296,29 @@
                                 ]
                             },
                             "soft_min": {
-                                "type": "number"
+                                "type": ["number", "null"],
+                                "description": "null means no limit - Blender's own property default applies instead of clamping."
                             },
                             "soft_max": {
-                                "type": "number"
+                                "type": ["number", "null"],
+                                "description": "null means no limit - Blender's own property default applies instead of clamping."
                             },
                             "min": {
-                                "type": "number"
+                                "type": ["number", "null"],
+                                "description": "null means no limit - Blender's own property default applies instead of clamping."
                             },
                             "max": {
-                                "type": "number"
+                                "type": ["number", "null"],
+                                "description": "null means no limit - Blender's own property default applies instead of clamping."
                             },
                             "spin_step": {
                                 "type": "number"
+                            },
+                            "file_extensions": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
                             }
                         }
                     },

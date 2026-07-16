@@ -55,8 +55,14 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
         Otherwise, determine which materials have been updated and remove them from
         the cache so that they will be re-exported.
     """
+    # Animated sequence bitmaps only need re-exporting when the frame actually changes - not on
+    # every IPR edit (object moves, etc.). Track the previous frame to gate that re-export.
+    frameChanged = exporterCtx.currentFrame != exporterCtx.persistedState.lastExportedFrame
+    exporterCtx.persistedState.lastExportedFrame = exporterCtx.currentFrame
+
     if exporterCtx.fullExport:
         exporterCtx.exportedMtls.clear()
+        exporterCtx.animatedBitmapMaterials.clear()
     else:
         _tagForUpdateMtlWithSelectorNode(exporterCtx)
 
@@ -87,6 +93,13 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
 
         updatedMtls = updatedMtls.union(mtlsWithRemovedNodeTrees).union(mtlsWithUpdatedTextures)
         updatedMtlIDs = [getObjTrackId(mtl) for mtl in updatedMtls]
+
+        # On a frame change, also re-export materials with animated sequence bitmaps so their
+        # frame_number is re-keyed. The registry was filled during the previous export (no node-tree
+        # scan), and is rebuilt by the re-exports triggered this pass.
+        if frameChanged:
+            updatedMtlIDs += exporterCtx.animatedBitmapMaterials
+            exporterCtx.animatedBitmapMaterials.clear()
 
         for mtlId in (exporterCtx.exportedMtls.keys() & updatedMtlIDs):
             del exporterCtx.exportedMtls[mtlId]

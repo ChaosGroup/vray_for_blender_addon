@@ -286,6 +286,8 @@ class InstancerExporter(ExporterBase):
         updatedFurGizmoObjTrackIdSet = set(p.gizmoObjTrackId for p in self.updatedFurInfo) # Objects selected by fur objects that have been updated.
 
         # Tracks source light objects whose `LightXxx` plugin we have ensured during this pass.
+        # In 'instanced' LightMix mode the entries are (objTrackId, instancerTrackId) tuples, since a
+        # dedicated light plugin is exported per (instancer, light) pair; otherwise plain objTrackId.
         exportedLights = set()
 
         for inst in self.dg.object_instances:
@@ -340,6 +342,13 @@ class InstancerExporter(ExporterBase):
         # Export the collected instancer data
         self.export()
 
+    def _useInstancedLightMix(self):
+        """ True when the active LightMix render channel is in 'instanced' mode and we are producing
+            LightMix render channels (production or IPR-VFB export).
+        """
+        return (self.activeLightMixNode is not None) \
+            and (self.activeLightMixNode.RenderChannelLightMix.mode == 'instanced') \
+            and (self.production or self.iprVFB)
 
     def _exportLightInstance(self, inst: bpy.types.DepsgraphObjectInstance, exportedLights: set):
         obj = inst.instance_object
@@ -348,19 +357,36 @@ class InstancerExporter(ExporterBase):
         if obj.data.vray.light_type == 'MESH':
             return
 
-        objTrackId = getObjTrackId(obj)
+        useLightMix = self._useInstancedLightMix()
+        instancerObj = inst.parent
+        instancedName = Names.instancedLight(obj, instancerObj) if useLightMix else Names.object(obj)
 
-        if objTrackId not in exportedLights:
+        # In 'instanced' LightMix mode, each object that instances lights gets its own LightSelect
+        # render channel, and each instanced light is exported as a dedicated plugin (separate from
+        # the source light) so its contribution is attributable to that channel. This only applies
+        # to full production/IPR-VFB exports, where LightMix render channels are produced.
+        # For that reason, we need to use the instancer object track id to identify the light as there could be
+        # multiple instancers that instance the same light.
+        exportedLightKey = (getObjTrackId(obj), getObjTrackId(instancerObj)) if useLightMix else getObjTrackId(obj)
+
+        if exportedLightKey not in exportedLights:
             # If the original light is visible, we don't need to export it again.
             originalIsVisible = obj.original.visible_get() if self.interactive else not obj.original.hide_render
-            if not originalIsVisible:
-                with self.objectContext.push(obj):
-                    self.lightExporter.exportLight(obj)
-                
-                # Disable the light plugin, so that the original light is not visible in the render result.
-                vray.pluginUpdateInt(self.renderer, Names.object(obj), 'enabled', False)
+            exportLightPlugin = useLightMix or (not originalIsVisible)
 
-            exportedLights.add(objTrackId)
+            if exportLightPlugin:
+                with self.objectContext.push(obj):
+                    # Don't export the LightSelect render channel if we are in 'instanced' LightMix mode.
+                    self.lightExporter.exportLight(obj, pluginNameOverride=instancedName, lightSelectExportEnabled=not useLightMix)
+
+                # Disable the light plugin, so that the original light is not visible in the render result.
+                vray.pluginUpdateInt(self.renderer, instancedName, 'enabled', False)
+
+            
+            if useLightMix: # Export the LightSelect render channel for the instancer object.
+                self.lightExporter.exportLightSelectChannel(instancerObj.name, [instancedName], obj.name)
+
+            exportedLights.add(exportedLightKey)
 
         # The `LightXxx` plugin already carries the source light's world transform
         # (set by `LightExporter._exportLightPlugin` from `obj.matrix_world`). V-Ray
@@ -371,7 +397,7 @@ class InstancerExporter(ExporterBase):
         sourceTm = obj.matrix_world
         relativeTm = inst.matrix_world @ sourceTm.inverted()
 
-        self._addInstance(inst, Names.object(obj), tmOverride=relativeTm)
+        self._addInstance(inst, instancedName, tmOverride=relativeTm)
 
 
     @staticmethod

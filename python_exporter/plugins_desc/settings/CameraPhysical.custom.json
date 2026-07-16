@@ -165,7 +165,11 @@
                 "derived": true
             },
             "ui": {
-                "display_name": "Texture"
+                "display_name": "Texture",
+                "file_extensions": [
+                    "exr", "png", "bmp", "tga", "hdr", "jpg", "jpeg",
+                    "pic", "tif", "tiff", "psd", "vrimg", "sgi", "rgb", "rgba"
+                ]
             }
         },
         {
@@ -194,7 +198,11 @@
                 "derived": true
             },
             "ui": {
-                "display_name": "Distortion Texture"
+                "display_name": "Distortion Texture",
+                "file_extensions": [
+                    "exr", "png", "bmp", "tga", "hdr", "jpg", "jpeg",
+                    "pic", "tif", "tiff", "psd", "vrimg", "sgi", "rgb", "rgba"
+                ]
             }
         },
         {
@@ -497,6 +505,123 @@
                         "visible": {
                             "cond": "::distortion_type=2"
                         }
+                    }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "use",
+                        "custom_draw": "widgetDrawNPanelEnabled"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::use=1"
+                        },
+                        "attrs": [
+                            {
+                                "name": "ISO",
+                                "label": "Film Speed (ISO)"
+                            },
+                            {
+                                "name": "f_number",
+                                "label": "F-Number"
+                            },
+                            {
+                                "name": "shutter_speed",
+                                "label": "Shutter Speed (s^-1)",
+                                "active": {
+                                    "cond": "::type!=1,::type!=2"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "film_width",
+                                "label": "Film Gate (mm)"
+                            },
+                            {
+                                "name": "focal_length",
+                                "label": "Focal Length (mm)",
+                                "active": {
+                                    "cond": "::specify_fov=0"
+                                }
+                            },
+                            {
+                                "name": "zoom_factor",
+                                "active": {
+                                    "cond": "::specify_fov=0"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "specify_fov",
+                                "label": "Specify Field of View"
+                            },
+                            {
+                                "name": "fov",
+                                "label": "Field of View",
+                                "active": {
+                                    "cond": "::specify_fov=1"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "exposure"
+                            },
+                            {
+                                "name": "exposure_value",
+                                "active": {
+                                    "cond": "::exposure=2"
+                                }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "use_dof",
+                                "label": "Depth Of Field"
+                            },
+                            {
+                                "name": "focus_object",
+                                "custom_draw": "widgetDrawFocusObject"
+                            },
+                            {
+                                "name": "focus_distance",
+                                "custom_draw": "widgetDrawFocusDistance"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "use_moblur",
+                                "label": "Motion Blur"
+                            }
+                        ]
                     }
                 ]
             }

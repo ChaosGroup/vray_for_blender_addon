@@ -219,6 +219,16 @@ class Names:
             raise ex
 
         return name
+
+
+    @staticmethod
+    def instancedLight(obj: bpy.types.Object, instancer: bpy.types.Object):
+        """ Return the name of the dedicated light plugin used for the instances of 'obj'
+            produced by the 'instancer' object. It is kept separate from the source light plugin
+            (Names.object(obj)) so that each instancer's lighting contribution can be routed to its
+            own LightSelect render channel in 'instanced' LightMix mode.
+        """
+        return f"{Names.object(obj)}@instanced@{Names.object(instancer)}"
     
     
     @staticmethod 

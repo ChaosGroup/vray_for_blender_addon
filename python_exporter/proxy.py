@@ -13,7 +13,7 @@ import bpy
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting import tools as export_tools
-from vray_blender.lib.blender_utils import setFloatFrame, selectObject
+from vray_blender.lib.blender_utils import setFloatFrame, selectObject, getVRayPreferences
 from vray_blender.lib.defs import ExporterContext
 from vray_blender.lib.draw_utils import rollout
 from vray_blender.lib.mixin import VRayOperatorBase
@@ -55,10 +55,9 @@ class VRAY_OT_vrayscene_load_preview(VRayOperatorBase):
     bl_description = "Load VRayScene preview from *.vrscene file"
 
     def execute(self, context):
-        ob = context.object
-        filepath = ob.data.vray.VRayScene.filepath
+        vrayScene = context.object.data.vray.VRayScene
 
-        if err := vray_proxy.loadVRayScenePreviewMesh(ob, filepath):
+        if err := vray_proxy.loadVRayScenePreviewMesh(vrayScene, vrayScene.filepath):
             debug.report('ERROR', err)
             return {'CANCELLED'}
 
@@ -81,7 +80,7 @@ class VRAY_OT_proxy_load_preview(VRayOperatorBase):
         if not os.path.exists(proxyFilepath):
             return {'FINISHED'}
 
-        err = vray_proxy.loadVRayProxyPreviewMesh(context.object, context.scene.frame_current-1)
+        err = vray_proxy.loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current - 1)
 
         if err is not None:
             self.report({'ERROR'}, err)
@@ -96,8 +95,7 @@ class VRAY_OT_proxy_generate_preview(VRayOperatorBase):
     bl_description = "Generate preview mesh for a VRayProxy object and load it into the scene"
 
     def execute(self, context):
-        ob = context.object
-        geomMeshFile = ob.data.vray.GeomMeshFile
+        geomMeshFile = context.object.data.vray.GeomMeshFile
 
         # Default the preview to the original mesh file
         previewFilePath = bpy.path.abspath(geomMeshFile.file)
@@ -106,7 +104,7 @@ class VRAY_OT_proxy_generate_preview(VRayOperatorBase):
             debug.reportError(f"File not found: {geomMeshFile.file} [resolves to {previewFilePath}]")
             return {'CANCELLED'}
 
-        if err := vray_proxy.loadVRayProxyPreviewMesh(ob, geomMeshFile.file, context.scene.frame_current):
+        if err := vray_proxy.loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current):
             debug.reportError(err)
             return {'CANCELLED'}
 
@@ -119,14 +117,13 @@ class VRAY_OT_vrayscene_generate_preview(VRayOperatorBase):
     bl_description = "Generate preview mesh for a VRayScene object and load it into the scene"
 
     def execute(self, context):
-        ob  = context.object
-        vrayScene = ob.data.vray.VRayScene
+        vrayScene = context.object.data.vray.VRayScene
 
         if not (sceneFilepath := bpy.path.abspath(vrayScene.filepath)):
             self.report({'ERROR'}, "Scene filepath is not set!")
             return {'CANCELLED'}
 
-        if err:= vray_proxy.loadVRayScenePreviewMesh(ob, sceneFilepath):
+        if err := vray_proxy.loadVRayScenePreviewMesh(vrayScene, sceneFilepath):
             debug.report('ERROR', err)
             return {'CANCELLED'}
 
@@ -385,7 +382,7 @@ class VRAY_OT_proxy_path_browser(bpy.types.Operator, ImportHelper):
     bl_label = "Select File"
     bl_description = "Show a file browser for selecting the path to a V-Ray Proxy or V-Ray Scene compatibe file"
 
-    object_name: bpy.props.StringProperty(default="", options={'HIDDEN'})
+    mesh_name: bpy.props.StringProperty(default="", options={'HIDDEN'})
     filter_glob: bpy.props.StringProperty(default="", options={'HIDDEN'})
     
     relative_path: bpy.props.BoolProperty(
@@ -404,18 +401,18 @@ class VRAY_OT_proxy_path_browser(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         if self.is_proxy:
-            bpy.data.meshes[self.object_name].vray.GeomMeshFile.file = self.filepath
+            bpy.data.meshes[self.mesh_name].vray.GeomMeshFile.file = self.filepath
         else:
-            bpy.data.meshes[self.object_name].vray.VRayScene.filepath = self.filepath
+            bpy.data.meshes[self.mesh_name].vray.VRayScene.filepath = self.filepath
 
         return {'FINISHED'}
     
     def invoke(self, context, event):
         # Set the initial path to the file browser
         if self.is_proxy:
-            filePath = bpy.data.meshes[self.object_name].vray.GeomMeshFile.file
+            filePath = bpy.data.meshes[self.mesh_name].vray.GeomMeshFile.file
         else:
-            filePath = bpy.data.meshes[self.object_name].vray.VRayScene.filepath
+            filePath = bpy.data.meshes[self.mesh_name].vray.VRayScene.filepath
         
         absPath = bpy.path.abspath(filePath)
         if os.path.exists(absPath):
@@ -484,29 +481,29 @@ def _objectsToRemoveAfterProxyExport(exporterCtx: ExporterContext) -> set[bpy.ty
 
     return {obj.original for obj in objs if export_tools.isProxyConvertibleGeometryType(obj.original)}
 
-def _buildProxyExportSettings(exporter):
+def _buildProxyExportSettings(preferences):
     """Fills vray.ProxyExportSettings for .vrmesh export (maps to VRay::ProxyCreateParams)."""
     ps = vray.ProxyExportSettings()
 
-    proxyPath = bpy.path.abspath(exporter.export_proxy_file_path).strip()
+    proxyPath = bpy.path.abspath(preferences.export_proxy_file_path).strip()
     if not proxyPath:
         raise ValueError("Proxy export path is empty.")
 
     if not proxyPath.lower().endswith('.vrmesh'):
         proxyPath = f"{proxyPath}.vrmesh"
-        exporter.export_proxy_file_path = proxyPath
+        preferences.export_proxy_file_path = proxyPath
 
     outputDir = os.path.dirname(proxyPath)
     if outputDir and (not os.path.isdir(outputDir)):
         raise ValueError(f"Directory does not exist '{outputDir}'.")
 
     ps.filePath = proxyPath
-    ps.elementsPerVoxel = exporter.export_proxy_elements_per_voxel
-    ps.previewFaces = exporter.export_proxy_preview_faces
-    ps.previewType = int(exporter.export_proxy_preview_type)
-    ps.animOn = exporter.export_proxy_animation_range == 'FRAME_RANGE'
-    ps.startFrame = exporter.export_proxy_start_frame
-    ps.endFrame = exporter.export_proxy_end_frame
+    ps.elementsPerVoxel = preferences.export_proxy_elements_per_voxel
+    ps.previewFaces = preferences.export_proxy_preview_faces
+    ps.previewType = int(preferences.export_proxy_preview_type)
+    ps.animOn = preferences.export_proxy_animation_range == 'FRAME_RANGE'
+    ps.startFrame = preferences.export_proxy_start_frame
+    ps.endFrame = preferences.export_proxy_end_frame
     return ps
 
 
@@ -547,12 +544,12 @@ def _setupProxyExporterContext(exporterCtx: ExporterContext, exportOnlySelected:
     exporterCtx.proxyExportSettings.proxyMaterialSlots = list(precomputedSlotList or [])
 
 
-def _proxyExportFrames(exporter, currentFrame: int) -> list[int]:
-    if exporter.export_proxy_animation_range != 'FRAME_RANGE':
+def _proxyExportFrames(preferences, currentFrame: int) -> list[int]:
+    if preferences.export_proxy_animation_range != 'FRAME_RANGE':
         return [int(currentFrame)]
 
-    startFrame = int(exporter.export_proxy_start_frame)
-    endFrame = int(exporter.export_proxy_end_frame)
+    startFrame = int(preferences.export_proxy_start_frame)
+    endFrame = int(preferences.export_proxy_end_frame)
     if endFrame < startFrame:
         raise ValueError("End frame must be greater than or equal to Start frame.")
 
@@ -583,8 +580,8 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
     
     context = exporterCtx.ctx
     renderer = exporterCtx.renderer
-    exporter = scene.vray.Exporter
-    exportOnlySelected = exporter.export_proxy_scope == 'SELECTION'
+    preferences = getVRayPreferences(context)
+    exportOnlySelected = preferences.export_proxy_scope == 'SELECTION'
     success = False
 
     originalLockInterface = scene.render.use_lock_interface
@@ -595,8 +592,8 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
     pluginExportSuccessful = False
 
     try:
-        proxySettings = _buildProxyExportSettings(exporter)
-        exportFrames = _proxyExportFrames(exporter, scene.frame_current)
+        proxySettings = _buildProxyExportSettings(preferences)
+        exportFrames = _proxyExportFrames(preferences, scene.frame_current)
 
         if not renderer:
             raise ValueError("Failed to acquire V-Ray renderer for proxy export.")
@@ -621,7 +618,7 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
             raise ValueError(err or "Proxy export failed.")
 
         importedProxy = None
-        if exporter.export_proxy_add_to_scene:
+        if preferences.export_proxy_add_to_scene:
             proxyPath = proxySettings.filePath
             matPath = str(PurePath(proxyPath).with_suffix('.vrmat'))
             importedProxy, importErr = importProxyFromMeshFile(context, matPath, proxyPath, useRelPath=False, scaleUnit=1.0, select=False)
@@ -631,7 +628,7 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
                 proxyMaterialSlots = _buildProxyMaterialSlotList(exporterCtx)
                 _assignImportedProxyMaterials(importedProxy, proxyMaterialSlots)
 
-        if exporter.export_proxy_remove_exported_objects:
+        if preferences.export_proxy_remove_exported_objects:
             for ob in _objectsToRemoveAfterProxyExport(exporterCtx):
                 parent = ob.parent
                 bpy.data.objects.remove(ob, do_unlink=True)
@@ -658,7 +655,7 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
         setFloatFrame(scene, originalFrame)
         scene.render.use_lock_interface = originalLockInterface
         if success:
-            engine.report({'INFO'}, f"Exported proxy: {exporter.export_proxy_file_path}")
+            engine.report({'INFO'}, f"Exported proxy: {preferences.export_proxy_file_path}")
 
 class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
     bl_idname = "vray.export_vrmesh"
@@ -670,8 +667,8 @@ class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
             self.report({'WARNING'}, getCELimitedFeatureMsg())
             return {'CANCELLED'}
 
-        exporter = context.scene.vray.Exporter
-        exportOnlySelected = exporter.export_proxy_scope == 'SELECTION'
+        preferences = getVRayPreferences(context)
+        exportOnlySelected = preferences.export_proxy_scope == 'SELECTION'
         scopeObjects = context.selected_objects if exportOnlySelected else context.scene.objects
         if not any(export_tools.isProxyConvertibleGeometryType(obj) for obj in scopeObjects):
             self.report({'ERROR'}, f"No V-Ray proxy-convertible objects found for export.")
@@ -707,28 +704,28 @@ class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
         layout.use_property_decorate = False
         layout.active = not vray.isCommunityEdition()
 
-        exporter = context.scene.vray.Exporter
+        preferences = getVRayPreferences(context)
 
         row = layout.row(align=True)
-        row.prop(exporter, 'export_proxy_file_path')
+        row.prop(preferences, 'export_proxy_file_path')
         row.operator('vray.select_proxy_export_file', text='', icon='FILE_FOLDER')
 
         body = rollout(layout, "VRAY_OT_export_vrmesh_export", "Export Settings", defaultClosed=False)
         if body:
-            body.prop(exporter, 'export_proxy_scope')
-            body.prop(exporter, 'export_proxy_add_to_scene')
-            body.prop(exporter, 'export_proxy_remove_exported_objects')
-            body.prop(exporter, 'export_proxy_elements_per_voxel')
-            body.prop(exporter, 'export_proxy_preview_type')
-            body.prop(exporter, 'export_proxy_preview_faces')
+            body.prop(preferences, 'export_proxy_scope')
+            body.prop(preferences, 'export_proxy_add_to_scene')
+            body.prop(preferences, 'export_proxy_remove_exported_objects')
+            body.prop(preferences, 'export_proxy_elements_per_voxel')
+            body.prop(preferences, 'export_proxy_preview_type')
+            body.prop(preferences, 'export_proxy_preview_faces')
 
         body = rollout(layout, "VRAY_OT_export_vrmesh_anim", "Animation", defaultClosed=False)
         if body:
-            body.prop(exporter, 'export_proxy_animation_range')
+            body.prop(preferences, 'export_proxy_animation_range')
             col = body.column()
-            col.enabled = exporter.export_proxy_animation_range == 'FRAME_RANGE'
-            col.prop(exporter, 'export_proxy_start_frame')
-            col.prop(exporter, 'export_proxy_end_frame')
+            col.enabled = preferences.export_proxy_animation_range == 'FRAME_RANGE'
+            col.prop(preferences, 'export_proxy_start_frame')
+            col.prop(preferences, 'export_proxy_end_frame')
 
         self._cursorWrap(context)
 

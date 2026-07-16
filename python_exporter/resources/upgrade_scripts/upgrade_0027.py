@@ -192,9 +192,9 @@ def upgradeProxy(obj: bpy.types.Object):
             'faces': faces.reshape((-1,3))
         }
 
-        proxy._replaceObjMesh(obj, newMeshData)
+        proxy._replaceObjMesh(obj.data, newMeshData)
 
-    proxy.loadVRayProxyPreviewMesh(obj, geomMeshFile.file)
+    proxy.loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file)
     return _SUCCESS
 
 def run():
