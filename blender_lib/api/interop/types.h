@@ -37,6 +37,10 @@ struct ExporterSettings
 	PROPERTY_NO_DEFAULT(StrList, drHosts)           // Distributed rendering
 	PROPERTY(bool, separateFiles          , false)  // Export to separate files
 	PROPERTY(std::string, previewDir      , "")		// Folder for .exr material preview files
+	PROPERTY(int, profilerMode            , 0)		// RayProfilerSettings::mode
+	PROPERTY(int, profilerMaxDepth        , 1)		// RayProfilerSettings::maxDepth
+	PROPERTY(std::string, profilerOutputDirectory, "")	// RayProfilerSettings::outputDirectory
+	PROPERTY(std::string, profilerSceneName      , "")	// RayProfilerSettings::sceneName
 	void setDRHosts(nb::object hosts);
 };
 

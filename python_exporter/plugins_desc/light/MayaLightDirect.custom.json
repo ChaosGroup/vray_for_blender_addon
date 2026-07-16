@@ -243,6 +243,34 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
         ]
     },
     "Node": {

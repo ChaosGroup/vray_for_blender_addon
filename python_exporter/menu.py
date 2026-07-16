@@ -13,12 +13,13 @@ from vray_blender.ui.classes import pollEngine, disableLayoutInEditMode
 from vray_blender.ui.icons import getIcon, getUIIcon
 from vray_blender.lib.sys_utils import activeRendererExists
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.nodes.importing import convertMaterial
+from vray_blender.nodes.importing import convertMaterial, convertLight
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.operators import VRAY_OT_message_box_base
 from vray_blender.ui.community_edition import getLimitedFeatureDescription, drawCELimitedFeatureWarning
 
 from vray_blender.bin import VRayBlenderLib as vray
+from vray_blender.lib import path_utils
 
 class VRAY_MT_help(bpy.types.Menu):
     bl_label = 'Help'
@@ -94,6 +95,7 @@ class VRAY_MT_geometry(bpy.types.Menu):
         from vray_blender.ui import menus
         vrayProxyOp = menus.VRAY_OT_add_object_proxy
         vraySceneOp = menus.VRAY_OT_add_object_vrayscene
+        vraySplatOp = menus.VRAY_OT_add_object_splat
         vrayFurOp = menus.VRAY_OT_add_object_fur
         vrayDecalOp = menus.VRAY_OT_add_object_decal
 
@@ -104,6 +106,8 @@ class VRAY_MT_geometry(bpy.types.Menu):
 
         vraySceneLayout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
+        # Still not ready for production
+        # self.layout.operator(vraySplatOp.bl_idname, text="V-Ray Gaussians", icon_value=getUIIcon(vrayFurOp))
         self.layout.operator(vrayFurOp.bl_idname, text="V-Ray Fur", icon_value=getUIIcon(vrayFurOp))
         self.layout.operator(vrayDecalOp.bl_idname, text="V-Ray Decal", icon_value=getUIIcon(vrayDecalOp))
 
@@ -126,6 +130,36 @@ class VRAY_MT_cosmos(bpy.types.Menu):
         self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
 
 
+class VRAY_MT_cloud_services(bpy.types.Menu):
+    """ V-Ray submenu grouping the Chaos Cloud and Chaos Veras commands """
+    bl_label = 'Cloud Services'
+    bl_idname = 'VRAY_MT_cloud_services'
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.label(text="Chaos Cloud")
+        layout.operator(VRAY_OT_cloud_submit.bl_idname, icon_value=getUIIcon(VRAY_OT_cloud_submit))
+
+        collaboration = layout.row()
+        collaboration.active = not vray.isCommunityEdition()
+        collaboration.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
+
+        layout.separator()
+
+        layout.label(text="Chaos Veras")
+        # Chaos Veras is a full-version feature. Keep the commands visible but inactive (not
+        # disabled) in Community Edition, so clicking them still shows the CE upsell notification.
+        veras = layout.column()
+        veras.active = not vray.isCommunityEdition()
+        veras.operator(VRAY_OT_veras_from_viewport.bl_idname, icon_value=getUIIcon(VRAY_OT_veras_from_viewport))
+        veras.operator(VRAY_OT_veras_from_vfb.bl_idname, icon_value=getUIIcon(VRAY_OT_veras_from_vfb))
+
+
 class VRAY_MT_tools(bpy.types.Menu):
     bl_label = 'Tools'
     bl_idname = 'VRAY_MT_tools'
@@ -135,8 +169,43 @@ class VRAY_MT_tools(bpy.types.Menu):
         return pollEngine(context)
 
     def draw(self, context):
+        # This feature is not production-ready-yet
+        # self.layout.operator("vray.lister_open", text="Scene Lister", icon='OUTLINER')
+        # self.layout.operator("vray.relink_assets", text="Find Missing V-Ray Files", icon='FILE_REFRESH')
+        # self.layout.separator()
         self.layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
-        self.layout.operator(VRAY_OT_make_shadow_catcher.bl_idname)
+        self.layout.operator(VRAY_OT_convert_lights.bl_idname)
+        self.layout.operator(VRAY_OT_make_shadow_catcher.bl_idname, icon_value=getUIIcon(VRAY_OT_make_shadow_catcher))
+
+
+class VRAY_MT_object_context(bpy.types.Menu):
+    """ V-Ray submenu shown in the 3D viewport right-click (object context) menu """
+    bl_label = "V-Ray"
+    bl_idname = 'VRAY_MT_object_context'
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def draw(self, context):
+        layout = self.layout
+
+        # --- Render ---
+        layout.label(text="Render")
+        renderOps = layout.column()
+        renderOps.enabled = vray.isInitialized()
+        renderOps.operator(VRAY_OT_open_vfb.bl_idname, icon_value=getUIIcon(VRAY_OT_open_vfb))
+        renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
+        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
+        layout.separator()
+
+        # --- Tools ---
+        layout.label(text="Tools")
+        layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
+        layout.operator(VRAY_OT_make_shadow_catcher.bl_idname, icon_value=getUIIcon(VRAY_OT_make_shadow_catcher))
+        layout.separator()
+
+        layout.menu(VRAY_MT_cloud_services.bl_idname)
 
 
 class VRAY_MT_main(bpy.types.Menu):
@@ -156,13 +225,10 @@ class VRAY_MT_main(bpy.types.Menu):
         renderOps.operator(VRAY_OT_open_vfb.bl_idname, icon_value=getUIIcon(VRAY_OT_open_vfb))
         renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
-        layout.operator(VRAY_OT_cloud_submit.bl_idname, icon_value=getUIIcon(VRAY_OT_cloud_submit))
         layout.separator()
-        
-        collaboration = layout.row()
-        collaboration.active = not vray.isCommunityEdition()
-        collaboration.operator(VRAY_OT_open_collaboration.bl_idname, icon_value=getUIIcon(VRAY_OT_open_collaboration))
-        
+
+        layout.menu(VRAY_MT_cloud_services.bl_idname)
+
         layout.separator()
         layout.menu(VRAY_MT_cosmos.bl_idname)
         if False and vray.withDR2:
@@ -240,7 +306,55 @@ class VRAY_OT_open_cosmos_ai_generator(VRayOperatorBase):
     def description(cls, context, properties):
         return getLimitedFeatureDescription(cls.bl_description)
 
-  
+
+class VRAY_OT_veras_from_viewport(VRayOperatorBase):
+    bl_idname       = "vray.veras_from_viewport"
+    bl_label        = "Viewport Image to Veras"
+    bl_description  = "Capture the 3D viewport and stylize it with Chaos Veras"
+    bl_options      = {'INTERNAL'}
+
+    def execute(self, context):
+        if vray.isCommunityEdition():
+            return context.window_manager.invoke_popup(self, width=400)
+
+        from vray_blender.utils.viewport_capture import captureViewportToFile
+        imagePath = captureViewportToFile(context)
+        if not imagePath:
+            self.report({'WARNING'}, "Could not capture the 3D viewport")
+            return {'CANCELLED'}
+
+        vray.openVerasWithViewport(imagePath)
+        return {'FINISHED'}
+
+    def draw(self, context):
+        drawCELimitedFeatureWarning(self.layout)
+
+    @classmethod
+    def description(cls, context, properties):
+        return getLimitedFeatureDescription(cls.bl_description)
+
+
+class VRAY_OT_veras_from_vfb(VRayOperatorBase):
+    bl_idname       = "vray.veras_from_vfb"
+    bl_label        = "VFB Image to Veras"
+    bl_description  = "Send the current V-Ray Frame Buffer image to Chaos Veras"
+    bl_options      = {'INTERNAL'}
+
+    def execute(self, context):
+        if vray.isCommunityEdition():
+            return context.window_manager.invoke_popup(self, width=400)
+
+        vray.openVerasWithVfbImage()
+        return {'FINISHED'}
+
+    def draw(self, context):
+        drawCELimitedFeatureWarning(self.layout)
+
+    @classmethod
+    def description(cls, context, properties):
+        return getLimitedFeatureDescription(cls.bl_description)
+
+
 class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
     bl_idname       = "vray.relink_cosmos_assets"
     bl_label        = "Download Cosmos Assets"
@@ -303,6 +417,41 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
         self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
         self.layout.label(text="they will be deleted before the conversion.")
 
+
+class VRAY_OT_convert_lights(VRayOperatorBase):
+    bl_idname      = "vray.convert_lights"
+    bl_label       = "Convert Lights"
+    bl_description = "Convert Blender lights to V-Ray lights"
+    bl_options     = { "UNDO", "INTERNAL" }
+
+    selected_only: bpy.props.BoolProperty(
+        name        = "Selected Only",
+        description = "Convert only the lights of the selected objects instead of every light in the scene",
+        default     = False,
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def execute(self, context):
+        if self.selected_only:
+            seen = set()
+            nativeLights = []
+            for obj in context.scene.objects:
+                if obj.type == 'LIGHT' and obj.select_get() \
+                        and obj.data.vray.light_type == 'BLENDER' and obj.data.name not in seen:
+                    seen.add(obj.data.name)
+                    nativeLights.append(obj.data)
+        else:
+            nativeLights = [l for l in bpy.data.lights if l.vray.light_type == 'BLENDER']
+
+        converted = sum(1 for light in nativeLights if convertLight(light))
+
+        self.report({'INFO'}, f"Converted {converted} light(s)")
+        return { 'FINISHED' }
+
+
 class VRAY_OT_make_shadow_catcher(VRayOperatorBase):
     bl_idname      = "vray.make_shadow_catcher"
     bl_label       = "Make Shadow Catcher"
@@ -364,6 +513,7 @@ class VRAY_OT_open_vfb(VRayOperatorBase):
 
     def execute(self, context):
         vfbAlwaysOnTop = context.scene.vray.Exporter.display_vfb_on_top
+        vray.updateScenePath(path_utils.getScenePath())
         vray.openVFB()
         vray.setVfbOnTop(vfbAlwaysOnTop)
 
@@ -428,9 +578,37 @@ class VRAY_OT_show_account_status(VRayOperatorBase):
 
   
 
-def _drawMainMenu(self, context):
-    layout = self.layout
-    layout.menu(VRAY_MT_main.bl_idname)
+class _TopbarLayout:
+    """Wraps UILayout.menu() to inject the V-Ray menu just before TOPBAR_MT_help."""
+
+    def __init__(self, real):
+        self._real = real
+
+    def menu(self, idname, *args, **kwargs):
+        if idname == "TOPBAR_MT_help":
+            self._real.menu(VRAY_MT_main.bl_idname)
+        self._real.menu(idname, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+class _TopbarMenu:
+    """Wraps a Menu instance to substitute self.layout with a _TopbarLayout."""
+
+    def __init__(self, realSelf, layout):
+        self._real = realSelf
+        self.layout = layout
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+_originalTopbarDraw = None
+
+
+def _patchedTopbarDraw(self, context):
+    _originalTopbarDraw(_TopbarMenu(self, _TopbarLayout(self.layout)), context)
 
 
 def _drawExportAsVrayFileMenuItem(self, context):
@@ -441,13 +619,23 @@ def _drawExportAsVrayFileMenuItem(self, context):
     layout.operator('vray.export_vrmesh', text='V-Ray Proxy (.vrmesh)')
 
 
+def _drawObjectContextMenuItem(self, context):
+    """ Prepend the V-Ray submenu to the top of the 3D viewport object right-click menu """
+    if pollEngine(context):
+        self.layout.menu(VRAY_MT_object_context.bl_idname, icon_value=getIcon("VRAY_PLACEHOLDER"))
+        self.layout.separator()
+
+
 def _getRegClasses():
     return (
         VRAY_OT_open_collaboration,
         VRAY_OT_open_cosmos_browser,
         VRAY_OT_open_cosmos_ai_generator,
+        VRAY_OT_veras_from_viewport,
+        VRAY_OT_veras_from_vfb,
         VRAY_OT_relink_cosmos_assets,
         VRAY_OT_convert_materials,
+        VRAY_OT_convert_lights,
         VRAY_OT_make_shadow_catcher,
         # VRAY_OT_vantage_live_link,
         VRAY_OT_open_vfb,
@@ -461,22 +649,31 @@ def _getRegClasses():
         VRAY_MT_lights,
         VRAY_MT_geometry,
         VRAY_MT_cosmos,
+        VRAY_MT_cloud_services,
         VRAY_MT_tools,
+        VRAY_MT_object_context,
         VRAY_MT_main
     )
 
 
 def register():
+    global _originalTopbarDraw
     for regClass in _getRegClasses():
         bpy.utils.register_class(regClass)
 
-    bpy.types.TOPBAR_MT_editor_menus.append(_drawMainMenu)
+    _originalTopbarDraw = bpy.types.TOPBAR_MT_editor_menus.draw
+    bpy.types.TOPBAR_MT_editor_menus.draw = _patchedTopbarDraw
     bpy.types.TOPBAR_MT_file_export.append(_drawExportAsVrayFileMenuItem)
+    bpy.types.VIEW3D_MT_object_context_menu.prepend(_drawObjectContextMenuItem)
 
 
 def unregister():
+    global _originalTopbarDraw
     for regClass in _getRegClasses():
         bpy.utils.unregister_class(regClass)
 
+    if _originalTopbarDraw is not None:
+        bpy.types.TOPBAR_MT_editor_menus.draw = _originalTopbarDraw
+        _originalTopbarDraw = None
     bpy.types.TOPBAR_MT_file_export.remove(_drawExportAsVrayFileMenuItem)
-    bpy.types.TOPBAR_MT_editor_menus.remove(_drawMainMenu)
+    bpy.types.VIEW3D_MT_object_context_menu.remove(_drawObjectContextMenuItem)

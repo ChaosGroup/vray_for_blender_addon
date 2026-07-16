@@ -60,6 +60,10 @@ def _onSavePost(e):
     if VRAY_OT_dr_nodes_save.poll(bpy.context):
         bpy.ops.vray.dr_nodes_save()
 
+    # After Save As the filepath changes; notify the server so VFB project path
+    # and scene name reflect the new location.
+    vray.updateScenePath(path_utils.getScenePath())
+
 
 @bpy.app.handlers.persistent
 def _onSavePre(e):
@@ -82,6 +86,7 @@ def _onLoadPre(e):
     try:
         VRayRenderEngine.resetAll()
         VfbEventHandler.reset()
+        vray.clearMainBitmapCache()
     except Exception:
         _blendFileLoadInProgress = False
         raise
@@ -203,6 +208,15 @@ def _onUpdatePost(scene, depsgraph):
 
     image_utils.trackImageUpdates()
     image_utils.updateTexturePlaceholderNode()
+    image_utils.tagChangedSequenceBitmaps()
+
+    # Invalidate the render channels panel cache on any World/node-tree change (catches
+    # link swaps, muting and group sub-tree edits). Route via PLUGIN_MODULES to hit the
+    # bare-name module instance that owns the getter - a package-path import would no-op.
+    if any(isinstance(u.id, (bpy.types.World, bpy.types.NodeTree)) for u in depsgraph.updates):
+        from vray_blender import plugins
+        if rcPanel := plugins.PLUGIN_MODULES.get('VRayRenderChannels'):
+            rcPanel.invalidateConnectedChannelsCache()
 
     # Push Blender's camera-view render region to VFB whenever the scene changes
     # and no render is running. syncVfbRenderRegionFromScene() dedupes against

@@ -241,6 +241,17 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         vrayNodeUpdate(self)
 
 
+    def nodeReset(self):
+        """ Re-apply the creation-time values to the existing layer sockets (count preserved).
+            Opacity/Blend Mode already match their registered defaults via the generic socket reset. """
+        for l in range(self.layers):
+            humanIndex = l + 1
+            if texSock := self.inputs.get(f"Texture {humanIndex}"):
+                texSock.setValue((1.0, 1.0, 1.0))
+            if maskSock := self.inputs.get(f"Mask {humanIndex}"):
+                maskSock.setValue((1.0, 1.0, 1.0))
+
+
     @staticmethod
     def addLayer(node, humanIndex):
         """ Add the inputs for a texture layer """

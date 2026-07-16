@@ -284,6 +284,38 @@
         {
             "attr": "dispersion",
             "desc": "Increase or decrease the dispersion effect. Lowering it widens the dispersion and vice versa."
+        },
+        {
+            "attr": "quick_caustics_reflection_on",
+            "desc": "True to enable quick caustics for reflection. Requires a V-Ray Sun in the scene and CPU rendering.",
+            "update": "onUpdateQuickCaustics"
+        },
+        {
+            "attr": "quick_caustics_reflection_depth",
+            "default": 10,
+            "desc": "The depth (in scene units) that the reflection quick caustics reach.",
+            "ui": {
+                "min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.5
+            },
+            "update": "onUpdateQuickCaustics"
+        },
+        {
+            "attr": "quick_caustics_refraction_on",
+            "desc": "True to enable quick caustics for refraction. Requires a V-Ray Sun in the scene and CPU rendering.",
+            "update": "onUpdateQuickCaustics"
+        },
+        {
+            "attr": "quick_caustics_refraction_depth",
+            "default": 10,
+            "desc": "The depth (in scene units) that the refraction quick caustics reach.",
+            "ui": {
+                "min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.5
+            },
+            "update": "onUpdateQuickCaustics"
         }
     ],
     "Widget": {
@@ -733,6 +765,38 @@
                     {
                         "name": "lpe_label",
                         "label": "LPE Label"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "quick_caustics",
+                        "label": "Quick Sun Caustics",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "quick_caustics_reflection_on",
+                                "label": "Reflection"
+                            },
+                            {
+                                "name": "quick_caustics_reflection_depth",
+                                "label": "Depth",
+                                "active": { "cond": "::quick_caustics_reflection_on=1" }
+                            },
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "quick_caustics_refraction_on",
+                                "label": "Refraction"
+                            },
+                            {
+                                "name": "quick_caustics_refraction_depth",
+                                "label": "Depth",
+                                "active": { "cond": "::quick_caustics_refraction_on=1" }
+                            }
+                        ]
                     }
                 ]
             }

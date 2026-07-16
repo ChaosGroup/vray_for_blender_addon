@@ -12,8 +12,8 @@ from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs, moveExtendSocketToBottom
 from vray_blender.nodes.nodes import vrayNodeInit, vrayNodeDraw, vrayNodeDrawSide
-from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode, autoConnectNode
-from vray_blender.nodes.links import getPluginModule, scheduleFixMisdirectedLink, vrayNodeInsertLink
+from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode
+from vray_blender.nodes.links import getPluginModule, scheduleFixMisdirectedLink, vrayNodeInsertLink, autoConnectNode
 from vray_blender.ui import classes
 
 
@@ -59,6 +59,18 @@ def addMtlMultiExtendSocket(node):
     sockExtend.del_operator = 'vray.node_mtlmulti_socket_del'
 
 
+def getMaterialSockets(node):
+    """ Return the material input sockets (the 'Material X' sockets) of a MtlMulti node,
+        in their input-list order.
+
+        Material sockets are located by their socket type instead of by name. The number in
+        the 'Material X' name is the material's ID, which may be non-consecutive or not 0-based
+        (e.g. after importing a scene with ids_list=[1, 5, 3]) and is also user-editable, so the
+        name cannot be relied upon to identify or order the sockets.
+    """
+    return [s for s in node.inputs if s.bl_idname == 'VRaySocketMtlMulti']
+
+
 def _getMtlNodeFromOperatorContext(context: bpy.types.Context):
     if hasattr(context, "node"):
         return context.node
@@ -97,10 +109,11 @@ class VRAY_OT_node_mtlmulti_socket_del(VRayOperatorBase):
             self.report({'WARNING'}, f"{node.bl_label} needs at least one material.")
             return {'CANCELLED'}
 
-        humanIndex = node.materials
-        sockName = f"Material {humanIndex}"
+        # Remove the last material socket, identified by its position rather than by a name
+        # rebuilt from the count, since the ID embedded in the name may be non-consecutive.
+        lastMtlSock = getMaterialSockets(node)[-1]
 
-        if removeInputs(node, [sockName], removeLinked=False):
+        if removeInputs(node, [lastMtlSock.name], removeLinked=False):
             node.materials -= 1
             return {'FINISHED'}
 
@@ -127,19 +140,17 @@ class VRayNodeMtlMulti(VRayNodeBase):
     def copy(self, srcNode):
         while self.materials < srcNode.materials:
             self.addMaterial()
-        for i in range(1, self.materials + 1):
-            sockName = f"Material {i}"
-            if sockName in self.inputs and sockName in srcNode.inputs:
-                dstSock = self.inputs[sockName]
-                srcSock = srcNode.inputs[sockName]
-                dstSock.value = srcSock.value
-                dstSock.enabled = srcSock.enabled
+        # Pair the sockets by position; the ID embedded in the name may differ between nodes.
+        for dstSock, srcSock in zip(getMaterialSockets(self), getMaterialSockets(srcNode)):
+            dstSock.value = srcSock.value
+            dstSock.enabled = srcSock.enabled
 
     def _fixMisdirectedLink(self):
         # When creating a MtlMulti on top of an existing node link between materials it will get
         # connected to the Switch Texture socket. In this case insert_link doesn't get called so
         # we do it here manually.
-        scheduleFixMisdirectedLink(self, "Switch Texture", "Material 1", {'VRaySocketMtl', 'VRaySocketBRDF'})
+        if mtlSockets := getMaterialSockets(self):
+            scheduleFixMisdirectedLink(self, "Switch Texture", mtlSockets[0].name, {'VRaySocketMtl', 'VRaySocketBRDF'})
 
     def update(self):
         super().update()
@@ -149,10 +160,9 @@ class VRayNodeMtlMulti(VRayNodeBase):
         addInput(self, 'VRaySocketFloatNoValue', "Switch Texture", 'mtlid_gen_float', "MtlMulti")
 
         for i in range(self.materials):
-            humanIndex = i + 1
-            texSockName = f"Material {humanIndex}"
+            texSockName = f"Material {i}"
             mtlSock = addInput(self, 'VRaySocketMtlMulti', texSockName)
-            mtlSock.setValue(humanIndex)
+            mtlSock.setValue(i)
             mtlSock.enabled = True
 
         addMtlMultiExtendSocket(self)
@@ -161,13 +171,21 @@ class VRayNodeMtlMulti(VRayNodeBase):
 
     def addMaterial(self):
         """ Add the inputs for a texture layer """
-        humanIndex = self.materials + 1
-        sockName = f"Material {humanIndex}"
+        # Derive the new material's ID from the existing sockets rather than from the socket
+        # count, so it stays unique even when the current IDs are non-consecutive.
+        newIndex = max((s.value for s in getMaterialSockets(self)), default=-1) + 1
+        sockName = f"Material {newIndex}"
         sockMtl = addInput(self, 'VRaySocketMtlMulti', sockName)
-        sockMtl.setValue(humanIndex)
+        sockMtl.setValue(newIndex)
         sockMtl.enabled = True
         self.materials += 1
         moveExtendSocketToBottom(self)
+
+    def nodeReset(self):
+        """ Re-apply the creation-time values to the existing 'Material N' sockets (count preserved). """
+        for i, mtlSock in enumerate(getMaterialSockets(self)):
+            mtlSock.setValue(i)
+            mtlSock.enabled = True
 
 
     def insert_link(self, link: bpy.types.NodeLink):
@@ -176,7 +194,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
                 from_socket = link.from_socket
                 ntree = self.id_data
                 self.addMaterial()
-                ntree.links.new(from_socket, self.inputs[f"Material {self.materials}"])
+                ntree.links.new(from_socket, getMaterialSockets(self)[-1])
                 ntree.links.remove(link)
 
         vrayNodeInsertLink(self, link, _doInsert)
@@ -206,13 +224,10 @@ class VRayNodeMtlMulti(VRayNodeBase):
 
         mtlsPanel = draw_utils.subPanel(layout)
 
-        for i in range(self.materials):
-            humanIndex = i + 1
-            sockLabel = f'Material {humanIndex}'
-            uniqueID = f"{self.as_pointer()}_{sockLabel}"
+        for sockMtl in getMaterialSockets(self):
+            uniqueID = f"{self.as_pointer()}_{sockMtl.identifier}"
 
-            if panelBody := draw_utils.rollout(mtlsPanel, uniqueID, sockLabel):
-                sockMtl = self.inputs[sockLabel]
+            if panelBody := draw_utils.rollout(mtlsPanel, uniqueID, sockMtl.name):
                 sockMtl.draw_property(context, draw_utils.subPanel(panelBody), text="")
 
 

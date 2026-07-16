@@ -130,6 +130,17 @@ class VRayUITemplate(bpy.types.PropertyGroup):
             raise ex
 
 
+    def resetToDefaults(self):
+        """ Reset the template's own state to defaults.
+
+            The base implementation is a no-op: templates whose values live entirely in bound
+            plugin properties (e.g. TemplateColorTemperature, TemplateFileSelect) need nothing here,
+            as those properties are reset by the generic property reset. Templates that hold their
+            own state should override this.
+        """
+        pass
+
+
 class VRayObjectSelector(VRayUITemplate):
     """ Base class for object selector templates. Provides uniform UI and filtering.
 
@@ -240,6 +251,14 @@ class VRayObjectSelector(VRayUITemplate):
                 selected.add(obj)
 
         return list(selected)
+
+
+    def resetToDefaults(self):
+        """ Clear the selection list and the selector fields. """
+        self.selectedItems.clear()
+        self.activeItem = -1
+        self.objectSelector = None
+        self.collectionSelector = None
 
 
     def copy(self, dest: VRayObjectSelector):

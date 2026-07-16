@@ -9,6 +9,27 @@ from vray_blender.ui import classes
 from vray_blender.lib import lib_utils, draw_utils, plugin_utils
 
 
+class VRAY_OT_update_lighting_analysis(bpy.types.Operator):
+    bl_idname      = "vray.update_lighting_analysis"
+    bl_label       = "Update Lighting Analysis"
+    bl_description  = ("Re-apply the Lighting Analysis settings to the current render in the V-Ray "
+                       "VFB without re-rendering. Use after changing its parameters (quantity, value "
+                       "range, scale, display)")
+    bl_options     = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.render.engine == 'VRAY_RENDER_RT'
+
+    def execute(self, context):
+        # The renderer lives in the ZMQ server process; the native module sends a control
+        # message that calls VRayRenderer::updateLightingAnalysis() there (no-op if no render
+        # is running). Mirrors the clearVfbImage() control action.
+        from vray_blender.bin import VRayBlenderLib as vray
+        vray.updateLightingAnalysis()
+        return {'FINISHED'}
+
+
 class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
     bl_label    = "Render Channels"
     bl_icon     = "NONE"
@@ -33,8 +54,9 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
 
         vrayRenderChannels = context.scene.world.vray.VRayRenderChannels
 
-        # LightMix and Denoiser channels are displayed separately
-        # until a better solution for their representation is found.
+        # LightMix and Denoiser are displayed separately until a better solution for their
+        # representation is found. Lighting Analysis is a regular Utility channel (shown in the
+        # Utility rollout below), with its Update button next to it there (and on the node too).
         split = self.layout.split(factor=0.02)
         split.column()
         col = split.column()
@@ -43,7 +65,8 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
         if not plugin_utils.isGenAIDisabled():
             specialChannels.append("Enhancer")
         for channel in specialChannels:
-            col.prop(getattr(vrayRenderChannels, f"VRayNodeRenderChannel{channel}"), "enabled")
+            chanProps = getattr(vrayRenderChannels, f"VRayNodeRenderChannel{channel}")
+            col.prop(chanProps, "enabled")
 
         for menuType in VRayChannelNodeSubtypes:
             menuName = menuType.title()
@@ -55,7 +78,18 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
                 for t in VRayNodeTypes["RENDERCHANNEL"]:
                     if getattr(t, "vray_menu_subtype","") == menuType:
                         elemType = t.bl_rna.identifier
-                        col.prop(getattr(vrayRenderChannels, elemType), "enabled")
+                        chanProps = getattr(vrayRenderChannels, elemType)
+                        if elemType == "VRayNodeRenderChannelLightingAnalysis":
+                            # Lighting Analysis params are a post-process over the rendered data;
+                            # offer an Update button to re-apply them to the current VFB without
+                            # re-rendering. Disabled while the channel itself is disabled.
+                            row = col.row(align=True)
+                            row.prop(chanProps, "enabled")
+                            update = row.row(align=True)
+                            update.enabled = chanProps.enabled
+                            update.operator("vray.update_lighting_analysis", text="Update", icon='FILE_REFRESH')
+                        else:
+                            col.prop(chanProps, "enabled")
 
 
 # View Layer settings that lets the user choose which layer should be rendered
@@ -237,6 +271,7 @@ class VRAY_PT_Includer(classes.VRayRenderLayersPanel):
 
 def getRegClasses():
     return (
+        VRAY_OT_update_lighting_analysis,
         VRAY_PT_RenderChannels,
         VRAY_PT_MaterialOverride,
         VRAY_PT_Viewlayer,

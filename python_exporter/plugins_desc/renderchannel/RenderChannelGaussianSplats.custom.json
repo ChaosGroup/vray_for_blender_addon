@@ -1,0 +1,31 @@
+{
+    "ID": "RenderChannelGaussianSplats",
+    "Name": "Gaussian Splats",
+    "Subtype": "ADVANCED",
+    "Parameters": [
+        {
+            "attr": "name",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "channelType",
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
+                    },
+                    { "name": "name", "label": "Channel Name" },
+                    { "name": "mode", "label": "Mode" },
+                    { "name": "enableDeepOutput", "label": "Enable Deep Output" }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

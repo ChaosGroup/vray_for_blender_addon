@@ -124,6 +124,10 @@ def _hidePanels():
                     if obj and hasattr(obj, 'vray'):
                         if obj.vray.isVRayDecal:
                             return False
+                        if obj.vray.isVRayGaussian:
+                            # Gaussian splat Empties have their own data panels; hide the
+                            # default Empty data panels (display type, size, etc.).
+                            return False
                         assetType = obj.vray.VRayAsset.assetType
                         if assetType == blender_utils.VRAY_ASSET_TYPE["Scene"]:
                             return False

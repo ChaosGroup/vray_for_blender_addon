@@ -8,7 +8,7 @@ from vray_blender import plugins
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.names import syncObjectUniqueName
-from vray_blender.nodes import utils as NodeUtils
+from vray_blender.nodes import utils as NodeUtils, links as NodeLinks
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.nodes import vrayNodeUpdate
 from vray_blender.nodes.sockets import addInput, addOutput
@@ -43,7 +43,7 @@ class VRayNodeDisplacement(VRayNodeBase):
         self.GeomDisplacedMesh.keep_continuity = True
         self.GeomDisplacedMesh.water_level = 0.0
 
-        NodeUtils.autoConnectObjectNode(self, 'Displacement')
+        NodeLinks.autoConnectObjectNode(self, 'Displacement')
 
     def draw_buttons(self, context, layout):
         pluginModule = getPluginModule('GeomDisplacedMesh')

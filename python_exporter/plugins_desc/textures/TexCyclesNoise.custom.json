@@ -1,0 +1,171 @@
+{
+    "ID": "TexCyclesNoise",
+    "Name": "V-Ray Cycles Noise",
+    "Parameters": [
+        {
+            "attr": "dimensions"
+        },
+        {
+            "attr": "type",
+            "ui": {
+                "display_name": "Noise Type"
+            }
+        },
+        {
+            "attr": "detail"
+        },
+        {
+            "attr": "scale",
+            "subtype": "NONE",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "roughness",
+            "subtype": "NONE",
+            "ui": {
+                "min": 0.0,
+                "max": 1.0
+            }
+        },
+        {
+            "attr": "lacunarity",
+            "subtype": "NONE",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "offset",
+            "subtype": "NONE",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "gain",
+            "subtype": "NONE",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "distortion",
+            "subtype": "NONE",
+            "ui": {
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "uvwgen",
+            "ui": {
+                "display_name": "Mapping"
+            },
+            "type": "UVWGEN"
+        },
+        {
+            "attr": "w_coord",
+            "subtype": "NONE",
+            "ui" : {
+                "display_name": "W Coord",
+                "spin_step" : 0.1
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "dimensions" },
+                    { "name": "type" },
+                    { "name": "normalize", "visible": { "cond": "::type=4" } }
+                ]
+            },
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "w_coord", "visible": { "cond": "::dimensions=1;::dimensions=4" } },
+                    { "name": "scale" },
+                    { "name": "detail" },
+                    { "name": "roughness" },
+                    { "name": "lacunarity" },
+                    { "name": "offset", "visible": { "cond": "::type=2;::type=3;::type=5" } },
+                    { "name": "gain", "visible": { "cond": "::type=2;::type=3" } },
+                    { "name": "distortion" }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "output",
+                "label": "Output",
+                "attrs": [
+                    {
+                        "name": "color_mult"
+                    },
+                    {
+                        "name": "color_offset"
+                    },
+                    {
+                        "name": "invert"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "dimensions" },
+                    { "name": "type" },
+                    { "name": "normalize", "visible": { "cond": "::type=4" } }
+                ]
+            }
+        ],
+        "input_sockets": [
+            { "name": "uvwgen", "visible": { "cond": "::dimensions!=1" } },
+            { "name": "w_coord", "visible": { "cond": "::dimensions=1;::dimensions=4" } },
+            { "name": "scale" },
+            { "name": "detail" },
+            { "name": "roughness" },
+            { "name": "lacunarity" },
+            { "name": "offset", "visible": { "cond": "::type=2;::type=3;::type=5" } },
+            { "name": "gain", "visible": { "cond": "::type=2;::type=3" } },
+            { "name": "distortion" },
+            {
+                "name": "texture_rollout",
+                "label": "Output",
+                "type": "ROLLOUT"
+            },
+            {
+                "name": "color_mult"
+            },
+            {
+                "name": "color_offset"
+            }
+        ]
+        
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size"
+        ]
+    }
+}

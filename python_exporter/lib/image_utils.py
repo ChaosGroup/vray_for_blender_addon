@@ -5,6 +5,7 @@
 
 import bpy
 import os
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -67,6 +68,76 @@ def _resolveImagePath(image: bpy.types.Image) -> str:
     """
     return bpy.path.abspath(image.filepath, library=image.library)
 
+
+def computeSequenceFrame(imageUser: bpy.types.ImageUser, sceneFrame: int) -> int:
+    """ Resolve the sequence frame for a scene frame - a compact port of Blender's
+        BKE_image_user_frame_get, so V-Ray loads the file Blender/Cycles shows.
+    """
+    sequenceLength = imageUser.frame_duration
+    if sequenceLength == 0:
+        return 0
+
+    frameNumber = sceneFrame - imageUser.frame_start + 1
+    if imageUser.use_cyclic:
+        # Wrap into [1, sequenceLength] (Blender's modulo, matches for negative frames too).
+        frameNumber = (frameNumber - 1) % sequenceLength + 1
+
+    frameNumber = max(0, min(frameNumber, sequenceLength))
+    return frameNumber + imageUser.frame_offset
+
+
+def detectSequenceRange(image: bpy.types.Image) -> tuple[int, int] | None:
+    """ Return (firstFrame, lastFrame) of a sequence's numbered files on disk, or None. Blender has
+        no range detection for image sequences ('Match Movie Length' is movie-only), so scan the
+        folder for files matching the loaded frame's name pattern (trailing digits before the ext).
+    """
+    path = _resolveImagePath(image)
+    directory, fileName = os.path.split(path)
+    if not os.path.isdir(directory):
+        return None
+
+    baseName, extension = os.path.splitext(fileName)
+    trailingDigitsMatch = re.search(r'(\d+)$', baseName)
+    if not trailingDigitsMatch:
+        return None
+
+    prefix = baseName[:trailingDigitsMatch.start()]
+    framePattern = re.compile('^' + re.escape(prefix) + r'(\d+)' + re.escape(extension) + '$', re.IGNORECASE)
+    frameNumbers = [int(fileMatch.group(1)) for candidate in os.listdir(directory) if (fileMatch := framePattern.match(candidate))]
+    return (min(frameNumbers), max(frameNumbers)) if frameNumbers else None
+
+
+def applyDetectedSequenceRange(imageUser: bpy.types.ImageUser, image: bpy.types.Image) -> bool:
+    """ Set frame_duration and frame_offset from the sequence files on disk, matching Blender's own
+        load convention (frames = count, offset = firstFrame - 1). Returns False if no files found.
+        Start Frame is the timeline placement and isn't derivable from disk, so it's left untouched.
+    """
+    frameRange = detectSequenceRange(image)
+    if not frameRange:
+        return False
+    firstFrame, lastFrame = frameRange
+    imageUser.frame_duration = lastFrame - firstFrame + 1
+    imageUser.frame_offset = firstFrame - 1
+    return True
+
+
+def applySequenceFrameAttrs(image: bpy.types.Image, imageUser: bpy.types.ImageUser, currentFrame: float, bitmapBufferDesc) -> bool:
+    """ Pin BitmapBuffer to the exact frame Blender resolves for the current frame, returning True
+        for a sequence so the caller re-exports the material each frame. computeSequenceFrame
+        reproduces Blender's cyclic wrap and non-cyclic clamp, which a static V-Ray frame_offset
+        can't. UDIM (<UDIM>/<UVTILE> token in 'file', resolved by V-Ray) and single images are
+        static and return False.
+    """
+    if image.source != 'SEQUENCE':
+        return False
+
+    frameNumber = int(round(currentFrame)) if currentFrame else bpy.context.scene.frame_current
+    bitmapBufferDesc.setAttribute('frame_sequence', True)
+    bitmapBufferDesc.setAttribute('frame_number', computeSequenceFrame(imageUser, frameNumber))
+    bitmapBufferDesc.setAttribute('frame_offset', 0)
+    return True
+
+
 def trackImageUpdates():
     """ Tracks V-Ray-related images and saves them if modified. """
     for image in bpy.data.images:
@@ -76,7 +147,13 @@ def trackImageUpdates():
         imageTrack: _ImageTrack = _trackedImages[image.name]
 
         if image.is_dirty:
-            imageTrack.path = _saveTemporaryImage(image)
+            if image.source == 'SEQUENCE':
+                # A dirty sequence can't be temp-saved as a whole - image.save() would capture only
+                # the current frame to a non-numbered path. Render from the on-disk numbered files.
+                imageTrack.path = _resolveImagePath(image)
+                imageTrack.originalPath = image.filepath
+            else:
+                imageTrack.path = _saveTemporaryImage(image)
             imageTrack.updated = True
 
             # Tag V-Ray users of the image for update.
@@ -87,12 +164,13 @@ def trackImageUpdates():
                 imageTrack.updated = False
                 if image.type == 'RENDER_RESULT':
                     imageTrack.path = getDefaultTexturePath()
-                elif (image.source == 'FILE' and image.packed_file) or image.source == "GENERATED":
+                elif image.source == "GENERATED" or (image.source in ('FILE', 'TILED') and len(image.packed_files) > 0):
+                    # Packed single image or packed UDIM (all tiles) -> save to the V-Ray temp dir.
                     imageTrack.path = _saveTemporaryImage(image)
                 else:
                     imageTrack.path = _resolveImagePath(image)
                     imageTrack.originalPath = image.filepath
-            elif image.source == 'FILE' and not image.packed_file and image.filepath != imageTrack.originalPath:
+            elif image.source in ('FILE', 'SEQUENCE', 'TILED') and len(image.packed_files) == 0 and image.filepath != imageTrack.originalPath:
                 imageTrack.path = _resolveImagePath(image)
                 imageTrack.originalPath = image.filepath
                 imageTrack.updated = True
@@ -149,6 +227,15 @@ def _saveTemporaryImage(image: bpy.types.Image):
         # the pointer to it when saving the image.
         debug.printError(f"Image {image.name} contains invalid data and cannot be saved. Please consider re-creating it.")
         return None
+
+    if image.source == 'TILED':
+        # A UDIM image holds multiple tiles. image.save() with a <UDIM>/<UVTILE> token path writes
+        # every tile (BKE_image_save iterates ima->tiles), without disturbing the pack. Reuse the
+        # original token filename so the tile-numbering format (<UDIM> vs <UVTILE>) is preserved.
+        tokenName = os.path.basename(image.filepath) or f"{image.name}.<UDIM>.exr"
+        filePath = os.path.join(getV4BTempDir(), tokenName)
+        image.save(filepath=filePath)
+        return filePath
 
     filePath = str(Path(os.path.join(getV4BTempDir(), image.name)).resolve())
     image.save(filepath=filePath)
@@ -220,10 +307,40 @@ class VRAY_FH_image_handler(bpy.types.FileHandler):
         return _pollImageDragDrop(cls, context)
 
 
+class VRAY_OT_calc_image_sequence_range(bpy.types.Operator):
+    bl_idname      = "vray.calc_image_sequence_range"
+    bl_label       = "Detect Range"
+    bl_description = "Set Frames from the numbered files found in the image sequence's folder"
+    bl_options     = { 'INTERNAL', 'UNDO' }
+
+    nodeID: bpy.props.StringProperty()
+    nodeTreeType: bpy.props.StringProperty()
+
+    def execute(self, context: bpy.types.Context):
+        node = getattr(context, 'active_node', None)
+        if not (node and getattr(node, 'unique_id', None) == self.nodeID):
+            # Invoked from the property panel - resolve the node by its unique id.
+            match self.nodeTreeType:
+                case 'MATERIAL': nodes = context.material.node_tree.nodes
+                case 'WORLD':    nodes = context.world.node_tree.nodes
+                case _:          nodes = []
+            node = next((n for n in nodes if getattr(n, "unique_id", None) == self.nodeID), None)
+
+        if not (node and node.texture and (image := node.texture.image)):
+            return { 'CANCELLED' }
+
+        if not applyDetectedSequenceRange(node.texture.image_user, image):
+            self.report({'WARNING'}, "No image sequence files found on disk")
+            return { 'CANCELLED' }
+
+        return { 'FINISHED' }
+
+
 def _getRegClasses():
     return (
         VRAY_OT_import_drop_image,
         VRAY_FH_image_handler,
+        VRAY_OT_calc_image_sequence_range,
     )
 
 
@@ -255,14 +372,50 @@ def _onBitmapImageUpdate(node: bpy.types.Node):
         tagUsersForUpdate(ntree)
 
 
-def subscribeToBitmapImageUpdates(node: bpy.types.Node):
-    """Subscribe to texture RNA changes for a V-Ray Bitmap node.
+# Per-node fingerprint of the sequence frame settings, so we can detect edits Blender does not
+# report as depsgraph updates (those settings live on the node's orphan ImageTexture image_user).
+_sequenceBitmapParams: dict[int, tuple] = {}
 
-    Blender does not fire node.update() when the user swaps node.texture.image
-    via template_ID, because the change is on a sub-property of the texture
-    pointer. This msgbus subscription watches the whole texture object
-    (which covers .image changes) and tags the node tree dirty so that IPR
-    picks up the new image.
+
+def tagChangedSequenceBitmaps():
+    """ Tag the owning material of any V-Ray Bitmap whose SEQUENCE frame settings (Frames / Start
+        Frame / Offset / Cyclic) changed since the last call, so IPR re-exports it. Blender does not
+        generate a depsgraph update for the orphan ImageTexture's image_user, so we fingerprint and
+        compare here. Driven from depsgraph_update_post (event-driven, no polling timer).
+    """
+    from vray_blender.nodes.tree import iterVRayNodeTrees
+    liveNodes = set()
+
+    for ntree in iterVRayNodeTrees():
+        for node in ntree.nodes:
+            if node.bl_idname != 'VRayNodeMetaImageTexture':
+                continue
+            texture = node.texture
+            image = texture.image if texture else None
+            if not (image and image.source == 'SEQUENCE'):
+                continue
+
+            imageUser = texture.image_user
+            nodeKey = node.as_pointer()
+            liveNodes.add(nodeKey)
+            fingerprint = (imageUser.frame_duration, imageUser.frame_start,
+                           imageUser.frame_offset, imageUser.use_cyclic)
+            # Using the new fingerprint as the default means a node we haven't seen before is just
+            # recorded, not tagged - we only re-export on an actual change.
+            if _sequenceBitmapParams.get(nodeKey, fingerprint) != fingerprint:
+                _onBitmapImageUpdate(node)
+            _sequenceBitmapParams[nodeKey] = fingerprint
+
+    # Forget nodes that no longer exist so the dict doesn't grow unbounded.
+    for nodeKey in _sequenceBitmapParams.keys() - liveNodes:
+        del _sequenceBitmapParams[nodeKey]
+
+
+def subscribeToBitmapImageUpdates(node: bpy.types.Node):
+    """ Tag IPR dirty when the user swaps node.texture.image via template_ID - Blender fires no
+        node.update() for that sub-property change. Watches the whole texture (covers .image swaps);
+        sequence frame settings (image_user) are handled by tagChangedSequenceBitmaps() instead,
+        since msgbus doesn't fire reliably for those nested-struct changes.
     """
     tex = node.texture
     if not tex:
@@ -274,20 +427,11 @@ def subscribeToBitmapImageUpdates(node: bpy.types.Node):
         return
 
     bpy.msgbus.clear_by_owner(tex)
-    bpy.msgbus.subscribe_rna(
-        key=tex,
-        owner=tex,
-        args=(originalNode,),
-        notify=_onBitmapImageUpdate,
-    )
+    bpy.msgbus.subscribe_rna(key=tex, owner=tex, args=(originalNode,), notify=_onBitmapImageUpdate)
 
 
 def registerBitmapImageNodes():
-    """Re-subscribe all V-Ray Bitmap nodes in the scene.
-
-    msgbus subscriptions are cleared on scene reload, undo, and redo, so
-    this function must be called from the corresponding event handlers.
-    """
+    """ Re-subscribe all V-Ray Bitmap nodes (subscriptions are cleared on reload/undo/redo). """
     from vray_blender.nodes.tree import iterVRayNodeTrees
     for ntree in iterVRayNodeTrees():
         for node in ntree.nodes:

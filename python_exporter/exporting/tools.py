@@ -134,6 +134,9 @@ def isObjectVrayProxy(obj: bpy.types.Object):
 def isObjectVRayDecal(obj: bpy.types.Object):
     return obj.vray.isVRayDecal
 
+def isObjectVRayGaussian(obj: bpy.types.Object):
+    return obj.vray.isVRayGaussian
+
 def isObjectNonMeshClipper(obj: bpy.types.Object):
     vrayClipper = obj.vray.VRayClipper
     return vrayClipper and vrayClipper.enabled and not vrayClipper.use_obj_mesh

@@ -1,0 +1,48 @@
+
+{
+    "Desciption" : "RenderChannelGaussianSplats",
+    "ID" : "RenderChannelGaussianSplats",
+    "Name" : "Render Channel Gaussian Splats",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "enableDeepOutput",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "name",
+            "default" : "gaussianSplats",
+            "desc" : "Display name of this render channel",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "mode",
+            "default" : "0",
+            "desc" : "Specifies what information to store in the channel",
+            "items" : 
+            [
+                [ "0", "Splat color (albedo)", "Splat color (albedo)" ],
+                [ "1", "Illuminated splats", "Illuminated splats" ],
+                [ "2", "Raw illumination", "Raw illumination" ],
+                
+                [
+                    "3",
+                    "Splat color without lighting (for Back to Beauty)",
+                    "Splat color without lighting (for Back to Beauty)"
+                ]
+            ],
+            "type" : "ENUM"
+        }
+    ],
+    "Type" : "RENDERCHANNEL",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

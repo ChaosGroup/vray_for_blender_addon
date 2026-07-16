@@ -9,16 +9,23 @@ from dataclasses import dataclass
 from typing import Callable
 
 from vray_blender.nodes.tools import isCompatibleNode
-from vray_blender.nodes.utils import getPluginTypeOfNode
+from vray_blender.nodes.utils import (
+    getPluginTypeOfNode,
+    getOutputNode,
+    getNodeByType,
+    getVrayPropGroup,
+    isAutoConnectEnabled,
+    getMaterialWrapperSocket,
+)
 from vray_blender import debug
-from vray_blender.nodes.sockets import STRUCTURAL_SOCKET_CLASSES
+from vray_blender.nodes.sockets import (
+    STRUCTURAL_SOCKET_CLASSES,
+    MTL_SOCKET_TYPES,
+    OBJECT_SOCKET_TYPES,
+    SAME_TYPE_SOCKET_TYPES,
+)
 from vray_blender.plugins import getPluginModule
-from vray_blender.exporting.tools import getVRayBaseSockType
-
-
-_OBJECT_SOCKETS = frozenset({'VRaySocketObject', 'VRaySocketObjectList', 'VRaySocketIncludeExcludeList'})
-
-_SAME_TYPE_SOCKETS = frozenset({'VRaySocketColorRamp', 'VRaySocketTransform', 'VRaySocketGeom', 'VRaySocketObjectProps'})
+from vray_blender.exporting.tools import getVRayBaseSockType, getFarNodeLink
 
 
 def _sockType(sock: bpy.types.NodeSocket) -> str:
@@ -92,15 +99,22 @@ def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink, customIns
     """
     assert type(link) is bpy.types.NodeLink
 
-    # Store newly created links for nodes that have registered a custom nodeInsertLink callback
-    if getattr(node, 'vray_plugin', 'NONE') == 'NONE' and not customInsertLinkCallback:
+    if node != link.to_node:
         return
 
-    if (node == link.to_node) and (customInsertLinkCallback or hasattr(getPluginModule(node.vray_plugin), "nodeInsertLink")):
+    # Defer processing of the newly created link to VRayNodeBase.update(). At this point the
+    # 'link' parameter is not a real link yet and we cannot store it for later use, nor is it
+    # safe to touch socket/node state (the tree topology cache is not yet built). We record the
+    # link's identity so update() can find the real link once the topology has been committed.
+    # A link is recorded when it needs any deferred handling, i.e. when:
+    #   - the target socket reacts to being connected (e.g. auto-enables a 'use' toggle), or
+    #   - a custom insert-link callback was supplied, or
+    #   - the plugin module defines a nodeInsertLink callback.
+    hasPluginCallback = (getattr(node, 'vray_plugin', 'NONE') != 'NONE'
+                         and hasattr(getPluginModule(node.vray_plugin), "nodeInsertLink"))
+
+    if customInsertLinkCallback or hasPluginCallback or hasattr(link.to_socket, "onLinkConnected"):
         global _NewlyCreatedLinks
-        # Give the node a chance to initialize plugin-specific state. At this point,
-        # the 'link' parameter is not a real link yet and we cannot store it for later use.
-        # Store information about the link which will be used later to identify it
         _NewlyCreatedLinks.append(_NewLinkInfo(id(node.id_data),
                                                link.from_node.name,
                                                link.from_socket.name,
@@ -166,8 +180,8 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
             and (_sockType(fromSocket) != 'VRaySocketObjectProps'
                  or fromSocket.name != toSocket.name)):
         return False
-    if (_sockType(toSocket) in _SAME_TYPE_SOCKETS
-            or _sockType(fromSocket) in _SAME_TYPE_SOCKETS):
+    if (_sockType(toSocket) in SAME_TYPE_SOCKET_TYPES
+            or _sockType(fromSocket) in SAME_TYPE_SOCKET_TYPES):
         # Group interface sockets (NodeGroupInput outputs / NodeGroupOutput
         # inputs) are created by Blender with generic NodeSocket* types and
         # can't carry the exact V-Ray subtype. Allow them through so users
@@ -185,10 +199,10 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
             and not (toSocket.node.bl_idname == 'VRayNodeOutputMaterial'
                      and toSocket.name == 'Outlines')):
         return False
-    if (_sockType(toSocket) in _OBJECT_SOCKETS) != (_sockType(fromSocket) in _OBJECT_SOCKETS):
+    if (_sockType(toSocket) in OBJECT_SOCKET_TYPES) != (_sockType(fromSocket) in OBJECT_SOCKET_TYPES):
         return False
     if (fromSocket.bl_idname == 'VRaySocketBRDF'
-            and _sockType(toSocket) not in {'VRaySocketBRDF', 'VRaySocketMtl', 'VRaySocketMtlMulti'}):
+            and _sockType(toSocket) not in MTL_SOCKET_TYPES):
         return False
     return True
 
@@ -202,3 +216,192 @@ def isLinkValid(node: bpy.types.Node, link: bpy.types.NodeLink) -> bool:
         debug.report('WARNING', f"Node '{link.to_node.name}' not compatible with V-Ray node tree")
         return False
     return isConnectionAllowed(link.from_socket, link.to_socket)
+
+# Automatic node connections. When a node is added to a tree (and only on direct user edits,
+# i.e. outside a DisableAutoConnect block), it is wired up to the obvious target if there is one.
+
+def autoConnectObjectNode(node: bpy.types.Node, socketName: str):
+    """ Automatically connect an object node to a specific socket in the VRayNodeObjectOutput node. """
+    if not isAutoConnectEnabled():
+        return
+
+    if (ntree := node.id_data) and (ntree.vray.tree_type in {'OBJECT', 'FUR'}):
+        if outputNode := getOutputNode(ntree, 'OBJECT'):
+            targetSocket = outputNode.inputs.get(socketName)
+            if targetSocket and not targetSocket.is_linked:
+                ntree.links.new(node.outputs[0], targetSocket)
+
+
+def autoConnectNode(node: bpy.types.Node):
+    """ Automatically connect specific nodes to the output node of the tree. """
+    if not isAutoConnectEnabled():
+        return
+
+    if not (ntree := node.id_data):
+        return
+
+    if ntree.vray.tree_type == 'OBJECT':
+        socketName = None
+        match node.bl_idname:
+            case 'VRayNodeDisplacement':           socketName = 'Displacement'
+            case 'VRayNodeGeomStaticSmoothedMesh': socketName = 'Subdivision'
+            case 'VRayNodeObjectMatteProps':       socketName = 'Matte'
+            case 'VRayNodeObjectSurfaceProps':     socketName = 'Surface'
+            case 'VRayNodeObjectVisibilityProps':  socketName = 'Visibility'
+
+        if socketName:
+            autoConnectObjectNode(node, socketName)
+
+    elif ntree.vray.tree_type == 'MATERIAL':
+        if outputNode := getOutputNode(ntree, 'MATERIAL'):
+            # BRDFToonOverride auto-connects to the dedicated Outlines socket
+            if getattr(node, 'vray_plugin', '') == 'BRDFToonOverride':
+                outlinesSock = outputNode.inputs.get("Outlines")
+                if outlinesSock and not outlinesSock.is_linked:
+                    if sourceSocket := node.outputs.get("BRDF"):
+                        ntree.links.new(sourceSocket, outlinesSock)
+            else:
+                targetSocket = outputNode.inputs.get("Material")
+                autoLinkSocket = None
+                if targetSocket:
+                    if not targetSocket.is_linked:
+                        autoLinkSocket = targetSocket
+                    if targetSocket.is_linked and (link := getFarNodeLink(targetSocket)):
+                        if (wrapperNode := link.from_node) and (sock := getMaterialWrapperSocket(wrapperNode)):
+                            if not sock.is_linked:
+                                autoLinkSocket = sock
+
+                if autoLinkSocket:
+                    vrayType = getattr(node, 'vray_type', 'NONE')
+                    if vrayType in {'BRDF', 'MATERIAL'}:
+                        # Find the primary output socket
+                        sourceSocket = None
+                        if vrayType == 'BRDF':
+                            sourceSocket = node.outputs.get("BRDF")
+                        elif vrayType == 'MATERIAL':
+                            sourceSocket = node.outputs.get("Material") or node.outputs.get("Ci")
+
+                        if sourceSocket:
+                            ntree.links.new(sourceSocket, autoLinkSocket)
+
+    elif ntree.vray.tree_type == 'WORLD':
+        if vrayType := getattr(node, 'vray_type', 'NONE'):
+            containerType = None
+            socketType = None
+            if vrayType == 'RENDERCHANNEL':
+                containerType = 'VRayNodeRenderChannels'
+                socketType = 'VRaySocketRenderChannel'
+            elif vrayType == 'EFFECT':
+                containerType = 'VRayNodeEffectsHolder'
+                socketType = 'VRaySocketEffect'
+
+            if containerType:
+                containerNode = getNodeByType(ntree, containerType)
+                if containerNode:
+                    # Find first unlinked input socket (excluding the extend socket)
+                    targetSocket = next((s for s in containerNode.inputs if not s.is_linked and s.bl_idname != 'VRaySocketExtend'), None)
+
+                    if not targetSocket:
+                        # Add a new socket
+                        from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
+                        sockNamePrefix = "Channel" if vrayType == 'RENDERCHANNEL' else "Effect"
+
+                        # Count existing regular sockets to determine next name
+                        existingSockets = [s for s in containerNode.inputs if s.bl_idname == socketType]
+                        targetSocket = addInput(containerNode, socketType, f"{sockNamePrefix} {len(existingSockets) + 1}")
+
+                        moveExtendSocketToBottom(containerNode)
+
+                    if targetSocket:
+                        # Find primary output socket of the node
+                        sourceSocket = next((s for s in node.outputs if s.bl_idname in {'VRaySocketRenderChannelOutput', 'VRaySocketEffectOutput'}), None)
+                        if not sourceSocket and node.outputs:
+                            sourceSocket = node.outputs[0]
+
+                        if sourceSocket:
+                            ntree.links.new(sourceSocket, targetSocket)
+
+    # Helper nodes (uvwgen, object selectors, transform/matrix) connect to a single
+    # unconnected compatible socket anywhere in the tree, regardless of tree type.
+    autoConnectSingleSocket(node)
+
+
+# Helper nodes that should connect to a single unconnected compatible input socket
+# anywhere in the tree when added. UVWGen nodes are matched by 'vray_type' so that
+# both the meta mapping node and the auto-generated UVWGenRandomizer are covered.
+_SINGLE_SOCKET_AUTOCONNECT_IDNAMES = {
+    'VRayNodeSelectObject',
+    'VRayNodeMultiSelect',
+    'VRayPluginListHolder',
+    'VRayNodeTransform',
+    'VRayNodeMatrix',
+}
+
+
+def _isSingleSocketAutoConnectNode(node: bpy.types.Node):
+    return (getattr(node, 'vray_type', 'NONE') == 'UVWGEN') \
+        or (node.bl_idname in _SINGLE_SOCKET_AUTOCONNECT_IDNAMES)
+
+
+def _socketsConnectable(srcType: str, dstType: str):
+    """ Return True if an output socket of srcType is a natural auto-connect target for an
+        input of dstType: the same base type, or any pair within the object-reference family
+        (object / object-list / include-exclude list), matching isConnectionAllowed. """
+    if not srcType or not dstType:
+        return False
+    if srcType == dstType:
+        return True
+    return (srcType in OBJECT_SOCKET_TYPES) and (dstType in OBJECT_SOCKET_TYPES)
+
+
+def _socketAcceptsAutoConnect(sock: bpy.types.NodeSocket):
+    """ Exclude sockets that are always shown but only relevant in a particular mode, so they
+        don't pollute the single-candidate detection.
+
+        BRDFVRayMtl (and other BRDFs) expose an always-visible 'anisotropy_uvwgen' Mapping
+        socket which only affects the material when the anisotropy axes are derived from a uvw
+        generator (anisotropy_derivation == 1). In every other mode it should not be treated as
+        an auto-connect target, otherwise a freshly added mapping node would never reach the
+        texture's uvwgen socket. """
+    if getattr(sock, 'vray_attr', '') == 'anisotropy_uvwgen':
+        propGroup = getVrayPropGroup(sock.node)
+        return (propGroup is not None) and (getattr(propGroup, 'anisotropy_derivation', '1') == '1')
+    return True
+
+
+def autoConnectSingleSocket(node: bpy.types.Node):
+    """ Connect a newly added helper node (uvwgen, object selector, transform/matrix) to
+        the single unconnected compatible input socket in the tree, if exactly one exists.
+        When the connection is ambiguous (more than one candidate) nothing is connected. """
+    if not isAutoConnectEnabled():
+        return
+
+    if not _isSingleSocketAutoConnectNode(node):
+        return
+
+    if not (ntree := node.id_data) or not node.outputs:
+        return
+
+    sourceSocket = node.outputs[0]
+    if sourceSocket.is_linked:
+        return
+
+    srcType = _sockType(sourceSocket)
+
+    candidate = None
+    for treeNode in ntree.nodes:
+        if treeNode == node:
+            continue
+        for sock in treeNode.inputs:
+            if sock.is_linked or not sock.enabled:
+                continue
+            if _socketsConnectable(srcType, _sockType(sock)):
+                if not _socketAcceptsAutoConnect(sock):
+                    continue
+                if candidate is not None:
+                    # More than one candidate: ambiguous, do not auto-connect.
+                    return
+                candidate = sock
+
+    if candidate is not None:
+        ntree.links.new(sourceSocket, candidate)

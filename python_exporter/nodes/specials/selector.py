@@ -8,6 +8,7 @@ import bpy
 from vray_blender.exporting.tools import getActiveInputFarNodeLinks, getActiveOutputFarNodeLinks
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.lib.mixin import VRayNodeBase
+from vray_blender.nodes import links as NodeLinks
 from vray_blender.nodes.nodes import updateNodeMutedState
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isCompatibleNode
@@ -26,8 +27,9 @@ class VRayNodeMultiSelect(VRayNodeBase, common.VRayObjectSelector):
     def init(self, context: bpy.types.Context):
         addOutput(self, 'VRaySocketObjectList', "Objects")
         addInput(self, 'VRaySocketObjectList', "Objects", isMultiInput=True)
-        
+
         self.onSelectionChanged(context)
+        NodeLinks.autoConnectSingleSocket(self)
 
 
     def getSelected(self, context: bpy.types.Context):
@@ -183,6 +185,7 @@ class VRayNodeSelectObject(VRayNodeBase):
     
     def init(self, context):
         addOutput(self, 'VRaySocketObject', "Object")
+        NodeLinks.autoConnectSingleSocket(self)
 
     def copy(self, node: bpy.types.Node):
         if node.bl_idname == 'VRayNodeSelectObject':

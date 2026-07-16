@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from mathutils import Color
 
 from vray_blender.lib.names import Names
 from vray_blender.lib.defs import NodeContext, PluginDesc
@@ -14,9 +15,12 @@ from vray_blender.lib.defs import AttrPlugin
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
+# Magenta shown when the bitmap can't be loaded (missing file / non-existent sequence frame).
+_DEFAULT_MISSING_COLOR = Color((1.0, 0.0, 1.0))
+
 def exportTreeNode(nodeCtx: NodeContext):
     """ V-Ray Bitmap node translates to 3 VRay plugins: TexBitmap, BitmapBuffer and a UVW Gen plugin
-        depending on the selected UV mapping mode. This function returns a TexBitmap plugin with 
+        depending on the selected UV mapping mode. This function returns a TexBitmap plugin with
         attached to it the other two plugins.
     """
     node = nodeCtx.node
@@ -50,6 +54,10 @@ def exportTreeNode(nodeCtx: NodeContext):
                 #       [GPU_BROKEN_MODIFIED_IMAGES_RELOAD_IPR]
                 plugin_utils.updateValue(nodeCtx.exporterCtx.renderer, bitmapBufferPluginName, 'file', AttrPlugin(forceUpdate=True))
 
+            # SEQUENCE pins a per-frame frame_number and re-exports each frame; UDIM/single need none.
+            if image_utils.applySequenceFrameAttrs(image, node.texture.image_user, nodeCtx.exporterCtx.currentFrame, bitmapBufferPluginDesc):
+                nodeCtx.exporterCtx.registerAnimatedBitmapMaterial(nodeCtx.material)
+
         filePath = path_utils.formatResourcePath(filePath, allowRelativePaths)
         bitmapBufferPluginDesc.setAttribute('file', filePath)
 
@@ -71,6 +79,7 @@ def exportTreeNode(nodeCtx: NodeContext):
 
     commonNodesExport.exportNodeTree(nodeCtx, texBitmapPluginDesc, ("uvwgen",))
     texBitmapPluginDesc.setAttribute("bitmap", pluginBitmapBuffer)
+    texBitmapPluginDesc.setAttribute("default_color", _DEFAULT_MISSING_COLOR)
 
     return commonNodesExport.exportPluginWithStats(nodeCtx, texBitmapPluginDesc)
 

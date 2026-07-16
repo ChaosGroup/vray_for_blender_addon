@@ -326,11 +326,6 @@ def getLightAddOperators():
         VRAY_OT_add_object_vray_light_ambient,
     )
 
-def addSeparatorToMenu(self, context):
-    """ Callback to add a separator to a menu. To be used with Menu.append() """
-    self.layout.separator()
-
-
 def addVRayLightsToMenu(self, context):
     """ Callback to add all V-Ray lights to a menu. To be used with Menu.append() """
 
@@ -502,7 +497,7 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
 
         ob.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
 
-        if err := vray_proxy.loadVRayScenePreviewMesh(ob, absFilePath):
+        if err := vray_proxy.loadVRayScenePreviewMesh(ob.data.vray.VRayScene, absFilePath):
             debug.report('ERROR', err)
             return {'CANCELLED'}
 
@@ -531,13 +526,64 @@ class VRAY_OT_add_object_decal(VRayOperatorBase):
 
     def execute(self, context):
         obj = createDecalObject(context)
-        generateDecalPreviewMesh(obj, obj.data.vray.VRayDecal)
+        generateDecalPreviewMesh(obj)
         blender_utils.selectObject(obj)
 
         return {'FINISHED'}
 
-class VRAY_MT_Mesh(bpy.types.Menu):
-    bl_idname = "VRAY_MT_Mesh"
+
+class VRAY_OT_add_object_splat(VRayOperatorBase):
+    """ Add a V-Ray Gaussians object: an Empty that renders a Gaussian splat (.ply) file. """
+
+    bl_idname = "vray.add_object_splat"
+    bl_label = "Add V-Ray Gaussians"
+    bl_description = "Import a Gaussian splat (.ply) file as a V-Ray Gaussians object"
+    bl_options = { 'UNDO' }
+
+    filter_glob: bpy.props.StringProperty(default="*.ply", options={'HIDDEN'})
+    filepath: bpy.props.StringProperty(name="Filepath (*.ply)", subtype="FILE_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        from vray_blender.utils import splat_preview
+
+        obj = bpy.data.objects.new("V-Ray Gaussians", None)
+        # Set the file before tagging the object as a splat so the GeomGaussians.file update
+        # callback (which also regenerates the preview) is a no-op here - we load the preview
+        # explicitly below so we can report a read error to the user, avoiding a double load.
+        obj.vray.GeomGaussians.file = self.filepath
+        obj.vray.isVRayGaussian = True
+        obj.location = context.scene.cursor.location
+        context.collection.objects.link(obj)
+
+        # Pre-generate the viewport preview so the first redraw doesn't stall, size the Empty to
+        # the model's bounding box, and give immediate feedback if the file cannot be read.
+        if err := splat_preview.loadPreview(obj):
+            self.report({'WARNING'}, err)
+
+        blender_utils.selectObject(obj)
+        return {'FINISHED'}
+
+
+def getMenuLightAddOperators():
+    """ The V-Ray lights shown in the Add (Shift+A) menu, in display order. """
+    return (
+        VRAY_OT_add_object_vray_light_rect,
+        VRAY_OT_add_object_vray_light_sphere,
+        VRAY_OT_add_object_vray_light_dome,
+        VRAY_OT_add_object_vray_light_mesh,
+        VRAY_OT_add_object_vray_light_ies,
+        VRAY_OT_add_object_vray_light_sun,
+        VRAY_OT_add_object_vray_sun_sky,
+    )
+
+
+class VRAY_MT_add(bpy.types.Menu):
+    """ V-Ray submenu in the Add (Shift+A) menu, grouped by Camera / Lights / Geometry """
+    bl_idname = "VRAY_MT_add"
     bl_label = "V-Ray"
 
     @classmethod
@@ -545,19 +591,87 @@ class VRAY_MT_Mesh(bpy.types.Menu):
         return classes.pollEngine(context)
 
     def draw(self, context):
+        layout = self.layout
+
+        # Forbid creation of objects in Edit mode (it can produce errors).
+        classes.disableLayoutInEditMode(layout, context)
+
+        # --- Camera ---
+        layout.label(text="Camera")
+        layout.operator(VRAY_OT_add_physical_camera.bl_idname, text="V-Ray Physical Camera", icon_value=icons.getUIIcon(VRAY_OT_add_physical_camera))
+        layout.separator()
+
+        # --- Lights ---
+        layout.label(text="Lights")
+        for op in getMenuLightAddOperators():
+            layout.operator(op.bl_idname, text=op.bl_label, icon_value=icons.getUIIcon(op))
+        layout.separator()
+
+        # --- Geometry ---
+        layout.label(text="Geometry")
+        # V-Ray Scene is only available in solid viewport mode (not during IPR viewport render).
         enableVrscene = not VRayRendererIprViewport.isActive()
-        vraySceneLayout = self.layout.column()
+        vraySceneLayout = layout.column()
         vraySceneLayout.active = enableVrscene
         vraySceneLayout.enabled = enableVrscene
-
         vraySceneLayout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_vrayscene))
-        self.layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
-        self.layout.operator(VRAY_OT_add_object_fur.bl_idname, text="V-Ray Fur", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
-        self.layout.operator(VRAY_OT_add_object_decal.bl_idname, text="V-Ray Decal", icon_value=icons.getUIIcon(VRAY_OT_add_object_decal))
+
+        layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
+        # Still not ready for production
+        # layout.operator(VRAY_OT_add_object_splat.bl_idname, text="V-Ray Gaussians", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
+        layout.operator(VRAY_OT_add_object_fur.bl_idname, text="V-Ray Fur", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
+        layout.operator(VRAY_OT_add_object_decal.bl_idname, text="V-Ray Decal", icon_value=icons.getUIIcon(VRAY_OT_add_object_decal))
 
 
-def addVRayMeshesToMenu(self, context):
-    self.layout.menu(VRAY_MT_Mesh.bl_idname, icon_value=icons.getIcon("VRAY_PLACEHOLDER"))
+class _AddMenuLayout:
+    """Wraps UILayout.menu() to inject the V-Ray menu just before VIEW3D_MT_mesh_add."""
+
+    def __init__(self, real):
+        object.__setattr__(self, "_real", real)
+
+    def menu(self, idname, *args, **kwargs):
+        if idname == "VIEW3D_MT_mesh_add":
+            self._real.menu(VRAY_MT_add.bl_idname, icon_value=icons.getIcon("VRAY_PLACEHOLDER"))
+            self._real.separator()
+        self._real.menu(idname, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setattr__(self, name, value):
+        # Forward attribute writes (e.g. operator_context) to the wrapped layout.
+        setattr(self._real, name, value)
+
+
+class _AddMenu:
+    """Wraps a Menu instance to substitute self.layout with an _AddMenuLayout."""
+
+    def __init__(self, realSelf, layout):
+        self._real = realSelf
+        self.layout = layout
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+_originalAddMenuDraw = None
+
+
+def _patchedAddMenuDraw(self, context):
+    _originalAddMenuDraw(_AddMenu(self, _AddMenuLayout(self.layout)), context)
+
+
+def register_add_menu_draw():
+    global _originalAddMenuDraw
+    _originalAddMenuDraw = bpy.types.VIEW3D_MT_add.draw
+    bpy.types.VIEW3D_MT_add.draw = _patchedAddMenuDraw
+
+
+def unregister_add_menu_draw():
+    global _originalAddMenuDraw
+    if _originalAddMenuDraw is not None:
+        bpy.types.VIEW3D_MT_add.draw = _originalAddMenuDraw
+        _originalAddMenuDraw = None
 
 
 original_topbar_render_draw = None
@@ -602,11 +716,13 @@ def getRegClasses():
         VRAY_OT_set_view,
         VRAY_OT_add_object_vrayscene,
         VRAY_OT_add_object_proxy,
+        # Still not ready for production
+        # VRAY_OT_add_object_splat,
         VRAY_OT_add_object_fur,
         VRAY_OT_add_object_decal,
         VRAY_OT_select_camera,
         VRAY_OT_camera_lock_unlock_view,
-        VRAY_MT_Mesh,
+        VRAY_MT_add,
         VRAY_OT_add_physical_camera
     ) + getLightAddOperators()
 
@@ -615,12 +731,7 @@ def register():
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
 
-    bpy.types.VIEW3D_MT_mesh_add.append(addSeparatorToMenu)
-    bpy.types.VIEW3D_MT_mesh_add.append(addVRayMeshesToMenu)
-
-    bpy.types.VIEW3D_MT_light_add.append(addSeparatorToMenu)
-    bpy.types.VIEW3D_MT_light_add.append(addVRayLightsToMenu)
-
+    register_add_menu_draw()
     register_topbar_render_draw()
 
 
@@ -628,7 +739,5 @@ def unregister():
     for regClass in getRegClasses():
         bpy.utils.unregister_class(regClass)
 
-    bpy.types.VIEW3D_MT_mesh_add.remove(addVRayMeshesToMenu)
-    bpy.types.VIEW3D_MT_light_add.remove(addVRayLightsToMenu)
-
+    unregister_add_menu_draw()
     unregister_topbar_render_draw()

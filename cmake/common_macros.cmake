@@ -204,6 +204,7 @@ macro(use_vraysdk _appsdk_root _sdk_root)
 		vutils_s
 		cosmos_client_s
 		collaboration_common_s
+		veras_submit_client_s # Chaos Veras web view, shipped with the collaboration libs
 		chaos_unified_login_s
 		pll_s # for uuid
 		vray # for valloc
@@ -376,7 +377,7 @@ macro(set_build_configurations)
 endmacro()
 
 function(extract_vray_version _version_major_var _version_minor_var _version_patch_var)
-	set (_file_path "${CMAKE_SOURCE_DIR}/vray_for_blender_python_exporter/__init__.py")
+	set (_file_path "${CMAKE_SOURCE_DIR}/python_exporter/__init__.py")
 	if(NOT EXISTS "${_file_path}")
 		message(FATAL_ERROR "Exporter init file not found: ${_file_path}")
 	endif()

@@ -6,6 +6,7 @@ import bpy
 
 from vray_blender.ui import classes
 from vray_blender.lib import class_utils, draw_utils
+from vray_blender.lib.attribute_utils import copyPropGroupValues
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addInput
 from vray_blender.nodes.utils import findDataObjFromNode, addInputs
@@ -56,7 +57,7 @@ class VRayNodeObjectOutput(VRayNodeBase):
     def update(self):
         if self.mute:
             self.mute = False
-        super().update()
+        vrayNodeUpdate(self)
 
 
 class VRayNodeFurOutput(VRayNodeBase):
@@ -73,10 +74,17 @@ class VRayNodeFurOutput(VRayNodeBase):
     def draw_buttons_ext(self, context, layout):
         classes.drawPluginUI(context, layout, self.GeomHair, getPluginModule('GeomHair'), self)
 
+    def free(self):
+        # Sync node values back to the object's classic propgroup so deleting the tree keeps them.
+        obj = next((o for o in bpy.data.objects
+                    if getattr(o.vray, 'isVRayFur', False) and o.vray.ntree is self.id_data), None)
+        if obj:
+            copyPropGroupValues(self.GeomHair, obj.data.vray.GeomHair, getPluginModule('GeomHair'))
+
     def update(self):
         if self.mute:
             self.mute = False
-            
+
         vrayNodeUpdate(self)
 
 class VRayNodeDecalOutput(VRayNodeBase):
@@ -89,9 +97,21 @@ class VRayNodeDecalOutput(VRayNodeBase):
 
     def init(self, context):
         addInputs(self, getPluginModule('VRayDecal'))
+        # Inherit the object's classic decal settings (mirrors fur; reverse of free()).
+        if obj := self._decalObject():
+            copyPropGroupValues(obj.data.vray.VRayDecal, self.VRayDecal, getPluginModule('VRayDecal'))
 
     def draw_buttons_ext(self, context, layout):
         classes.drawPluginUI(context, layout, self.VRayDecal, getPluginModule('VRayDecal'), self)
+
+    def free(self):
+        # Sync node values back to the object's classic propgroup so deleting the tree keeps them.
+        if obj := self._decalObject():
+            copyPropGroupValues(self.VRayDecal, obj.data.vray.VRayDecal, getPluginModule('VRayDecal'))
+
+    def _decalObject(self):
+        return next((o for o in bpy.data.objects
+                     if getattr(o.vray, 'isVRayDecal', False) and o.vray.ntree is self.id_data), None)
 
     def update(self):
         vrayNodeUpdate(self)
@@ -170,6 +190,9 @@ class VRayNodeOutputMaterial(VRayNodeBase):
             split.column()
             col = split.column()
             classes.drawPluginUI(context, col, propGroup, getPluginModule(pluginType), self)
+    
+    def update(self):
+        vrayNodeUpdate(self)
 
 ########  ########  ######   ####  ######  ######## ########     ###    ######## ####  #######  ##    ##
 ##     ## ##       ##    ##   ##  ##    ##    ##    ##     ##   ## ##      ##     ##  ##     ## ###   ##

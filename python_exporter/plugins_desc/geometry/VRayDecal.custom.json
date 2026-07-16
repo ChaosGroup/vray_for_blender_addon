@@ -339,6 +339,48 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "decal_type"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::enabled=1"
+                        },
+                        "attrs": [
+                            {
+                                "name": "height",
+                                "label": "Length"
+                            },
+                            {
+                                "name": "height_offset",
+                                "label": "Length Offset"
+                            },
+                            {
+                                "name": "width"
+                            },
+                            {
+                                "name": "length",
+                                "label": "Height"
+                            },
+                            {
+                                "name": "bend",
+                                "active": {
+                                    "cond": "::decal_type=1"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
         ]
     },
     "Node": {

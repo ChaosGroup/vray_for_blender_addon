@@ -1,0 +1,53 @@
+{
+    "ID": "RenderChannelLightingAnalysis",
+    "Name" : "Lighting Analysis",
+    "Subtype" : "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "channelType",
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawChannelType"
+                    },
+                    {
+                        "name": "quantity"
+                    },
+                    {
+                        "name": "min_value"
+                    },
+                    {
+                        "name": "max_value"
+                    },
+                    {
+                        "name": "scale"
+                    },
+                    {
+                        "name": "display"
+                    },
+                    {
+                        "name": "grid_horizontal_spacing"
+                    },
+                    {
+                        "name": "grid_vertical_spacing"
+                    },
+                    {
+                        "name": "fade_background_image"
+                    },
+                    {
+                        "name": "draw_legend"
+                    },
+                    {
+                        "name": "lightingAnalysisUpdate",
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawLightingAnalysisUpdate"
+                    }
+                ]
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": []
+    }
+}

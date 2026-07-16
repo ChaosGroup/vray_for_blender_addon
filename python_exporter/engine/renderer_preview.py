@@ -10,6 +10,7 @@ import time
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 
 from vray_blender import debug
+from vray_blender.lib.blender_utils import getVRayPreferences
 from vray_blender.lib.common_settings import CommonSettings, collectExportSceneSettings
 from vray_blender.lib.defs import ExporterContext, NodeContext, PluginDesc, ExporterType, ProdRenderMode
 from vray_blender.lib.names import Names, syncUniqueNamesForPreview
@@ -83,7 +84,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         # Look up whether we need to export a vrscene for the material preview
         # in the original scene. This property is not set in the preview scene.
         originalScene = bpy.context.scene
-        if originalScene.vray.Exporter.export_material_preview_scene:
+        if getVRayPreferences().export_material_preview_scene:
             self._writeVrscene(originalScene, engine)
 
         vray.renderFrame(self.renderer)
@@ -163,13 +164,13 @@ class VRayRendererPreview(VRayRendererProdBase):
         """ Export the preview scene to a .vrscene file """
         from pathlib import Path
 
-        vrayExporter = scene.vray.Exporter
-        assert vrayExporter.export_material_preview_scene
+        preferences = getVRayPreferences()
+        assert preferences.export_material_preview_scene
 
         # Reuse the path set for the .vrscene for the interactive scene, but
         # add the '_preview' suffix. This is only available in in debug mode, so
         # no need for other user-controllable options here.
-        exportPath = Path(vrayExporter.export_scene_file_path)
+        exportPath = Path(preferences.export_scene_file_path)
         vrsceneFile = exportPath.parent / f"{exportPath.stem}_preview.vrscene"
 
         exportSettings, errMsg = collectExportSceneSettings(scene, str(vrsceneFile))

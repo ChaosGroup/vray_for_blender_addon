@@ -290,20 +290,30 @@ def addTexMultiExtendSocket(node):
     sockExtend.add_operator = 'vray.node_texmulti_socket_add'
     sockExtend.del_operator = 'vray.node_texmulti_socket_del'
 
+def _applyDefaultTexSocketValues(texSockets):
+    """ Set each tex socket to its creation-time default: its ID and a shade of grey from a gradient
+        spread across the sockets. Shared by nodeInit and nodeReset. """
+    total = len(texSockets) or 1
+    for i, texSock in enumerate(texSockets):
+        texSock.id = i + 1
+        clr = 1.0 - (1.0 / total) * i
+        texSock.value = mathutils.Color((clr, clr, clr))
+
+
 def nodeInit(node: bpy.types.Node):
     DEFAULT_SOCKETS = 5
 
     for i in range(DEFAULT_SOCKETS):
-        humanIndex = i + 1
-        texSock = addInput(node, 'VRaySocketTexMulti', _getTexSockName(humanIndex))
-        texSock.id = humanIndex
-
-        # Set a different shade of grey to each of the pre-created sockets
-        clr = 1.0 - (1.0 / DEFAULT_SOCKETS) * i
-        texSock.value = mathutils.Color((clr, clr, clr))
+        addInput(node, 'VRaySocketTexMulti', _getTexSockName(i + 1))
+    _applyDefaultTexSocketValues(_getTexSockets(node))
 
     addTexMultiExtendSocket(node)
     getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != "30")
+
+
+def nodeReset(node: bpy.types.Node):
+    """ Re-apply the creation-time values to the existing tex sockets (count preserved). """
+    _applyDefaultTexSocketValues(_getTexSockets(node))
 
 
 def nodeInsertLink(link: bpy.types.NodeLink):

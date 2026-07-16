@@ -155,7 +155,9 @@ def _fixBlenderRectLight(areaLight: bpy.types.Light):
     if areaLight.shape == 'SQUARE':
         areaLight.shape = 'RECTANGLE'
 
-    if areaLight.vray.LightRectangle.is_disc:
+    # Only write when the value actually changes. fixSceneLights() runs on every depsgraph
+    # update; an unconditional write would re-tag the depsgraph each pass and recurse.
+    if areaLight.vray.LightRectangle.is_disc and (areaLight.size_y != areaLight.size):
         areaLight.size_y = areaLight.size
 
 
@@ -321,7 +323,7 @@ class LightExporter(ExporterBase):
         self._exportLightMix()
 
 
-    def _exportLightSelect(self, channelName: str, selectMode: int):
+    def exportLightSelect(self, channelName: str, selectMode: int):
         """ Export a single RenderChannelLightSelect plugin.
 
             Parameters:
@@ -341,8 +343,41 @@ class LightExporter(ExporterBase):
         return export_utils.exportPlugin(self, pluginDesc)
 
 
+    def exportLightSelectChannel(self, channelName: str, pluginNames: list[str], mappingObjName: str = None):
+        """ Export a 'full' RenderChannelLightSelect named 'channelName', link every plugin in
+            'pluginNames' to it via 'channels_full', and register the channel -> scene-object mapping
+            used by the LightMix Transfer-to-Scene feature. This is the common wiring shared by the
+            per-light (LightMix 'individual'/'instanced') and the per-instancer channels.
+
+            Parameters:
+            @channelName -   The name shown for the channel in the VFB LightMix UI.
+            @pluginNames -   The light plugin names whose contribution should feed this channel.
+            @mappingObjName - The scene object name to map the channel to (defaults to 'channelName').
+        """
+        from vray_blender.engine.light_mix_transfer import getLightMixMapping
+
+        if not pluginNames:
+            return
+
+        lsPlugin = self.exportLightSelect(channelName, LightSelectMode.Full)
+
+        for pluginName in pluginNames:
+            self.linkPluginToRenderChannel(pluginName, 'channels_full', lsPlugin)
+
+        getLightMixMapping().addLight(channelName, mappingObjName if mappingObjName is not None else channelName)
+
+
     # Creates light plugin, exports it and puts it in ObjTracker
-    def exportLight(self, obj: bpy.types.Object):
+    def exportLight(self, obj: bpy.types.Object, pluginNameOverride: str = None, lightSelectExportEnabled: bool = True):
+        """ Export the light plugin for 'obj'.
+
+            @pluginNameOverride - when set, the light plugin is exported under this name instead of
+            the object's default name. This is used to emit a dedicated copy of the light for its
+            instances (see 'instanced' LightMix mode).
+            @lightSelectExportEnabled - when False, skip creating a per-light LightSelect render channel
+            for this plugin. Used for a dedicated instanced copy, which the caller links to its
+            instancer's LightSelect channel instead.
+        """
         light = obj.data
         vrayLight = light.vray
 
@@ -367,7 +402,7 @@ class LightExporter(ExporterBase):
                 light.type = blenderType
 
 
-        lightPluginName = getPluginName(obj)
+        lightPluginName = pluginNameOverride or getPluginName(obj)
 
         # The lights may be defined either through the property pages, or as node trees.
         # When a V-Ray node tree is active, all values set through the property pages are disregarded.
@@ -389,19 +424,24 @@ class LightExporter(ExporterBase):
                     with TrackObj(self.nodeTracker, lightTrackId):
                         exportNodeTree(nodeCtx, pluginDesc)
                         # So far, we have exported the whole nodetree except for the proper LightXXX node. Export it now
-                        lightPlugin = self._exportLightPlugin(obj, pluginDesc, lightNode)
+                        lightPlugin = self._exportLightPlugin(obj, pluginDesc, lightNode, lightSelectExportEnabled=lightSelectExportEnabled)
                         nodeCtx.cacheNodePlugin(lightNode, lightPlugin)
 
         else:
             pluginDesc = PluginDesc(lightPluginName, pluginType)
             pluginDesc.vrayPropGroup = getattr(vrayLight, pluginType)
-            self._exportLightPlugin(obj, pluginDesc, lightNode = None)
+            self._exportLightPlugin(obj, pluginDesc, lightNode = None, lightSelectExportEnabled=lightSelectExportEnabled)
 
         self.exportProgress.update(self.engine)
 
 
-    def _exportLightPlugin(self, obj: bpy.types.Object, pluginDesc: PluginDesc, lightNode: bpy.types.Node):
-        """ Export an 'output' light plugin. """
+    def _exportLightPlugin(self, obj: bpy.types.Object, pluginDesc: PluginDesc, lightNode: bpy.types.Node, lightSelectExportEnabled: bool = True):
+        """ Export an 'output' light plugin.
+
+            @lightSelectExportEnabled - when False, skip creating a per-light LightSelect render channel
+            for this plugin. Used when exporting a dedicated instanced copy of the light, which is
+            linked to its instancer's LightSelect channel by the caller instead.
+        """
         light = obj.data
 
         # Set attributes that do not depend on the usage of nodetree for the light
@@ -443,7 +483,7 @@ class LightExporter(ExporterBase):
         propGroup = getattr(propHolder, pluginDesc.type)
 
         # Export a LightSelect render channel for this light, if necessary.
-        if propGroup.enabled:
+        if lightSelectExportEnabled and propGroup.enabled:
             self._exportIndividualLightInLightMix(obj, pluginDesc)
 
         # Depending on whether the light has a nodetree, the plugin properties are stored in different locations.
@@ -606,13 +646,13 @@ class LightExporter(ExporterBase):
         lightMixMapping.clear()
 
         # Environment and Self-Illumination LightSelect plugins are needed for the Light Mix
-        self._exportLightSelect("Environment", LightSelectMode.Environment)
-        self._exportLightSelect("Self_Illumination", LightSelectMode.SelfIllumination)
+        self.exportLightSelect("Environment", LightSelectMode.Environment)
+        self.exportLightSelect("Self_Illumination", LightSelectMode.SelfIllumination)
 
         if lightMix.separate_emissive_material:
             # Create LightSelect channels for each emissive material
             for pluginName, attrName, nodeName, materialName in self.emissiveMaterials:
-                lightSelectEmissive = self._exportLightSelect(nodeName, LightSelectMode.Full)
+                lightSelectEmissive = self.exportLightSelect(nodeName, LightSelectMode.Full)
                 self.linkPluginToRenderChannel(pluginName, attrName, lightSelectEmissive)
                 lightMixMapping.addMaterial(nodeName, materialName)
 
@@ -634,7 +674,7 @@ class LightExporter(ExporterBase):
             if not (lightObjects := [o for o in coll.all_objects if o.type == 'LIGHT']):
                 continue
 
-            lsPlugin = self._exportLightSelect(coll.name, LightSelectMode.Full)
+            lsPlugin = self.exportLightSelect(coll.name, LightSelectMode.Full)
             # No need to track light selects as they are only exported for production renders
 
             for objLight in lightObjects:
@@ -658,20 +698,16 @@ class LightExporter(ExporterBase):
 
         isFreeLight = (lightMix.mode == 'grouped') and (objLight in self.lightCollections[""])
 
-        if (lightMix.mode != 'individual') and (not isFreeLight):
+        # In 'instanced' mode the (non-instanced) originals behave like 'individual' - each gets its
+        # own per-light channel. Their instanced copies are routed to per-instancer channels instead.
+        if (lightMix.mode not in ('individual', 'instanced')) and (not isFreeLight):
             return
 
-        from vray_blender.engine.light_mix_transfer import getLightMixMapping
-        lightMixMapping = getLightMixMapping()
-
         if objLight.data.vray.light_type == 'MESH':
-            for lightMeshPluginName in getLightMeshInstanceNames(self, lightPlugin.name):
-                lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
-                self.linkPluginToRenderChannel(lightMeshPluginName, 'channels_full', lsPlugin)
+            pluginNames = getLightMeshInstanceNames(self, lightPlugin.name)
         else:
-            lsPlugin = self._exportLightSelect(objLight.name, LightSelectMode.Full)
-            self.linkPluginToRenderChannel(lightPlugin.name, 'channels_full', lsPlugin)
+            pluginNames = [lightPlugin.name]
 
-        lightMixMapping.addLight(objLight.name, objLight.name)
+        self.exportLightSelectChannel(objLight.name, pluginNames)
 
 

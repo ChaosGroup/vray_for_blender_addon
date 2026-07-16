@@ -11,7 +11,7 @@ from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 from vray_blender.exporting.update_tracker import UpdateTracker
 
 from vray_blender import debug
-from vray_blender.lib.blender_utils import TestBreak, setFloatFrame
+from vray_blender.lib.blender_utils import TestBreak, setFloatFrame, getVRayPreferences
 from vray_blender.lib.path_utils import getV4BTempDir
 from vray_blender.lib.common_settings import CommonSettings, collectExportSceneSettings
 from vray_blender.lib.defs import ExporterContext, ExporterType, ProdRenderMode
@@ -119,7 +119,8 @@ class VRayRendererProd(VRayRendererProdBase):
                 case ProdRenderMode.CLOUD_SUBMIT:
                     self._submitToCloud(engine)
                 case ProdRenderMode.EXPORT_VRSCENE:
-                    self._writeVrscene(scene, engine)
+                    scenePath = self._writeVrscene(scene, engine)
+                    self._packExportedScene(scenePath, engine)
                 case ProdRenderMode.EXPORT_PROXY:
                     success = self._exportProxy(scene, engine)
                 case ProdRenderMode.RENDER:
@@ -223,6 +224,23 @@ class VRayRendererProd(VRayRendererProdBase):
 
         return ""
 
+    def _packExportedScene(self, scenePath: str, engine: bpy.types.RenderEngine):
+        """ If enabled, collect the exported scene's assets via Chaos Cloud and optionally zip them. """
+        if not scenePath:
+            return
+
+        preferences = getVRayPreferences()
+        if not preferences.export_scene_pack:
+            return
+
+        self._reportInfo(engine, "Packing scene assets...")
+
+        from vray_blender.lib.export_utils import packExportedScene
+        if errMsg := packExportedScene(scenePath, archive=preferences.export_scene_zip):
+            self._reportError(engine, f"Scene packing: {errMsg}")
+        else:
+            self._reportInfo(engine, "Scene packed.")
+
     def _initRenderJob(self, engine: bpy.types.RenderEngine, depsgraph: bpy.types.Depsgraph):
         
         scene = bpy.context.scene
@@ -247,7 +265,7 @@ class VRayRendererProd(VRayRendererProdBase):
             if not self.renderer:
                 isProxyAnimationExport = (
                     __class__.renderMode == ProdRenderMode.EXPORT_PROXY
-                    and scene.vray.Exporter.export_proxy_animation_range == 'FRAME_RANGE'
+                    and getVRayPreferences().export_proxy_animation_range == 'FRAME_RANGE'
                 )
                 exporterType = ExporterType.ANIMATION if (self.exporterCtx.isAnimation or isProxyAnimationExport) else ExporterType.PROD
                 self.renderer = self._createRenderer(exporterType)

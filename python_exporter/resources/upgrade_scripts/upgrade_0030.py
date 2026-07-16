@@ -71,9 +71,9 @@ def run():
                     'faces': faces.reshape((-1,3))
                 }
 
-                proxy._replaceObjMesh(obj, newMeshData)
+                proxy._replaceObjMesh(obj.data, newMeshData)
 
-            proxy.loadVRayScenePreviewMesh(obj, vrayScene.filepath)
+            proxy.loadVRayScenePreviewMesh(vrayScene, vrayScene.filepath)
 
 
 def check():

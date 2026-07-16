@@ -7,6 +7,7 @@ from bpy.types import Context
 
 from vray_blender.engine import ZMQ
 from vray_blender.lib import draw_utils
+from vray_blender.lib.blender_utils import getVRayPreferences
 from vray_blender.lib.sys_utils import StartupConfig, activeRendererExists
 from vray_blender.operators import VRAY_OT_cloud_submit, VRAY_OT_jump_to_setting, VRAY_OT_render, VRAY_OT_set_render_mode
 from vray_blender.plugins import getPluginModule
@@ -323,8 +324,9 @@ class VRAY_PT_Exporter(classes.VRayRenderPanel):
                 boxDebug.prop(vrayExporter, "enable_visual_debugger")
                 boxDebug.separator()
                 row = boxDebug.row(align=True)
-                row.prop(vrayExporter, 'export_scene_file_path', text='Vrscene path')
-                boxDebug.prop(vrayExporter, 'export_material_preview_scene', text='Export material preview vrscene')
+                preferences = getVRayPreferences(context)
+                row.prop(preferences, 'export_scene_file_path', text='Vrscene path')
+                boxDebug.prop(preferences, 'export_material_preview_scene', text='Export material preview vrscene')
                 row.operator('vray.select_vrscene_export_file', text='', icon='FILE_FOLDER')
                 exportSceneLayout = boxDebug.row(align=True)
                 exportSceneLayout.enabled = not vray.isCommunityEdition()
@@ -591,6 +593,38 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
         ).menu_tab = 'PREFERENCES_MENU_DR'
 
 
+class VRAY_PT_VRayProfiler(classes.VRayRenderPanel):
+    bl_label = "V-Ray Profiler"
+    bl_panel_groups = RenderPanelGroups
+
+    @classmethod
+    def poll_custom(cls, context):
+        return pollEngine(context) and StartupConfig.debugUI
+
+    def draw(self, context):
+        layout = self.layout
+
+        vrayProfiler = getVRayPreferences(context).VRayProfiler
+
+        layout.use_property_decorate = False
+        layout.use_property_split = True
+
+        col = layout.column()
+        col.prop(vrayProfiler, 'mode')
+
+        maxDepthCol = col.column()
+        maxDepthCol.enabled = vrayProfiler.mode == '2'
+        maxDepthCol.prop(vrayProfiler, 'maxDepth')
+        
+        layout.prop(vrayProfiler, 'outputDirectory')
+        if not vrayProfiler.outputDirectory:
+            layout.label(text="Set an output directory to enable the profiler", icon='ERROR')
+
+        row = layout.row()
+        row.enabled = bool(vrayProfiler.outputDirectory)
+        row.operator("vray.open_last_profiler_report", icon='FILE_FOLDER')
+
+
 
 ########     ###    ##    ## ########
 ##     ##   ## ##   ##   ##  ##
@@ -670,24 +704,14 @@ def getRegClasses():
         # System
         VRAY_PT_Exporter,
         VRAY_PT_DR,
+        VRAY_PT_VRayProfiler,
     )
-
-from bl_ui import properties_render as BlenderRender
-
-_originalPoll = None
-
-
-@classmethod
-def myPoll(cls, context):
-    # Return False when V-Ray is the active engine
-    return not pollEngine(context)
 
 def register():
     from vray_blender.lib.class_utils import registerClass
 
-    global _originalPoll
-    _originalPoll = bpy.types.RENDER_PT_context.poll
-    bpy.types.RENDER_PT_context.poll = myPoll
+    # The stock render-context panel ignores COMPAT_ENGINES in its poll, so hide it explicitly.
+    classes.hideStockPanels([bpy.types.RENDER_PT_context])
 
     for regClass in getRegClasses():
         registerClass(regClass)
@@ -698,4 +722,4 @@ def unregister():
     for regClass in reversed(getRegClasses()):
         bpy.utils.unregister_class(regClass)
 
-    bpy.types.RENDER_PT_context.poll = _originalPoll
+    classes.restoreStockPanels([bpy.types.RENDER_PT_context])

@@ -563,6 +563,61 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "intensity_multiplier",
+                        "label": "Intensity"
+                    },
+                    {
+                        "name": "size_multiplier",
+                        "label": "Size"
+                    },
+                    {
+                        "name": "color_mode"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "name": "sky_model"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "clouds_on",
+                        "label": "Clouds On"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::clouds_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "clouds_ground_shadows",
+                                "label": "Ground Shadows"
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
         ]
     },
     "Node": {

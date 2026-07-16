@@ -124,6 +124,10 @@ def enumerateSpecialPasses(world):
 # the report log on every update_render_passes / setup poll.
 _warnedUnmappedChannels: set[str] = set()
 
+# Render elements that are intentionally VFB-only: they have no Blender compositor pass
+# by design, so the "missing mapping" warning would just be noise for them.
+_VFB_ONLY_PASSES: frozenset[str] = frozenset({"Lighting Analysis", "Light Mix"})
+
 
 def resetUnmappedChannelWarnings():
     """ Clear the warning dedup set so a newly loaded scene re-warns about its own
@@ -139,7 +143,9 @@ def enumerateGenericChannelNodes(world):
         passName = NODE_LABEL_TO_PASS_NAME.get(node.bl_label, node.bl_label)
         reInfo = RE.get(passName)
         if not reInfo or "channelType" not in reInfo:
-            if passName not in _warnedUnmappedChannels:
+            # VFB-only elements (Lighting Analysis, Light Mix) have no compositor pass by
+            # design - skip the warning for them; warn once for anything else unmapped.
+            if passName not in _VFB_ONLY_PASSES and passName not in _warnedUnmappedChannels:
                 _warnedUnmappedChannels.add(passName)
                 from vray_blender import debug
                 debug.reportAsync("WARNING",

@@ -152,20 +152,28 @@ class HairExporter(ExporterBase):
         uvs = np.empty(2*(totalParticles - firstExported), dtype=np.float32) if exportUVs else np.empty(0)
         colors = np.empty(3*(totalParticles - firstExported), dtype=np.float32) if exportColors else np.empty(0)
 
-        i = 0
-        for pindex in range(firstExported, totalParticles):
-            particle = psys.particles[(pindex - parents) % parents]
+        if exportUVs or exportColors:
+            # 'particle' is only needed when emitter UVs/colors are exported, so skip the
+            # whole loop otherwise. Cache the parent particles in a plain list once:
+            # psys.particles[...] is an RNA subscript (~0.8us) that would otherwise run once
+            # per child - hundreds of thousands of times on dense fur.
+            parentList = list(psys.particles)
+            uvOnEmitter = psys.uv_on_emitter
+            mcolOnEmitter = psys.mcol_on_emitter
+            i = 0
+            for pindex in range(firstExported, totalParticles):
+                particle = parentList[(pindex - parents) % parents]
 
-            if exportUVs:
-                uv = psys.uv_on_emitter(pmod, particle=particle, particle_no=pindex, uv_no=uvIndex)
-                uvs[i*2+0] = uv[0]
-                uvs[i*2+1] = uv[1]
-            if exportColors:
-                color = psys.mcol_on_emitter(pmod, particle=particle, particle_no=pindex, vcol_no=activeLayerIndex)
-                colors[i*3+0] = color[0]
-                colors[i*3+1] = color[1]
-                colors[i*3+2] = color[2]
-            i += 1
+                if exportUVs:
+                    uv = uvOnEmitter(pmod, particle=particle, particle_no=pindex, uv_no=uvIndex)
+                    uvs[i*2+0] = uv[0]
+                    uvs[i*2+1] = uv[1]
+                if exportColors:
+                    color = mcolOnEmitter(pmod, particle=particle, particle_no=pindex, vcol_no=activeLayerIndex)
+                    colors[i*3+0] = color[0]
+                    colors[i*3+1] = color[1]
+                    colors[i*3+2] = color[2]
+                i += 1
         data.uvs = uvs
         data.vertColors = colors
 

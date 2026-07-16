@@ -85,6 +85,14 @@ class PointCloudData:
 
 
 
+def _needsObjPropertiesExport(obj: bpy.types.Object, viewLayerEval: bpy.types.ViewLayer) -> bool:
+    """ Return True if the Blender Holdout or Indirect Only toggle is set and therefore
+        requires VRayObjectProperties to be exported.
+    """
+    # See the NOTE in export_utils.exportObjProperties() re. view_layer_eval.
+    return obj.holdout_get(view_layer=viewLayerEval) or obj.indirect_only_get(view_layer=viewLayerEval)
+
+
 class GeometryExporter(ExporterBase):
     """ Export all geometry objects in a depsgraph """
 
@@ -355,13 +363,13 @@ class GeometryExporter(ExporterBase):
                 self.persistedState.objDataTracker.trackPluginOfData(Names.objectData(obj, instance), geomPlugin.name)
 
                 nodePlugin = exportNodePlugin(self, obj, geomPlugin, Names.object(obj, instance), self.objTracker, instance=instance, visible=isVisible)
-                export_utils.exportObjProperties(obj, nodeCtx, self.objTracker, nodeOutput, [nodePlugin.name])
+                export_utils.exportObjProperties(obj, nodeCtx.exporterCtx, nodeCtx.renderer, self.objTracker, nodeOutput, [nodePlugin.name])
 
         return nodePlugin
 
 
-    def _exportMeshObject(self, evaluatedObj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance, asyncExport):
-        assert evaluatedObj.is_evaluated, f"Evaluated object expected: {evaluatedObj.name}"
+    def _exportMeshObject(self, evaluatedObj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance, asyncExport, force=False):
+        assert evaluatedObj.is_evaluated or force, f"Evaluated object expected: {evaluatedObj.name}"
 
         objectName = Names.object(evaluatedObj, instance)
 
@@ -415,6 +423,17 @@ class GeometryExporter(ExporterBase):
                     instance = instance,
                     visible = isVisible
                 )
+
+                # Objects without a V-Ray OBJECT node tree never go through exportObjProperties().
+                # Export VRayObjectProperties when any Blender visibility/holdout flag deviates
+                # from its defaults, OR when the plugin was previously exported (so that disabling
+                # holdout resets the plugin back to defaults rather than leaving matte_surface=True).
+                if nodePlugin is not None:
+                    objPropsPluginName = Names.pluginObject("VRayObjectProperties", Names.object(evaluatedObj))
+                    wasExported = objPropsPluginName in self.objTracker.getPlugins(objTrackId)
+                    if wasExported or _needsObjPropertiesExport(evaluatedObj, self.dg.view_layer_eval):
+                        export_utils.exportObjProperties(evaluatedObj, self, self.renderer, self.objTracker,
+                                                         None, [nodePlugin.name])
 
             if nodePlugin is not None:
                 plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", evaluatedObj.vray.VRayObjectProperties.objectID)
@@ -478,8 +497,8 @@ class GeometryExporter(ExporterBase):
 
 
     # Export a MESH object to VRayScene plugin
-    def _exportVrayScene(self, obj: bpy.types.Object, isVisible: bool, instance):
-        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+    def _exportVrayScene(self, obj: bpy.types.Object, isVisible: bool, instance, force=False):
+        assert obj.is_evaluated or force, f"Evaluated object expected: {obj.name}"
         pluginName = Names.pluginObject("vrayscene", Names.object(obj))
 
         isInstanced = instance is not None
@@ -503,8 +522,8 @@ class GeometryExporter(ExporterBase):
 
 
     # Export a MESH object to GeomMeshFile plugin
-    def _exportVrayProxy(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None):
-        assert obj.is_evaluated
+    def _exportVrayProxy(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None, force=False):
+        assert obj.is_evaluated or force
         objectName = Names.object(obj)
         pluginName = Names.pluginObject("vrayproxy", objectName)
         isInstanced = instance is not None
@@ -527,6 +546,46 @@ class GeometryExporter(ExporterBase):
             geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getPluginName(dataName) or '')
             exportNodePlugin(self, obj, geomPlugin, Names.object(obj, instance),
                                self.objTracker, instance=instance, isInstancer=False, visible=isVisible)
+
+    # Export a V-Ray Gaussian splat object (an Empty) to a GeomGaussians plugin
+    def _exportVRaySplat(self, obj: bpy.types.Object, isVisible: bool, force=False):
+        assert obj.is_evaluated or force, f"Evaluated object expected: {obj.name}"
+
+        geomName = Names.pluginObject("vraysplat", Names.object(obj))
+        geomDesc = PluginDesc(geomName, "GeomGaussians")
+        gaussians = obj.original.vray.GeomGaussians
+        geomDesc.vrayPropGroup = gaussians
+
+        # Object-based clipping mask: generate a TexDistance from the chosen object and use it as
+        # the clipping_mask. We only support object clipping for splats (no texture graphs).
+        if clipObj := gaussians.clip_object.boundPropObj:
+            geomDesc.setAttribute("clipping_mask", self._exportSplatClipMask(obj, clipObj, gaussians.clip_distance))
+
+        export_utils.exportPlugin(self, geomDesc)
+
+        # Wrap the geometry in a Node so it picks up the object's transform and visibility.
+        exportNodePlugin(self, obj, AttrPlugin(geomName), Names.object(obj), self.objTracker, visible=isVisible)
+        self.objTracker.trackPlugin(getObjTrackId(obj), geomName)
+
+    def _exportSplatClipMask(self, obj: bpy.types.Object, clipObj: bpy.types.Object, distance: float) -> AttrPlugin:
+        """ Export a TexDistance plugin that measures the distance to clipObj, used as the
+            clipping mask of a Gaussian splat (mirrors the V-Ray for Maya object-clipping). """
+        texName = Names.pluginObject("vraysplatclip", Names.object(obj))
+        texDesc = PluginDesc(texName, "TexDistance")
+        texDesc.setAttribute("distance", distance)
+        texDesc.setAttribute("inside_separate", True)
+        texDesc.setAttribute("inside_solid", True)
+
+        # The clip mask references the clip object's scene Node. Register it as a referenced object so
+        # it is exported even when it is invisible / disabled in renders (VBLD-2516), and pre-create
+        # the Node so the reference is valid if it is exported after this plugin.
+        self.registerReferencedObject(clipObj)
+        clipNodeName = Names.vrayNode(Names.object(clipObj))
+        vray.pluginCreate(self.renderer, clipNodeName, 'Node')
+        texDesc.setAttribute("objects", [AttrPlugin(clipNodeName)])
+        export_utils.exportPlugin(self, texDesc)
+        self.objTracker.trackPlugin(getObjTrackId(obj), texName)
+        return AttrPlugin(texName)
 
     # Export a MESH object to VRayDecal plugin
     def _exportVRayDecal(self, obj: bpy.types.Object, isVisible: bool):
@@ -581,8 +640,8 @@ class GeometryExporter(ExporterBase):
 
         self.objTracker.trackPlugin(objTrackId, pluginName)
 
-    def _exportCurves(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None):
-        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+    def _exportCurves(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None, force=False):
+        assert obj.is_evaluated or force, f"Evaluated object expected: {obj.name}"
 
         geomPlugin = self.ts.timeThis("collect_hair_curves_data", lambda: self.hairExporter.exportFromCurves(obj, exportGeometry))
 
@@ -592,8 +651,8 @@ class GeometryExporter(ExporterBase):
 
 
     # Export a POINTCLOUD object to a GeomParticleSystem VRay plugin
-    def _exportPointCloud(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None):
-        assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
+    def _exportPointCloud(self, obj: bpy.types.Object, exportGeometry: bool, isVisible: bool, instance: bpy.types.DepsgraphObjectInstance = None, force=False):
+        assert obj.is_evaluated or force, f"Evaluated object expected: {obj.name}"
 
         pluginName = Names.objectData(obj, instance)
 
@@ -672,6 +731,9 @@ class GeometryExporter(ExporterBase):
 
 
     def _exportObjects(self):
+        # The dg.objects pass owns these; a referenced object NOT here is hidden and gets force-exported.
+        dgObjectIds = {getObjTrackId(o) for o in self.dg.objects}
+
         def geometryForExport():
             if self.isProxyExport:
                 for obj in self.dg.objects:
@@ -688,6 +750,14 @@ class GeometryExporter(ExporterBase):
             else:
                 yield from geometryObjectIt(self.dg.objects)
 
+            # Referenced (by a selector etc.) but hidden objects the pass above never yields; without
+            # this their references resolve to empty plugins. The prepass already discovered them.
+            # Snapshot the dict: a forced export may re-register refs (a no-op) and must not mutate it
+            # mid-iteration.
+            for refTrackId, refObj in list(self.referencedObjects.items()):
+                if refTrackId not in dgObjectIds:
+                    yield refObj.evaluated_get(self.dg)
+
         # Export all scene objects
         for obj in geometryForExport():
             if obj.vray.isVRayFur:
@@ -697,9 +767,10 @@ class GeometryExporter(ExporterBase):
                 # Node plugins' "visible" property for instanced objects should be set to
                 # False if we only want to see the instances and not the original instanced object
                 objTrackId = getObjTrackId(obj)
+                forced = objTrackId not in dgObjectIds
                 isVisible = objTrackId in self.visibleObjects
-                exportGeometry = export_utils.isObjectGeomUpdated(self, objTrackId)
-                self.exportObject(obj, exportGeometry, isVisible=isVisible)
+                exportGeometry = forced or export_utils.isObjectGeomUpdated(self, objTrackId)
+                self.exportObject(obj, exportGeometry, isVisible=isVisible, force=forced)
 
             self.furExporter.exportFursOfObject(obj)
             self.exportProgress.update(self.engine)
@@ -717,38 +788,58 @@ class GeometryExporter(ExporterBase):
                       exportGeometry: bool,
                       isVisible: bool,
                       instance: bpy.types.DepsgraphObjectInstance = None,
-                      asyncExport = True):
+                      asyncExport = True,
+                      force = False):
+        """ Export an object based on its type.
 
+            force=True is for a referenced object the dg.objects pass does not yield (hidden / disabled
+            in renders): it skips the is_evaluated guard but keeps change-tracking, exporting it hidden.
+        """
         assert isinstance(evaluatedObj, bpy.types.Object), "Only Blender 'Object' type accepted"
 
         objTrackId = getObjTrackId(evaluatedObj)
 
         # Mark the object as processed, even if it is not exported.
         # This ensures we can differentiate between objects already handled and new additions to the depsgraph.
+        alreadyProcessed = objTrackId in self.persistedState.processedObjects
         self.persistedState.processedObjects.add(objTrackId)
 
-        if not exportGeometry and isMaterialAssignedToObject(self.updatedMtlWithDisplacement, evaluatedObj):
-            # If the object has material with displacement, trigger geometry update, otherwise it wont affect the geometry.
-            vrayNodeName = Names.vrayNode(Names.object(evaluatedObj))
-            vray.pluginReCreateAttr(self.renderer, vrayNodeName, "geometry")
+        if force:
+            # Re-export when full, first-seen, or changed this cycle (dg.updates includes hidden
+            # objects, so moving e.g. a splat clip object updates the render in IPR). is_evaluated is
+            # intentionally not checked - a hide_render object still yields its base geometry.
+            if (not self.fullExport) and alreadyProcessed and (objTrackId not in self.dgUpdates['all']):
+                return False
+        else:
+            if not exportGeometry and (
+                    isMaterialAssignedToObject(self.updatedMtlWithDisplacement, evaluatedObj)
+                    or isMaterialAssignedToObject(self.updatedMtlWithQuickCaustics, evaluatedObj)):
+                # The geometry must be recompiled without a full geometry re-export in two cases:
+                #  - the object's material has displacement (otherwise the change wont affect the geometry);
+                #  - a quick caustics parameter changed (the caustic beam generators are registered
+                #    during geometry compilation, so the geometry must be recompiled to (un)register them).
+                vrayNodeName = Names.vrayNode(Names.object(evaluatedObj))
+                vray.pluginReCreateAttr(self.renderer, vrayNodeName, "geometry")
 
-        if (not self.fullExport) \
-                and not exportGeometry \
-                and objTrackId not in self.dgUpdates['transform'] \
-                and not export_utils.isObjectTreeUpdated(self, evaluatedObj) \
-                and (objTrackId not in self.objectsWithUpdatedVisibility) \
-                and (objTrackId not in self.updatedMeshLightGizmos) \
-                and (objTrackId not in self.updatedFurGizmos) \
-                and (UpdateFlags.NONE == UpdateTracker.getObjUpdate(UpdateTarget.OBJECT_MTL_OPTIONS, evaluatedObj)) \
-                and (objTrackId not in self.addedGizmos) \
-                and (objTrackId not in self.removedGizmos) \
-                and instance is None:
-            return False
+            if (not self.fullExport) \
+                    and not exportGeometry \
+                    and objTrackId not in self.dgUpdates['transform'] \
+                    and not export_utils.isObjectTreeUpdated(self, evaluatedObj) \
+                    and (objTrackId not in self.objectsWithUpdatedVisibility) \
+                    and (objTrackId not in self.objectsWithUpdatedHoldout) \
+                    and (objTrackId not in self.updatedMeshLightGizmos) \
+                    and (objTrackId not in self.updatedFurGizmos) \
+                    and (UpdateFlags.NONE == UpdateTracker.getObjUpdate(UpdateTarget.OBJECT_MTL_OPTIONS, evaluatedObj)) \
+                    and (objTrackId not in self.addedGizmos) \
+                    and (objTrackId not in self.removedGizmos) \
+                    and not (tools.isObjectVRayGaussian(evaluatedObj) and (objTrackId in self.dgUpdates['all'])) \
+                    and instance is None:
+                return False
 
-        if not evaluatedObj.is_evaluated:
-            # Objects that are in the depsgraph but are not evaluated are not visible in the scene.
-            # This is true e.g. for certain objects that are marked as 'Disabled in renders'.
-            return False
+            if not evaluatedObj.is_evaluated:
+                # Objects that are in the depsgraph but are not evaluated are not visible in the scene.
+                # This is true e.g. for certain objects that are marked as 'Disabled in renders'.
+                return False
 
         exported = True
 
@@ -756,13 +847,13 @@ class GeometryExporter(ExporterBase):
             case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE':
                 if tools.isObjectVrayScene(evaluatedObj):
                     # VRayScene does not handle correctly updates during IPR, this is why they are disabled
-                    self._exportVrayScene(evaluatedObj, isVisible, instance)
+                    self._exportVrayScene(evaluatedObj, isVisible, instance, force)
                 elif tools.isObjectVrayProxy(evaluatedObj):
-                    self._exportVrayProxy(evaluatedObj, exportGeometry, isVisible, instance)
+                    self._exportVrayProxy(evaluatedObj, exportGeometry, isVisible, instance, force)
                 elif tools.isObjectVRayDecal(evaluatedObj):
                     self._exportVRayDecal(evaluatedObj, isVisible)
                 elif not tools.isObjectNonMeshClipper(evaluatedObj):
-                    exported = self._exportMeshObject(evaluatedObj, exportGeometry, isVisible, instance, asyncExport)
+                    exported = self._exportMeshObject(evaluatedObj, exportGeometry, isVisible, instance, asyncExport, force)
                 else:
                     # This is a clipper object that should not be drawn
                     self.hiddenObjects.append(evaluatedObj)
@@ -771,12 +862,15 @@ class GeometryExporter(ExporterBase):
                 self._exportClipper(evaluatedObj)
 
             case 'POINTCLOUD':
-                self._exportPointCloud(evaluatedObj, exportGeometry, isVisible, instance)
+                self._exportPointCloud(evaluatedObj, exportGeometry, isVisible, instance, force)
             case "VOLUME":
                 SmokeExporter(self).exportVolume(evaluatedObj, exportGeometry, isVisible)
             case 'CURVES':
                 if not evaluatedObj.vray.isVRayFur:
-                    self._exportCurves(evaluatedObj, exportGeometry, isVisible, instance)
+                    self._exportCurves(evaluatedObj, exportGeometry, isVisible, instance, force)
+            case 'EMPTY':
+                if tools.isObjectVRayGaussian(evaluatedObj):
+                    self._exportVRaySplat(evaluatedObj, isVisible, force)
             case _:
                 # print(f"Export of {evaluatedObj.type} not implemented")
                 pass
@@ -916,8 +1010,14 @@ class GeometryExporter(ExporterBase):
             if isObjectVisible(self, o) and isVisibleInLocalView(o, self.dg, localView)
         }
 
-        for o in [obj for obj in self.sceneObjects if obj.type in tools.EXPORTED_OBJECT_TYPES or obj.is_instancer]:
+        for o in [obj for obj in self.sceneObjects if obj.type in tools.EXPORTED_OBJECT_TYPES or obj.is_instancer or tools.isObjectVRayGaussian(obj)]:
             objTrackId = getObjTrackId(o)
+
+            # Diff Holdout / Indirect Only here too, alongside visibility (see holdoutState).
+            holdoutState = (o.holdout_get(), o.indirect_only_get())
+            if holdoutState != self.persistedState.holdoutState.get(objTrackId):
+                self.objectsWithUpdatedHoldout.add(objTrackId)
+                self.persistedState.holdoutState[objTrackId] = holdoutState
 
             wasShown   = objTrackId in self.persistedState.visibleObjects
             isShown    = objTrackId in currentVisibleObjects
@@ -1013,7 +1113,7 @@ class GeometryExporter(ExporterBase):
                         False is the object is not an instancer or is an instancer with instancer visibility
                             enabled.
         """
-        hasParticleSystemModifier = any([m for m in obj.modifiers if m.type == 'PARTICLE_SYSTEM'])
+        hasParticleSystemModifier = any(m.type == 'PARTICLE_SYSTEM' for m in obj.modifiers)
 
         if obj.is_instancer or hasParticleSystemModifier:
             return not (obj.show_instancer_for_viewport if self.interactive else obj.show_instancer_for_render)

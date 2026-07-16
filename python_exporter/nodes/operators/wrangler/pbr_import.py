@@ -99,9 +99,9 @@ def _matchFilesToSlots(files, slots):
 #   'NORMAL'       - wrap in TexNormalBump, connect to bump_map, set bump_type='6'
 #   'BUMP'         - straight -> bump_map, set bump_type='0'
 #   'DISPLACEMENT' - no BRDF socket; the BRDF is wrapped in a MtlDisplacement in a post-pass.
-# `isData` = True -> colorspace_settings.is_data (Non-Color) on the loaded image.
+# `isData` = True -> Blender Non-Color colorspace + V-Ray linear transfer function / raw color space.
 _SLOTS = [
-    # slotKey         tokens                                                attrName              flavor          isData
+    # slotKey         tokens                                                   attrName              flavor          isData
     ('base_color',    'diffuse diff albedo base col color basecolor'.split(),  'diffuse',            'COLOR',        False),
     ('metallic',      'metallic metalness metal mtl'.split(),                  'metalness',          'FLOAT',        True),
     ('roughness',     'roughness rough rgh'.split(),                           'reflect_glossiness', 'ROUGHNESS',    True),
@@ -137,6 +137,8 @@ def _newBitmap(ntree, filepath: str, isData: bool, makeRelative: bool):
         node.texture.image = img
     if isData:
         img.colorspace_settings.is_data = True
+        safeSet(node.BitmapBuffer, 'transfer_function', '0')
+        safeSet(node.BitmapBuffer, 'rgb_color_space', 'raw')
     # Default output for TEXTURE category is "Color".
     return node, _firstOutput(node, 'Color')
 
@@ -248,7 +250,7 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
         # can reach it.
         displacementBitmap: bpy.types.Node | None = None
 
-        for (_slotKey, _tokens, attrName, flavor, isData), fname in resolved:
+        for (slotKey, _tokens, attrName, flavor, isData), fname in resolved:
             # Displacement has no direct BRDF socket - handled as a post-pass
             # below that wraps the whole material in a MtlDisplacement.
             if flavor != 'DISPLACEMENT':
@@ -260,7 +262,7 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
 
             filepath = path.join(importDir, fname)
             bitmap, bitmapOut = _newBitmap(ntree, filepath, isData, self.relative_path)
-            bitmap.label = _slotKey.replace('_', ' ').title()
+            bitmap.label = slotKey.replace('_', ' ').title()
             wrappers: list[bpy.types.Node] = []
             rows.append((bitmap, wrappers))
 

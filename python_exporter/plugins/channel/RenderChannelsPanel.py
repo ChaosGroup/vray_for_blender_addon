@@ -83,6 +83,43 @@ def _getConnectedChannelsNode(worldTree: bpy.types.NodeTree):
 
     return None
 
+
+# Memoized set of connected render channel bl_idnames. The 'enabled' getter runs once per
+# checkbox on every panel repaint, so without this each repaint re-walks the world tree N
+# times (laggy during gizmo drags). Invalidated from depsgraph_update_post (events.py) on
+# any World/node-tree change - catching link swaps, muting and group sub-tree edits that a
+# node/link-count fingerprint would miss. session_uid below is a backstop for world switches.
+_connectedChannelsValid = False
+_connectedChannelsWorldUid = 0
+_connectedChannelNames = set()
+
+
+def invalidateConnectedChannelsCache():
+    """ Mark the cache stale; the getter recomputes on the next repaint. Cheap flag flip. """
+    global _connectedChannelsValid
+    _connectedChannelsValid = False
+
+
+def _getConnectedChannelNames(world: bpy.types.World):
+    """ Connected render channel bl_idnames for 'world', recomputed only when invalidated or
+        the active world changed. None if there is no V-Ray world.
+    """
+    global _connectedChannelsValid, _connectedChannelsWorldUid, _connectedChannelNames
+
+    if not (world and world.node_tree and world.vray.is_vray_class):
+        return None
+
+    if (not _connectedChannelsValid) or (world.session_uid != _connectedChannelsWorldUid):
+        names = set()
+        if channelsOutputNode := _getConnectedChannelsNode(world.node_tree):
+            names = {s.links[0].from_node.bl_idname for s in channelsOutputNode.inputs if s.is_linked}
+        _connectedChannelNames = names
+        _connectedChannelsWorldUid = world.session_uid
+        _connectedChannelsValid = True
+
+    return _connectedChannelNames
+
+
 def _setRenderChannelEnabled(self, useRenderChannel: bool):
     """ Setter for the 'enabled' property of the render channel indicator property group.
         If the render channel is enabled, a new node for the render element is created in the world node tree.
@@ -111,6 +148,10 @@ def _setRenderChannelEnabled(self, useRenderChannel: bool):
             else:
                 _removeRenderChannel(channelsOutputNode, self.nodeName)
 
+        # Invalidate now so the toggled checkbox is right on the next repaint (don't wait for
+        # the depsgraph handler); also covers a channels container nested in a VRayGroup.
+        invalidateConnectedChannelsCache()
+
         # Blender doesn't expose an API to invalidate its render-pass cache after
         # channels are added/removed in our world tree; the helper toggles a built-in
         # pass off-and-on which forces a re-call of update_render_passes().
@@ -121,14 +162,8 @@ def _getRenderChannelEnabled(self):
     """ Getter for the 'enabled' property of the render channel indicator property group.
         Returns if node for the render element is connected to the 'Channels' socket of the world output node.
     """
-    world = bpy.context.scene.world
-    if not (world and world.node_tree and world.vray.is_vray_class):
-        return False
-
-    if channelsOutputNode := _getConnectedChannelsNode(world.node_tree):
-        return any(s.links[0].from_node.bl_idname == self.nodeName for s in channelsOutputNode.inputs if s.is_linked)
-
-    return False
+    connectedNames = _getConnectedChannelNames(bpy.context.scene.world)
+    return (connectedNames is not None) and (self.nodeName in connectedNames)
 
 
 _vrayRenderChannelsType = None

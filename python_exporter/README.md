@@ -1,7 +1,7 @@
 # V-Ray for Blender Python Exporter
 
 
-`vray_for_blender_python_exporter` is a Blender add-on that acts as the main Python layer for V-Ray integration. It exports Blender scene data (geometry, materials, animation, etc.) to V-Ray, manages rendering jobs, and provides a flexible UI and API for artists and technical users. The add-on communicates with the V-Ray backend (aka V-Ray ZMQ server) via VRayBlenderLib (aka V-Ray For Blender Native) and supports both interactive and production rendering workflows.
+`python_exporter` is a Blender add-on that acts as the main Python layer for V-Ray integration. It exports Blender scene data (geometry, materials, animation, etc.) to V-Ray, manages rendering jobs, and provides a flexible UI and API for artists and technical users. The add-on communicates with the V-Ray backend (aka V-Ray ZMQ server) via VRayBlenderLib (aka V-Ray For Blender Native) and supports both interactive and production rendering workflows.
 
 
 ## Directory Structure

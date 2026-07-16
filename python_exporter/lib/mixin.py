@@ -98,16 +98,18 @@ class VRayNodeBase(VRayEntity, bpy.types.Node):
             for link in sock.links:
                 if not isLinkValid(self, link):
                     self.id_data.links.remove(link)
-                elif ((nodeLinkInfo := checkAndRemoveNewlyCreatedLink(link))
-                            and link.to_node == self
-                            and ((getattr(self, 'vray_plugin', 'NONE') != 'NONE') or nodeLinkInfo.customInsertLinkCallback)):
+                elif (nodeLinkInfo := checkAndRemoveNewlyCreatedLink(link)) and link.to_node == self:
+                    # A new link was connected to this input socket. The tree topology is now
+                    # committed, so it is safe to touch socket/node state. Let the socket react
+                    # first (e.g. auto-enable a 'use' toggle so the connection takes effect),
+                    # then run any plugin-specific link handler.
+                    if onLinkConnected := getattr(link.to_socket, 'onLinkConnected', None):
+                        onLinkConnected()
                     if nodeLinkInfo.customInsertLinkCallback:
-                        fnNodeInsertLink = nodeLinkInfo.customInsertLinkCallback
-                    else:
-                        pluginModule = getPluginModule(self.vray_plugin)
-                        fnNodeInsertLink = getattr(pluginModule, "nodeInsertLink")
-                    assert fnNodeInsertLink
-                    fnNodeInsertLink(link)
+                        nodeLinkInfo.customInsertLinkCallback(link)
+                    elif getattr(self, 'vray_plugin', 'NONE') != 'NONE':
+                        if fnNodeInsertLink := getattr(getPluginModule(self.vray_plugin), "nodeInsertLink", None):
+                            fnNodeInsertLink(link)
 
 
 class VRayOperatorBase(bpy.types.Operator):

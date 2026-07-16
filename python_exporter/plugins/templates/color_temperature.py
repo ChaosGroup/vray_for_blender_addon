@@ -5,7 +5,7 @@
 import bpy
 
 from vray_blender.lib import color_utils
-from vray_blender.lib.blender_utils import getObjectFromEditorContext
+from vray_blender.lib.blender_utils import getPinnedDataFromEditorContext
 from vray_blender.lib.lib_utils import getLightPluginType
 from vray_blender.plugins.templates import common
 
@@ -43,7 +43,7 @@ class TemplateColorTemperature(common.VRayUITemplate):
             # Temperature
             from vray_blender.ui import icons
             
-            lightObj = getObjectFromEditorContext(context)
+            lightObj = getPinnedDataFromEditorContext(context, context.object)
             if lightObj is None:
                 return
             
@@ -63,7 +63,7 @@ class TemplateColorTemperature(common.VRayUITemplate):
             # "Set as color" button
             op = row.operator("vray.set_light_color_from_temperature", text="", icon='FORWARD')
             op.color = color
-            op.light_name = lightObj.name
+            op.light_name = lightObj.data.name
             op.plugin_type = pluginType
             op.color_attr_name = colorAttr
 

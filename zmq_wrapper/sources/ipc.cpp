@@ -6,6 +6,9 @@
 #include "vassert.h"
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <set>
+#include <utility>
 
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include <boost/interprocess/sync/scoped_lock.hpp>
@@ -15,6 +18,24 @@ namespace ipc = boost::interprocess;
 namespace VrayZmqWrapper {
 
 const std::string MAPPING_BASE_NAME = "db";
+
+#ifndef _WIN32
+namespace {
+	// Registry of shared-memory objects created by SharedMemoryWriter::create() in this process and
+	// not yet destroyed, keyed by (id, name). removeAllWriters() uses it to unlink everything on an
+	// abnormal exit() where ~SharedMemoryWriter would not run. UNIX-only (Windows shm is
+	// kernel-lifetime, so nothing to unlink).
+	std::mutex& activeWritersMutex() {
+		static std::mutex mutex;
+		return mutex;
+	}
+
+	std::set<std::pair<std::string, std::string>>& activeWriters() {
+		static std::set<std::pair<std::string, std::string>> writers;
+		return writers;
+	}
+}
+#endif
 
 
 SharedMemoryBase::SharedMemoryBase(const std::string& id, const std::string& name) :
@@ -49,9 +70,13 @@ SharedMemoryBase::Payload& SharedMemoryBase::getPayload() const {
 }
 
 
+std::string SharedMemoryBase::makeUniqueName(const std::string& id, const std::string& name, const std::string& objName) {
+	return std::string("vray-zmq-") + id + "-" + name + "-" + objName;
+}
+
+
 std::string SharedMemoryBase::createUniqueName(const std::string& objName) const {
-	const std::string name = std::string("vray-zmq-") + m_id + "-" + m_name + "-" + objName;
-	return name;
+	return makeUniqueName(m_id, m_name, objName);
 }
 
 
@@ -77,6 +102,11 @@ SharedMemoryWriter::~SharedMemoryWriter() {
 	}
 	// Clean up m_lock as well.
 	NamedLock::remove(createUniqueName("l").c_str());
+
+	{
+		std::lock_guard<std::mutex> lock(activeWritersMutex());
+		activeWriters().erase({m_id, m_name});
+	}
 #endif
 }
 
@@ -84,6 +114,22 @@ void SharedMemoryWriter::remove(const std::string& id, const std::string& name) 
 	// Creating a dummy SharedMemoryWriter which will go through the destructor
 	// and clean up and left-over shared files.
 	SharedMemoryWriter tempWriterDeleter(id, name);
+}
+
+
+void SharedMemoryWriter::removeAllWriters() {
+#ifndef _WIN32
+	std::set<std::pair<std::string, std::string>> snapshot;
+	{
+		std::lock_guard<std::mutex> g(activeWritersMutex());
+		snapshot = activeWriters();
+	}
+
+	for (const auto& entry : snapshot) {
+		SharedMem::remove(makeUniqueName(entry.first, entry.second, MAPPING_BASE_NAME).c_str());
+		NamedLock::remove(makeUniqueName(entry.first, entry.second, "l").c_str());
+	}
+#endif
 }
 
 bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullptr */) {
@@ -122,6 +168,16 @@ bool SharedMemoryWriter::create(SizeType size, const void* initialData /* =nullp
 	if (nullptr != initialData) {
 		writeImpl(initialData);
 	}
+
+#ifndef _WIN32
+	// Track this object so removeAllWriters() can unlink it if we exit abnormally before ~dtor runs.
+	// Only writers that clear on destroy are tracked, so a writer that deliberately keeps its
+	// shared object alive is not unlinked by removeAllWriters().
+	if (m_clearSharedObjects) {
+		std::lock_guard<std::mutex> g(activeWritersMutex());
+		activeWriters().insert({m_id, m_name});
+	}
+#endif
 
 	return true;
 }

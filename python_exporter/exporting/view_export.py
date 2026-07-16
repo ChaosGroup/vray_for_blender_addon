@@ -67,6 +67,17 @@ def _getCameraToViewportRatio(viewParams: ViewParams, region: bpy.types.Region, 
     return rectView.width() / (rectCamera.height() if sensorFit == 'VERTICAL' else  rectCamera.width())
 
 
+def cameraSceneName(cameraObj):
+    """ Return the value to use for the 'scene_name' attribute of a camera plugin.
+
+        The scene_name attribute is embedded in the vrscene file so users can reference
+        the camera by name on the V-Ray standalone command line. Fall back to
+        RENDER_CAMERA_BASE_NAME when there is no camera object (e.g. perspective viewport
+        with no active camera, or a non-camera object used as local camera).
+    """
+    return cameraObj.name if cameraObj is not None else RENDER_CAMERA_BASE_NAME
+
+
 def getActiveCamera(ctx: ExporterContext):
     """ Return the view-local camera, if active. Otherwise return the scene camera.
         NOTE: The view camera is not necessarily of type Camera, may be any object.
@@ -264,7 +275,7 @@ class ViewExporter(ExporterBase):
             focalDistance = ct.getCameraDofDistance(cameraObj) if settingsDof.use_camera_focus else settingsDof.focal_dist
             viewDesc.setAttribute("focalDistance", focalDistance)
 
-        viewDesc.setAttribute("scene_name", self._getCameraBaseName(cameraObj))
+        viewDesc.setAttribute("scene_name", self._getCameraSceneName(cameraObj))
 
         viewDesc.setAttribute("use_scene_offset", not self.interactive)
         viewDesc.setAttribute("dont_affect_settings", not isRenderCamera)
@@ -288,7 +299,7 @@ class ViewExporter(ExporterBase):
 
 
         plDesc.setAttributes({
-            'scene_name'            : self._getCameraBaseName(cameraObj),
+            'scene_name'            : self._getCameraSceneName(cameraObj),
             'dont_affect_settings'  : not isRenderCamera,
             'fov'                   : -1, # Special value to indicate that FOV from RenderView should be used instead
             "auto_exposure"         : settingsCameraGlobal.auto_exposure,
@@ -345,7 +356,7 @@ class ViewExporter(ExporterBase):
         plDesc = PluginDesc(pluginName, pluginType)
         plDesc.vrayPropGroup = vrayCamera.CameraPhysical
         self._fillPhysicalCameraSettings(plDesc, viewParams)
-        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject))
+        plDesc.setAttribute("scene_name", self._getCameraSceneName(viewParams.cameraObject))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.setAttribute("fov", viewParams.renderView.fov)
 
@@ -369,7 +380,7 @@ class ViewExporter(ExporterBase):
         pluginName = self._getCameraPluginUniqueName(viewParams.cameraObject, pluginType, isRenderCamera)
 
         plDesc = PluginDesc(pluginName, pluginType)
-        plDesc.setAttribute("scene_name", self._getCameraBaseName(viewParams.cameraObject))
+        plDesc.setAttribute("scene_name", self._getCameraSceneName(viewParams.cameraObject))
         plDesc.setAttribute("dont_affect_settings", not isRenderCamera)
         plDesc.vrayPropGroup = viewParams.cameraObject.data.vray.CameraDome
 
@@ -957,12 +968,20 @@ class ViewExporter(ExporterBase):
 
 
     def _getCameraBaseName(self, cameraObj):
-        # During rendering, only the active camera is being exported with its unique name.
-        # Otherwise, export the camera with its Blender object name.
+        # Used for plugin naming (registry identity), not for the scene_name attribute.
+        # During rendering, all camera plugins share a fixed name so V-Ray can find the active
+        # camera by plugin name. During export-only, each camera gets its unique internal ID.
         if not self.exportOnly:
             return RENDER_CAMERA_BASE_NAME
         return Names.object(cameraObj)
 
+    def _getCameraSceneName(self, cameraObj):
+        # During rendering, all camera plugins share the fixed render camera scene name.
+        # During export-only, use the camera's user-facing name (see cameraSceneName).
+        if not self.exportOnly:
+            return RENDER_CAMERA_BASE_NAME
+
+        return cameraSceneName(cameraObj)
 
 def run(ctx: ExporterContext):
     return ViewExporter(ctx).export()

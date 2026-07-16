@@ -7,6 +7,7 @@ import mathutils
 
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.utils import selectedObjectTagUpdate
+from vray_blender.nodes.links import autoConnectSingleSocket
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.exporting.tools import getLinkedFromSocket, getFarNodeLink
 
@@ -59,6 +60,7 @@ class VRayNodeTransform(VRayNodeBase):
         addInput(self,  'VRaySocketVectorScale',    "Scale")
         addInput(self,  'VRaySocketObject',    "Object")
         addOutput(self, 'VRaySocketTransform', "Transform")
+        autoConnectSingleSocket(self)
 
     def draw_buttons(self, context, layout):
         layout.prop(self, 'invert')
@@ -124,6 +126,7 @@ class VRayNodeMatrix(VRayNodeBase):
         addInput(self, 'VRaySocketVectorRotation', "Rotation")
         addInput(self, 'VRaySocketVectorScale', "Scale")
         addOutput(self, 'VRaySocketTransform', "Matrix")
+        autoConnectSingleSocket(self)
 
     def draw_buttons(self, context, layout):
         layout.prop(self, 'invert')

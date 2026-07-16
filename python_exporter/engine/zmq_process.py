@@ -51,7 +51,7 @@ class ZMQProcess:
         # Reset
         if not ZMQProcess._started:
             self._start()
-            
+
 
     def _getDumpInfoLogFile(self):
         from vray_blender.lib.path_utils import getV4BTempDir
@@ -83,12 +83,12 @@ class ZMQProcess:
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
         from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
         from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
-        
+
         if not self._startServerProcess():
             return
 
         ZMQProcess._started = True
-        
+
         # Cosmos Browser download notifications callback
         self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
         vray.setCosmosImportCallback(self.assetImportCallback)
@@ -104,7 +104,7 @@ class ZMQProcess:
          # VFB start button callback
         self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport \
             else VfbEventHandler.startProdRender(forceAnimationMode='AUTO', uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext())
-        
+
         vray.setRenderStartCallback(self.renderStartCallback)
 
         # Abort-all-renders callback (e.g. if ZmqServer crashes)
@@ -134,7 +134,7 @@ class ZMQProcess:
 
         self._updateComputeDevices = lambda deviceType, deviceNames, defaultDeviceStates: _updateComputeDevicesCallback(deviceType, deviceNames, defaultDeviceStates)
         vray.setUpdateComputeDevicesCallback(self._updateComputeDevices)
-        
+
         self._autoUpdateChanged = lambda autoCheck: onUpdateSettingsChanged(autoCheck)
         vray.setAutoUpdateChangedCallback(self._autoUpdateChanged)
 
@@ -191,7 +191,7 @@ class ZMQProcess:
 
         args.exePath             = executablePath
         args.port                = settings.zmq_port
-        args.logLevel            = int(logLevelOverride) if logLevelOverride else int(prefs.verbose_level)  
+        args.logLevel            = int(logLevelOverride) if logLevelOverride else int(prefs.verbose_level)
         args.enableQtLogs        = prefs.enable_qt_logs
         args.headlessMode        = bpy.app.background  # Do not try to show VFB and agreements dialog in headless mode
         args.noHeartbeat         = True
@@ -224,7 +224,7 @@ class ZMQProcess:
         if not success:
             debug.printError(err)
             return False
-        
+
         if bpy.app.background:
             # In headless mode, we need to wait for the ZmqServer to start before attempting any rendering
             if not ZMQProcess._waitForZmqServerToStart():

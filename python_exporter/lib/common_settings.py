@@ -75,21 +75,21 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath="", viewLayerNa
         return filePath, None
 
 
-    exporter = scene.vray.Exporter
+    preferences = blender_utils.getVRayPreferences()
 
-    if (not exporter.export_scene_file_path) and (not scenePath):
+    if (not preferences.export_scene_file_path) and (not scenePath):
         return None, None
 
     settings = vray.ExportSceneSettings()
 
-    settings.compressed    = exporter.export_scene_compressed
-    settings.hexArrays     = exporter.export_scene_hex_meshes
-    settings.hexTransforms = exporter.export_scene_hex_transforms
-    settings.separateFiles = exporter.export_scene_separate_files
-    settings.pluginTypes   = exporter.export_scene_plugin_types
+    settings.compressed    = preferences.export_scene_compressed
+    settings.hexArrays     = preferences.export_scene_hex_meshes
+    settings.hexTransforms = preferences.export_scene_hex_transforms
+    settings.separateFiles = preferences.export_scene_separate_files
+    settings.pluginTypes   = preferences.export_scene_plugin_types
     settings.hostAppString = getHostAppVersionString()
 
-    filePath, errMsg = fixPath(scenePath if scenePath else exporter.export_scene_file_path)
+    filePath, errMsg = fixPath(scenePath if scenePath else preferences.export_scene_file_path)
 
     if errMsg:
         return None, errMsg
@@ -204,7 +204,7 @@ class CommonSettings:
 
         animationMode = 'FRAME'
         if isProductionRendering:
-            animSettings = self.vrayExporter.animationSettingsVrsceneExport
+            animSettings = blender_utils.getVRayPreferences().animationSettingsVrsceneExport
             vrsceneExport = self.exportOnly and not self.isCloudSubmit()
 
             if self.forceAnimationMode != 'AUTO':

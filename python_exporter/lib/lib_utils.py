@@ -33,6 +33,15 @@ LightVrayTypeToBlender = {
     'DOME'    : 'POINT'
 }
 
+# Match Blender light type to the V-Ray light_type enum value used when converting
+# a native Blender light to a V-Ray light.
+BlenderToVrayLightType = {
+    'POINT' : 'OMNI',
+    'SPOT'  : 'SPOT',
+    'AREA'  : 'RECT',
+    'SUN'   : 'SUN',
+}
+
 # Match V-Ray light type to V-Ray plugin
 LightTypeToPlugin = {
     'AMBIENT' : 'LightAmbient',

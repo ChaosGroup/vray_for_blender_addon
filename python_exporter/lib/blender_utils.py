@@ -63,10 +63,20 @@ NC_MATERIAL = 1
 NC_LAMP     = 3
 
 
+def isNonGeometryExportedAsGeometry(ob) -> bool:
+    """ True for objects whose type is not a geometry type (so the normal geometry
+        iteration skips them) but which V-Ray still exports through the geometry
+        pipeline. Currently only Gaussian splats (Empties flagged isVRayGaussian);
+        add future "non-geometry object exported as geometry" cases here so they flow
+        through the main export loop instead of needing a separate pass. """
+    return ob.type == 'EMPTY' and ob.vray.isVRayGaussian
+
+
 def geometryObjectIt(objects):
-    """ Iterates through each geometry object in list """
+    """ Iterates through each geometry object in the list, plus the non-geometry objects
+        that V-Ray exports through the geometry pipeline (e.g. Gaussian splats). """
     for ob in objects:
-        if ob.type not in NonGeometryTypes:
+        if ob.type not in NonGeometryTypes or isNonGeometryExportedAsGeometry(ob):
             yield ob
 
 
@@ -357,14 +367,12 @@ def getUIMousePos():
     return {"x":VRAY_OT_get_ui_mouse_position.pos_x, "y":VRAY_OT_get_ui_mouse_position.pos_y}
 
 
-def replaceObjectMesh(ob: bpy.types.Object, newMesh: bpy.types.Mesh):
-    """ Replace mesh geometry of an object without changing any other properties """
+def replaceObjectMesh(mesh: bpy.types.Mesh, newMesh: bpy.types.Mesh):
+    """ Replace mesh geometry without changing any other properties """
     bm = bmesh.new()
     bm.from_mesh(newMesh)
-    bm.to_mesh(ob.data)
-    ob.data.update()
-
-    # Remove temp object
+    bm.to_mesh(mesh)
+    mesh.update()
     bm.free()
 
 def markPreferencesDirty(context: bpy.types.Context):
@@ -408,6 +416,18 @@ def getShadowAttr(data, attrName: str):
 def setShadowAttr(data, attrName: str, value):
     """ Set the value of a shadow attribute given the main attribute's name """
     setattr(data, getShadowAttrName(attrName), value)
+
+
+def getObjectOfData(data):
+    """ Return the first object whose .data is `data`, or None.
+
+        Lets a property update callback recover the owning object from its propgroup's id_data
+        instead of relying on context.active_object - which is absent or points at the wrong
+        object when the property is edited from the V-Ray Scene Lister's Preferences window.
+    """
+    if data is None:
+        return None
+    return next((o for o in bpy.data.objects if o.data is data), None)
 
 
 def hasShadowedAttrChanged(data, attrName):
@@ -622,10 +642,12 @@ def getFullPathToNode(node: bpy.types.Node):
     return None
 
 
-def getObjectFromEditorContext(context: bpy.types.Context):
-    """ Returns the object in the context of the currently open editor.
-        This may be either the currently selected object, or the object 
-        whose editor was pinned.
+def getPinnedDataFromEditorContext(context: bpy.types.Context, fallback):
+    """ Returns the data-block whose node editor is currently pinned, or 'fallback'
+        if the editor is not pinned. The pinned data-block is the one whose node tree
+        is shown in the editor regardless of the active selection.
     """
-    sdata = context.space_data
-    return sdata.id_from if getattr(sdata, 'pin', None) and getattr(sdata, 'id_from', None) else context.object
+    snode = context.space_data
+    if isinstance(snode, bpy.types.SpaceNodeEditor) and snode.pin and snode.id_from:
+        return snode.id_from
+    return fallback

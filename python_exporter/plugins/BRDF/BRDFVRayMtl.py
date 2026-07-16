@@ -13,8 +13,9 @@ from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.blender_utils import getVRayPreferences, hasShadowedAttrChanged, updateShadowAttr
 from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin, ExporterContext
 from vray_blender.lib.names import Names
+from vray_blender.lib.settings_defs import GIEngine
 from vray_blender.nodes.tools import isVraySocket
-from vray_blender.nodes.utils import _AutoConnectEnabled
+from vray_blender.nodes.utils import _AutoConnectEnabled, getNodeOfPropGroup, findDataObjFromNode, areNodesInterconnected, getOutputNode
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -132,5 +133,49 @@ def onUpdateShadingModel(propGroup, context: bpy.types.Context, attrName: str):
     if propGroup.option_shading_model == '1':
         # Open PBR
         propGroup.option_use_roughness = True
+
+
+def onUpdateQuickCaustics(propGroup, context: bpy.types.Context, attrName: str):
+    # In the V-Ray core, a mesh registers as a quick caustics beam generator at geometry-compile
+    # time based on its material. Changing any of the quick caustics material params therefore
+    # requires the connected geometry to be RECOMPILED (not just the material re-exported) so the
+    # generators are re-registered and the beams regenerated. See the equivalent IPR handling in
+    # V-Ray for Maya (VRayMtl.cpp / object_handlers.cpp quickCausticsChanged).
+    from vray_blender.exporting.update_tracker import UpdateTracker
+
+    if node := getNodeOfPropGroup(propGroup):
+        outputNode = getOutputNode(node.id_data)
+        if not areNodesInterconnected(node, outputNode):
+            return
+        if mtl := findDataObjFromNode(bpy.data.materials, node):
+            # Queue the material so obj_export forces a geometry recompile (pluginReCreateAttr)
+            # for every object using it, mirroring the displacement handling.
+            ExporterContext.pendingQuickCausticsMtl = mtl.name
+            # Ensure the objects using this material enter the object-export loop.
+            UpdateTracker.tagMtlTopology(context, mtl)
+
+    # Quick caustics only render when Light Cache is the GI engine (and, in interactive
+    # rendering, when "Use Light Cache for Interactive Rendering" is on). 
+    if attrName in ("quick_caustics_reflection_on", "quick_caustics_refraction_on") \
+            and getattr(propGroup, attrName):
+        _reportLightCacheRequirement(context)
+
+
+def _reportLightCacheRequirement(context: bpy.types.Context):
+    """ Show an info message in Blender's status area when Light Cache, which quick caustics
+        require, is not set up. """
+    from vray_blender import debug
+
+    settingsGI = context.scene.vray.SettingsGI
+    isLightCacheEngine = (int(settingsGI.secondary_engine) == GIEngine.LightCache)
+
+    if not isLightCacheEngine:
+        debug.reportAsync('INFO',
+            '“Light Cache” and "Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect',
+            delayed = True)
+    elif not settingsGI.use_light_cache_for_interactive:
+        debug.reportAsync('INFO',
+            '"Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect',
+            delayed = True)
 
 

@@ -170,6 +170,7 @@ class ExceptionLogger:
 
 
 ############  Reports in Blender's UI  ############
+
 class VRAY_OT_report(VRayOperatorBase):
     """ Implements reporting in Blender status area regardless of the context """
     bl_idname = "vray.report"
@@ -198,9 +199,60 @@ class VRAY_OT_report(VRayOperatorBase):
     def poll(cls, context):
         # The operator should be callable even if the default engine is not V-Ray.
         return True
+    
+
+# This operator is a fix for the problem with the stuck mouse-down after 
+# showing the message. This operator should replace the original debug.report
+# operator after proper testing
+  
+class VRAY_OT_reportDelayed(VRayOperatorBase):
+    """ Implements reporting in Blender status area regardless of the context """
+    bl_idname = "vray.report_delayed"
+    bl_label = "Report"
+
+    message: bpy.props.StringProperty()
+    reportType: bpy.props.StringProperty(default="ERROR")
+
+    _timer = None
+
+    def execute(self, context):
+        if context.window:
+            # Drive the report from our own timer event. modal() must never finish on a
+            # user input event: returning {'FINISHED'} consumes the triggering event, and if
+            # that event is the mouse-button release, the window manager keeps the mouse
+            # stuck in the 'down' state (hovering then activates other widgets without a click).
+            wm = context.window_manager
+            self._timer = wm.event_timer_add(0.001, window=context.window)
+            wm.modal_handler_add(self)
+            return {'RUNNING_MODAL'}
+
+        printMsg(self.message, level=_LOG_LEVEL_MAP[self.reportType])
+        return {"CANCELLED"}
+
+    def modal(self, context, event):
+        if event.type != 'TIMER':
+            # Let real input events flow to the UI untouched.
+            return {'PASS_THROUGH'}
+
+        if self._timer is not None:
+            context.window_manager.event_timer_remove(self._timer)
+            self._timer = None
+
+        try:
+            self.report({self.reportType}, self.message)
+        except Exception:
+            pass
+        return {'FINISHED'}
 
 
-def report(severity: str, msg: str):
+    @classmethod
+    def poll(cls, context):
+        # The operator should be callable even if the default engine is not V-Ray.
+        return True
+
+
+
+def report(severity: str, msg: str, delayed=False):
     """ Report in Blender's status area. This function is a replacement
         for the report() method of blender classes (e.g. operators)
         that can be used in any context.
@@ -215,12 +267,17 @@ def report(severity: str, msg: str):
     Args:
         severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
         msg (str): The message to show.
+        delayed(bool): temporary. Remove when debug.report is replaced by debug.report_delayed
     """
-    bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
+    if delayed:
+        bpy.ops.vray.report_delayed(reportType=severity, message=f"V-Ray: {msg}")
+    else:
+        bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
+    
     printMsg(msg, level=_LOG_LEVEL_MAP[severity])
 
 
-def reportAsync(severity: str, msg: str):
+def reportAsync(severity: str, msg: str, delayed=False):
     """ Report in Blender's status area. This function is a replacement
         for the report() method of blender classes (e.g. operators)
         that can be used in any context.
@@ -232,9 +289,11 @@ def reportAsync(severity: str, msg: str):
     Args:
         severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
         msg (_type_): The message to show.
+        delayed: switch between invoking ops.vray.report and ops.vray.report_delayed
     """
     from vray_blender.engine.vfb_event_handler import VfbEventHandler
-    VfbEventHandler.reportStatus(severity, msg)
+    VfbEventHandler.reportStatus(severity, msg, delayed)
+
 
 
 ############  Registration  ############
@@ -242,6 +301,7 @@ def reportAsync(severity: str, msg: str):
 def getRegClasses():
     return (
         VRAY_OT_report,
+        VRAY_OT_reportDelayed,
     )
 
 

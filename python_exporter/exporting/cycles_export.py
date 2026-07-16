@@ -97,7 +97,7 @@ def _getSocketValue(socket: bpy.types.NodeSocket, type: SocketValueType) -> Colo
     return _getResolvedSocketValue(socket, type)
 
 
-def _isSocketTexture(socket: bpy.types.NodeSocket):
+def _isSocketConnected(socket: bpy.types.NodeSocket):
     # The check the two basic cases - if we have an unmuted connection. Then check if the connection
     # is meaningful i.e. going to an actual node not just re-routed to a node group.
     if not socketHasActiveNearLinks(socket):
@@ -146,7 +146,7 @@ def _clamp01(val):
 
 def _exportCyclesColorAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, attr: str|bpy.types.NodeSocketFloat, *plgParamNames: str):
     attribute = nodeCtx.node.inputs[attr] if isinstance(attr, str) else attr
-    if _isSocketTexture(attribute):
+    if _isSocketConnected(attribute):
         if sockValue := _exportCyclesLinkedSocket(nodeCtx, attribute):
             for param in plgParamNames:
                 pluginDesc.setAttribute(param, sockValue)
@@ -156,7 +156,7 @@ def _exportCyclesColorAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, at
 
 def _exportCyclesFloatAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, attr: str|bpy.types.NodeSocketFloat, *plgParamNames: str):
     attribute = nodeCtx.node.inputs[attr] if isinstance(attr, str) else attr
-    if _isSocketTexture(attribute):
+    if _isSocketConnected(attribute):
         if sockValue := _exportCyclesLinkedSocket(nodeCtx, attribute):
             for param in plgParamNames:
                 pluginDesc.setAttribute(param, sockValue)
@@ -171,13 +171,13 @@ def _exportCyclesMixedAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, co
         pluginDesc.setAttribute(plgParamName, BLACK_COLOR)
         return
     # If strength is 1.0 then just export the color parameter without a mix plugin.
-    if not _isSocketTexture(strengthSocket):
+    if not _isSocketConnected(strengthSocket):
         if math.isclose(_getSocketValue(strengthSocket, SocketValueType.Float), 1.0):
             _exportCyclesColorAttribute(nodeCtx, pluginDesc, colorAttrName, plgParamName)
             return
         else:
             colorSocket = nodeCtx.node.inputs[colorAttrName]
-            if not _isSocketTexture(colorSocket):
+            if not _isSocketConnected(colorSocket):
                 value = _getSocketValue(colorSocket, SocketValueType.Color) * _getSocketValue(strengthSocket, SocketValueType.Float)
                 pluginDesc.setAttribute(plgParamName, value)
                 return
@@ -195,17 +195,18 @@ def _exportCyclesMixedAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, co
 def _exportCyclesWrappedAttribute(nodeCtx: NodeContext, attributeName: str):
     # Export a color and optionally wraps it in a TexAColor if necessary.
     colorAttr = nodeCtx.node.inputs[attributeName]
-    if _isSocketTexture(colorAttr):
+    if _isSocketConnected(colorAttr):
         return _exportCyclesLinkedSocket(nodeCtx, colorAttr)
     else:
         return wrapAsTexture(nodeCtx, _getSocketValue(colorAttr, SocketValueType.Color))
 
 def _exportCyclesVectorAttribute(nodeCtx: NodeContext, pluginDesc: PluginDesc, vectorAttrName: str, additionalMatrix: Matrix = Matrix()):
     vectorSocket = nodeCtx.node.inputs[vectorAttrName]
-    if _isSocketTexture(vectorSocket):
+    if _isSocketConnected(vectorSocket):
         uvwgen = exportLinkedSocket(nodeCtx, vectorSocket)
         # Blender uses Vector type for UVWGen so it's possible to sometimes end up here with a color as UVWGen.
         if uvwgen is not None and (not isinstance(uvwgen, AttrPlugin) or 'UVWGen' not in uvwgen.pluginType):
+            # Wrap plugins that are not UVW generators
             uvwgenExplicitName = Names.nextVirtualNode(nodeCtx, "UVWGenExplicit")
             uvwgenExplicitDesc = PluginDesc(uvwgenExplicitName, "UVWGenExplicit")
             uvwgenExplicitDesc.setAttribute("uvw", uvwgen)
@@ -238,7 +239,7 @@ def _exportIntensityOutput(nodeCtx: NodeContext, plugin: AttrPlugin):
 
 def _convertBlenderHSVToVRay(nodeCtx: NodeContext, hueSocket: bpy.types.NodeSocket) -> float | AttrPlugin:
     # V-Ray expects [0-360] hue, blender uses values in the range [0-1] so we multiply by 360
-    if _isSocketTexture(hueSocket):
+    if _isSocketConnected(hueSocket):
         texFloatOpName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
         texFloatOpDesc = PluginDesc(texFloatOpName, "TexFloatOp")
         _exportCyclesFloatAttribute(nodeCtx, texFloatOpDesc, hueSocket, "float_a")
@@ -251,7 +252,7 @@ def _convertBlenderHSVToVRay(nodeCtx: NodeContext, hueSocket: bpy.types.NodeSock
 
 def _wrapColorFactorSocket(nodeCtx: NodeContext, factorSocket: bpy.types.NodeSocket, color1: AttrPlugin, color2: AttrPlugin):
     # Export a TexMix plugin that will blend color1 and color2 based on the value of factorSocket.
-    if not _isSocketTexture(factorSocket):
+    if not _isSocketConnected(factorSocket):
         if math.isclose(_getSocketValue(factorSocket, SocketValueType.Float), 0.0):
             return color1
         if math.isclose(_getSocketValue(factorSocket, SocketValueType.Float), 1.0):
@@ -260,7 +261,7 @@ def _wrapColorFactorSocket(nodeCtx: NodeContext, factorSocket: bpy.types.NodeSoc
     texMixDesc = PluginDesc(texMixName, "TexMix")
     texMixDesc.setAttribute("color1", color1)
     texMixDesc.setAttribute("color2", color2)
-    if _isSocketTexture(factorSocket):
+    if _isSocketConnected(factorSocket):
         factor = _exportCyclesLinkedSocket(nodeCtx, factorSocket)
         factor = _wrapFloatToColor(nodeCtx, factor)
         texMixDesc.setAttribute("mix_map", factor)
@@ -278,7 +279,7 @@ def _isSocketZero(socket):
     return not _isSocketNonZero(socket)
 
 def _isSocketNonZero(socket):
-    return _isSocketTexture(socket) or not math.isclose(_getSocketValue(socket, SocketValueType.Float), 0.0)
+    return _isSocketConnected(socket) or not math.isclose(_getSocketValue(socket, SocketValueType.Float), 0.0)
 
 def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
     match nodeCtx.node.bl_idname:
@@ -389,7 +390,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
 
     baseColorSocket = node.inputs["Base Color"]
-    baseColor = _exportCyclesLinkedSocket(nodeCtx, baseColorSocket) if _isSocketTexture(baseColorSocket) else _getSocketValue(baseColorSocket, SocketValueType.Color)
+    baseColor = _exportCyclesLinkedSocket(nodeCtx, baseColorSocket) if _isSocketConnected(baseColorSocket) else _getSocketValue(baseColorSocket, SocketValueType.Color)
     mtlDesc.setAttribute("translucency_color", baseColor)
 
     _exportCyclesFloatAttribute(nodeCtx, mtlDesc, "Alpha", "opacity")
@@ -432,7 +433,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
 
     sssWeightSocket = nodeCtx.node.inputs["Subsurface Weight"]
     transmissionWeight = nodeCtx.node.inputs["Transmission Weight"]
-    if _isSocketTexture(transmissionWeight):
+    if _isSocketConnected(transmissionWeight):
         transmission = exportLinkedSocket(nodeCtx, transmissionWeight)
         refract = _wrapFloatToColor(nodeCtx, transmission)
     else:
@@ -446,7 +447,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     # export.
 
     # diffuse = (1-transmission)*base color
-    if _isSocketTexture(transmissionWeight):
+    if _isSocketConnected(transmissionWeight):
         invertTransmissionName = Names.nextVirtualNode(nodeCtx, "TexInvertFloat")
         invertTransmissionDesc = PluginDesc(invertTransmissionName, "TexInvertFloat")
         _exportCyclesFloatAttribute(nodeCtx, invertTransmissionDesc, transmissionWeight, "texture")
@@ -476,7 +477,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
 
     if node.subsurface_method != 'BURLEY' and "Subsurface Anisotropy" in nodeCtx.node.inputs:
         sssAnisotropySocket = nodeCtx.node.inputs["Subsurface Anisotropy"]
-        if _isSocketTexture(sssAnisotropySocket):
+        if _isSocketConnected(sssAnisotropySocket):
             NodeContext.registerError("V-Ray does not support textured Subsurface Anisotropy")
         mtlDesc.setAttribute("translucency_scatter_dir", _getSocketValue(sssAnisotropySocket, SocketValueType.Float))
     else:
@@ -566,7 +567,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     # The formula here is purely based on observation. The anisotropy in Cycles seems to be clamped
     # between [0-1] and seems to somewhat match V-Ray's when rescaled in the range [0.0, 0.6].
     anisotropySocket = node.inputs["Anisotropic"]
-    if not _isSocketTexture(anisotropySocket):
+    if not _isSocketConnected(anisotropySocket):
         anisotropy = _clamp01(_getSocketValue(anisotropySocket, SocketValueType.Float))*0.6
     else:
         anisotropy = _exportCyclesLinkedSocket(nodeCtx, anisotropySocket)
@@ -610,7 +611,7 @@ def _exportCyclesBsdfPrincipled(nodeCtx: NodeContext):
     mtlDesc.setAttribute("reflect_depth", 4)
     mtlDesc.setAttribute("refract_depth", 12)
 
-    if _isSocketTexture(nodeCtx.node.inputs["Tangent"]):
+    if _isSocketConnected(nodeCtx.node.inputs["Tangent"]):
         NodeContext.registerError("V-Ray does not support tangent textures")
 
     return _exportCyclesPluginWithStats(nodeCtx, mtlDesc)
@@ -671,7 +672,7 @@ def _exportCyclesGlossyBsdf(nodeCtx: NodeContext):
     # the anisotropy because V-Ray does not handle -1.0 and 1.0 and we add 0.25 to the rotation
     # because the highlight is rotated 90degrees by default.
     anisotropySocket = nodeCtx.node.inputs["Anisotropy"]
-    if not _isSocketTexture(anisotropySocket):
+    if not _isSocketConnected(anisotropySocket):
         anisotropy = _clamp(_getSocketValue(anisotropySocket, SocketValueType.Float), -0.99, 0.99)
     else:
         anisotropy = _exportCyclesLinkedSocket(nodeCtx, anisotropySocket)
@@ -679,7 +680,7 @@ def _exportCyclesGlossyBsdf(nodeCtx: NodeContext):
     mtlDesc.setAttribute("anisotropy", anisotropy)
     mtlDesc.setAttribute("coat_anisotropy", anisotropy)
     rotationSocket = nodeCtx.node.inputs["Rotation"]
-    if not _isSocketTexture(rotationSocket):
+    if not _isSocketConnected(rotationSocket):
         mtlDesc.setAttribute("anisotropy_rotation", _getSocketValue(rotationSocket, SocketValueType.Float) + 0.25)
     else:
         texFloatOpName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
@@ -729,7 +730,7 @@ def _exportCyclesRefractiveBsdf(nodeCtx: NodeContext, isGlass: bool):
     mtlDesc = PluginDesc(pluginName, "BRDFVRayMtl")
 
     colorSocket = nodeCtx.node.inputs["Color"]
-    if _isSocketTexture(colorSocket):
+    if _isSocketConnected(colorSocket):
         mtlDesc.setAttribute("fog_color_tex", _exportCyclesLinkedSocket(nodeCtx, colorSocket))
     else:
         mtlDesc.setAttribute("fog_color", _getSocketValue(colorSocket, SocketValueType.Color))
@@ -763,7 +764,7 @@ def _exportCyclesBlendShaderNode(nodeCtx: NodeContext, isMix: bool):
     brdfs, weights = [], []
 
     baseLayer = nodeCtx.node.inputs["Shader"]
-    if _isSocketTexture(baseLayer):
+    if _isSocketConnected(baseLayer):
         material = exportLinkedSocket(nodeCtx, baseLayer)
         if not material or not isinstance(material, AttrPlugin):
             material = MtlExporter.exportDefaultMaterial(nodeCtx.exporterCtx)
@@ -772,14 +773,14 @@ def _exportCyclesBlendShaderNode(nodeCtx: NodeContext, isMix: bool):
         weights.append(weight)
 
     layer = nodeCtx.node.inputs["Shader_001"]
-    if _isSocketTexture(layer):
+    if _isSocketConnected(layer):
         material = exportLinkedSocket(nodeCtx, layer)
         if not material or not isinstance(material, AttrPlugin):
             material = MtlExporter.exportDefaultMaterial(nodeCtx.exporterCtx)
         brdfs.append(material)
         if isMix:
             factorSocket = nodeCtx.node.inputs["Fac"]
-            if _isSocketTexture(factorSocket):
+            if _isSocketConnected(factorSocket):
                 factorPlugin = _exportCyclesLinkedSocket(nodeCtx, factorSocket)
                 texFloatToColor = _wrapFloatToColor(nodeCtx, factorPlugin)
                 weights.append(texFloatToColor)
@@ -808,13 +809,13 @@ def _exportCyclesCheckerTexture(nodeCtx: NodeContext, nodeLink: FarNodeLink):
         texDesc.setAttribute("black_color", WHITE_COLOR)
 
     scaleSocket = nodeCtx.node.inputs['Scale']
-    if _isSocketTexture(scaleSocket):
+    if _isSocketConnected(scaleSocket):
         nodeCtx.registerError("V-Ray does not support textured scale of Checker texture")
 
     scale = _getSocketValue(scaleSocket, SocketValueType.Float) / 2.0
     smat = Matrix.Scale(scale, 4, Vector((1, 0, 0))) @ Matrix.Scale(scale, 4, Vector((0, 1, 0))) @ Matrix.Scale(scale, 4, Vector((0, 0, 1)))
     vectorSocket = nodeCtx.node.inputs["Vector"]
-    if _isSocketTexture(vectorSocket):
+    if _isSocketConnected(vectorSocket):
         nodeCtx.pushUVWTransform(smat)
         _exportCyclesVectorAttribute(nodeCtx, texDesc, "Vector")
         nodeCtx.popUVWTransform()
@@ -994,7 +995,7 @@ def _exportCyclesInvertNode(nodeCtx: NodeContext):
     texDesc = PluginDesc(pluginName, "TexInvert")
 
     colorSocket = nodeCtx.node.inputs["Color"]
-    if _isSocketTexture(colorSocket):
+    if _isSocketConnected(colorSocket):
         inputColor = _exportCyclesLinkedSocket(nodeCtx, colorSocket)
     else:
         inputColor = _getSocketValue(colorSocket, SocketValueType.Color)
@@ -1070,10 +1071,6 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
     # TODO: Images in scenes?
     image: bpy.types.Image = node.image
     if image is not None:
-        if image.source != 'FILE':
-            NodeContext.registerError("V-Ray currently  supports only file images")
-            return INVALID_COLOR
-
         imagePath = image_utils.getTrackedImagePath(image)
 
         colorSpace = image.colorspace_settings.name
@@ -1120,6 +1117,10 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
         updateValue(nodeCtx.exporterCtx.renderer, bitmapBufferName, 'file', AttrPlugin(forceUpdate=True))
     
     bitmapBufferDesc.setAttribute("file", imagePath)
+
+    # A sequence pins a per-frame frame_number; register the material so it re-exports each frame.
+    if image is not None and image_utils.applySequenceFrameAttrs(image, node.image_user, nodeCtx.exporterCtx.currentFrame, bitmapBufferDesc):
+        nodeCtx.exporterCtx.registerAnimatedBitmapMaterial(nodeCtx.material)
 
     match node.interpolation:
         case 'Linear':
@@ -1292,7 +1293,7 @@ def _exportCyclesGradientNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     uvwMatrix = _computeImageMappingTransform(node.texture_mapping)
 
     vectorSocket = nodeCtx.node.inputs["Vector"]
-    if _isSocketTexture(vectorSocket):
+    if _isSocketConnected(vectorSocket):
         _exportCyclesVectorAttribute(nodeCtx, texDesc, "Vector", uvwMatrix)
     else:
         uvwgen = _exportCyclesGeneratedCoordsUVWGen(nodeCtx, False)
@@ -1390,7 +1391,7 @@ def _exportCyclesWireframeNode(nodeCtx: NodeContext):
     sizeSocket = node.inputs["Size"]
 
     def _exportWidthTexture(widthParam, multiplier):
-        if _isSocketTexture(sizeSocket):
+        if _isSocketConnected(sizeSocket):
             texFloatOpDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexFloatOp"), "TexFloatOp")
             _exportCyclesFloatAttribute(nodeCtx, texFloatOpDesc, sizeSocket, "float_a")
             texFloatOpDesc.setAttribute("float_b", multiplier)
@@ -1453,7 +1454,7 @@ def _exportCyclesCurvesNode(nodeCtx: NodeContext, isColor: bool):
     curveMapping: bpy.types.CurveMapping = node.mapping
     colorSocket = node.inputs["Color"] if isColor else nodeCtx.node.inputs["Vector"]
     input = None
-    if _isSocketTexture(colorSocket):
+    if _isSocketConnected(colorSocket):
         input: AttrPlugin = _exportCyclesLinkedSocket(nodeCtx, colorSocket)
     else:
         input = _getSocketValue(colorSocket, SocketValueType.Color)
@@ -1509,7 +1510,7 @@ def _exportCyclesMappingNode(nodeCtx: NodeContext):
     location = node.inputs["Location"] if "Location" in node.inputs else None
     rotation = node.inputs["Rotation"]
     scale = node.inputs["Scale"]
-    if (location is not None and _isSocketTexture(location)) or _isSocketTexture(rotation) or _isSocketTexture(scale):
+    if (location is not None and _isSocketConnected(location)) or _isSocketConnected(rotation) or _isSocketConnected(scale):
         NodeContext.registerError("V-Ray does not support linked Mapping node sockets")
 
     transform = _computeMappingMatrix(
@@ -1520,7 +1521,7 @@ def _exportCyclesMappingNode(nodeCtx: NodeContext):
     )
 
     vectorSocket: bpy.types.NodeSocketVector = node.inputs["Vector"]
-    if _isSocketTexture(vectorSocket):
+    if _isSocketConnected(vectorSocket):
         nodeCtx.pushUVWTransform(transform)
         sockValue = _exportCyclesLinkedSocket(nodeCtx, vectorSocket)
         nodeCtx.popUVWTransform()
@@ -1630,7 +1631,7 @@ def _exportCyclesBevelNode(nodeCtx: NodeContext):
     normalBumpDesc = PluginDesc(normalBumpName, "TexNormalBump")
 
     inputNormalSocket = node.inputs["Normal"]
-    if _isSocketTexture(inputNormalSocket):
+    if _isSocketConnected(inputNormalSocket):
         _exportCyclesColorAttribute(nodeCtx, normalBumpDesc, inputNormalSocket, "bump_tex_color")
         normalBumpDesc.setAttribute("map_type", 6) # explicit
 
@@ -1679,8 +1680,8 @@ def _exportCyclesBumpNode(nodeCtx: NodeContext):
     heightSocket = node.inputs["Height"]
     normalSocket = node.inputs["Normal"]
 
-    if not _isSocketTexture(heightSocket):
-        if _isSocketTexture(normalSocket):
+    if not _isSocketConnected(heightSocket):
+        if _isSocketConnected(normalSocket):
             return _exportCyclesLinkedSocket(nodeCtx, normalSocket)
         else:
             return AttrPlugin()
@@ -1695,15 +1696,15 @@ def _exportCyclesBumpNode(nodeCtx: NodeContext):
     if node.invert:
         distance = -distance
     bumpMultDefault = strength * distance
-    if _isSocketTexture(normalSocket):
+    if _isSocketConnected(normalSocket):
         # Strength is technically a blend between the original normal and the bump normal
         # but for now all sockets are just multiplied together.
-        if not _isSocketTexture(strengthSocket) and not _isSocketTexture(distanceSocket):
-            bump = _exportCyclesLinkedSocket(nodeCtx, heightSocket) if _isSocketTexture(heightSocket) else _getSocketValue(heightSocket, SocketValueType.Float)
+        if not _isSocketConnected(strengthSocket) and not _isSocketConnected(distanceSocket):
+            bump = _exportCyclesLinkedSocket(nodeCtx, heightSocket) if _isSocketConnected(heightSocket) else _getSocketValue(heightSocket, SocketValueType.Float)
             bump = _wrapFloatToColor(nodeCtx, bump)
             texDesc.setAttribute("bump_map_mult", bumpMultDefault)
         else:
-            strength = _exportCyclesLinkedSocket(nodeCtx, strengthSocket) if _isSocketTexture(strengthSocket) else _getSocketValue(strengthSocket, SocketValueType.Float)
+            strength = _exportCyclesLinkedSocket(nodeCtx, strengthSocket) if _isSocketConnected(strengthSocket) else _getSocketValue(strengthSocket, SocketValueType.Float)
             strengthDistanceName = Names.nextVirtualNode(nodeCtx, "TexAColorOp")
             strengthDistanceDesc = PluginDesc(strengthDistanceName, "TexAColorOp")
             strengthDistanceDesc.setAttribute("color_a", _wrapFloatToColor(nodeCtx, strength))
@@ -1720,7 +1721,7 @@ def _exportCyclesBumpNode(nodeCtx: NodeContext):
         texDesc.setAttribute("map_type", 6) # explicit
         texDesc.setAttribute("additional_bump", bump)
     else:
-        if not _isSocketTexture(strengthSocket) and not _isSocketTexture(distanceSocket):
+        if not _isSocketConnected(strengthSocket) and not _isSocketConnected(distanceSocket):
             texDesc.setAttribute("bump_tex_mult", bumpMultDefault)
             texDesc.setAttribute("bump_tex_mult_tex", AttrPlugin())
         else:
@@ -1732,7 +1733,7 @@ def _exportCyclesBumpNode(nodeCtx: NodeContext):
             bumpMult = _exportCyclesPluginWithStats(nodeCtx, strengthDistanceDesc)
             texDesc.setAttribute("bump_tex_mult_tex", bumpMult)
             texDesc.setAttribute("bump_tex_mult", 1.0)
-        bump = _exportCyclesLinkedSocket(nodeCtx, heightSocket) if _isSocketTexture(heightSocket) else _getSocketValue(heightSocket, SocketValueType.Float)
+        bump = _exportCyclesLinkedSocket(nodeCtx, heightSocket) if _isSocketConnected(heightSocket) else _getSocketValue(heightSocket, SocketValueType.Float)
         bump = _wrapFloatToColor(nodeCtx, bump)
         texDesc.setAttribute("map_type", 5) # bump
         texDesc.setAttribute("bump_tex_color", bump)
@@ -1816,8 +1817,8 @@ def _exportCyclesSeperateXYZNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     pluginName = Names.treeNode(nodeCtx)
     texDesc = PluginDesc(pluginName, "TexAColorOp")
     vectorSocket = nodeCtx.node.inputs["Vector"]
-    value = _exportCyclesLinkedSocket(nodeCtx, vectorSocket) if _isSocketTexture(vectorSocket) else _getSocketValue(vectorSocket, SocketValueType.Color)
-    if value is not None and isinstance(value, AttrPlugin) and value.pluginType.startswith("UVWGen"):
+    value = _exportCyclesLinkedSocket(nodeCtx, vectorSocket) if _isSocketConnected(vectorSocket) else _getSocketValue(vectorSocket, SocketValueType.Color)
+    if value is not None and isinstance(value, AttrPlugin) and "UVWGen" in value.pluginType:
         value = _exportUVWToColor(nodeCtx, value)
     texDesc.setAttribute("color_a", value)
     texAColorOp = _exportCyclesPluginWithStats(nodeCtx, texDesc)
@@ -1844,7 +1845,7 @@ def _exportLayerWeightBias(nodeCtx: NodeContext, input: AttrPlugin):
     # When nothing is connected here use the calculation from blender,
     # otherwise use schlick bias which is a bit different.
     blendSocket = nodeCtx.node.inputs["Blend"]
-    if _isSocketTexture(blendSocket):
+    if _isSocketConnected(blendSocket):
             texFloatOpName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
             texFloatOpDesc = PluginDesc(texFloatOpName, "TexFloatOp")
             texFloatOpDesc.setAttribute("float_a", input)
@@ -1930,7 +1931,7 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool, isLegacy=F
     ]
 
     def wrapMixInput(socket: bpy.types.NodeSocketColor):
-        if _isSocketTexture(socket):
+        if _isSocketConnected(socket):
             tex = _exportCyclesLinkedSocket(nodeCtx, socket)
             if isColorMix and isinstance(tex, AttrPlugin):
                 # V-Ray blends based on the alpha of the inputs(and Cycles doesn't) so for now set the alpha to 1.0.
@@ -1954,7 +1955,7 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool, isLegacy=F
     else:
         factorSocket = nodeCtx.node.inputs["Factor"]
     if isColorMix or node.factor_mode=='UNIFORM':
-        factor = _exportCyclesLinkedSocket(nodeCtx, factorSocket) if _isSocketTexture(factorSocket) else _getSocketValue(factorSocket, SocketValueType.Float)
+        factor = _exportCyclesLinkedSocket(nodeCtx, factorSocket) if _isSocketConnected(factorSocket) else _getSocketValue(factorSocket, SocketValueType.Float)
         if not isLegacy and node.clamp_factor:
             factor = _wrapClampPlugin01(nodeCtx, factor)
         floatToColor = _wrapFloatToColor(nodeCtx, factor)
@@ -1962,7 +1963,7 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool, isLegacy=F
     else:
         nodeCtx.registerError("V-Ray does not support non-uniform Vector Mix")
         # Still export the color, but V-Ray will use the intensity
-        if _isSocketTexture(factorSocket):
+        if _isSocketConnected(factorSocket):
             facTex = _exportCyclesLinkedSocket(nodeCtx, factorSocket)
             masks = [wrapAsTexture(nodeCtx, WHITE_COLOR), wrapAsTexture(nodeCtx, facTex)]
         else:
@@ -2011,7 +2012,7 @@ def _exportCyclesFloatMixNode(nodeCtx: NodeContext):
     bTexDesc = PluginDesc(bTexName, "TexFloatOp")
     bTexDesc.setAttribute("mode", 0) # product
     _exportCyclesFloatAttribute(nodeCtx, bTexDesc, "A", "float_a")
-    if not _isSocketTexture(factorSocket):
+    if not _isSocketConnected(factorSocket):
         bTexDesc.setAttribute("float_b", 1 - _getSocketValue(factorSocket, SocketValueType.Float))
     else:
         # 1 - Factor
@@ -2036,11 +2037,11 @@ def _exportCyclesMixNode(nodeCtx: NodeContext):
 
 def _exportCyclesClampNode(nodeCtx: NodeContext):
     valueSocket = nodeCtx.node.inputs["Value"]
-    value = _exportCyclesLinkedSocket(nodeCtx, valueSocket) if _isSocketTexture(valueSocket) else _getSocketValue(valueSocket, SocketValueType.Float)
+    value = _exportCyclesLinkedSocket(nodeCtx, valueSocket) if _isSocketConnected(valueSocket) else _getSocketValue(valueSocket, SocketValueType.Float)
     minSocket = nodeCtx.node.inputs["Min"]
-    min = _exportCyclesLinkedSocket(nodeCtx, minSocket) if _isSocketTexture(minSocket) else _getSocketValue(minSocket, SocketValueType.Float)
+    min = _exportCyclesLinkedSocket(nodeCtx, minSocket) if _isSocketConnected(minSocket) else _getSocketValue(minSocket, SocketValueType.Float)
     maxSocket = nodeCtx.node.inputs["Max"]
-    max = _exportCyclesLinkedSocket(nodeCtx, maxSocket) if _isSocketTexture(maxSocket) else _getSocketValue(maxSocket, SocketValueType.Float)
+    max = _exportCyclesLinkedSocket(nodeCtx, maxSocket) if _isSocketConnected(maxSocket) else _getSocketValue(maxSocket, SocketValueType.Float)
     return _wrapClampPlugin(nodeCtx, value, min, max)
 
 def _exportCyclesHSVNode(nodeCtx: NodeContext):
@@ -2061,7 +2062,7 @@ def _exportCyclesHSVNode(nodeCtx: NodeContext):
     _exportCyclesFloatAttribute(nodeCtx, texDesc, "Saturation", "sat_gain")
     _exportCyclesFloatAttribute(nodeCtx, texDesc, "Value", "val_gain")
     colorSocket = nodeCtx.node.inputs["Color"]
-    if _isSocketTexture(colorSocket):
+    if _isSocketConnected(colorSocket):
         inputColor = _exportCyclesLinkedSocket(nodeCtx, colorSocket)
     else:
         inputColor = _getSocketValue(colorSocket, SocketValueType.Color)
@@ -2075,7 +2076,7 @@ def _exportCyclesGammaNode(nodeCtx: NodeContext):
     # Note that this plugin is different than the one used by VBLD but support everything needed.
     texDesc = PluginDesc(texName, "TexColorCorrect")
     gammaSocket = nodeCtx.node.inputs["Gamma"]
-    if _isSocketTexture(gammaSocket):
+    if _isSocketConnected(gammaSocket):
         invertName = Names.nextVirtualNode(nodeCtx, "TexFloatOp")
         invertDesc = PluginDesc(invertName, "TexFloatOp")
         invertDesc.setAttribute("float_a", 1.0)
@@ -2095,22 +2096,60 @@ def _exportCyclesBrightnessNode(nodeCtx: NodeContext):
     texDesc = PluginDesc(texName, "ColorCorrection")
     contrastSocket = nodeCtx.node.inputs["Contrast"]
     brightnessSocket = nodeCtx.node.inputs["Bright"]
-    if _isSocketTexture(brightnessSocket) or _isSocketTexture(contrastSocket):
+    if _isSocketConnected(brightnessSocket) or _isSocketConnected(contrastSocket):
         NodeContext.registerError("V-Ray does not support textured Brightness/Contrast node inputs")
     texDesc.setAttribute("contrast", _getSocketValue(contrastSocket, SocketValueType.Float) + 1)
     texDesc.setAttribute("brightness", _getSocketValue(brightnessSocket, SocketValueType.Float) / 2)
     _exportCyclesColorAttribute(nodeCtx, texDesc, "Color", "texture_map")
     return _exportCyclesPluginWithStats(nodeCtx, texDesc)
 
-def _exportCyclesNoiseNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
-    # The node is not at all well supported but allow export for it since it's commonly used.
-    NodeContext.registerError("Noise is not well supported by V-Ray. You may need you adjust your setup")
-    fromSocket = nodeLink.from_socket
-    texName = Names.treeNode(nodeCtx)
-    texDesc = PluginDesc(texName, "TexNoiseMax")
+_NOISE_DIMENSIONS_MAP = {'1D': 1, '2D': 2, '3D': 3, '4D': 4}
+_NOISE_TYPE_MAP = {
+    'MULTIFRACTAL':        1,
+    'RIDGED_MULTIFRACTAL': 2,
+    'HYBRID_MULTIFRACTAL': 3,
+    'FBM':                 4,
+    'HETERO_TERRAIN':      5,
+}
 
-    texDesc.setAttribute("size", 0.05)
-    noisePlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc)
-    if fromSocket.name == "Fac":
-        return _exportIntensityOutput(nodeCtx, noisePlugin)
-    return noisePlugin
+def _exportCyclesNoiseNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
+    node: bpy.types.ShaderNodeTexNoise = nodeCtx.node
+    texName = Names.treeNode(nodeCtx)
+    texDesc = PluginDesc(texName, "TexCyclesNoise")
+
+    dimensions = _NOISE_DIMENSIONS_MAP.get(node.noise_dimensions, 3)
+    texDesc.setAttribute("dimensions", dimensions)
+    texDesc.setAttribute("type", _NOISE_TYPE_MAP.get(node.noise_type, 4))
+    texDesc.setAttribute("normalize", node.normalize)
+    
+    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Scale",      "scale")
+    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Detail",     "detail")
+    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Roughness",  "roughness")
+    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Lacunarity", "lacunarity")
+    _exportCyclesFloatAttribute(nodeCtx, texDesc, "Distortion", "distortion")
+    
+    if node.noise_type in ('RIDGED_MULTIFRACTAL', 'HYBRID_MULTIFRACTAL', 'HETERO_TERRAIN'):
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Offset", "offset")
+    
+    if node.noise_type in ('RIDGED_MULTIFRACTAL', 'HYBRID_MULTIFRACTAL'):
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "Gain", "gain")
+    
+
+    # W socket is only present in 1D and 4D modes.
+    if dimensions in (1, 4):
+        _exportCyclesFloatAttribute(nodeCtx, texDesc, "W", "w_coord")
+
+    if dimensions != 1:
+        uvwMatrix = _computeImageMappingTransform(node.texture_mapping)
+        if _isSocketConnected(node.inputs["Vector"]):
+            nodeCtx.pushUVWTransform(uvwMatrix)
+            _exportCyclesVectorAttribute(nodeCtx, texDesc, "Vector")
+            nodeCtx.popUVWTransform()
+        else:
+            nodeCtx.pushUVWTransform(uvwMatrix)
+            uvwgen = _exportCyclesGeneratedCoordsUVWGen(nodeCtx, fromMappingNode=False)
+            nodeCtx.popUVWTransform()
+            texDesc.setAttribute("uvwgen", uvwgen)
+
+    return _exportCyclesPluginWithStats(nodeCtx, texDesc)
+

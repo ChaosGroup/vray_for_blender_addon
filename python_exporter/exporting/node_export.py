@@ -9,7 +9,7 @@ from vray_blender.lib import export_utils, lib_utils
 from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
 from vray_blender.lib.names import Names
 from vray_blender.lib.sys_utils import getUvGridTexturePath
-from vray_blender.plugins import PLUGIN_MODULES, getPluginModule
+from vray_blender.plugins import PLUGIN_MODULES, getPluginModule, getPluginAttr
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId
 from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeShaderScript
 from vray_blender.exporting.node_exporters.uvw_node_export import exportVRayNodeUVWGenRandomizer, exportVRayNodeUVWMapping
@@ -263,7 +263,16 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
         NodeContext.registerError(f"Non V-Ray node can not be exported: '{node.name}'")
         return
 
-    pluginAttrs = PLUGIN_MODULES[plDesc.type].Parameters
+    pluginModule = PLUGIN_MODULES[plDesc.type]
+
+    # Properties driven by a meta socket (e.g. the 'use' flag and target plugin of a
+    # BRDF_USE/COLOR_USE socket) are exported by that meta socket. They also get their
+    # own hidden stand-alone sockets, whose unlinked export would overwrite the value
+    # the meta socket set - skip them here.
+    metaBoundProps = set()
+    for p in pluginModule.Parameters:
+        if boundProps := p.get('bound_props'):
+            metaBoundProps.update(boundProps.values())
 
     for sock in node.inputs:
         if not isVraySocket(sock):
@@ -274,8 +283,11 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
         if sock.vray_attr in skippedSockets:
             continue
 
+        if sock.vray_attr in metaBoundProps:
+            continue
+
         attrName = sock.vray_attr
-        pluginParam = next(iter(i for i in pluginAttrs if i['attr'] == attrName), None)
+        pluginParam = getPluginAttr(pluginModule, attrName)
 
         if not pluginParam:
             # Nodetrees for meta nodes are exported one VRay plugin at a time. If the plugin param
@@ -585,6 +597,10 @@ def _forwardExportSceneObject(nodeCtx: NodeContext, obj: bpy.types.Object, isGeo
             else:
                 pluginName = Names.vrayNode(Names.object(obj))
             pluginType = "Node"
+
+            # Make sure the referenced object is actually exported, even if it is invisible /
+            # disabled in renders. Without this the forward-created plugin below would stay empty.
+            nodeCtx.exporterCtx.registerReferencedObject(obj)
         case "LIGHT":
             # If the object is light it won't be represented by a node,
             # so the name of the light plugin is given

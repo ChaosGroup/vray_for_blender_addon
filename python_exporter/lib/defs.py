@@ -62,6 +62,10 @@ class PersistedState:
         # of an object changes, so we need to track it ourselves.
         self.visibleObjects = set() # set of objTrackId
 
+        # A snapshot of scene objects' Holdout / Indirect Only state. Like visibility, Blender does
+        # not tag a usable depsgraph update when these change, so we track it ourselves.
+        self.holdoutState: dict[int, tuple[bool, bool]] = {} # objTrackId -> (holdout, indirectOnly)
+
         self.activeInstancers = set()
         self.activeGizmos     = set()
 
@@ -70,7 +74,16 @@ class PersistedState:
         # and the corresponding value is its AttrPlugin representation.
         # This cache is used to avoid re-exporting materials that have already been exported.
         self.exportedMtls: Dict[int, AttrPlugin] = {}
-        
+
+        # Track ids (session_uids) of materials whose node tree contains an animated image-sequence
+        # bitmap. Filled as bitmaps are exported and read by syncMtlExportCache, so those materials
+        # are re-exported on frame change without scanning every node in the scene.
+        self.animatedBitmapMaterials: set = set()
+
+        # The frame of the previous export, so syncMtlExportCache re-exports animated bitmaps only
+        # when the frame actually changed (not on every IPR edit). None until the first export.
+        self.lastExportedFrame = None
+
         self.activeFurInfo = set()
         self.activeMeshLightsInfo = set()
 
@@ -118,6 +131,17 @@ class ProxyExportSettings:
     exportOnlySelected: bool = False
     proxyMaterialSlots: list[tuple[int, str | None]] = field(default_factory=list)
     proxyMaterialSlotOffsets: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ReferencedPluginParam:
+    """ A plugin parameter that references other plugins and is therefore exported only after the
+        whole scene has been exported, once all the referenced plugins are guaranteed to exist. """
+
+    targetPluginName: str
+    attrName: str
+    value: object         # AttrPlugin | list[AttrPlugin] | scalar accepted by plugin_utils.updateValue
+    append: bool = False  # True => append into a per-key list; False => last-writer-wins
 
 
 class ExporterContext:
@@ -181,6 +205,13 @@ class ExporterContext:
     # This list is meant to be filled in from contexts outside the export sequence where immediate changes to V-Ray state
     # are not possible or convenient.
     pluginsToRecreate = set()
+
+    # Name of the material whose quick caustics parameter was last changed from a UI update
+    # callback (outside the export sequence). Quick caustics beam generators are registered at
+    # geometry-compile time in the core, so the geometry of objects using this material must be
+    # recompiled. Transferred into the per-export updatedMtlWithQuickCaustics field at the start
+    # of each export sync. 
+    pendingQuickCausticsMtl = ""
 
 
     def __init__(self, exporterCtx: ExporterContext = None):
@@ -265,10 +296,20 @@ class ExporterContext:
 
         self.objectsWithUpdatedVisibility: dict[int, bool] = {}
 
-        # A dictionary of (pluginName, attrName) => list of render channels. It will be filled up during the export
-        # procedure. When all other plugins have already been exported, the render channel names will be
-        # exported for each plugin that is on the list.
-        self.pluginRenderChannels = {}
+        # objTrackIds of objects whose Holdout / Indirect Only state changed since the last export.
+        self.objectsWithUpdatedHoldout: set[int] = set()
+
+        # Plugin parameters that reference other plugins, exported only after every referenceable
+        # plugin exists so the references resolve. Keyed by (targetPluginName, attrName), drained by
+        # export_utils.exportReferencedPluginParams(). Currently used for render-channel linking (see
+        # linkPluginToRenderChannel); object selectors use self.referencedObjects instead.
+        self.referencedPluginParams: dict[tuple[str, str], ReferencedPluginParam] = {}
+
+        # Objects referenced by a plugin parameter (e.g. a selector); must export even when hidden,
+        # else the reference points to an empty plugin. Filled by reference_collector, exported by
+        # GeometryExporter._exportObjects. Maps objTrackId -> original object (render-hidden objects
+        # are absent from the depsgraph, so the original cannot be recovered from it).
+        self.referencedObjects: dict[int, bpy.types.Object] = {}
 
         # A dictionary of collection => list of lights. For lights outside a collection, the collection
         # name is an empty string. This info is used for exporting LightSelect and LightMix render channels.
@@ -290,6 +331,10 @@ class ExporterContext:
 
         # The name of currently updated material that has a displacement node in its node tree
         self.updatedMtlWithDisplacement = ""
+
+        # Name of the material whose quick caustics parameters changed for this export. Objects
+        # using this material get their geometry recompiled so beam generators re-register.
+        self.updatedMtlWithQuickCaustics = ""
 
         # UI context data
         self.uiRegionContext: UIRegionContext = None
@@ -317,6 +362,7 @@ class ExporterContext:
         self.allObjects             = other.allObjects
         self.dgUpdates              = other.dgUpdates
         self.objectsWithUpdatedVisibility  = other.objectsWithUpdatedVisibility
+        self.objectsWithUpdatedHoldout     = other.objectsWithUpdatedHoldout
         self.commonSettings         = other.commonSettings
         self.ctx                    = other.ctx
         self.dg                     = other.dg
@@ -333,13 +379,15 @@ class ExporterContext:
         self.stats                  = other.stats
         self.defaultPlugins         = other.defaultPlugins
         self.objectsWithTempMeshes  = other.objectsWithTempMeshes
-        self.pluginRenderChannels   = other.pluginRenderChannels
+        self.referencedPluginParams = other.referencedPluginParams
+        self.referencedObjects      = other.referencedObjects
         self.lightCollections       = other.lightCollections
         self.emissiveMaterials      = other.emissiveMaterials
         self.objectContext          = other.objectContext
         self.motionBlurBuilder      = other.motionBlurBuilder
         self.activeLightMixNode     = other.activeLightMixNode
         self.updatedMtlWithDisplacement = other.updatedMtlWithDisplacement
+        self.updatedMtlWithQuickCaustics = other.updatedMtlWithQuickCaustics
         self.uiRegionContext             = other.uiRegionContext
         self.forceAnimationMode     = other.forceAnimationMode
         self.exportProgress         = other.exportProgress
@@ -400,6 +448,16 @@ class ExporterContext:
     def exportedMtls(self):
         return self.persistedState.exportedMtls
 
+    @property
+    def animatedBitmapMaterials(self):
+        return self.persistedState.animatedBitmapMaterials
+
+    def registerAnimatedBitmapMaterial(self, material):
+        """ Record a material that contains an animated image-sequence bitmap, so the incremental
+            exporter re-exports it next frame without scanning every node tree. """
+        if material is not None:
+            self.persistedState.animatedBitmapMaterials.add(material.original.session_uid)
+
     def calculateObjectVisibility(self):
         """ Fill the visibility and active instancers info into ExporterContext """
 
@@ -432,6 +490,45 @@ class ExporterContext:
         }
 
 
+    def registerReferencedPluginParam(self, targetPluginName: str, attrName: str, value, append=False):
+        """ Register a plugin parameter that references other plugins, to be exported only after the
+            whole scene has been exported (the referenced plugins may not have been created yet).
+
+        Args:
+            targetPluginName (str): The plugin on which the parameter is set.
+            attrName (str): The parameter name.
+            value: AttrPlugin | list[AttrPlugin] | scalar accepted by plugin_utils.updateValue.
+            append (bool): If True, accumulate values into a list per (plugin, attr) - used e.g. when
+                several render channels reference the same light. If False, the last registration wins.
+        """
+        key = (targetPluginName, attrName)
+
+        if not append:
+            self.referencedPluginParams[key] = ReferencedPluginParam(targetPluginName, attrName, value, append=False)
+            return
+
+        existing = self.referencedPluginParams.get(key)
+        if existing is None:
+            seed = list(value) if isinstance(value, list) else [value]
+            self.referencedPluginParams[key] = ReferencedPluginParam(targetPluginName, attrName, seed, append=True)
+        else:
+            assert existing.append, f"Mixing appended and single-valued referenced plugin params for {key}"
+            existing.value.extend(value) if isinstance(value, list) else existing.value.append(value)
+
+
+    def registerReferencedObject(self, obj: bpy.types.Object):
+        """ Mark a scene object as referenced by a plugin parameter so that it is exported even when
+            it is invisible / disabled in renders. See the comment on self.referencedObjects.
+
+            Lights are ignored: they are exported by the light exporter, not the geometry force-export
+            pass that consumes self.referencedObjects, so registering one would be a no-op.
+        """
+        if (obj is None) or (obj.type == 'LIGHT'):
+            return
+        objTrackId = getObjTrackId(obj)
+        self.referencedObjects.setdefault(objTrackId, obj)
+
+
     def linkPluginToRenderChannel(self, pluginName: str, channelLinkAttr: str, renderChannelPlugin: AttrPlugin):
         """ Store information about a link from a plugin to a render channel, i.e. that the plugin
             output should be visible in a render channel.
@@ -441,8 +538,7 @@ class ExporterContext:
             channelLinkAttr (str): Attribute of type PLUGIN_LIST to which the render channel name should be added.
             renderChannelPlugin (AttrPlugin): the render channel plugin
         """
-        channelKey = (pluginName, channelLinkAttr)
-        self.pluginRenderChannels.setdefault(channelKey, []).append(renderChannelPlugin)
+        self.registerReferencedPluginParam(pluginName, channelLinkAttr, renderChannelPlugin, append=True)
 
 
 class ExporterBase(ExporterContext):

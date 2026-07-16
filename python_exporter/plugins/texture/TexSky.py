@@ -23,14 +23,12 @@ def showBasicOptions(propGroup, node):
     if propGroup.sun_dir_only:
         return True
 
-    if sunSock := getInputSocketByAttr(node, 'sun'):
+    if node and (sunSock := getInputSocketByAttr(node, 'sun')):
         if sunLink := getFarNodeLink(sunSock):
             linkedNode = sunLink.from_node
             if linkedNode.bl_idname in ('VRayNodeMultiSelect', 'VRayNodeSelectObject') and \
                     linkedNode.getSelected(bpy.context):
                 return False
-            return True
-        else:
             return True
 
     return propGroup.sun_select.boundPropObjName == ''

@@ -8,12 +8,17 @@
             "attr": "mode",
             "type": "ENUM",
             "desc": "The working mode of the light mix",
-            "default": "",
+            "default": "instanced",
             "items": [
                 [
                     "individual",
                     "Individual lights",
                     "The lighting information of each light is stored in a separate channel"
+                ],
+                [
+                    "instanced",
+                    "Instanced lights",
+                    "Non-instanced lights get separate channels. For instanced lights, a channel named after each instancer collects lighting from the lights it instances."
                 ],
                 [
                     "grouped",
