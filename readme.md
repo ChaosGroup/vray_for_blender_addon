@@ -35,7 +35,7 @@ Create the folder passed as the ADDON_PATH parameter to cmake in the next step.
 
 ## 5. Build 
 
-* The `BLENDER_VER` parameter specifies the Blender version (currently 4.5, 5.0 and 5.1 are supported) for which this build is intended.
+* The `BLENDER_VER` parameter specifies the Blender version (currently 4.5, 5.0 and 5.1, 5.2 are supported) for which this build is intended.
 * The path passed in 'ADDON_PATH' parameter must exist before the command is run
 
 
