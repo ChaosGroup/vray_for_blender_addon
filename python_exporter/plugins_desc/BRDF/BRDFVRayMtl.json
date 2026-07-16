@@ -909,6 +909,44 @@
         },
         
         {
+            "attr" : "quick_caustics_reflection_on",
+            "default" : false,
+            "desc" : "True to enable quick caustics for reflection",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "quick_caustics_reflection_depth",
+            "default" : 200.0,
+            "desc" : "The depth for reflection quick caustics",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "quick_caustics_refraction_on",
+            "default" : false,
+            "desc" : "True to enable quick caustics for refraction",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "quick_caustics_refraction_depth",
+            "default" : 200.0,
+            "desc" : "The depth for refraction quick caustics",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
             "attr" : "option_shading_model",
             "default" : "0",
             "desc" : "Shading model to use (0 - V-Ray, 1 - OpenPBR)",

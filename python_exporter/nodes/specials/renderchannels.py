@@ -12,8 +12,8 @@ from vray_blender.lib import class_utils, draw_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.operators import sockets as SocketOperators
 from vray_blender.nodes.sockets import addInput, addOutput, moveExtendSocketToBottom
-from vray_blender.nodes.links import vrayNodeInsertLink
-from vray_blender.nodes.utils import autoConnectNode, getNodeByType
+from vray_blender.nodes.links import vrayNodeInsertLink, autoConnectNode
+from vray_blender.nodes.utils import getNodeByType
 from vray_blender.ui import classes
 
 

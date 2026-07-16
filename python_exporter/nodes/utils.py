@@ -7,15 +7,15 @@ import functools
 import operator
 
 from vray_blender import debug
-from vray_blender.exporting.tools import (getInputSocketByName, getFarNodeLink, removeSocketLinks,
+from vray_blender.exporting.tools import (getInputSocketByName, getFarNodeLink,
                                           getInputSocketByAttr)
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
 from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, getSocketType
 from vray_blender.lib.attribute_utils import getAttrDisplayName, formatAttributeName
-from vray_blender.lib.condition_processor import evaluateCondition, isCondition
+from vray_blender.lib.condition_processor import isCondition
 from vray_blender.lib.sys_utils import importFunction
-from vray_blender.nodes.tools import isVrayNode, getSocketPanel
+from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel
 from vray_blender.lib.blender_utils import tagUsersForUpdate
 
 
@@ -152,7 +152,7 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
         for link in output.links:
             nextNode = link.to_node
 
-            if not link.to_socket.hasActiveFarLink():
+            if isVraySocket(link.to_socket) and not link.to_socket.hasActiveFarLink():
                 return False
 
             if nextNode == toNode:
@@ -241,6 +241,10 @@ def _getPluginInputSockets(pluginModule, nodeType):
     overriddenByMeta = functools.reduce(operator.iconcat, overriddenByMetaLists, [])
 
     excludedParams = set(pluginModule.Options.get('excluded_parameters', []))
+    # Properties driven by a meta socket (BRDF_USE/COLOR_USE) are managed entirely by
+    # that meta socket. Don't create separate sockets for them - the stand-alone
+    # sockets are redundant and their export would overwrite the meta socket's value.
+    excludedParams.update(overriddenByMeta)
 
     # socketOverrides
     #   None means that there are no overrides
@@ -287,8 +291,7 @@ def _getPluginInputSockets(pluginModule, nodeType):
 
         visible = isVisible and \
                     ((isListExplicit and isSocketExplicit) or ((not isListExplicit) and isTypeVisible))\
-                    and attr.get('options', {}).get('visible', True) \
-                    and attrName not in overriddenByMeta
+                    and attr.get('options', {}).get('visible', True)
 
         # Add a panel for the socket, if necessary. The panel is added when the first of its sockets is added.
         if inputSocketsList is not None:
@@ -476,16 +479,26 @@ MATERIAL_OPTION_PLUGIN_TYPES = (
     "VRayMtlRoundEdges"
 )
 
-def _nodeConnectedToObjOutput(node: bpy.types.Node, objTree: bpy.types.NodeTree):
-    """ Check if the node is connected to the output node of the object node tree. """
+def isNodeConnectedToTreeOutput(node: bpy.types.Node) -> bool:
+    """ Check whether 'node' is connected, directly or through a chain of links, to the output
+        node of its own node tree. A node that does not reach the output does not affect the
+        render result, so updates originating from it can be safely ignored.
+    """
+    ntree = getattr(node, 'id_data', None)
+    if not (isinstance(ntree, bpy.types.NodeTree) and hasattr(ntree, 'vray')):
+        return True
 
-    # Note: V-Ray Fur objects can have multiple output nodes, so we need to check all of them
-    for treeType in ['OBJECT', 'FUR', 'DECAL']:
-        if objTreeOutput := getOutputNode(objTree, treeType):
-            if (node == objTreeOutput) or areNodesInterconnected(node, objTreeOutput):
-                return True
+    treeType = ntree.vray.tree_type
 
-    return False
+    outputNodes = []
+    if treeType == 'FUR':
+        outputNodes = [getOutputNode(ntree, 'OBJECT'), getOutputNode(ntree, treeType)]
+    elif treeType == 'LIGHT':
+        outputNodes = [getLightOutputNode(ntree)]
+    else:
+        outputNodes = [getOutputNode(ntree, treeType)]
+
+    return any((node == outputNode) or areNodesInterconnected(node, outputNode) for outputNode in outputNodes)
 
 
 def tagGroupTreeUsers(groupTree):
@@ -550,6 +563,20 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
         and properties. It is needed because Blender does not generate update events
         for changes to custom node trees.
     """
+
+    # A node whose output does not reach the tree's output node cannot affect the render result,
+    # so there is nothing to re-export. Skip the update entirely for such nodes. 'self' may be the
+    # node itself, one of its sockets, or a property group attached to the node.
+    if isinstance(self, bpy.types.Node):
+        changedNode = self
+    elif isinstance(self, bpy.types.NodeSocket):
+        changedNode = self.node
+    else:
+        changedNode = getNodeOfPropGroup(self)
+
+    if (changedNode is not None) and not isNodeConnectedToTreeOutput(changedNode):
+        return
+
     # If the change originates inside a GROUP tree, propagate to all parent materials
     # and worlds right away. This works regardless of context.active_object state.
     ntree = getattr(self, 'id_data', None)
@@ -566,7 +593,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
         # Tag an update on the node tree.
 
         # Nodes from object node trees are tagging for update the object otherwise the changes won't be exported.
-        if (activeEditor == "OBJECT") and _nodeConnectedToObjOutput(self, self.id_data):
+        if activeEditor == "OBJECT" and context.active_object:
             context.active_object.update_tag()
         else:
             self.id_data.update_tag()
@@ -582,14 +609,8 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
         match ob.type:
             case 'MESH'| 'META' | 'SURFACE' | 'FONT' | 'CURVE' | 'CURVES' | 'POINTCLOUD' | 'VOLUME':
                 if activeEditor == "OBJECT":
-                    # If the opened node tree editor is 'OBJECT'
-                    # and the node of the property group is linked to output node,
-                    # the active object is tagged for geometry updates
                     if ob.vray and ob.vray.ntree:
-                        node = self.node if isinstance(self, bpy.types.NodeSocket) else getNodeOfPropGroup(self)
-
-                        if _nodeConnectedToObjOutput(node, ob.vray.ntree):
-                            tagUsersForUpdate(ob.vray.ntree)
+                        tagUsersForUpdate(ob.vray.ntree)
 
                 elif (mtl := ob.active_material) and mtl.node_tree:
 
@@ -624,6 +645,12 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                 # For lights, it is currently not possible to tag the node trees, so tag the object
                 # itself. This will trigger a node tree update
                 ob.update_tag()
+
+            case 'EMPTY':
+                # V-Ray Gaussian splats store their parameters on obj.vray.GeomGaussians (an
+                # Empty has no data block). Tag the object so the change is re-exported in IPR.
+                if ob.vray.isVRayGaussian:
+                    ob.update_tag()
 
     tagRedrawPropertyEditor()
 
@@ -792,7 +819,8 @@ _OUTPUT_NODE_TYPES = {
         'FUR'       : 'VRayNodeFurOutput',
         'DECAL'     : 'VRayNodeDecalOutput',
 
-        'SHADER'    : 'ShaderNodeOutputMaterial' # Cycles Material Output
+        'SHADER'    : 'ShaderNodeOutputMaterial', # Cycles Material Output
+        'GROUP'     : 'NodeGroupOutput', # Node Group Output
     }
 
 
@@ -862,26 +890,42 @@ class DisableAutoConnect:
         _AutoConnectEnabled = self.original_state
 
 
+def isAutoConnectEnabled():
+    """ False while a bulk programmatic operation (asset/.vrscene import, native->V-Ray
+        conversion, scene upgrade) runs inside a DisableAutoConnect block. Property update
+        callbacks can consult this to skip side effects that should only happen on direct
+        user edits. """
+    return _AutoConnectEnabled
+
+
 MATERIAL_WRAPPER_SOCKETS = {
     'VRayNodeBRDFBump'        : 'Base Material',
     'VRayNodeMtlDisplacement' : 'Base Material',
-    'VRayNodeMtlMulti'        : 'Material 1',
+    # MtlMulti's target is its first material socket. The name is only a fresh-node default;
+    # getMaterialWrapperSocket() resolves the actual socket by position (the ID in the name may
+    # be non-consecutive).
+    'VRayNodeMtlMulti'        : 'Material 0',
     'VRayNodeMtl2Sided'       : 'Front',
     'VRayNodeMtlOverride'     : 'Base Material',
     'VRayNodeBRDFLayered'     : 'Base Material',
 }
 
 
-def autoConnectObjectNode(node: bpy.types.Node, socketName: str):
-    """ Automatically connect an object node to a specific socket in the VRayNodeObjectOutput node. """
-    if not _AutoConnectEnabled:
-        return
+def getMaterialWrapperSocket(node: bpy.types.Node):
+    """ Return the input socket of a material 'wrapper' node that a child material/BRDF should
+        connect into, or None if the node isn't a wrapper or the socket is missing.
 
-    if (ntree := node.id_data) and (ntree.vray.tree_type in {'OBJECT', 'FUR'}):
-        if outputNode := getOutputNode(ntree, 'OBJECT'):
-            targetSocket = outputNode.inputs.get(socketName)
-            if targetSocket and not targetSocket.is_linked:
-                ntree.links.new(node.outputs[0], targetSocket)
+        For MtlMulti the target is the first material socket, located by position rather than by
+        name: the ID embedded in its 'Material X' name may be non-consecutive (e.g. after importing
+        a scene with ids_list=[1, 5, 3]), so the name in MATERIAL_WRAPPER_SOCKETS can't be relied on.
+    """
+    if node.bl_idname == 'VRayNodeMtlMulti':
+        from vray_blender.nodes.specials.material import getMaterialSockets
+        mtlSockets = getMaterialSockets(node)
+        return mtlSockets[0] if mtlSockets else None
+
+    sockName = MATERIAL_WRAPPER_SOCKETS.get(node.bl_idname, '')
+    return node.inputs.get(sockName) if sockName else None
 
 
 def autoInitBitmapNode(node: bpy.types.Node):
@@ -896,97 +940,6 @@ def autoInitBitmapNode(node: bpy.types.Node):
         if bitmapBuffer := getattr(node, 'BitmapBuffer', None):
             bitmapBuffer.rgb_color_space = 'raw'
             bitmapBuffer.transfer_function = '0' # Linear
-
-
-def autoConnectNode(node: bpy.types.Node):
-    """ Automatically connect specific nodes to the output node of the tree. """
-    if not _AutoConnectEnabled:
-        return
-
-    if not (ntree := node.id_data):
-        return
-
-    if ntree.vray.tree_type == 'OBJECT':
-        socketName = None
-        match node.bl_idname:
-            case 'VRayNodeDisplacement':           socketName = 'Displacement'
-            case 'VRayNodeGeomStaticSmoothedMesh': socketName = 'Subdivision'
-            case 'VRayNodeObjectMatteProps':       socketName = 'Matte'
-            case 'VRayNodeObjectSurfaceProps':     socketName = 'Surface'
-            case 'VRayNodeObjectVisibilityProps':  socketName = 'Visibility'
-
-        if socketName:
-            autoConnectObjectNode(node, socketName)
-
-    elif ntree.vray.tree_type == 'MATERIAL':
-        if outputNode := getOutputNode(ntree, 'MATERIAL'):
-            # BRDFToonOverride auto-connects to the dedicated Outlines socket
-            if getattr(node, 'vray_plugin', '') == 'BRDFToonOverride':
-                outlinesSock = outputNode.inputs.get("Outlines")
-                if outlinesSock and not outlinesSock.is_linked:
-                    if sourceSocket := node.outputs.get("BRDF"):
-                        ntree.links.new(sourceSocket, outlinesSock)
-            else:
-                targetSocket = outputNode.inputs.get("Material")
-                autoLinkSocket = None
-                if targetSocket:
-                    if not targetSocket.is_linked:
-                        autoLinkSocket = targetSocket
-                    if targetSocket.is_linked and (link := getFarNodeLink(targetSocket)):
-                        if (wrapperNode := link.from_node) and (sockName := MATERIAL_WRAPPER_SOCKETS.get(wrapperNode.bl_idname, '')):
-                            sock = wrapperNode.inputs.get(sockName)
-                            if sock and not sock.is_linked:
-                                autoLinkSocket = sock
-
-                if autoLinkSocket:
-                    vrayType = getattr(node, 'vray_type', 'NONE')
-                    if vrayType in {'BRDF', 'MATERIAL'}:
-                        # Find the primary output socket
-                        sourceSocket = None
-                        if vrayType == 'BRDF':
-                            sourceSocket = node.outputs.get("BRDF")
-                        elif vrayType == 'MATERIAL':
-                            sourceSocket = node.outputs.get("Material") or node.outputs.get("Ci")
-
-                        if sourceSocket:
-                            ntree.links.new(sourceSocket, autoLinkSocket)
-
-    elif ntree.vray.tree_type == 'WORLD':
-        if vrayType := getattr(node, 'vray_type', 'NONE'):
-            containerType = None
-            socketType = None
-            if vrayType == 'RENDERCHANNEL':
-                containerType = 'VRayNodeRenderChannels'
-                socketType = 'VRaySocketRenderChannel'
-            elif vrayType == 'EFFECT':
-                containerType = 'VRayNodeEffectsHolder'
-                socketType = 'VRaySocketEffect'
-
-            if containerType:
-                containerNode = getNodeByType(ntree, containerType)
-                if containerNode:
-                    # Find first unlinked input socket (excluding the extend socket)
-                    targetSocket = next((s for s in containerNode.inputs if not s.is_linked and s.bl_idname != 'VRaySocketExtend'), None)
-
-                    if not targetSocket:
-                        # Add a new socket
-                        from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
-                        sockNamePrefix = "Channel" if vrayType == 'RENDERCHANNEL' else "Effect"
-
-                        # Count existing regular sockets to determine next name
-                        existingSockets = [s for s in containerNode.inputs if s.bl_idname == socketType]
-                        targetSocket = addInput(containerNode, socketType, f"{sockNamePrefix} {len(existingSockets) + 1}")
-
-                        moveExtendSocketToBottom(containerNode)
-
-                    if targetSocket:
-                        # Find primary output socket of the node
-                        sourceSocket = next((s for s in node.outputs if s.bl_idname in {'VRaySocketRenderChannelOutput', 'VRaySocketEffectOutput'}), None)
-                        if not sourceSocket and node.outputs:
-                            sourceSocket = node.outputs[0]
-
-                        if sourceSocket:
-                            ntree.links.new(sourceSocket, targetSocket)
 
 
 def getVrayPropGroup(node: bpy.types.Node):

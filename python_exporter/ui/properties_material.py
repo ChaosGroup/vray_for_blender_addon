@@ -6,6 +6,7 @@
 import bpy
 
 from vray_blender.ui      import classes
+from vray_blender.ui      import ui_operators
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.nodes.group.utils import VRAY_EDITOR_TREE_TYPES
 from vray_blender.plugins import PLUGINS, getPluginModule
@@ -45,17 +46,16 @@ def renderMaterialPanel(mtl, context, layout: bpy.types.UILayout):
 
     layout.use_property_split = True
     layout.use_property_decorate = True
-    box = layout.box()
-    box.label(text=f'  {activeNode.bl_label}')
+    headerRow = layout.row(align=True)
+    headerRow.label(text=f'  {activeNode.bl_label}')
+    ui_operators.drawPropertyPageButtons(headerRow, context, 'MATERIAL')
     layout.separator()
 
     if activeNode.bl_idname == 'VRayNodeOutputMaterial':
         layout.separator()
         # The material options (MtlMaterialID etc.) will be drawn below
-    elif hasattr(activeNode, "draw_buttons_ext"):
-        activeNode.draw_buttons_ext(context, layout)
     else:
-        classes.drawNodePanel(context, layout, activeNode, PLUGINS)
+        classes.drawActiveNodePanel(context, layout, activeNode, PLUGINS)
 
 
 def renderMaterialOptionsPanel(mtl, context, layout):
@@ -310,10 +310,18 @@ def getRegClasses():
 
 def register():
     from vray_blender.lib.class_utils import registerClass
+    from bl_ui.properties_material import MATERIAL_PT_lineart
+
     for regClass in getRegClasses():
         registerClass(regClass)
 
+    # The stock 'Line Art' panel ignores COMPAT_ENGINES in its poll, so hide it explicitly.
+    classes.hideStockPanels([MATERIAL_PT_lineart])
+
 
 def unregister():
+    from bl_ui.properties_material import MATERIAL_PT_lineart
+    classes.restoreStockPanels([MATERIAL_PT_lineart])
+
     for regClass in reversed(getRegClasses()):
         bpy.utils.unregister_class(regClass)

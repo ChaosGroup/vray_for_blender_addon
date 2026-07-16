@@ -51,7 +51,7 @@ class VRAY_PT_ContextWorld(classes.VRayPanel):
                 return
 
             layout.separator()
-            classes.drawNodePanel(context, self.layout, activeNode, PLUGINS)
+            classes.drawActiveNodePanel(context, self.layout, activeNode, PLUGINS)
 
 
 def getRegClasses():

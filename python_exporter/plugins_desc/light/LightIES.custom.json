@@ -336,6 +336,34 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "ies_file_selector"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "name": "filter_color"
+                    },
+                    {
+                        "name": "power"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
         ]
     },
     "Node": {

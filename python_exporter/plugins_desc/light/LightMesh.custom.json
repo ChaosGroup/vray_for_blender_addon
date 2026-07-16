@@ -354,6 +354,42 @@
                     }
                 ]
             }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "object_selector",
+                        "label": "Mesh light objects",
+                        "list_label": "Objects"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
         ]
     },
     "Node": {

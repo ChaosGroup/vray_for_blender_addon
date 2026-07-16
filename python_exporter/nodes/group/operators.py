@@ -114,7 +114,7 @@ def _getSocketIndex(sockets, socket):
 
 def _snapshotLinks(tree, selectedNames):
     """ Snapshot all links in a tree relative to a selection boundary.
-        Returns (incoming, outgoing, internal) as lists of plain-data tuples.
+        Returns (incoming, outgoing) as lists of plain-data tuples.
 
         Each tuple: (from_node_name, from_socket_name, from_socket_bl_idname,
                      to_node_name, to_socket_name, to_socket_bl_idname)
@@ -124,7 +124,6 @@ def _snapshotLinks(tree, selectedNames):
     """
     incoming = []   # outside -> inside
     outgoing = []   # inside -> outside
-    internal = []   # inside -> inside
 
     for link in tree.links:
         # Use base socket type for V-Ray sockets so _BLENDER_SOCKET_TYPE_MAP
@@ -137,14 +136,139 @@ def _snapshotLinks(tree, selectedNames):
         fromInside = data[0] in selectedNames
         toInside   = data[3] in selectedNames
 
-        if fromInside and toInside:
-            internal.append(data)
-        elif not fromInside and toInside:
+        if not fromInside and toInside:
             incoming.append(data)
         elif fromInside and not toInside:
             outgoing.append(data)
 
-    return incoming, outgoing, internal
+    return incoming, outgoing
+
+
+# ---------------------------------------------------------------------------
+# Core group construction (space-independent)
+# ---------------------------------------------------------------------------
+
+def makeGroupFromNodes(parentTree, nodes, groupTreeType, groupName="VRayGroup", center=None):
+    """ Move 'nodes' from 'parentTree' into a new V-Ray group and return the
+        created VRayNodeGroup node (left in parentTree).
+
+        Performs the same steps as VRAY_OT_node_group_make.execute but does not
+        touch the node editor (space.path) or selection state, so it can be used
+        headlessly (e.g. from the Cycles->V-Ray conversion). The caller is
+        responsible for any editor/selection bookkeeping and for laying out the
+        result. 'nodes' is used verbatim - the caller decides what is groupable.
+    """
+    if not nodes:
+        return None
+
+    nonFrameNodes = [n for n in nodes if n.bl_idname != 'NodeFrame'] or nodes
+    if center is None:
+        centerX = sum(n.location.x for n in nonFrameNodes) / len(nonFrameNodes)
+        centerY = sum(n.location.y for n in nonFrameNodes) / len(nonFrameNodes)
+    else:
+        centerX, centerY = center
+
+    selectedNames = {n.name for n in nodes}
+
+    # Snapshot link data as plain strings BEFORE any tree modifications.
+    incoming, outgoing = _snapshotLinks(parentTree, selectedNames)
+
+    # Create the group tree and group node
+    groupTree = bpy.data.node_groups.new(groupName, groupTreeType)
+    groupTree.vray.tree_type = 'GROUP'
+
+    groupNode = parentTree.nodes.new(VRAY_GROUP_NODE_TYPE)
+    groupNode.node_tree = groupTree
+
+    # Copy the selected nodes into the group tree. Direct copy preserves
+    # absolute positions, so we subtract the original center to land them
+    # around origin in the group tree.
+    copyNodesBetweenTrees(parentTree, nodes, groupTree)
+    for n in groupTree.nodes:
+        n.location.x -= centerX
+        n.location.y -= centerY
+
+    # Add GroupInput and GroupOutput nodes
+    inputNode = groupTree.nodes.new('NodeGroupInput')
+    outputNode = groupTree.nodes.new('NodeGroupOutput')
+
+    contentNodes = [n for n in groupTree.nodes
+                    if n.bl_idname not in ('NodeGroupInput', 'NodeGroupOutput')]
+    if contentNodes:
+        inputX  = min(n.location.x for n in contentNodes) - 300
+        outputX = max(n.location.x for n in contentNodes) + 300
+    else:
+        inputX, outputX = -250, 250
+    inputNode.location  = (inputX, 0)
+    outputNode.location = (outputX, 0)
+
+    # Create group interface sockets for incoming links and wire them up
+    inputSocketMap = {}  # (from_node, from_socket) -> index
+    for fromNodeName, fromSockName, _, toNodeName, toSockName, toSockType in incoming:
+        key = (fromNodeName, fromSockName)
+        if key not in inputSocketMap:
+            blenderType = _BLENDER_SOCKET_TYPE_MAP.get(toSockType, 'NodeSocketFloat')
+            groupTree.interface.new_socket(
+                name=toSockName, in_out='INPUT', socket_type=blenderType
+            )
+            idx = len(inputSocketMap)
+            inputSocketMap[key] = idx
+
+        idx = inputSocketMap[key]
+        internalNode = groupTree.nodes.get(toNodeName)
+        internalSocket = _getSocketByName(internalNode.inputs, toSockName) if internalNode else None
+        if internalSocket and idx < len(inputNode.outputs) - 1:
+            groupTree.links.new(inputNode.outputs[idx], internalSocket)
+
+    # Create group interface sockets for outgoing links and wire them up
+    outputSocketMap = {}  # (from_node, from_socket) -> index
+    for fromNodeName, fromSockName, fromSockType, toNodeName, toSockName, _ in outgoing:
+        key = (fromNodeName, fromSockName)
+        if key not in outputSocketMap:
+            blenderType = _BLENDER_SOCKET_TYPE_MAP.get(fromSockType, 'NodeSocketFloat')
+            groupTree.interface.new_socket(
+                name=fromSockName, in_out='OUTPUT', socket_type=blenderType
+            )
+            idx = len(outputSocketMap)
+            outputSocketMap[key] = idx
+
+        idx = outputSocketMap[key]
+        internalNode = groupTree.nodes.get(fromNodeName)
+        internalSocket = _getSocketByName(internalNode.outputs, fromSockName) if internalNode else None
+        if internalSocket and idx < len(outputNode.inputs) - 1:
+            groupTree.links.new(internalSocket, outputNode.inputs[idx])
+
+    # Remove the original selected nodes from the parent tree.
+    _removeNodes(parentTree, selectedNames)
+
+    # Set up the group node
+    groupNode.location = (centerX, centerY)
+    groupNode.width = 230
+
+    # Sync V-Ray sockets from GroupInput/GroupOutput connections
+    syncGroupNodeSockets(groupNode)
+
+    # Reconnect incoming links: external upstream node -> group node input
+    for fromNodeName, fromSockName, _, _, _, _ in incoming:
+        key = (fromNodeName, fromSockName)
+        idx = inputSocketMap[key]
+        fromNode = parentTree.nodes.get(fromNodeName)
+        if fromNode and idx < len(groupNode.inputs):
+            fromSock = _getSocketByName(fromNode.outputs, fromSockName)
+            if fromSock:
+                parentTree.links.new(fromSock, groupNode.inputs[idx])
+
+    # Reconnect outgoing links: group node output -> external downstream node
+    for fromNodeName, fromSockName, _, toNodeName, toSockName, _ in outgoing:
+        key = (fromNodeName, fromSockName)
+        idx = outputSocketMap[key]
+        toNode = parentTree.nodes.get(toNodeName)
+        if toNode and idx < len(groupNode.outputs):
+            toSock = _getSocketByName(toNode.inputs, toSockName)
+            if toSock:
+                parentTree.links.new(groupNode.outputs[idx], toSock)
+
+    return groupNode
 
 
 # ---------------------------------------------------------------------------
@@ -247,134 +371,22 @@ class VRAY_OT_node_group_make(bpy.types.Operator):
             self.report({'WARNING'}, "No groupable nodes selected")
             return {'CANCELLED'}
 
-        # Calculate center of selected nodes (excluding frames for better centering)
-        nonFrameNodes = [n for n in selectedNodes if n.bl_idname != 'NodeFrame']
-        if not nonFrameNodes:
-            nonFrameNodes = selectedNodes
-        centerX = sum(n.location.x for n in nonFrameNodes) / len(nonFrameNodes)
-        centerY = sum(n.location.y for n in nonFrameNodes) / len(nonFrameNodes)
-
-        selectedNames = {n.name for n in selectedNodes}
-
-        # Snapshot link data as plain strings BEFORE any tree modifications.
-        # Tuple: (from_node, from_socket, from_bl_idname,
-        #         to_node,   to_socket,   to_bl_idname)
-        incoming, outgoing, internal = _snapshotLinks(editTree, selectedNames)
-
         if not (hasattr(editTree, 'vray') and editTree.vray.tree_type):
             self.report({'WARNING'}, "V-Ray grouping is not supported in this node tree")
             return {'CANCELLED'}
 
-        # Create the group tree and group node
-        groupTree = bpy.data.node_groups.new("VRayGroup", _getGroupTreeType(context))
-        groupTree.vray.tree_type = 'GROUP'
+        groupNode = makeGroupFromNodes(editTree, selectedNodes, _getGroupTreeType(context))
+        if groupNode is None:
+            return {'CANCELLED'}
 
-        groupNode = editTree.nodes.new(VRAY_GROUP_NODE_TYPE)
-        groupNode.node_tree = groupTree
-
-        # Copy the selected nodes into the group tree. Direct copy preserves
-        # absolute positions, so we subtract the original center to land them
-        # around origin in the group tree.
-        copyNodesBetweenTrees(editTree, selectedNodes, groupTree)
-        for n in groupTree.nodes:
-            n.location.x -= centerX
-            n.location.y -= centerY
-
-        # Enter the group tree for later operations
-        space.path.append(groupTree, node=groupNode)
-
-        # Add GroupInput and GroupOutput nodes
-        inputNode = groupTree.nodes.new('NodeGroupInput')
-        outputNode = groupTree.nodes.new('NodeGroupOutput')
-
-        contentNodes = [n for n in groupTree.nodes
-                        if n.bl_idname not in ('NodeGroupInput', 'NodeGroupOutput')]
-        if contentNodes:
-            inputX  = min(n.location.x for n in contentNodes) - 300
-            outputX = max(n.location.x for n in contentNodes) + 300
-        else:
-            inputX, outputX = -250, 250
-        inputNode.location  = (inputX, 0)
-        outputNode.location = (outputX, 0)
-
-        # Create group interface sockets for incoming links and wire them up
-        inputSocketMap = {}  # (from_node, from_socket) -> index
-        for fromNodeName, fromSockName, _, toNodeName, toSockName, toSockType in incoming:
-            key = (fromNodeName, fromSockName)
-            if key not in inputSocketMap:
-                blenderType = _BLENDER_SOCKET_TYPE_MAP.get(toSockType, 'NodeSocketFloat')
-                groupTree.interface.new_socket(
-                    name=toSockName, in_out='INPUT', socket_type=blenderType
-                )
-                idx = len(inputSocketMap)
-                inputSocketMap[key] = idx
-
-            idx = inputSocketMap[key]
-            internalNode = groupTree.nodes.get(toNodeName)
-            internalSocket = _getSocketByName(internalNode.inputs, toSockName) if internalNode else None
-            if internalSocket and idx < len(inputNode.outputs) - 1:
-                groupTree.links.new(inputNode.outputs[idx], internalSocket)
-
-        # Create group interface sockets for outgoing links and wire them up
-        outputSocketMap = {}  # (from_node, from_socket) -> index
-        for fromNodeName, fromSockName, fromSockType, toNodeName, toSockName, _ in outgoing:
-            key = (fromNodeName, fromSockName)
-            if key not in outputSocketMap:
-                blenderType = _BLENDER_SOCKET_TYPE_MAP.get(fromSockType, 'NodeSocketFloat')
-                groupTree.interface.new_socket(
-                    name=fromSockName, in_out='OUTPUT', socket_type=blenderType
-                )
-                idx = len(outputSocketMap)
-                outputSocketMap[key] = idx
-
-            idx = outputSocketMap[key]
-            internalNode = groupTree.nodes.get(fromNodeName)
-            internalSocket = _getSocketByName(internalNode.outputs, fromSockName) if internalNode else None
-            if internalSocket and idx < len(outputNode.inputs) - 1:
-                groupTree.links.new(internalSocket, outputNode.inputs[idx])
-
-        # Exit the group tree back to the parent
-        space.path.pop()
-
-        # Remove the original selected nodes from the parent tree.
-        # Deferred slightly so that node copy() timers (e.g. gradient ramp texture
-        # copy) can complete before the originals are freed.
-        _removeNodes(editTree, selectedNames)
-
-        # Set up the group node
+        # Editor/selection bookkeeping (handled here, not in the headless helper).
         for n in editTree.nodes:
             n.select = False
-
-        groupNode.location = (centerX, centerY)
-        groupNode.width = 230
         groupNode.select = True
         editTree.nodes.active = groupNode
 
-        # Sync V-Ray sockets from GroupInput/GroupOutput connections
-        syncGroupNodeSockets(groupNode)
-
-        # Reconnect incoming links: external upstream node -> group node input
-        for fromNodeName, fromSockName, _, _, _, _ in incoming:
-            key = (fromNodeName, fromSockName)
-            idx = inputSocketMap[key]
-            fromNode = editTree.nodes.get(fromNodeName)
-            if fromNode and idx < len(groupNode.inputs):
-                fromSock = _getSocketByName(fromNode.outputs, fromSockName)
-                if fromSock:
-                    editTree.links.new(fromSock, groupNode.inputs[idx])
-
-        # Reconnect outgoing links: group node output -> external downstream node
-        for fromNodeName, fromSockName, _, toNodeName, toSockName, _ in outgoing:
-            key = (fromNodeName, fromSockName)
-            idx = outputSocketMap[key]
-            toNode = editTree.nodes.get(toNodeName)
-            if toNode and idx < len(groupNode.outputs):
-                toSock = _getSocketByName(toNode.inputs, toSockName)
-                if toSock:
-                    editTree.links.new(groupNode.outputs[idx], toSock)
-
         # Enter the newly created group for editing
-        space.path.append(groupTree, node=groupNode)
+        space.path.append(groupNode.node_tree, node=groupNode)
 
         return {'FINISHED'}
 
@@ -538,7 +550,7 @@ class VRAY_OT_node_group_insert(bpy.types.Operator):
             return {'CANCELLED'}
 
         selectedNames = {n.name for n in selectedNodes}
-        incoming, outgoing, _ = _snapshotLinks(editTree, selectedNames)
+        incoming, outgoing = _snapshotLinks(editTree, selectedNames)
 
         # Copy selected nodes directly into the group tree.
         nodeMap = copyNodesBetweenTrees(editTree, selectedNodes, groupTree)

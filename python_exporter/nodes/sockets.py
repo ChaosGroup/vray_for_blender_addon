@@ -29,6 +29,39 @@ STRUCTURAL_SOCKET_CLASSES = {
 }
 
 
+# Socket-type categories used by node-link validation (see nodes/links.py).
+# When adding a new socket type that belongs to one of these categories, add it
+# here so the connection rules pick it up automatically. These are matched
+# against a socket's base type (vray_socket_base_type), so dynamic variants are
+# covered as well.
+
+# Sockets that carry a BRDF or material plugin reference (e.g. material slots,
+# the MtlOverride GI/reflect/refract/shadow overrides, MtlMulti slots). A BRDF
+# output may be connected only to a socket of one of these types.
+MTL_SOCKET_TYPES = frozenset({
+    'VRaySocketBRDF',
+    'VRaySocketMtl',
+    'VRaySocketMtlMulti',
+    'VRaySocketPluginUse',
+})
+
+# Sockets that carry an object / object-list reference. An object socket may
+# only be connected to another object socket.
+OBJECT_SOCKET_TYPES = frozenset({
+    'VRaySocketObject',
+    'VRaySocketObjectList',
+    'VRaySocketIncludeExcludeList',
+})
+
+# Sockets that may only be connected to a socket of the exact same type.
+SAME_TYPE_SOCKET_TYPES = frozenset({
+    'VRaySocketColorRamp',
+    'VRaySocketTransform',
+    'VRaySocketGeom',
+    'VRaySocketObjectProps',
+})
+
+
 # Colors for standard Blender sockets. List copied from .\source\blender\editors\space_node\drawnode.cc
 BLENDER_SOCKET_COLORS = {
     'FLOAT' :      (0.63, 0.63, 0.63, 1.0),
@@ -377,7 +410,7 @@ class VRaySocket(bpy.types.NodeSocket):
         name = "UI Enabled",
         description = "Enable/disable socket's UI",
         options = {'HIDDEN'},
-        default = True 
+        default = True
     )
 
     def hasActiveFarLink(self):
@@ -402,7 +435,7 @@ class VRaySocket(bpy.types.NodeSocket):
             col = split.column()
 
         return col
-    
+
     def getPluginName(self):
         """ Get the name of the plugin that the socket is associated with. """
 
@@ -464,7 +497,7 @@ class VRaySocket(bpy.types.NodeSocket):
 
         node = self.node
 
-        
+
         if (pluginName := self.getPluginName()) != 'NONE':
             pluginModule = getPluginModule(pluginName)
             sockDesc = getInputSocketDesc(pluginModule, self.vray_attr)
@@ -603,7 +636,13 @@ class VRaySocketUse(VRayValueSocket):
 
     def getFarLink(self):
         return super().getFarLink() if self.use else None
-    
+
+    def onLinkConnected(self):
+        # Enable the 'use' toggle so a freshly connected input takes effect without an
+        # extra manual step. Called from the deferred link handler in VRayNodeBase.update()
+        # (not from insert_link, where the tree topology is not yet safe to touch).
+        self.use = True
+
     def copy(self, dest):
         dest.use = self.use
         super().copy(dest)
@@ -1152,14 +1191,17 @@ class VRaySocketColorUse(VRaySocketMult):
 
     def getItem(self):
         targetAttrName, _ = self._getBoundProperty()
-        colorSocket = getInputSocketByAttr(self.node, targetAttrName)
-        return colorSocket.value
-        
+        if colorSocket := getInputSocketByAttr(self.node, targetAttrName):
+            return colorSocket.value
+        return getattr(getVrayPropGroup(self.node), targetAttrName)
+
     def setItem(self, value):
         targetAttrName, _ = self._getBoundProperty()
-        colorSocket = getInputSocketByAttr(self.node, targetAttrName)
-        colorSocket.value = value
-    
+        if colorSocket := getInputSocketByAttr(self.node, targetAttrName):
+            colorSocket.value = value
+        else:
+            setattr(getVrayPropGroup(self.node), targetAttrName, value)
+
     def draw_impl(self, context, layout, node, text):
         targetAttrName, useAttrName = self._getBoundProperty()
         propGroup    = getVrayPropGroup(self.node)
@@ -1204,11 +1246,16 @@ class VRaySocketColorUse(VRaySocketMult):
 
         pluginDesc.setAttribute(targetAttrName, value)
 
-    
+
+    def onLinkConnected(self):
+        _, useAttrName = self._getBoundProperty()
+        setattr(getVrayPropGroup(self.node), useAttrName, True)
+
+
     def _getBoundProperty(self):
         pluginModule   = getPluginModule(self.getPluginName())
         metaAttr       = getPluginAttr(pluginModule, self.vray_attr)
-        
+
         targetAttrName = metaAttr['bound_props']['target_prop']
         useAttrName    = metaAttr['bound_props']['use_prop']
 

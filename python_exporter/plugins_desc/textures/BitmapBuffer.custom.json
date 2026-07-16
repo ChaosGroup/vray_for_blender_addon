@@ -66,7 +66,16 @@
         },
         {
             "attr": "file",
-            "subtype": "VRAY_FILE_PATH"
+            "subtype": "VRAY_FILE_PATH",
+            "options": {
+                "animatable": false
+            },
+            "ui": {
+                "file_extensions": [
+                    "exr", "png", "bmp", "tga", "hdr", "jpg", "jpeg", "pic",
+                    "tif", "tiff", "psd", "vrimg", "sgi", "rgb", "rgba", "ifl"
+                ]
+            }
         },
         {
             "attr": "file_selector",

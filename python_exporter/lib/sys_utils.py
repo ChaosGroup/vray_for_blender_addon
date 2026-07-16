@@ -191,9 +191,16 @@ def getAppSdkLibPath():
     return os.path.join(getAppSdkPath(), libFileNameName)
 
 
+_resourcesPath = None
+
 def _getResourcesPath():
     """ Returns the full path to the resources folder """
-    return os.path.dirname(os.path.realpath(__file__)).replace("lib", "resources")
+    # Cache the result: os.path.realpath() is a filesystem syscall and this is called
+    # once per exported TexBitmap. __file__ does not change during a session.
+    global _resourcesPath
+    if _resourcesPath is None:
+        _resourcesPath = os.path.dirname(os.path.realpath(__file__)).replace("lib", "resources")
+    return _resourcesPath
 
 def getVfbSettingsPath():
     return os.path.join(_getResourcesPath(), "vfbSettings.json")

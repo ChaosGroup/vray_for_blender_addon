@@ -11,7 +11,7 @@ from vray_blender import debug
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib import export_utils, plugin_utils
-from vray_blender.lib.blender_utils import getObjectFromEditorContext
+from vray_blender.lib.blender_utils import getPinnedDataFromEditorContext
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.vray_tools.vrmat_parser import getMaterialNamesFromVRMatFile
 from vray_blender.vray_tools.vrscene_parser import getMaterialNamesFromVRScene
@@ -142,7 +142,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
 def widgetDrawMaterialName(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup, widgetAttr):
     row = layout.row()
     row.prop(propGroup, 'mtlname')
-    contextObj = getObjectFromEditorContext(context)
+    contextObj = getPinnedDataFromEditorContext(context, context.object)
     assert contextObj, "No valid context object"
 
     op = row.operator("vray.get_vrscene_material_name", text = "", icon="DOWNARROW_HLT")

@@ -10,7 +10,7 @@ from vray_blender.lib import draw_utils
 from vray_blender.ui import classes
 
 from vray_blender.lib.mixin import VRayNodeBase
-from vray_blender.nodes import utils as NodeUtils, sockets as SocketUtils
+from vray_blender.nodes import utils as NodeUtils, sockets as SocketUtils, links as NodeLinks
 from vray_blender.nodes.nodes import vrayNodeUpdate
 
 def _getMappingPluginType(self: bpy.types.Node):
@@ -79,6 +79,7 @@ class VRayNodeUVWMapping(VRayNodeBase):
     def init(self, context):
         SocketUtils.addOutput(self, 'VRaySocketCoords', "Mapping", 'uvwgen')
         _addMappingInputSockets(self)
+        NodeLinks.autoConnectSingleSocket(self)
 
 
     def draw_buttons(self, context, layout):

@@ -124,7 +124,16 @@
             "attr": "intensity",
             "default": 30.0,
             "ui": {
+                "max": null,
+                "soft_max": null,
                 "spin_step": 1.0
+            }
+        },
+        {
+            "attr": "units",
+            "update": "onUpdateUnits",
+            "options": {
+                "shadowed": true
             }
         },
         {
@@ -133,7 +142,7 @@
         },
         {
             "attr": "u_size",
-            "update": "onUpdaeWidth"
+            "update": "onUpdateWidth"
         },
         {
             "attr": "color_temp_control",
@@ -355,6 +364,47 @@
                     },
                     {
                         "name": "causticMult"
+                    }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "name": "directional"
+                    },
+                    {
+                        "name": "directional_strength"
+                    },
+                    {
+                        "name": "is_disc",
+                        "label": "Disk Shape"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "shadows"
                     }
                 ]
             }

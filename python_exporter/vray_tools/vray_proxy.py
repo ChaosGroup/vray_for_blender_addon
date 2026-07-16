@@ -24,9 +24,11 @@ from vray_blender.vray_tools import vray_proxy
 # Types of actions that can be performed for generating data for VRayProxy or VRayScene supported formats
 # using the vraytools utility.
 class PreviewAction:
-    MeshPreview    = '1'      # Geometry from a VRayProxy-compatible files
-    ScenePreview   = '2'      # Geometry from a VRayScene-compatible files
-    ScannedPreset  = '3'      # Scanned material preset info
+    MeshPreview     = '1'      # Geometry from a VRayProxy-compatible files
+    ScenePreview    = '2'      # Geometry from a VRayScene-compatible files
+    ScannedPreset   = '3'      # Scanned material preset info
+    MacOSInternal   = '4'      # Internal action used on macOS; not exposed in this module
+    GaussianPreview = '5'      # Preview points (positions + colors) of a Gaussian splat file (.ply)
 
 
 _PREVIEW_TYPES = {
@@ -347,7 +349,7 @@ def _applyTransformToVertex(vertex: Vector, mat: Matrix):
     return vertex @ mat.to_3x3().transposed() + mat.to_translation()
 
 
-def _replaceObjMesh(previewObj, meshData):
+def _replaceObjMesh(mesh: bpy.types.Mesh, meshData):
     # Replace object's mesh using fast foreach_set path
     vertices = meshData['vertices']
     faces = meshData['faces']
@@ -355,24 +357,24 @@ def _replaceObjMesh(previewObj, meshData):
     numFaces = len(faces)
     numLoops = numFaces * 3
 
-    mesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
-    mesh.vertices.add(numVerts)
-    mesh.loops.add(numLoops)
-    mesh.polygons.add(numFaces)
+    tempMesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
+    tempMesh.vertices.add(numVerts)
+    tempMesh.loops.add(numLoops)
+    tempMesh.polygons.add(numFaces)
 
-    mesh.vertices.foreach_set('co', np.ascontiguousarray(vertices, dtype=np.float32).ravel())
-    mesh.loops.foreach_set('vertex_index', np.ascontiguousarray(faces, dtype=np.int32).ravel())
-    mesh.polygons.foreach_set('loop_start', np.arange(0, numLoops, 3, dtype=np.int32))
-    mesh.polygons.foreach_set('loop_total', np.full(numFaces, 3, dtype=np.int32))
-    mesh.update()
+    tempMesh.vertices.foreach_set('co', np.ascontiguousarray(vertices, dtype=np.float32).ravel())
+    tempMesh.loops.foreach_set('vertex_index', np.ascontiguousarray(faces, dtype=np.int32).ravel())
+    tempMesh.polygons.foreach_set('loop_start', np.arange(0, numLoops, 3, dtype=np.int32))
+    tempMesh.polygons.foreach_set('loop_total', np.full(numFaces, 3, dtype=np.int32))
+    tempMesh.update()
 
-    blender_utils.replaceObjectMesh(previewObj, mesh)
-    bpy.data.meshes.remove(mesh)
+    blender_utils.replaceObjectMesh(mesh, tempMesh)
+    bpy.data.meshes.remove(tempMesh)
 
     shaders = meshData.get('shaders')
     materialIDs = meshData.get('material_ids')
     if shaders and materialIDs is not None and len(materialIDs) == numFaces:
-        numSlots = len(previewObj.data.materials)
+        numSlots = len(mesh.materials)
         if numSlots > 0:
             sortedShaders = sorted(shaders, key=lambda s: s['id'])
             shaderIdToSlotIndex = {s['id']: i for i, s in enumerate(sortedShaders)}
@@ -382,23 +384,19 @@ def _replaceObjMesh(previewObj, meshData):
                 lut[sid] = idx
             matArray = lut[np.clip(materialIDs, 0, maxID)]
             np.clip(matArray, 0, numSlots - 1, out=matArray)
-            attr = previewObj.data.attributes.get("material_index") or \
-                   previewObj.data.attributes.new("material_index", 'INT', 'FACE')
+            attr = mesh.attributes.get("material_index") or \
+                   mesh.attributes.new("material_index", 'INT', 'FACE')
             attr.data.foreach_set("value", matArray)
-            previewObj.data.update()
+            mesh.update()
 
 
-def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFrame = 0, outMetadata: dict = None):
+def loadVRayProxyPreviewMesh(geomMeshFile, filePath: str, animFrame = 0, outMetadata: dict = None):
     """ Load the preview voxel from a .vrmesh file, if any.
 
         Returns: None on success, error message on error.
         If outMetadata is provided, it will be populated with shader and UV channel info.
     """
-    assert previewObj is not None, "Proxy object must have been created"
-
-    # Work with the GeomMeshFile field of the original object, or the changes to it
-    # might be lost.
-    geomMeshFile = previewObj.original.data.vray.GeomMeshFile
+    mesh = geomMeshFile.id_data
     isNewMesh = hasShadowedAttrChanged(geomMeshFile, 'file')
 
     absFilePath = bpy.path.abspath(filePath)
@@ -426,24 +424,26 @@ def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFr
         # The proxy is being reimported because one of its properties has changed (incl. the mesh file).
         # In addition to the scale, we also apply the transform of the previous proxy so that the new
         # object appeared at the same position
-        appliedTransform = getProxyPreviewAppliedTransform(previewObj)
+        appliedTransform = _computeAppliedTransform(geomMeshFile, mesh)
         meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], appliedTransform)
-        _positionProxyLights(previewObj, Vector(geomMeshFile['initial_preview_mesh_pos']))
+        parentObjPos = Vector(geomMeshFile['initial_preview_mesh_pos'])
+        for proxyObj in (o for o in bpy.data.objects if o.data is mesh):
+            _positionProxyLights(proxyObj, parentObjPos)
     else:
         geomMeshFile['initial_preview_mesh_pos'] = geometryCenter
 
     geomMeshFile['basis_matrix'] = mat4x4ToTuple(geomMeshFileScale @ baseMatrix)
     geomMeshFile['basis_vertex_indices'] = pointIndices
 
-    _replaceObjMesh(previewObj, meshData)
+    _replaceObjMesh(mesh, meshData)
 
     # Create empty UV layers named after the proxy's UV channel indices.
     # This allows MayaPlace2D UVWGen to select UVW channels by name.
     if (uvChannelIndices := meshData.get('uv_channel_indices')) is not None:
         for channelIdx in uvChannelIndices:
             layerName = f"vray_channel_id_{channelIdx}"
-            if layerName not in previewObj.data.uv_layers:
-                previewObj.data.uv_layers.new(name=layerName)
+            if layerName not in mesh.uv_layers:
+                mesh.uv_layers.new(name=layerName)
 
     if outMetadata is not None:
         outMetadata['shaders'] = meshData.get('shaders')
@@ -455,12 +455,12 @@ def loadVRayProxyPreviewMesh(previewObj: bpy.types.Object, filePath: str, animFr
 
     updateShadowAttr(geomMeshFile, 'file')
 
-def loadVRayScenePreviewMesh(previewObj: bpy.types.Object, absFilePath: str):
+def loadVRayScenePreviewMesh(vrayScene, absFilePath: str):
     """ Load preview from a file format compatible with VRayScene.
 
         Args:
-            previewObj      (Object): scene object whose mesh will be replaced by the preview mesh
-            sceneFilepath   (str)   : path to a file compatible with VRayScene
+            vrayScene       (PropertyGroup): VRayScene propgroup of the scene object
+            absFilePath     (str)          : path to a file compatible with VRayScene
 
         Returns:
             None on success, error message on error.
@@ -473,7 +473,7 @@ def loadVRayScenePreviewMesh(previewObj: bpy.types.Object, absFilePath: str):
     if not os.path.exists(absFilePath):
         return "Scene file doesn't exist!"
 
-    vrayScene = previewObj.data.vray.VRayScene
+    mesh = vrayScene.id_data
     isNewScene = hasShadowedAttrChanged(vrayScene, 'filepath')
 
     meshData, boxVertices, err = _constructPointPreview(vrayScene, absFilePath, isProxy=False) \
@@ -495,13 +495,13 @@ def loadVRayScenePreviewMesh(previewObj: bpy.types.Object, absFilePath: str):
         # The proxy is being reimported because one of its properties has changed (incl. the mesh file).
         # In addition to the scale, we also apply the transform of the previous proxy so that the new
         # object appeared at the same position
-        appliedTransform = getProxyPreviewAppliedTransform(previewObj)
+        appliedTransform = _computeAppliedTransform(vrayScene, mesh)
         meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], appliedTransform)
 
     vrayScene['basis_matrix'] = mat4x4ToTuple(baseMatrix)
     vrayScene['basis_vertex_indices'] = pointIndices
 
-    _replaceObjMesh(previewObj, meshData)
+    _replaceObjMesh(mesh, meshData)
 
     if vrayScene.previewType == 'Preview':
         # The preview-generation procedure uses the requested number of preview faces as a guideline only.
@@ -516,7 +516,7 @@ def isAlembicFile(filePath: str):
     return filePath.endswith('.abc')
 
 
-def _binRead(file: BufferedReader, dataType: str, numItems: int):
+def binRead(file: BufferedReader, dataType: str, numItems: int):
     """ Read typed data items from a binary file.
 
     Args:
@@ -555,7 +555,7 @@ def readBinMeshFile(filePath: str):
     objects = {} # name -> meshData
 
     with open(os.path.expanduser(filePath), "rb") as file:
-        numObjects = _binRead(file, 'I', 1) # uint32
+        numObjects = binRead(file, 'I', 1) # uint32
 
         for i in range(numObjects):
             meshData = _readObjectFromBinFile(file)
@@ -637,17 +637,17 @@ def _readObjectFromBinFile(file: BufferedReader):
         dict(str, meshData): a map of object name to mesh data for the object
     """
     def _readString(file):
-        length = _binRead(file, 'I', 1)
-        return _binRead(file, 's', length)
+        length = binRead(file, 'I', 1)
+        return binRead(file, 's', length)
 
     chunks = []
     objName = _readString(file)
-    tocSize = _binRead(file, "I", 1)         # uint32
+    tocSize = binRead(file, "I", 1)         # uint32
 
     for _ in range(tocSize):
-        itemType  = _binRead(file, 'c', 1)   # char
-        itemCount = _binRead(file, 'Q', 1)   # uint64
-        offset    = _binRead(file, 'Q', 1)   # uint64
+        itemType  = binRead(file, 'c', 1)   # char
+        itemCount = binRead(file, 'Q', 1)   # uint64
+        offset    = binRead(file, 'Q', 1)   # uint64
         chunks.append((itemType, offset, itemCount))
 
     vertices = []
@@ -695,23 +695,10 @@ def _readObjectFromBinFile(file: BufferedReader):
     }
 
 
-def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
-    """ Return the cumulative transformation to the obeject's mesh which has been applied
-        after the proxy object was imported for the first time. This incliudes changing
-        the object's origin point and using 'Apply transform' on the object.
+def _computeAppliedTransform(propGroup, mesh: bpy.types.Mesh):
+    """ Compute the cumulative transform applied to the mesh since first import.
+        Works from the propgroup and mesh data directly, without needing the Object.
     """
-    assert isObjectVrayProxy(obj) or isObjectVrayScene(obj)
-
-    # When a transformation is applied to an object, Blender transforms the vertices of its mesh.
-    # From the current locations (in object local coordinates) of the 4 vertices that serve as
-    # the 'anchor' basis matrix, we can compute the transformation applued to the object.
-
-    isProxy = isObjectVrayProxy(obj)
-
-    # If in Edit mode, non-original obj will have no geometry data
-    mesh = obj.original.data if fromOriginal else obj.data
-
-    propGroup = mesh.vray.GeomMeshFile if isProxy else mesh.vray.VRayScene
     basePosMatrix = matrixLayoutToMatrix(propGroup.basis_matrix)
 
     if basePosMatrix == Matrix():
@@ -722,7 +709,6 @@ def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
     anchorIndices = propGroup.basis_vertex_indices
     currPts = [mesh.vertices[anchorIndices[i]].co for i in range(4)]
 
-    # Find the affine transform that maps the base anchor positions to the current ones.
     baseDiffVecs = [basePts[i + 1] - basePts[0] for i in range(3)]
     currDiffVecs = [currPts[i + 1] - currPts[0] for i in range(3)]
     baseDiffMatrix = Matrix(tuple(zip(*baseDiffVecs)))
@@ -734,6 +720,19 @@ def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
     return result
 
 
+def getProxyPreviewAppliedTransform(obj: bpy.types.Object, fromOriginal=True):
+    """ Return the cumulative transformation to the object's mesh which has been applied
+        after the proxy object was imported for the first time. This includes changing
+        the object's origin point and using 'Apply transform' on the object.
+    """
+    assert isObjectVrayProxy(obj) or isObjectVrayScene(obj)
+
+    # If in Edit mode, non-original obj will have no geometry data
+    mesh = obj.original.data if fromOriginal else obj.data
+    propGroup = mesh.vray.GeomMeshFile if isObjectVrayProxy(obj) else mesh.vray.VRayScene
+    return _computeAppliedTransform(propGroup, mesh)
+
+
 def _positionProxyLights(previewObj: bpy.types.Object, parentObjPos: Vector):
     """ Set the position of lights attached to a VRayProxy object when the mesh is updated.
 
@@ -741,7 +740,7 @@ def _positionProxyLights(previewObj: bpy.types.Object, parentObjPos: Vector):
         and if the mesh origin point is moved, the lights need to be updated accordingly.
     """
     geomMeshFile = previewObj.data.vray.GeomMeshFile
-    appliedTransform = getProxyPreviewAppliedTransform(previewObj)
+    appliedTransform = _computeAppliedTransform(geomMeshFile, previewObj.data)
 
     for lightObj in (c for c in previewObj.children if c.type == 'LIGHT'):
         light = lightObj.data

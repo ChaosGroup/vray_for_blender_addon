@@ -844,6 +844,14 @@ void ZmqExporter::init(const ExporterSettings & settings)
 			m_client->send(serializeMessage(MsgRendererEnableDistributedRendering{hostsStr, (DRFlags)drFlags, m_settings.remoteDispatcher}));
 		}
 
+		if (m_settings.profilerMode != 0) {
+			m_client->send(serializeMessage(MsgRendererSetVRayProfiler{
+				m_settings.profilerMode,
+				m_settings.profilerMaxDepth,
+				m_settings.profilerOutputDirectory,
+				m_settings.profilerSceneName}));
+		}
+
 		m_cachedValues.renderSizes = RenderSizes();
 	}
 	catch (zmq::error_t& e) {

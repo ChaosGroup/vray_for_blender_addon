@@ -46,7 +46,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
         if ctx.activeLightMixNode:
             lightMixMode = ctx.activeLightMixNode.RenderChannelLightMix.mode
             
-            if lightMixMode == 'individual' and lightSelect.light_select_mode == '4':
+            if lightMixMode in ('individual', 'instanced') and lightSelect.light_select_mode == '4':
                 return AttrPlugin()
 
         # Get a list of lights that should be included in this light select render channel 

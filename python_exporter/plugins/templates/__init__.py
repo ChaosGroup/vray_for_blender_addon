@@ -6,6 +6,7 @@
 def getRegModules():
     from vray_blender.plugins.templates import (
         common,
+        single_select,
         multi_select,
         include_exclude,
         file_select,
@@ -14,6 +15,7 @@ def getRegModules():
 
     return (
         common, # Keep this first in the list
+        single_select,
         multi_select,
         include_exclude,
         file_select,

@@ -14,7 +14,7 @@ from vray_blender.nodes.tools import getFilterFunction
 
 class TemplateSingleObjectSelect(common.VRayUITemplate):
 
-    """ Show UI for selecting a single object. 
+    """ Show UI for selecting a single object.
 
         NOTE: This template should have a corresponding a widget description and is normally
         created for plugin properties of type TEMPLATE.
@@ -23,14 +23,14 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
            bound_property: the name of the property to receive the resulting object reference
            filter_function (optional): the name of the filter function for the object search field
     """
-    
+
     def _onUpdateName(self, context):
         if self.boundPropObj:
             self.boundPropObjName = self.boundPropObj.name
         else:
             self.boundPropObjName = ""
-    
-    
+
+
     def _onFilterObject(self, obj):
         # Return the poll (filter) function for the Object Select field
         if filterFn := getFilterFunction(self.vray_plugin, self.getTemplateAttr('filter_function', '')):
@@ -51,28 +51,28 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
     )
 
 
-    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context, 
+    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context,
                     pluginModule, propGroup, widgetAttr: dict, text, nested=False):
-        
+
         sock: bpy.types.NodeSocket = None
 
         if (boundProperty := self.getTemplateAttr('bound_property')) and (node := getNodeOfPropGroup(propGroup)):
             sock = getInputSocketByAttr(node, boundProperty)
-        
+
         if sock and sock.hasActiveFarLink():
             # Do not draw if the object is supplied by a linked object selector node
             return
-        
+
         attrName = widgetAttr['name']
         panel = layout
         panel.use_property_decorate = False # Animation not supported for object lists
         label = widgetAttr.get('label', getPluginAttr(pluginModule, attrName))
         collectionName = self.getTemplateAttr('collection', '')
         data, prop = TemplateSingleObjectSelect._getSearchCollectionProvider(context, collectionName)
-    
+
         panel.prop_search( self, "boundPropObj", data, prop, text=label)
-        
-        
+
+
 
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):
         """ Sets the values of the template bound properties to the pluginDesc.
@@ -83,7 +83,7 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         if not (boundProperty := self.getTemplateAttr('bound_property')):
             # The plugin has custom export code and only uses the template to obtain the data.
             return False
-        
+
         if node := pluginDesc.node:
             sock = getInputSocketByAttr(node, boundProperty)
             if sock.hasActiveFarLink():
@@ -94,6 +94,9 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
             pluginDesc.setAttribute(boundProperty, AttrPlugin())
             return True
 
+        # Mark the referenced object for export so the reference resolves even if the object is
+        # invisible / disabled in renders.
+        exporterCtx.registerReferencedObject(self.boundPropObj)
         pluginDesc.setAttribute(boundProperty, objectToAttrPlugin(self.boundPropObj))
 
         return True
@@ -105,6 +108,12 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
             return (context.scene, 'objects')
         else:
             return (bpy.data, collName)
+
+    def resetToDefaults(self):
+        # Clearing boundPropObj triggers _onUpdateName, which clears boundPropObjName too.
+        self.boundPropObj = None
+        self.boundPropObjName = ""
+
 
     def removeDeletedItems(self, context: bpy.types.Context):
         if self.boundPropObjName and self.boundPropObjName not in context.scene.objects:

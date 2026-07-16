@@ -106,7 +106,10 @@ def addLightNodeTree(light: bpy.types.Light, isNewLight = False):
 
     bounds = NodeTools.calculateTreeBounds(ntree)
     NodeTools.rearrangeTree(ntree, lightNode, bounds=bounds, appendLeft=True)
-    NodeTools.deselectNodes(ntree)
+
+    # Select only the light node so its animation channels show in the Graph Editor / Dope Sheet
+    # under the default "Only Show Selected" filter (which hides unselected nodes' F-curves).
+    NodeTools.selectOnlyNode(ntree, lightNode)
 
 
 def addObjectNodeTree(ob):
@@ -179,9 +182,8 @@ def addMaterialNodeTree(mtl: bpy.types.Material, addDefaultTree = True, nodeType
         if nodeType in NodeUtils.MATERIAL_WRAPPER_SOCKETS:
             brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')
 
-            sockName = NodeUtils.MATERIAL_WRAPPER_SOCKETS[nodeType]
-            if sockName in mainNode.inputs:
-                ntree.links.new(brdfNode.outputs['BRDF'], mainNode.inputs[sockName])
+            if wrapperSock := NodeUtils.getMaterialWrapperSocket(mainNode):
+                ntree.links.new(brdfNode.outputs['BRDF'], wrapperSock)
     else:
         if not outputNode.inputs[0].hasActiveFarLink():
             brdfNode = ntree.nodes.new('VRayNodeBRDFVRayMtl')

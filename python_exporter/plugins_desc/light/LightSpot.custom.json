@@ -87,7 +87,11 @@
         },
         {
             "attr": "units",
-            "default": "3"
+            "default": "3",
+            "update": "onUpdateUnits",
+            "options": {
+                "shadowed": true
+            }
         },
         {
             "attr": "shadowBias",
@@ -124,6 +128,8 @@
             "attr": "intensity",
             "default": 30.0,
             "ui": {
+                "max": null,
+                "soft_max": null,
                 "spin_step": 0.1
             }
         },
@@ -134,7 +140,8 @@
             "subtype": "ANGLE",
             "precision": 7,
             "ui": {
-                "spin_step": 0.1
+                "spin_step": 0.1,
+                "min": 0.0174533
             }
         },
         {
@@ -427,6 +434,34 @@
                                 "name": "decay_far_end"
                             }
                         ]
+                    }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "color_temp_control"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "units"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "shadows"
                     }
                 ]
             }

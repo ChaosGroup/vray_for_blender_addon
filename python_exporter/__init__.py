@@ -12,7 +12,7 @@ bl_info = {
     "doc_url"     : "https://documentation.chaos.com/space/VBLD",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "30", "20")
+    "version"     : ("7", "40", "00")
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data
@@ -21,7 +21,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 46
+UPGRADE_NUMBER = 48
 
 try:
     import numpy as np
@@ -182,7 +182,7 @@ def unregister():
 
     if not _isRegistered:
         return
-    
+
     # Switching all 3D viewports to SOLID mode
     # to ensure no updates are triggered during unregistration.
     _switchViewportsToSolid()

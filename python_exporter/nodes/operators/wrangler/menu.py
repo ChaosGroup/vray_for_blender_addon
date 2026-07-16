@@ -12,6 +12,7 @@
 import bpy
 
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.nodes.utils import getLightOutputNode
 from vray_blender.nodes.operators.wrangler.merge import _MODE_ITEMS
 from vray_blender.nodes.operators.wrangler.poll import (
     isVrayEditor, hasEditTree,
@@ -62,6 +63,10 @@ def drawWranglerLayout(layout, context):
     elif treeType == 'WORLD':
         layout.operator("vray.wr_add_hdri",            text="Import HDRI",                   icon='WORLD')
         layout.operator("vray.wr_add_beauty_channels", text="Add Beauty Render Elements",    icon='RENDERLAYERS')
+    elif treeType == 'LIGHT':
+        domeNode = getLightOutputNode(ntree)
+        if domeNode is not None and getattr(domeNode, 'vray_plugin', '') == 'LightDome':
+            layout.operator("vray.wr_add_dome_hdri",   text="Import HDRI",                   icon='WORLD')
 
     layout.separator()
 

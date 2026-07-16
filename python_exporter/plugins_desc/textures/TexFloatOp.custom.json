@@ -63,6 +63,44 @@
             "options": {
                 "derived": true
             }
+        },
+        {
+            "attr": "outputs",
+            "type": "ENUM",
+            "desc": "Output socket to show or hide",
+            "default": "sum",
+            "items": [
+                ["sum",          "Sum",          "A + B"],
+                ["difference",   "Difference",   "A - B"],
+                ["product",      "Product",      "A * B"],
+                ["ratio",        "Ratio",        "A / B"],
+                ["power",        "Power",        "A ^ B"],
+                ["min",          "Min",          "min(A, B)"],
+                ["max",          "Max",          "max(A, B)"],
+                ["average",      "Average",      "(A + B) / 2"],
+                ["sin",          "Sin",          "sin(A)"],
+                ["cos",          "Cos",          "cos(A)"],
+                ["tan",          "Tan",          "tan(A)"],
+                ["asin",         "Asin",         "asin(A)"],
+                ["acos",         "Acos",         "acos(A)"],
+                ["atan",         "Atan",         "atan(A)"],
+                ["atan2",        "Atan2",        "atan2(B, A)"],
+                ["abs",          "Abs",          "abs(A)"],
+                ["ceil",         "Ceil",         "ceil(A)"],
+                ["exp",          "Exp",          "exp(A)"],
+                ["floor",        "Floor",        "floor(A)"],
+                ["log",          "Log",          "log(A)"],
+                ["log10",        "Log10",        "log10(A)"],
+                ["sqrt",         "Sqrt",         "sqrt(A)"],
+                ["fmod",         "Fmod",         "A % B"],
+                ["bias_schlick", "Bias Schlick", "Bias (Schlick approximation)"],
+                ["gain_schlick", "Gain Schlick", "Gain (Schlick approximation)"],
+                ["bias_perlin",  "Bias Perlin",  "Bias (Perlin definition)"],
+                ["gain_perlin",  "Gain Perlin",  "Gain (Perlin definition)"]
+            ],
+            "options": {
+                "derived": true
+            }
         }
     ],
     "Widget": {

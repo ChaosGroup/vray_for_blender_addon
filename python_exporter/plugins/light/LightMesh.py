@@ -24,7 +24,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     # This procedure will export one instance of LightMesh for each selected object and will
     # return a list of the exported plugins (instead of a single plugin)
     geomObjects: list[bpy.types.Object] = []  # A list of geometry objects attached to the same LightMesh
-    exportedLights: list[AttrPlugin]   = []   # A list of the expored LightMesh plugins 
+    exportedLights: list[AttrPlugin]   = []   # A list of the expored LightMesh plugins
 
     exportedObjectSelectorNode = False
 
@@ -35,12 +35,12 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
             # want to suppress the usage of internal objects list because it will be confusing
             # to the users (as list is hidden in the UI).
             exportedObjectSelectorNode = True
-    
+
             linkedNode = geomLink.from_node
-            
+
             if linkedNode.bl_idname not in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
                 debug.printError(f"A non-selector node attached to 'Geometry' socket of {node.name}.")
-            elif linkedItem := pluginDesc.getAttribute('geometry'): 
+            elif linkedItem := pluginDesc.getAttribute('geometry'):
                 if type(linkedItem) is list:
                     # The node has an group selector connected to its 'geometry' socket
                     geomObjects = [pl.auxData['object'] for pl in linkedItem]
@@ -51,12 +51,16 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     if not exportedObjectSelectorNode:
         # The 'geometry' socket is not linked, use the value from the property page if any
         geomObjects = pluginDesc.vrayPropGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
-        
+
     if geomObjects:
         baseName = pluginDesc.name
-        
+
         # LightMesh plugin can only have one target geometry, so export one LightMesh plugin for each geometry
         for meshObj in geomObjects:
+            # The LightMesh references the object's geometry plugin directly, so make sure the object
+            # is exported even if it is invisible / disabled in renders.
+            ctx.registerReferencedObject(meshObj)
+
             meshName = Names.objectData(meshObj)
             pluginDesc.name = getLightMeshPluginName(baseName, getObjTrackId(meshObj))
 
@@ -64,13 +68,13 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
                 'geometry': AttrPlugin(meshName),
                 'transform' : meshObj.matrix_world
             })
-            
+
             if lightObj := ctx.objectContext.get():
                 if userAttributes := lightObj.vray.UserAttributes.getAsString():
                     pluginDesc.setAttribute('user_attributes', userAttributes)
             else:
                 debug.printError(f"LightMesh {baseName} has no object context set. User attributes not exported.")
-                
+
             exportedLights.append(export_utils.exportPluginCommon(ctx, pluginDesc))
 
     return exportedLights
@@ -82,7 +86,7 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
         LightMesh combines a light object and a geometry object, which are exported by LightExporter
         and GeometryExporter respectively. Both exporters need to know about the existing links in order
         to stay in sync about what is exported by each of them. This function will collect two lists
-        of light/geometry object tuples - one for all currently visible in the scene, and one for 
+        of light/geometry object tuples - one for all currently visible in the scene, and one for
         which depsgraph updates have been generated.
 
         Returns:
@@ -94,7 +98,7 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
                     and (o.data.vray.light_type == 'MESH') and (getObjTrackId(o) in exporterCtx.visibleObjects)]
 
     return export_utils.collectConnectedMeshInfo(
-        exporterCtx, meshLightObjects, 'LightMesh', 'Geometry', 'data.node_tree', 'VRayNodeLightMesh')   
+        exporterCtx, meshLightObjects, 'LightMesh', 'Geometry', 'data.node_tree', 'VRayNodeLightMesh')
 
 
 def getLightMeshPluginName(lightName: str, gizmoObjTrackId):

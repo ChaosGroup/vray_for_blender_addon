@@ -107,9 +107,38 @@ def rearrangeTree(ntree: bpy.types.NodeTree, rootNode: bpy.types.Node, depth=0, 
             levelTop -= _getNodeHeight(node)
 
 
+def rearrangeTreeRecursive(ntree: bpy.types.NodeTree, rootNode: bpy.types.Node, bounds=(0, 0, 0, 0), appendLeft=False):
+    """ Lay out 'ntree' from 'rootNode', then recurse into the inner tree of every
+        V-Ray group node it contains. Each inner group tree is laid out from its
+        NodeGroupOutput node (the group's sink).
+    """
+    from vray_blender.nodes.group.utils import VRAY_GROUP_NODE_TYPE
+
+    rearrangeTree(ntree, rootNode, bounds=bounds, appendLeft=appendLeft)
+
+    for node in ntree.nodes:
+        if node.bl_idname == VRAY_GROUP_NODE_TYPE and node.node_tree:
+            groupOutput = next((n for n in node.node_tree.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+            if groupOutput:
+                rearrangeTreeRecursive(node.node_tree, groupOutput,
+                                       bounds=calculateTreeBounds(node.node_tree))
+
+
 def deselectNodes(ntree):
     for node in ntree.nodes:
         node.select = False
+
+
+def selectOnlyNode(ntree, node):
+    """ Deselect every node in the tree, then select and activate only 'node'.
+
+        Keeps the node's animation channels visible in the Graph Editor / Dope Sheet under
+        the default "Only Show Selected" filter, which hides the F-curves of unselected nodes
+        (Blender anim_filter.cc: skip_fcurve_selected_data).
+    """
+    deselectNodes(ntree)
+    node.select = True
+    ntree.nodes.active = node
 
 
 def addVRayNodeTreeSettings(ntree: bpy.types.ShaderNodeTree, treeType: str):
@@ -126,6 +155,8 @@ def isVrayNodeTree(ntree: bpy.types.NodeTree, treeType: str):
     return hasattr(ntree, 'vray') and (ntree.vray.tree_type == treeType)
 
 
+_isVraySocketByType = {}   # socket class -> bool
+
 def isVraySocket(sock: bpy.types.NodeSocket):
     """ Return True if the socket has an associated V-Ray plugin attribute.
 
@@ -133,7 +164,12 @@ def isVraySocket(sock: bpy.types.NodeSocket):
         the newly added sockets might not have a 'vray_attr' field in the data
         loaded from an old scene.
     """
-    return hasattr(sock, 'vray_attr')
+    sockType = type(sock)
+    cached = _isVraySocketByType.get(sockType)
+    if cached is None:
+        cached = hasattr(sock, 'vray_attr')
+        _isVraySocketByType[sockType] = cached
+    return cached
 
 
 def isVrayLight(light: bpy.types.Light):

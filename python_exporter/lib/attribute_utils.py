@@ -378,10 +378,13 @@ def setAttrSubtype(attrArgs, attrDesc, pluginModule):
     elif 'subtype' in attrDesc:
         attrArgs['subtype'] = attrDesc.get('subtype')
     elif ui:
-        # For attributes that have min/max or soft_min/soft_max UI guides always use a factor slider.
+        # For attributes that have min/max or soft_min/soft_max UI guides always use a factor
+        # slider. A bound explicitly set to null means "no limit", so it does not count.
         pluginSupportsFactor = (pluginModule.Options.get('animatable', True) or pluginModule.Options.get('use_factor_subtype', False))
         supportedFloatParam = (attrType in ('FLOAT_TEXTURE', 'FLOAT', 'INT') and pluginSupportsFactor)
-        if supportedFloatParam and (('min' in ui and 'max' in ui) or ('soft_min' in ui and 'soft_max' in ui)):
+        hasMinMax = ui.get('min') is not None and ui.get('max') is not None
+        hasSoftMinMax = ui.get('soft_min') is not None and ui.get('soft_max') is not None
+        if supportedFloatParam and (hasMinMax or hasSoftMinMax):
             attrArgs['subtype'] = 'FACTOR'
 
         quantityType = ui.get('quantityType', '')
@@ -480,6 +483,40 @@ def getBlenderDefault(param):
     return val
 
 
+def _resetTemplateToDefaults(template):
+    """ Reset a UI template's own state to defaults by delegating to its resetToDefaults()
+        method (templates that hold no state of their own are no-ops). """
+    if template is not None and (fnReset := getattr(template, 'resetToDefaults', None)):
+        fnReset()
+
+
+def resetPropGroupToDefaults(propGroup, pluginModule, skipAttrs=None):
+    """ Reset every JSON-defined parameter on propGroup to its Blender default.
+
+        TEMPLATE params are reset by delegating to the template's own resetToDefaults(); templates
+        whose values live in ordinary bound params keep a no-op reset, as those params are reset by
+        the loop below.
+
+        @param skipAttrs - optional set of attr names to leave untouched (e.g. params whose
+            value is stored on an input socket rather than the PropGroup).
+    """
+    skipAttrs = skipAttrs or set()
+    for param in pluginModule.Parameters:
+        attrName = param['attr']
+        if attrName in skipAttrs:
+            continue
+        if param['type'] == 'TEMPLATE':
+            _resetTemplateToDefaults(getattr(propGroup, attrName, None))
+            continue
+        blDefault = getBlenderDefault(param)
+        if blDefault is None:
+            continue
+        try:
+            setattr(propGroup, attrName, blDefault)
+        except (TypeError, ValueError, AttributeError):
+            pass
+
+
 def setAttrLimits(attrArgs, attrDesc):
     attrType = attrDesc['type']
 
@@ -506,11 +543,23 @@ def setAttrLimits(attrArgs, attrDesc):
 
         minValue = attrDesc['ui'].get('min', defUi['min'])
         maxValue = attrDesc['ui'].get('max', defUi['max'])
+        # A bound explicitly set to null means "no limit". Soft bounds default to the hard
+        # bound when not specified, except when the hard bound is null - then they fall back
+        # to the generic soft default instead, so an unbounded hard max doesn't silently make
+        # the slider's drag range unbounded too (unless soft_min/soft_max opt out as well).
+        softMinValue = attrDesc['ui'].get('soft_min', minValue if minValue is not None else defUi['soft_min'])
+        softMaxValue = attrDesc['ui'].get('soft_max', maxValue if maxValue is not None else defUi['soft_max'])
 
-        attrArgs['min'] = convertVRayValueToUI(attrDesc, minValue)
-        attrArgs['max'] = convertVRayValueToUI(attrDesc, maxValue)
-        attrArgs['soft_min'] = convertVRayValueToUI(attrDesc, attrDesc['ui'].get('soft_min', minValue))
-        attrArgs['soft_max'] = convertVRayValueToUI(attrDesc, attrDesc['ui'].get('soft_max', maxValue))
+        # Skip a bound that resolved to null - Blender's own property default
+        # (e.g. FLT_MAX for FLOAT) applies instead of clamping.
+        if minValue is not None:
+            attrArgs['min'] = convertVRayValueToUI(attrDesc, minValue)
+        if maxValue is not None:
+            attrArgs['max'] = convertVRayValueToUI(attrDesc, maxValue)
+        if softMinValue is not None:
+            attrArgs['soft_min'] = convertVRayValueToUI(attrDesc, softMinValue)
+        if softMaxValue is not None:
+            attrArgs['soft_max'] = convertVRayValueToUI(attrDesc, softMaxValue)
 
         if 'spin_step' in attrDesc['ui']:
             stepValue = attrDesc['ui']['spin_step']

@@ -389,7 +389,7 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
             lightNode = NodesImport.createNode(importContext, plgDesc)
 
             NodesTools.rearrangeTree(lightNtree, lightNode)
-            NodesTools.deselectNodes(lightNtree)
+            NodesTools.selectOnlyNode(lightNtree, lightNode)
 
             _checkNodeTree(lightNtree, f"Light {plgName}")
 
@@ -401,23 +401,25 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
     domeDict = parseVrmat(lightPath)
     textureDict = parseVrmat(texturePath)
 
-    name = f'VRayDomeLight@{Path(lightPath).stem}'
-    domeData = bpy.data.lights.new(name=name , type='POINT')
-    domeData.vray.light_type = 'DOME'
-    domeData.vray.cosmos_package_id = packageId
-    domeData.vray.cosmos_revision_id = revisionId
-    domeObj = bpy.data.objects.new(name=name, object_data=domeData)
-
-    bpy.context.collection.objects.link(domeObj)
-    blender_utils.selectObject(domeObj)
-
-    ntree = createNodeTreeForLightObject(domeData, isNewLight = True)
     try:
         lightDesc = next((plgDesc for plgDesc in domeDict if plgDesc['ID'] == "LightDome"))
         texDesc = next((plgDesc for plgDesc in textureDict if plgDesc['ID'] == "TexBitmap"))
     except:
         debug.printError("HDRI import: either no 'LightDome' description in light file or 'TexBitmap' in texture file")
         return
+
+    name = f'VRayDomeLight@{Path(lightPath).stem}'
+    domeData = bpy.data.lights.new(name=name , type='POINT')
+    domeData.vray.light_type = 'DOME'
+    domeData.vray.cosmos_package_id = packageId
+    domeData.vray.cosmos_revision_id = revisionId
+
+    # Build the light's node tree before linking the object into the scene. Linking and
+    # selecting cross an operator boundary that flushes the depsgraph and runs
+    # fixSceneLights(), which adds a default LightDome output node to any V-Ray light that
+    # still has none. Doing it first means the tree already has its output node, so no
+    # duplicate (empty) one is created and exported instead of the imported one (VBLD-2560).
+    ntree = createNodeTreeForLightObject(domeData, isNewLight = True)
 
     domeContext = NodesImport.ImportContext(ntree, domeDict, locationsMap=locationsMap)
     textureContext = NodesImport.ImportContext(ntree, textureDict, locationsMap=locationsMap)
@@ -427,7 +429,11 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
 
     ntree.links.new(textureNode.outputs["Color"], lightDomeNode.inputs['Dome Color'])
     NodesTools.rearrangeTree(ntree, lightDomeNode)
-    NodesTools.deselectNodes(ntree)
+    NodesTools.selectOnlyNode(ntree, lightDomeNode)
+
+    domeObj = bpy.data.objects.new(name=name, object_data=domeData)
+    bpy.context.collection.objects.link(domeObj)
+    blender_utils.selectObject(domeObj)
 
 
 def importDecal(settings):
@@ -459,7 +465,7 @@ def importDecal(settings):
         importContext = NodesImport.ImportContext(objTree, vrsceneDict, locationsMap=settings.locationsMap)
         decalOutputNode = NodesImport.createNode(importContext, decalDesc)
 
-        generateDecalPreviewMesh(obj, obj.data.vray.VRayDecal)
+        generateDecalPreviewMesh(obj)
 
         obj.data.vray.cosmos_package_id = settings.packageId
         obj.data.vray.cosmos_revision_id = settings.revisionId
@@ -507,7 +513,7 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0, ou
     context.collection.objects.link(ob)
     vrayAsset = ob.vray.VRayAsset
 
-    if err := vray_proxy.loadVRayProxyPreviewMesh(ob, proxyFilePath, animFrame=0.0, outMetadata=outMetadata):
+    if err := vray_proxy.loadVRayProxyPreviewMesh(ob.data.vray.GeomMeshFile, proxyFilePath, animFrame=0.0, outMetadata=outMetadata):
         return None, err
 
     vrayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Proxy"]

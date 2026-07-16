@@ -26,7 +26,7 @@ PLUGINS_DIRS = []
 # global definitions in the corresponding plugins/*.py file, if there is such
 # This allows to augment the JSONs with additional properties, to override properties
 # or to define custom export functionality. E.g. this is how the _exportCustom()
-# mechanism is implemented 
+# mechanism is implemented
 PLUGIN_MODULES = {}
 
 # This struct holds the PLUGIN_MODULES entries sorted by plugin category
@@ -62,20 +62,20 @@ def getPluginModule(pluginType: str):
         errMsg = f'Plugin "{pluginType}" module not found.'
         debug.printError(errMsg)
         raise Exception(errMsg)
-    
+
     return pluginModule
 
 def findPluginModule(pluginType: str):
     """ Return plugin module given the plugin type name """
     if pluginModule := PLUGIN_MODULES.get(pluginType):
         return pluginModule
-    
+
     return None
 
 
 def getPluginAttr(pluginModule, attrName):
     """ Return parameter definition or None if not found """
-    return next((p for p in pluginModule.Parameters if p['attr'] == attrName), None)
+    return pluginModule.ParametersByAttr.get(attrName)
 
 
 def getInputSocketDesc(pluginModule, attrName):
@@ -143,24 +143,24 @@ def _loadPlugins():
     for plugin in plugins:
         if not hasattr(plugin, 'ID'):
             continue
-        
+
         try:
             PLUGINS[plugin.TYPE][plugin.ID] = plugin
         except Exception as ex:
             debug.printError(f"Failed to register plugin of type {plugin.ID}, category {plugin.TYPE}: {ex}")
             continue
-        
+
         PLUGIN_MODULES[plugin.ID] = plugin
 
 
 def _loadAttributeOverrides(mode: str, file: str):
-    """ Load overrides to the default property values of plugins 
+    """ Load overrides to the default property values of plugins
 
         mode: viewport, preview, production
         file: path to a json file with overriding values
     """
     global DEFAULTS_OVERRIDES
-    
+
     try:
         overrides = sys_utils.readOverrides(file)
         DEFAULTS_OVERRIDES[mode] = json.loads(overrides) if overrides != "" else None
@@ -180,12 +180,15 @@ def _loadAttributeOverrides(mode: str, file: str):
  ######  ##     ## ##     ## ######## ##     ## ##     ##
 
 def _toggleCameraUpdate(self, context, isPhysical: bool):
-        vrayCamera = context.camera.vray
+        # `self` is the VRayCamera prop group being edited. Use it directly instead of
+        # context.camera, which is not available outside the Properties editor (e.g. when the
+        # toggle is driven from the V-Ray N-panel in the 3D Viewport).
+        vrayCamera = self
         physicalCamera = vrayCamera.CameraPhysical
         domeCamera = vrayCamera.CameraDome
-        
+
         # This is a property update callback. Change the properties by using the
-        # dictionary access syntax to avoid recursion. 
+        # dictionary access syntax to avoid recursion.
         if isPhysical:
             physicalCamera['use'] = vrayCamera.use_physical
             domeCamera['use'] = False
@@ -341,18 +344,18 @@ def getFilePathValue(propGroup):
         return ""
 
     if propGroup.useRelativePath:
-        # Converting relative paths to absolute paths, so they could be exported.  
-        # Replacing "\\" with "//" helps avoid errors caused by  
+        # Converting relative paths to absolute paths, so they could be exported.
+        # Replacing "\\" with "//" helps avoid errors caused by
         # Windows remote paths being confused with Blender's relative paths.
         return bpy.path.abspath(propGroup["filePath"].replace("\\\\", "//"))
-    
+
     return propGroup["filePath"]
 
 # Setter for VRayAsset.filePath.
 # This is necessary because, without a setter, the property becomes read-only if only a getter is defined.
 def setFilePathValue(propGroup, path):
-    # If bpy.path.abspath("//") returns an empty string, the scene is new and unsaved.  
-    # In this case, an absolute path is assigned to ensure the path is valid  
+    # If bpy.path.abspath("//") returns an empty string, the scene is new and unsaved.
+    # In this case, an absolute path is assigned to ensure the path is valid
     # and can be properly converted to a relative path when the scene is saved.
     if propGroup.useRelativePath and bpy.path.abspath("//"):
         propGroup["filePath"] = bpy.path.relpath(path)
@@ -449,6 +452,12 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
         default = False
     )
 
+    isVRayGaussian: bpy.props.BoolProperty(
+        name = "Is V-Ray Gaussians Object",
+        description = "True if this is a Gaussian splat object.",
+        default = False
+    )
+
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}
 
@@ -533,7 +542,7 @@ class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
         update = selectedObjectTagUpdate
     )
 
-    
+
     from vray_blender.plugins.templates.multi_select import TemplateSelectGeometries
     objectList: bpy.props.PointerProperty(
         type = TemplateSelectGeometries
@@ -880,7 +889,7 @@ def register():
                 continue
 
             jsonPlugin = plugin_utils.PLUGINS_DESC[jsonPluginType]
-            
+
             #if jsonPlugin['TYPE'] in {'MISC'}:
             #    continue
 
@@ -897,7 +906,7 @@ def register():
                 PLUGINS[jsonPlugin['TYPE']][jsonPlugin['ID']] = DynPluginType
             except Exception as ex:
                 debug.printExceptionInfo(ex, f"No plugin module has been loaded for plugin '{jsonPlugin['ID']}' of type '{jsonPlugin['TYPE']}'")
-            
+
             PLUGIN_MODULES[jsonPlugin['ID']] = DynPluginType
 
     # Register properties
@@ -1119,7 +1128,7 @@ def register():
         description = "V-Ray window settings"
     )
 
-    
+
 
 def unregister():
     global PLUGIN_MODULES

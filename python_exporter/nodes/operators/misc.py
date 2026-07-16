@@ -125,7 +125,8 @@ def _drawVrayNodeSelector(layout, data, property, new, icon, text):
 def _drawVRayNodeEditorMenus(layout, context: bpy.types.Context):
     layout.template_header()
 
-    layout.prop(context.scene.vray, "ActiveNodeEditorType", text="")
+    row = layout.row(align=True)
+    row.prop(context.scene.vray, "ActiveNodeEditorType", expand=True)
     layout.menu("NODE_MT_view")
     layout.menu("NODE_MT_select")
     layout.menu("NODE_MT_vray_add")

@@ -12,6 +12,7 @@ vray.wr_add_disp_subdiv     - Drop Displacement + Subdivision nodes (OBJECT).
 vray.wr_add_shadow_catcher  - Shadow-catcher preset on the active object (OBJECT).
 vray.wr_add_disp_texture    - File-browser: wire a height map into Displacement (OBJECT).
 vray.wr_add_hdri            - File-browser: wire an HDRI into World Environment (WORLD).
+vray.wr_add_dome_hdri       - File-browser: wire an HDRI into a Dome light texture (LIGHT).
 vray.wr_wrap_selected       - Wrap ≥2 selected nodes in MtlMulti or BRDFLayered (MATERIAL).
 vray.wr_add_beauty_channels - Add all beauty render elements to the world tree (WORLD).
 """
@@ -24,7 +25,8 @@ from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.nodes.tools import rearrangeTree, calculateTreeBounds
 from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
-from vray_blender.nodes.utils import getNodeByType, getOutputNode, DisableAutoConnect
+from vray_blender.nodes.specials.material import getMaterialSockets
+from vray_blender.nodes.utils import getNodeByType, getOutputNode, getLightOutputNode, DisableAutoConnect
 from vray_blender.nodes.operators.wrangler.helpers import _OUTPUT_BY_TREE_TYPE
 from vray_blender.nodes.operators.wrangler.poll import isVrayEditor, hasEditTree, hasSelection
 from vray_blender.nodes.operators.wrangler.pbr_import import (
@@ -64,6 +66,20 @@ def _getOrCreateOutput(ntree: bpy.types.NodeTree) -> bpy.types.Node | None:
         return ntree.nodes.new(bl_idname)
     except RuntimeError:
         return None
+
+
+def _newHdriBitmap(ntree: bpy.types.NodeTree, filepath: str, makeRelative: bool):
+    """ Create an HDRI bitmap fed by an Environment (spherical) UVW mapping node.
+
+        Returns (bitmapNode, bitmapColorOutput, uvwNode). HDRI files are already
+        linear, so isData=False lets Blender auto-detect the colour space
+        (.hdr/.exr -> Linear).
+    """
+    bitmapNode, bitmapOut = _newBitmap(ntree, filepath, isData=False, makeRelative=makeRelative)
+    uvwNode = ntree.nodes.new('VRayNodeUVWMapping')
+    uvwNode.mapping_node_type = 'ENVIRONMENT'   # triggers _mappingTypeUpdate
+    _tryLink(ntree, uvwNode.outputs.get('Mapping'), getInputSocketByAttr(bitmapNode, 'uvwgen'))
+    return bitmapNode, bitmapOut, uvwNode
 
 
 # ---------- Arrange Tree ----------
@@ -301,17 +317,8 @@ class VRAY_OT_WR_add_hdri(VRayOperatorBase, ImportHelper):
                 _tryLink(ntree, envNode.outputs.get('Environment'), envSock)
             envNode.location = (outputNode.location.x - 380.0, outputNode.location.y + 80.0)
 
-        # Create the bitmap node.  HDRI files are already linear; leave isData=False
-        # so Blender auto-detects the colour space (.hdr/.exr → Linear).
-        bitmapNode, bitmapOut = _newBitmap(ntree, self.filepath, isData=False,
-                                           makeRelative=self.relative_path)
-
-        # Add an Environment-type UVW mapping node and wire it to the bitmap.
-        uvwNode = ntree.nodes.new('VRayNodeUVWMapping')
-        uvwNode.mapping_node_type = 'ENVIRONMENT'   # triggers _mappingTypeUpdate
-        uvwSock = getInputSocketByAttr(bitmapNode, 'uvwgen')
-        uvwOut  = uvwNode.outputs.get('Mapping')
-        _tryLink(ntree, uvwOut, uvwSock)
+        # HDRI bitmap fed by an Environment (spherical) UVW mapping node.
+        bitmapNode, bitmapOut, uvwNode = _newHdriBitmap(ntree, self.filepath, self.relative_path)
 
         # Background is always wired; enable the use checkbox so the override is active.
         bgSock = getInputSocketByAttr(envNode, 'bg_tex')
@@ -332,6 +339,61 @@ class VRAY_OT_WR_add_hdri(VRayOperatorBase, ImportHelper):
 
         # Layout: uvw ← bitmap ← envNode ← outputNode
         bitmapNode.location = (envNode.location.x - 380.0, envNode.location.y + 40.0)
+        uvwNode.location    = (bitmapNode.location.x - 280.0, bitmapNode.location.y)
+
+        ntree.update_tag()
+        self.report({'INFO'}, "HDRI imported")
+        return {'FINISHED'}
+
+
+# ---------- Import HDRI into a Dome light (LIGHT) ----------
+
+class VRAY_OT_WR_add_dome_hdri(VRayOperatorBase, ImportHelper):
+    """Pick an HDRI / EXR and wire it into the Dome light texture"""
+    bl_idname = "vray.wr_add_dome_hdri"
+    bl_label = "Import HDRI"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filter_glob: StringProperty(
+        default="*.hdr;*.exr;*.png;*.jpg;*.jpeg;*.tif;*.tiff",
+        options={'HIDDEN'},
+    )
+    relative_path: BoolProperty(
+        name="Relative Path",
+        description="Make the filepath relative to the blend file when possible",
+        default=True,
+    )
+
+    def draw(self, context):
+        self.layout.prop(self, 'relative_path')
+
+    @classmethod
+    def poll(cls, context):
+        if not (isVrayEditor(context) and hasEditTree(context) and _treeType(context) == 'LIGHT'):
+            return False
+        domeNode = getLightOutputNode(context.space_data.edit_tree)
+        return (domeNode is not None) and (getattr(domeNode, 'vray_plugin', '') == 'LightDome')
+
+    def execute(self, context):
+        if not self.filepath:
+            self.report({'INFO'}, "No file selected")
+            return {'CANCELLED'}
+
+        ntree    = context.space_data.edit_tree
+        domeNode = getLightOutputNode(ntree)
+        if domeNode is None or getattr(domeNode, 'vray_plugin', '') != 'LightDome':
+            self.report({'WARNING'}, "No dome light node")
+            return {'CANCELLED'}
+
+        bitmapNode, bitmapOut, uvwNode = _newHdriBitmap(ntree, self.filepath, self.relative_path)
+
+        # Wire the bitmap into the dome's "Dome Color" texture socket. The
+        # VRaySocketColorTexture meta socket sets use_dome_tex=True on export
+        # whenever it is linked, so no explicit toggle is required here.
+        _tryLink(ntree, bitmapOut, getInputSocketByAttr(domeNode, 'color_colortex'))
+
+        # Layout: uvw <- bitmap <- domeNode
+        bitmapNode.location = (domeNode.location.x - 380.0, domeNode.location.y + 40.0)
         uvwNode.location    = (bitmapNode.location.x - 280.0, bitmapNode.location.y)
 
         ntree.update_tag()
@@ -463,8 +525,10 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
         for _ in range(len(sources) - 2):
             wrapNode.addMaterial()
 
-        for i, (_, srcOut) in enumerate(sources):
-            _tryLink(ntree, srcOut, wrapNode.inputs.get(f"Material {i + 1}"))
+        # Link each source to a material socket by position; the ID in the 'Material X' name
+        # need not be consecutive.
+        for (_, srcOut), mtlSock in zip(sources, getMaterialSockets(wrapNode)):
+            _tryLink(ntree, srcOut, mtlSock)
 
         wrapOut = wrapNode.outputs.get('Material') or wrapNode.outputs[0]
         self._rewireDownstream(ntree, preserved, wrapOut)
@@ -625,6 +689,7 @@ def getRegClasses():
         VRAY_OT_WR_add_shadow_catcher,
         VRAY_OT_WR_add_disp_texture,
         VRAY_OT_WR_add_hdri,
+        VRAY_OT_WR_add_dome_hdri,
         VRAY_OT_WR_wrap_selected,
         VRAY_OT_WR_add_beauty_channels,
     )

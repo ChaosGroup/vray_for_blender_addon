@@ -10,9 +10,9 @@ import struct
 import bpy
 
 from vray_blender.plugins.BRDF import BRDFScanned
-from vray_blender.nodes.tools import calculateTreeBounds, deselectNodes, rearrangeTree
+from vray_blender.nodes.tools import calculateTreeBounds, deselectNodes, rearrangeTree, rearrangeTreeRecursive
 from vray_blender.lib import attribute_utils, attribute_types
-from vray_blender.lib import path_utils
+from vray_blender.lib import path_utils, image_utils
 from vray_blender.plugins import getPluginModule, getPluginAttr
 from vray_blender.plugins.skipped_plugins import SKIPPED_PLUGINS
 from vray_blender.nodes.curves_node import getCurvesNode
@@ -53,6 +53,10 @@ class ImportContext:
         self.nodeTree = nodeTree
         self.vrsceneDict = vrsceneDict
         self.locationsMap = locationsMap
+        # Maps each created node to the group instance path (tuple of
+        # (instanceName, groupDefName)) it belongs to, recorded at creation time.
+        # Used by _regroupConvertedTree to rebuild the Cycles groups as V-Ray groups.
+        self.groupPathByNode = {}
 
     def resolvePath(self, path):
         if self.locationsMap and path in self.locationsMap:
@@ -101,10 +105,20 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
                 for pl in value:
                     plNames.append(pl.name)
                 pluginDesc.attrs[key] = plNames
+        # Capture the group instance path so the import step can rebuild the
+        # Cycles node groups as V-Ray groups. Each element is (instanceName, groupDefName):
+        # instanceName (the group node's name) is unique per instance, groupDefName
+        # (the group node_tree's name) is used as the V-Ray group's display name.
+        # Empty tuple for top-level plugins.
+        groupPath = tuple(
+            (g.name, (g.node_tree.name if getattr(g, 'node_tree', None) else g.name))
+            for g in nodeCtx._groupInstancePath
+        )
         vrsceneDict.append({
             "ID"         : pluginDesc.type,
             "Name"       : pluginDesc.name,
             "Attributes" : pluginDesc.attrs,
+            "GroupPath"  : groupPath,
         })
         return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
 
@@ -143,6 +157,41 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     reportErrors()
 
 
+def convertLight(light: bpy.types.Light):
+    """ Convert a native Blender light to a V-Ray light.
+
+        Mirrors convertMaterial's export->import flow: the light is first 'exported' to a V-Ray
+        light plugin description, which is then 'imported' onto the light's V-Ray property group.
+
+        Returns True if the light was converted, False if skipped (already a V-Ray light or an
+        unsupported light type).
+    """
+    from vray_blender.exporting.light_convert import exportBlenderLight
+    from vray_blender.lib import lib_utils
+
+    # Skip lights that have already been converted to a V-Ray type.
+    if light.vray.light_type != 'BLENDER':
+        return False
+
+    pluginDesc = exportBlenderLight(light)
+    if pluginDesc is None:
+        return False
+
+    # Switch the light to the matching explicit V-Ray type, then apply the converted attributes
+    # to the active light property group (the legacy group on Blender 4.2-4.5, or the light
+    # node's group on 5.1+ - getLightPropGroup picks the correct one).
+    light.vray.light_type = lib_utils.BlenderToVrayLightType[light.type]
+
+    pluginType = pluginDesc['ID']
+    propGroup  = lib_utils.getLightPropGroup(light, pluginType)
+    # Apply the converted attributes as a programmatic (non-user) change: 'units' carries an
+    # already-converted 'intensity', so the units update callback must not rescale it.
+    with NodeUtils.DisableAutoConnect():
+        _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType)
+
+    return True
+
+
 def _convertMaterialFromDict(importContext: ImportContext):
     fixPluginParams(importContext.vrsceneDict, forceDefaultUVChannel=True)
     deselectNodes(importContext.nodeTree)
@@ -163,9 +212,67 @@ def _convertMaterialFromDict(importContext: ImportContext):
     outputNode = importContext.nodeTree.nodes.new('VRayNodeOutputMaterial')
     importContext.nodeTree.links.new(mtlNode.outputs['BRDF'], outputNode.inputs['Material'])
 
-    rearrangeTree(importContext.nodeTree, outputNode, bounds=bounds, appendLeft=True)
+    # When group nodes are enabled, rebuild the Cycles node groups as V-Ray groups
+    # before laying out the tree, then lay out the top tree and every inner group tree.
+    from vray_blender.nodes.group.utils import isGroupNodesEnabled
+    if isGroupNodesEnabled():
+        _regroupConvertedTree(importContext)
+        rearrangeTreeRecursive(importContext.nodeTree, outputNode, bounds=bounds, appendLeft=True)
+    else:
+        rearrangeTree(importContext.nodeTree, outputNode, bounds=bounds, appendLeft=True)
 
     return {'FINISHED'}
+
+
+def _regroupConvertedTree(importContext: ImportContext):
+    """ Reconstruct nested V-Ray groups in the converted material tree from the
+        per-plugin GroupPath captured during conversion (see _vrsceneDictCollector).
+
+        Each converted plugin carries a 'GroupPath' - a tuple of (instanceName,
+        groupDefName) describing which Cycles ShaderNodeGroup instance(s) it came
+        from. Nodes are folded back into nested V-Ray groups deepest-first, so a
+        child group node is copied (with its node_tree preserved) into its parent
+        group. The group construction itself reuses makeGroupFromNodes - the same
+        code path as the interactive 'Make Group' operator.
+    """
+    from vray_blender.nodes.group.utils import VRAY_GROUP_TREE_TYPE, NON_GROUPABLE_NODE_TYPES
+    from vray_blender.nodes.group.operators import makeGroupFromNodes
+
+    nodeTree = importContext.nodeTree
+
+    # Group membership was recorded at creation time on importContext.groupPathByNode
+    # (both real plugin nodes and the import-side Transform helpers). Top-level nodes
+    # have an empty path; tree-level anchors are never grouped.
+    pathByNode = {n: p for n, p in importContext.groupPathByNode.items()
+                  if p and n.bl_idname not in NON_GROUPABLE_NODE_TYPES}
+
+    if not pathByNode:
+        return
+
+    # Every distinct group instance is a non-empty prefix of some node's path.
+    instancePaths = set()
+    for groupPath in pathByNode.values():
+        for depth in range(1, len(groupPath) + 1):
+            instancePaths.add(groupPath[:depth])
+
+    # Process deepest paths first: a child group is created (as a VRayNodeGroup node
+    # left in the flat tree) before its parent group is built and folds it in.
+    for path in sorted(instancePaths, key=len, reverse=True):
+        members = [n for n, p in pathByNode.items() if p == path]
+        if not members:
+            continue
+
+        groupName = path[-1][1]  # the Cycles group definition (node_tree) name
+        groupNode = makeGroupFromNodes(nodeTree, members, VRAY_GROUP_TREE_TYPE, groupName)
+        if groupNode is None:
+            continue
+
+        # The consumed members were moved into the new group; the group node itself
+        # belongs to the parent instance so the next (shallower) pass folds it in.
+        for n in members:
+            del pathByNode[n]
+        if parentPath := path[:-1]:
+            pathByNode[groupNode] = parentPath
 
 
 def _removeVRayNodes(nodeTree: bpy.types.NodeTree):
@@ -411,28 +518,39 @@ def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False):
                 bitmapTexture.image.filepath = bpy.path.relpath(bitmapTexture.image.filepath)
 
 
-def _pluginAttrsToNodeProps(pluginDesc, node):
-    pluginType = pluginDesc['ID']
+def _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None):
+    """ Apply a plugin description's Attributes directly to a property group.
 
-    assert hasattr(node, pluginType)
-
-    propGroup = getattr(node, pluginType)
+        Works for both a node's plugin property group (e.g. node.LightOmni) and a datablock's
+        property group (e.g. light.vray.LightOmni).
+    """
+    pluginType = pluginType or pluginDesc['ID']
     pluginModule = getPluginModule(pluginType)
 
     for attrName in pluginDesc['Attributes']:
-        attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
+        if not hasattr(propGroup, attrName):
+            continue
 
+        attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
         attrValue = pluginDesc['Attributes'][attrName]
 
-        if hasattr(propGroup, attrName):
-            if (attrDesc['type'] == 'ENUM'
-                    and not attribute_utils.valueInEnumItems(attrDesc, str(attrValue))):
-                debug.printError(f"Unsupported ENUM value '{str(attrValue)}' for attribute: {pluginType}.{attrName}")
-                continue
+        if attrDesc and (attrDesc['type'] == 'ENUM') \
+                and not attribute_utils.valueInEnumItems(attrDesc, str(attrValue)):
+            debug.printError(f"Unsupported ENUM value '{str(attrValue)}' for attribute: {pluginType}.{attrName}")
+            continue
 
-            attrType = type(getattr(propGroup, attrName))
-            attrValue = attrType(attrValue)
-            setattr(propGroup, attrName, attrValue)
+        currentValue = getattr(propGroup, attrName)
+        if hasattr(currentValue, '__len__') and not isinstance(currentValue, str):
+            # Color/vector array property: assign a sequence of matching length.
+            setattr(propGroup, attrName, attrValue[:len(currentValue)])
+        else:
+            setattr(propGroup, attrName, type(currentValue)(attrValue))
+
+
+def _pluginAttrsToNodeProps(pluginDesc, node):
+    pluginType = pluginDesc['ID']
+    assert hasattr(node, pluginType)
+    _pluginAttrsToPropGroup(pluginDesc, getattr(node, pluginType), pluginType)
 
 
 def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
@@ -444,15 +562,39 @@ def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
 
     bitmapTexture = imageTextureNode.texture
 
-    imageFilepath = pluginDescBitmapBuffer['Attributes'].get('file')
-    imageFilepath = importContext.resolvePath(imageFilepath)
+    bitmapBufferAttrs = pluginDescBitmapBuffer['Attributes']
+    imageFilepath = importContext.resolvePath(bitmapBufferAttrs.get('file'))
 
     importSettings = getPluginByName(importContext.vrsceneDict, "Import Settings")
     importDir = None
     if importSettings:
         importDir = importSettings['Dirpath']
 
-    loadImage(imageFilepath, importDir, bitmapTexture)
+    isIFL = bool(imageFilepath) and imageFilepath.lower().endswith('.ifl')
+    # UDIM paths hold a <UDIM>/<UVTILE> token; load a concrete first tile so the file is found,
+    # then restore the token and tag the image as tiled below.
+    isUDIM = bool(imageFilepath) and ('<UDIM>' in imageFilepath or '<UVTILE>' in imageFilepath)
+
+    if isIFL:
+        # An .ifl is a text file listing frames, not a Blender image - use the external file-path
+        # mode. The file path and ifl_* options are applied by _pluginAttrsToNodeProps() below.
+        imageTextureNode.BitmapBuffer.use_external_image = True
+    else:
+        loadPath = imageFilepath.replace('<UDIM>', '1001').replace('<UVTILE>', 'u1_v1') if isUDIM else imageFilepath
+        loadImage(loadPath, importDir, bitmapTexture)
+
+        # Restore Blender's image source from the imported BitmapBuffer so sequences/UDIM round-trip.
+        if image := bitmapTexture.image:
+            if isUDIM:
+                image.source = 'TILED'
+                image.filepath = imageFilepath
+            elif bitmapBufferAttrs.get('frame_sequence'):
+                image.source = 'SEQUENCE'
+                imageUser = bitmapTexture.image_user
+                if not image_utils.applyDetectedSequenceRange(imageUser, image):
+                    # Files not on disk - fall back to the offset stored in the .vrscene.
+                    if (importedFrameOffset := bitmapBufferAttrs.get('frame_offset')) is not None:
+                        imageUser.frame_offset = int(importedFrameOffset)
 
     # Filling the Mapping Socket of Texture
     if "uvwgen" in pluginDescTexBitmap['Attributes']:
@@ -909,7 +1051,7 @@ def _createMappingNode(importContext: ImportContext, pluginDesc, pluginType):
     return mappingNode
 
 
-def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName: str, node: bpy.types.Node):
+def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName: str, node: bpy.types.Node, groupPath: tuple = ()):
     m = attrValue if isinstance(attrValue, Matrix) else attribute_utils.attrValueToMatrix(attrValue, True)
 
     if allclose(m, Matrix.Identity(4)):
@@ -927,6 +1069,7 @@ def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName
     tmNode.inputs['Scale'].value    = (scale[0],  scale[1],  scale[2])
 
     importContext.nodeTree.links.new(tmNode.outputs['Transform'], node.inputs[attrSocketName])
+    importContext.groupPathByNode[tmNode] = groupPath
 
 # UNUSED at the moment
 def _createMatrixNode(ntree: bpy.types.NodeTree, attrValue, attrSocketName: str, node: bpy.types.Node):
@@ -1254,9 +1397,12 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
                 # _createMatrixNode(ntree, attrValue, attrSocketName, node)
 
             elif attrDesc['type'] == 'TRANSFORM':
-                if not isVisibleSocket: 
+                if not isVisibleSocket:
                     continue
-                _createTransformNode(importContext, attrValue, attrSocketName, node)
+                # The Transform helper has no plugin of its own; it belongs to the
+                # same group as the node it feeds, so it stays inside that group.
+                _createTransformNode(importContext, attrValue, attrSocketName, node,
+                                     tuple(pluginDesc.get('GroupPath', ())))
 
             elif attrDesc['type'] == 'ENUM':
                 _setNodeEnumProperty(attrDesc, attrName, attrValue, pluginType, propGroup)
@@ -1307,32 +1453,36 @@ def createNode(importContext: ImportContext, pluginDesc: dict):
 
     match pluginType:
         case 'BRDFLayered':
-            return _createNodeBRDFLayered(importContext, pluginDesc)
+            node = _createNodeBRDFLayered(importContext, pluginDesc)
         case 'BRDFScanned':
-            return _createNodeBRDFScanned(importContext, pluginDesc)
+            node = _createNodeBRDFScanned(importContext, pluginDesc)
         case 'TexBitmap':
-            return _createNodeTexBitmap(importContext, pluginDesc)
+            node = _createNodeTexBitmap(importContext, pluginDesc)
         case 'TexGradRamp':
-            return _createNodeTexGradRamp(importContext, pluginDesc)
+            node = _createNodeTexGradRamp(importContext, pluginDesc)
         case 'TexRemap':
-            return _createNodeTexRemap(importContext, pluginDesc)
+            node = _createNodeTexRemap(importContext, pluginDesc)
         case 'TexVectorProduct':
-            return _createNodeTexVectorProduct(importContext, pluginDesc)
+            node = _createNodeTexVectorProduct(importContext, pluginDesc)
         case 'TexLayeredMax':
-            return _createNodeTexLayered(importContext, pluginDesc)
+            node = _createNodeTexLayered(importContext, pluginDesc)
         case 'UVWGenMayaPlace2dTexture' | 'UVWGenProjection' |'UVWGenObject' | 'UVWGenEnvironment':
-            return _createMappingNode(importContext, pluginDesc, pluginType)
+            node = _createMappingNode(importContext, pluginDesc, pluginType)
         case 'UVWGenChannel':
-            return _createUVWGenChannelNode(importContext, pluginDesc)
+            node = _createUVWGenChannelNode(importContext, pluginDesc)
         case 'LightIES':
-            return _createLightIES(importContext, pluginDesc)
+            node = _createLightIES(importContext, pluginDesc)
         case 'TexNormalMapFlip' | "TexNormalBump":
-            return _createTexNormalMapNode(importContext, pluginDesc)
+            node = _createTexNormalMapNode(importContext, pluginDesc)
         case 'TexBezierCurve':
-            return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=False)
+            node = _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=False)
         case 'TexBezierCurveColor':
-            return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=True)
+            node = _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=True)
         case 'VRayDecal':
-            return _createNodeVRayDecal(importContext, pluginDesc)
-        
-    return _createGenericNode(importContext, pluginDesc)
+            node = _createNodeVRayDecal(importContext, pluginDesc)
+        case _:
+            node = _createGenericNode(importContext, pluginDesc)
+
+    if node is not None:
+        importContext.groupPathByNode[node] = tuple(pluginDesc.get('GroupPath', ()))
+    return node

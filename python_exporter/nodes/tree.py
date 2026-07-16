@@ -9,7 +9,6 @@ from vray_blender.lib.mixin import VRayEntity
 from vray_blender.lib import blender_utils
 from vray_blender.ui import classes
 from vray_blender.plugins import VRayNodeTreeSettings
-from vray_blender.lib.blender_utils import tagUsersForUpdate
 
 
 ##      ##  #######  ########  ##       ########
@@ -64,9 +63,6 @@ class VRayNodeTreeObjectBase(VRayEntity, bpy.types.NodeTree):
     @classmethod
     def get_from_context(cls, context):
         return _getVRayObjectNTreeData(context)
-
-    def update(self):
-        tagUsersForUpdate(self)
 
 
 class VRayNodeTreeObject(VRayNodeTreeObjectBase):

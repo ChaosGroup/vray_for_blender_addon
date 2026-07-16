@@ -145,6 +145,38 @@ class VRayRenderNode(bpy.types.PropertyGroup):
     )
 
 
+class VRayProfiler(bpy.types.PropertyGroup):
+    # The values match VRay::VRayProfilerSettings::Mode. 'Off' (0) disables the profiler.
+    mode: bpy.props.EnumProperty(
+        name        = "Mode",
+        description = "Operational mode of the V-Ray Profiler",
+        items       = (
+            ('0', "Off",     "The profiler is disabled"),
+            ('2', "Render",  "Profile the whole rendering process"),
+            ('3', "Process", "Only profile the preparing state (plugin initialization, geometry compilation, etc.)"),
+        ),
+        default     = '0',
+        options     = set()
+    )
+
+    maxDepth: bpy.props.IntProperty(
+        name        = "Max Depth",
+        description = "The maximum ray bounces that will be profiled",
+        default     = 4,
+        min         = 1,
+        max         = 8,
+        options     = set()
+    )
+
+    outputDirectory: bpy.props.StringProperty(
+        name        = "Output Directory",
+        description = "The directory where the profiler reports will be created. Must be set for the profiler to run",
+        default     = "",
+        subtype     = 'DIR_PATH',
+        options     = set()
+    )
+
+
 class VRAY_OT_switch_license_type(bpy.types.Operator):
     """ Toggle the Community / Commercial license selection and restart the
         VRayZmqServer process so the new license type is applied. """
@@ -195,11 +227,196 @@ class VRAY_OT_switch_license_type(bpy.types.Operator):
         return {'FINISHED'}
 
 
+# Custom export animation settings as a separate property group
+class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
+    customFrameStart: bpy.props.IntProperty(
+        name = "Start Frame",
+        description = "Start frame for export (overrides scene frame start during VRScene export only)",
+        default = 1,
+        min = 0,
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+    customFrameEnd: bpy.props.IntProperty(
+        name = "End Frame",
+        description = "End frame for export (overrides scene frame end during VRScene export only)",
+        default = 250,
+        min = 0,
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+    customFrameStep: bpy.props.IntProperty(
+        name = "Frame Step",
+        description = "Frame step for export (overrides scene frame step during VRScene export only)",
+        default = 1,
+        min = 0,
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+    customFramesList: bpy.props.StringProperty(
+        name = "Frames",
+        description = "A list of frames to export (e.g. 1,3-10:3)",
+        default = "",
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+    exportAnimation: bpy.props.BoolProperty(
+        name = "Export Animation",
+        description = "Export animation frames",
+        default = False,
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+    frameRangeMode: bpy.props.EnumProperty(
+        name='Animation Mode',
+        description='How to handle animation during export',
+        items = (
+            ("SCENE_RANGE", "Scene Range", "Use scene frame range"),
+            ("CUSTOM_RANGE", "Custom Range", "Use custom frame range"),
+            ("CUSTOM_FRAMES", "Custom Frames", "Use custom list of frames")
+        ),
+        default = "SCENE_RANGE",
+        update = lambda self, context: blender_utils.markPreferencesDirty(context)
+    )
+
+
+def _onListerLayoutRedraw(self, context):
+    """ Redraw any open lister window and persist the changed setting. """
+    from vray_blender.ui.lister import core
+    blender_utils.markPreferencesDirty(context)
+    core.tagListerRedraw(context)
+
+
+def _onListerGeometryCombined(self, context):
+    # Combining/splitting geometry can drop the active section from the navbar (e.g.
+    # 'Proxies' when combined); move to the section that replaced it.
+    from vray_blender.ui.lister import core
+    view = core.getListerView(context)
+    if view is not None:
+        # Resolve from the RAW stored enum index, not view.active_category - the latter
+        # re-resolves against the just-refiltered item list and yields '' for the hidden section.
+        cats = core.getCategories()
+        rawIdx = view.get('active_category', 0)
+        cat = cats[rawIdx] if isinstance(rawIdx, int) and 0 <= rawIdx < len(cats) else None
+        if self.geometry_combined:
+            if cat is not None and cat.geometryRole == 'split':
+                view.active_category = 'GEOMETRY'
+        elif cat is not None and cat.geometryRole == 'combined':
+            view.active_category = 'PROXIES'
+    blender_utils.markPreferencesDirty(context)
+    core.tagListerRedraw(context)
+
+
+class VRayListerPreferences(bpy.types.PropertyGroup):
+    """ Global V-Ray Scene Lister layout settings (per-file view state lives on the Scene).
+        The names are mirrored by core.ListerState - keep them in sync. """
+    layout_mode: bpy.props.EnumProperty(
+        name = "Layout",
+        description = "How the V-Ray Scene Lister arranges the types",
+        items = (
+            ('TABBED',  "Tabbed",  "Show one type at a time, selected from tabs on top", 'LINENUMBERS_ON', 0),
+            ('STACKED', "Stacked", "Show every type stacked in collapsible groups", 'LINENUMBERS_OFF', 1),
+        ),
+        default = 'STACKED',
+        update = _onListerLayoutRedraw,
+    )
+
+    alignment_mode: bpy.props.EnumProperty(
+        name = "Column Alignment",
+        description = "How columns line up across the stacked sections (Stacked layout only)",
+        items = (
+            ('NONE',    "Independent",  "Each section sizes its own columns; sections do not line up"),
+            ('UNIFIED', "Unified Grid", "Every section shares one column layout, with blank cells where a type has no value"),
+        ),
+        default = 'UNIFIED',
+        update = _onListerLayoutRedraw,
+    )
+
+    geometry_combined: bpy.props.BoolProperty(
+        name = "Combine Geometry",
+        description = "Show proxies, splats, decals, fur, scenes and clippers together "
+                      "in one 'Geometry' section instead of separate sections",
+        default = False,
+        update = _onListerGeometryCombined,
+    )
+
+    max_visible_rows: bpy.props.IntProperty(
+        name = "Max Visible Rows",
+        description = "Maximum rows drawn per group. Blender's immediate-mode UI has no row "
+                      "virtualization, so very large values will make the lister slow to redraw. "
+                      "Use the Search filter to work with large scenes instead of raising this limit",
+        default = 500,
+        min    = 10,
+        soft_max = 2000,
+        update = _onListerLayoutRedraw,
+    )
+
+    unified_hide_exclusive: bpy.props.BoolProperty(
+        name = "Hide Type-Exclusive Columns",
+        description = "In Unified Grid mode, hide columns that appear in only one group type "
+                      "from the shared layout (select, visibility and name columns are always shown). "
+                      "Reduces blank cells when groups have very different column sets",
+        default = False,
+        update = _onListerLayoutRedraw,
+    )
+
+    hidden_columns: bpy.props.StringProperty(
+        options = {'HIDDEN'},
+        default = "",
+        update = _onListerLayoutRedraw,
+    )
+
+    mat_editor_layout: bpy.props.EnumProperty(
+        name = "Editor List Placement",
+        description = "Where the material list lives in the Material Editor view",
+        items = (
+            ('NAVBAR', "Navbar (drag-resize)",
+             "Material list alone in the resizable navbar region; switch categories from the "
+             "header dropdown. Drag the navbar border to resize - a real mouse-drag divider"),
+            ('SPLIT',  "Split panel (slider)",
+             "Material list as a separate column beside the parameters; category tabs stay in "
+             "the navbar. The editor is sized with the Editor Width slider"),
+            ('TABLE',  "Table on top, editor below",
+             "The full materials table (with its basic-parameter columns) on top, and the "
+             "selected material's preview and parameters below it"),
+            ('PLAIN',  "Plain table (no editor)",
+             "Just the materials table with its parameter columns, like the other sections - "
+             "no preview/editor panel"),
+        ),
+        default = 'SPLIT',
+        update = _onListerLayoutRedraw,
+    )
+    mat_editor_panel_width: bpy.props.FloatProperty(
+        name = "Editor Width",
+        description = "Width of the material editor (preview + parameters) panel, in UI units, "
+                      "in the split-panel layout. A fixed width, so the editor stays put and the "
+                      "material list takes the remaining space",
+        default = 24.0, min = 12.0, max = 64.0,
+        update = _onListerLayoutRedraw,
+    )
+    mat_editor_list_display: bpy.props.EnumProperty(
+        name = "List Display",
+        description = "How the material list shows its entries in the Navbar / Split layouts",
+        items = (
+            ('LIST',       "List",       "A compact text list, one material per row"),
+            ('THUMBNAILS', "Thumbnails", "A grid of material preview thumbnails"),
+        ),
+        default = 'LIST',
+        update = _onListerLayoutRedraw,
+    )
+
+
 class VRayExporterPreferences(bpy.types.AddonPreferences):
     bl_idname = "vray_blender"
 
     vray_cloud_binary = getVRayCloudPath()
     detect_vray_cloud = vray_cloud_binary is not None
+
+    lister: bpy.props.PointerProperty(
+        type = VRayListerPreferences,
+        name = "Scene Lister",
+        description = "V-Ray Scene Lister layout settings",
+    )
 
     anonymized_telemetry: bpy.props.BoolProperty(
         default = False,
@@ -280,6 +497,12 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         type = ComputeDevices
     )
 
+    VRayProfiler: bpy.props.PointerProperty(
+        name = "V-Ray Profiler",
+        type = VRayProfiler,
+        description = "V-Ray Profiler settings"
+    )
+
     def _updateLogLevel(self, context):
         from vray_blender import debug
         sys_utils.StartupConfig.logLevel = None
@@ -347,6 +570,142 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         name = "Community Edition",
         description = "Run V-Ray for Blender as the Community Edition. Features that are not available in CE are disabled while this is enabled",
         default = False
+    )
+
+    export_scene_file_path: bpy.props.StringProperty(
+        name = "File path",
+        default = '',
+        description = "Path to the exported .vrscene file"
+    )
+
+    export_proxy_file_path: bpy.props.StringProperty(
+        name = "File path",
+        default = '',
+        description = "Path to the exported .vrmesh file"
+    )
+
+    export_proxy_scope: bpy.props.EnumProperty(
+        name = "Export",
+        description = "Choose whether proxy export includes the whole scene or only selected objects",
+        items = (
+            ('SELECTION', "Selected Objects", "Export only selected objects"),
+            ('WHOLE_SCENE', "Whole Scene", "Export all eligible scene objects"),
+        ),
+        default = 'SELECTION'
+    )
+
+    export_proxy_add_to_scene: bpy.props.BoolProperty(
+        name = "Add Proxy to Scene",
+        description = "After export, import the .vrmesh as a V-Ray Proxy object at the 3D cursor",
+        default = False,
+    )
+
+    export_proxy_remove_exported_objects: bpy.props.BoolProperty(
+        name = "Remove Exported Objects",
+        description = "After a successful export, delete the source objects that were written to the proxy",
+        default = False,
+    )
+
+    export_proxy_elements_per_voxel: bpy.props.IntProperty(
+        name = "Elements per Voxel",
+        description = "Target number of triangles in each voxel before subdivision (0 uses exporter default)",
+        default = 0,
+        min = 0,
+    )
+
+    export_proxy_preview_faces: bpy.props.IntProperty(
+        name = "Preview Faces",
+        description = "Approximate number of preview mesh triangles (0 disables preview geometry)",
+        default = 10000,
+        min = 0,
+    )
+
+    export_proxy_preview_type: bpy.props.EnumProperty(
+        name = "Preview Type",
+        description = "Method used to build the proxy preview mesh",
+        items = (
+            ('0', "Face Sampling", "Fastest; copies faces; triangles may look disconnected"),
+            ('1', "Clustering", "Grid-based vertex reduction; robust on disconnected geometry"),
+            ('2', "Edge Collapse", "Best quality where the mesh is connected; slower"),
+            ('3', "Combined", "Clustering then edge collapse; recommended default"),
+        ),
+        default = '3',
+    )
+
+    export_proxy_animation_range: bpy.props.EnumProperty(
+        name = "Animation Range",
+        description = "Whether the proxy stores a single frame or a frame range",
+        items = (
+            ('CURRENT_FRAME', "Current Frame", "Export geometry for the current frame only"),
+            ('FRAME_RANGE', "Frame Range", "Export an animated proxy using start and end frame"),
+        ),
+        default = 'CURRENT_FRAME',
+    )
+
+    export_proxy_start_frame: bpy.props.IntProperty(
+        name = "Start Frame",
+        description = "First frame when Animation Range is set to Frame Range",
+        default = 0,
+    )
+
+    export_proxy_end_frame: bpy.props.IntProperty(
+        name = "End Frame",
+        description = "Last frame when Animation Range is set to Frame Range",
+        default = 10,
+        min = 0,
+    )
+
+    export_material_preview_scene: bpy.props.BoolProperty(
+        name = "Export material preview scene",
+        description = "Export a .vrscene for the material preview. The scene path is the vrscene path set above but with a '_preview' suffix",
+        default = False
+    )
+
+    export_scene_compressed: bpy.props.BoolProperty(
+        name = "Compressed",
+        description = "Compress geometric information so that the resulting .vrscene file is smaller. Only valid if 'Meshes in HEX Format' is enabled",
+        default = True
+    )
+
+    export_scene_hex_meshes: bpy.props.BoolProperty(
+        name = "Meshes in HEX Format",
+        description = "Write geometric information as binary data to avoid round-off errors",
+        default = True
+    )
+
+    export_scene_hex_transforms: bpy.props.BoolProperty(
+        name = "Transforms in HEX Format",
+        description = "Write object matrices information as binary data to avoid round-off errors",
+        default = True
+    )
+
+    export_scene_separate_files: bpy.props.BoolProperty(
+        name = "Separate Files",
+        description = "Write each object category to a separate file",
+        default = False
+    )
+
+    export_scene_pack: bpy.props.BoolProperty(
+        name = "Pack",
+        description = "After export, collect all assets referenced by the scene into a folder next to the "
+                      ".vrscene and make their paths relative, so the scene can be shared and redistributed "
+                      "easily. Requires Chaos Cloud to be installed",
+        default = False
+    )
+
+    export_scene_zip: bpy.props.BoolProperty(
+        name = "Zip",
+        description = "Archive the packed scene folder into a single .zip file",
+        default = False
+    )
+
+    export_scene_plugin_types: bpy.props.StringProperty(
+        name = 'Export File Types',
+        description = 'Export file types separated by comma'
+    )
+
+    animationSettingsVrsceneExport: bpy.props.PointerProperty(
+        type=AnimationSettingsVrsceneExport
     )
 
     def _drawAboutPanel(self, layout):
@@ -596,7 +955,10 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 def getRegClasses():
     return (
         VRayRenderNode,
+        AnimationSettingsVrsceneExport,
+        VRayProfiler,
         VRAY_OT_switch_license_type,
+        VRayListerPreferences,
         VRayExporterPreferences,
     )
 

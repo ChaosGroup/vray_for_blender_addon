@@ -6,6 +6,8 @@ import bpy
 import contextlib
 import mathutils
 import os
+import shutil
+import subprocess
 
 from vray_blender import debug
 from vray_blender.bin import VRayBlenderLib as vray
@@ -173,6 +175,17 @@ def exportPluginCommon(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlug
     return exportPluginParams(ctx, pluginDesc)
 
 
+def exportReferencedPluginParams(renderer, ctx: ExporterContext):
+    """ Export all plugin parameters that reference other plugins, deferred until the whole scene had
+        been exported. At this point every referenceable plugin is guaranteed to exist, so the links
+        resolve correctly.
+    """
+    for param in ctx.referencedPluginParams.values():
+        plugin_utils.updateValue(renderer, param.targetPluginName, param.attrName, param.value)
+
+    ctx.referencedPluginParams.clear()
+
+
 def exportPlugin(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
     pluginModule = getPluginModule(pluginDesc.type)
 
@@ -275,6 +288,25 @@ def setupDistributedRendering(settings: vray.ExporterSettings, exporterType: Exp
     elif exporterType == ExporterType.VANTAGE_LIVE_LINK:
         settings.drUse = True
         settings.setDRHosts([preferences.vantage_host + ":" + str(preferences.vantage_port)])
+
+
+def setupVRayProfiler(settings: vray.ExporterSettings, exporterType: ExporterType):
+    """
+    Export the V-Ray Profiler settings configured in the 'V-Ray Profiler' UI panel.
+    Args:
+        settings (ExporterSettings): An existing ExporterSettings instance where the parameters will be set.
+        exporterType (ExporterType): The type of export. The profiler is only used for production renders (PROD, ANIMATION).
+    """
+    if exporterType not in (ExporterType.PROD, ExporterType.ANIMATION):
+        return
+
+    vrayProfiler = blender_utils.getVRayPreferences().VRayProfiler
+
+    profilerEnabled = (vrayProfiler.mode != '0') and bool(vrayProfiler.outputDirectory)
+    settings.profilerMode             = int(vrayProfiler.mode) if profilerEnabled else 0
+    settings.profilerMaxDepth         = vrayProfiler.maxDepth
+    settings.profilerOutputDirectory  = vrayProfiler.outputDirectory
+    settings.profilerSceneName        = os.path.splitext(os.path.basename(bpy.data.filepath))[0] or "untitled"
 
 
 @dataclass
@@ -386,9 +418,9 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
     return activeConnectedMeshes, updatedConnectedMeshes, activeMeshesUpdateInfo
 
 
-def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker, nodeOutput, nodePluginNames):
+def exportObjProperties(obj: bpy.types.Object, exporterCtx: ExporterContext, renderer, objTracker, nodeOutput, nodePluginNames):
     """ Exports the nodes connected in the "Matte", "Surface" and "Visibility" sockets of
-        object output node
+        object output node, and maps Blender visibility/holdout flags to VRayObjectProperties.
     """
 
     pluginType = "VRayObjectProperties"
@@ -405,26 +437,40 @@ def exportObjProperties(obj: bpy.types.Object, nodeCtx: NodeContext, objTracker,
     for attrDesc in pluginModule.Parameters:
         objPropsPlDesc.setAttribute(attrDesc['attr'], attrDesc.get('default', None))
 
-    for objProp in ("Matte", "Surface", "Visibility"):
-        nodeLink = getNodeLinkToNode(nodeOutput, objProp, f"VRayNodeObject{objProp}Props")
-        if nodeLink:
-            # Only the attributes of connected object property nodes should be exported
-            node = nodeLink.from_node
-            for attr in node.visibleAttrs:
-                objPropsPlDesc.setAttribute(attr, getattr(objProps, attr))
+    # Map Blender's Holdout and Indirect Only toggles to VRayObjectProperties. These sit below
+    # the V-Ray node connections, which override them. The Blender per-ray visibility options are
+    # intentionally ignored - that panel is hidden in V-Ray.
+    # NOTE: 'obj' is evaluated, so it must be paired with view_layer_eval, not view_layer,
+    # or the Base lookup inside holdout_get()/indirect_only_get() silently returns False.
+    viewLayerEval = exporterCtx.dg.view_layer_eval
+    if obj.holdout_get(view_layer=viewLayerEval):
+        objPropsPlDesc.setAttribute("matte_surface", True)
+        objPropsPlDesc.setAttribute("alpha_contribution", -1.0)
+    elif obj.indirect_only_get(view_layer=viewLayerEval):
+        objPropsPlDesc.setAttribute("camera_visibility", False)
 
-            if objProp == "Visibility":
-                node.fillReflectAndRefractLists(nodeCtx.exporterCtx, objPropsPlDesc)
+    # V-Ray node connections have the highest priority and override everything above.
+    if nodeOutput:
+        for objProp in ("Matte", "Surface", "Visibility"):
+            nodeLink = getNodeLinkToNode(nodeOutput, objProp, f"VRayNodeObject{objProp}Props")
+            if nodeLink:
+                # Only the attributes of connected object property nodes should be exported
+                node = nodeLink.from_node
+                for attr in node.visibleAttrs:
+                    objPropsPlDesc.setAttribute(attr, getattr(objProps, attr))
+
+                if objProp == "Visibility":
+                    node.fillReflectAndRefractLists(exporterCtx, objPropsPlDesc)
 
     objId = getObjTrackId(obj)
 
-    objPropsAttrPlugin = exportPlugin(nodeCtx.exporterCtx, objPropsPlDesc)
+    objPropsAttrPlugin = exportPlugin(exporterCtx, objPropsPlDesc)
 
     objTracker.trackPlugin(objId, objPropsPluginName)
 
     # The fur objects have multiple node plugins, so we need to update the object properties for each of them
     for nodePluginName in nodePluginNames:
-        plugin_utils.updateValue(nodeCtx.renderer, nodePluginName, "object_properties", objPropsAttrPlugin, animatable=False)
+        plugin_utils.updateValue(renderer, nodePluginName, "object_properties", objPropsAttrPlugin, animatable=False)
 
 def isObjectGeomUpdated(exporterCtx: ExporterContext, objTrackId: int):
     """ Check if the object needs to be updated. """
@@ -440,3 +486,47 @@ def isObjectTreeUpdated(exporterCtx: ExporterContext, obj: bpy.types.Object):
     objTrackId = getObjTrackId(obj)
     return objTrackId in exporterCtx.dgUpdates['shading'] and \
             exporterCtx.ctx.scene.vray.ActiveNodeEditorType == "OBJECT"
+
+
+def packExportedScene(scenePath: str, archive: bool) -> str:
+    """ Pack all assets referenced by an exported .vrscene into a folder next to it using
+        the Chaos Cloud binary, optionally archiving that folder into a .zip file.
+
+        Mirrors the 'Pack'/'Zip' behaviour of the 3ds Max .vrscene exporter, but uses Python's
+        stdlib for zipping (we do not ship a 7-Zip binary).
+
+        @param scenePath  full path to the exported .vrscene file
+        @param archive    whether to zip the packed folder (and remove the folder afterwards)
+        @return an error message on failure, or an empty string on success
+    """
+    cloudBinary = blender_utils.getVRayPreferences().vray_cloud_binary
+    if not cloudBinary:
+        return "Chaos Cloud is not installed, cannot pack the scene"
+
+    scenePath = os.path.normpath(scenePath)
+    sceneDir  = os.path.dirname(scenePath)
+    sceneName = os.path.splitext(os.path.basename(scenePath))[0]
+
+    # 'ccloud pack' collects the scene and its assets into <sceneDir>/<sceneName>/
+    packedDir = os.path.join(sceneDir, sceneName)
+
+    cmd = [cloudBinary, "pack", "--output", sceneDir, "--sceneFile", scenePath]
+    try:
+        if subprocess.call(cmd, env=os.environ) != 0:
+            return "Chaos Cloud failed to pack the scene, check the console"
+
+        if not os.path.isdir(packedDir):
+            return "Packed scene folder was not created"
+
+        if archive:
+            # Archive the contents of the packed folder so the .vrscene sits at the zip root.
+            shutil.make_archive(packedDir, 'zip', root_dir=packedDir)
+
+            # Remove the intermediate packed folder to save space, mirroring 3ds Max.
+            shutil.rmtree(packedDir, ignore_errors=True)
+    except OSError as ex:
+        # e.g. ccloud was removed after start-up (FileNotFoundError), or the archive step hit an IO error.
+        # Report it without failing the export - the .vrscene itself was written successfully.
+        return f"Failed to pack the scene: {ex}"
+
+    return ""

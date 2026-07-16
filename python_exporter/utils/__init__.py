@@ -7,11 +7,12 @@ __all__ = []
 
 
 def getRegModules():
-    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview, update_checker
+    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview, splat_preview, update_checker
     return (
         cosmos_handler,
         utils_bake,
         fur_preview,
+        splat_preview,
         update_checker
     )
 

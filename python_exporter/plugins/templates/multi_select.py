@@ -17,7 +17,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 
 class TemplateMultiObjectSelect(common.VRayObjectSelector):
 
-    """ Show UI for selecting a list of objects. 
+    """ Show UI for selecting a list of objects.
 
         NOTE: This template should have a corresponding a widget description and is normally
         created for plugin properties of type TEMPLATE.
@@ -25,7 +25,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         Template arguments:
            filter_function (optional): the name of the filter function for the object search field
            bound_property (optional): the name of the property to receive the resulting list of objects
-    """     
+    """
 
     # VRayObjectSelector callback
     def onFilterObject(self, obj):
@@ -38,22 +38,22 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
     def onSelectionChanged(self, context: bpy.types.Context):
         if node := getattr(context, 'active_node', None):
             node.id_data.update_tag()
-        
+
         if obj := getattr(context, 'active_object', None):
            obj.update_tag()
 
 
-    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context, 
+    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context,
                     pluginModule, propGroup, widgetAttr: dict, text, nested=False):
-        
+
         sock: bpy.types.NodeSocket = None
 
         if (boundProperty := self.getTemplateAttr('bound_property')) and (node := getNodeOfPropGroup(propGroup)):
             sock = getInputSocketByAttr(node, boundProperty)
-        
+
         if sock and sock.hasActiveFarLink():
             return
-        
+
         attrName = widgetAttr['name']
         panel = layout
         panel.use_property_decorate = False # Animation not supported for object lists
@@ -67,16 +67,16 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
                 panel = draw_utils.rollout(layout, uniqueID,  label)
 
         # 'panel' will be None if the rollout is collapsed
-        if panel:    
+        if panel:
             if drawPre := widgetAttr.get('draw_pre', []):
                 painter = draw_utils.UIPainter(context, pluginModule, propGroup)
                 painter.renderWidgets(layout, drawPre)
-                                      
+
             collectionName = self.getTemplateAttr('collection', '')
             listLabel = widgetAttr['list_label']
             data, prop = TemplateMultiObjectSelect._getSearchCollectionProvider(context, collectionName)
             self.drawSelectorUI(context, layout, dataProvider=data, dataProperty=prop, listLabel=listLabel)
-        
+
 
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):
         """ Sets the values of the template bound properties to the pluginDesc.
@@ -87,7 +87,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         if not (boundProperty := self.getTemplateAttr('bound_property')):
             # The plugin has custom export code and only uses the template to obtain the data.
             return False
-        
+
         if node := pluginDesc.node:
             sock = getInputSocketByAttr(node, boundProperty)
             if sock.hasActiveFarLink():
@@ -97,7 +97,13 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         collectionName = self.getTemplateAttr('collection', '')
         selectedObjects = self.getSelectedItems(exporterCtx.ctx, collectionName)
         pluginList = [objectToAttrPlugin(o) for  o in selectedObjects]
-        
+
+        # Mark the referenced objects for export so that the references resolve even if the objects
+        # are invisible / disabled in renders. The reference prepass collects node-graph references up
+        # front; this covers the selector property groups stored directly on plugins.
+        for o in selectedObjects:
+            exporterCtx.registerReferencedObject(o)
+
         # Forward-create all referenced plugins. This is necessary because the materials for each object are exported as
         # part of the object's export. Materials may refer to objects other than the ones they are attached to which may
         # not have been exported yet.
@@ -114,7 +120,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
             return (context.scene, 'objects')
         else:
             return (bpy.data, collName)
-            
+
 class TemplateSelectGeometries(common.VRayObjectSelector):
     """ Select multuple geometry objects from the active scene.
 
@@ -129,16 +135,16 @@ class TemplateSelectGeometries(common.VRayObjectSelector):
     def onSelectionChanged(self, context: bpy.types.Context):
         if node := getattr(context, 'active_node', None):
             node.update()
-        
+
         if obj := getattr(context, 'active_object', None):
             context.active_object.update_tag()
 
 
     def draw(self, layout:bpy.types.UILayout, context: bpy.types.Context):
         super().drawSelectorUI(context, layout, listLabel='Object List')
-        
 
-    
+
+
 
 def getRegClasses():
     return (

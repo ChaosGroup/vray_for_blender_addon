@@ -77,6 +77,10 @@ protected:
 	/// Create a name which is globally unique for the owned memory mapping.
 	std::string createUniqueName(const std::string& objName) const;
 
+	/// Static form of createUniqueName, so the name can be rebuilt without an instance (used by
+	/// SharedMemoryWriter::removeAllLive). Single source of truth for the naming scheme.
+	static std::string makeUniqueName(const std::string& id, const std::string& name, const std::string& objName);
+
 	/// Get a friendly view of the mapped region.
 	Payload& getPayload() const;
 
@@ -137,6 +141,10 @@ public:
 	/// @param id The id of the mapped file.
 	/// @param name The base name of the mapped file.
 	static void remove(const std::string& id, const std::string& name);
+
+	/// Unlinks every shared-memory object (and its named lock) that was created
+	/// via SharedMemoryWriter::create() in this process and is still alive.
+	static void removeAllWriters();
 
 private:
 	/// Internal implementation which relies on the caller to provide synchronization.

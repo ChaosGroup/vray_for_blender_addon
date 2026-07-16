@@ -60,6 +60,11 @@ def createRampTexture(node: bpy.types.Node, attrName: str = 'texture'):
 
 
 def _onRampUpdate(node: bpy.types.Node):
+    # If the node does not reach the tree's output node, its ramp does not affect the render
+    # result, so there is nothing to re-export.
+    if not NodeUtils.isNodeConnectedToTreeOutput(node):
+        return
+
     node.id_data.update_tag()
     tagUsersForUpdate(node.id_data)
 

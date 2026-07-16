@@ -29,6 +29,7 @@ def _getUIIcons():
         ui.VRAY_OT_add_object_vray_sun_sky        : 'SUN_SKY',
         ui.VRAY_OT_add_object_vrayscene           : 'VRAY_SCENE',
         ui.VRAY_OT_add_object_proxy               : 'VRAY_PROXY',
+        ui.VRAY_OT_add_object_splat               : 'VRAY_GAUSSIANS',
         ui.VRAY_OT_add_object_fur                 : 'VRAY_FUR',
         ui.VRAY_OT_add_object_decal               : 'VRAY_DECAL',
 
@@ -36,8 +37,11 @@ def _getUIIcons():
         menu.VRAY_OT_open_collaboration           : 'VRAY_LOGO',
         menu.VRAY_OT_open_cosmos_browser          : 'COSMOS',
         menu.VRAY_OT_open_cosmos_ai_generator     : 'COSMOS_AI_GENERATOR',
+        menu.VRAY_OT_veras_from_viewport          : 'VERAS_VIEWPORT',
+        menu.VRAY_OT_veras_from_vfb               : 'VERAS_VFB',
         menu.VRAY_OT_relink_cosmos_assets         : 'COSMOS_RELINK_ASSETS',
         menu.VRAY_OT_convert_materials            : 'CONVERT_MATERIALS',
+        menu.VRAY_OT_make_shadow_catcher          : 'SHADOW_CATCHER',
         menu.VRAY_OT_open_vfb                     : 'VFB',
         ops.VRAY_OT_cloud_submit                  : 'CLOUD',
 
@@ -66,13 +70,18 @@ _ICON_FILES = [
 
         ('VRAY_SCENE',          "VRayScene.svg"),
         ('VRAY_PROXY',          "VRayProxy.svg"),
+        ('VRAY_GAUSSIANS',      "VRayGaussians.svg"),
         ('VRAY_FUR',            "VRayFur.svg"),
         ('VRAY_DECAL',          "VRayDecal.svg"),
+
+        ('VERAS_VIEWPORT',      "VerasViewport.svg"),
+        ('VERAS_VFB',           "VerasVFB.svg"),
 
         ('COSMOS',              "CosmosBrowser.svg"),
         ('COSMOS_AI_GENERATOR', "CosmosAIGenerator.svg"),
         ('COSMOS_RELINK_ASSETS',"CosmosRelinkAssets.svg"),
         ('CONVERT_MATERIALS',   "VRayConvertMaterials.svg"),
+        ('SHADOW_CATCHER',      "VRayShadowCatcher.svg"),
         ('INFO_ABOUT',          "VRayAbout.svg"),
         ('CHECK_FOR_UPDATES',   "VRayCheckForUpdates.svg"),
 
@@ -116,34 +125,35 @@ def getIcon(idIcon: str):
 
     
 def getSolidColorIcon(colorLinear):
-    """ Get the ID of a dynamic icon with the specified color """
+    """ Get the ID of a dynamic icon with the specified color.
+
+        One persistent icon is cached per distinct color so that several swatches with
+        different colors can be shown at the same time (e.g. the lister's per-light Kelvin
+        column). A single shared icon would make them all draw the last-written color. """
     import struct
 
-    iconKey = "_SOLID_COLOR_ICON"
     size = 16
 
-    if iconKey not in _VRAY_ICONS:
-        # Create a new icon. Blender draws all icons in turn, so it is OK to hand
-        # the same icon with updated color for each call site.
-        icon = _VRAY_ICONS.new(iconKey)
-        icon.icon_size = (size, size)
-        icon.is_icon_custom = True
-    else:
-        icon = _VRAY_ICONS[iconKey]
-
     # Convert scene linear to perceptual color, which is always sRGB
-    # in Blender's color picker.  
+    # in Blender's color picker.
     perceptualColor = Color.from_scene_linear_to_srgb(colorLinear)
 
     r = int(max(0.0, min(1.0, perceptualColor.r)) * 255)
     g = int(max(0.0, min(1.0, perceptualColor.g)) * 255)
     b = int(max(0.0, min(1.0, perceptualColor.b)) * 255)
-    
+
+    iconKey = f"_SOLID_COLOR_ICON_{r}_{g}_{b}"
+    if iconKey in _VRAY_ICONS:
+        return _VRAY_ICONS[iconKey].icon_id
+
+    icon = _VRAY_ICONS.new(iconKey)
+    icon.icon_size = (size, size)
+    icon.is_icon_custom = True
+
     pixelUnsigned = (255 << 24) | (b << 16) | (g << 8) | r
     pixelSigned = struct.unpack('i', struct.pack('I', pixelUnsigned))[0]
 
-    pixels = [pixelSigned] * (size * size)
-    icon.icon_pixels = pixels
+    icon.icon_pixels = [pixelSigned] * (size * size)
 
     return icon.icon_id
 

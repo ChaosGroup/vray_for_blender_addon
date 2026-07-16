@@ -4,7 +4,7 @@
 
 import bpy
 
-from vray_blender.lib.blender_utils import getObjectFromEditorContext
+from vray_blender.lib.blender_utils import getPinnedDataFromEditorContext
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.operators import VRAY_OT_FileSelect
 from vray_blender.plugins import getPluginAttr
@@ -52,13 +52,14 @@ class TemplateFileSelect(common.VRayUITemplate):
                 if context.light:
                     # Lights are special because they may have or not have nodes
                     selector = node.name if node else propGroup.name
-                    obj = getObjectFromEditorContext(context)
-                    op.object_name = obj.name
+                    obj = getPinnedDataFromEditorContext(context, context.object)
+                    # Use the data-block name, not the object name — looked up in bpy.data.lights.
+                    op.object_name = obj.data.name
                     op.selector_name = selector
                     op.object_type = 'light'
 
                 elif context.material:
-                    obj = getObjectFromEditorContext(context)
+                    obj = getPinnedDataFromEditorContext(context, context.object)
                     op.object_name = obj.active_material.name
                     op.selector_name = node.name
                     op.object_type = 'material'
@@ -74,7 +75,7 @@ class TemplateFileSelect(common.VRayUITemplate):
                     op.selector_name = node.name
 
             case "camera":
-                op.object_name = context.active_object.name
+                op.object_name = context.camera.name
                 op.object_type = objType
                 
             case "settings":

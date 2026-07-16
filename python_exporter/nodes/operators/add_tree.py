@@ -12,6 +12,15 @@ from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.operators import VRAY_OT_message_box_base
 from vray_blender.plugins import getPluginModule
 
+
+def _getPinnedMaterial(context: bpy.types.Context):
+    return blender_utils.getPinnedDataFromEditorContext(context, getattr(context.object, 'active_material', None))
+
+
+def _getPinnedWorld(context):
+    return blender_utils.getPinnedDataFromEditorContext(context, context.scene.world)
+
+
 class VRAY_OT_add_nodetree_light(VRayOperatorBase):
     bl_idname       = "vray.add_nodetree_light"
     bl_label        = "Add V-Ray Light Nodetree"
@@ -110,7 +119,7 @@ class VRAY_OT_add_nodetree_world(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        tree_defaults.addWorldNodeTree(context.scene.world)
+        tree_defaults.addWorldNodeTree(_getPinnedWorld(context))
         bpy.ops.vray.show_ntree(data='WORLD')
         return {'FINISHED'}
 
@@ -140,8 +149,8 @@ class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        if activeMtl := getattr(context.object, 'active_material'):
-            # Replace the nodetree of the actve material. This case will be executed
+        if activeMtl := _getPinnedMaterial(context):
+            # Replace the nodetree of the active material. This case will be executed
             # when a non-vray material is converted to V-Ray, or when the operator is
             # invoked manually.
             tree_defaults.addMaterialNodeTree(activeMtl, appendLeft=True)
@@ -161,7 +170,7 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        if activeMtl := getattr(context.object, 'active_material'):
+        if activeMtl := _getPinnedMaterial(context):
             from vray_blender.nodes.importing import convertMaterial
             convertMaterial(activeMtl, self)
             _redrawNodeEditor()
@@ -173,8 +182,6 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
 
     def invoke(self, context, event):
         if self._checkForExistingVrayNodes(context):
-            # Invoking props dialog that warns the user that there is already a V-Ray material
-            # attached to the node tree
             self._centerDialog(context, event)
             return context.window_manager.invoke_props_dialog(self, width=300)
 
@@ -184,11 +191,10 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
         self.layout.label(text="There are V-Ray nodes in this tree.")
         self.layout.label(text="If you proceed, they will be deleted.")
 
-
     def _checkForExistingVrayNodes(self, context: bpy.types.Context):
         from vray_blender.nodes.tools import isVrayNode
 
-        if (activeMtl := getattr(context.object, 'active_material')) is not None:
+        if (activeMtl := _getPinnedMaterial(context)) is not None:
             return any([n for n in activeMtl.node_tree.nodes if isVrayNode(n)])
 
         return False

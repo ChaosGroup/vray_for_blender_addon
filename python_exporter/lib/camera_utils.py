@@ -24,7 +24,7 @@ M_SQRT2   = 1.41421356237309504880
 DEFAULT_LENS_FOCAL_LENGTH = 35.0
 
 # Biggest region dimension allowed for rendering with Community Edition
-MAX_CE_REGION_DIMENSION = 2560 
+MAX_CE_REGION_DIMENSION = 2560
 
 class Rect:
     """ Floating-size rectangle """
@@ -151,7 +151,7 @@ class ViewParams:
         rs.cropRgnHeight = srcRgnHeight
 
         # If the pixel aspect ratio is not 1.0, the source image view region will be squashed
-        # in order to fit into the output dimensions. This will make the resulting image file 
+        # in order to fit into the output dimensions. This will make the resulting image file
         # show with the correct aspect on monitor with the the target non-1.0 pixel ratio.
         if not math.isclose(self.pixelAspectY, 1.0):
             rs.cropRgnTop -= (srcRgnHeight * self.pixelAspectY - srcRgnHeight) / 2
@@ -160,11 +160,12 @@ class ViewParams:
         # The output region is also used for croppping, but inside the output image (whereas the
         # crop region does define cropping inside the rendered image).
         # We are never rendering to just a part of the output image, so output region is always
-        # equal to the output image size
-        rs.rgnLeft   = destRgnLeft
-        rs.rgnTop    = destRgnTop
-        rs.rgnWidth  = destRgnWidth
-        rs.rgnHeight = destRgnHeight
+        # equal to the output image size. Round to whole pixels to be consistent with the values
+        # in _computeVfbRenderRegionPayload(...).
+        rs.rgnLeft   = round(destRgnLeft)
+        rs.rgnTop    = round(destRgnTop)
+        rs.rgnWidth  = round(destRgnWidth)
+        rs.rgnHeight = round(destRgnHeight)
 
         # Don't make assumptions about the previous state, always set all values
         rs.bitmask  = RenderSizes.Bitmask.ImgSize | RenderSizes.Bitmask.CropRgn
@@ -494,14 +495,14 @@ def sceneResolutionLimitedByCE(scene: bpy.types.Scene, printWarning: bool = True
 
     resolutionX = int(scene.render.resolution_x*resolutionPercentage)
     resolutionY = int(scene.render.resolution_y*resolutionPercentage)
-    
+
     if _resolutionLimitedByCE(resolutionX, resolutionY):
         if printWarning:
             warningMsg = f'Resolution is limited by Community Edition to {MAX_CE_REGION_DIMENSION}x{MAX_CE_REGION_DIMENSION}'
             vray.logVfbMessage(int(debug.VfbMessageLevel.MessageWarning), warningMsg)
             debug.reportAsync('WARNING', warningMsg)
         return True
-    
+
     return False
 
 def applyCEResolutionLimits(width: int, height: int) -> tuple[int, int]:

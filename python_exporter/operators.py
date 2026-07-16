@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import glob
 import os
 import re
+import pathlib
 import platform
 import time
 
@@ -11,7 +13,7 @@ import bpy
 from bpy_extras.io_utils import ImportHelper
 
 from vray_blender.engine   import vfb_event_handler
-from vray_blender.lib      import blender_utils, color_utils, sys_utils, common_settings, path_utils, image_utils
+from vray_blender.lib      import blender_utils, color_utils, sys_utils, common_settings, path_utils
 from vray_blender.lib.defs import ProdRenderMode
 from vray_blender          import debug
 
@@ -477,9 +479,9 @@ class VRAY_OT_select_exporter_output_file_base(VRayOperatorBase):
 
     def invoke(self, context, event):
         from pathlib import Path
-        exporter = context.scene.vray.Exporter
+        preferences = blender_utils.getVRayPreferences(context)
 
-        if filePath := getattr(exporter, self.PATH_ATTR):
+        if filePath := getattr(preferences, self.PATH_ATTR):
             self.filepath = filePath
         elif blendPath := context.blend_data.filepath:
             self.filepath = str(Path(blendPath).with_suffix(self.SUFFIX))
@@ -490,7 +492,7 @@ class VRAY_OT_select_exporter_output_file_base(VRayOperatorBase):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        setattr(context.scene.vray.Exporter, self.PATH_ATTR, self.filepath)
+        setattr(blender_utils.getVRayPreferences(context), self.PATH_ATTR, self.filepath)
         if context.area:
             context.area.tag_redraw()
         return {'FINISHED'}
@@ -757,6 +759,7 @@ class VRAY_OT_render_viewport(VRayOperatorBase):
         vfb_event_handler.VfbEventHandler.startViewportRender()
         # This operator is only invoked from the main menu and this is the only case
         # in which we want to open the VFB for an interactive rendering session.
+        vray.updateScenePath(path_utils.getScenePath())
         vray.openVFB()
         return {'FINISHED'}
 
@@ -787,6 +790,7 @@ class VRAY_OT_render_interactive(VRayOperatorBase):
 
         # This operator is only invoked from the main menu and this is the only case
         # in which we want to open the VFB for an interactive rendering session.
+        vray.updateScenePath(path_utils.getScenePath())
         vray.openVFB()
         return {'FINISHED'}
 
@@ -869,9 +873,9 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         
         debug.report('INFO', 'Started .vrscene export. Blender UI will be unresponsive until the operation is complete.')
         fileTypes = []
-        vrayExporter = context.scene.vray.Exporter
+        preferences = blender_utils.getVRayPreferences(context)
 
-        if vrayExporter.export_scene_separate_files:
+        if preferences.export_scene_separate_files:
             if self.exportView:             fileTypes.append('view')
             if self.exportLights:           fileTypes.append('lights')
             if self.exportGeometry:         fileTypes.append('geometry')
@@ -881,7 +885,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
             if self.exportBitmaps:          fileTypes.append('bitmaps')
             if self.exportRenderChannels:   fileTypes.append('render_elements')
 
-        vrayExporter.export_scene_plugin_types = ','.join(fileTypes)
+        preferences.export_scene_plugin_types = ','.join(fileTypes)
 
         from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
         uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext()
@@ -896,8 +900,8 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
 
     def invoke(self, context, event):
 
-        vrayExporter = context.scene.vray.Exporter
-        fileCategories = vrayExporter.export_scene_plugin_types.split(',')
+        preferences = blender_utils.getVRayPreferences(context)
+        fileCategories = preferences.export_scene_plugin_types.split(',')
 
         for category in fileCategories:
             if category == 'view':              self.exportView = True
@@ -926,25 +930,29 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         layout.use_property_decorate = False
         layout.active = not vray.isCommunityEdition()
 
-        vrayExporter = context.scene.vray.Exporter
+        preferences = blender_utils.getVRayPreferences(context)
 
         row = layout.row(align=True)
-        row.prop(vrayExporter, 'export_scene_file_path')
+        row.prop(preferences, 'export_scene_file_path')
         row.operator('vray.select_vrscene_export_file', text='', icon='FILE_FOLDER')
 
-        layout.separator()
+        hexBox = layout.box()
+        hexBox.use_property_split = False
+        # 'Compressed' only applies to HEX meshes, so disable it when those are off.
+        compressedRow = hexBox.row()
+        compressedRow.enabled = preferences.export_scene_hex_meshes
+        compressedRow.prop(preferences, 'export_scene_compressed')
 
-        layoutCompressed = layout.column(align=True)
-        layoutCompressed.enabled = vrayExporter.export_scene_hex_meshes
-        layoutCompressed.prop(vrayExporter, 'export_scene_compressed')
+        hexFormatRow = hexBox.row(align=True)
+        hexFormatRow.prop(preferences, 'export_scene_hex_meshes')
+        hexFormatRow.prop(preferences, 'export_scene_hex_transforms')
 
-        layout.prop(vrayExporter, 'export_scene_hex_meshes')
-        layout.prop(vrayExporter, 'export_scene_hex_transforms')
-        layout.prop(vrayExporter, 'export_scene_separate_files')
+        sepBox = layout.box()
+        sepBox.prop(preferences, 'export_scene_separate_files')
 
-        splitOuter = layout.split(factor=0.1)
+        splitOuter = sepBox.split(factor=0.1)
         splitOuter.column()
-        splitOuter.enabled = splitOuter.active = vrayExporter.export_scene_separate_files
+        splitOuter.enabled = splitOuter.active = preferences.export_scene_separate_files
 
         boxOuter = splitOuter.column()
         splitInner = boxOuter.split()
@@ -961,11 +969,31 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
         col2.prop(self, 'exportBitmaps')
         col2.prop(self, 'exportRenderChannels')
 
+        # Archive packer: collect all assets referenced by the scene next to the .vrscene via
+        # Chaos Cloud (and optionally zip them), so it is unavailable when Chaos Cloud is missing.
+        archiveBox = layout.box()
+        archiveBox.use_property_split = False
+        archiveBox.label(text="Archive")
+
+        archiveRow = archiveBox.row(align=True)
+        packCell = archiveRow.row(align=True)
+        packToggle = packCell.row()
+        packToggle.enabled = preferences.detect_vray_cloud
+        packToggle.prop(preferences, 'export_scene_pack')
+
+        if not preferences.detect_vray_cloud:
+            # Blender can't attach a custom tooltip to the disabled checkbox, so explain the
+            # missing Chaos Cloud requirement through an info icon next to the Pack option.
+            packCell.operator('vray.pack_requires_ccloud_tooltip', text='', icon='INFO', emboss=False)
+
+        zipCell = archiveRow.row()
+        zipCell.enabled = preferences.detect_vray_cloud and preferences.export_scene_pack
+        zipCell.prop(preferences, 'export_scene_zip')
+
         # Animation export options
-        layout.separator()
         animationRow = layout.box().row(align=True)
 
-        animSettings = vrayExporter.animationSettingsVrsceneExport
+        animSettings = preferences.animationSettingsVrsceneExport
         animationRow.prop(animSettings, 'exportAnimation')
 
         animationRangeCol = animationRow.column()
@@ -997,8 +1025,8 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
 def _validateFramesList(context: bpy.types.Context):
     from vray_blender.lib.lib_utils import parseFramesToFlatList
 
-    vrayExporter = context.scene.vray.Exporter
-    animSettings = vrayExporter.animationSettingsVrsceneExport
+    preferences = blender_utils.getVRayPreferences(context)
+    animSettings = preferences.animationSettingsVrsceneExport
 
     if animSettings.exportAnimation and animSettings.frameRangeMode == 'CUSTOM_FRAMES':
         frames = animSettings.customFramesList
@@ -1269,11 +1297,49 @@ class VRAY_OT_url_open(VRayOperatorBase):
             return properties.description
         return cls.bl_description
 
+class VRAY_OT_open_last_profiler_report(VRayOperatorBase):
+    """Open the most recently written V-Ray profiler HTML report in a web browser"""
+    bl_idname = "vray.open_last_profiler_report"
+    bl_label = "Show Last Profile"
+    bl_description = "Open the last V-Ray profiler report in a web browser"
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        outputDir = blender_utils.getVRayPreferences(context).VRayProfiler.outputDirectory
+        if not outputDir:
+            self.report({'WARNING'}, "No profiler output directory set")
+            return {'CANCELLED'}
+
+        outputDir = bpy.path.abspath(outputDir)
+        files = glob.glob(os.path.join(outputDir, "vray_profiler_*.html"))
+
+        if not files:
+            self.report({'WARNING'}, f"No profiler reports found in: {outputDir}")
+            return {'CANCELLED'}
+
+        files.sort(key=os.path.getmtime, reverse=True)
+        bpy.ops.wm.url_open(url=pathlib.Path(files[0]).as_uri())
+        return {'FINISHED'}
+
+
 class VRAY_OT_CE_limited_feature_tooltip(VRayOperatorBase):
     """A dummy operator to display a tooltip for a limited feature in the Community Edition"""
     bl_idname = "vray.ce_limited_feature_tooltip"
     bl_label = ""
     bl_description = getCELimitedFeatureMsg()
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
+class VRAY_OT_pack_requires_ccloud_tooltip(VRayOperatorBase):
+    """A dummy operator that uses its tooltip to explain that Chaos Cloud is required for packing.
+       Blender cannot attach a custom tooltip to a disabled checkbox, so this is shown as an info
+       icon next to the Pack option when the Chaos Cloud executable is not found."""
+    bl_idname = "vray.pack_requires_ccloud_tooltip"
+    bl_label = ""
+    bl_description = "Chaos Cloud was not found on this system. It is required to pack scene assets"
     bl_options = {'INTERNAL'}
 
     def execute(self, context):
@@ -1428,7 +1494,9 @@ def getRegClasses():
         VRAY_OT_testing_log_marker,
         VRAY_OT_FileSelect,
         VRAY_OT_url_open,
+        VRAY_OT_open_last_profiler_report,
         VRAY_OT_CE_limited_feature_tooltip,
+        VRAY_OT_pack_requires_ccloud_tooltip,
         VRAY_OT_message_box,
         VRAY_OT_jump_to_setting,
     )
