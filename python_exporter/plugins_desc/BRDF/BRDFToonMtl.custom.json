@@ -175,6 +175,9 @@
         {
             "attr": "bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -184,6 +187,9 @@
         {
             "attr": "coat_bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -207,6 +213,32 @@
             "options": {
                "derived": true
             }
+        },
+        {
+            "attr": "depth_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the depth-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "angular_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the view-angle-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "depthCurveOn",
+            "desc": "Enable per-material depth-based line width. Replaces the global V-Ray Toon depth curve for surfaces using this material"
+        },
+        {
+            "attr": "angularCurveOn",
+            "desc": "Enable per-material view-angle-based line width. Replaces the global V-Ray Toon angular curve for surfaces using this material"
         }
     ],
     "Widget": {
@@ -587,6 +619,58 @@
                     {
                         "name": "maskColor",
                         "active": { "cond": "::toon_edge_override_on=1" }
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "depth scaling override",
+                        "label": "Depth Scaling",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "depthCurveOn",
+                                "active": { "cond": "::toon_edge_override_on=1" }
+                            },
+                            {
+                                "layout": "BOX",
+                                "active": { "cond": "::toon_edge_override_on=1, ::depthCurveOn!=0" },
+                                "attrs": [
+                                    {
+                                        "name": "minDepth"
+                                    },
+                                    {
+                                        "name": "maxDepth"
+                                    },
+                                    {
+                                        "name": "depth_curve",
+                                        "label": "Depth Curve",
+                                        "custom_draw": "drawLineWidthCurveTemplate"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
+                        "name": "angular scaling override",
+                        "label": "Angular Scaling",
+                        "default_closed": true,
+                        "attrs": [
+                            {
+                                "name": "angularCurveOn",
+                                "active": { "cond": "::toon_edge_override_on=1" }
+                            },
+                            {
+                                "layout": "BOX",
+                                "active": { "cond": "::toon_edge_override_on=1, ::angularCurveOn!=0" },
+                                "attrs": [
+                                    {
+                                        "name": "angular_curve",
+                                        "label": "Angular Curve",
+                                        "custom_draw": "drawLineWidthCurveTemplate"
+                                    }
+                                ]
+                            }
+                        ]
                     }
                 ]
             },
@@ -653,7 +737,8 @@
             {
                 "name": "panel_opacity",
                 "label": "Opacity",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "opacity_color"
             },
             {
                 "name": "opacity_color",
@@ -662,7 +747,8 @@
             {
                 "name": "panel_shadows",
                 "label": "Shadows",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "shadow_color"
             },
             {
                 "name": "shadow_color"
@@ -681,7 +767,8 @@
             {
                 "name": "panel_reflection",
                 "label": "Reflection",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "reflect"
             },
             {
                 "name": "reflect"
@@ -726,7 +813,8 @@
             {
                 "name": "panel_bump",
                 "label": "Bump",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "bump_map"
             },
             {
                 "name": "bump_map"
@@ -757,6 +845,8 @@
             "coat_darkening",
             "coat_glossiness",
             "coat_ior",
+            "depthCurveExternal",
+            "angularCurveExternal",
             "diffuse_gradient_external",
             "environment_override",
             "environment_priority",

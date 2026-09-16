@@ -95,14 +95,13 @@ inline DeserializerStream & operator>> (DeserializerStream & stream, VRayBaseTyp
 
 template <typename Q>
 inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseTypes::AttrList<Q> & list) {
-	list.init();
 	int size = 0;
 	stream >> size;
 	vassert(size >= 0 && "Negative list size in deserialization");
 
-	list.getData()->resize(size);
-	memcpy(list.getData()->data(), stream.getCurrent(), size * sizeof(Q));
-	stream.forward(size * sizeof(Q));
+	const Q * src = reinterpret_cast<const Q *>(stream.getCurrent());
+	list.getData()->assign(src, src + size);
+	stream.forward(static_cast<size_t>(size) * sizeof(Q));
 
 	return stream;
 }
@@ -110,14 +109,16 @@ inline DeserializerStream & operator>>(DeserializerStream & stream, VRayBaseType
 
 template <typename T>
 inline void readListNonPOD(DeserializerStream & stream, VRayBaseTypes::AttrList<T> & list) {
-	list.init();
 	int size = 0;
 	stream >> size;
-	list.getData()->reserve(size);
+
+	auto & data = *list.getData();
+	data.clear();
+	data.reserve(size);
 	for (int c = 0; c < size; ++c) {
 		T item;
 		stream >> item;
-		list.append(std::move(item));
+		data.push_back(std::move(item));
 	}
 }
 

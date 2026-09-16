@@ -106,6 +106,14 @@
                     },
                     {
                         "name": "use_blend_input"
+                    },
+                    {
+                        "name": "dist_near",
+                        "visible": { "cond": "::type=4" }
+                    },
+                    {
+                        "name": "dist_far",
+                        "visible": { "cond": "::type=4" }
                     }
                 ]
             }

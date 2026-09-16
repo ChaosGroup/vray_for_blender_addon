@@ -99,6 +99,18 @@
         },
         
         {
+            "attr" : "out_of_frustum_mult",
+            "default" : 4.0,
+            "desc" : "Controls how the tessellation is lowered for parts of the object which are outside of the camera frustum",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Out of frustum multiplier",
+                "min" : 1.0
+            }
+        },
+        
+        {
             "attr" : "keep_continuity",
             "default" : false,
             "desc" : "If true, the plugin will attempt to keep the continuity of the displaced surface",
@@ -271,6 +283,14 @@
             {
                 "min" : 0.0
             }
+        },
+        
+        {
+            "attr" : "displacement_vector_tex_prescaled",
+            "default" : false,
+            "desc" : "If true vector range conversion (e.g. value*2.0f-1.0f) won't be performed and assumed already done for the input texture",
+            "type" : "BOOL",
+            "ui" : {}
         }
     ],
     "Type" : "GEOMETRY",

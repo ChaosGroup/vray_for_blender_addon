@@ -15,6 +15,7 @@ def _getModules():
     from vray_blender.nodes import nodes
     from vray_blender.nodes import operators
     from vray_blender.nodes import docs
+    from vray_blender.nodes import tools
 
     return (
         operators,
@@ -26,6 +27,7 @@ def _getModules():
         group,  # After sockets (V-Ray socket types available), before nodes (menus need it)
         nodes,
         docs,
+        tools,  # Registers the node-editor draw handler that refines imported layouts
     )
 
 

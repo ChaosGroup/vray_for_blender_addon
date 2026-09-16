@@ -135,6 +135,10 @@
             "default" : true
         },
         {
+            "attr" : "enable_thin_lens_equation",
+            "default" : false
+        },
+        {
             "attr": "use_dof",
             "update": "onUpdateUseDof"
         },
@@ -301,7 +305,10 @@
                         "attrs": [
                             {
                                 "name": "ISO",
-                                "label": "Film Speed (ISO)"
+                                "label": "Film Speed (ISO)",
+                                "active": {
+                                    "cond": "::exposure=1"
+                                }
                             },
                             {
                                 "name": "f_number",
@@ -525,7 +532,10 @@
                         "attrs": [
                             {
                                 "name": "ISO",
-                                "label": "Film Speed (ISO)"
+                                "label": "Film Speed (ISO)",
+                                "active": {
+                                    "cond": "::exposure=1"
+                                }
                             },
                             {
                                 "name": "f_number",

@@ -13,6 +13,7 @@ import time
 from vray_blender.lib import lib_utils
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.attribute_utils import resetPropGroupToDefaults
+from vray_blender.nodes import navigation as NodesNav
 from vray_blender.nodes.group.utils import VRAY_EDITOR_TREE_TYPES
 from vray_blender.nodes.operators.wrangler.settings import resetNode
 from vray_blender.nodes.utils import getLightOutputNode, getPluginTypeOfNode, treeHasNodes
@@ -120,14 +121,11 @@ class VRAY_OT_reset_property_page(VRayOperatorBase):
         return self._resetObject(context)
 
     def _resetMaterial(self, context):
-        # Local import to avoid a circular import with properties_material (which imports this module).
-        from vray_blender.ui.properties_material import getMaterialPanelNode
-
         mtl = context.material
         if not (mtl and mtl.vray.is_vray_class):
             return {'CANCELLED'}
 
-        node = getMaterialPanelNode(context, mtl)
+        node = NodesNav.getPanelNode(NodesNav.getEditedTree(context, mtl), 'MATERIAL')
         if not (node and (plugin := getPluginTypeOfNode(node)) and (module := getPluginModule(plugin))):
             return {'CANCELLED'}
 

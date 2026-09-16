@@ -174,7 +174,7 @@ class Names:
             debug.printError(f"Name requested for non-vray node tree: {nodeCtx.ntree.name}")
                              
         if nodeCtx._groupInstancePath:
-            groupPart = '|'.join(n.name for n in nodeCtx._groupInstancePath)
+            groupPart = '|'.join(Names.struct(n) for n in nodeCtx._groupInstancePath)
             return f"{ntreeRootName}|{groupPart}|{Names.struct(nodeCtx.node)}"
         return f"{ntreeRootName}|{Names.struct(nodeCtx.node)}"
         
@@ -348,6 +348,9 @@ def syncUniqueNames(reset: bool = False):
         syncObjectUniqueName(obj, reset)
 
     _syncUniqueNamesForColl(bpy.data.meshes, reset)
+    _syncUniqueNamesForColl(bpy.data.hair_curves, reset)
+    _syncUniqueNamesForColl(bpy.data.pointclouds, reset)
+    _syncUniqueNamesForColl(bpy.data.curves, reset)
     _syncUniqueNamesForColl(bpy.data.collections, reset)
     _syncUniqueNamesForColl(bpy.data.worlds, reset)
     _syncUniqueNamesForColl(bpy.data.materials, reset)

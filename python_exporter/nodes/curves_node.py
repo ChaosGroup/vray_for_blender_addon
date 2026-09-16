@@ -16,6 +16,13 @@ _POINT_TYPES_DECODE = { v: k for k, v in _POINT_TYPES_ENCODE.items() }
 # Keeping old name for compatibility, even though it's not just for TexRemap anymore.
 _CURVES_NODE_TREE_NAME = ".texRemapTree"
 
+# Stable owners for curve node msgbus subscriptions, keyed by curves node name.
+_CURVE_NODE_OWNERS: dict[str, object] = {}
+
+
+def _getCurveNodeOwner(curvesNodeName: str) -> object:
+    return _CURVE_NODE_OWNERS.setdefault(curvesNodeName, object())
+
 
 def copyCurvesData(srcCurvesNode: bpy.types.Node, dstCurvesNode: bpy.types.Node):
     """Copy CurveMapping data from one ShaderNodeRGBCurve to another."""
@@ -54,11 +61,25 @@ def registerCurveNodes(handlers: dict):
 
     handlers: {bl_idname: callable(node)} mapping node types to their registration functions.
     """
-    from vray_blender.nodes.tree import iterVRayNodeTrees
+    from vray_blender.nodes.tools import iterVRayNodeTrees
     for ntree in iterVRayNodeTrees():
         for n in ntree.nodes:
             if handler := handlers.get(n.bl_idname):
                 handler(n)
+
+
+def registerCurveNodeSubscriptions():
+    """ (Re)subscribe msgbus updates for all CurvesMap (Remap) widget nodes. """
+    from vray_blender.plugins.effects.VolumeVRayToon import registerNodeCurves as registerVolumeVRayToonNodeCurves
+    from vray_blender.plugins.BRDF.BRDFToonMtl import registerNodeCurves as registerBRDFToonMtlNodeCurves
+    from vray_blender.plugins.BRDF.BRDFToonOverride import registerNodeCurves as registerBRDFToonOverrideNodeCurves
+
+    registerCurveNodes({
+        'VRayNodeTexRemap': addCurvesUpdateCallback,
+        'VRayNodeBRDFToonMtl': registerBRDFToonMtlNodeCurves,
+        'VRayNodeBRDFToonOverride': registerBRDFToonOverrideNodeCurves,
+        'VRayNodeVolumeVRayToon': registerVolumeVRayToonNodeCurves,
+    })
 
 
 def loadCurvesData(node: bpy.types.Node):
@@ -74,10 +95,15 @@ def initImportedCurveNodes(ntree: bpy.types.NodeTree):
     this creates curves nodes from stored data or defaults as appropriate for each node type.
     """
     from vray_blender.plugins.effects.VolumeVRayToon import registerNodeCurves as _registerToonCurves
+    from vray_blender.plugins.BRDF.BRDFToonMtl import registerNodeCurves as _registerToonMtlCurves
+    from vray_blender.plugins.BRDF.BRDFToonOverride import registerNodeCurves as _registerToonOverrideCurves
 
     for node in ntree.nodes:
         if node.bl_idname == 'VRayNodeBRDFToonMtl':
-            loadCurvesData(node)
+            loadCurvesData(node)                # highlight-shape curve (from the stored string)
+            _registerToonMtlCurves(node)        # depth/angular line-width curves
+        elif node.bl_idname == 'VRayNodeBRDFToonOverride':
+            _registerToonOverrideCurves(node)
         elif node.bl_idname == 'VRayNodeTexRemap':
             curvesNode = createCurvesNode(node)
             if curvesData := node.TexRemap.get('curves_data'):
@@ -133,7 +159,7 @@ def decodeMapping(jsonData: str, mapping: bpy.types.CurveMapping):
 def removeCurvesNode(node: bpy.types.Node, nameSuffix=''):
     """Removes a CurvesMap node from the CurvesMap node tree."""
     curvesNode = getCurvesNode(node, nameSuffix)
-    bpy.msgbus.clear_by_owner(curvesNode)
+    bpy.msgbus.clear_by_owner(_CURVE_NODE_OWNERS.pop(curvesNode.name))
     bpy.data.node_groups[_CURVES_NODE_TREE_NAME].nodes.remove(curvesNode)
 
 
@@ -153,10 +179,11 @@ def addCurvesUpdateCallback(node: bpy.types.Node, curvesNodeOverride: bpy.types.
     originalNode = nodeTree.nodes.get(node.name)
 
     # Clear previous subscriptions to be sure that there aren't other update callbacks left
-    bpy.msgbus.clear_by_owner(curvesNode)
+    owner = _getCurveNodeOwner(curvesNode.name)
+    bpy.msgbus.clear_by_owner(owner)
     bpy.msgbus.subscribe_rna(
         key=curvesNode,
-        owner=curvesNode,
+        owner=owner,
         args=(originalNode,),
         notify=vrayNodeUpdate,
     )
@@ -231,6 +258,35 @@ def _extrapolateToEdge(p1, p2, extend, left=True):
 def _getInterpolation(point: bpy.types.CurveMapPoint):
     """Maps Blender's "VECTOR" interpolation to "linear". Everything else - "bezier"."""
     return 1 if point.handle_type == 'VECTOR' else 4
+
+
+def exportLineWidthCurves(nodeCtx, plDesc, node: bpy.types.Node, curveTypes=('depth', 'angular')):
+    """Export a node's per-material depth/angular line-width curves as V-Ray float curves.
+
+    Reads the node's suffixed curve widget nodes ('_depth', '_angular') and sets
+    <type>CurvePositions / <type>CurveInterpolations / <type>CurveValues on plDesc.
+    Shared by BRDFToonMtl (surface) and BRDFToonOverride (Material Output 'Outlines' socket),
+    both of which carry the same curve parameters as the global VolumeVRayToon.
+    """
+    from vray_blender.lib.names import Names
+    from vray_blender.lib.defs import PluginDesc
+    from vray_blender.exporting import node_export as commonNodesExport
+
+    for curveType in curveTypes:
+        curve = getCurvesNode(node, f'_{curveType}').mapping.curves[3]
+
+        plDesc.setAttribute(f"{curveType}CurvePositions", [pt.location[0] for pt in curve.points])
+        plDesc.setAttribute(f"{curveType}CurveInterpolations",
+                            [("3" if "AUTO" in pt.handle_type else "1") for pt in curve.points])
+
+        # The Y coordinates are exported as a TEXTURE_FLOAT_LIST, i.e. a list of plugins.
+        pointYCoords = []
+        for pt in curve.points:
+            texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, 'FloatToTex'), 'FloatToTex')
+            texPlugin.setAttribute('input', pt.location[1])
+            pointYCoords.append(commonNodesExport.exportPluginWithStats(nodeCtx, texPlugin))
+
+        plDesc.setAttribute(f"{curveType}CurveValues", pointYCoords)
 
 
 def fillSplineData(curve: bpy.types.CurveMap, extend: str):

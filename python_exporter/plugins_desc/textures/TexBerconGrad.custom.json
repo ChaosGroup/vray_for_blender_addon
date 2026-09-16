@@ -1,0 +1,37 @@
+{
+    "ID": "TexBerconGrad",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui": {
+                "display_name": "Mapping"
+            }
+        },
+        {
+            "attr": "color_ramp",
+            "type": "GRAD_RAMP",
+            "desc": "Gradient Color Ramp",
+            "default": null,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "positions",
+            "type": "FLOAT_LIST"
+        },
+        {
+            "attr": "texture_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ]
+}

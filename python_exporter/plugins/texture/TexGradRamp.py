@@ -84,8 +84,9 @@ def exportTreeNode(nodeCtx: NodeContext):
     for sock in node.inputs:
         if nodeLink := sock.getFarLink():
             if sock.bl_idname == VRaySocketColorRamp.bl_idname:
-                origin_node = sock.links[0].from_node
-                colors, positions, interpolation = origin_node.exportGradTreeNode(nodeCtx)
+                origin_node = nodeLink.from_node
+                with nodeCtx.pushGroupPath(nodeLink.groupPath):
+                    colors, positions, interpolation = origin_node.exportGradTreeNode(nodeCtx)
                 pluginDesc.setAttribute('colors', colors)
                 pluginDesc.setAttribute('positions', positions)
                 pluginDesc.setAttribute('interpolation', [interpolation] * len(positions))

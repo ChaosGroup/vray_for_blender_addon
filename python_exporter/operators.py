@@ -309,6 +309,12 @@ class VRAY_OT_message_box_base(VRayOperatorBase):
             def invoke(self, context, event):
                 self._centerDialog(context, event)
                 return context.window_manager.invoke_props_dialog(self)
+
+            def draw(self, context):
+                ...
+                # Always pair _centerDialog() with this call at the end of draw(), or the
+                # cursor is left in the center of the screen.
+                self._cursorWarp(context)
     """
     originalMouseX : bpy.props.IntProperty(default = 0)
     originalMouseY: bpy.props.IntProperty(default = 0)
@@ -323,7 +329,7 @@ class VRAY_OT_message_box_base(VRayOperatorBase):
         context.window.cursor_warp(int(context.window.width / 2), int(context.window.height / 2))
 
 
-    def _cursorWrap(self, context: bpy.types.Context):
+    def _cursorWarp(self, context: bpy.types.Context):
         if not self.mouseMoved:
             # Move the cursor back to where the user expects it to be
             self.mouseMoved = True
@@ -374,6 +380,8 @@ class VRAY_OT_message_box(VRAY_OT_message_box_base):
         for line in lines:
             col2.label(text=line)
 
+        self._cursorWarp(context)
+
     def execute(self, context):
         return {'FINISHED'}
 
@@ -423,7 +431,7 @@ class VRAY_OT_export_scene(VRayOperatorBase):
                 vray.setRenderFrame(renderer, context.scene.frame_current)
                 if not vray.writeVrscene(renderer, exportSettings):
                     self.report({'ERROR'}, "Scene export failed")
-                    return { 'FINISHED' }
+                    return { 'CANCELLED' }
 
                 while vray.exportJobIsRunning(renderer):
                     time.sleep(0.1)
@@ -431,14 +439,16 @@ class VRAY_OT_export_scene(VRayOperatorBase):
                 msgInfo = f"Exported scene: {exportSettings.filePath}."
                 self.report({'INFO'}, msgInfo)
                 debug.printInfo(msgInfo)
-            elif msgErr:
+                return {'FINISHED'}
+
+            if msgErr:
                 self.report({'ERROR'}, msgErr)
                 debug.printError(msgErr)
         else:
             msgErr = "Export scene: no active V-Ray renderer. Start an interactive render and try again."
             self.report({'ERROR'}, msgErr)
             debug.printError(msgErr)
-        return {'FINISHED'}
+        return {'CANCELLED'}
 
     @classmethod
     def description(cls, context, properties):
@@ -572,18 +582,19 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         return self.forceMode
 
     def execute(self, context: bpy.types.Context):
-        if vray.isInitialized():
-            # This status message should ideally be printed right before the rendering starts but here is the last
-            # chance for it to be shown BEFORE the render job is complete. Once the operator starts executing, no
-            # updates to the UI will be made until it's finished.
-            debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
-            
-            from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
-            
-            uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext()
-            vfb_event_handler.VfbEventHandler.startProdRender(self.forceMode, uiRegionContext)
-        else:
+        if not vray.isInitialized():
             debug.report('WARNING', "Can't start render job. V-Ray is not initialized")
+            return {'CANCELLED'}
+
+        # This status message should ideally be printed right before the rendering starts but here is the last
+        # chance for it to be shown BEFORE the render job is complete. Once the operator starts executing, no
+        # updates to the UI will be made until it's finished.
+        debug.report('INFO', 'Started render job. Blender UI will be unresponsive until the rendering is complete')
+
+        from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
+
+        uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext()
+        vfb_event_handler.VfbEventHandler.startProdRender(self.forceMode, uiRegionContext)
         return {'FINISHED'}
 
     def _checkOutputInfo(self, context):
@@ -655,8 +666,12 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
                 # paths that contain $camera. Expand paths per frame and cache directory
                 # listings so long animation ranges don't hammer the file system.
                 dirCache: dict[str, set[str]] = {}
-                frameRange = common_settings.getAnimationFrames(context.scene, layer.name)
 
+                frameRange, _ = common_settings.getAnimationFrames(context.scene, layer.name)
+
+                if not frameRange:
+                    break
+        
                 for frame in frameRange:
                     layerImgDir = expander.expand(settingsOutput.img_dir, frame,
                                                   viewLayerName=viewLayerName)
@@ -688,9 +703,6 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
 
     def invoke(self, context, event):
-        if self.forceMode in {'FRAME', 'ANIMATION'}:
-            context.window_manager.vray.render_button_mode = self.forceMode
-
         if not _validateFramesList(context):
             self.report({'WARNING'}, f"Invalid frames list, render aborted. See console log for details.")
             return {'CANCELLED'}
@@ -725,6 +737,8 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
             case _:
                 assert not f'Invalid message selector: {self.errorType}'
+
+        self._cursorWarp(context)
 
 
 class VRAY_OT_set_render_mode(VRayOperatorBase):
@@ -1015,7 +1029,7 @@ class VRAY_OT_export_vrscene(VRAY_OT_message_box_base):
             customRangeCol.prop(context.scene, 'frame_end')
             customRangeCol.prop(context.scene, 'frame_step')
 
-        self._cursorWrap(context)
+        self._cursorWarp(context)
 
     @classmethod
     def description(cls, context, properties):
@@ -1034,7 +1048,11 @@ def _validateFramesList(context: bpy.types.Context):
         if not frames:
             return False
         
-        return bool(parseFramesToFlatList(frames))
+        frames, err = parseFramesToFlatList(frames)
+        if frames is None:
+            debug.printError(err)
+
+        return bool(frames)
     
     return True
     
@@ -1069,7 +1087,7 @@ class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
         self.layout.prop(VRayExporter, 'vray_cloud_project_name')
         _drawPathPropWithPlaceholders(self.layout, VRayExporter, 'vray_cloud_job_name', "Job Name",
                                       target_prop_group="EXPORTER")
-        self._cursorWrap(context)
+        self._cursorWarp(context)
 
 
 class VRAY_OT_copy_plugin_version(VRayOperatorBase):
@@ -1148,11 +1166,10 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
                 __class__._executing = True
             else:
                 return {'CANCELLED'}
-            if blender_utils.getVRayPreferences(context).ask_for_upgrade_confirm:
-                self._centerDialog(context, event)
-                return context.window_manager.invoke_props_dialog(self, width=400, title="V-Ray Scene Version Update", confirm_text="OK")
-            else:
-                return self.execute(context)
+            # Always upgrade automatically, without a confirmation dialog.
+            # NOTE: draw(), _centerDialog/_cursorWarp and the 'ask_for_upgrade_confirm'
+            # preference / 'dont_ask_again' prop are now unused - flagged for cleanup.
+            return self.execute(context)
 
         return {'CANCELLED'}
 
@@ -1168,7 +1185,7 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         self.layout.label(text="Click OK to run the update procedure.")
         self.layout.label(text="If everything goes well, save the .blend file.")
         self.layout.label(text="If you encounter any problems, look in the console for error messages.")
-        self._cursorWrap(context)
+        self._cursorWarp(context)
 
         self.layout.prop(self, 'dont_ask_again')
 

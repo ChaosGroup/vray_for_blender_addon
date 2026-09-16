@@ -493,6 +493,23 @@
             {
                 "display_name" : "Toon Materials Only"
             }
+        },
+        
+        {
+            "attr" : "outerEdgeStyle",
+            "default" : "0",
+            "desc" : "0:Outer outline straddles the silhouette; 1:Outline only inside the silhouette; 2:Outline only outside the silhouette",
+            "items" : 
+            [
+                [ "0", "Middle", "Middle" ],
+                [ "1", "Inside", "Inside" ],
+                [ "2", "Outside", "Outside" ]
+            ],
+            "type" : "ENUM",
+            "ui" : 
+            {
+                "display_name" : "Outer Edge Style"
+            }
         }
     ],
     "Type" : "VOLUMETRIC",

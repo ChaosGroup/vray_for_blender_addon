@@ -63,7 +63,7 @@ def createColorRampNode(parentNode: bpy.types.Node, toSocket: bpy.types.NodeSock
 
     # Prepare the ramp texture based on the node it was created from.
     rampTex = rampNode.texture
-    if parentNode.vray_plugin == "TexGradRamp":
+    if parentNode.vray_plugin in ("TexGradRamp", "TexRamp"):
         _prepareRampForTexGradRamp(rampTex)
     elif parentNode.vray_plugin == "BRDFToonMtl":
         # toSocket.name comes from BRDFToonMtl.json.
@@ -376,7 +376,7 @@ def registerColorRamps():
     Called from the Load Post event handler.
     Adds all ColorRamp nodes to a list for sync. Used with Undo/Redo as well.
     """
-    from vray_blender.nodes.tree import iterVRayNodeTrees
+    from vray_blender.nodes.tools import iterVRayNodeTrees
     for ntree in iterVRayNodeTrees():
         for node in ntree.nodes:
             if node.bl_idname == VRayNodeColorRamp.bl_idname and node.texture:

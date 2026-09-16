@@ -21,7 +21,6 @@ from vray_blender.lib import camera_utils
 
 class AnimationSettings:
     def __init__(self):
-        self.mode         = 'FRAME'
         self.use          = False
         self.frameCurrent = 0
         self.frames       = []
@@ -98,26 +97,42 @@ def collectExportSceneSettings(scene: bpy.types.Scene, scenePath="", viewLayerNa
     return settings, None
 
 
-def getAnimationFrames(scene: bpy.types.Scene, viewLayerName: str = "") -> list[int]:
-    """ Returns the frames to render for a normal (non-vrscene-export) animation render job.
-        Uses use_frame_range to choose between the scene frame range and a custom frame list
-        expression. Filters by the view layer's enabled state when viewLayerName is provided.
-        Returns [] if the frame expression is empty or invalid.
+def _frameRange(start: int, end: int, step: int) -> list[int]:
+    """ An inclusive frame range. Blender's RNA hard min for frame_step is 0 (only the UI
+        soft min is 1), so a step of 0 can reach us from a .blend and range() would reject it.
+    """
+    return list(range(start, end + 1, max(step, 1)))
+
+
+def getAnimationFrames(scene: bpy.types.Scene, viewLayerName: str = "") -> (list[int] | None, str | None):
+    """ Returns (frames, errMsg) - the frames to render for a normal (non-vrscene-export)
+        animation render job. Uses use_frame_range to choose between the scene frame range and
+        a custom frame list expression. Filters by the view layer's enabled state when
+        viewLayerName is provided.
+
+        frames is None, with a message in errMsg, if the frame expression is empty or invalid.
+        An empty list means that the expression was valid but no frame passed the view layer
+        filter - the renderer reports that case separately.
 
         Note: frame_step is applied only for the scene range; custom frame list expressions
         specify frames explicitly so frame_step is not relevant there.
     """
     vrayExporter = scene.vray.Exporter
     if vrayExporter.use_frame_range:
-        frames = list(range(scene.frame_start, scene.frame_end + 1, scene.frame_step))
+        frames = _frameRange(scene.frame_start, scene.frame_end, scene.frame_step)
     else:
-        frames = parseFramesToFlatList(vrayExporter.frames_list) or []
+        frames, err = parseFramesToFlatList(vrayExporter.frames_list)
+        if frames is None:
+            return None, err
+        if not frames:
+            # An expression that parses but selects nothing, e.g. "" or " , , "
+            return None, "Empty frames list"
 
     if viewLayerName:
         if vlFCurve := blender_utils.getViewLayerUseFCurve(viewLayerName):
             frames = [f for f in frames if vlFCurve.evaluate(f)]
 
-    return frames
+    return frames, None
 
 
 class CommonSettings:
@@ -161,8 +176,8 @@ class CommonSettings:
             self.exportFileFormat = defs.ExportFormat.ZIP
 
         self._updateFileOutput()
-        self._updateAnimation()
         self._updateRenderMode()
+        self._updateAnimation()
         self._updateViewport()
         self._updateLogLevels()
 
@@ -221,21 +236,28 @@ class CommonSettings:
                 if vrsceneExport:
                     match animSettings.frameRangeMode:
                         case "CUSTOM_RANGE":
-                            frames = list(range(animSettings.customFrameStart, animSettings.customFrameEnd + 1, animSettings.customFrameStep))
+                            frames = _frameRange(animSettings.customFrameStart, animSettings.customFrameEnd, animSettings.customFrameStep)
                         case "CUSTOM_FRAMES":
-                            if not (frames := parseFramesToFlatList(animSettings.customFramesList)):
-                                raise Exception("Invalid frames list")
+                            frames, err = parseFramesToFlatList(animSettings.customFramesList)
+                            if frames is None:
+                                raise Exception(err)
+                            if not frames:
+                                raise Exception("Empty frames list")
                         case "SCENE_RANGE":
-                            frames = list(range(self.scene.frame_start, self.scene.frame_end + 1, self.scene.frame_step))
+                            frames = _frameRange(self.scene.frame_start, self.scene.frame_end, self.scene.frame_step)
                         case _:
                             assert False, "Invalid frame range mode"
                     if vlFCurve := blender_utils.getViewLayerUseFCurve(self.viewLayerName):
                         frames = [f for f in frames if vlFCurve.evaluate(f)]
                     self.animation.frames = frames
                 else:
-                    self.animation.frames = getAnimationFrames(self.scene, self.viewLayerName)
-                    if not self.vrayExporter.use_frame_range and not self.animation.frames:
-                        raise Exception("Invalid frames list")
+                    frames, err = getAnimationFrames(self.scene, self.viewLayerName)
+                    if frames is None:
+                        raise Exception(err)
+                    
+                    # An empty list is not an error here - the view layer may be disabled for
+                    # all the selected frames. The renderer reports that case separately.
+                    self.animation.frames = frames
 
  
         self.animation.use = (animationMode != 'FRAME')
@@ -249,8 +271,6 @@ class CommonSettings:
 
         mbSettings = self.scene.vray.SettingsMotionBlur
         self.mbSamples = mbSettings.geom_samples
-        self.maxMBlurDuration = 0 # The biggest motion blur duration of all cameras
-        self.useMotionBlur = False
 
         if self.exportOnly:
             allCameras = [obj for obj in self.scene.objects if obj.type == 'CAMERA']
@@ -258,21 +278,29 @@ class CommonSettings:
             markerCameras = [marker.camera for marker in self.scene.timeline_markers if marker.camera]
             allCameras = markerCameras if markerCameras else [self.scene.camera]
 
-        self.useMotionBlur = any(camera_utils.camObjUsesMotionBlur(camObj, mbSettings) for camObj in allCameras)
+        # Motion blur that will be visible in the render result. Kept separate from
+        # exportMotionData so that the SettingsMotionBlur export can tell it apart from the
+        # velocity-only case. Bake renders and previews never render motion blur.
+        self.hasCameraMotionBlur = any(camera_utils.camObjUsesMotionBlur(camObj, mbSettings) for camObj in allCameras) \
+                                    and not self.vrayExporter.isBakeMode and not self.isPreview
 
-        if self.useMotionBlur and not self.exportOnly:
-            for camObj in allCameras:
-                _, mbDuration = camera_utils.getMBlurIntCenterAndDuration(camObj.data, self)
-                self.maxMBlurDuration = max(mbDuration, self.maxMBlurDuration)
+        # A Velocity render element is computed from object motion, which V-Ray only has if we
+        # export subframes for it. Other V-Ray integrations do the same, so an enabled Velocity
+        # element is its own reason to export motion data, regardless of motion blur.
+        from vray_blender.engine.render_elements import isVelocityWired
+        self.velocityMotionData = isVelocityWired(self.scene.world) \
+                                    and not self.vrayExporter.isBakeMode and not self.isPreview \
+                                    and not self._interactive \
+                                    and not self.isGpu
 
-        # Disable motion blur for bake render
-        self.useMotionBlur = self.useMotionBlur and not self.vrayExporter.isBakeMode and not self.isPreview
+        # Subframe motion data has to be exported. NOT the same as rendering motion blur.
+        self.exportMotionData = self.hasCameraMotionBlur or self.velocityMotionData
 
         # If we are rendering single frame but we have motion blur - override to animation rendering
         # and set the start/end frame to the current. That way we'll export frames for motion blur
         # override only for production rendering. IPR does not export animation frames yet so
         # it won't handle animation being turned on
-        if isProductionRendering and not self.animation.use and self.useMotionBlur:
+        if isProductionRendering and not self.animation.use and self.exportMotionData:
             self.animation.use = True
             self.animation.frames = [self.scene.frame_current]
 

@@ -21,6 +21,8 @@ def _getUIIcons():
         ui.VRAY_OT_add_object_vray_light_dome     : 'LIGHT_DOME',
         ui.VRAY_OT_add_object_vray_light_ies      : 'LIGHT_IES',
         ui.VRAY_OT_add_object_vray_light_mesh     : 'LIGHT_MESH',
+        ui.VRAY_OT_create_mesh_light              : 'LIGHT_MESH',
+        ui.VRAY_OT_add_object_vray_light_luminaire: 'LIGHT_LUMINAIRE',
         ui.VRAY_OT_add_object_vray_light_omni     : 'LIGHT_OMNI',
         ui.VRAY_OT_add_object_vray_light_rect     : 'LIGHT_RECT',
         ui.VRAY_OT_add_object_vray_light_sphere   : 'LIGHT_SPHERE',
@@ -32,6 +34,7 @@ def _getUIIcons():
         ui.VRAY_OT_add_object_splat               : 'VRAY_GAUSSIANS',
         ui.VRAY_OT_add_object_fur                 : 'VRAY_FUR',
         ui.VRAY_OT_add_object_decal               : 'VRAY_DECAL',
+        ui.VRAY_OT_add_object_infinite_plane      : 'VRAY_INFINITE_PLANE',
 
         menu.VRAY_OT_show_about_dialog            : 'INFO_ABOUT',
         menu.VRAY_OT_open_collaboration           : 'VRAY_LOGO',
@@ -58,6 +61,7 @@ _ICON_FILES = [
         ("LIGHT_DIRECT",        "VRayLightDirect.svg"),
         ("LIGHT_DOME",          "VRayLightDome.svg"),
         ("LIGHT_IES",           "VRayLightIES.svg"),
+        ('LIGHT_LUMINAIRE',     "VRayLightLuminaire.svg"),
         ('LIGHT_MESH',          "VRayLightMesh.svg"),
         ('LIGHT_OMNI',          "VRayLightOmni.svg"),
         ('LIGHT_RECT',          "VRayLightRectangle.svg"),
@@ -73,6 +77,8 @@ _ICON_FILES = [
         ('VRAY_GAUSSIANS',      "VRayGaussians.svg"),
         ('VRAY_FUR',            "VRayFur.svg"),
         ('VRAY_DECAL',          "VRayDecal.svg"),
+        ('VRAY_INFINITE_PLANE', "VRayInfinitePlane.svg"),
+        ('CHAOS_SCATTER',       "ChaosScatter.svg"),
 
         ('VERAS_VIEWPORT',      "VerasViewport.svg"),
         ('VERAS_VFB',           "VerasVFB.svg"),
@@ -170,7 +176,11 @@ def _loadVRayIcons():
     iconsDir = getIconsDir()
 
     for iconKey, fileName in _ICON_FILES:
-        icons.load(iconKey, os.path.join(iconsDir, fileName), 'IMAGE')
+        preview = icons.load(iconKey, os.path.join(iconsDir, fileName), 'IMAGE')
+
+        # load() only schedules the rasterization, and an icon first drawn in a Preferences
+        # window stays blank because that window drops the repaint. Reading pixels forces it.
+        _ = preview.icon_pixels_float[:1]
 
     return icons
 

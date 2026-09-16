@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
-from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade, scopedForUpgrade
 
 # Node types and their distance-based bump_amount attribute names
 # (from BRDFAlSurface, BRDFCarPaint2, BRDFToonMtl, BRDFVRayMtl custom JSONs)
@@ -27,7 +27,7 @@ UPGRADE_INFO = {
 
 def _mtlNodeTrees():
     """Yield all relevant node trees (materials)."""
-    for mtl in bpy.data.materials:
+    for mtl in scopedForUpgrade(bpy.data.materials):
         if getattr(mtl, "node_tree", None) and mtl.node_tree:
             yield mtl.node_tree
 

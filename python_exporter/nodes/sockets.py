@@ -8,10 +8,12 @@ import math
 import mathutils
 import sys
 
+from typing import NamedTuple
+
 from vray_blender import debug
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
 from vray_blender.exporting.tools import getFarNodeLinkImpl, removeSocketLinks, getInputSocketByAttr
-from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getInputSocketDesc, getPluginModule
+from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getInputSocketDesc, getPluginModule, findPluginModule
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
 from vray_blender.nodes.tools import getSocketPanelName, getSocketPanel
@@ -21,6 +23,9 @@ from vray_blender.nodes.utils import getAttrDisplayName, selectedObjectTagUpdate
 DYNAMIC_SOCKET_OVERRIDES = {}
 DYNAMIC_SOCKET_CLASSES = set()
 DYNAMIC_SOCKET_CLASS_NAMES = set()
+# Class name -> (pluginType, attrName) that first claimed it; detects name collisions (e.g.
+# TexRamp/TexRemap both abbreviate to "TR" and would otherwise silently share a socket class).
+DYNAMIC_SOCKET_CLASS_OWNERS = {}
 
 
 STRUCTURAL_SOCKET_CLASSES = {
@@ -60,6 +65,35 @@ SAME_TYPE_SOCKET_TYPES = frozenset({
     'VRaySocketGeom',
     'VRaySocketObjectProps',
 })
+
+class SpecialChannelSockets(NamedTuple):
+    """ The socket types of a render channel that owns a special socket, and the label shared
+        by the node's output socket and the container's input socket.
+    """
+    name: str
+    inputType: str
+    outputType: str
+
+
+# Render channels that own a special, permanent socket on the render channels container instead
+# of sharing the numbered 'Channel N' slots, keyed by the channel node's bl_idname. The socket
+# types are theirs alone, which is what keeps every other channel out of those sockets and them
+# out of the numbered slots (see nodes/links.py).
+SPECIAL_CHANNEL_SOCKETS = {
+    'VRayNodeRenderChannelLightMix': SpecialChannelSockets(
+        "Light Mix", 'VRaySocketRenderChannelLightMix', 'VRaySocketRenderChannelLightMixOutput'),
+    'VRayNodeRenderChannelDenoiser': SpecialChannelSockets(
+        "Denoiser", 'VRaySocketRenderChannelDenoiser', 'VRaySocketRenderChannelDenoiserOutput'),
+}
+
+SPECIAL_CHANNEL_SOCKET_TYPES = frozenset(s.inputType for s in SPECIAL_CHANNEL_SOCKETS.values())
+
+# Input socket type -> the only output socket type that may feed it
+SPECIAL_CHANNEL_INPUT_TO_OUTPUT = {s.inputType: s.outputType for s in SPECIAL_CHANNEL_SOCKETS.values()}
+
+# Every output socket type that carries a render channel
+RENDER_CHANNEL_OUTPUT_TYPES = frozenset({'VRaySocketRenderChannelOutput'}
+                                        | {s.outputType for s in SPECIAL_CHANNEL_SOCKETS.values()})
 
 
 # Colors for standard Blender sockets. List copied from .\source\blender\editors\space_node\drawnode.cc
@@ -106,6 +140,11 @@ PLUGIN_SOCKET_COLOR         = (1.0, 1.0, 1.0, 1.0)
 OBJ_PROP_SOCKET_COLOR       = (0.8, 0.2, 0.5, 1.0)
 
 
+# Plugins whose abbreviated name collides with a shipped plugin that has DIFFERENT enum items
+# (e.g. TexRamp -> "TR" clashes with TexRemap). Use the full name for these instead.
+_NO_ABBREVIATE_PLUGINS = {'TexRamp', 'TexComposite'}
+
+
 def getDynamicSocketClassName(pluginType, socketTypeName, attrName):
     """ Construct name for a dynamic socket class.
 
@@ -116,7 +155,8 @@ def getDynamicSocketClassName(pluginType, socketTypeName, attrName):
         return ''.join(filter(lambda c: c >= 'A' and c <= 'Z', str))
 
     # make the typeName unique per type, node and attribute
-    suffix = '%s_%s' % (abbreviateTitle(pluginType), attrName)
+    pluginToken = pluginType if pluginType in _NO_ABBREVIATE_PLUGINS else abbreviateTitle(pluginType)
+    suffix = '%s_%s' % (pluginToken, attrName)
     typeName = '%s_%s' % (socketTypeName, suffix)
     # bpy has obscene limitation of 64 symbols for class name!
     if len(typeName) >= 64:
@@ -169,6 +209,19 @@ def registerDynamicSocketClass(pluginType, socketTypeName, attrName):
 
     pluginModule = getPluginModule(pluginType)
     dynamicTypeName = getDynamicSocketClassName(pluginType, socketTypeName, attrName)
+
+    # Collision guard: two plugins can hash to the same abbreviated class name. Harmless if they
+    # share the same enum items; a bug if they differ (the second silently gets the first's items).
+    _collisionAttrDesc = attribute_utils.getAttrDesc(pluginModule, attrName)
+    _collisionItems = _collisionAttrDesc.get('items') if _collisionAttrDesc else None
+    sockSignature = tuple(it[0] for it in _collisionItems) if _collisionItems else None
+    owner = DYNAMIC_SOCKET_CLASS_OWNERS.get(dynamicTypeName)
+    if owner is None:
+        DYNAMIC_SOCKET_CLASS_OWNERS[dynamicTypeName] = (pluginType, attrName, sockSignature)
+    elif (owner[0], owner[1]) != (pluginType, attrName) and owner[2] != sockSignature:
+        debug.printError(f"Dynamic socket class name collision '{dynamicTypeName}': "
+                         f"{owner[0]}::{owner[1]} and {pluginType}::{attrName} have different enum "
+                         f"items but share one socket class. Add the plugin to _NO_ABBREVIATE_PLUGINS.")
 
     if dynamicTypeName not in DYNAMIC_SOCKET_CLASS_NAMES:
         socketTypeAttributes = {
@@ -284,13 +337,59 @@ def moveExtendSocketToBottom(node: bpy.types.Node):
         node.inputs.move(node.inputs.find(sockExtend.name), len(node.inputs) - 1)
 
 
+def addSpecialChannelSockets(node: bpy.types.Node):
+    """ Add the missing special render channel sockets to a channels container node and keep
+        them above the numbered 'Channel N' sockets. No-op if they are all already there.
+    """
+    existing = {s.bl_idname for s in node.inputs}
+    if not (missing := [d for d in SPECIAL_CHANNEL_SOCKETS.values() if d.inputType not in existing]):
+        return
+
+    for sockDesc in missing:
+        addInput(node, sockDesc.inputType, sockDesc.name)
+
+    for idx, sockDesc in enumerate(SPECIAL_CHANNEL_SOCKETS.values()):
+        sock = next((s for s in node.inputs if s.bl_idname == sockDesc.inputType), None)
+        # Only move when the socket is out of place - a redundant move still triggers a node
+        # tree update, which is not safe while the container node is being built
+        if sock and (curIdx := node.inputs.find(sock.name)) != idx:
+            node.inputs.move(curIdx, idx)
+
+
+def getSpecialChannelSocket(containerNode: bpy.types.Node, channelNodeType: str):
+    """ The special socket of a channels container for the given render channel node type, or
+        None if that channel uses the numbered 'Channel N' sockets. The socket is created if the
+        container predates it.
+    """
+    if not (sockDesc := SPECIAL_CHANNEL_SOCKETS.get(channelNodeType)):
+        return None
+
+    addSpecialChannelSockets(containerNode)
+    return next((s for s in containerNode.inputs if s.bl_idname == sockDesc.inputType), None)
+
+
+def addChannelOutput(node: bpy.types.Node):
+    """ Add the output socket of a render channel node. The channels with a special socket get
+        their own type and label; all the others share the generic 'Channel' output.
+    """
+    if sockDesc := SPECIAL_CHANNEL_SOCKETS.get(node.bl_idname):
+        return addOutput(node, sockDesc.outputType, sockDesc.name)
+
+    return addOutput(node, 'VRaySocketRenderChannelOutput', "Channel")
+
+
+def getChannelOutput(node: bpy.types.Node):
+    """ The output socket carrying a render channel node's channel, or None. """
+    return next((s for s in node.outputs if s.bl_idname in RENDER_CHANNEL_OUTPUT_TYPES), None)
+
+
 def _configureInPanel(sock: bpy.types.NodeSocket):
     """ Set socket's initial state if it is placed on a panel or if it is a 'panel' socket """
     assert not sock.is_output, "Only input sockets may be placed onz panels"
 
-    if (pluginName := sock.getPluginName()) != 'NONE':
-        pluginModule = getPluginModule(pluginName)
-
+    # findPluginModule, not getPluginModule: a generic plugin node carries the type of a plugin
+    # V-Ray has no description for, and the latter raises for those.
+    if (pluginModule := findPluginModule(sock.getPluginName())) is not None:
         if sock.bl_idname == 'VRaySocketRollout':
             panelDesc = getSocketPanel(pluginModule, sock.vray_attr)
             sock.is_open = not panelDesc.get('default_closed', True)
@@ -498,15 +597,19 @@ class VRaySocket(bpy.types.NodeSocket):
         node = self.node
 
 
-        if (pluginName := self.getPluginName()) != 'NONE':
-            pluginModule = getPluginModule(pluginName)
+        # findPluginModule, not getPluginModule: a generic plugin node carries the type of a plugin
+        # V-Ray has no description for, and the latter raises for those.
+        pluginName = self.getPluginName()
+        if (pluginModule := findPluginModule(pluginName)) is not None:
             sockDesc = getInputSocketDesc(pluginModule, self.vray_attr)
 
             if (sockDesc is not None) and ((label := sockDesc.get('label')) is not None):
-                if isCondition(label):
-                    return evaluateCondition(getattr(node, pluginName), node, label)
-                else:
+                if not isCondition(label):
                     return label
+                # A conditional label reads the node's property group. Generic plugin nodes
+                # keep their values in the sockets and have none, so fall back to the name.
+                if (propGroup := getattr(node, pluginName, None)) is not None:
+                    return evaluateCondition(propGroup, node, label)
 
         # No label definition was found, draw using the original socket name
         return formatAttributeName(self.name)
@@ -1051,6 +1154,8 @@ class VRaySocketColorTexture(VRaySocketMult):
         super().exportLinked(pluginDesc, attrDesc, linkValue)
         if propUseTex := attrDesc.get('use_tex_prop'):
             pluginDesc.setAttribute(propUseTex, True)
+        # Stash the flat color too, so export_utils' COLOR_TEXTURE case can fall back to it.
+        pluginDesc.setAttribute(attrDesc['color_prop'], mathutils.Color(self.value[:]))
 
     def exportUnlinked(self, nodeCtx: NodeContext, pluginDesc, attrDesc):
         pluginDesc.setAttribute(attrDesc['attr'], mathutils.Color(self.value[:]))
@@ -1527,10 +1632,12 @@ class VRaySocketPlugin(VRayValueSocket):
 ##     ## ######## ##    ## ########  ######## ##     ##     ######  ##     ## ##     ## ##    ## ##    ## ######## ########
 
 
-class VRaySocketRenderChannel(VRaySocketUse):
-    bl_idname = 'VRaySocketRenderChannel'
-    bl_label  = 'Render Channel Socket'
-
+class VRaySocketRenderChannelBase(VRaySocketUse):
+    """ Shared body of the render channels container's input sockets. Deliberately not
+        registered: registering a socket class whose base is itself registered detaches the
+        base's Python class from its instances, so the container's sockets are siblings
+        sharing this mixin instead of deriving from each other.
+    """
     value: bpy.props.StringProperty(
         name        = "",
         description = "",
@@ -1549,10 +1656,29 @@ class VRaySocketRenderChannel(VRaySocketUse):
         return CHANNEL_SOCKET_COLOR
 
 
-class VRaySocketRenderChannelOutput(VRaySocket):
-    bl_idname = 'VRaySocketRenderChannelOutput'
-    bl_label  = 'Render Channel Ouput Socket'
+class VRaySocketRenderChannel(VRaySocketRenderChannelBase):
+    bl_idname = 'VRaySocketRenderChannel'
+    bl_label  = 'Render Channel Socket'
 
+
+# One input/output socket pair per single-instance render channel, so that the link rules can
+# keep each of these channels off the numbered 'Channel N' slots, and everything else off theirs.
+# See SPECIAL_CHANNEL_SOCKETS.
+
+class VRaySocketRenderChannelLightMix(VRaySocketRenderChannelBase):
+    bl_idname = 'VRaySocketRenderChannelLightMix'
+    bl_label  = 'Light Mix Render Channel Socket'
+
+
+class VRaySocketRenderChannelDenoiser(VRaySocketRenderChannelBase):
+    bl_idname = 'VRaySocketRenderChannelDenoiser'
+    bl_label  = 'Denoiser Render Channel Socket'
+
+
+class VRaySocketRenderChannelOutputBase(VRaySocket):
+    """ Shared body of the render channel nodes' output sockets. Deliberately not registered,
+        for the same reason as VRaySocketRenderChannelBase.
+    """
     value: bpy.props.StringProperty(
         name        = "",
         description = "",
@@ -1562,6 +1688,21 @@ class VRaySocketRenderChannelOutput(VRaySocket):
     @classmethod
     def draw_color_simple(cls):
         return CHANNEL_SOCKET_COLOR
+
+
+class VRaySocketRenderChannelOutput(VRaySocketRenderChannelOutputBase):
+    bl_idname = 'VRaySocketRenderChannelOutput'
+    bl_label  = 'Render Channel Ouput Socket'
+
+
+class VRaySocketRenderChannelLightMixOutput(VRaySocketRenderChannelOutputBase):
+    bl_idname = 'VRaySocketRenderChannelLightMixOutput'
+    bl_label  = 'Light Mix Render Channel Output Socket'
+
+
+class VRaySocketRenderChannelDenoiserOutput(VRaySocketRenderChannelOutputBase):
+    bl_idname = 'VRaySocketRenderChannelDenoiserOutput'
+    bl_label  = 'Denoiser Render Channel Output Socket'
 
 
 ######## ######## ######## ########  ######  ########  ######
@@ -1726,6 +1867,10 @@ def getRegClasses():
         VRaySocketMtl,
         VRaySocketRenderChannel,
         VRaySocketRenderChannelOutput,
+        VRaySocketRenderChannelLightMix,
+        VRaySocketRenderChannelDenoiser,
+        VRaySocketRenderChannelLightMixOutput,
+        VRaySocketRenderChannelDenoiserOutput,
         VRaySocketEffect,
         VRaySocketEffectOutput,
         VRaySocketTransform,

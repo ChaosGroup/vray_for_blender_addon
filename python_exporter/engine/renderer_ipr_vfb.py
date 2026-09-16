@@ -47,7 +47,7 @@ class VRayRendererIprVfb(VRayRendererIprBase):
             warningMsg += " scene resolution exceeding the Community Edition's limit."
 
             vray.logVfbMessage(debug.VfbMessageLevel.MessageWarning, warningMsg)
-            debug.reportAsync('WARNING', warningMsg)
+            debug.report('WARNING', warningMsg)
 
     @staticmethod
     @bpy.app.handlers.persistent

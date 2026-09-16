@@ -8,6 +8,9 @@ from vray_blender.lib.defs import *
 from vray_blender.lib.names import Names
 from mathutils import Color
 
+# "No water level" sentinel.
+WATER_LEVEL_OFF = -1e30
+
 def exportVRayNodeDisplacement(nodeCtx: NodeContext, subdivPropGroup):
     node = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
@@ -29,7 +32,7 @@ def exportVRayNodeDisplacement(nodeCtx: NodeContext, subdivPropGroup):
         pluginDesc.setAttribute("displacement_shift", 0.0)
         pluginDesc.setAttribute("displacement_tex_color", AttrPlugin())
         pluginDesc.setAttribute("displacement_tex_float", AttrPlugin())
-        pluginDesc.setAttribute("water_level", -1e30)
+        pluginDesc.setAttribute("water_level", WATER_LEVEL_OFF)
     else:
         texVal = commonNodesExport.exportLinkedSocket(nodeCtx, texSock)
 
@@ -54,7 +57,7 @@ def exportVRayNodeDisplacement(nodeCtx: NodeContext, subdivPropGroup):
             pluginDesc.setAttribute("max_bound", Color((maxBound, maxBound, maxBound)))
 
         if not node.GeomDisplacedMesh.use_water_level:
-            pluginDesc.setAttribute("water_level", -1e30)
+            pluginDesc.setAttribute("water_level", WATER_LEVEL_OFF)
 
         # The Texture socket could be VRaySocketColorNoValue or VRaySocketFloatNoValue based on the value of GeomDisplacedMesh.type
         useTexColor = getVRayBaseSockType(texSock) == 'VRaySocketColorNoValue'

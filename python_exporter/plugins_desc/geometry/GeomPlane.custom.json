@@ -1,0 +1,32 @@
+{
+    "//Comment1": "GeomPlane is attached to the Object (not its data) because the infinite plane is represented by an Empty object, which has no data block.",
+    "//Comment2": "Overriding the Type to OBJECT makes the property group available as obj.vray.GeomPlane.",
+    "//Comment3": "The plane lies in the object's XY plane with a +Z normal, so the Empty's own transform orients it. Blender is Z-up, so unlike the Y-up hosts (C4D, Maya, Modo) no axis fix-up is needed on export.",
+    "//Comment4": "real_world_scale is an INT 0/1 in the plugin; promote it to BOOL so it draws as a checkbox, as in V-Ray for 3ds Max and Houdini.",
+    "Name": "V-Ray Infinite Plane",
+    "Type": "OBJECT",
+    "Parameters": [
+        {
+            "attr": "real_world_scale",
+            "type": "BOOL"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "real_world_scale", "label": "Real-World UVs" }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "real_world_scale", "label": "Real-World UVs" }
+                ]
+            }
+        ]
+    }
+}

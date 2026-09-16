@@ -1,0 +1,105 @@
+
+{
+    "Description" : "TexScatterSurfaceColor",
+    "ID" : "TexScatterSurfaceColor",
+    "Name" : "Scatter Surface Color",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "source",
+            "default" : "0",
+            "desc" : "Source(0 - Surface diffuse/base map(s); 1 - Custom map",
+            "items" : 
+            [
+                
+                [
+                    "0",
+                    "Shade/tint the instance with color sampled from the scatter surface face maps",
+                    "Shade/tint the instance with color sampled from the scatter surface face maps"
+                ],
+                
+                [
+                    "1",
+                    ":Shade/tint the instance with color sampled from custom map",
+                    ":Shade/tint the instance with color sampled from custom map"
+                ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "custom_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Custom shading map, used when source=1",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "distribution_surface_maps",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Distribution surfaces maps, used when source=0",
+            "elements_count" : 0,
+            "type" : "TEXTURE_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "surface_map_ids",
+            "default" : 0,
+            "desc" : "Distribution surface map IDs, used when source=0",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "surface_nodes",
+            "default" : null,
+            "desc" : "Distribution surface nodes",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "surface_node_ids",
+            "default" : 0,
+            "desc" : "Distribution surface node IDs",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hue_randomness",
+            "default" : 0.0,
+            "desc" : "Hue randomness %",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "gamma_randomness",
+            "default" : 0.0,
+            "desc" : "Gamma randomness %",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "presampled_source",
+            "default" : 0,
+            "desc" : "A non-zero number - indicates the source map is presampled in channel with the given number and zero - indicates the source should be sampled at render time",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

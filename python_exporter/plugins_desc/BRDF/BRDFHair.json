@@ -1,0 +1,50 @@
+
+{
+    "Desciption" : "BRDFHair",
+    "ID" : "BRDFHair",
+    "Name" : "Hair",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "specular_color_tex",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Specular color",
+                "rollout" : "V-Ray Simple Hair",
+                "tab" : "V-Ray Simple Hair"
+            }
+        },
+        
+        {
+            "attr" : "specular_power",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Specular power",
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "diffuse_color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Diffuse color override; if set - hair color data is ignored",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Diffuse color"
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

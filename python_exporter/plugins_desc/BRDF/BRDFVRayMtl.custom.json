@@ -190,6 +190,9 @@
         {
             "attr": "coat_bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -205,6 +208,9 @@
         {
             "attr": "bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -880,6 +886,7 @@
             {
                 "name": "panel_refraction",
                 "type": "ROLLOUT",
+                "link_redirect": "refract",
                 "label": {
                     "cond": {
                         "Transmission": "::option_shading_model=1",
@@ -914,7 +921,8 @@
             {
                 "name": "panel_translucency",
                 "label": "Translucency",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "translucency_color"
             },
             {
                 "name": "translucency_color",
@@ -938,7 +946,8 @@
             {
                 "name": "panel_bump",
                 "label": "Bump",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "bump_map"
             },
             { "name": "bump_map" },
             {   "name": "bump_amount",

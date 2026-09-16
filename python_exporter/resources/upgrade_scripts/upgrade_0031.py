@@ -5,7 +5,7 @@
 import bpy
 
 from vray_blender.nodes.specials.gradient_ramp import VRayNodeColorRamp, VRaySocketColorRamp
-from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeNode, sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import UpgradeContext, upgradeNode, sceneNeedsUpgrade, scopedForUpgrade
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes import color_ramp
 
@@ -95,19 +95,19 @@ def run():
     """Transfers the TexGradRamp properties from the old version of the node to
     the new one, and the "texture" property from the old version to the new
     ColorRamp node created with the new TexGradRamp node."""
-    for material in bpy.data.materials:
+    for material in scopedForUpgrade(bpy.data.materials):
         if material.use_nodes and _hasUpgradeableNodes(material):
             _upgradeNodeTree(material.node_tree, material.name)
 
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         if _hasUpgradeableNodes(light):
             _upgradeNodeTree(light.node_tree, light.name)
 
-    for world in bpy.data.worlds:
+    for world in scopedForUpgrade(bpy.data.worlds):
         if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world):
             _upgradeNodeTree(world.node_tree, world.name)
 
-    for group in bpy.data.node_groups:
+    for group in scopedForUpgrade(bpy.data.node_groups):
         if hasattr(group, 'vray') and _hasUpgradeableNodes(group):
             _upgradeNodeTree(group, group.name)
 

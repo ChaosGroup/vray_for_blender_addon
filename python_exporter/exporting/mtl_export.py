@@ -20,13 +20,18 @@ def getMtlTopologyUpdates():
     return {t[0] for t in topologyUpdates}
 
 
-def _getMtlsOfTextures(textureNames: list[str]):
+def _getMtlsOfTextures(textureNames: set[str]):
         """ Return the materials in whose node trees the texture names are used.
 
           NOTE: This is hackish, but for the moment we don't know how to make Blender generate
           depsgraph updates for the node tree.
     """
         result = set()
+
+        # Texture updates are rare (e.g. color ramp edits); skip the full scene scan
+        # on the common no-texture-update path.
+        if not textureNames:
+            return result
 
         for mtl in [m for m in bpy.data.materials if hasattr(m, 'vray') and m.node_tree]:
             for n in mtl.node_tree.nodes:
@@ -40,6 +45,11 @@ def _tagForUpdateMtlWithSelectorNode(exporterCtx: ExporterContext):
     """ Tag for update object's material if it has and object selector node,
         referencing object with updated transform
     """
+    if not exporterCtx.dgUpdates['transform']:
+        # Nothing can be tagged below without a transform update, so the walk over every material's
+        # node tree would be a no-op.
+        return
+
     for mtl in [m for m in bpy.data.materials if m.node_tree]:
         for node in mtl.node_tree.nodes:
             if node.bl_idname == "VRayNodeSelectObject":
@@ -69,7 +79,7 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
         mtlTaggedUpdates = {m[0] for m in UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.ALL)}
 
         updates = (u.id.original for u in exporterCtx.dg.updates if u.is_updated_geometry or u.is_updated_shading or u.is_updated_transform)
-        updatedTextures = [t.name for t in updates if isinstance(t, bpy.types.Texture)]
+        updatedTextures = {t.name for t in updates if isinstance(t, bpy.types.Texture)}
         mtlsWithUpdatedTextures = _getMtlsOfTextures(updatedTextures)
 
         # Get the materials that had their entire V-Ray node trees deleted. The update record for them will be just
@@ -105,6 +115,9 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
             del exporterCtx.exportedMtls[mtlId]
 
 DEFAULT_MATERIAL_NAME = "defaultMtl"
+
+# Attribute types whose value is a color in V-Ray
+COLOR_ATTR_TYPES = ("ACOLOR", "COLOR", "COLOR_TEXTURE", "TEXTURE")
 
 class MtlExporter(ExporterBase):
     """ Export all objects in a depsgraph
@@ -197,6 +210,11 @@ class MtlExporter(ExporterBase):
                         nodeCtx.stats.uniqueMtls.add(mtl.name)
                         nodeCtx.stats.mtls += 1
 
+                        # Also into the cycle-wide accumulator. Most callers of exportMtl() discard
+                        # the returned stats - node_export._exportObjectMaterial(), which is where
+                        # the bulk of the materials are actually exported, is one of them.
+                        self.sceneStats.addMaterial(mtl.name)
+
                     self.exportedMtls[mtlId] = singleBRDFMtl
                     nodeCtx.cacheNodePlugin(outputNode, singleBRDFMtl)
 
@@ -253,6 +271,12 @@ class MtlExporter(ExporterBase):
             return exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE]
         else:
             defaultBrdfDesc = PluginDesc("defaultBRDF", "BRDFVRayMtl")
+
+            # Without a propGroup, colors would export as ListFloat, read as black by AppSDK
+            for attrDesc in findPluginModule("BRDFVRayMtl").Parameters:
+                if (attrDesc['type'] in COLOR_ATTR_TYPES) and not attrDesc.get('options', {}).get('linked_only', False):
+                    defaultBrdfDesc.setAttribute(attrDesc['attr'], AColor(attrDesc['default']))
+
             defaultBrdfDesc.setAttribute("diffuse", AColor((0.5, 0.5, 0.5)))
             defaultBrdf = export_utils.exportPlugin(exporterCtx, defaultBrdfDesc)
 
@@ -277,6 +301,11 @@ class MtlExporter(ExporterBase):
 
         exportNodeTree(nodeCtx, plDesc, skippedSockets=('base_brdf',))
         plDesc.setAttribute('base_brdf', baseBrdf)
+
+        # Per-material depth/angular line-width curve overrides are stored in curve widget
+        # nodes, not in sockets, so they are not handled by exportNodeTree.
+        from vray_blender.nodes.curves_node import exportLineWidthCurves
+        exportLineWidthCurves(nodeCtx, plDesc, outlinesNode)
 
         return exportPluginWithStats(nodeCtx, plDesc)
 

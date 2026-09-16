@@ -17,6 +17,7 @@ def _getModules():
     from vray_blender.nodes.specials import transform
     from vray_blender.nodes.specials import object_properties
     from vray_blender.nodes.specials import gradient_ramp
+    from vray_blender.nodes.specials import generic_plugin
 
     return (
         outputs,
@@ -31,6 +32,7 @@ def _getModules():
         transform,
         object_properties,
         gradient_ramp,
+        generic_plugin,
     )
 
 

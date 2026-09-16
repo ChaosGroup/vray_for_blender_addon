@@ -1,0 +1,13 @@
+{
+    "ID": "TexStencil",
+    "Name": "V-Ray Stencil",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui": {
+                "display_name": "Mapping"
+            }
+        }
+    ]
+}

@@ -16,7 +16,7 @@ from vray_blender.lib import path_utils
 from vray_blender.lib.path_utils import getV4BTempDir
 from vray_blender.plugins import getPluginModule
 from vray_blender.ui.classes import pollEngine, pollTreeType
-from vray_blender.nodes.tools import deselectNodes
+from vray_blender.nodes.tools import TEXTURE_PLACEHOLDER_NODE_NAME, deselectNodes
 from vray_blender.nodes.utils import createNode
 
 VRAY_IMAGE_FORMATS_LIST = ('.png', '.bmp', '.tga', '.hdr', '.sgi', '.rgb', '.rgba',
@@ -181,7 +181,7 @@ def trackImageUpdates():
 
 def _getTexturePlaceholderNode(material: bpy.types.Material, create: bool) -> bpy.types.Node:
     """ Returns the placeholder 'ShaderNodeTexImage' node for a material. """
-    IMAGE_PLACEHOLDER_NAME = "V-Ray Texture Placeholder"
+    IMAGE_PLACEHOLDER_NAME = TEXTURE_PLACEHOLDER_NODE_NAME
 
     nodeTree = material.node_tree
     if node := nodeTree.nodes.get(IMAGE_PLACEHOLDER_NAME):
@@ -234,11 +234,16 @@ def _saveTemporaryImage(image: bpy.types.Image):
         # original token filename so the tile-numbering format (<UDIM> vs <UVTILE>) is preserved.
         tokenName = os.path.basename(image.filepath) or f"{image.name}.<UDIM>.exr"
         filePath = os.path.join(getV4BTempDir(), tokenName)
-        image.save(filepath=filePath)
-        return filePath
+    else:
+        filePath = str(Path(os.path.join(getV4BTempDir(), image.name)).resolve())
 
-    filePath = str(Path(os.path.join(getV4BTempDir(), image.name)).resolve())
-    image.save(filepath=filePath)
+    try:
+        image.save(filepath=filePath)
+    except RuntimeError as ex:
+        # A single unsaveable image (e.g. a .tif whose Exif block OpenImageIO refuses to write)
+        # must not abort the whole export/scene load. Skip it like the invalid-data case above.
+        debug.printError(f"Image {image.name} could not be saved to a temporary file ({ex}); skipping.")
+        return None
 
     return filePath
 
@@ -354,6 +359,26 @@ def unregister():
         bpy.utils.unregister_class(regClass)
 
 
+def _findBitmapNodeByTexture(tex: bpy.types.Texture):
+    """ Locate the V-Ray Bitmap node that owns 'tex', or None. """
+    from vray_blender.nodes.tools import iterVRayNodeTrees
+    for ntree in iterVRayNodeTrees():
+        for node in ntree.nodes:
+            if node.bl_idname == 'VRayNodeMetaImageTexture' and node.texture == tex:
+                return node
+    return None
+
+
+def _onBitmapImageMsgbusNotify(tex: bpy.types.Texture):
+    """ msgbus notify for a V-Ray Bitmap's texture. Re-resolves the node from the texture
+        instead of holding it in the subscription args - see subscribeToBitmapImageUpdates
+        for why. A node that no longer exists simply resolves to None, leaving the stale
+        subscription harmless.
+    """
+    if node := _findBitmapNodeByTexture(tex):
+        _onBitmapImageUpdate(node)
+
+
 def _onBitmapImageUpdate(node: bpy.types.Node):
     ntree = node.id_data
     treeType = getattr(getattr(ntree, 'vray', None), 'tree_type', '')
@@ -383,7 +408,7 @@ def tagChangedSequenceBitmaps():
         generate a depsgraph update for the orphan ImageTexture's image_user, so we fingerprint and
         compare here. Driven from depsgraph_update_post (event-driven, no polling timer).
     """
-    from vray_blender.nodes.tree import iterVRayNodeTrees
+    from vray_blender.nodes.tools import iterVRayNodeTrees
     liveNodes = set()
 
     for ntree in iterVRayNodeTrees():
@@ -417,22 +442,33 @@ def subscribeToBitmapImageUpdates(node: bpy.types.Node):
         sequence frame settings (image_user) are handled by tagChangedSequenceBitmaps() instead,
         since msgbus doesn't fire reliably for those nested-struct changes.
     """
-    tex = node.texture
-    if not tex:
-        return
-
     nodeTree = node.id_data.original
     originalNode = nodeTree.nodes.get(node.name)
     if not originalNode:
         return
 
+    tex = originalNode.texture
+    if not tex:
+        return
+
     bpy.msgbus.clear_by_owner(tex)
-    bpy.msgbus.subscribe_rna(key=tex, owner=tex, args=(originalNode,), notify=_onBitmapImageUpdate)
+    # Pass the texture, NOT the node. The subscription is owned by the texture, which is a
+    # separate datablock that can outlive the node - and Blender only calls Node.free() for
+    # nodes.remove(), not when the owning node tree or material is freed, so there is no
+    # reliable place to unsubscribe. A node held in args would then be dereferenced after it
+    # was freed, crashing in pyrna_struct_get_id_data. The texture cannot dangle the same
+    # way: it is the subscription's own key, so msgbus drops the subscription with it.
+    #
+    # The node is found back by identity rather than by unique_id, because unique_id is
+    # re-minted for every node whose pointer changed the next time syncUniqueNames() runs
+    # after an undo, which would leave the id captured here matching nothing.
+    bpy.msgbus.subscribe_rna(key=tex, owner=tex, args=(tex,),
+                             notify=_onBitmapImageMsgbusNotify)
 
 
 def registerBitmapImageNodes():
     """ Re-subscribe all V-Ray Bitmap nodes (subscriptions are cleared on reload/undo/redo). """
-    from vray_blender.nodes.tree import iterVRayNodeTrees
+    from vray_blender.nodes.tools import iterVRayNodeTrees
     for ntree in iterVRayNodeTrees():
         for node in ntree.nodes:
             if node.bl_idname == 'VRayNodeMetaImageTexture' and node.texture:

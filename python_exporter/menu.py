@@ -6,6 +6,8 @@
 
 import bpy
 
+from vray_blender import features
+from vray_blender.features import Feature
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink, VantageInitStatus
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive, VRAY_OT_cloud_submit
@@ -13,13 +15,14 @@ from vray_blender.ui.classes import pollEngine, disableLayoutInEditMode
 from vray_blender.ui.icons import getIcon, getUIIcon
 from vray_blender.lib.sys_utils import activeRendererExists
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.nodes.importing import convertMaterial, convertLight
+from vray_blender.nodes.importing import convertMaterial, convertLight, convertWorld
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.operators import VRAY_OT_message_box_base
 from vray_blender.ui.community_edition import getLimitedFeatureDescription, drawCELimitedFeatureWarning
 
 from vray_blender.bin import VRayBlenderLib as vray
-from vray_blender.lib import path_utils
+from vray_blender.lib import path_utils, blender_utils
+from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES
 
 class VRAY_MT_help(bpy.types.Menu):
     bl_label = 'Help'
@@ -98,6 +101,7 @@ class VRAY_MT_geometry(bpy.types.Menu):
         vraySplatOp = menus.VRAY_OT_add_object_splat
         vrayFurOp = menus.VRAY_OT_add_object_fur
         vrayDecalOp = menus.VRAY_OT_add_object_decal
+        vrayPlaneOp = menus.VRAY_OT_add_object_infinite_plane
 
         enableVrscene = not VRayRendererIprViewport.isActive()
         vraySceneLayout = self.layout.column()
@@ -106,10 +110,12 @@ class VRAY_MT_geometry(bpy.types.Menu):
 
         vraySceneLayout.operator(vraySceneOp.bl_idname, text="V-Ray Scene", icon_value=getUIIcon(vraySceneOp))
         self.layout.operator(vrayProxyOp.bl_idname, text="V-Ray Proxy", icon_value=getUIIcon(vrayProxyOp))
-        # Still not ready for production
-        # self.layout.operator(vraySplatOp.bl_idname, text="V-Ray Gaussians", icon_value=getUIIcon(vrayFurOp))
+        if features.isEnabled(Feature.GAUSSIAN_SPLATS):
+            self.layout.operator(vraySplatOp.bl_idname, text="V-Ray Gaussians", icon_value=getUIIcon(vraySplatOp))
         self.layout.operator(vrayFurOp.bl_idname, text="V-Ray Fur", icon_value=getUIIcon(vrayFurOp))
         self.layout.operator(vrayDecalOp.bl_idname, text="V-Ray Decal", icon_value=getUIIcon(vrayDecalOp))
+        self.layout.operator(vrayPlaneOp.bl_idname, text="V-Ray Infinite Plane", icon_value=getUIIcon(vrayPlaneOp))
+        menus.addChaosScatterToMenu(self.layout)
 
 
 class VRAY_MT_cosmos(bpy.types.Menu):
@@ -122,11 +128,11 @@ class VRAY_MT_cosmos(bpy.types.Menu):
 
     def draw(self, context):
         self.layout.operator(VRAY_OT_open_cosmos_browser.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_browser))
-        
+
         mtlGen = self.layout.row()
         mtlGen.active = not vray.isCommunityEdition()
         mtlGen.operator(VRAY_OT_open_cosmos_ai_generator.bl_idname, icon_value=getUIIcon(VRAY_OT_open_cosmos_ai_generator))
-        
+
         self.layout.operator(VRAY_OT_relink_cosmos_assets.bl_idname, icon_value=getUIIcon(VRAY_OT_relink_cosmos_assets))
 
 
@@ -169,12 +175,14 @@ class VRAY_MT_tools(bpy.types.Menu):
         return pollEngine(context)
 
     def draw(self, context):
-        # This feature is not production-ready-yet
-        # self.layout.operator("vray.lister_open", text="Scene Lister", icon='OUTLINER')
-        # self.layout.operator("vray.relink_assets", text="Find Missing V-Ray Files", icon='FILE_REFRESH')
-        # self.layout.separator()
+        if features.isEnabled(Feature.OBJECT_LISTER):
+            self.layout.operator("vray.lister_open", text="Object Lister", icon='OUTLINER')
+            self.layout.operator("vray.material_lister_open", text="Material Manager", icon='MATERIAL')
+            self.layout.operator("vray.relink_assets", text="Find Missing V-Ray Files", icon='FILE_REFRESH')
+            self.layout.separator()
         self.layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
         self.layout.operator(VRAY_OT_convert_lights.bl_idname)
+        self.layout.operator(VRAY_OT_convert_world.bl_idname)
         self.layout.operator(VRAY_OT_make_shadow_catcher.bl_idname, icon_value=getUIIcon(VRAY_OT_make_shadow_catcher))
 
 
@@ -196,13 +204,23 @@ class VRAY_MT_object_context(bpy.types.Menu):
         renderOps.enabled = vray.isInitialized()
         renderOps.operator(VRAY_OT_open_vfb.bl_idname, icon_value=getUIIcon(VRAY_OT_open_vfb))
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
-        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
+        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render)).forceMode='FRAME'
+        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render), text="Render Animation").forceMode='ANIMATION'
         layout.separator()
 
         # --- Tools ---
+        from vray_blender.ui.menus import VRAY_OT_create_mesh_light
+
         layout.label(text="Tools")
         layout.operator(VRAY_OT_convert_materials.bl_idname, icon_value=getUIIcon(VRAY_OT_convert_materials))
         layout.operator(VRAY_OT_make_shadow_catcher.bl_idname, icon_value=getUIIcon(VRAY_OT_make_shadow_catcher))
+        layout.operator(VRAY_OT_create_mesh_light.bl_idname, icon_value=getUIIcon(VRAY_OT_create_mesh_light))
+
+        # Proxy export is a full-version feature. Keep it visible but inactive (not disabled) in
+        # Community Edition, so clicking it still shows the CE upsell notification.
+        proxyExport = layout.column()
+        proxyExport.active = not vray.isCommunityEdition()
+        proxyExport.operator('vray.export_vrmesh', icon_value=getIcon("VRAY_PROXY"))
         layout.separator()
 
         layout.menu(VRAY_MT_cloud_services.bl_idname)
@@ -223,7 +241,8 @@ class VRAY_MT_main(bpy.types.Menu):
         renderOps = layout.column()
         renderOps.enabled = vray.isInitialized()
         renderOps.operator(VRAY_OT_open_vfb.bl_idname, icon_value=getUIIcon(VRAY_OT_open_vfb))
-        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render))
+        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render)).forceMode='FRAME'
+        renderOps.operator(VRAY_OT_render.bl_idname, icon_value=getUIIcon(VRAY_OT_render), text="Render Animation").forceMode='ANIMATION'
         renderOps.operator(VRAY_OT_render_interactive.bl_idname, icon_value=getUIIcon(VRAY_OT_render_interactive))
         layout.separator()
 
@@ -231,10 +250,12 @@ class VRAY_MT_main(bpy.types.Menu):
 
         layout.separator()
         layout.menu(VRAY_MT_cosmos.bl_idname)
-        if False and vray.withDR2:
+        if vray.withDR2:
             layout.separator()
+            column = self.layout.column()
+            column.active = not vray.isCommunityEdition()
             running = VRayRenderEngine.iprRenderer and isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink)
-            layout.operator(VRAY_OT_vantage_live_link.bl_idname, icon = 'CHECKBOX_HLT' if running else 'CHECKBOX_DEHLT')
+            column.operator(VRAY_OT_vantage_live_link.bl_idname, icon = 'CHECKBOX_HLT' if running else 'CHECKBOX_DEHLT')
         layout.separator()
         layout.menu(VRAY_MT_camera.bl_idname)
         layout.menu(VRAY_MT_lights.bl_idname)
@@ -274,7 +295,7 @@ class VRAY_OT_open_collaboration(VRayOperatorBase):
     def description(cls, context, properties):
         return getLimitedFeatureDescription(cls.bl_description)
 
-from vray_blender.utils.cosmos_handler import cosmosHandler, VRAY_OT_show_cosmos_info_popup, VRAY_OT_dummy, CosmosBrowserPage, CosmosDownloadStatus
+from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosBrowserPage, CosmosDownloadStatus
 
 class VRAY_OT_open_cosmos_browser(VRayOperatorBase):
     bl_idname       = "vray.open_cosmos_browser"
@@ -367,7 +388,7 @@ class VRAY_OT_relink_cosmos_assets(VRayOperatorBase):
 
     def execute(self, context: bpy.types.Context):
         if not cosmosHandler.startDownload():
-            return {'FINISHED'}
+            return {'CANCELLED'}
         self._timer = context.window_manager.event_timer_add(0.1, window=context.window)
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -407,7 +428,7 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
                 converted += 1
         self.report({'INFO'}, f"Converted {converted} material(s)")
 
-        return { 'FINISHED' }
+        return { 'FINISHED' } if converted else { 'CANCELLED' }
 
     def invoke(self, context, event):
         self._centerDialog(context, event)
@@ -416,6 +437,7 @@ class VRAY_OT_convert_materials(VRAY_OT_message_box_base):
     def draw(self, context):
         self.layout.label(text="If there are V-Ray nodes in any Cycles material tree")
         self.layout.label(text="they will be deleted before the conversion.")
+        self._cursorWarp(context)
 
 
 class VRAY_OT_convert_lights(VRayOperatorBase):
@@ -449,7 +471,39 @@ class VRAY_OT_convert_lights(VRayOperatorBase):
         converted = sum(1 for light in nativeLights if convertLight(light))
 
         self.report({'INFO'}, f"Converted {converted} light(s)")
+        return { 'FINISHED' } if converted else { 'CANCELLED' }
+
+
+class VRAY_OT_convert_world(VRayOperatorBase):
+    bl_idname      = "vray.convert_world"
+    bl_label       = "Convert World"
+    bl_description = "Convert the Cycles world to a V-Ray environment"
+    bl_options     = { "UNDO", "INTERNAL" }
+
+    @classmethod
+    def poll(cls, context):
+        # When invoked from the node editor, the edited world may be a pinned one
+        # rather than the scene's world.
+        world = blender_utils.getPinnedDataFromEditorContext(context, context.scene.world)
+        return pollEngine(context) and world is not None and not world.vray.is_vray_class
+
+    def execute(self, context):
+        from vray_blender.nodes.operators.misc import _redrawNodeEditor, frameVRayNodes
+
+        world = blender_utils.getPinnedDataFromEditorContext(context, context.scene.world)
+
+        if not convertWorld(world, self):
+            self.report({'WARNING'}, f"Nothing to convert in world '{world.name}'")
+            return { 'CANCELLED' }
+
+        _redrawNodeEditor()
+        frameVRayNodes(world.node_tree)
+        self.report({'INFO'}, f"Converted world '{world.name}'")
         return { 'FINISHED' }
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event,
+            message="The Cycles world node tree will be replaced by a V-Ray one.")
 
 
 class VRAY_OT_make_shadow_catcher(VRayOperatorBase):
@@ -463,20 +517,60 @@ class VRAY_OT_make_shadow_catcher(VRayOperatorBase):
         return pollEngine(context)
 
     def execute(self, context):
-        objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        # Any object V-Ray exports as geometry can be a matte surface, not just meshes.
+        # Matches V-Ray for C4D, which accepts any object.
+        objects = [obj for obj in context.selected_objects if obj.type in GEOMETRY_OBJECT_TYPES]
 
         if not objects:
             self.report({'WARNING'}, "No object selected, please select geometry to make shadow catcher")
             return {'CANCELLED'}
 
         for obj in objects:
-            props = obj.vray.VRayObjectProperties
-            props.matte_surface            = True
-            props.shadows                  = True
-            props.alpha_contribution       = -1
-            props.matte_for_secondary_rays = "2"
+            blender_utils.makeShadowCatcher(obj)
 
         return {'FINISHED'}
+
+
+class VRAY_OT_revert_shadow_catcher(VRayOperatorBase):
+    bl_idname      = "vray.revert_shadow_catcher"
+    bl_label       = "Revert Shadow Catcher"
+    bl_description = "Remove the shadow-catcher preset from selected objects"
+    bl_options     = { "UNDO" }
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def execute(self, context):
+        objects = [obj for obj in context.selected_objects if blender_utils.isShadowCatcher(obj)]
+
+        if not objects:
+            self.report({'WARNING'}, "No shadow catcher object selected, please select one to revert")
+            return {'CANCELLED'}
+
+        for obj in objects:
+            blender_utils.revertShadowCatcher(obj)
+
+        return {'FINISHED'}
+
+
+class VRAY_MT_hidden_search(bpy.types.Menu):
+    """ Not appended to any visible menu or panel. Bound only to an unused keymap item
+        (see keymap.py's _registerHiddenSearchKeymap) so its operators are still
+        discoverable via F3 search: Blender's search index only walks menus reachable
+        from an editor's root menu or from an active keymap item, it does not list all
+        registered operators.
+    """
+    bl_label  = "V-Ray (Advanced)"
+    bl_idname = 'VRAY_MT_hidden_search'
+
+    @classmethod
+    def poll(cls, context):
+        return pollEngine(context)
+
+    def draw(self, context):
+        self.layout.operator(VRAY_OT_revert_shadow_catcher.bl_idname)
+
 
 class VRAY_OT_vantage_live_link(VRayOperatorBase):
     bl_idname       = "vray.vantage_live_link"
@@ -484,10 +578,17 @@ class VRAY_OT_vantage_live_link(VRayOperatorBase):
     bl_description  = "Vantage Live Link"
     bl_options      = {'INTERNAL'}
 
+    def draw(self, context):
+        drawCELimitedFeatureWarning(self.layout)
+
+    @classmethod
+    def description(cls, context, properties):
+        return getLimitedFeatureDescription(cls.bl_description)
+
     def invoke(self, context, event):
         running = VRayRenderEngine.iprRenderer and (type(VRayRenderEngine.iprRenderer) is VRayRendererVantageLiveLink)
         if not running and (status := VRayRendererVantageLiveLink.checkAndReportVantageState(context)) != VantageInitStatus.Success:
-            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message="Vantage Live Link failed: " + status.value)
+            return bpy.ops.vray.message_box('INVOKE_DEFAULT', message=f"Vantage Live Link failed:\n{status.value}", icon='ERROR', width=400)
 
         if running:
             from vray_blender.engine  import vfb_event_handler
@@ -497,10 +598,13 @@ class VRAY_OT_vantage_live_link(VRayOperatorBase):
         return self.execute(context)
 
     def execute(self, context: bpy.types.Context):
-        from vray_blender.engine  import vfb_event_handler
-        vfb_event_handler.VfbEventHandler.stopViewportRender()
-        vfb_event_handler.VfbEventHandler.stopInteractiveRender()
-        vfb_event_handler.VfbEventHandler.startVantageLiveLink()
+        if not vray.isCommunityEdition():
+            from vray_blender.engine  import vfb_event_handler
+            vfb_event_handler.VfbEventHandler.stopViewportRender()
+            vfb_event_handler.VfbEventHandler.stopInteractiveRender()
+            vfb_event_handler.VfbEventHandler.startVantageLiveLink()
+        else:
+            return context.window_manager.invoke_popup(self, width=400)
 
         return { 'FINISHED' }
 
@@ -636,13 +740,13 @@ def _getRegClasses():
         VRAY_OT_relink_cosmos_assets,
         VRAY_OT_convert_materials,
         VRAY_OT_convert_lights,
+        VRAY_OT_convert_world,
         VRAY_OT_make_shadow_catcher,
-        # VRAY_OT_vantage_live_link,
+        VRAY_OT_revert_shadow_catcher,
+        VRAY_OT_vantage_live_link,
         VRAY_OT_open_vfb,
         VRAY_OT_show_about_dialog,
         VRAY_OT_show_account_status,
-        VRAY_OT_show_cosmos_info_popup,
-        VRAY_OT_dummy,
 
         VRAY_MT_help,
         VRAY_MT_camera,
@@ -652,6 +756,7 @@ def _getRegClasses():
         VRAY_MT_cloud_services,
         VRAY_MT_tools,
         VRAY_MT_object_context,
+        VRAY_MT_hidden_search,
         VRAY_MT_main
     )
 

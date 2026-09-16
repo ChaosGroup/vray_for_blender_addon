@@ -4,12 +4,10 @@
 
 #pragma once
 
-#define ZMQ_BUILD_DRAFT_API
-
 #include <string>
 #include <vector>
 
-#include "cppzmq/zmq.hpp"
+#include <zmq.hpp>
 #include "base_types.h"
 #include "msg_serializer.hpp"
 
@@ -125,6 +123,7 @@ enum class MsgType : char {
 	RendererOnAsyncOpComplete,
 	RendererOnProgress,
 	RendererOnElementReady,
+	RendererOnPluginPropertyValues, ///< Server -> client: values V-Ray wrote into in/out plugin parameters.
 	LastRendererEvent,
 
 	// Control messages
@@ -139,6 +138,8 @@ enum class MsgType : char {
 	ControlOnCosmosDownloadAssets,
 	ControlOnCosmosDownloadedAssets,
 	ControlOnUpdateScenePath,
+	ControlOnCosmosImportById,      ///< Client -> server: import a Cosmos package by asset name or package id.
+	ControlOnCosmosDropImport,
 
 	// Scanned materials
 	ControlOnScannedLicenseCheck,
@@ -184,7 +185,36 @@ enum class MsgType : char {
 	ControlOnVFBShowMessagesWindow,
 	ControlOnVFBRenderRegionChanged,
 	ControlOnSwitchLicenseToCommunity,
+	ControlOnRenderStage,           ///< Server -> client: current render stage and its progress.
 	LastControlEvent,
+
+	// Scene import messages (dedicated SCENE_IMPORT connection), see zmq_import_message.hpp
+	FirstImportMessage,
+	ImportVrsceneRequest,
+	ImportVrsceneCancel,
+	ImportVrsceneAck,
+	LastImportMessage,
+
+	// Scene import events
+	FirstImportEvent,
+	ImportOnPluginData,
+	ImportOnProgress,
+	ImportOnResult,
+	LastImportEvent,
+
+	// Scatter preview messages (dedicated SCATTER_PREVIEW connection; scene data travels over
+	// the generic plugin messages), see zmq_scatter_message.hpp
+	FirstScatterMessage,
+	ScatterPreviewRequest,
+	ScatterPreviewCancel,
+	ScatterPresetRequest,
+	LastScatterMessage,
+
+	// Scatter preview events
+	FirstScatterEvent,
+	ScatterPreviewResult,
+	ScatterPresetResult,
+	LastScatterEvent,
 
 	// Compute devices
 };
@@ -232,7 +262,14 @@ enum class ImportedAssetType : char {
 	VRMesh,
 	HDRI,
 	Extras,
-	ParallaxInterior
+	ParallaxInterior,
+	// A Chaos Cosmos Asset Set. Carries no geometry - only a settings.json manifest
+	// referencing other packages. The addon parses it and imports each member separately.
+	AssetSet,
+	// A Chaos Scatter preset. Carries no geometry either - only a .mbc config, which the
+	// server reads with GeomUtils::readScatterPreset. The models it references are separate
+	// packages, imported like set members.
+	ScatterPreset
 };
 
 
@@ -315,6 +352,10 @@ struct RenderSizes {
 	int rgnTop = 0;
 	int rgnWidth = 0;
 	int rgnHeight = 0;
+
+	// Whether the exporter controls the VFB "Render Region" toolbar button for this resize.
+	// False leaves the button (and region) untouched.
+	bool manageRenderRegion = true;
 };
 
 
@@ -332,6 +373,7 @@ SERIALIZE_STRUCT(RenderSizes,
 	PARAM(rgnTop)
 	PARAM(rgnWidth)
 	PARAM(rgnHeight)
+	PARAM(manageRenderRegion)
 );
 
 
@@ -522,6 +564,41 @@ SERIALIZE_MESSAGE(RendererOnElementReady,
 	PARAM(metadataKey)
 	PARAM(metadataValue)
 );
+
+
+/// One property value read back from a V-Ray plugin instance. Used for in/out parameters
+/// which the core fills in while rendering and the client can only read, e.g.
+/// RenderChannelVelocity::max_velocity_last_frame.
+struct PluginPropertyValueData {
+	std::string     pluginName;    ///< V-Ray plugin instance name, as exported by the client.
+	std::string     propertyName;
+	vray::AttrValue value;
+};
+
+/// MsgRendererOnPluginPropertyValues - sent after each rendered frame with the values the
+/// core wrote into the watched plugin parameters. Carries an arbitrary collection so that
+/// other read-back parameters can be added without a new message.
+PROTO_MESSAGE(RendererOnPluginPropertyValues,
+	std::vector<PluginPropertyValueData> values;
+);
+
+static SerializerStream& operator&& (SerializerStream& s, const MsgRendererOnPluginPropertyValues& msg) {
+	s << static_cast<int>(msg.values.size());
+	for (const auto& v : msg.values) {
+		s << v.pluginName << v.propertyName << v.value;
+	}
+	return s;
+}
+
+static DeserializerStream& operator&& (DeserializerStream& s, MsgRendererOnPluginPropertyValues& msg) {
+	int count = 0;
+	s >> count;
+	msg.values.resize(count);
+	for (auto& v : msg.values) {
+		s >> v.pluginName >> v.propertyName >> v.value;
+	}
+	return s;
+}
 
 
 /// Client -> server: per-element SHM consumed; the server may overwrite the slot
@@ -1013,6 +1090,93 @@ SERIALIZE_MESSAGE(ControlOnUpdateScenePath,
 	PARAM(scenePath)
 );
 
+/// MsgControlOnCosmosImportById
+/// Client -> server request to import one or more Cosmos packages identified by
+/// asset name or package id. The server resolves each entry through the Cosmos
+/// client (name -> package id, falling back to treating it as a raw id) and drives
+/// the regular import path, so the result arrives back as MsgControlOnImportAsset(s).
+PROTO_MESSAGE(ControlOnCosmosImportById,
+	vray::AttrListString assetIdsOrNames;
+	bool applyTriplanarMapping;
+	bool applyRealWorldScale;
+	// Optional per-entry opaque tokens, parallel to assetIdsOrNames. Used when the addon
+	// imports the members of a Cosmos Asset Set: the token is echoed back in the resulting
+	// MsgControlOnImportAsset so the addon can match each imported asset to the manifest
+	// instance that requested it. An empty list means "no tokens"; entries are then resolved
+	// as asset names first, whereas a tokened entry is always treated as a raw package id.
+	vray::AttrListString instanceTokens;
+);
+
+/// MsgControlOnCosmosDropImport
+/// Sent from the Blender addon to the server when the user drops a Cosmos
+/// asset stub file onto a Blender viewport. The server invokes
+/// GalaxyClient::importPackage(packageId, ctx) which downloads the asset
+/// and calls back into BlenderCosmosImporter::importMaterial/importCompositeAsset,
+/// which then produce the usual MsgControlOnImportAsset (carrying drop coords
+/// through via ImportRequestContext) back to the addon.
+PROTO_MESSAGE(ControlOnCosmosDropImport,
+	std::string packageId;
+	uint32_t revisionId;
+	// World-space position of the drop in Blender units. Computed in the
+	// drop operator by raycasting from the viewport mouse position; on a
+	// miss, falls back to a point in front of the camera. Passed through
+	// unchanged by the server and used on the Python side to set the
+	// placement location of newly imported objects.
+	double worldX;
+	double worldY;
+	double worldZ;
+	// Name of the Blender scene object the drop ray hit (empty on miss).
+	// Used on the Python side to assign dropped Material assets to the
+	// hovered object's material slots.
+	std::string dropTargetObject;
+	// Specific material-slot index to assign the dropped material to, or
+	// -1 ("not specified") to let the Python side use its default policy
+	// (clear all slots, append to slot 0). Set from the hit face's
+	// material_index for viewport drops, or from the target object's
+	// active_material_index for Outliner drops. Ignored for non-Material
+	// asset types.
+	int32_t dropTargetSlot;
+	// Surface normal at the hit point (populated only on a geometry hit,
+	// i.e. hasHitNormal=true). Used on the Python side to orient Decals
+	// so they project INTO the hit surface.
+	bool hasHitNormal;
+	double normalX;
+	double normalY;
+	double normalZ;
+	// Flags taken from the 'options' block of the Cosmos drag JSON payload.
+	bool applyTriplanarMapping;
+	bool applyRealWorldScale;
+	// Set when Ctrl was held during the drop. Asks the addon to align the
+	// imported asset's local +Z to the hit surface normal even for assets
+	// that wouldn't otherwise be re-oriented (anything not tagged "wall"
+	// and not a Decal). Ignored when hasHitNormal is false.
+	bool forceNormalAlign;
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosImportById,
+	PARAM(assetIdsOrNames)
+	PARAM(applyTriplanarMapping)
+	PARAM(applyRealWorldScale)
+	PARAM(instanceTokens)
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosDropImport,
+	PARAM(packageId)
+	PARAM(revisionId)
+	PARAM(worldX)
+	PARAM(worldY)
+	PARAM(worldZ)
+	PARAM(dropTargetObject)
+	PARAM(dropTargetSlot)
+	PARAM(hasHitNormal)
+	PARAM(normalX)
+	PARAM(normalY)
+	PARAM(normalZ)
+	PARAM(applyTriplanarMapping)
+	PARAM(applyRealWorldScale)
+	PARAM(forceNormalAlign)
+);
+
 /// MsgControlOnImportAsset
 PROTO_MESSAGE(ControlOnImportAsset,
 	ImportedAssetType assetType;
@@ -1021,8 +1185,20 @@ PROTO_MESSAGE(ControlOnImportAsset,
 	std::string materialFile;
 	std::string objectFile;
 	std::string lightFile;
+	// The .vrmat holding a Cosmos light asset's LightLuminaire, from the package's "backward
+	// incompatible plugins" map. Kept out of lightFile so V-Ray 6 ignores it. Empty if none.
+	std::string luminaireFile;
+	// The settings.json manifest of a Cosmos Asset Set. Set only for assetType AssetSet,
+	// which carries no other file - the addon parses it and imports the members separately.
+	std::string settingsFile;
+	// Echo of MsgControlOnCosmosImportById::instanceTokens for this import. Non-empty only
+	// for a member of an Asset Set; the addon uses it to look up the manifest instance this
+	// asset was imported for, and to place it accordingly.
+	std::string setInstanceToken;
 	std::string packageId;
 	uint32_t revisionId;
+	// The asset's name in the Cosmos browser. Unrelated to 'assetNames' above, which holds location-map keys.
+	std::string packageName;
 	bool isAnimated;
 	// Plane dimensions in centimeters for ParallaxInterior assets; zero otherwise.
 	double planeWidth;
@@ -1033,6 +1209,39 @@ PROTO_MESSAGE(ControlOnImportAsset,
 	// Used to derive the triplanar size when applyTriplanarMapping is true.
 	float texRealWorldWidth;
 	float texRealWorldHeight;
+	// Drop-origin fields, populated when this import was triggered by a
+	// drag-and-drop operation. hasDropCoords=false means "imported via the
+	// Cosmos browser's Import button" and worldX/worldY/worldZ should be
+	// ignored (use default placement like 3D cursor).
+	bool hasDropCoords;
+	double worldX;
+	double worldY;
+	double worldZ;
+	// Name of the scene object the drop ray hit (empty on miss / non-drop).
+	// Used by the addon to assign dropped Material assets to that object's
+	// material slots instead of creating a free-floating material datablock.
+	std::string dropTargetObject;
+	// Specific material-slot index for Material drops, or -1 to use the
+	// addon's default policy. See MsgControlOnCosmosDropImport.
+	int32_t dropTargetSlot;
+	// Surface normal at the hit point. Valid only when hasHitNormal is true
+	// (a geometry raycast hit occurred); for drops over empty space no
+	// normal is available. Consumed on the Python side to orient Decals.
+	bool hasHitNormal;
+	double normalX;
+	double normalY;
+	double normalZ;
+	// Cosmos surface-attachment tag for the dropped package. Empty string
+	// for normal floor-standing assets; "wall" and "ceiling" for assets
+	// that should be pre-rotated so their attachment side faces the drop
+	// surface (matching the 3dsmax behavior - see VMAX-12393). Consumed on
+	// the Python side together with the hit normal to align the asset to
+	// the surface it was dropped on.
+	std::string surfaceAttachment;
+	// Set when Ctrl was held during the drop - the addon's "force align
+	// to hit normal" override for assets that wouldn't otherwise be
+	// re-oriented. See MsgControlOnCosmosDropImport.
+	bool forceNormalAlign;
 );
 
 SERIALIZE_MESSAGE(ControlOnImportAsset,
@@ -1042,14 +1251,30 @@ SERIALIZE_MESSAGE(ControlOnImportAsset,
 	PARAM(materialFile)
 	PARAM(objectFile)
 	PARAM(lightFile)
+	PARAM(luminaireFile)
+	PARAM(settingsFile)
+	PARAM(setInstanceToken)
 	PARAM(packageId)
 	PARAM(revisionId)
+	PARAM(packageName)
 	PARAM(isAnimated)
 	PARAM(planeWidth)
 	PARAM(planeHeight)
 	PARAM(applyTriplanarMapping)
 	PARAM(texRealWorldWidth)
 	PARAM(texRealWorldHeight)
+	PARAM(hasDropCoords)
+	PARAM(worldX)
+	PARAM(worldY)
+	PARAM(worldZ)
+	PARAM(dropTargetObject)
+	PARAM(dropTargetSlot)
+	PARAM(hasHitNormal)
+	PARAM(normalX)
+	PARAM(normalY)
+	PARAM(normalZ)
+	PARAM(surfaceAttachment)
+	PARAM(forceNormalAlign)
 );
 
 /// MsgControlOnScannedLicenseCheck
@@ -1259,6 +1484,22 @@ PROTO_MESSAGE(ControlOnLogMessage,
 SERIALIZE_MESSAGE(ControlOnLogMessage,
 	PARAM(logLevel)
 	PARAM(logMessage)
+);
+
+
+/// MsgControlOnRenderStage
+/// Goes on the control connection, not the renderer one: a blocking renderer call (startSync()
+/// during GPU kernel compilation) holds the renderer connection's thread, which also flushes its sends.
+PROTO_MESSAGE(ControlOnRenderStage,
+	std::string stage;   // e.g. "Compiling kernels"
+	int elements;        // Work units done
+	int totalElements;   // Total work units, 0 if the stage reports none
+);
+
+SERIALIZE_MESSAGE(ControlOnRenderStage,
+	PARAM(stage)
+	PARAM(elements)
+	PARAM(totalElements)
 );
 
 

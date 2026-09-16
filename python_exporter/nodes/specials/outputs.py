@@ -70,16 +70,22 @@ class VRayNodeFurOutput(VRayNodeBase):
 
     def init(self, context):
         addInputs(self, getPluginModule('GeomHair'))
+        # Inherit the object's classic fur settings (reverse of free()), so replacing the node
+        # keeps the settings free() saved instead of resetting them to the plugin defaults.
+        if obj := self._furObject():
+            copyPropGroupValues(obj.data.vray.GeomHair, self.GeomHair, getPluginModule('GeomHair'))
 
     def draw_buttons_ext(self, context, layout):
         classes.drawPluginUI(context, layout, self.GeomHair, getPluginModule('GeomHair'), self)
 
     def free(self):
         # Sync node values back to the object's classic propgroup so deleting the tree keeps them.
-        obj = next((o for o in bpy.data.objects
-                    if getattr(o.vray, 'isVRayFur', False) and o.vray.ntree is self.id_data), None)
-        if obj:
+        if obj := self._furObject():
             copyPropGroupValues(self.GeomHair, obj.data.vray.GeomHair, getPluginModule('GeomHair'))
+
+    def _furObject(self):
+        return next((o for o in bpy.data.objects
+                     if getattr(o.vray, 'isVRayFur', False) and o.vray.ntree is self.id_data), None)
 
     def update(self):
         if self.mute:
@@ -161,13 +167,16 @@ class VRayNodeOutputMaterial(VRayNodeBase):
 
     def draw_buttons_ext(self, context, layout):
         layout.prop(self, 'dontOverride')
-        # Draw material option properties in the sidebar
-        mtl = findDataObjFromNode(bpy.data.materials, self)
 
-        self._drawMaterialOption(context, layout, mtl.vray.MtlMaterialID, 'MtlMaterialID', 'Material ID')
-        self._drawMaterialOption(context, layout, mtl.vray.MtlRenderStats, 'MtlRenderStats', 'Render Stats')
+        # Draw material option properties in the sidebar. An output node in a node group or an
+        # orphan tree belongs to no material, and reading mtl.vray would raise.
+        if not (mtl := findDataObjFromNode(bpy.data.materials, self)):
+            return
+
         self._drawMaterialOption(context, layout, mtl.vray.MtlWrapper, 'MtlWrapper', 'Wrapper')
+        self._drawMaterialOption(context, layout, mtl.vray.MtlMaterialID, 'MtlMaterialID', 'Material ID')
         self._drawMaterialOption(context, layout, mtl.vray.MtlRoundEdges, 'MtlRoundEdges', 'Round Edges')
+        self._drawMaterialOption(context, layout, mtl.vray.MtlRenderStats, 'MtlRenderStats', 'Render Stats')
 
 
     def copy(self, srcNode):
@@ -178,7 +187,7 @@ class VRayNodeOutputMaterial(VRayNodeBase):
         addInput(self, 'VRaySocketBRDF', "Outlines", 'outlines')
 
     def _drawMaterialOption(self, context, layout, propGroup, pluginType, label):
-        panelUniqueId = f'{self.as_pointer()}_{pluginType}'
+        panelUniqueId = draw_utils.panelStateId(self, pluginType)
 
         if panel := draw_utils.rollout(layout, panelUniqueId, label, usePropDataSrc=propGroup, usePropName='use'):
             split = panel.split(factor=0.05, align=True)

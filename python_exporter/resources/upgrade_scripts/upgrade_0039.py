@@ -4,7 +4,7 @@
 
 import bpy
 from vray_blender.nodes.sockets import moveExtendSocketToBottom
-from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade, scopedForUpgrade
 from vray_blender.nodes.specials.effects import addEffectsExtendSocket
 from vray_blender.nodes.specials.renderchannels import addRenderChannelsExtendSocket
 from vray_blender.nodes.specials.texture import addTexLayeredExtendSocket
@@ -34,13 +34,13 @@ def _upgradeTree(ntree: bpy.types.NodeTree):
             fnAddExtendSock(node)
 
 def run():
-    for material in bpy.data.materials:
+    for material in scopedForUpgrade(bpy.data.materials):
         _upgradeTree(material.node_tree)
 
-    for object in bpy.data.objects:
+    for object in scopedForUpgrade(bpy.data.objects):
         _upgradeTree(object.vray.ntree)
 
-    for world in bpy.data.worlds:
+    for world in scopedForUpgrade(bpy.data.worlds):
         _upgradeTree(world.node_tree)
 
 def check():

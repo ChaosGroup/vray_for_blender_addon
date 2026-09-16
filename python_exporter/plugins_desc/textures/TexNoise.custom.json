@@ -1,5 +1,6 @@
 {
     "ID": "TexNoise",
+    "Name": "V-Ray Perlin Noise",
     "Widget": {
         "widgets": [
             {
@@ -148,7 +149,9 @@
                     },
                     {
                         "name": "invert_alpha",
-                        "active": {"cond": "::invert!=0"}
+                        "active": {
+                            "cond": "::invert!=0"
+                        }
                     }
                 ],
                 "layout": "COLUMN"
@@ -274,7 +277,7 @@
         },
         {
             "attr": "uvwgen",
-            "ui" : {
+            "ui": {
                 "display_name": "Mapping"
             },
             "type": "UVWGEN"

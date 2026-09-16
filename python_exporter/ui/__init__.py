@@ -23,6 +23,8 @@ def _getRegPackages():
     from vray_blender.ui import classes
     from vray_blender.ui import icons
     from vray_blender.ui import ui_operators
+    from vray_blender.ui import node_slots
+    from vray_blender.ui import node_nav
     from vray_blender.ui import properties_data_fur
     from vray_blender.ui import properties_data_geometry
     from vray_blender.ui import properties_data_camera
@@ -38,6 +40,7 @@ def _getRegPackages():
     from vray_blender.ui import properties_world
     from vray_blender.ui import properties_view_3d
     from vray_blender.ui import properties_npanel
+    from vray_blender.ui import highlight_objects
     from vray_blender.ui import menus
     from vray_blender.ui import preferences
     from vray_blender.ui import lister
@@ -46,6 +49,8 @@ def _getRegPackages():
         icons,
         classes,
         ui_operators,
+        node_slots,
+        node_nav,
         properties_data_fur,
         properties_data_geometry,
         properties_data_camera,
@@ -61,6 +66,7 @@ def _getRegPackages():
         properties_world,
         properties_view_3d,
         properties_npanel,
+        highlight_objects,
         menus,
         preferences,
         lister

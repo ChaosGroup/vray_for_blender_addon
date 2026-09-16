@@ -87,6 +87,8 @@ _BLENDER_SOCKET_TYPE_MAP = {
     'VRaySocketCoords':                'NodeSocketColor',
     'VRaySocketTransform':             'NodeSocketColor',
     'VRaySocketRenderChannelOutput':   'NodeSocketColor',
+    'VRaySocketRenderChannelLightMixOutput': 'NodeSocketColor',
+    'VRaySocketRenderChannelDenoiserOutput': 'NodeSocketColor',
     'VRaySocketEffectOutput':          'NodeSocketColor',
     'VRaySocketObjectList':            'NodeSocketColor',
     'VRaySocketWeight':                'NodeSocketFloat',

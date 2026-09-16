@@ -33,6 +33,8 @@ from bpy_extras.io_utils import ImportHelper
 
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.exporting.tools import getInputSocketByAttr
+from vray_blender.nodes.slots import firstOutput, loadImage, tryLink
+from vray_blender.nodes.tools import rearrangeTree
 from vray_blender.nodes.utils import getOutputNode, getPluginTypeOfNode
 from vray_blender.nodes.operators.wrangler.helpers import safeSet
 from vray_blender.nodes.operators.wrangler.poll import isVrayEditor, hasEditTree
@@ -114,25 +116,10 @@ _SLOTS = [
 ]
 
 
-def _loadImage(filepath: str, makeRelative: bool):
-    """Load an image, re-using an existing datablock if one with the same name is loaded."""
-    blockName = bpy.path.display_name_from_filepath(filepath)
-    img = bpy.data.images.get(blockName)
-    if img is None:
-        img = bpy.data.images.load(filepath, check_existing=True)
-        img.name = blockName
-    if makeRelative and bpy.data.filepath:
-        try:
-            img.filepath = bpy.path.relpath(img.filepath)
-        except ValueError:
-            pass
-    return img
-
-
 def _newBitmap(ntree, filepath: str, isData: bool, makeRelative: bool):
     """ Create a VRayNodeMetaImageTexture, load + assign the image. Returns (node, colorOutput). """
     node = ntree.nodes.new('VRayNodeMetaImageTexture')
-    img = _loadImage(filepath, makeRelative)
+    img = loadImage(filepath, makeRelative)
     if getattr(node, 'texture', None) is not None:
         node.texture.image = img
     if isData:
@@ -140,29 +127,16 @@ def _newBitmap(ntree, filepath: str, isData: bool, makeRelative: bool):
         safeSet(node.BitmapBuffer, 'transfer_function', '0')
         safeSet(node.BitmapBuffer, 'rgb_color_space', 'raw')
     # Default output for TEXTURE category is "Color".
-    return node, _firstOutput(node, 'Color')
-
-
-def _firstOutput(node, name: str):
-    return node.outputs.get(name) or (node.outputs[0] if node.outputs else None)
-
-
-def _tryLink(ntree, fromSocket, toSocket):
-    if fromSocket is None or toSocket is None:
-        return
-    try:
-        ntree.links.new(fromSocket, toSocket)
-    except RuntimeError:
-        pass
+    return node, firstOutput(node, 'Color')
 
 
 def _wrapNormal(ntree, bitmapOut):
     """ Wrap a bitmap in VRayNodeTexNormalBump (tangent space). Returns (wrapper, color_output). """
     wrap = ntree.nodes.new('VRayNodeTexNormalBump')
-    _tryLink(ntree, bitmapOut, getInputSocketByAttr(wrap, 'bump_tex_color'))
+    tryLink(ntree, bitmapOut, getInputSocketByAttr(wrap, 'bump_tex_color'))
     # map_type '1' = normal map in tangent space
     safeSet(wrap.TexNormalBump, 'map_type', '1')
-    return wrap, _firstOutput(wrap, 'Color')
+    return wrap, firstOutput(wrap, 'Color')
 
 
 # ---------- operator ----------
@@ -243,28 +217,55 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
             self.report({'INFO'}, "No matching images found")
             return {'CANCELLED'}
 
+        # A BRDFVRayMtl socket accepts a single input, but different filename tokens can
+        # resolve to the SAME target - e.g. a normal map and a bump map both target
+        # bump_map, or roughness and gloss both target reflect_glossiness. Flag the first
+        # match per socket to be connected (_SLOTS order makes that the more standard
+        # channel: normal over bump, roughness over gloss); the rest are still imported
+        # (so they land in the Textures group, ready to wire manually) but left
+        # unconnected, instead of overwriting the link and orphaning a node. displacement
+        # has no direct socket (attrName None) and is always connected.
+        seenTargets = set()
+        flagged, skippedSlots = [], []
+        for slotMeta, fname in resolved:
+            attrName = slotMeta[2]
+            connect = not (attrName is not None and attrName in seenTargets)
+            if attrName is not None and connect:
+                seenTargets.add(attrName)
+            if not connect:
+                skippedSlots.append(slotMeta[0])
+            flagged.append((slotMeta, fname, connect))
+        resolved = flagged
+
         # rows: list of (bitmap, [wrappers]) - wrappers sit to the right of the
         # source bitmap in the layout pass at the end.
         rows: list[tuple[bpy.types.Node, list[bpy.types.Node]]] = []
+        # Bitmaps imported but not wired (socket already taken); positioned into the
+        # Textures group after the connected part of the tree has been arranged.
+        unconnectedBitmaps: list[bpy.types.Node] = []
         # Carried out of the per-slot loop so the MtlDisplacement post-pass
         # can reach it.
         displacementBitmap: bpy.types.Node | None = None
 
-        for (slotKey, _tokens, attrName, flavor, isData), fname in resolved:
+        for (slotKey, _tokens, attrName, flavor, isData), fname, connect in resolved:
             # Displacement has no direct BRDF socket - handled as a post-pass
             # below that wraps the whole material in a MtlDisplacement.
-            if flavor != 'DISPLACEMENT':
+            target = None
+            if connect and flavor != 'DISPLACEMENT':
                 target = getInputSocketByAttr(mtl, attrName)
                 if target is None:
-                    continue
-            else:
-                target = None
+                    continue   # material lacks this socket - nothing to import
 
             filepath = path.join(importDir, fname)
             bitmap, bitmapOut = _newBitmap(ntree, filepath, isData, self.relative_path)
             bitmap.label = slotKey.replace('_', ' ').title()
             wrappers: list[bpy.types.Node] = []
             rows.append((bitmap, wrappers))
+
+            # Imported-but-unconnected: keep it in the Textures group, wire nothing.
+            if not connect:
+                unconnectedBitmaps.append(bitmap)
+                continue
 
             if bitmapOut is None:
                 continue
@@ -276,13 +277,13 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
             if flavor == 'NORMAL':
                 wrap, wrapOut = _wrapNormal(ntree, bitmapOut)
                 wrappers.append(wrap)
-                _tryLink(ntree, wrapOut, target)
+                tryLink(ntree, wrapOut, target)
                 # Tell the material this is a normal map (bump_type == 6).
                 safeSet(mtl.BRDFVRayMtl, 'bump_type', '6')
                 continue
 
             if flavor == 'BUMP':
-                _tryLink(ntree, bitmapOut, target)
+                tryLink(ntree, bitmapOut, target)
                 safeSet(mtl.BRDFVRayMtl, 'bump_type', '0')
                 continue
 
@@ -294,23 +295,26 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
             elif flavor == 'GLOSS':
                 safeSet(mtl.BRDFVRayMtl, 'option_use_roughness', False)
 
-            _tryLink(ntree, bitmapOut, target)
+            tryLink(ntree, bitmapOut, target)
 
         if not rows:
             self.report({'INFO'}, "No compatible sockets on the active material")
             return {'CANCELLED'}
 
-        # Shared UVW mapping node wired into every bitmap's uvwgen input.
-        # A reroute branches the mapping vector so all bitmaps fan out from
-        # one point, keeping the link graph readable.
+        # Shared UVW mapping node wired into every CONNECTED bitmap's uvwgen input.
+        # A reroute branches the mapping vector so all bitmaps fan out from one point,
+        # keeping the link graph readable. Unconnected imports are left fully standalone
+        # (no uvwgen either), so the layout doesn't pull them into the graph and strand
+        # them next to the material - they are placed into the Textures group below.
+        connectedBitmaps = [bitmap for bitmap, _ in rows if bitmap not in unconnectedBitmaps]
         uvwNode = ntree.nodes.new('VRayNodeUVWMapping')
         mappingOut = uvwNode.outputs.get('Mapping') or (uvwNode.outputs[0] if uvwNode.outputs else None)
         uvwReroute = ntree.nodes.new('NodeReroute')
         if mappingOut:
-            _tryLink(ntree, mappingOut, uvwReroute.inputs[0])
+            tryLink(ntree, mappingOut, uvwReroute.inputs[0])
         rerouteOut = uvwReroute.outputs[0]
-        for bitmap, _ in rows:
-            _tryLink(ntree, rerouteOut, getInputSocketByAttr(bitmap, 'uvwgen'))
+        for bitmap in connectedBitmaps:
+            tryLink(ntree, rerouteOut, getInputSocketByAttr(bitmap, 'uvwgen'))
 
         # Displacement post-pass: wrap the BRDF in a MtlDisplacement so the
         # height map feeds the engine's subdivision pipeline. Existing
@@ -320,51 +324,57 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
         if displacementBitmap is not None:
             displacementNode = self._wrapInDisplacement(ntree, mtl, displacementBitmap)
 
-        # Layout: UVWgen on the far left, reroute branching to the bitmap
-        # column, then wrappers cascading right of each bitmap. The whole
-        # block sits to the left of the BRDF.
-        bitmapX = mtl.location.x - 900.0
-        wrapStep = 280.0
-        rowStep = 200.0
-        by = mtl.location.y
-        for row, (bitmap, wrappers) in enumerate(rows):
-            y = by - row * rowStep
-            bitmap.location = (bitmapX, y)
-            for col, wrap in enumerate(wrappers):
-                wrap.location = (bitmapX + (col + 1) * wrapStep, y)
-        # Bitmaps are anchored at their top-left, so the row centers sit
-        # rowStep/2 below `.location.y`. Average top + bottom row centers
-        # to land the reroute/UVW on the vertical midline of the column.
-        midY = by - len(rows) * rowStep / 2.0
-        uvwNode.location = (bitmapX - 300.0, midY)
-        uvwReroute.location = (bitmapX - 60.0, midY)
+        # Lay the whole tree out with the shared auto-arrange algorithm rather than fixed
+        # offsets: the old row step overlapped tall preview nodes (a TexBitmap with its
+        # thumbnail is far taller than the old step) and ignored DPI scaling. Force a
+        # redraw first so the freshly created nodes report their real node.dimensions.
+        try:
+            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+        except RuntimeError:
+            pass
 
-        # Group bitmaps under a labeled "Textures" frame so they read as a
-        # unit, matching the layout produced by Blender's stock Node Wrangler.
-        # Parent is assigned after absolute positioning - the frame stays at
-        # (0,0) so each bitmap's stored location (relative to the frame) keeps
-        # the same on-screen position.
+        rearrangeTree(ntree, getOutputNode(ntree, 'MATERIAL') or mtl)
+
+        # Stack any imported-but-unconnected bitmaps into the texture column, just below
+        # the connected ones, so they sit inside the Textures group rather than being left
+        # at the origin. Real node.dimensions are available now (we forced a redraw above).
+        if unconnectedBitmaps:
+            dpiFac = bpy.context.preferences.system.dpi / 72.0
+            def _uiHeight(node):
+                dimY = node.dimensions.y
+                return dimY / dpiFac if dimY > 1.0 else 200.0
+
+            if connectedBitmaps:
+                colX = min(b.location.x for b in connectedBitmaps)
+                y = min(b.location.y - _uiHeight(b) for b in connectedBitmaps) - 40.0
+            else:
+                colX, y = mtl.location.x - 900.0, mtl.location.y
+            for bitmap in unconnectedBitmaps:
+                bitmap.location = (colX, y)
+                y -= _uiHeight(bitmap) + 40.0
+
+        # Group the source bitmaps (connected and unconnected) under a labeled "Textures"
+        # frame so they read as a unit. Parent AFTER the layout: the frame stays at (0,0),
+        # so each bitmap's stored (now frame-relative) location is unchanged on screen and
+        # Blender shrinks the frame to fit.
         texturesFrame = ntree.nodes.new('NodeFrame')
         texturesFrame.label = 'Textures'
         for bitmap, _ in rows:
             bitmap.parent = texturesFrame
 
-        if displacementNode is not None:
-            wrapX = mtl.location.x + mtl.width + 80.0
-            displacementNode.location = (wrapX, mtl.location.y)
-            # If the tree's Material Output is in the way (overlapping or to
-            # the left of the wrapper), shift it past so the chain reads
-            # BRDF -> MtlDisplacement -> Output instead of stacking on top.
-            outputNode = getOutputNode(ntree, 'MATERIAL')
-            if outputNode is not None:
-                minOutputX = wrapX + displacementNode.width + 80.0
-                if outputNode.location.x < minOutputX:
-                    outputNode.location.x = minOutputX
-
         ntree.update_tag()
+
+        # Frame the result in the editor.
+        try:
+            bpy.ops.node.view_all('INVOKE_DEFAULT')
+        except RuntimeError:
+            pass
         summary = f"Imported {len(rows)} texture(s)"
         if displacementNode is not None:
             summary += "; wrapped material in MtlDisplacement"
+        if skippedSlots:
+            summary += (f"; {', '.join(skippedSlots)} left unconnected in the Textures "
+                        "group (target socket already used - wire manually if needed)")
         self.report({'INFO'}, summary)
         return {'FINISHED'}
 
@@ -381,12 +391,12 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
         brdfOutput = next((output for output in mtl.outputs if output.enabled and not output.hide), None)
         preserved = [link.to_socket for link in list(brdfOutput.links)] if brdfOutput else []
 
-        _tryLink(ntree, brdfOutput, getInputSocketByAttr(wrap, 'base_material'))
-        _tryLink(ntree, _firstOutput(heightBitmap, 'Color'), getInputSocketByAttr(wrap, 'displacement_tex_color'))
+        tryLink(ntree, brdfOutput, getInputSocketByAttr(wrap, 'base_material'))
+        tryLink(ntree, firstOutput(heightBitmap, 'Color'), getInputSocketByAttr(wrap, 'displacement_tex_color'))
 
-        materialOutput = _firstOutput(wrap, 'Material')
+        materialOutput = firstOutput(wrap, 'Material')
         for toSocket in preserved:
-            _tryLink(ntree, materialOutput, toSocket)
+            tryLink(ntree, materialOutput, toSocket)
 
         # Fresh material trees often leave the BRDF disconnected from the
         # Material Output. Without this fallback the wrapper would float
@@ -396,7 +406,7 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
             if treeOutput is not None:
                 materialInput = treeOutput.inputs.get('Material')
                 if materialInput is not None:
-                    _tryLink(ntree, materialOutput, materialInput)
+                    tryLink(ntree, materialOutput, materialInput)
 
         return wrap
 

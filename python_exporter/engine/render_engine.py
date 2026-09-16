@@ -92,12 +92,17 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             whatever reason. In this case, the matching renderers on the server are no longer available
             so we need to recreate them in V4B as well.
         """
-        if VRayRenderEngine.previewRenderer is not None:
-            VRayRenderEngine.previewRenderer.abort()
+        # Both aborts block: previews and production renders run on Blender job threads that
+        # hold raw pointers to their native exporters, which our caller (a ZmqServer restart) is
+        # about to destroy.
+        if (previewRenderer := VRayRenderEngine.previewRenderer) is not None:
+            # Cleared first, so a preview job that has not entered render() yet skips it.
             VRayRenderEngine.previewRenderer = None
+            previewRenderer.abort()
 
-        if VRayRenderEngine.prodRenderer is not None:
-            VRayRenderEngine.prodRenderer.abort()
+        if (prodRenderer := VRayRenderEngine.prodRenderer) is not None:
+            prodRenderer.abort()
+            # Cleared last - the bake modal in utils_bake reads it while the job unwinds.
             VRayRenderEngine.prodRenderer = None
 
         if VRayRenderEngine.iprRenderer:
@@ -136,6 +141,9 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         if VRayRenderEngine.iprRenderer:
             VRayRenderEngine.iprRenderer.stop()
             VRayRenderEngine.iprRenderer = None
+            # Repaint, or the Vantage logo drawn by drawCallbackVantage() stays on screen
+            # until something else invalidates the viewport.
+            tagRedrawViewport()
 
     @staticmethod
     def stopViewportRenderer():
@@ -171,12 +179,15 @@ class VRayRenderEngine(bpy.types.RenderEngine):
     # This method is called for both final renders small preview for materials, world and lights.
     # Called on a non-main thread.
     def render(self, depsgraph: bpy.types.Depsgraph):
-        if self.is_preview and depsgraph.scene.render.resolution_x < 64: # Don't render icons
-            return
-
         try:
             if self.is_preview:
-                VRayRenderEngine.previewRenderer.render(self, depsgraph)
+                # The slot may have been cleared by resetAll() between update() and render().
+                if previewRenderer := VRayRenderEngine.previewRenderer:
+                    try:
+                        previewRenderer.render(self, depsgraph)
+                    finally:
+                        # Release the slot so it only ever holds an in-flight preview renderer.
+                        VRayRenderEngine.previewRenderer = None
             elif VRayRenderEngine.prodRenderer:
                 VRayRenderEngine.prodRenderer.render(self, depsgraph)
         except Exception as ex:
@@ -258,6 +269,8 @@ class VRayRenderEngine(bpy.types.RenderEngine):
         if not scene.vray.Exporter.image_to_blender:
             return
 
+        self.register_pass(scene, viewLayer, "Combined", 4, "RGBA", "COLOR")
+
         from vray_blender.nodes import utils as NodesUtils
         from vray_blender.engine.render_elements import (
             enumerateCryptomatteNodes, cryptomattePassName,
@@ -271,8 +284,6 @@ class VRayRenderEngine(bpy.types.RenderEngine):
             return
         if not NodesUtils.getChannelsOutputNode(world.node_tree):
             return
-
-        self.register_pass(scene, viewLayer, "Combined", 4, "RGBA", "COLOR")
 
         for _cryptoNode, instanceName, typePrefix, idType, numPasses in enumerateCryptomatteNodes(world):
             if idType not in ("0", "1") and idType not in self._warnedCryptoIdTypes:

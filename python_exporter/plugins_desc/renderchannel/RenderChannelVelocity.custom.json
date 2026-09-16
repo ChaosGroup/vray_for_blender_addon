@@ -7,6 +7,10 @@
             "attr": "name",
             "default": "Velocity",
             "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        },
+        {
+            "attr": "max_velocity_last_frame",
+            "desc": "The highest velocity V-Ray measured while rendering, before normalization. Filled in by V-Ray after each frame - set Max Velocity to this value to keep the pass from clipping"
         }
     ],
     "Widget": {
@@ -30,6 +34,10 @@
                     },
                     {
                         "name": "max_velocity"
+                    },
+                    {
+                        "name": "max_velocity_last_frame",
+                        "active": false
                     },
                     {
                         "name": "ignore_z"

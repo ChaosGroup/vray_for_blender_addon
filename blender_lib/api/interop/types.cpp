@@ -92,6 +92,7 @@ InstancerData::InstancerData(nb::object obj) :
 	tms		(obj.attr("tms")),
 	meshes		(obj.attr("meshes")),
 	indices		(obj.attr("indices")),
+	userAttrs	(obj.attr("userAttrs")),
 	ref		(obj)
 {}
 

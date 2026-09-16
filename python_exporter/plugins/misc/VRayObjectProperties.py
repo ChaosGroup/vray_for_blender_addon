@@ -83,11 +83,11 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     if propGroup.use_visibility:
         if propGroup.reflection_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
             for attrPlugin in pluginDesc.getAttribute('reflection_exclude'):
-                vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+                plugin_utils.forwardDeclarePlugin(exporterCtx, attrPlugin.name, 'Node')
     
         if propGroup.refraction_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
             for attrPlugin in pluginDesc.getAttribute('refraction_exclude'):
-                vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+                plugin_utils.forwardDeclarePlugin(exporterCtx, attrPlugin.name, 'Node')
         
         return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
     else:
@@ -96,6 +96,6 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
         
         # export_utils.exportPluginCommon will also export templates. We don't want this here, as it will
         # override the reflection/refraction exlude lists. 
-        vray.pluginCreate(exporterCtx.renderer, pluginDesc.name, pluginDesc.type)
+        plugin_utils.createPlugin(exporterCtx, pluginDesc.name, pluginDesc.type)
         return export_utils.exportPluginParams(exporterCtx, pluginDesc)
 

@@ -17,10 +17,9 @@ def reportAutoSettingsWarning(context):
         (vrayScene.SettingsCameraGlobal.auto_exposure != "0" or \
         vrayScene.SettingsCameraGlobal.auto_white_balance != False):
         
-        # debug.report() invokes bpy.ops.vray.report(...).
-        # Calling bpy.ops.* synchronously from inside a property update callback is unsafe.
-        # For that reason, we use debug.reportAsync() instead.
-        debug.reportAsync(
+        # debug.report() defers the bpy.ops.vray.report(...) call to the next main-loop
+        # tick, so it is safe to call from inside this property update callback.
+        debug.report(
             'WARNING',
             "Auto Exposure and Auto White Balance require Light Cache to be enabled."
         )

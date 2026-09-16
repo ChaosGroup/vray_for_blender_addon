@@ -94,11 +94,10 @@
                         "type": "boolean"
                     },
                     "active": {
-                        "type": "object",
-                        "additionalProps": false,
-                        "properties": {
-                            "cond1": "string"
-                        }
+                        "oneOf": [
+                            {"type": "boolean"},
+                            {"$ref": "#/$defs/singleRuleCondition" }
+                        ]
                     },
                     "visible": {
                         "oneOf": [
@@ -552,6 +551,10 @@
                             },
                             "default_closed": {
                                 "type": "boolean"
+                            },
+                            "link_redirect": {
+                                "type": "string",
+                                "description": "For a ROLLOUT socket: the name of a grouped param socket that a link dropped on the collapsed rollout header is forwarded to. The rollout auto-expands to reveal the connection."
                             }
                         }
                     }

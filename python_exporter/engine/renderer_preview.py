@@ -5,6 +5,7 @@
 import threading
 import bpy
 import mathutils
+import numpy
 import time
 
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
@@ -21,26 +22,96 @@ from vray_blender.exporting import world_export
 from vray_blender.bin import VRayBlenderLib as vray
 
 
+def _retagStuckMaterialPreviews():
+    """ Re-kick material previews whose icon render job was killed mid-queue.
+
+        Blender kills all pending preview jobs when a production render starts or a RENDERED
+        viewport session ends, and cancelled previews keep their 'rendering' flag forever -
+        the UI shows a spinner and never reschedules them. Such previews are detectable by
+        their allocated but never written pixel buffers. Tag them so they re-render on the
+        next draw.
+    """
+    if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('RENDER_PREVIEW'):
+        # A live job may legitimately not have written its pixels yet.
+        return
+
+    for mtl in bpy.data.materials:
+        if ((preview := mtl.preview) is None) or preview.is_image_custom:
+            continue
+        for size, pixels in ((preview.image_size, preview.image_pixels), (preview.icon_size, preview.icon_pixels)):
+            if pixelCount := size[0] * size[1]:
+                buf = numpy.empty(pixelCount, dtype=numpy.int32)
+                pixels.foreach_get(buf)
+                if not buf.any():
+                    # reload() clears the preview (BKE_previewimg_clear), which resets the stale
+                    # 'rendering' flag and makes the missing buffer reschedule a render on the
+                    # next draw. Works for materials outside the depsgraph too, unlike update_tag().
+                    preview.reload()
+                    break
+
+
+def scheduleStuckPreviewCheck():
+    """ Run the stuck-preview check once, after the transition that may have killed the
+        preview jobs has settled.
+    """
+    if not bpy.app.timers.is_registered(_retagStuckMaterialPreviews):
+        bpy.app.timers.register(_retagStuckMaterialPreviews, first_interval=1.0)
+
+
 class VRayRendererPreview(VRayRendererProdBase):
     """ Material preview renderer implementation. """
+
+    # Upper bound for the wait in abort(). A preview render takes ~150ms, so it is only ever
+    # reached if the job thread is stuck - and giving up on it is safe, as the native side never
+    # destroys a preview exporter a job thread may still be using.
+    ABORT_TIMEOUT = 5.0
 
     def __init__(self):
         super().__init__(isPreview=True)
         self.lock = threading.Lock()
 
+        # Cleared while render() is in flight, set once it has released the native renderer.
+        self._renderFinished = threading.Event()
+        self._renderFinished.set()
+
+        # Set by abort(). Polled by the render loop so an abort is honoured even when it arrives
+        # before the frame has been started, which vray.renderEnd() alone would not catch.
+        self._aborted = False
+
 
     def abort(self):
-        """ Abort the rendering job, if it is running. This method can be called from
-            any context.
+        """ Abort the rendering job, if it is running, and wait for the preview job thread to
+            release the renderer. Can be called from any context except that thread itself.
         """
         with self.lock:
+            self._aborted = True
+
             if self.renderer:
                 # Abort the job in vray. The cleanup will be performed when the job
                 # has finished.
                 vray.renderEnd(self.renderer)
 
+        # Deliberately outside the lock - render() holds it while running _renderEnd().
+        if not self._renderFinished.wait(VRayRendererPreview.ABORT_TIMEOUT):
+            debug.printError("Timed out waiting for the material preview render to abort")
+
 
     def render(self, engine: bpy.types.RenderEngine, dg: bpy.types.Depsgraph):
+        self._renderFinished.clear()
+
+        try:
+            self._render(engine, dg)
+        finally:
+            # A throw before _render()'s own cleanup would leave the native renderer registered
+            # with nothing left to release it. A no-op once it has been released.
+            with self.lock:
+                self._renderEnd(engine, success=False)
+
+            # Must be last - abort() reads it as 'the native renderer is no longer in use'.
+            self._renderFinished.set()
+
+
+    def _render(self, engine: bpy.types.RenderEngine, dg: bpy.types.Depsgraph):
         with self.lock:
             self.renderer = self._createRenderer(ExporterType.PREVIEW)
 
@@ -55,7 +126,8 @@ class VRayRendererPreview(VRayRendererProdBase):
         exporterCtx = self._getExporterContext(engine, dg, commonSettings)
         exporterCtx.renderer = self.renderer
         syncUniqueNamesForPreview(exporterCtx.dg)
-        exporterCtx.calculateObjectVisibility()
+        exporterCtx.syncSceneState()
+        exporterCtx.syncActiveInstancers()
 
         # Obtain a rendering target from Blender and set it to the C++ renderer
         self._renderStart(exporterCtx)
@@ -64,8 +136,7 @@ class VRayRendererPreview(VRayRendererProdBase):
         try:
             VRayRendererPreview._syncView(exporterCtx)
 
-            self._renderScene(engine, exporterCtx)
-            success = True
+            success = self._renderScene(engine, exporterCtx)
         except Exception as ex:
             self._reportError(engine, f"{str(ex)} See log for details")
             debug.printExceptionInfo(ex, "VRayRendererPreview::render()")
@@ -77,6 +148,9 @@ class VRayRendererPreview(VRayRendererProdBase):
     def _renderScene(self, engine: bpy.types.RenderEngine, exporterCtx: ExporterContext):
         """ Export and render the current frame."""
         scene = exporterCtx.dg.scene
+
+        if self._aborted:
+            return False
 
         vray.setRenderFrame(self.renderer, scene.frame_current)
         self._export(engine, exporterCtx)
@@ -90,13 +164,17 @@ class VRayRendererPreview(VRayRendererProdBase):
         vray.renderFrame(self.renderer)
 
         while vray.renderJobIsRunning(self.renderer):
-            if engine.test_break():
+            if self._aborted or engine.test_break():
                 vray.abortRender(self.renderer)
                 return False
 
             # It is usual for previews to be aborted so keep the abort check mechanism
-            # responsive by sleeping for just a short interval.
-            time.sleep(0.03)
+            # responsive by sleeping for just a short interval. A preview render takes
+            # ~150ms, so a 30ms interval used to add up to 20% to it in wait alone.
+            # Anything below 2ms only burns CPU without returning sooner.
+            time.sleep(0.002)
+
+        return True
 
 
     def _exportSceneAdjustments(self, exporterCtx: ExporterContext):

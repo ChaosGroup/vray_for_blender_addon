@@ -1,0 +1,38 @@
+
+{
+    "Desciption" : "UVWGenSelect",
+    "ID" : "UVWGenSelect",
+    "Name" : "UVW Gen Select",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "uvwgen_id",
+            "default" : "",
+            "desc" : "Selector string ID that will be searched for in the intersected geometry instance",
+            "type" : "STRING",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvw_transform",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Additional transform to be applied over the resolved UVW coordinates",
+            "type" : "TRANSFORM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "uvwgen",
+            "default" : null,
+            "desc" : "Optional UVWGen to be used as default if the uvwgen_id could not be resolved",
+            "type" : "PLUGIN",
+            "ui" : {}
+        }
+    ],
+    "Type" : "UVWGEN",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

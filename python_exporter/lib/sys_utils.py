@@ -47,10 +47,13 @@ def getPlatformName(executableBaseName: str):
 
 
 def getExporterPath():
-    for path in bpy.utils.script_paths(subdir=os.path.join('addons','vray_blender')):
-        if path:
-            return path
-    return None
+    # The add-on package may be installed outside Blender's scripts/addons folder: a thin
+    # bootstrap there redirects the 'vray_blender' package to the real install location.
+    # Resolve the add-on root relative to the imported package rather than the addons
+    # folder, so bundled resources (plugins/, plugins_desc/, bin/ tools, templates/,
+    # overrides/, preview/) are found wherever the package actually lives.
+    import vray_blender
+    return os.path.dirname(vray_blender.__file__)
 
 
 def getUserConfigDir():
@@ -166,7 +169,7 @@ def getZmqServerFolder():
     # By default, ZmqServer is installed in the bin/ folder of the add-on. This location
     # can be changed from the command line.
     if not (zmqServerFolder := StartupConfig.zmqServerFolder):
-        zmqServerFolder =  os.path.dirname(os.path.realpath(__file__)).replace("lib","bin/VRayZmqServer/")
+        zmqServerFolder = os.path.join(getExporterPath(), "bin", "VRayZmqServer")
 
     return zmqServerFolder
 
@@ -195,11 +198,11 @@ _resourcesPath = None
 
 def _getResourcesPath():
     """ Returns the full path to the resources folder """
-    # Cache the result: os.path.realpath() is a filesystem syscall and this is called
-    # once per exported TexBitmap. __file__ does not change during a session.
+    # Cache the result: this is called once per exported TexBitmap and the
+    # install location does not change during a session.
     global _resourcesPath
     if _resourcesPath is None:
-        _resourcesPath = os.path.dirname(os.path.realpath(__file__)).replace("lib", "resources")
+        _resourcesPath = os.path.join(getExporterPath(), "resources")
     return _resourcesPath
 
 def getVfbSettingsPath():
@@ -217,8 +220,8 @@ def getUvGridTexturePath():
 
 def copyToClipboard(text):
     if 'WINDIR' in os.environ:
-        # Blender clears the system environments variables
-        # which loses the path to clip.exe (needed for copying to clipboard)
+        # Full path rather than a bare name: starting the ZmqServer used to overwrite PATH in
+        # the Blender process, dropping System32 from it. Fixed now, so this is only defensive.
         # TODO: handle all supported operating systems
         sys32Path = f"{os.environ['WINDIR']}\\System32\\"
         os.system(f"echo {text}|{sys32Path}\\clip.exe")

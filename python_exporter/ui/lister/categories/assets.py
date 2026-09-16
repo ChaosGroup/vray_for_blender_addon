@@ -12,7 +12,7 @@ from vray_blender.ui.lister.core import ListerCategory, ColumnSpec
 from vray_blender.ui.lister import relink
 
 
-_GROUP_ORDER = ['BITMAP', 'PROXY', 'SCENE', 'SPLAT', 'SCANNED', 'VRMAT', 'OCIO', 'IES', 'CAMERA']
+_GROUP_ORDER = ['BITMAP', 'PROXY', 'SCENE', 'SPLAT', 'SCANNED', 'VRMAT', 'OCIO', 'IES', 'LUMINAIRE', 'CAMERA']
 
 
 def _drawSelect(row, rec, propGroup):
@@ -56,12 +56,19 @@ def _drawPath(row, rec, propGroup):
 
 def _drawOpen(row, rec, propGroup):
     line = row.row(align=True)
-    op = line.operator("vray.asset_open", text="", icon='FILE_FOLDER')   # show containing folder
-    op.mode = 'FOLDER'
+    # No action in this cell can do anything while the file is missing from disk -
+    # opening it, opening its folder and reading a proxy back all need it there.
+    line.enabled = not rec.isMissing
+    op = line.operator("vray.asset_open_folder", text="", icon='FILE_FOLDER')
     op.ref = rec.locator
-    op = line.operator("vray.asset_open", text="", icon='WINDOW')        # open in default app
-    op.mode = 'FILE'
-    op.ref = rec.locator
+    if rec.kind == 'PROXY':
+        # A .vrmesh has no viewer; convert it to a Blender mesh instead.
+        op = line.operator("vray.proxy_to_mesh", text="", icon='MESH_DATA')
+        op.object_name = rec.objName
+    elif rec.kind == 'BITMAP':
+        # Only bitmaps have a default app; other kinds are V-Ray formats - VBLD-2615.
+        op = line.operator("vray.asset_open_file", text="", icon='WINDOW')
+        op.ref = rec.locator
 
 
 # Status / Type are icon-only columns (no header text, no sorting).
@@ -72,7 +79,7 @@ _COL_ELEMENT    = ColumnSpec('element', "Scene Element", draw=_drawElement, widt
 _COL_PATH       = ColumnSpec('path',    "Path",          draw=_drawPath,    width=4.0)
 # Bitmaps and splats both expose 'rgb_color_space'; the generic prop cell edits it.
 _COL_COLORSPACE = ColumnSpec('rgb_color_space', "Color Space", attr='rgb_color_space', width=1.8)
-_COL_OPEN       = ColumnSpec('open',    "",              draw=_drawOpen,    fixedWidth=2.2, center=True)
+_COL_OPEN       = ColumnSpec('open',    "",              draw=_drawOpen,    fixedWidth=2.8, center=True)
 
 # Kinds whose propgroup carries an editable color space.
 _COLORSPACE_KINDS = frozenset({'BITMAP', 'SPLAT'})
@@ -92,6 +99,11 @@ class AssetsCategory(ListerCategory):
     def enumerate(self, context):
         return relink.collectAssetRefs(context)
 
+    def emptyMessage(self, state):
+        if getattr(state, 'show_missing_assets_only', False):
+            return "No missing assets in the scene."
+        return super().emptyMessage(state)
+
     def entityName(self, rec):
         return rec.element
 
@@ -107,6 +119,15 @@ class AssetsCategory(ListerCategory):
     def getPropGroup(self, rec):
         # None for image-backed bitmaps; the cell draws read the record directly
         return rec.propGroup
+
+    def visibilityObject(self, rec, key, context):
+        # Only file references owned by a single scene object (proxies, splats, V-Ray
+        # scenes, IES lights, cameras) follow that object's viewport / render visibility;
+        # texture / material / world references have no single owner (objName == '') and
+        # stay unfiltered.
+        if not rec.objName:
+            return None
+        return context.scene.objects.get(rec.objName)
 
     def columns(self, key):
         cols = [_COL_SELECT, _COL_STATUS, _COL_TYPE, _COL_ELEMENT, _COL_PATH]

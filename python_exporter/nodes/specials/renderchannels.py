@@ -11,7 +11,7 @@ from vray_blender.exporting.world_export import sockConnectedToDenoiser
 from vray_blender.lib import class_utils, draw_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.operators import sockets as SocketOperators
-from vray_blender.nodes.sockets import addInput, addOutput, moveExtendSocketToBottom
+from vray_blender.nodes.sockets import addChannelOutput, addInput, addOutput, addSpecialChannelSockets, moveExtendSocketToBottom
 from vray_blender.nodes.links import vrayNodeInsertLink, autoConnectNode
 from vray_blender.nodes.utils import getNodeByType
 from vray_blender.ui import classes
@@ -83,6 +83,8 @@ class VRayNodeRenderChannels(VRayNodeBase):
     )
 
     def init(self, context):
+        addSpecialChannelSockets(self)
+
         addInput(self, 'VRaySocketRenderChannel', "Channel 1")
 
         addRenderChannelsExtendSocket(self)
@@ -138,11 +140,15 @@ class VRayNodeRenderChannelDenoiser(VRayNodeBase):
         rather than in the node itself.
     """
     bl_idname = 'VRayNodeRenderChannelDenoiser'
-    bl_label  = 'VRay Denoiser'
+    bl_label  = 'Denoiser'
     bl_icon   = 'SCENE_DATA'
 
     vray_type   = 'RENDERCHANNEL'
     vray_plugin = 'RenderChannelDenoiser'
+
+    # Matches the 'Subtype' of RenderChannelDenoiser.custom.json. The node class is hand-written,
+    # so it does not get the attribute from the plugin description like the generated ones do.
+    vray_menu_subtype = 'SPECIAL'
 
     @property
     def RenderChannelDenoiser(self):
@@ -154,7 +160,7 @@ class VRayNodeRenderChannelDenoiser(VRayNodeBase):
         return None
 
     def init(self, context):
-        addOutput(self, 'VRaySocketRenderChannelOutput', "Channel")
+        addChannelOutput(self)
         autoConnectNode(self)
 
     def draw_buttons(self, context, layout):

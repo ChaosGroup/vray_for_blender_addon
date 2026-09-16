@@ -1,0 +1,84 @@
+{
+    "ID": "TexParticleSampler",
+    "Name": "V-Ray Particle Sampler",
+    "Type": "TEXTURE",
+    "Subtype": "UTILITY",
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "parameters",
+                "label": "Parameters",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "def_color_tex"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Color",
+                "type": "OUTPUT_TEXTURE"
+            },
+            {
+                "name": "rgbPP"
+            },
+            {
+                "name": "incandescencePP"
+            },
+            {
+                "name": "acceleration"
+            },
+            {
+                "name": "worldVelocity"
+            },
+            {
+                "name": "userVector1PP"
+            },
+            {
+                "name": "userVector2PP"
+            },
+            {
+                "name": "userVector3PP"
+            },
+            {
+                "name": "userVector4PP"
+            },
+            {
+                "name": "userVector5PP"
+            },
+            {
+                "name": "age"
+            },
+            {
+                "name": "lifespanPP"
+            },
+            {
+                "name": "opacityPP"
+            },
+            {
+                "name": "userScalar1PP"
+            },
+            {
+                "name": "userScalar2PP"
+            },
+            {
+                "name": "userScalar3PP"
+            },
+            {
+                "name": "userScalar4PP"
+            },
+            {
+                "name": "userScalar5PP"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": true
+    }
+}

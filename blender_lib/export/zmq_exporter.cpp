@@ -282,6 +282,37 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		processRendererOnElementReady(message);
 		break;
 	}
+	case MsgType::RendererOnPluginPropertyValues: {
+		const auto& message = deserializeMessage<MsgRendererOnPluginPropertyValues>(stream);
+		processRendererOnPluginPropertyValues(message);
+		break;
+	}
+
+	case MsgType::ScatterPreviewResult: {
+		const auto message = deserializeMessage<MsgScatterPreviewResult>(stream);
+		ScatterResultCb cb;
+		{
+			std::scoped_lock l(m_callbacksMutex);
+			cb = callback_on_scatter_result;
+		}
+		if (cb) {
+			cb(message);
+		}
+		break;
+	}
+
+	case MsgType::ScatterPresetResult: {
+		const auto message = deserializeMessage<MsgScatterPresetResult>(stream);
+		ScatterPresetResultCb cb;
+		{
+			std::scoped_lock l(m_callbacksMutex);
+			cb = callback_on_scatter_preset_result;
+		}
+		if (cb) {
+			cb(message);
+		}
+		break;
+	}
 
 	default:
 		Logger::error("Invalid message type: %1%", static_cast<int>(msgType));
@@ -311,7 +342,10 @@ void ZmqExporter::processControlOnLogMessage(DeserializerStream& stream) {
 		logMsg.resize(firstNewLinePos);
 	}
 
-	callback_on_message_update(logMsg);
+	// Respect the configured verbosity so the status line doesn't show filtered-out messages.
+	if (Logger::get().shouldLog(static_cast<LogLevel>(message.logLevel))) {
+		callback_on_message_update(logMsg);
+	}
 }
 
 
@@ -338,7 +372,10 @@ void ZmqExporter::processRendererOnVRayLog(const proto::MsgRendererOnVRayLog& me
 			msg.resize(firstNewLinePos);
 		}
 
-		callback_on_message_update(msg);
+		// Respect the configured verbosity so the status line doesn't show filtered-out messages.
+		if (Logger::get().shouldLog(static_cast<LogLevel>(message.logLevel))) {
+			callback_on_message_update(msg);
+		}
 	}
 }
 
@@ -488,6 +525,7 @@ void ZmqExporter::processRendererOnElementReady(const proto::MsgRendererOnElemen
 	// Look up the destination registered by ProductionExporter::setElementPasses.
 	ElementDestination dest;
 	bool haveDest = false;
+	bool haveAnyDest = false;
 	{
 		std::scoped_lock lock(m_imgMutex);
 		auto it = m_elementDestinations.find(PerInstanceKey{message.pluginInstanceName, message.subIndex});
@@ -495,6 +533,7 @@ void ZmqExporter::processRendererOnElementReady(const proto::MsgRendererOnElemen
 			dest = it->second;
 			haveDest = true;
 		}
+		haveAnyDest = !m_elementDestinations.empty();
 
 		if (!message.metadataKey.empty()) {
 			m_metadata[message.metadataKey] = message.metadataValue;
@@ -502,8 +541,16 @@ void ZmqExporter::processRendererOnElementReady(const proto::MsgRendererOnElemen
 	}
 
 	if (!haveDest) {
-		Logger::warning("Element ready for '%1%' subIndex %2%: no registered destination (Blender pass not requested)",
-			message.pluginInstanceName, message.subIndex);
+		// Every emitted element was requested by this client, so a key missing from a
+		// populated map means we asked for the channel but registered no pass for it.
+		// An empty map means renderEnd() cleared it - expected when an abort races the emit.
+		if (haveAnyDest) {
+			Logger::warning("Element ready for '%1%' subIndex %2%: no destination registered for this routing key",
+				message.pluginInstanceName, message.subIndex);
+		} else {
+			Logger::debug("Element ready for '%1%' subIndex %2%: element routing already cleared (render ended)",
+				message.pluginInstanceName, message.subIndex);
+		}
 	} else if (!dest.buffer) {
 		// Expected during Blender's lazy pass-buffer allocation - the pass was registered
 		// but ibuf->float_buffer.data wasn't materialized yet. Data is dropped this frame;
@@ -531,6 +578,20 @@ void ZmqExporter::processRendererOnElementReady(const proto::MsgRendererOnElemen
 		const size_t bytes = std::min(expectedBytes, capacity);
 		::memcpy(dest.buffer, src, bytes);
 	});
+}
+
+
+void ZmqExporter::processRendererOnPluginPropertyValues(const MsgRendererOnPluginPropertyValues& message) {
+	// Overwrite rather than append: the server sends the full watched set after every
+	// frame, so the newest message is the complete picture.
+	std::scoped_lock lock(m_imgMutex);
+	m_pluginPropertyValues = message.values;
+}
+
+
+std::vector<PluginPropertyValueData> ZmqExporter::getPluginPropertyValues() const {
+	std::scoped_lock lock(m_imgMutex);
+	return m_pluginPropertyValues;
 }
 
 
@@ -802,6 +863,9 @@ void ZmqExporter::init(const ExporterSettings & settings)
 {
 	m_settings = settings;
 
+	// Server-wide state - drop the stage left over from the previous render.
+	ZmqServer::get().clearRenderStage();
+
 	try {
 		RendererType type = RendererType::None;
 		ExporterType exporterType = m_settings.getExporterType();
@@ -867,6 +931,7 @@ void ZmqExporter::start()
 		std::scoped_lock lock(m_imgMutex);
 		m_layerImages.clear();
 		m_metadata.clear();
+		m_pluginPropertyValues.clear();
 	}
 
 	// The view settings should not be set if not changed. Set them to their default values
@@ -916,6 +981,7 @@ void ZmqExporter::renderSequence(const vray::AttrList<int>& sequences)
 		std::scoped_lock lock(m_imgMutex);
 		m_layerImages.clear();
 		m_metadata.clear();
+		m_pluginPropertyValues.clear();
 	}
 
 	m_lastRenderedFrame = (*sequences)[0] - 1;

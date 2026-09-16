@@ -185,22 +185,10 @@ class VRAY_OT_switch_license_type(bpy.types.Operator):
     bl_description = "Switch between Commercial and Community editions. The V-Ray server will be restarted to apply the new license type"
     bl_options     = {'INTERNAL'}
 
-    @staticmethod
-    def _isRenderRunning():
-        """ Return True if any V-Ray renderer is currently active.
-            Mirrors the set of renderer slots cleared by VRayRenderEngine.resetAll().
-        """
-        from vray_blender.engine.render_engine import VRayRenderEngine
-        return any((
-            VRayRenderEngine.prodRenderer,
-            VRayRenderEngine.previewRenderer,
-            VRayRenderEngine.viewportRenderer,
-            VRayRenderEngine.iprRenderer,
-        ))
-
     def invoke(self, context, event):
-        # Only prompt when an active render would be aborted by the restart.
-        if self._isRenderRunning():
+        # Only prompt when an active render would be aborted by the restart. Material previews
+        # are not counted - they are short-lived and Blender re-renders them automatically.
+        if sys_utils.activeRendererExists():
             return context.window_manager.invoke_props_dialog(self, width=400)
         return self.execute(context)
 
@@ -220,9 +208,11 @@ class VRAY_OT_switch_license_type(bpy.types.Operator):
         # Make sure no renderers are using the about-to-die ZmqServer.
         VRayRenderEngine.resetAll()
 
-        # Restart the server so the new -license value is picked up.
+        # Restart the server so the new -license value is picked up. stop() clears the
+        # ZmqServer callback registry, so the engine callbacks must be re-attached.
         ZMQ.stop()
         ZMQ.ensureRunning()
+        ZMQ.attachEngineCallbacks()
 
         return {'FINISHED'}
 
@@ -249,7 +239,7 @@ class AnimationSettingsVrsceneExport(bpy.types.PropertyGroup):
         name = "Frame Step",
         description = "Frame step for export (overrides scene frame step during VRScene export only)",
         default = 1,
-        min = 0,
+        min = 1,
         update = lambda self, context: blender_utils.markPreferencesDirty(context)
     )
 
@@ -295,9 +285,10 @@ def _onListerGeometryCombined(self, context):
     if view is not None:
         # Resolve from the RAW stored enum index, not view.active_category - the latter
         # re-resolves against the just-refiltered item list and yields '' for the hidden section.
-        cats = core.getCategories()
+        # Match on enumIndex, never on the position in getCategories(): the two happen to agree
+        # today, but enumIndex is a fixed per-category number that must not track list order.
         rawIdx = view.get('active_category', 0)
-        cat = cats[rawIdx] if isinstance(rawIdx, int) and 0 <= rawIdx < len(cats) else None
+        cat = next((c for c in core.getCategories() if c.enumIndex == rawIdx), None)
         if self.geometry_combined:
             if cat is not None and cat.geometryRole == 'split':
                 view.active_category = 'GEOMETRY'
@@ -312,7 +303,7 @@ class VRayListerPreferences(bpy.types.PropertyGroup):
         The names are mirrored by core.ListerState - keep them in sync. """
     layout_mode: bpy.props.EnumProperty(
         name = "Layout",
-        description = "How the V-Ray Scene Lister arranges the types",
+        description = "How the V-Ray Object Lister arranges the types",
         items = (
             ('TABBED',  "Tabbed",  "Show one type at a time, selected from tabs on top", 'LINENUMBERS_ON', 0),
             ('STACKED', "Stacked", "Show every type stacked in collapsible groups", 'LINENUMBERS_OFF', 1),
@@ -366,42 +357,44 @@ class VRayListerPreferences(bpy.types.PropertyGroup):
         update = _onListerLayoutRedraw,
     )
 
-    mat_editor_layout: bpy.props.EnumProperty(
-        name = "Editor List Placement",
-        description = "Where the material list lives in the Material Editor view",
-        items = (
-            ('NAVBAR', "Navbar (drag-resize)",
-             "Material list alone in the resizable navbar region; switch categories from the "
-             "header dropdown. Drag the navbar border to resize - a real mouse-drag divider"),
-            ('SPLIT',  "Split panel (slider)",
-             "Material list as a separate column beside the parameters; category tabs stay in "
-             "the navbar. The editor is sized with the Editor Width slider"),
-            ('TABLE',  "Table on top, editor below",
-             "The full materials table (with its basic-parameter columns) on top, and the "
-             "selected material's preview and parameters below it"),
-            ('PLAIN',  "Plain table (no editor)",
-             "Just the materials table with its parameter columns, like the other sections - "
-             "no preview/editor panel"),
-        ),
-        default = 'SPLIT',
-        update = _onListerLayoutRedraw,
-    )
-    mat_editor_panel_width: bpy.props.FloatProperty(
-        name = "Editor Width",
-        description = "Width of the material editor (preview + parameters) panel, in UI units, "
-                      "in the split-panel layout. A fixed width, so the editor stays put and the "
-                      "material list takes the remaining space",
-        default = 24.0, min = 12.0, max = 64.0,
-        update = _onListerLayoutRedraw,
-    )
-    mat_editor_list_display: bpy.props.EnumProperty(
+    # The Material Lister's two panes are real editor areas, so their widths are Blender's
+    # area divider to drag - there is no width or collapse state of ours to store.
+    material_editor_list_display: bpy.props.EnumProperty(
         name = "List Display",
-        description = "How the material list shows its entries in the Navbar / Split layouts",
+        description = "How the Material Manager's list shows its entries",
         items = (
-            ('LIST',       "List",       "A compact text list, one material per row"),
-            ('THUMBNAILS', "Thumbnails", "A grid of material preview thumbnails"),
+            ('LIST',       "List",       "A compact text list, one material per row", 'LONGDISPLAY', 0),
+            ('THUMBNAILS', "Thumbnails", "A grid of material preview thumbnails", 'IMGDISPLAY', 1),
         ),
-        default = 'LIST',
+        default = 'THUMBNAILS',
+        update = _onListerLayoutRedraw,
+    )
+    material_thumbnail_size: bpy.props.EnumProperty(
+        name = "Thumbnail Size",
+        description = "How large the previews are drawn in the Material Manager's thumbnail grid",
+        items = (
+            ('SMALL',  "Small",  "Small thumbnails, more per row", 0),
+            ('MEDIUM', "Medium", "Medium thumbnails", 1),
+            ('LARGE',  "Large",  "Large thumbnails, at Blender's full preview resolution", 2),
+        ),
+        default = 'MEDIUM',
+        update = _onListerLayoutRedraw,
+    )
+    material_sync_selection: bpy.props.BoolProperty(
+        name = "Sync Selection",
+        description = "Selecting a material in the Material Manager also selects the objects "
+                      "using it and makes its slot active, so the Properties editor's Material "
+                      "tab and the node editor follow the manager. Materials no object uses "
+                      "leave the selection alone",
+        default = True,
+        update = _onListerLayoutRedraw,
+    )
+    assign_highlight: bpy.props.BoolProperty(
+        name = "Highlight Drop Target",
+        description = "While dragging a material onto the viewport, tint the region of the mesh "
+                      "under the cursor that will receive it (the faces of the active material "
+                      "slot, or the whole mesh for a single-slot object)",
+        default = True,
         update = _onListerLayoutRedraw,
     )
 
@@ -414,8 +407,8 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 
     lister: bpy.props.PointerProperty(
         type = VRayListerPreferences,
-        name = "Scene Lister",
-        description = "V-Ray Scene Lister layout settings",
+        name = "Object Lister",
+        description = "V-Ray Object Lister layout settings",
     )
 
     anonymized_telemetry: bpy.props.BoolProperty(
@@ -547,6 +540,16 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         name="Use roughness for new materials by default",
         description="Global switch between roughness and glossiness modes.",
         default=False
+    )
+
+    shading_tree_style: bpy.props.EnumProperty(
+        name="Shading Tree",
+        description="How the property pages present the textures feeding a material, world or light",
+        items=(
+            ('BREADCRUMB', "Breadcrumb",      "Just the trail of nodes leading to the one being edited"),
+            ('MENU_GLYPH', "Dropdown menu",   "A single button opening the shading tree as a menu, drawn with box characters"),
+        ),
+        default='BREADCRUMB'
     )
     
     def _updateCheckForUpdates(self, context):
@@ -795,9 +798,9 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             subLayout.use_property_split = True
             subLayout.use_property_decorate = False
 
-            subLayout.prop(self, 'ask_for_upgrade_confirm')
-            subLayout.prop(self, 'mtl_use_roughness')
             subLayout.prop(self, 'auto_check_for_updates')
+            subLayout.prop(self, 'mtl_use_roughness')
+            subLayout.prop(self, 'shading_tree_style')
 
     def _drawPerformancePanel(self, layout, context):
         box = layout.box()
@@ -881,14 +884,16 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
                     noDevicesRow = subLayout.row()
                     noDevicesRow.label(text="No compute devices available")
 
-    def _drawDistributedRenderingPanel(self, layout, context):
-        header, subLayout = layout.box().panel(idname='dr_prefs', default_closed=False)
+    def _drawCEPanelBox(self, layout, idname, label):
+        """ Draw a collapsible box panel header, dimmed with a CE-limited icon when running
+            the Community Edition. Returns the panel's body sublayout (or None if collapsed).
+        """
+        header, subLayout = layout.box().panel(idname=idname, default_closed=False)
 
         headerRow = header.row()
         headerRow.alignment = 'LEFT'
-        headerRow.scale_x = 0.75
         labelRow = headerRow.row()
-        labelRow.label(text="V-Ray Distributed Rendering")
+        labelRow.label(text=label)
         labelRow.enabled = not vray.isCommunityEdition()
 
         if vray.isCommunityEdition():
@@ -896,6 +901,12 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
 
         if subLayout:
             subLayout.enabled = not vray.isCommunityEdition()
+
+        return subLayout
+
+    def _drawDistributedRenderingPanel(self, layout, context):
+        subLayout = self._drawCEPanelBox(layout, 'dr_prefs', "V-Ray Distributed Rendering")
+        if subLayout:
             split = subLayout.split(factor=0.05, align=True)
             split.column()
             panel = split.column(align=True)
@@ -923,18 +934,16 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             col.operator('vray.dr_nodes_load', text="", icon='FILE_FOLDER')
             col.operator('vray.dr_nodes_save', text="", icon='DISK_DRIVE')
 
-        if False:
-            # Draw the vantage settings on all operating systems, MacOS V-Ray Blender and
-            # Vantage running on Windows is a valid use-case.
-            header, subLayout = layout.box().panel(idname="live_link", default_closed=False)
-            header.label(text='Vantage Live Link')
-            if subLayout:
-                subLayout = subLayout.column()
-                subLayout.use_property_split = True
-                subLayout.use_property_decorate = False
+        # Draw the vantage settings on all operating systems, MacOS/Linux V-Ray Blender and
+        # Vantage running on Windows is a valid use-case.
+        subLayout = self._drawCEPanelBox(layout, "live_link", "Vantage Live Link")
+        if subLayout:
+            subLayout = subLayout.column()
+            subLayout.use_property_split = True
+            subLayout.use_property_decorate = False
 
-                subLayout.prop(self, 'vantage_host', text='Vantage Host')
-                subLayout.prop(self, 'vantage_port', text=' ')
+            subLayout.prop(self, 'vantage_host', text='Vantage Host')
+            subLayout.prop(self, 'vantage_port', text=' ')
 
     def draw(self, context):
         layout = self.layout

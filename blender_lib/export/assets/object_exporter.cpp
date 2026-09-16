@@ -5,6 +5,8 @@
 #include "object_exporter.h"
 
 #include <numeric>
+#include <utility>
+#include <vector>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
@@ -25,49 +27,39 @@ namespace
 {
 
 // TODO: Move the conversion helpers to some utils file
+// resize() would zero every element first - AttrVector's default ctor is user-provided.
 AttrListVector arrayToAttrListVec3(const float* src, int vecCount)
 {
-	AttrListVector list;
-	list.resize(vecCount);
+	std::vector<AttrVector> vec;
+	vec.reserve(vecCount);
 
-	const auto* srcPtr = src;
-
-	for (size_t i = 0; i < vecCount; ++i) {
-		(*list)[i].x = *srcPtr;
-		(*list)[i].y = *(srcPtr + 1);
-		(*list)[i].z = *(srcPtr + 2);
-		srcPtr += 3;
+	for (int i = 0; i < vecCount; ++i, src += 3) {
+		vec.emplace_back(src[0], src[1], src[2]);
 	}
 
-	return list;
+	return AttrListVector(std::move(vec));
 }
 
 
 AttrListVector arrayToAttrListVec2(const float* src, int vecCount)
 {
-	AttrListVector list;
-	list.resize(vecCount);
+	std::vector<AttrVector> vec;
+	vec.reserve(vecCount);
 
-	const auto* srcPtr = src;
-
-	for (int i = 0; i < vecCount; ++i) {
-		(*list)[i].x = *srcPtr;
-		(*list)[i].y = *(srcPtr + 1);
-		srcPtr += 2;
+	// z is written explicitly - the previous version relied on resize() zeroing it.
+	for (int i = 0; i < vecCount; ++i, src += 2) {
+		vec.emplace_back(src[0], src[1], 0.0f);
 	}
 
-	return list;
+	return AttrListVector(std::move(vec));
 }
 
 
 template <class T>
 AttrList<T> arrayToAttrList(const T* src, int count)
 {
-	std::vector<T> vec;
-	vec.resize(count);
-	::memcpy(vec.data(), src, count * sizeof(T));
-
-	return AttrList<T>(std::move(vec));
+	// Range construct: resize() would value-initialize before the copy overwrote it.
+	return AttrList<T>(std::vector<T>(src, src + count));
 }
 
 } // end anonymous namespace
@@ -115,10 +107,10 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 {
 	const int N = inst.itemCount;
 
-	AttrListTransform transforms(N);
+	AttrListTransform transforms;
 	AttrListInt       instanceIds(N);
 	AttrListPlugin    meshes;
-	AttrListInt       indices(N);
+	AttrListInt       indices;
 
 	{
 		nb::gil_scoped_acquire gil;
@@ -138,7 +130,10 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 		const int32_t* idxSrc = idxArr.data();
 		nb::gil_scoped_release noGIL;
 
-		memcpy(*transforms, tmsSrc, N * sizeof(AttrTransform));
+		// Range construct: AttrTransform's default ctor makes sizing an element-wise loop.
+		const auto* tmSrc = reinterpret_cast<const AttrTransform*>(tmsSrc);
+		transforms = AttrListTransform(std::vector<AttrTransform>(tmSrc, tmSrc + N));
+		indices    = AttrListInt(std::vector<int>(idxSrc, idxSrc + N));
 
 		int* idDst = *instanceIds;
 		constexpr int persistentIdBytes = 8 * sizeof(int32_t);
@@ -147,8 +142,48 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 			MurmurHash3_x86_32(idSrc + i * 8, persistentIdBytes, 0, &hash);
 			idDst[i] = static_cast<int>(hash);
 		}
+	}
 
-		memcpy(*indices, idxSrc, N * sizeof(int32_t));
+	// Per-instance user attributes (Blender instance-domain attributes).
+	std::vector<std::pair<std::string, AttrValue>> userAttrValues;
+	if (N > 0) {
+		nb::gil_scoped_acquire gil;
+
+		for (auto item : nb::cast<nb::list>(inst.userAttrs)) {
+			auto entry = nb::cast<nb::tuple>(item);
+			const auto attrName = nb::cast<std::string>(entry[0]);
+			const auto kind = static_cast<Interop::InstancerUserAttrKind>(nb::cast<int>(entry[1]));
+
+			switch (kind) {
+			case Interop::InstancerUserAttrKind::Int: {
+				auto arr = nb::cast<nb::ndarray<int32_t, nb::c_contig>>(entry[2]);
+				vassert(static_cast<int>(arr.shape(0)) == N);
+				AttrListInt values(N);
+				memcpy(*values, arr.data(), N * sizeof(int32_t));
+				userAttrValues.emplace_back(attrName, values);
+				break;
+			}
+			case Interop::InstancerUserAttrKind::Float: {
+				auto arr = nb::cast<nb::ndarray<float, nb::c_contig>>(entry[2]);
+				vassert(static_cast<int>(arr.shape(0)) == N);
+				AttrListFloat values(N);
+				memcpy(*values, arr.data(), N * sizeof(float));
+				userAttrValues.emplace_back(attrName, values);
+				break;
+			}
+			case Interop::InstancerUserAttrKind::Color: {
+				static_assert(sizeof(AttrVector) == 3 * sizeof(float), "AttrVector layout must be 3 contiguous floats");
+				auto arr = nb::cast<nb::ndarray<float, nb::c_contig>>(entry[2]);
+				vassert(static_cast<int>(arr.shape(0)) == N);
+				AttrListVector values(N);
+				memcpy(*values, arr.data(), N * sizeof(AttrVector));
+				userAttrValues.emplace_back(attrName, values);
+				break;
+			}
+			default:
+				vassert(!"Unknown InstancerUserAttrKind");
+			}
+		}
 	}
 
 	AttrListValue sources;
@@ -168,6 +203,14 @@ AttrValue exportInstancer(const InstancerData& inst, ZmqExporter& exporter)
 
 		AttrListValue userAttributes;
 		userAttributes.append(explicitIdAttr);
+
+		for (const auto& [attrName, values] : userAttrValues) {
+			AttrListValue attr;
+			attr.append(AttrValue(attrName));
+			attr.append(values);
+			userAttributes.append(attr);
+		}
+
 		instancerDesc.add("user_attributes", userAttributes);
 	}
 

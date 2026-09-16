@@ -106,6 +106,16 @@ def getRegClasses():
 _originalPolls = {}
 _vrayDataPanels = set()  # Our own panels that should not be hidden
 
+def _isChaosScatterObject(obj):
+    """ True for the carrier object of a Chaos Scatter setup - a PointCloud, or a vertices-only
+        Mesh on Blender versions where a PointCloud cannot be sized from Python (pre-5.1). The
+        'chaos_scatter' property group is registered by the separate Chaos Scatter addon; when
+        that addon is disabled, no object can match.
+    """
+    cs = getattr(obj, 'chaos_scatter', None)
+    return (cs is not None) and cs.is_scatter
+
+
 def _hidePanels():
     for panel in bpy.types.Panel.__subclasses__():
         if getattr(panel, 'bl_context', None) == 'data':
@@ -113,6 +123,10 @@ def _hidePanels():
                 continue
 
             if panel in _originalPolls or panel in _vrayDataPanels:
+                continue
+
+            if panel.__module__.startswith('chaos_scatter'):
+                # The Chaos Scatter addon owns these - they are the panels we keep.
                 continue
 
             originalPoll = panel.poll
@@ -124,9 +138,14 @@ def _hidePanels():
                     if obj and hasattr(obj, 'vray'):
                         if obj.vray.isVRayDecal:
                             return False
-                        if obj.vray.isVRayGaussian:
-                            # Gaussian splat Empties have their own data panels; hide the
-                            # default Empty data panels (display type, size, etc.).
+                        if blender_utils.isNonGeometryExportedAsGeometry(obj):
+                            # Empty-backed V-Ray geometry (Gaussian splats, infinite plane,
+                            # perfect sphere) has its own data panels, and the plugin owns the
+                            # Empty's display type and size. Hide the default Empty data panels.
+                            return False
+                        if _isChaosScatterObject(obj):
+                            # The carrier's own geometry is generated - editing its attributes,
+                            # shape keys etc. is meaningless. Leave only the Chaos Scatter panels.
                             return False
                         assetType = obj.vray.VRayAsset.assetType
                         if assetType == blender_utils.VRAY_ASSET_TYPE["Scene"]:
@@ -146,16 +165,38 @@ def _restorePanels():
     _originalPolls.clear()
 
 
+# Blender draws a data panel only when the active engine is listed in the panel's
+# COMPAT_ENGINES. The stock panels for these object types name only Blender's own engines, so
+# without adding V-Ray they all vanish as soon as V-Ray is the active engine (VBLD-2779).
+# properties_data_curve (the legacy Curve) is deliberately absent - its panels declare no
+# COMPAT_ENGINES at all, so they are never engine-gated and already show under V-Ray.
+_COMPAT_PANEL_MODULES = (
+    'properties_data_mesh',
+    'properties_data_pointcloud',
+    'properties_data_curves',
+    'properties_data_speaker',
+)
+
+
+def _setCompatEngines(add: bool):
+    import importlib
+
+    for moduleName in _COMPAT_PANEL_MODULES:
+        module = importlib.import_module(f'bl_ui.{moduleName}')
+        for member in dir(module):
+            subclass = getattr(module, member)
+            try:
+                for compatEngine in classes.VRayEngines:
+                    if add:
+                        subclass.COMPAT_ENGINES.add(compatEngine)
+                    else:
+                        subclass.COMPAT_ENGINES.remove(compatEngine)
+            except:
+                pass
+
+
 def register():
-    from bl_ui import properties_data_mesh
-    for member in dir(properties_data_mesh):
-        subclass = getattr(properties_data_mesh, member)
-        try:
-            for compatEngine in classes.VRayEngines:
-                subclass.COMPAT_ENGINES.add(compatEngine)
-        except:
-            pass
-    del properties_data_mesh
+    _setCompatEngines(True)
 
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)
@@ -167,15 +208,7 @@ def register():
 def unregister():
     _restorePanels()
 
-    from bl_ui import properties_data_mesh
-    for member in dir(properties_data_mesh):
-        subclass = getattr(properties_data_mesh, member)
-        try:
-            for compatEngine in classes.VRayEngines:
-                subclass.COMPAT_ENGINES.remove(compatEngine)
-        except:
-            pass
-    del properties_data_mesh
+    _setCompatEngines(False)
 
     for regClass in reversed(getRegClasses()):
         bpy.utils.unregister_class(regClass)

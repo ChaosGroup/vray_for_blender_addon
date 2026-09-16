@@ -189,6 +189,156 @@
                 "max" : 1.0,
                 "min" : 0.0
             }
+        },
+        
+        {
+            "attr" : "depthCurveOn",
+            "default" : false,
+            "desc" : "Enable per-material depth-based line width. Replaces the global VRayToon depth curve",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Depth curve on",
+                "rollout" : "Depth Curve Override"
+            }
+        },
+        
+        {
+            "attr" : "minDepth",
+            "default" : 0.001000000047497451,
+            "desc" : "Minimum depth",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Minimum depth",
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "maxDepth",
+            "default" : 10000.0,
+            "desc" : "Maximum depth",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Maximum depth",
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "depthCurvePositions",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth curve positions",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "depthCurveInterpolations",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth curve interpolations"
+            }
+        },
+        
+        {
+            "attr" : "depthCurveValues",
+            "default" : null,
+            "desc" : "Curve controlling the line width based on depth",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "display_name" : "Depth curve values"
+            }
+        },
+        
+        {
+            "attr" : "depthCurveExternal",
+            "default" : null,
+            "desc" : "If this parameter is set, it will be used instead of depthCurvePositions, depthCurveInterpolations and depthCurveValues to provide an external curve for controlling the line width based on depth",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Depth curve"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveOn",
+            "default" : false,
+            "desc" : "Enable per-material view-angle-based line width. Replaces the global VRayToon angular curve",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Angular curve on",
+                "rollout" : "Angular Curve Override"
+            }
+        },
+        
+        {
+            "attr" : "angularCurvePositions",
+            "default" : 0.0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular curve positions",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "angularCurveInterpolations",
+            "default" : 0,
+            "desc" : "",
+            "elements_count" : 0,
+            "type" : "INT_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular curve interpolations"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveValues",
+            "default" : null,
+            "desc" : "Curve controlling the line width based on view angle",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST",
+            "ui" : 
+            {
+                "display_name" : "Angular curve values"
+            }
+        },
+        
+        {
+            "attr" : "angularCurveExternal",
+            "default" : null,
+            "desc" : "If this parameter is set, it will be used instead of angularCurvePositions, angularCurveInterpolations and angularCurveValues to provide an external curve for controlling the line width based on view angle",
+            "type" : "PLUGIN",
+            "ui" : 
+            {
+                "display_name" : "Angular curve"
+            }
         }
     ],
     "Type" : "BRDF",

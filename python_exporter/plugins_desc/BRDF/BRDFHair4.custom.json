@@ -158,7 +158,8 @@
             {
                 "name": "glossiness_rollout",
                 "type": "ROLLOUT",
-                "label": "Glossiness"
+                "label": "Glossiness",
+                "link_redirect": "glossiness"
             },
             { "name": "glossiness" },
             { "name": "primary_glossiness_boost" },

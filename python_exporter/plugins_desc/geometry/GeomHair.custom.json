@@ -11,7 +11,11 @@
         },
         {
             "attr": "perArea",
-            "default": 100
+            "default": 100,
+            "ui": {
+                "soft_max": 10000.0,
+                "max": 1000000000.0
+            }
         },
         {
             "attr": "length_base",
@@ -260,11 +264,11 @@
                             },
                             {
                                 "name": "length_var",
-                                "label": "Gravity Variation"
+                                "label": "Length Variation"
                             },
                             {
                                 "name": "thickness_var",
-                                "label": "Tickness Variation"
+                                "label": "Thickness Variation"
                             },
                             {
                                 "name": "gravity_var",

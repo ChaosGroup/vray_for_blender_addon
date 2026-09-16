@@ -93,7 +93,7 @@ class VRAY_OT_WR_del_unused(VRayOperatorBase):
 
         for node in nodes:
             node.select = node.name in savedSelection
-        return {'FINISHED'}
+        return {'FINISHED'} if deleted else {'CANCELLED'}
 
     def invoke(self, context, event):
         return context.window_manager.invoke_confirm(self, event)
@@ -138,18 +138,19 @@ class VRAY_OT_WR_swap_links(VRayOperatorBase):
         selected = list(context.selected_nodes)
 
         if len(selected) == 2:
-            self._swapOutputs(selected[0], selected[1], links)
+            swapped = self._swapOutputs(selected[0], selected[1], links)
         else:
-            self._swapInputs(selected[0], links)
-        return {'FINISHED'}
+            swapped = self._swapInputs(selected[0], links)
+        return {'FINISHED'} if swapped else {'CANCELLED'}
 
     def _swapOutputs(self, nodeA, nodeB, links):
+        """ Swap the output connections of two nodes. Returns True if any link was moved. """
         if not (nodeA.outputs and nodeB.outputs):
             if nodeA.outputs or nodeB.outputs:
                 self.report({'WARNING'}, "One of the nodes has no outputs")
             else:
                 self.report({'WARNING'}, "Neither of the nodes have outputs")
-            return
+            return False
 
         def capture(node):
             captured = []
@@ -178,18 +179,20 @@ class VRAY_OT_WR_swap_links(VRayOperatorBase):
         reconnect(nodeALinks, nodeB)
         reconnect(nodeBLinks, nodeA)
 
+        return bool(nodeALinks or nodeBLinks)
+
     def _swapInputs(self, node, links):
-        """ Swap the two most similar linked inputs.
+        """ Swap the two most similar linked inputs. Returns True if any link was moved.
             Group linked inputs by socket type, rank groups by size.
             2-of-a-kind: swap the pair. 1-of-a-kind with one linked input: move its source
             to the next free input. Two different solos: cross-swap them.
         """
         if not node.inputs:
             self.report({'WARNING'}, "This node has no inputs to swap")
-            return
+            return False
         if node.inputs[0].is_multi_input:
             self.report({'WARNING'}, "Cannot swap inputs of a multi-input socket")
-            return
+            return False
 
         # V-Ray sockets can't always be distinguished by the stock .type enum, so group
         # by bl_idname instead.
@@ -205,7 +208,7 @@ class VRAY_OT_WR_swap_links(VRayOperatorBase):
 
         if not groups:
             self.report({'WARNING'}, "This node has no input connections to swap")
-            return
+            return False
 
         top = groups[0]
         if top[1] == 2:
@@ -218,13 +221,15 @@ class VRAY_OT_WR_swap_links(VRayOperatorBase):
                         and not other.is_multi_input):
                     pair = (top[0], other)
                     break
-            if pair:
-                firstInput, secondInput = pair
-                firstFrom = firstInput.links[0].from_socket
-                secondFrom = secondInput.links[0].from_socket
-                links.new(firstFrom, secondInput)
-                links.new(secondFrom, firstInput)
-            return
+            if not pair:
+                return False
+
+            firstInput, secondInput = pair
+            firstFrom = firstInput.links[0].from_socket
+            secondFrom = secondInput.links[0].from_socket
+            links.new(firstFrom, secondInput)
+            links.new(secondFrom, firstInput)
+            return True
 
         if top[1] == 1:
             if len(groups) == 1:
@@ -247,13 +252,19 @@ class VRAY_OT_WR_swap_links(VRayOperatorBase):
                     links.new(fromSocket, node.inputs[nextIdx])
                 except RuntimeError:
                     pass
-            elif len(groups) >= 2:
+                # The source link was removed either way, so the tree did change.
+                return True
+
+            if len(groups) >= 2:
                 # Two different-type single links - cross-swap them.
                 firstInput, secondInput = groups[0][0], groups[1][0]
                 firstFrom = firstInput.links[0].from_socket
                 secondFrom = secondInput.links[0].from_socket
                 links.new(firstFrom, secondInput)
                 links.new(secondFrom, firstInput)
+                return True
+
+        return False
 
 
 ########## Detach Outputs ##########
@@ -407,18 +418,20 @@ class VRAY_OT_WR_link_active_to_selected(VRayOperatorBase):
         fwdMatch = _hasSemanticMatch(active, selected)
         revMatch = _hasSemanticMatch(selected[0], [active]) if len(selected) == 1 else False
         if revMatch and not fwdMatch:
-            self._linkOneToOne(links, selected[0], active)
-            return {'FINISHED'}
+            linked = self._linkOneToOne(links, selected[0], active)
+        else:
+            linked = self._linkActiveToSelected(links, active, selected)
 
-        self._linkActiveToSelected(links, active, selected)
+        if not linked:
+            self.report({'WARNING'}, "No compatible free input found to link to")
+            return {'CANCELLED'}
+
         return {'FINISHED'}
 
     def _linkActiveToSelected(self, links, active, selected):
+        """ Returns True if a link was created. """
         outputs = [o for o in active.outputs if o.enabled and not o.hide]
-        done = False
         for output in outputs:
-            if done:
-                break
             for node in selected:
                 if node is active or node.name == active.name:
                     continue
@@ -431,13 +444,15 @@ class VRAY_OT_WR_link_active_to_selected(VRayOperatorBase):
                         links.new(output, inp)
                     except RuntimeError:
                         continue
-                    done = True
-                    break
+                    return True
+
+        return False
 
     def _linkOneToOne(self, links, srcNode, dstNode):
-        """Wire the first compatible output of srcNode into dstNode's first matching input."""
+        """Wire the first compatible output of srcNode into dstNode's first matching input.
+           Returns True if a link was created."""
         if srcNode is dstNode or srcNode.name == dstNode.name:
-            return
+            return False
         for output in srcNode.outputs:
             if not output.enabled or output.hide:
                 continue
@@ -448,9 +463,11 @@ class VRAY_OT_WR_link_active_to_selected(VRayOperatorBase):
                     continue
                 try:
                     links.new(output, inp)
-                    return
+                    return True
                 except RuntimeError:
                     continue
+
+        return False
 
 
 ########## Link to Output ##########

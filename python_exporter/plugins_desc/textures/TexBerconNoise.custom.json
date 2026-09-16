@@ -1,0 +1,121 @@
+{
+    "ID": "TexBerconNoise",
+    "Name": "V-Ray Bercon Noise",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui": {
+                "display_name": "Mapping"
+            }
+        },
+        {
+            "attr": "noise_map1",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "noise_map2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_size",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_low",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_high",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_phase",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_spread",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_F1",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_F2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_F3",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_F4",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_levels",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_offset",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_gain",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_lacunarity",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_exponent",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ]
+}

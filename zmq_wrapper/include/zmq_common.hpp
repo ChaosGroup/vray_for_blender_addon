@@ -7,14 +7,13 @@
 #include <string>
 
 
-#define ZMQ_BUILD_DRAFT_API
-#include "cppzmq/zmq.hpp"
+#include <zmq.hpp>
 
 #include "base_types.h"
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2041;
+static const int ZMQ_PROTOCOL_VERSION = 2049;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -115,6 +114,8 @@ enum class ExporterType {
 	PREVIEW,
 	ANIMATION,
 	VANTAGE_LIVE_LINK,
+	SCENE_IMPORT,   ///< Non-rendering worker: reads a .vrscene and streams plugin data back to the client.
+	SCATTER_PREVIEW,///< Non-rendering worker: computes Chaos Scatter preview transforms via readScatterData.
 	TYPES_COUNT
 };
 

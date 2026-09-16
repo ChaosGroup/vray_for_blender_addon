@@ -369,9 +369,6 @@ static void fillEdgeVisibility(const MeshData& mesh, AttrListInt& edgeVisibility
 	int bitCount = 0;
 	int evIdx = 0;
 
-	auto getEdgeKey = [](unsigned int a, unsigned int b) {
-		return (a < b) ? (((uint64_t)a << 32) | b) : (((uint64_t)b << 32) | a);
-	};
 	auto checkBitCount = [&] {
 		if (bitCount >= 30) {
 			evPtr[evIdx++] = bitBuffer;
@@ -380,7 +377,6 @@ static void fillEdgeVisibility(const MeshData& mesh, AttrListInt& edgeVisibility
 		}
 	};
 
-	HashMap<uint64_t, int> edgeCounts; // Map to store all edges of a single face
 	for (int fi = 0; fi < numTriangles; ) {
 		const unsigned int pi = mesh.loopTriPolys[fi];
 		int nextFi = fi;
@@ -395,29 +391,30 @@ static void fillEdgeVisibility(const MeshData& mesh, AttrListInt& edgeVisibility
 			fi = nextFi;
 			continue;
 		}
-		// Triangles in [fi, nextFi) belong to the same polygon pi.
-		// An edge is an "original" edge of the polygon if it belongs to exactly one triangle in this set.
+
+		// Blender tessellates a polygon from its own contiguous corner range, so a triangle
+		// edge is an original polygon edge exactly when its corners are adjacent in that ring.
+		unsigned int firstCorner = mesh.loopTris[fi][0];
 		for (int i = fi; i < nextFi; i++) {
 			const auto& ltri = mesh.loopTris[i];
-			const unsigned int v0 = mesh.loops[ltri[0]];
-			const unsigned int v1 = mesh.loops[ltri[1]];
-			const unsigned int v2 = mesh.loops[ltri[2]];
-
-			edgeCounts[getEdgeKey(v0, v1)]++;
-			edgeCounts[getEdgeKey(v1, v2)]++;
-			edgeCounts[getEdgeKey(v2, v0)]++;
+			firstCorner = std::min({firstCorner, ltri[0], ltri[1], ltri[2]});
 		}
+		// A polygon tessellated into n triangles has n + 2 corners.
+		const unsigned int lastCorner = firstCorner + static_cast<unsigned int>(nextFi - fi) + 1;
+
+		auto isPolygonEdge = [firstCorner, lastCorner](unsigned int a, unsigned int b) {
+			const unsigned int lo = std::min(a, b);
+			const unsigned int hi = std::max(a, b);
+			return (hi == lo + 1) || ((lo == firstCorner) && (hi == lastCorner));
+		};
 
 		for (int i = fi; i < nextFi; i++) {
 			const auto& ltri = mesh.loopTris[i];
-			const unsigned int v0 = mesh.loops[ltri[0]];
-			const unsigned int v1 = mesh.loops[ltri[1]];
-			const unsigned int v2 = mesh.loops[ltri[2]];
 
 			int triBits = 0;
-			if (edgeCounts[getEdgeKey(v0, v1)] == 1) triBits |= (1 << 0);
-			if (edgeCounts[getEdgeKey(v1, v2)] == 1) triBits |= (1 << 1);
-			if (edgeCounts[getEdgeKey(v2, v0)] == 1) triBits |= (1 << 2);
+			if (isPolygonEdge(ltri[0], ltri[1])) triBits |= (1 << 0);
+			if (isPolygonEdge(ltri[1], ltri[2])) triBits |= (1 << 1);
+			if (isPolygonEdge(ltri[2], ltri[0])) triBits |= (1 << 2);
 
 			bitBuffer |= (triBits << bitCount);
 			bitCount += 3;
@@ -426,12 +423,12 @@ static void fillEdgeVisibility(const MeshData& mesh, AttrListInt& edgeVisibility
 		}
 
 		fi = nextFi;
-		edgeCounts.clear();
 	}
 
 	if (bitCount > 0) {
 		evPtr[evIdx++] = bitBuffer;
 	}
+
 }
 
 
@@ -509,38 +506,53 @@ static float creaseToSharpness(float crease) {
 
 
 static void fillCreases(const MeshData& mesh, PluginDesc& pluginDesc) {
+	// Count first so the lists are allocated once.
 	if (!mesh.edgeCreases.empty()) {
-		AttrListInt   ev;
-		AttrListFloat es;
-
-		for (int e = 0; e < static_cast<int>(mesh.edgeCreases.size()); ++e) {
-			const float crease = mesh.edgeCreases[e];
-			if (crease > 0.0f) {
-				ev.append(mesh.edgeVertices[e][0]);
-				ev.append(mesh.edgeVertices[e][1]);
-				es.append(creaseToSharpness(crease));
-			}
+		size_t creased = 0;
+		for (const float crease : mesh.edgeCreases) {
+			creased += (crease > 0.0f);
 		}
-		if (ev.getCount() > 0) {
-			pluginDesc.add("edge_creases_vertices",  ev);
-			pluginDesc.add("edge_creases_sharpness", es);
+
+		if (creased > 0) {
+			std::vector<int>   ev;
+			std::vector<float> es;
+			ev.reserve(creased * 2);
+			es.reserve(creased);
+
+			for (int e = 0; e < static_cast<int>(mesh.edgeCreases.size()); ++e) {
+				const float crease = mesh.edgeCreases[e];
+				if (crease > 0.0f) {
+					ev.push_back(mesh.edgeVertices[e][0]);
+					ev.push_back(mesh.edgeVertices[e][1]);
+					es.push_back(creaseToSharpness(crease));
+				}
+			}
+			pluginDesc.add("edge_creases_vertices",  AttrListInt(std::move(ev)));
+			pluginDesc.add("edge_creases_sharpness", AttrListFloat(std::move(es)));
 		}
 	}
 
 	if (!mesh.vertexCreases.empty()) {
-		AttrListInt   vv;
-		AttrListFloat vs;
-
-		for (int v = 0; v < static_cast<int>(mesh.vertexCreases.size()); ++v) {
-			const float crease = mesh.vertexCreases[v];
-			if (crease > 0.0f) {
-				vv.append(v);
-				vs.append(creaseToSharpness(crease));
-			}
+		size_t creased = 0;
+		for (const float crease : mesh.vertexCreases) {
+			creased += (crease > 0.0f);
 		}
-		if (vv.getCount() > 0) {
-			pluginDesc.add("vertex_creases_vertices",  vv);
-			pluginDesc.add("vertex_creases_sharpness", vs);
+
+		if (creased > 0) {
+			std::vector<int>   vv;
+			std::vector<float> vs;
+			vv.reserve(creased);
+			vs.reserve(creased);
+
+			for (int v = 0; v < static_cast<int>(mesh.vertexCreases.size()); ++v) {
+				const float crease = mesh.vertexCreases[v];
+				if (crease > 0.0f) {
+					vv.push_back(v);
+					vs.push_back(creaseToSharpness(crease));
+				}
+			}
+			pluginDesc.add("vertex_creases_vertices",  AttrListInt(std::move(vv)));
+			pluginDesc.add("vertex_creases_sharpness", AttrListFloat(std::move(vs)));
 		}
 	}
 }
@@ -548,14 +560,15 @@ static void fillCreases(const MeshData& mesh, PluginDesc& pluginDesc) {
 
 void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 	const auto numFaces = static_cast<int>(mesh.loopTris.size());
-	AttrListVector  vertices(static_cast<int>(mesh.vertices.size()));
-	AttrListVector  normals(static_cast<int>(mesh.normals.size())); // Normals list
-	AttrListInt     faces(numFaces * 3);					        // Face vertex indices
-	AttrListInt     faceNormals(numFaces * 3);			            // Normals per face vertex - indices
-	AttrListInt     faceMtlIDs(numFaces);				            // Material index per face
 
-	std::memcpy(*vertices, mesh.vertices.data(), mesh.vertices.size() * sizeof(float) * 3);
-	std::memcpy(*normals, mesh.normals.data(), mesh.normals.size() * sizeof(float) * 3);
+	// Range construct: sizing first would value-initialize every element before the copy.
+	const auto* vertSrc = reinterpret_cast<const AttrVector*>(mesh.vertices.data());
+	const auto* normSrc = reinterpret_cast<const AttrVector*>(mesh.normals.data());
+	AttrListVector  vertices(std::vector<AttrVector>(vertSrc, vertSrc + mesh.vertices.size()));
+	AttrListVector  normals(std::vector<AttrVector>(normSrc, normSrc + mesh.normals.size()));
+
+	AttrListInt     faces(numFaces * 3);					        // Face vertex indices
+	AttrListInt     faceMtlIDs(numFaces);				            // Material index per face
 
 	fillFaces(mesh, faces, faceMtlIDs);
 
@@ -565,16 +578,20 @@ void fillGeometry(const MeshData& mesh, PluginDesc& pluginDesc) {
 		pluginDesc.add("edge_visibility", edgeVisibility);
 	}
 
+	AttrListInt faceNormals;                                        // Normals per face vertex - indices
 	switch (mesh.normalsDomain){
 		case MeshData::NormalsDomain::Face:
+			faceNormals = AttrListInt(numFaces * 3);
 			fillFaceNormalsFromFaces(mesh, faceNormals);
 			break;
 
 		case MeshData::NormalsDomain::Point:
-			fillFaceNormalsFromVertices(mesh, faceNormals);
+			// Indexed exactly like the face vertices. Shared, so neither may be mutated.
+			faceNormals = faces;
 			break;
 
 		case MeshData::NormalsDomain::Corner:
+			faceNormals = AttrListInt(numFaces * 3);
 			fillFaceNormalsFromCorners(mesh, faceNormals);
 			break;
 

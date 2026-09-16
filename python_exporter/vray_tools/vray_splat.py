@@ -13,7 +13,7 @@ from mathutils import Vector
 from vray_blender import debug
 from vray_blender.lib import path_utils, sys_utils
 from vray_blender.lib.sys_utils import getAppSdkLibPath
-from vray_blender.vray_tools.vray_proxy import PreviewAction, binRead
+from vray_blender.vray_tools.vray_proxy import PreviewAction, binRead, runVRayTools
 
 
 # Loading of preview data for V-Ray Gaussian splat objects.
@@ -35,7 +35,6 @@ def _dumpSplatFile(splatFile: str, binFile: str):
     Returns:
         str | None: Error message on failure, None on success
     """
-    from subprocess import PIPE, run
 
     vrayToolsApp = path_utils.getBinTool(sys_utils.getPlatformName("vraytools"))
 
@@ -48,7 +47,7 @@ def _dumpSplatFile(splatFile: str, binFile: str):
     debug.printInfo(f"Running Gaussian splat preview tool: {' '.join(cmd)}")
 
     try:
-        result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        result = runVRayTools(cmd)
     except Exception as ex:
         return f"Failed to launch Gaussian preview tool '{vrayToolsApp}': {ex}"
 

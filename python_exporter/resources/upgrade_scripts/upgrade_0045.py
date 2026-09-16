@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 from vray_blender.exporting.tools import isObjectVRayDecal
 from vray_blender.nodes.utils import getNodeByType, treeHasNodes
@@ -18,7 +19,7 @@ def _decalPropGroups():
     """ Yield every VRayDecal property group in the scene (both the one on the
         mesh data and the one on a VRayNodeDecalOutput node, if present).
     """
-    for obj in bpy.data.objects:
+    for obj in scopedForUpgrade(bpy.data.objects):
         if not isObjectVRayDecal(obj):
             continue
 

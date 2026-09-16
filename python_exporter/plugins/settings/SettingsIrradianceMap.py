@@ -21,7 +21,7 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     if getattr(propGroup, 'auto_save'):
         autosaveFile = getattr(propGroup, "auto_save_file")
-        autosaveFile = path_utils.formatResourcePath(autosaveFile, allowRelativePaths = ctx.allowRelativePaths)
+        autosaveFile = path_utils.formatResourcePath(autosaveFile, allowRelative = ctx.allowRelativePaths)
         path_utils.createDirectoryFromFilepath(autosaveFile)
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)

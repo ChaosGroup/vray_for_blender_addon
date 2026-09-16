@@ -134,7 +134,7 @@ def exportCustom(exporterCtx: ExporterContext, pluginDesc: PluginDesc):
             objPlugins.extend(addToPlugins)
 
             for plugin in objPlugins:
-                vray.pluginCreate(exporterCtx.renderer, plugin.name, plugin.pluginType)
+                plugin_utils.forwardDeclarePlugin(exporterCtx, plugin.name, plugin.pluginType)
 
             pluginDesc.setAttributes({
                 'render_mask_mode': 2,

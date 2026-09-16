@@ -8,8 +8,9 @@
 #include <chrono>
 #include <vector>
 
-#include "cppzmq/zmq.hpp"
-#include "cppzmq/zmq_addon.hpp"
+#include <zmq.hpp>
+#include <zmq_addon.hpp>
+#include "seh_guard.h"
 #include "vassert.h"
 #include <iostream>
 
@@ -40,6 +41,7 @@ ZmqAgent::ZmqAgent(zmq::context_t& ctx, const RoutingId& id, ExporterType worker
 	, workerType(workerType)
 	, isClient(isClient)
 	, state(State::Idle)
+	, aborted(false)
 {
 }
 
@@ -104,6 +106,11 @@ bool ZmqAgent::isStopped() const {
 }
 
 
+bool ZmqAgent::hasAborted() const {
+	return aborted;
+}
+
+
 void ZmqAgent::run(const std::string& endpoint, const ZmqTimeouts& timeoutSettings) {
 
 	vassert(state == State::Idle && "Cannot run the same ZmqAgent twice");
@@ -163,30 +170,45 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 	trace(Msg("Connecting to", endpoint));
 
 	try {
-		// ZMQ socket cannot be shared between threads.
-		// Keep it as a local variable to avoid confusion.
-		auto sock = connect(endpoint, id);
+		// libzmq aborts the process on an internal assertion failure, and several of
+		// those are reachable from here. Turn that into a reported error instead.
+		runGuarded([&] {
+			// ZMQ socket cannot be shared between threads.
+			// Keep it as a local variable to avoid confusion.
+			auto sock = connect(endpoint, id);
 
-		// Initialize activity monitor
-		lastActivity = Clock::now();
+			// Initialize activity monitor
+			lastActivity = Clock::now();
 
-		// Perform handshake synchronously
-		handshake(sock);
+			// Perform handshake synchronously
+			handshake(sock);
 
-		zmq::poller_t<> pollerRecv, pollerSend;
+			zmq::poller_t<> pollerRecv, pollerSend;
 
-		pollerRecv.add(sock, zmq::event_flags::pollin);
-		pollerSend.add(sock, zmq::event_flags::pollout);
+			pollerRecv.add(sock, zmq::event_flags::pollin);
+			pollerSend.add(sock, zmq::event_flags::pollout);
 
-		// Try to send all outstanding messages. In case of connection loss,
-		// an error will be received from ZmqRouter and the poller loop will exit.
-		while ((state == State::Running) || !msgQueue.empty()) {
-			sendPending(pollerSend);
-			recvPending(pollerRecv);
-		}
+			// Try to send all outstanding messages. In case of connection loss,
+			// an error will be received from ZmqRouter and the poller loop will exit.
+			while ((state == State::Running) || !msgQueue.empty()) {
+				sendPending(pollerSend);
+				recvPending(pollerRecv);
+			}
+		});
+	}
+	catch (const ZmqAbortError& e) {
+		// Always reported, unlike the cases below - libzmq is unusable from here on.
+		// Flagged first so the handler can tell it from a recoverable drop.
+		aborted = true;
+		reportError(e.what());
 	}
 	catch (const ZmqException& e) {
-		trace(Msg("ZmqException in agent poller loop:", e.what()));
+		if (state == State::Running) {
+			reportError(e.what());
+		}
+		else {
+			trace(Msg("ZmqException in agent poller loop:", e.what()));
+		}
 	}
 	catch (const std::exception& e) {
 		if (state == State::Running) {

@@ -150,14 +150,18 @@ def linkLightToRenderChannel(exporterCtx: ExporterContext, objLight: bpy.types.O
 
 
 def _fixBlenderRectLight(areaLight: bpy.types.Light):
-    # Change Blender AREA lights shape to 'RECTANGLE' as this is the shape expected by the
-    # the backing LightRectangle plugin export code.
-    if areaLight.shape == 'SQUARE':
-        areaLight.shape = 'RECTANGLE'
+    # Lights have two different propgroups for legacy and node lights, get the correct one
+    propGroup = getLightPropGroup(areaLight, 'LightRectangle')
+
+    # Drive Blender's shape from is_disc so that the viewport gizmo is round for disc lights.
+    # 'SQUARE' is never used because the backing LightRectangle export code expects separate
+    # width and height.
+    if (shape := 'DISK' if propGroup.is_disc else 'RECTANGLE') != areaLight.shape:
+        areaLight.shape = shape
 
     # Only write when the value actually changes. fixSceneLights() runs on every depsgraph
     # update; an unconditional write would re-tag the depsgraph each pass and recurse.
-    if areaLight.vray.LightRectangle.is_disc and (areaLight.size_y != areaLight.size):
+    if propGroup.is_disc and (areaLight.size_y != areaLight.size):
         areaLight.size_y = areaLight.size
 
 
@@ -308,8 +312,16 @@ class LightExporter(ExporterBase):
 
         updatedLights = updatedLights.union(updatedTextureLights).union(updatedMeshLights)
 
+        # A light referenced by a plugin parameter (e.g. a Chaos Scatter model) is typically hidden,
+        # and a hidden light is absent from the depsgraph - without this its plugin never exports
+        # and the reference resolves to nothing. The light itself is still switched off by
+        # _syncLightVisibility; GeomInstancer force-enables the instances it clones from it.
+        dgLightIds = {getObjTrackId(o) for o in sceneLightObjs}
+        updatedLights = updatedLights.union(o for trackId, o in self.referencedObjects.items()
+                                            if o.type == 'LIGHT' and trackId not in dgLightIds)
+
         def lightsForExport():
-            if self.commonSettings.useMotionBlur and self.isAnimation:
+            if self.commonSettings.exportMotionData and self.isAnimation:
                 return self.motionBlurBuilder.getObjectsForExport(updatedLights)
             return updatedLights
 
@@ -449,7 +461,7 @@ class LightExporter(ExporterBase):
             case "LightRectangle":
                 _setLightRectLightAttrs(light, pluginDesc)
                 pluginDesc.setAttribute("objectID", obj.pass_index)
-            case "LightSphere" | "LightDome":
+            case "LightSphere" | "LightDome" | "LightLuminaire":
                 pluginDesc.setAttribute("objectID", obj.pass_index)
 
             case "SunLight":
@@ -489,7 +501,7 @@ class LightExporter(ExporterBase):
         # Depending on whether the light has a nodetree, the plugin properties are stored in different locations.
         pluginDesc.vrayPropGroup = propGroup
 
-        if self.commonSettings.useMotionBlur:
+        if self.commonSettings.exportMotionData:
             overrideMb = obj.vray.VRayObjectProperties.override_motion_blur_samples
             samples = obj.vray.VRayObjectProperties.motion_blur_samples
             pluginDesc.setAttribute("nsamples", samples if overrideMb else self.commonSettings.mbSamples)
@@ -578,7 +590,8 @@ class LightExporter(ExporterBase):
         self._pruneNodeTreePlugins(updatedLightIds)
 
         activeLightIds = [getObjTrackId(l) for l in activeLights]
-        activeObjectIds = [getObjTrackId(o) for o in activeObjects]
+        # An instanced light is not necessarily in the scene - see instancedObjectTrackIds.
+        activeObjectIds = {getObjTrackId(o) for o in activeObjects} | self.instancedObjectTrackIds
 
         removedObjectIds = self.objTracker.diff(activeObjectIds)
         self._pruneObjectPlugins(removedObjectIds)

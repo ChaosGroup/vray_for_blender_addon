@@ -33,27 +33,24 @@ endif()
 
 if (NOT BINTOOLS_PATH)
     set(BOOST_LIBDIR    "./boost"               CACHE PATH    "Path to Boost libs")
-    set(ZMQ_LIBDIR      "./zmq"                 CACHE PATH    "Path to ZMQ libs")
     set(BLENDER_SDK_ROOT "./blender_sdk"        CACHE PATH    "Path to libs shipped with Blender")
 else()
     set(BOOST_LIBDIR    "${SDK_ROOT}/boost"               CACHE PATH    "Path to Boost libs")
-    set(ZMQ_LIBDIR      "${SDK_ROOT}/zmq"                 CACHE PATH    "Path to ZMQ libs")
     set(BLENDER_SDK_ROOT "${SDK_ROOT}/blender_sdk"        CACHE PATH    "Path to libs shipped with Blender")
 endif()
 
-fix_separators(ZMQ_LIBDIR)
 fix_separators(BLENDER_SDK_ROOT)
 
 message(STATUS "   Dependencies")
 message(STATUS "   -------------")
 message(STATUS "   Blener SDK root: \"${BLENDER_SDK_ROOT}\"")
 message(STATUS "   Boost root: \"${BOOST_LIBDIR}\"")
-message(STATUS "   ZMQ root: \"${ZMQ_LIBDIR}\"")
 message(STATUS "   Nanobind root: \"${NANOBIND_LIBDIR}\"")
 
 # Organize the source files by folder in the IDE
 GroupSources(api .)
 GroupSources(export .)
+GroupSources(import .)
 GroupSources(utils .)
 
 file(GLOB_RECURSE SOURCES
@@ -61,6 +58,10 @@ file(GLOB_RECURSE SOURCES
     "api/*.hpp"
     "export/*.cpp"
     "export/*.hpp"
+    "import/*.cpp"
+    "import/*.hpp"
+    "preview/*.cpp"
+    "preview/*.hpp"
     "utils/*.cpp"
     "utils/*.hpp"
 )
@@ -70,11 +71,13 @@ file(GLOB_RECURSE HEADERS
     "api/*.hpp"
     "export/*.h"
     "export/*.hpp"
+    "import/*.h"
+    "import/*.hpp"
+    "preview/*.h"
+    "preview/*.hpp"
     "utils/*.h"
     "utils/*.hpp"
 )
-
-use_zmq(${ZMQ_LIBDIR})
 
 if(WIN32)
 
@@ -152,12 +155,11 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
         )
         target_compile_definitions(${BLENDER_LIB_TARGET} PRIVATE $<$<CONFIG:NoOpt>:VASSERT_ENABLED>)
     else()
-        target_compile_options(${BLENDER_LIB_TARGET} PRIVATE -Werror)
+        # -g so the binary carries debug info, which the install step splits out and strips
+        target_compile_options(${BLENDER_LIB_TARGET} PRIVATE -Werror -g)
     endif()
 
-    link_with_zmq(${BLENDER_LIB_TARGET} PRIVATE)
-
-    target_link_libraries(${BLENDER_LIB_TARGET} PRIVATE VRayZmqWrapper)
+    target_link_libraries(${BLENDER_LIB_TARGET} PRIVATE VRayZmqWrapper zmq::zmq)
 
     if (WITH_OSL)
         target_compile_definitions(${BLENDER_LIB_TARGET} PRIVATE WITH_OSL)
@@ -180,7 +182,6 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
         utils
         ${VRAY_ZMQ_WRAPPER_ROOT}/include/
         ${VRAY_ZMQ_WRAPPER_ROOT}/utils/
-        ${VRAY_ZMQ_WRAPPER_ROOT}/extern/
         ${BOOST_LIBDIR}/include
         ${BLENDER_SDK_ROOT}/jpeg/include/
     )
@@ -267,6 +268,7 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
 
     if (INSTALL_LOCAL)
         install(TARGETS ${BLENDER_LIB_TARGET} LIBRARY DESTINATION ${INSTALL_PREFIX})
+        install_split_debug_info(${BLENDER_LIB_TARGET} ${INSTALL_PREFIX})
         if (MSVC)
             # Install the PDB file
             install(FILES $<TARGET_PDB_FILE:${BLENDER_LIB_TARGET}>

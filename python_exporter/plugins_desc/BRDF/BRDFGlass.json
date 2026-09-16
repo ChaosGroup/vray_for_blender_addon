@@ -1,0 +1,174 @@
+
+{
+    "Desciption" : "BRDFGlass",
+    "ID" : "BRDFGlass",
+    "Name" : "Glass",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "ior",
+            "default" : 1.549999952316284,
+            "desc" : "IOR for the glass; this is ignored if the surface has a volume shader (the volume IOR is used)",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "cutoff",
+            "default" : 0.009999999776482582,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_shadows",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : "0",
+            "desc" : "Specifies how render channels are propagated through the glass (0 - only the color channel; 1 - color and alpha; 2 - all channels",
+            "items" : 
+            [
+                [ "0", "Color only", "Color only" ],
+                [ "1", "Color and alpha", "Color and alpha" ],
+                [ "2", "All channels", "All channels" ]
+            ],
+            "type" : "ENUM",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trace_refractions",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trace_depth",
+            "default" : -1,
+            "desc" : "The maximum refraction bounces (-1 is controlled by the global options)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "exit_color_on",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect_exit_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color to use when the maximum depth is reached",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "refract_exit_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color to use when maximum depth is reached when exit_color_on is true",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "volume",
+            "default" : null,
+            "desc" : "",
+            "type" : "PLUGIN",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "ior_tex",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

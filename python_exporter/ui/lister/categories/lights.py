@@ -25,11 +25,13 @@ _GROUP_LABELS = {
     'LightOmni':       "Omni Lights",
     'MayaLightDirect': "Direct Lights",
     'LightAmbient':    "Ambient Lights",
+    'LightLuminaire':  "Luminaire Lights",
 }
 
 _GROUP_ORDER = [
     'LightRectangle', 'LightSphere', 'LightDome', 'LightMesh', 'LightIES',
     'SunLight', 'LightSpot', 'LightOmni', 'MayaLightDirect', 'LightAmbient',
+    'LightLuminaire',
 ]
 
 # Per-pass memos of each light's propgroup and color socket (resolving either scans the
@@ -75,12 +77,17 @@ def _drawColor(row, obj, propGroup):
     # Color / Temperature toggle in a fixed-width box (wide enough for the longest label, so
     # the value that follows starts at the same x in every row regardless of mode). A fixed
     # width - rather than a fraction of the column - keeps the labels readable even as the
-    # column is narrowed. Lights without a mode toggle draw the value into the whole cell.
+    # column is narrowed. Lights without a mode toggle reserve the same box, empty.
     valueArea = row
+    sub = row.row(align=True)
+    sub.ui_units_x = 6.0
     if modeAttr in props:
-        sub = row.row(align=True)
-        sub.ui_units_x = 6.0
         sub.prop(propGroup, modeAttr, text="")
+    else:
+        # A light with no mode toggle (Luminaire: its color is a plain multiplier over the
+        # baked cache, so there is no Color/Temperature choice) still reserves the box, or
+        # its swatch would start further left than every other row's and break the column.
+        sub.label(text="")
 
     if modeAttr in props and getattr(propGroup, modeAttr) != '0':
         # Kelvin temperature: the value plus a swatch of the resolved color, mirroring the
@@ -201,16 +208,16 @@ class LightsCategory(ListerCategory):
 
     def pickerSections(self, context, state):
         # Column picker: a common "Lights" section, type-specific extras (Sun sky params,
-        # IES file/power), and the caustic params.
+        # IES file/power, Luminaire cache/filtering), and the caustic params.
         from vray_blender.ui.lister import core
         caustic = {'causticSubdivs', 'causticMult'}
-        allCommon = [c for c in core._effectiveColumns(self, 'LightRectangle')
+        allCommon = [c for c in core.effectiveColumns(self, 'LightRectangle')
                      if c.id not in ('select', 'name')]
         common = [c for c in allCommon if c.id not in caustic]
         commonIds = {c.id for c in allCommon}  # includes caustics, so type sections skip them
 
         sections = [("Lights", common)]
-        for key, label in (('SunLight', "Sun"), ('LightIES', "IES")):
+        for key, label in (('SunLight', "Sun"), ('LightIES', "IES"), ('LightLuminaire', "Luminaire")):
             extra = [c for c in self.columns(key)
                      if c.id not in commonIds and c.id not in ('select', 'name')]
             if extra:
@@ -249,6 +256,16 @@ class LightsCategory(ListerCategory):
                 # columns out of alignment. A fixed width reserves the same space everywhere.
                 ColumnSpec('ies_file', "IES File", attr='ies_file', draw=makeFileCell('IES', 'ies_file'), fixedWidth=16.0),
                 ColumnSpec('filter_color', "Filter", attr='filter_color', width=1.4, defaultHidden=True),
+            ]
+        elif key == 'LightLuminaire':
+            # No 'units': the intensity is a plain multiplier over the baked cache. Fixed widths
+            # for the same reason as the IES columns above.
+            cols += [
+                ColumnSpec('luminaire_status', "Status", draw=makeStatusCell('LUMINAIRE', 'file'), width=1.0, center=True),
+                ColumnSpec('luminaire_file', "Luminaire File", attr='file', draw=makeFileCell('LUMINAIRE', 'file'), fixedWidth=16.0),
+                ColumnSpec('scale', "Scale", attr='scale', width=1.2, defaultHidden=True),
+                ColumnSpec('filtering', "Filtering", attr='filtering', width=0.8, defaultHidden=True),
+                ColumnSpec('filter_strength', "Filter Strength", attr='filter_strength', width=1.5, defaultHidden=True),
             ]
         else:
             # Fixed width, same reason as IES File above: the Units column is absent from the

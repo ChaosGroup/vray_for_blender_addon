@@ -1,0 +1,16 @@
+{
+    "Name": "V-Ray Combine Float",
+    "Subtype": "UTILITY",
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Float",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            }
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
+}

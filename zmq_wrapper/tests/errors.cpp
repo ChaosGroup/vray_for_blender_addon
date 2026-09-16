@@ -20,7 +20,7 @@ namespace {
 	zmq::context_t ctx;
 	auto timeouts      = ZmqTimeouts();
 	const RoutingId clientId = 1;
-	const int workerType = 1;
+	const ExporterType workerType = ExporterType::IPR_VFB;
 	const std::string clientEndpoint = "tcp://127.0.0.1:5557";
 	const std::string workerEndpoint = "inproc://test_router";
 	const bool WITH_TRACES_ON = false;

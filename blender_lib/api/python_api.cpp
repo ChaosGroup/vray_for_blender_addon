@@ -2,6 +2,9 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <algorithm>
+#include <cstring>
+#include <mutex>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -14,10 +17,15 @@
 #include "interop/osl.h"
 #endif
 
+#include <seh_guard.h>
 #include <zmq_message.hpp>
+#include <zmq_scatter_message.hpp>
 #include "interop/types.h"
 #include "interop/conversion.hpp"
+#include "interop/import_conversion.h"
 #include "interop/utils.hpp"
+#include "import/vrscene_import_client.h"
+#include "preview/scatter_preview.h"
 #include "export/zmq_server.h"
 #include "export/scene_exporter.h"
 #include "export/scene_exporter_pro.h"
@@ -37,9 +45,32 @@ using namespace Interop;
 // Forward declarations
 void deleteMainRenderer();
 
-using ExporterPtr = std::unique_ptr<SceneExporter>;
-ExporterPtr mainExporter;
-std::list<ExporterPtr> previewExporters;
+using ExporterUPtr = std::unique_ptr<SceneExporter>;
+
+/// Guards the main exporter state below. Production renders create it from a Blender job thread,
+/// while a teardown (e.g. the ZmqServer restart of a license type switch) runs on the main one.
+std::mutex mainExporterMutex;
+ExporterUPtr mainExporter;
+
+/// Set while a render job on a Blender job thread holds the pointer returned by getMainRenderer(),
+/// until it calls releaseMainRenderer(). Interactive sessions are driven from the main thread,
+/// where a teardown cannot overlap with them, so they never claim the exporter.
+const SceneExporter* mainExporterJobOwner = nullptr;
+
+/// Main exporters a teardown had to hand over to a still-running job instead of destroying them
+/// under it. Each is freed by that job's own thread, in releaseMainRenderer().
+std::list<SceneExporter*> detachedMainExporters;
+
+/// The exporters of the material previews currently being rendered, each on its own Blender job
+/// thread which holds a raw pointer to it for the whole render. Owned by those threads, hence the
+/// raw pointers: a teardown must never destroy an exporter a thread is still exporting into, so
+/// entries are only ever freed by deletePreviewRenderer().
+std::mutex previewExportersMutex;
+std::list<SceneExporter*> previewExporters;
+
+/// The single Chaos Scatter preview session (shared by all scatter objects; requests carry
+/// the scatter plugin name). Lazily created by scatterPreviewStart.
+ExporterUPtr scatterExporter;
 
 
 /// Check renderer parameter and return the exporter object
@@ -80,7 +111,13 @@ void init(const std::string& logFile)
 
 
 std::pair<bool, std::string> start(const ZmqServerArgs& args) {
-	VRayForBlender::ZmqServer::get().start(args);
+	try {
+		// get() is inside the guard on purpose - it constructs the ZmqServer singleton.
+		VrayZmqWrapper::runGuarded([&] { VRayForBlender::ZmqServer::get().start(args); });
+	}
+	catch (const VrayZmqWrapper::ZmqAbortError& e) {
+		return {false, std::string("V-Ray cannot start: ") + e.what()};
+	}
 	return {true, ""};
 }
 
@@ -90,8 +127,12 @@ void stopImpl(bool stopLogging) {
 	// executing Python callback.
 	nb::gil_scoped_release noGIL;
 
+	// Only the main renderer is torn down here - each preview exporter belongs to the preview job
+	// thread still rendering it, which frees it in deletePreviewRenderer().
 	deleteMainRenderer();
-	previewExporters.clear();
+	SceneImport::releaseAllImports();
+	scatterExporter.reset();
+	ScatterPreview::clear();
 
 	ZmqServer::get().stop();
 
@@ -134,11 +175,17 @@ bool hasLicense()
 }
 
 
+/// Whether the exporter type belongs to an interactive session, i.e. one that keeps rendering
+/// into a viewport or the VFB, as opposed to the one-shot job of a production or preview render.
+inline bool isInteractiveExporterType(proto::ExporterType exporterType) {
+	return exporterType == proto::ExporterType::IPR_VIEWPORT ||
+	       exporterType == proto::ExporterType::IPR_VFB ||
+	       exporterType == proto::ExporterType::VANTAGE_LIVE_LINK;
+}
+
+
 void initializeRenderer(SceneExporter& exporter, ExporterSettings& settings) {
-	const bool isInteractive =
-		settings.getExporterType() == proto::ExporterType::IPR_VIEWPORT ||
-		settings.getExporterType() == proto::ExporterType::IPR_VFB ||
-		settings.getExporterType() == proto::ExporterType::VANTAGE_LIVE_LINK;
+	const bool isInteractive = isInteractiveExporterType(settings.getExporterType());
 
 	ExporterBase* renderPolicy = isInteractive ?
 			static_cast<ExporterBase*>(new InteractiveExporter(settings)) :
@@ -146,6 +193,22 @@ void initializeRenderer(SceneExporter& exporter, ExporterSettings& settings) {
 
 	exporter.init(renderPolicy, settings);
 }
+
+/// Give up 'mainExporter' and return it for the caller to destroy, or an empty pointer if it had
+/// to be handed over to a render job that may still be using it. Callers are expected to have
+/// stopped the renderers first - VRayRenderEngine.resetAll() waits for the render job to release
+/// the renderer - so a claim still standing here means that wait timed out.
+/// Must be called with 'mainExporterMutex' held.
+ExporterUPtr relinquishMainExporter() {
+	if (mainExporter && (mainExporterJobOwner == mainExporter.get())) {
+		Logger::debug("Detaching the main renderer, still in use by a render job");
+		detachedMainExporters.push_back(mainExporter.release());
+	}
+
+	mainExporterJobOwner = nullptr;
+	return std::move(mainExporter);
+}
+
 
 size_t getMainRenderer(ExporterSettings& settings) {
 	vassert(settings.exporterType != (int)VrayZmqWrapper::ExporterType::PREVIEW);
@@ -163,25 +226,74 @@ size_t getMainRenderer(ExporterSettings& settings) {
 	}
 	const bool zmqServerRestarted = zmqCurrentProcessID != zmqProcessID;
 
-	if (!mainExporter || zmqServerRestarted || mainExporter->getPluginExporter()->isStopped()) {
-		mainExporter.reset(new SceneExporter());
-		zmqProcessID = zmqCurrentProcessID;
+	// Declared before the locked scope so that it is destroyed after the mutex is released:
+	// ~SceneExporter joins the ZMQ poller thread, which can take a while and would needlessly
+	// block every other thread waiting on 'mainExporterMutex'.
+	ExporterUPtr staleExporter;
+	SceneExporter* exporter = nullptr;
+
+	{
+		std::scoped_lock lock(mainExporterMutex);
+
+		if (!mainExporter || zmqServerRestarted || mainExporter->getPluginExporter()->isStopped()) {
+			staleExporter = relinquishMainExporter();
+			mainExporter.reset(new SceneExporter());
+			zmqProcessID = zmqCurrentProcessID;
+		}
+
+		exporter = mainExporter.get();
+		mainExporterJobOwner = isInteractiveExporterType(settings.getExporterType()) ? nullptr : exporter;
 	}
 
-	initializeRenderer(*mainExporter, settings);
-	return reinterpret_cast<size_t>(mainExporter.get());
+	// Outside the lock: initializeRenderer() talks to the ZmqServer. 'exporter' cannot be freed
+	// meanwhile - a teardown racing with us hands it over instead (see relinquishMainExporter).
+	initializeRenderer(*exporter, settings);
+	return reinterpret_cast<size_t>(exporter);
 }
 
 
 void deleteMainRenderer()  {
-	mainExporter.reset();
+	ExporterUPtr staleExporter; // Destroyed after the lock is released - see getMainRenderer().
+	{
+		std::scoped_lock lock(mainExporterMutex);
+		staleExporter = relinquishMainExporter();
+	}
+}
+
+
+/// Called by a render job once it is done with the pointer it got from getMainRenderer(). The
+/// main exporter is reused across render sessions, so this normally only drops the job's claim on
+/// it; one that a teardown had to detach is destroyed here, by the thread that was still using it.
+void releaseMainRenderer(const nb::object& renderer) {
+	const auto* exporter = getExporter(renderer);    // calls into CPython, so before the GIL drop
+
+	// ~SceneExporter joins the ZMQ poller thread and clears Python callbacks, so drop the GIL.
+	nb::gil_scoped_release noGIL;
+
+	ExporterUPtr detached; // Destroyed after the lock is released - see getMainRenderer().
+	{
+		std::scoped_lock lock(mainExporterMutex);
+
+		if (mainExporterJobOwner == exporter) {
+			mainExporterJobOwner = nullptr;
+		}
+
+		if (const auto it = std::find(detachedMainExporters.begin(), detachedMainExporters.end(), exporter);
+				it != detachedMainExporters.end()) {
+			detached.reset(*it);
+			detachedMainExporters.erase(it);
+		}
+	}
 }
 
 
 size_t createPreviewRenderer(ExporterSettings& settings) {
 
 	auto exporter = new SceneExporter();
-	previewExporters.emplace_back(std::unique_ptr<SceneExporter>(exporter));
+	{
+		std::scoped_lock lock(previewExportersMutex);
+		previewExporters.push_back(exporter);
+	}
 
 	initializeRenderer(*exporter, settings);
 	return reinterpret_cast<size_t>(exporter);
@@ -189,15 +301,26 @@ size_t createPreviewRenderer(ExporterSettings& settings) {
 
 
 void deletePreviewRenderer(const nb::object& renderer) {
+	const auto* exporter = getExporter(renderer);    // calls into CPython, so before the GIL drop
+
+	// ~SceneExporter joins the ZMQ poller thread and clears Python callbacks, so drop the GIL.
 	nb::gil_scoped_release noGIL;
-	auto* exporter = getExporter(renderer);
-	auto itExporter = std::find_if(previewExporters.begin(), previewExporters.end(), [exporter](ExporterPtr& e) {
-		return e.get() == exporter;
-	});
 
-	vassert( itExporter != previewExporters.end());
+	ExporterUPtr owned; // Destroyed after the lock is released - see getMainRenderer().
+	{
+		std::scoped_lock lock(previewExportersMutex);
 
-	previewExporters.erase(itExporter);
+		if (const auto it = std::find(previewExporters.begin(), previewExporters.end(), exporter);
+				it != previewExporters.end()) {
+			owned.reset(*it);
+			previewExporters.erase(it);
+		}
+		else {
+			vassert(!"The exporter is expected to be present in the exporter list.");
+			// A stale or duplicated delete must not corrupt the list, let alone crash Blender.
+			Logger::warning("deletePreviewRenderer(): unknown preview renderer, ignoring");
+		}
+	}
 }
 
 void clearScene(const nb::object& renderer)
@@ -260,6 +383,75 @@ void calculateDownloadSize(const nb::object& packageIds, const nb::object& revis
 
 void downloadMissingAssets() {
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnCosmosDownloadAssets{}), false);
+}
+
+/// Import one or more Cosmos assets by name or package id. The result is delivered
+/// asynchronously through the cosmos import callback (setCosmosImportCallback), the
+/// same path used by the Cosmos browser.
+/// 'instanceTokens', when given, must be positionally parallel to 'assetNames'. Each token is
+/// echoed back on the corresponding CosmosAssetSettings as 'setInstanceToken'; used to import
+/// the members of an Asset Set and match each result to its manifest instance. A tokened entry
+/// is treated as a raw package id, skipping name resolution.
+void importCosmosAsset(const nb::object& assetNames, bool applyTriplanarMapping, bool applyRealWorldScale,
+	const nb::object& instanceTokens)
+{
+	vray::AttrListString attrAssetNames = vray::AttrListString(toVector<std::string>(assetNames));
+	vray::AttrListString attrInstanceTokens = vray::AttrListString(toVector<std::string>(instanceTokens));
+
+	// A short list would silently leave the trailing entries untokened, which imports them as
+	// standalone assets and leaves their Asset Set waiting for replies that never identify it.
+	if (!attrInstanceTokens.empty() && (attrInstanceTokens.getCount() != attrAssetNames.getCount())) {
+		throw nb::value_error("instanceTokens must be empty or the same length as assetNames");
+	}
+
+	ZmqServer::get().sendMessage(serializeMessage(
+		proto::MsgControlOnCosmosImportById{
+			std::move(attrAssetNames),
+			applyTriplanarMapping,
+			applyRealWorldScale,
+			std::move(attrInstanceTokens)
+		}), false
+	);
+}
+
+/// Triggered by the Blender FileHandler when a Cosmos stub file is dropped on
+/// a Blender area. Forwards the package id and the world-space drop position
+/// (pre-resolved in the drop operator) to the server so it can call
+/// GalaxyClient::importPackage() and run the usual Cosmos import pipeline.
+/// The normal MsgControlOnImportAsset will come back carrying the same
+/// world position so Python-side importers can place the asset there.
+void cosmosDropImport(
+	const std::string& packageId,
+	int revisionId,
+	double worldX,
+	double worldY,
+	double worldZ,
+	const std::string& dropTargetObject,
+	int dropTargetSlot,
+	bool hasHitNormal,
+	double normalX,
+	double normalY,
+	double normalZ,
+	bool applyTriplanar,
+	bool applyRealWorldScale,
+	bool forceNormalAlign)
+{
+	proto::MsgControlOnCosmosDropImport msg;
+	msg.packageId             = packageId;
+	msg.revisionId            = static_cast<uint32_t>(revisionId);
+	msg.worldX                = worldX;
+	msg.worldY                = worldY;
+	msg.worldZ                = worldZ;
+	msg.dropTargetObject      = dropTargetObject;
+	msg.dropTargetSlot        = dropTargetSlot;
+	msg.hasHitNormal          = hasHitNormal;
+	msg.normalX               = normalX;
+	msg.normalY               = normalY;
+	msg.normalZ               = normalZ;
+	msg.applyTriplanarMapping = applyTriplanar;
+	msg.applyRealWorldScale   = applyRealWorldScale;
+	msg.forceNormalAlign      = forceNormalAlign;
+	ZmqServer::get().sendMessage(serializeMessage(msg), false);
 }
 
 // Opens VFB through control connection
@@ -447,6 +639,20 @@ void pluginUpdateFloatList(const nb::object& renderer, std::string name, std::st
 {
 	std::vector<float> vec = toVector<float>(list);
 	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), vray::AttrList<float>(std::move(vec)), animatable);
+}
+
+/// Set a VECTOR_LIST property from a flat float sequence of length 3*N (x,y,z per vector).
+/// A general-purpose list setter (like pluginUpdateFloatList); GeomStaticMesh.vertices and the
+/// scatter spline/area vertex lists need a true VECTOR_LIST, not a generic value list.
+void pluginUpdateVectorList(const nb::object& renderer, std::string name, std::string attrName, const nb::object& floats, bool animatable=true)
+{
+	const std::vector<float> flat = toVector<float>(floats);
+	const int count = static_cast<int>(flat.size() / 3);
+	vray::AttrList<vray::AttrVector> vecList(count);
+	if (count > 0) {
+		std::memcpy(vecList.getData()->data(), flat.data(), static_cast<size_t>(count) * sizeof(vray::AttrVector));
+	}
+	pluginUpdateAttr(renderer, std::move(name), std::move(attrName), std::move(vecList), animatable);
 }
 
 // Matrix/Transform wrappers: decode Python matrix, then forward.
@@ -727,6 +933,181 @@ void setCosmosDownloadAssets(nb::callable downloadAssetsCallback)
 	ZmqServer::get().setPythonCallback("setCosmosDownloadAssets", std::move(downloadAssetsCallback));
 }
 
+/// Start a .vrscene import session on the server. Returns the session id.
+/// typeFilter: comma-separated plugin-type prefixes (e.g. "Mtl"); empty imports everything.
+int importVrsceneStart(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd,
+                       const std::string& typeFilter)
+{
+	return SceneImport::startImport(filePath, skipDefaults, frameStart, frameEnd, typeFilter);
+}
+
+/// Ask the server to abort a running .vrscene import.
+void importVrsceneCancel(int importId)
+{
+	SceneImport::cancelImport(importId);
+}
+
+/// Get the imported plugin data as [(name, type, attributes, animatedAttrNames)].
+/// Valid after the import finished callback has reported success.
+nb::list getImportedVrscene(int importId, const nb::dict& largeAttrs)
+{
+	return SceneImport::getImportedScene(importId, largeAttrs);
+}
+
+/// Free an import session's native buffers. Numpy arrays already handed out stay valid.
+void importVrsceneRelease(int importId)
+{
+	// The release joins the session's connection thread which may be executing
+	// a Python callback; keeping the GIL here would deadlock.
+	nb::gil_scoped_release noGIL;
+	SceneImport::releaseImport(importId);
+}
+
+/// Sets the python callback for .vrscene import progress reports
+void setVrsceneImportProgressCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vrsceneImportProgress", std::move(callback));
+}
+
+/// Sets the python callback invoked when a .vrscene import completes
+void setVrsceneImportFinishedCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vrsceneImportFinished", std::move(callback));
+}
+
+// ---------------------------------------------------------------------------
+// Chaos Scatter preview
+//
+// The preview session is an ordinary SceneExporter of type SCATTER_PREVIEW, so the whole
+// vray.pluginCreate / pluginUpdate* / plugin_utils.updateValue path builds the target meshes,
+// model stand-ins, density textures and the GeomScatter plugin on the server's private
+// headless renderer with no scatter-specific send code. Only the compute trigger and its
+// result are bespoke.
+// ---------------------------------------------------------------------------
+
+/// Open (or reuse) the scatter preview session and return its renderer handle, or 0 if the
+/// ZmqServer is not up yet.
+size_t scatterPreviewStart()
+{
+	static int zmqProcessID = 0;
+
+	const int zmqCurrentProcessID = ZmqServer::get().getProcessID();
+	if (zmqCurrentProcessID == 0) {
+		return 0;   // server not started / restarting
+	}
+
+	// isStopped() never trips on a server crash (this connection has no ping), so the pid is the
+	// only restart signal - see the same guard in getMainRenderer().
+	const bool zmqServerRestarted = zmqCurrentProcessID != zmqProcessID;
+
+	if (!scatterExporter || zmqServerRestarted || scatterExporter->getPluginExporter()->isStopped()) {
+		scatterExporter.reset(new SceneExporter());
+		zmqProcessID = zmqCurrentProcessID;
+
+		ExporterSettings settings;
+		settings.exporterType = static_cast<int>(proto::ExporterType::SCATTER_PREVIEW);
+		initializeRenderer(*scatterExporter, settings);
+
+		scatterExporter->getPluginExporter()->set_callback_on_scatter_result(
+			[](const proto::MsgScatterPreviewResult& result) {
+				ScatterPreview::onResult(result);
+			});
+
+		scatterExporter->getPluginExporter()->set_callback_on_scatter_preset_result(
+			[](const proto::MsgScatterPresetResult& result) {
+				ScatterPreview::onPresetResult(result);
+			});
+	}
+
+	return reinterpret_cast<size_t>(scatterExporter.get());
+}
+
+
+/// Close the scatter preview session and drop stored results.
+void scatterPreviewStop()
+{
+	nb::gil_scoped_release noGIL;
+	scatterExporter.reset();
+	ScatterPreview::clear();
+}
+
+
+/// Ask the server to compute the preview transforms of an already-built GeomScatter plugin.
+void requestScatterPreview(const nb::object& renderer, int requestId, const std::string& scatterPluginName, double time)
+{
+	auto* exporter = getExporter(renderer);
+	proto::MsgScatterPreviewRequest request;
+	request.requestId = requestId;
+	request.scatterPluginName = scatterPluginName;
+	request.time = time;
+	exporter->getPluginExporter()->sendPluginMsg(serializeMessage(request));
+}
+
+
+/// Drop a queued preview request (a running computation still finishes but is discarded).
+void cancelScatterPreview(const nb::object& renderer, int requestId)
+{
+	auto* exporter = getExporter(renderer);
+	exporter->getPluginExporter()->sendPluginMsg(serializeMessage(proto::MsgScatterPreviewCancel{requestId}));
+}
+
+
+/// Register the Python callback invoked when a preview result arrives
+/// (requestId, status, errorText, instanceCount).
+void setScatterPreviewCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("scatterPreviewResult", std::move(callback));
+}
+
+
+/// Fetch a completed result as (transforms (N,12) float32, topo (N,) int32) zero-copy ndarrays.
+nb::tuple scatterPreviewGetResult(int requestId)
+{
+	return ScatterPreview::getResult(requestId);
+}
+
+
+/// Free a stored result; arrays already handed to Python stay valid.
+void scatterPreviewReleaseResult(int requestId)
+{
+	ScatterPreview::releaseResult(requestId);
+}
+
+
+/// Ask the server to read a Chaos Scatter preset config (.mbc) and reply with the parameters of
+/// the GeomScatter plugin it fills. unitRescale converts preset units (metres) to scene units.
+void requestScatterPreset(const nb::object& renderer, int requestId, const std::string& filePath, double unitRescale)
+{
+	auto* exporter = getExporter(renderer);
+	proto::MsgScatterPresetRequest request;
+	request.requestId = requestId;
+	request.filePath = filePath;
+	request.unitRescale = unitRescale;
+	exporter->getPluginExporter()->sendPluginMsg(serializeMessage(request));
+}
+
+
+/// Register the Python callback invoked when a preset read completes (requestId, status, errorText).
+void setScatterPresetCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("scatterPresetResult", std::move(callback));
+}
+
+
+/// Fetch a completed preset read as ([(pluginName, pluginType, attrs), ...], [assetId, ...]).
+nb::tuple scatterPresetGetResult(int requestId)
+{
+	return ScatterPreview::getPresetResult(requestId);
+}
+
+
+/// Free a stored preset result.
+void scatterPresetReleaseResult(int requestId)
+{
+	ScatterPreview::releasePresetResult(requestId);
+}
+
+
 /// Updates the V-Ray scene path after a scene change
 void updateScenePath(const std::string& scenePath) {
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnUpdateScenePath{scenePath}));
@@ -779,6 +1160,12 @@ float getRenderProgress(const nb::object& renderer)
 	return getExporter(renderer)->getRenderProgress();
 }
 
+/// (stage title, progress in [0, 1]) for the render stage V-Ray is working on.
+std::pair<std::string, float> getRenderStage()
+{
+	return ZmqServer::get().getRenderStage();
+}
+
 /// Sets callback executed when VFB is updated
 void setVfbSettingsUpdateCallback(nb::callable vfbSettingsUpdateCallback)
 {
@@ -827,7 +1214,7 @@ void setVfbLayers(const std::string& vfbLayers)
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlUpdateVfbLayers{vfbLayers}));
 }
 
-/// Show message in the VFB log 
+/// Show message in the VFB log
 void logVfbMessage(const int level, const std::string& message)
 {
 	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlLogVfbMessage{static_cast<proto::VfbMessageLevel>(level), message}));
@@ -850,6 +1237,14 @@ void setElementPasses(const nb::object& renderer, const nb::list& passes)
 std::string getMetadata(const nb::object& renderer, const std::string& key)
 {
 	return getExporter(renderer)->getMetadata(key);
+}
+
+
+/// The plugin property values V-Ray wrote during the last finished frame, as a list of
+/// (pluginName, propertyName, value) tuples. Empty until a frame has completed.
+nb::list getPluginPropertyValues(const nb::object& renderer)
+{
+	return Interop::pluginPropertyValuesToPython(getExporter(renderer)->getPluginPropertyValues());
 }
 
 
@@ -983,6 +1378,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(hasLicense));
 
 	m.def(FUN(getMainRenderer),         nb::arg("settings"));
+	m.def(FUN(releaseMainRenderer),     nb::arg("renderer"));
 	m.def(FUN(createPreviewRenderer),   nb::arg("settings"));
 	m.def(FUN(deletePreviewRenderer),   nb::arg("renderer"));
 	m.def(FUN(clearScene),              nb::arg("renderer"));
@@ -997,7 +1393,41 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(setCosmosDownloadAssets), nb::arg("setCosmosDownloadAssets"));
 	m.def(FUN(calculateDownloadSize),   nb::arg("packageId"), nb::arg("revisionId"), nb::arg("missingTextures"));
 	m.def(FUN(downloadMissingAssets));
+	m.def(FUN(importCosmosAsset), nb::arg("assetNames"), nb::arg("applyTriplanarMapping") = false, nb::arg("applyRealWorldScale") = false,
+	                              nb::arg("instanceTokens") = nb::list());
+	m.def(FUN(cosmosDropImport),
+		nb::arg("packageId"), nb::arg("revisionId"),
+		nb::arg("worldX"), nb::arg("worldY"), nb::arg("worldZ"),
+		nb::arg("dropTargetObject"),
+		nb::arg("dropTargetSlot"),
+		nb::arg("hasHitNormal"),
+		nb::arg("normalX"), nb::arg("normalY"), nb::arg("normalZ"),
+		nb::arg("applyTriplanar"), nb::arg("applyRealWorldScale"),
+		nb::arg("forceNormalAlign"));
 	m.def(FUN(updateScenePath),   nb::arg("scenePath"));
+
+	m.def(FUN(importVrsceneStart),      nb::arg("filePath"), nb::arg("skipDefaults") = true,
+	                                    nb::arg("frameStart") = 0.0, nb::arg("frameEnd") = 0.0,
+	                                    nb::arg("typeFilter") = "");
+	m.def(FUN(importVrsceneCancel),     nb::arg("importId"));
+	m.def(FUN(getImportedVrscene),      nb::arg("importId"), nb::arg("largeAttrs") = nb::dict());
+	m.def(FUN(importVrsceneRelease),    nb::arg("importId"));
+	m.def(FUN(setVrsceneImportProgressCallback), nb::arg("progressCallback"));
+	m.def(FUN(setVrsceneImportFinishedCallback), nb::arg("finishedCallback"));
+
+	m.def(FUN(scatterPreviewStart));
+	m.def(FUN(scatterPreviewStop));
+	m.def(FUN(requestScatterPreview),   nb::arg("renderer"), nb::arg("requestId"),
+	                                    nb::arg("scatterPluginName"), nb::arg("time") = 0.0);
+	m.def(FUN(cancelScatterPreview),    nb::arg("renderer"), nb::arg("requestId"));
+	m.def(FUN(setScatterPreviewCallback), nb::arg("callback"));
+	m.def(FUN(scatterPreviewGetResult), nb::arg("requestId"));
+	m.def(FUN(scatterPreviewReleaseResult), nb::arg("requestId"));
+	m.def(FUN(requestScatterPreset),    nb::arg("renderer"), nb::arg("requestId"),
+	                                    nb::arg("filePath"), nb::arg("unitRescale") = 1.0);
+	m.def(FUN(setScatterPresetCallback), nb::arg("callback"));
+	m.def(FUN(scatterPresetGetResult),  nb::arg("requestId"));
+	m.def(FUN(scatterPresetReleaseResult), nb::arg("requestId"));
 
 	m.def(FUN(checkScannedLicense));
 	m.def(FUN(setScannedLicenseCallback),    nb::arg("scannedLicenseCallback"));
@@ -1023,6 +1453,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(setRenderStartCallback),       nb::arg("startRenderCallback"));
 	m.def(FUN(setZmqServerAbortCallback),    nb::arg("zmqServerAbortCallback"));
 	m.def(FUN(getRenderProgress),            nb::arg("renderer"));
+	m.def(FUN(getRenderStage));
 	m.def(FUN(setVfbSettingsUpdateCallback), nb::arg("vfbSettingsUpdateCallback"));
 	m.def(FUN(setAutoUpdateChangedCallback), nb::arg("autoUpdateChangedCallback"));
 	m.def(FUN(setAppUpdateRequestedCallback), nb::arg("appUpdateRequestedCallback"));
@@ -1049,6 +1480,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(pluginUpdateStringList), nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("list"));
 	m.def(FUN(pluginUpdateIntList),    nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("list"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateFloatList),  nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("list"), nb::arg("animatable") = true);
+	m.def(FUN(pluginUpdateVectorList), nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("floats"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdatePluginList), nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("list"), nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateMatrix),     nb::arg("renderer"), nb::arg("pluginName"), nb::arg("attrName"), nb::arg("mat"),  nb::arg("animatable") = true);
 	m.def(FUN(pluginUpdateTransform));
@@ -1091,6 +1523,7 @@ NB_MODULE(VRayBlenderLib, m)
 	                                   nb::arg("subIndex") = 0);
 	m.def(FUN(setElementPasses),       nb::arg("renderer"), nb::arg("passes"));
 	m.def(FUN(getMetadata),            nb::arg("renderer"), nb::arg("key"));
+	m.def(FUN(getPluginPropertyValues), nb::arg("renderer"));
 	m.def(FUN(renderStart),            nb::arg("renderer"), nb::arg("renderResult"), nb::arg("onImageUpdated").none(), nb::arg("imageToBlender") = true);
 	m.def(FUN(renderEnd),              nb::arg("renderer"));
 	m.def(FUN(renderFrame),            nb::arg("renderer"));
@@ -1212,15 +1645,41 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, matFile)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, objFile)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, lightFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, luminaireFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, settingsFile)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, setInstanceToken)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, packageId)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, revisionId)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, assetName)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, isAnimated)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, locationsMap)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, planeWidth)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, planeHeight)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, applyTriplanarMapping)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, texRealWorldWidth)
-		.ADD_RW_PROPERTY(CosmosAssetSettings, texRealWorldHeight);
+		.ADD_RW_PROPERTY(CosmosAssetSettings, texRealWorldHeight)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, hasDropCoords)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, worldX)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, worldY)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, worldZ)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, dropTargetObject)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, dropTargetSlot)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, hasHitNormal)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, normalX)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, normalY)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, normalZ)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, surfaceAttachment)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, forceNormalAlign);
+
+	nb::class_<VrsceneImportResult>(m, "VrsceneImportResult")
+		.def(nb::init<>())
+		.ADD_RW_PROPERTY(VrsceneImportResult, status)
+		.ADD_RW_PROPERTY(VrsceneImportResult, errorText)
+		.ADD_RW_PROPERTY(VrsceneImportResult, errorFile)
+		.ADD_RW_PROPERTY(VrsceneImportResult, errorLine)
+		.ADD_RW_PROPERTY(VrsceneImportResult, pluginCount)
+		.ADD_RW_PROPERTY(VrsceneImportResult, paramCount)
+		.ADD_RW_PROPERTY(VrsceneImportResult, sceneBaseDir);
 #ifdef WITH_DR2
     m.attr("withDR2") = true;
 #else

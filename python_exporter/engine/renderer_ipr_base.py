@@ -10,8 +10,8 @@ from vray_blender import debug
 from vray_blender.lib import gl_draw
 from vray_blender.lib.common_settings import CommonSettings
 from vray_blender.lib.camera_utils import ViewParams
-from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, PersistedState, 
-                                    RenderMaskState, UIRegionContext, getObjTrackId, SceneStats)
+from vray_blender.lib.defs import (UIRegionContext, ExporterContext, RendererMode, PersistedState,
+                                    RenderMaskState, UIRegionContext, getObjTrackId)
 from vray_blender.lib.names import syncObjectUniqueName, syncUniqueNames, Names
 from vray_blender.lib.plugin_utils import objectToAttrPlugin, stringToIntList
 from vray_blender.lib import export_utils
@@ -37,8 +37,10 @@ def _exportObjects(ctx: ExporterContext):
 
 
 def _exportMaterials(ctx: ExporterContext):
-    stats: SceneStats = ctx.ts.timeThis("export_materials", lambda: mtl_export.run(ctx))
-    ctx.stats.append(f"{'Materials:':<12} exported {stats.mtls} materials, {stats.plugins} plugins, {stats.attrs} attributes")
+    # The returned stats only cover the materials this pass exported itself, which on any normal
+    # scene is none of them - the object pass has already exported and cached every material that
+    # has an object user. The reporting is done from _reportExportStats() instead.
+    ctx.ts.timeThis("export_materials", lambda: mtl_export.run(ctx))
 
 
 def _exportLights(ctx: ExporterContext):
@@ -54,8 +56,35 @@ def _exportInstances(ctx: ExporterContext, geomExporter, lightExporter):
 def _exportSettings(ctx: ExporterContext):
     # This method has been reworked to only export Settings
     settingsExporter = settings_export.SettingsExporter(ctx)
-    stats: SceneStats = ctx.ts.timeThis("export_settings", lambda: settingsExporter.export())
-    ctx.stats.append(f"{'Settings:':<12} exported {stats.plugins} plugins, {stats.attrs} attributes")
+
+    # Settings plugins are exported only here, so a before/after delta of the cycle-wide accumulator
+    # attributes them correctly. The exporter's own return value cannot be used - nothing on the
+    # generic export path knows about it.
+    before = ctx.sceneStats.snapshot()
+    ctx.ts.timeThis("export_settings", lambda: settingsExporter.export())
+
+    if ctx.sceneStats.enabled:
+        stats = ctx.sceneStats - before
+        ctx.stats.append(f"{'Settings:':<12} exported {stats.plugins} plugins, {stats.attrs} attributes")
+
+
+def _reportExportStats(ctx: ExporterContext):
+    """ Report what the whole cycle exported. Called once, after every exporter has run.
+
+        Per pass counts are not reportable for objects and materials: both are exported from more
+        than one pass (an object from the scene pass and again as an instance source, a material
+        from whichever pass first reaches the object using it), so they are counted by category
+        over the whole cycle instead.
+    """
+    if not (stats := ctx.sceneStats).enabled:
+        # Nothing was collected - see ExporterContext.resetSceneStats().
+        return
+
+    ctx.stats.append(f"{'Objects:':<12} exported {len(stats.uniqueObjs)} objects ({stats.objs} exports)")
+    ctx.stats.append(f"{'Materials:':<12} exported {len(stats.uniqueMtls)} materials")
+    ctx.stats.append(f"{'Plugins:':<12} exported {stats.plugins} plugins, {stats.attrs} attributes")
+    ctx.stats.append(f"{'':<12} + {stats.forwardDeclared} forward-declared, "
+                     f"{len(stats.uniquePlugins)} distinct plugin names")
 
 def exportViewportView(ctx: ExporterContext, prevViewParams: ViewParams, renderSizesOnly = False):
     return ctx.ts.timeThis("export_view", lambda: view_export.ViewExporter(ctx).exportViewportView(prevViewParams, renderSizesOnly))
@@ -109,6 +138,10 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
     # depend on it
     obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
 
+    # Has to be after syncObjVisibility: it keys off objectsWithUpdatedVisibility, which that pass
+    # computes. See ExporterContext.syncActiveInstancers().
+    exporterCtx.syncActiveInstancers()
+
     # NOTE: Updates should tagged be BEFORE any export structures are calculated
     # for the current pass. Keep this at the beginning of the function.
     UpdateTracker.tagCrossObjectUpdates(exporterCtx, bpy.data.materials, UpdateTarget.MATERIAL)
@@ -123,17 +156,20 @@ def _syncPlugins(self, exporterCtx: ExporterContext):
         # are not exported.
         light_export.collectLightMixInfo(exporterCtx)
 
-    # NOTE: just to be safe, remove objects that have been processed but not in the current scene
-    allObjectIds = {
-        trackId
-        for obj in exporterCtx.sceneObjects
-        for trackId in (
-            [getObjTrackId(obj)] +
-            [getObjTrackId(ps.settings) for ps in getattr(obj, 'particle_systems', [])]
-        )
-    }
-    for objTrackId in self.persistedState.processedObjects.difference(allObjectIds):
-        self.persistedState.processedObjects.discard(objTrackId)
+    # NOTE: just to be safe, remove objects that have been processed but not in the current scene.
+    # An object can only leave the scene when the scene's object set changed, so on any other update
+    # the difference below is empty by construction and the scan can be skipped.
+    if exporterCtx.fullExport or exporterCtx.allObjectsChanged:
+        allObjectIds = {
+            trackId
+            for obj in exporterCtx.sceneObjects
+            for trackId in (
+                [getObjTrackId(obj)] +
+                [getObjTrackId(ps.settings) for ps in getattr(obj, 'particle_systems', [])]
+            )
+        }
+        for objTrackId in self.persistedState.processedObjects.difference(allObjectIds):
+            self.persistedState.processedObjects.discard(objTrackId)
 
     # Check if the currently updated material contains a displacement node
     checkForUpdatedMtlWithDisplacement(exporterCtx)
@@ -150,6 +186,9 @@ def _persistState(self, exporterCtx: ExporterContext):
     self.persistedState.activeGizmos = exporterCtx.activeGizmos
     self.persistedState.activeFurInfo = exporterCtx.activeFurInfo
     self.persistedState.activeMeshLightsInfo = exporterCtx.activeMeshLightsInfo
+
+    # Only after a successful export - a failed cycle must not hide the change from its retry.
+    self.persistedState.referencedAttrNames = exporterCtx.collectedAttrNames
 
     viewLayer = exporterCtx.dg.view_layer
     self.persistedState.materialOverrideMode = viewLayer.vray.material_override_mode
@@ -418,6 +457,8 @@ class VRayRendererIprBase:
 
         vray.startExport(self.renderer, bpy.context.scene.vray.Exporter.debug_threads)
 
+        exporterCtx.resetSceneStats()
+
         try:
             _syncNames(exporterCtx)
 
@@ -441,7 +482,7 @@ class VRayRendererIprBase:
                 self.viewParams = exportViewportView(exporterCtx, self.viewParams, False)
 
             elif exporterCtx.fullExport or exporterCtx.dg.updates:
-                exporterCtx.calculateObjectVisibility()
+                exporterCtx.syncSceneState()
 
                 _syncPlugins(self, exporterCtx)
 
@@ -451,6 +492,9 @@ class VRayRendererIprBase:
 
                 # Discover selector-referenced objects up front so the object pass exports the hidden ones.
                 reference_collector.collectReferencedObjects(exporterCtx)
+
+                # Must run before the passes below decide what to skip.
+                reference_collector.syncReferencedAttrNames(exporterCtx)
 
                 geomExporter = _exportObjects(exporterCtx)
                 lightExporter = _exportLights(exporterCtx)
@@ -465,6 +509,8 @@ class VRayRendererIprBase:
                 _exportMaterials(exporterCtx)
 
                 self._exportReferencedPluginParams(exporterCtx)
+
+                _reportExportStats(exporterCtx)
 
                 _persistState(self, exporterCtx)
 

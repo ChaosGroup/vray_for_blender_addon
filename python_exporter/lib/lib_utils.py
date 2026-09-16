@@ -5,6 +5,7 @@
 
 import re
 import uuid
+from pathlib import PurePath
 
 import bpy
 
@@ -21,16 +22,17 @@ LightBlenderToVrayPlugin = {
 
 # Match V-Ray light type to Blender light type
 LightVrayTypeToBlender = {
-    'AMBIENT' : 'POINT',
-    'DIRECT'  : 'POINT',
-    'IES'     : 'POINT',
-    'MESH'    : 'POINT',
-    'OMNI'    : 'POINT',
-    'SPHERE'  : 'POINT',
-    'SPOT'    : 'SPOT',
-    'SUN'     : 'SUN',
-    'RECT'    : 'AREA',
-    'DOME'    : 'POINT'
+    'AMBIENT'   : 'POINT',
+    'DIRECT'    : 'POINT',
+    'IES'       : 'POINT',
+    'MESH'      : 'POINT',
+    'OMNI'      : 'POINT',
+    'SPHERE'    : 'POINT',
+    'SPOT'      : 'SPOT',
+    'SUN'       : 'SUN',
+    'RECT'      : 'AREA',
+    'DOME'      : 'POINT',
+    'LUMINAIRE' : 'POINT'
 }
 
 # Match Blender light type to the V-Ray light_type enum value used when converting
@@ -44,16 +46,17 @@ BlenderToVrayLightType = {
 
 # Match V-Ray light type to V-Ray plugin
 LightTypeToPlugin = {
-    'AMBIENT' : 'LightAmbient',
-    'DIRECT'  : 'MayaLightDirect',
-    'IES'     : 'LightIES',
-    'MESH'    : 'LightMesh',
-    'OMNI'    : 'LightOmni',
-    'SPHERE'  : 'LightSphere',
-    'SPOT'    : 'LightSpot',
-    'SUN'     : 'SunLight',
-    'RECT'    : 'LightRectangle',
-    'DOME'    : 'LightDome'
+    'AMBIENT'   : 'LightAmbient',
+    'DIRECT'    : 'MayaLightDirect',
+    'IES'       : 'LightIES',
+    'MESH'      : 'LightMesh',
+    'OMNI'      : 'LightOmni',
+    'SPHERE'    : 'LightSphere',
+    'SPOT'      : 'LightSpot',
+    'SUN'       : 'SunLight',
+    'RECT'      : 'LightRectangle',
+    'DOME'      : 'LightDome',
+    'LUMINAIRE' : 'LightLuminaire'
 }
 
 FormatToSettings = {
@@ -122,6 +125,67 @@ def cleanString(s, stripSigns=True):
 
 
 
+# The suffix V-Ray adds to a plugin name, e.g. '/Glass_mtl@mtl_2'.
+_reCosmosPluginSuffix = re.compile(r'@.*$')
+
+# Cosmos' 3D high/low detail prefix, e.g. '/_3DH_Lamp_Floor_013_vrayluminaire@light_27'.
+_reCosmosDetailPrefix = re.compile(r'^_3d[hl]_', re.IGNORECASE)
+
+# The package id Cosmos puts on every downloaded file, e.g. 'ff7f0a36_Nrm_2k_raw.tx'.
+_reCosmosFilePrefix = re.compile(r'^[0-9a-f]{8}_', re.IGNORECASE)
+
+# Detail level and color space, e.g. 'HDR_Map_723_8k_lin' -> 'HDR_Map_723_8k'.
+_reCosmosFileSuffix = re.compile(r'_(3dh|3dl|raw|srgb|lin|linear)$', re.IGNORECASE)
+
+# Illegal in file names (image names end up in one, see image_utils._saveTemporaryImage);
+# '@' and '|' also separate the generated V-Ray plugin names and survive lib/names.py.
+_reUnsafeNameChars = re.compile(r'[\\/:*?"<>|@\x00-\x1f]')
+
+
+def _collapseUnderscores(name: str):
+    return re.sub(r'_{2,}', '_', name).strip('_')
+
+
+def sanitizeDatablockName(name: str):
+    """ Make a name coming from outside Blender safe to use as a datablock name. """
+    return _reUnsafeNameChars.sub('_', name).strip()
+
+
+def getCosmosAssetName(cosmosAssetContext):
+    """ The Cosmos asset name to name the imported datablocks after, or '' if there is none. """
+    if not cosmosAssetContext:
+        return ""
+
+    return sanitizeDatablockName(cosmosAssetContext.assetName)
+
+
+def cleanImportedPluginName(pluginName: str):
+    """ '/Glass_mtl@mtl_2' -> 'Glass', '/_3DH_Lamp_Floor_013_vrayluminaire@light_27' ->
+        'Lamp_Floor_013_vrayluminaire'.
+    """
+    name = _reCosmosPluginSuffix.sub('', pluginName.lstrip('/'))
+    name = _reCosmosDetailPrefix.sub('', name)
+
+    if name.endswith('_mtl'):
+        name = name[:-len('_mtl')]
+
+    return _collapseUnderscores(name) or pluginName
+
+
+def cleanCosmosTextureName(filePath: str):
+    """ 'ff7f0a36_Nrm_2k_raw.tx' -> 'Nrm_2k',
+        '405a8918_Flowers_01_Diff_3dh_srgb.tx' -> 'Flowers_01_Diff'.
+    """
+    stem = PurePath(filePath).stem
+    name = _reCosmosFilePrefix.sub('', stem)
+
+    # The tokens may be combined, e.g. '..._3dh_srgb'.
+    while (shorter := _reCosmosFileSuffix.sub('', name)) != name:
+        name = shorter
+
+    return _collapseUnderscores(name) or stem
+
+
 def getPropGroup(parentID, propGroupPath):
     path = propGroupPath.split(".")
     propGroup = parentID
@@ -136,96 +200,67 @@ def isRestrictedContext(ctx: bpy.types.Context):
 
 
 
-def parseFrames(inputString: str, fnAppendFrame, fnAppendRange):
-    """ Parses a custom frame string into a single flat list of unique frames.
-        Example: "1,5,10-12, 20-24:2" -> [1, 5, 10, 11, 12, 20, 22, 24]
+def parseFramesToFlatList(inputString: str):
+    """ Parses a custom frame string into a sorted flat list of unique frames.
+        Example: "5, 20-24:2, 10-12, 10" -> [5, 10, 11, 12, 20, 22, 24]
     """
-    
+
     segments = inputString.replace(' ', '').replace('..', '-').split(",")
 
-    flatFrameList = []
-    
+    frames = set()
+
     for segment in segments:
         if not segment:
             # Skip empty items
             continue
-            
+
         try:
             match = re.fullmatch(r"(\d+)-(\d+)(?:\:(\d+))?", segment)
             if match:
                 startFrame = int(match.group(1))
                 endFrame   = int(match.group(2))
                 step       = int(match.group(3) or 1)
-                
-                fnAppendRange(flatFrameList, startFrame, endFrame, step)
+
+                if endFrame < startFrame:
+                    return None, f"Reversed frame range in frames list: {segment}"
+
+                frames.update(range(startFrame, endFrame + 1, step))
             else:
                 # Single frame
                 startFrame = int(segment)
                 if startFrame < 0:
-                    debug.printError("Negative frame number in frames list")
-                    return None
-                fnAppendFrame(flatFrameList, startFrame)
+                    return None, "Negative frame number in frames list"
+                frames.add(startFrame)
         except Exception:
-            debug.printError(f"Invalid frame range specification: {inputString}")
-            return None
-        
-    return flatFrameList
+            return None, f"Invalid frame range specification: {inputString}"
+
+    return sorted(frames), None
 
 
-def parseFramesToSequences(inputString: str):
-    """ Parses a custom frame string into a list of (start, end, step) items.
-        Example: "5,10-12, 20-24:2" -> [[5,5,1], [10,12,1], [20,24,2]]
-    """
-    
-    def _appendFrame(seq, frame: int):
-        seq.append([frame, frame, 1])
+def framesToSequences(frames: list[int]):
+    """ Groups a sorted list of unique frames into evenly stepped [start, end, step] runs.
+        Example: [5, 10, 11, 12, 20, 22, 24] -> [[5, 10, 5], [11, 12, 1], [20, 24, 2]]
 
-    def _appendRange(seq, start: int, end: int, step: int):
-        seq.append([start, end, step])
-
-    return parseFrames(inputString, _appendFrame, _appendRange)
-
-
-
-def parseFramesToFlatList(inputString: str):
-    """ Parses a custom frame string into a flat list of frames.
-        Example: "5,10-12, 20-24:2" -> [5, 10, 11, 12, 20, 22, 24]
+        The sequences must expand to exactly the frames they were built from, in the same
+        order, because the render sequence sent to V-Ray and the frame list used to drive
+        the export are matched up by index while rendering.
     """
 
-    def _appendFrame(flatList, frame: int):
-        flatList.append(frame)
+    sequences = []
+    i = 0
 
-    def _appendRange(flatList, start: int, end: int, step: int):
-        flatList.extend(list(range(start, end + 1, step)))
+    while i < len(frames):
+        if i + 1 == len(frames):
+            sequences.append([frames[i], frames[i], 1])
+            break
 
-    return parseFrames(inputString, _appendFrame, _appendRange)
+        step = frames[i + 1] - frames[i]
+        end = i + 1
+        while (end + 1 < len(frames)) and (frames[end + 1] - frames[end] == step):
+            end += 1
 
-def filterSequencesByViewLayerUse(viewLayerName: str, sequences: list[list[float]]):
-    """ Filter the parts of the sequences that are not enabled in the selected view layer """
+        sequences.append([frames[i], frames[end], step])
+        i = end + 1
 
-    from vray_blender.lib.blender_utils import getViewLayerUseFCurve
-
-    if vlFCurve := getViewLayerUseFCurve(viewLayerName):
-        
-        filteredSequences = []
-        for sequence in sequences:
-            startFrame = None
-            endFrame = None
-
-            sequenceStart, sequenceEnd, step = sequence
-            for frame in range(sequenceStart, sequenceEnd + 1, step):
-                vlayerEnabled = vlFCurve.evaluate(frame)
-
-                if not vlayerEnabled and startFrame:
-                    endFrame = max(frame - step, startFrame)
-                    filteredSequences.append([startFrame, endFrame, step])
-                    startFrame = None
-                if vlayerEnabled and not startFrame:
-                    startFrame = frame
-            
-            if (not endFrame) and startFrame:
-                filteredSequences.append([startFrame, sequenceEnd - (sequenceEnd - startFrame) % step, step])
-                
-        return filteredSequences
     return sequences
 

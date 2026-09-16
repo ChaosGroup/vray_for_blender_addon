@@ -92,24 +92,34 @@ class VRayNodeBase(VRayEntity, bpy.types.Node):
 
     def update(self):
         """Update on node graph topology changes (adding or removing nodes and links)"""
-        from vray_blender.nodes.links import isLinkValid, checkAndRemoveNewlyCreatedLink
-        from vray_blender.plugins import getPluginModule
-        for sock in self.inputs:
-            for link in sock.links:
-                if not isLinkValid(self, link):
-                    self.id_data.links.remove(link)
-                elif (nodeLinkInfo := checkAndRemoveNewlyCreatedLink(link)) and link.to_node == self:
-                    # A new link was connected to this input socket. The tree topology is now
-                    # committed, so it is safe to touch socket/node state. Let the socket react
-                    # first (e.g. auto-enable a 'use' toggle so the connection takes effect),
-                    # then run any plugin-specific link handler.
-                    if onLinkConnected := getattr(link.to_socket, 'onLinkConnected', None):
-                        onLinkConnected()
-                    if nodeLinkInfo.customInsertLinkCallback:
-                        nodeLinkInfo.customInsertLinkCallback(link)
-                    elif getattr(self, 'vray_plugin', 'NONE') != 'NONE':
-                        if fnNodeInsertLink := getattr(getPluginModule(self.vray_plugin), "nodeInsertLink", None):
-                            fnNodeInsertLink(link)
+        from vray_blender.nodes.links import isLinkValid, checkAndRemoveNewlyCreatedLink, scheduleRolloutLinkRedirect
+        from vray_blender.plugins import findPluginModule
+        ntree = self.id_data
+        # NodeSocket.links is implemented in Python and rescans the whole tree's link list on
+        # every access, so asking each input socket for its links costs inputs x links. One
+        # filtered pass over the tree's links visits exactly the same incoming links - V-Ray
+        # nodes have dozens of inputs, and this callback runs for every node on every topology
+        # change, so the difference dominates the build of a large imported tree.
+        for link in [l for l in ntree.links if l.to_node == self]:
+            if not isLinkValid(self, link):
+                # A link dropped on a rollout header socket that declares a redirect target
+                # is forwarded to that target (VBLD-2608); the invalid header link is dropped.
+                scheduleRolloutLinkRedirect(self, link)
+                ntree.links.remove(link)
+            elif nodeLinkInfo := checkAndRemoveNewlyCreatedLink(link):
+                # A new link was connected to this input socket. The tree topology is now
+                # committed, so it is safe to touch socket/node state. Let the socket react
+                # first (e.g. auto-enable a 'use' toggle so the connection takes effect),
+                # then run any plugin-specific link handler.
+                if onLinkConnected := getattr(link.to_socket, 'onLinkConnected', None):
+                    onLinkConnected()
+                if nodeLinkInfo.customInsertLinkCallback:
+                    nodeLinkInfo.customInsertLinkCallback(link)
+                # findPluginModule, not getPluginModule: a generic plugin node carries the type of
+                # a plugin V-Ray has no description for, and the latter raises for those.
+                elif fnNodeInsertLink := getattr(findPluginModule(getattr(self, 'vray_plugin', 'NONE')),
+                                                 "nodeInsertLink", None):
+                    fnNodeInsertLink(link)
 
 
 class VRayOperatorBase(bpy.types.Operator):

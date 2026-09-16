@@ -54,9 +54,15 @@ template <typename ...TArgs>
 bool invokePythonCallback(const std::string& callbackName, const nb::handle& callback, const TArgs&... args) {
 	nb::gil_scoped_acquire gil;
 
+	// The handle is non-owning and its slot can be reassigned from another thread, so calling
+	// through it is a use-after-free (VBLD-2803). Take a reference now the GIL is held; `owned` is
+	// declared after `gil` so its decref is GIL-protected too.
+	nb::object owned;
+
 	try {
 		if (callback) {
-			callback(args...);
+			owned = nb::borrow(callback);
+			owned(args...);
 		}
 
 		return true;

@@ -1,0 +1,37 @@
+{
+    "ID": "BRDFMirror",
+    "Parameters": [
+        {
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "default": [1.0, 1.0, 1.0],
+            "ui": { "display_name": "Color" },
+            "desc": "Reflection color. A linked texture overrides the flat color (V-Ray color_tex/color pair)."
+        },
+        {
+            "attr": "transparency_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "transparency",
+            "tex_prop": "transparency_tex",
+            "default": [0.0, 0.0, 0.0],
+            "ui": { "display_name": "Transparency" },
+            "desc": "Transparency. A linked texture overrides the flat color."
+        }
+    ],
+    "Node": {
+        "input_sockets": [
+            { "name": "color_colortex", "label": "Color" },
+            { "name": "transparency_colortex", "label": "Transparency" }
+        ]
+    },
+    "Options": {
+        "excluded_parameters": [
+            "color",
+            "color_tex",
+            "transparency",
+            "transparency_tex"
+        ]
+    }
+}

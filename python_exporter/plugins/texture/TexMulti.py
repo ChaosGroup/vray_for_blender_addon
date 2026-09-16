@@ -124,9 +124,10 @@ class VRAY_OT_node_texmulti_socket_del(VRayNodeDelCustomSocket, VRayOperatorBase
         self.vray_socket_name = 'Texture'
 
     def execute(self, context: bpy.types.Context):
-        selectedObjectTagUpdate(self, context)
-        VRayNodeDelCustomSocket.execute(self, context)
-        return {'FINISHED'}
+        res = VRayNodeDelCustomSocket.execute(self, context)
+        if res == {'FINISHED'}:
+            selectedObjectTagUpdate(self, context)
+        return res
 
 
 class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
@@ -181,7 +182,7 @@ class VRAY_OT_node_texmulti_add_from_folder(VRayOperatorBase):
 
         if not files:
             self.report({'ERROR'}, 'No valid images selected')
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         deselectNodes(ntree)
 

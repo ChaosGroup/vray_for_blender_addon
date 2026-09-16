@@ -10,6 +10,7 @@
 # collects all of them and relinks the missing ones by file name from a chosen
 # folder, exactly like Blender's "Find Missing Files".
 
+import contextlib
 import os
 
 import bpy
@@ -17,7 +18,7 @@ import bpy
 from vray_blender.lib import lib_utils
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.nodes.tools import isVrayLight
+from vray_blender.nodes.tools import isVrayLight, iterVRayNodeTreesWithOwners
 from vray_blender.ui.lister import core
 
 
@@ -75,16 +76,11 @@ def _nodePluginGroups(node):
             yield name, propGroup
 
 
-def _vrayNodeTrees():
-    trees = set()
-    for collection in (bpy.data.materials, bpy.data.worlds, bpy.data.lights):
-        for block in collection:
-            nt = getattr(block, 'node_tree', None)
-            if nt is not None:
-                trees.add(nt)
-    for ng in bpy.data.node_groups:
-        trees.add(ng)
-    return trees
+def _nodeLocator(ntree, node) -> str:
+    """ Row locator prefix, keyed on session_uid, not the tree name: trees share the name
+        'Shader Nodetree' and nodes keep their defaults, so name-based locators collide across
+        materials and every action keyed by one (relink, select, open) hits the first row. """
+    return f"n|{ntree.session_uid}|{node.name}"
 
 
 # Cache of file-existence checks keyed by absolute path. The lister redraws often
@@ -99,7 +95,7 @@ def refreshAssetCache():
     _existsCache.clear()
 
 
-def _isMissing(path: str) -> bool:
+def isFileMissing(path: str) -> bool:
     if not path:
         return False
     absPath = os.path.normpath(bpy.path.abspath(path))
@@ -124,15 +120,17 @@ _KIND_INFO = {
     'VRMAT':   ("VRmat Materials",   'MATERIAL'),
     'OCIO':    ("OCIO",              'FILE'),
     'IES':     ("IES Profiles",      'LIGHT'),
+    'LUMINAIRE': ("Luminaire Caches", 'LIGHT'),
     'CAMERA':  ("Camera Files",      'CAMERA_DATA'),
 }
 
 # Node plugin type -> Assets kind (object refs set their kind explicitly).
 _NODE_KIND = {
-    'BitmapBuffer': 'BITMAP',
-    'TexOCIO':      'OCIO',
-    'BRDFScanned':  'SCANNED',
-    'MtlVRmat':     'VRMAT',
+    'BitmapBuffer':   'BITMAP',
+    'TexOCIO':        'OCIO',
+    'BRDFScanned':    'SCANNED',
+    'MtlVRmat':       'VRMAT',
+    'LightLuminaire': 'LUMINAIRE',
 }
 
 _IMAGE_GLOB = "*.png;*.jpg;*.jpeg;*.tif;*.tiff;*.exr;*.hdr;*.tga;*.bmp;*.tx;*.tex;*.gif;*.psd"
@@ -161,7 +159,22 @@ def _globForKind(kind: str) -> str:
         'VRMAT':   "*.vrmat;*.vismat",
         'OCIO':    "*.ocio",
         'IES':     "*.ies",
+        'LUMINAIRE': "*.vlw;*.vlg;*.vlsh",
     }.get(kind, "")
+
+
+def _pathWriteGuard(kind: str):
+    """ Repairing a path points at the same scanned material in a new place, so it must not
+        re-read the .vrscan preset over the parameters on the node (nor run the preset tool once
+        per row). Via a flag the callback checks, not key access - that bypass is unsupported
+        since Blender 5.0 and silently loses the write on a get/set property. """
+    if kind == 'SCANNED':
+        # Via the registry: plugin modules load twice (bare name and package path) and the
+        # registered callback reads the PLUGIN_MODULES copy's globals.
+        from vray_blender.plugins import findPluginModule
+        if module := findPluginModule('BRDFScanned'):
+            return module.DisablePresetRead()
+    return contextlib.nullcontext()
 
 
 class AssetRef:
@@ -169,15 +182,19 @@ class AssetRef:
         a V-Ray plugin string attribute - or a Blender Image datablock (default-mode
         bitmaps keep their path on the Image). 'locator' is a stable string used to
         re-resolve the ref from an operator and as the selection key. """
-    __slots__ = ('kind', 'element', 'locator', 'propGroup', 'attr', 'image')
+    __slots__ = ('kind', 'element', 'locator', 'propGroup', 'attr', 'image', 'objName')
 
-    def __init__(self, kind, element, locator, propGroup=None, attr='', image=None):
+    def __init__(self, kind, element, locator, propGroup=None, attr='', image=None, objName=''):
         self.kind = kind
         self.element = element
         self.locator = locator
         self.propGroup = propGroup
         self.attr = attr
         self.image = image
+        # Name of the scene object that owns this reference (proxy / splat / scene / IES /
+        # camera files), or '' for node-based references (bitmaps, materials, world). Lets
+        # the Assets tab honour the viewport / render visibility filters for object refs.
+        self.objName = objName
 
     @property
     def path(self) -> str:
@@ -192,11 +209,12 @@ class AssetRef:
             self.image.filepath = newPath
             self.image.reload()
         elif self.propGroup is not None and self.attr:
-            setattr(self.propGroup, self.attr, newPath)
+            with _pathWriteGuard(self.kind):
+                setattr(self.propGroup, self.attr, newPath)
 
     @property
     def isMissing(self) -> bool:
-        return _isMissing(self.path)
+        return isFileMissing(self.path)
 
 
 # Transient (runtime-only) set of selected asset locators for the Assets tab's
@@ -228,7 +246,7 @@ def bitmapAssetRef(node):
     ntree = node.id_data
     bitmapBuffer = getattr(node, 'BitmapBuffer', None)
     if bitmapBuffer is not None and getattr(bitmapBuffer, 'use_external_image', False):
-        return getattr(bitmapBuffer, 'file', ""), f"n|{ntree.name}|{node.name}|BitmapBuffer|file"
+        return getattr(bitmapBuffer, 'file', ""), f"{_nodeLocator(ntree, node)}|BitmapBuffer|file"
     texture = getattr(node, 'texture', None)
     image = getattr(texture, 'image', None) if texture is not None else None
     if image is not None and image.filepath:
@@ -246,7 +264,7 @@ def collectAssetRefs(context: bpy.types.Context) -> list:
     seen = set()
     fileAttrs = _getFileAttrsByPlugin()
 
-    def add(kind, element, locator, propGroup, attr):
+    def add(kind, element, locator, propGroup, attr, objName=''):
         if propGroup is None:
             return
         try:
@@ -254,32 +272,45 @@ def collectAssetRefs(context: bpy.types.Context) -> list:
                 return
         except AttributeError:
             return
-        key = (id(propGroup), attr)
+        # as_pointer(), not id(): Blender hands out a fresh Python wrapper on every propgroup
+        # access, so id() would not recognise the same property reached a second time - e.g. a
+        # node-mode light's file attr, found both by the node walk and by the object walk below.
+        key = (propGroup.as_pointer(), attr)
         if key in seen or not getattr(propGroup, attr, ""):
             return  # already added, or empty path (nothing referenced)
         seen.add(key)
-        refs.append(AssetRef(kind, element, locator, propGroup=propGroup, attr=attr))
+        refs.append(AssetRef(kind, element, locator, propGroup=propGroup, attr=attr, objName=objName))
 
-    def addPlugin(element, locatorPrefix, propGroup, pluginType, kind):
+    def addPlugin(element, locatorPrefix, propGroup, pluginType, kind, objName=''):
         for attr in fileAttrs.get(pluginType, ()):
-            add(kind, element, f"{locatorPrefix}|{pluginType}|{attr}", propGroup, attr)
+            add(kind, element, f"{locatorPrefix}|{pluginType}|{attr}", propGroup, attr, objName=objName)
 
     # Node-tree references, in a single walk: file-path plugin attrs (bitmaps in external mode,
     # scanned / VRmat materials, OCIO textures, node-mode IES lights, ...) and the default-mode
     # V-Ray bitmaps whose path lives on a Blender Image datablock.
     imgSeen = set()
-    for ntree in _vrayNodeTrees():
+    for owner, ntree in iterVRayNodeTreesWithOwners():
         for node in ntree.nodes:
+            element = f"{owner.name} / {node.name}"
+            locator = _nodeLocator(ntree, node)
+            isBitmap = getattr(node, 'vray_plugin', '') == 'TexBitmap'
             for pluginType, propGroup in _nodePluginGroups(node):
+                # A V-Ray Bitmap's BitmapBuffer is added by the dedicated branch below (one row
+                # per bitmap, from either its external file path or its Blender image). Skip it
+                # here, or an imported bitmap - whose BitmapBuffer.file the importer fills even in
+                # image-datablock mode - would be listed twice.
+                if isBitmap and pluginType == 'BitmapBuffer':
+                    continue
                 kind = _NODE_KIND.get(pluginType, pluginType)
-                addPlugin(f"{ntree.name} / {node.name}", f"n|{ntree.name}|{node.name}",
-                          propGroup, pluginType, kind)
+                addPlugin(element, locator, propGroup, pluginType, kind)
 
-            if getattr(node, 'vray_plugin', '') != 'TexBitmap':
+            if not isBitmap:
                 continue
             bb = getattr(node, 'BitmapBuffer', None)
             if bb is not None and getattr(bb, 'use_external_image', False):
-                continue  # external mode: path is on BitmapBuffer.file, added above
+                # External mode: the path lives on BitmapBuffer.file.
+                addPlugin(element, locator, bb, 'BitmapBuffer', 'BITMAP')
+                continue
             tex = getattr(node, 'texture', None)
             img = getattr(tex, 'image', None) if tex is not None else None
             if (img is None or img.source in ('GENERATED', 'VIEWER')
@@ -288,8 +319,7 @@ def collectAssetRefs(context: bpy.types.Context) -> list:
             imgSeen.add(id(img))
             # Carry the BitmapBuffer propgroup too so the color-space column can edit
             # it; the path itself comes from the image (path/setPath prefer .image).
-            refs.append(AssetRef('BITMAP', f"{ntree.name} / {node.name}",
-                                 f"i|{img.name}", propGroup=bb, image=img))
+            refs.append(AssetRef('BITMAP', element, f"i|{img.name}", propGroup=bb, image=img))
 
     # Object / data / light / camera references that do not live on nodes.
     for obj in context.scene.objects:
@@ -299,21 +329,26 @@ def collectAssetRefs(context: bpy.types.Context) -> list:
         prefix = f"o|{obj.name}"
 
         if vrayObj is not None and getattr(vrayObj, 'isVRayGaussian', False):
-            addPlugin(obj.name, prefix, getattr(vrayObj, 'GeomGaussians', None), 'GeomGaussians', 'SPLAT')
+            addPlugin(obj.name, prefix, getattr(vrayObj, 'GeomGaussians', None), 'GeomGaussians', 'SPLAT', objName=obj.name)
 
         if vrayObj is not None and dataVray is not None:
             asset = getattr(vrayObj, 'VRayAsset', None)
             if asset is not None:
                 if asset.assetType == VRAY_ASSET_TYPE["Proxy"]:
-                    addPlugin(obj.name, prefix, getattr(dataVray, 'GeomMeshFile', None), 'GeomMeshFile', 'PROXY')
+                    addPlugin(obj.name, prefix, getattr(dataVray, 'GeomMeshFile', None), 'GeomMeshFile', 'PROXY', objName=obj.name)
                 elif asset.assetType == VRAY_ASSET_TYPE["Scene"]:
-                    addPlugin(obj.name, prefix, getattr(dataVray, 'VRayScene', None), 'VRayScene', 'SCENE')
+                    addPlugin(obj.name, prefix, getattr(dataVray, 'VRayScene', None), 'VRayScene', 'SCENE', objName=obj.name)
 
-        if obj.type == 'LIGHT' and isVrayLight(data) and lib_utils.getLightPluginType(data) == 'LightIES':
-            addPlugin(obj.name, prefix, lib_utils.getLightPropGroup(data, 'LightIES'), 'LightIES', 'IES')
+        if obj.type == 'LIGHT' and isVrayLight(data):
+            # Lights whose external file lives on the light itself rather than on a node.
+            match lib_utils.getLightPluginType(data):
+                case 'LightIES':
+                    addPlugin(obj.name, prefix, lib_utils.getLightPropGroup(data, 'LightIES'), 'LightIES', 'IES', objName=obj.name)
+                case 'LightLuminaire':
+                    addPlugin(obj.name, prefix, lib_utils.getLightPropGroup(data, 'LightLuminaire'), 'LightLuminaire', 'LUMINAIRE', objName=obj.name)
 
         if obj.type == 'CAMERA' and dataVray is not None:
-            addPlugin(obj.name, prefix, getattr(dataVray, 'CameraPhysical', None), 'CameraPhysical', 'CAMERA')
+            addPlugin(obj.name, prefix, getattr(dataVray, 'CameraPhysical', None), 'CameraPhysical', 'CAMERA', objName=obj.name)
 
     return refs
 
@@ -384,7 +419,7 @@ class VRAY_OT_relink_assets(VRayOperatorBase):
 
         refreshAssetCache()
         core.tagListerRedraw(context)
-        return {'FINISHED'}
+        return {'FINISHED'} if relinked else {'CANCELLED'}
 
 
 def _resolveOneAsset(obj: bpy.types.Object, kind: str):
@@ -400,6 +435,8 @@ def _resolveOneAsset(obj: bpy.types.Object, kind: str):
         return (getattr(vrayObj, 'GeomGaussians', None), 'file') if vrayObj else (None, '')
     if kind == 'IES':
         return (lib_utils.getLightPropGroup(obj.data, 'LightIES'), 'ies_file')
+    if kind == 'LUMINAIRE':
+        return (lib_utils.getLightPropGroup(obj.data, 'LightLuminaire'), 'file')
     if kind == 'LENS':
         dataVray = getattr(obj.data, 'vray', None)
         return (getattr(dataVray, 'CameraPhysical', None), 'lens_file') if dataVray else (None, '')
@@ -415,6 +452,7 @@ def _filterGlobForKind(kind: str) -> str:
         'SCENE':    VRAY_SCENE_FILTER_GLOB,
         'GAUSSIAN': "*.ply",
         'IES':      "*.ies",
+        'LUMINAIRE': "*.vlw;*.vlg;*.vlsh",
     }.get(kind, "")
 
 
@@ -450,8 +488,9 @@ class VRAY_OT_relink_one(VRayOperatorBase):
         propGroup, attr = _resolveOneAsset(obj, self.kind)
         if propGroup is None or not attr:
             return {'CANCELLED'}
-        if self.filepath:
-            setattr(propGroup, attr, self.filepath)
+        if not self.filepath:
+            return {'CANCELLED'}
+        setattr(propGroup, attr, self.filepath)
         core.tagListerRedraw(context)
         return {'FINISHED'}
 
@@ -485,8 +524,9 @@ class VRAY_OT_relink_asset(VRayOperatorBase):
         rec = self._findRef(context)
         if rec is None:
             return {'CANCELLED'}
-        if self.filepath:
-            rec.setPath(self.filepath)
+        if not self.filepath:
+            return {'CANCELLED'}
+        rec.setPath(self.filepath)
         refreshAssetCache()
         core.tagListerRedraw(context)
         return {'FINISHED'}
@@ -516,18 +556,14 @@ class VRAY_OT_asset_select(VRayOperatorBase):
         return {'FINISHED'}
 
 
-class VRAY_OT_asset_open(VRayOperatorBase):
-    bl_idname = "vray.asset_open"
-    bl_label = "Open Asset"
+class _AssetOpenBase(VRayOperatorBase):
+    """ Shared body of the two Assets-tab open actions. They are two operators rather
+        than one with a 'mode' property because an icon-only button takes its tooltip
+        title from bl_label, which is fixed per class - a single operator would title
+        both buttons the same. """
+    openFolder = False
 
-    mode: bpy.props.StringProperty(options={'HIDDEN'})  # 'FOLDER' or 'FILE'
     ref: bpy.props.StringProperty(options={'HIDDEN'})
-
-    @classmethod
-    def description(cls, context, properties):
-        if properties.mode == 'FOLDER':
-            return "Open the folder that contains this file in your system file browser"
-        return "Open this file in its default application"
 
     def execute(self, context):
         rec = next((r for r in collectAssetRefs(context) if r.locator == self.ref), None)
@@ -537,9 +573,28 @@ class VRAY_OT_asset_open(VRayOperatorBase):
         if not os.path.exists(absPath):
             self.report({'WARNING'}, "File not found on disk")
             return {'CANCELLED'}
-        target = os.path.dirname(absPath) if self.mode == 'FOLDER' else absPath
-        bpy.ops.wm.path_open(filepath=target)
+        target = os.path.dirname(absPath) if self.openFolder else absPath
+        try:
+            bpy.ops.wm.path_open(filepath=target)
+        except RuntimeError:
+            # OS has no app for this file type (e.g. .tx/.vrmesh on macOS) - VBLD-2615.
+            self.report({'WARNING'}, f"No application is associated with '{os.path.basename(target)}'")
+            return {'CANCELLED'}
         return {'FINISHED'}
+
+
+class VRAY_OT_asset_open_folder(_AssetOpenBase):
+    bl_idname = "vray.asset_open_folder"
+    bl_label = "Open Containing Folder"
+    bl_description = "Open the folder that contains this file in your system file browser"
+
+    openFolder = True
+
+
+class VRAY_OT_asset_open_file(_AssetOpenBase):
+    bl_idname = "vray.asset_open_file"
+    bl_label = "Open in Default Application"
+    bl_description = "Open this file in the application your system associates with its file type"
 
 
 class VRAY_OT_asset_refresh(VRayOperatorBase):
@@ -599,7 +654,7 @@ class VRAY_OT_assets_make_paths(VRayOperatorBase):
         if skipped:
             msg += f" ({skipped} skipped - different drive)"
         self.report({'INFO'}, msg)
-        return {'FINISHED'}
+        return {'FINISHED'} if changed else {'CANCELLED'}
 
 
 class VRAY_MT_asset_paths(bpy.types.Menu):
@@ -647,6 +702,7 @@ class VRAY_MT_asset_relink(bpy.types.Menu):
 
 def getRegClasses():
     return (VRAY_OT_relink_assets, VRAY_OT_relink_one,
-            VRAY_OT_relink_asset, VRAY_OT_asset_select, VRAY_OT_asset_open,
+            VRAY_OT_relink_asset, VRAY_OT_asset_select,
+            VRAY_OT_asset_open_folder, VRAY_OT_asset_open_file,
             VRAY_OT_asset_refresh, VRAY_OT_assets_make_paths,
             VRAY_MT_asset_relink, VRAY_MT_asset_paths)

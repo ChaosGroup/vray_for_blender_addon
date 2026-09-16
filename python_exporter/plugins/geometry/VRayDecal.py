@@ -32,9 +32,14 @@ def drawDecalAspectRatioButtons(context: bpy.types.Context, layout: bpy.types.UI
     col.operator('vray.fit_aspect_ratio', text="Aspect Ratio from Displacement").mode = 'displacement'
 
 
-def getVRayDecalPluginName(obj: bpy.types.Object):
+def getVRayDecalPluginName(obj: bpy.types.Object, instance: bpy.types.DepsgraphObjectInstance = None):
+    """ Return the name of the VRayDecal plugin for 'obj'.
+
+        'instance' is set for a decal which is part of an instanced collection. Each instance
+        gets its own decal plugin, so the name has to be unique per instance.
+    """
     assert isObjectVRayDecal(obj)
-    return Names.pluginObject("vraydecal", Names.object(obj))
+    return Names.pluginObject("vraydecal", Names.object(obj, instance))
 
 
 def isPluginVRayDecal(pluginName: str):
@@ -125,13 +130,13 @@ class VRAY_OT_fit_aspect_ratio(VRayOperatorBase):
 
         if not startNode:
             self.report({'WARNING'}, f'Could not set decal aspect ratio, no valid {self.mode} node')
-            return { 'FINISHED' }
+            return { 'CANCELLED' }
 
-        if img := __class__._traverseNodesForImage(startNode):
-            setAspectRatio(obj, img)
-        else:
+        if not (img := __class__._traverseNodesForImage(startNode)):
             self.report({'WARNING'}, f'Could not set decal aspect ratio, no valid {self.mode} image node found')
+            return { 'CANCELLED' }
 
+        setAspectRatio(obj, img)
         return { 'FINISHED' }
 
     @staticmethod
@@ -376,7 +381,7 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
 
     if vrayDecal.decal_object_selector.exportToPluginDesc(exporterCtx, pluginDesc):
         for attrPlugin in pluginDesc.getAttribute('exclusion_nodes'):
-            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, 'Node')
+            plugin_utils.forwardDeclarePlugin(exporterCtx, attrPlugin.name, 'Node')
 
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
 

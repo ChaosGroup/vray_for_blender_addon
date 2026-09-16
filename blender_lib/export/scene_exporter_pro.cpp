@@ -60,8 +60,6 @@ void ProductionExporter::setupCallbacks()
 
 void ProductionExporter::cb_on_image_ready()
 {
-	// updateImage() bails on m_renderFinished, so push the final frame before setting it.
-	updateImage();
 	m_renderFinished = true;
 }
 
@@ -269,9 +267,28 @@ void ProductionExporter::updateImage()
 		// Fall back to copying if dimensions changed mid-render and ZmqRenderImage reallocated.
 		float* dest = m_renderPass->ibuf->float_buffer.data;
 		if (layerImg.pixels != dest) {
-			const int destSizeX = std::min(layerImg.w,  m_renderPass->rectx);
+			const int destSizeX = std::min(layerImg.w, m_renderPass->rectx);
 			const int destSizeY = std::min(layerImg.h, m_renderPass->recty);
-			::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
+			
+			if(destSizeY == layerImg.h && destSizeX == layerImg.w) {
+				::memcpy(dest, layerImg.pixels, destSizeX * destSizeY * sizeof(float[4]));
+			}
+			else { // Blender's pass buffer holds just the region, so copy it row by row.
+				const int channels = 4;
+				const proto::RenderSizes& renderSizes = m_exporter->getRenderSizes();
+				int left = renderSizes.rgnLeft;
+				int topFlipped = layerImg.h - (renderSizes.rgnTop + destSizeY);
+				vassert(topFlipped >= 0 && "Mismatch between RenderSizes and image received from m_exporter->getImage().");
+
+				const size_t srcStride = static_cast<size_t>(layerImg.w) * channels;
+				const size_t dstStride = static_cast<size_t>(m_renderPass->rectx) * channels;
+				const size_t srcLeft   = static_cast<size_t>(left) * channels;
+				const size_t rowBytes  = static_cast<size_t>(destSizeX) * channels * sizeof(float);
+
+				for (int row = 0; row < destSizeY; ++row) {
+					::memcpy(dest + row  * dstStride, layerImg.pixels + ((row + topFlipped) * srcStride + srcLeft), rowBytes);
+				}
+			}
 		}
 
 		// Notify Python add-on that the image is written to the render pass buffer and can be

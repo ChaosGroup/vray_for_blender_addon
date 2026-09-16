@@ -23,6 +23,9 @@
         {
             "attr": "reflect1_bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -38,6 +41,9 @@
         {
             "attr": "reflect2_bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -47,6 +53,9 @@
         {
             "attr": "bump_amount",
             "default": 0.01,
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -69,6 +78,9 @@
             "attr": "diffuse_bump_amount",
             "default": 0.01,
             "desc": "Multiplier for the diffuse bump map effect.",
+            "options": {
+                "skipUnitScale": true
+            },
             "ui": {
                 "soft_min": -0.05,
                 "soft_max": 0.05,
@@ -307,14 +319,16 @@
             {
                 "name": "panel_Bump",
                 "label": "Bump",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "bump_map"
             },
             { "name": "bump_map" },
             { "name": "bump_amount" },
             {
                 "name": "panel_sss1",
                 "label": "Subsurface 1",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "sss1_color"
             },
             { "name": "sss1_color" },
             { "name": "sss1_weight" },
@@ -322,7 +336,8 @@
             {
                 "name": "panel_sss2",
                 "label": "Subsurface 2",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "sss2_color"
             },
             { "name": "sss2_color" },
             { "name": "sss2_weight" },
@@ -330,7 +345,8 @@
             {
                 "name": "panel_sss3",
                 "label": "Subsurface 3",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "sss3_color"
             },
             { "name": "sss3_color" },
             { "name": "sss3_weight" },
@@ -338,7 +354,8 @@
             {
                 "name": "panel_reflect1",
                 "label": "Reflection 1",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "reflect1"
             },
             { "name": "reflect1" },
             { "name": "reflect1_strength" },
@@ -349,7 +366,8 @@
             {
                 "name": "panel_reflect2",
                 "label": "Reflection 2",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "reflect2"
             },
             { "name": "reflect2" },
             { "name": "reflect2_strength" },

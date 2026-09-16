@@ -32,20 +32,12 @@ CROSS_DEPENDENCIES = {}
 # Key that serves to describe a comment into a *.custom.json plugin description
 DESC_COMMENT_KEY = "//Comment"
 
-# True if the CHAOS_DISABLE_GEN_AI env var is set. Captured once at import
-# (env var changes during the addon lifetime don't matter), unlike the CE
-# state which can flip at runtime via the addon preference.
+# True if the CHAOS_DISABLE_GEN_AI env var is set.
 _GEN_AI_DISABLED_BY_ENV = (os.getenv("CHAOS_DISABLE_GEN_AI") == "1")
 
 
 def isGenAIDisabled():
-    """ Return True if generative-AI features should be disabled.
-
-        AI features are disabled either by the CHAOS_DISABLE_GEN_AI environment
-        variable or by running in Community Edition. The CE check is re-evaluated
-        on every call so that toggling the license type at runtime takes effect
-        without restarting Blender.
-    """
+    """ Return True if generative-AI features should be disabled. """
     return _GEN_AI_DISABLED_BY_ENV or vray.isCommunityEdition()
 
 # {pluginType: [attribute_name, ...]} that matches a plugin type to a list of its template attributes
@@ -197,13 +189,7 @@ _OVERRIDABLE_KEYS = ('Name', 'Description', 'Type', 'Subtype', 'Category', 'Widg
 _ALL_KEYS = _OVERRIDABLE_KEYS + ('ID',)
 
 def _mergePluginDesc(pluginDesc: dict, customDesc: dict):
-    """ Merge selected properties from a custom description file.
-
-        The reason not all properties are merged is because this is not a general mechanism for overriding
-        plugin property values, but rather augmening the descriptions with missing data.
-        The Name and Description properties are exceptions because they only have a meaning
-        to the user.
-    """
+    """ Merge selected properties from a custom description file. """
 
     # Allow overriding the ID key for plugin variants only (when more than one custom.json
     # file overrides the same .json file)
@@ -228,6 +214,9 @@ def _mergePluginDesc(pluginDesc: dict, customDesc: dict):
 # Transfer selected properties from custom to original param
 def _mergePluginParam(origParam, customParam):
     for key in customParam:
+        # V-Ray's own default, before the custom description overrides it.
+        baseDefault = origParam.get('default') if key == 'default' else None
+
         if (key in origParam) and type(origParam[key]) is dict:
             # Augment existing values of type 'dictionary'
             origParam[key].update(customParam[key])
@@ -235,7 +224,10 @@ def _mergePluginParam(origParam, customParam):
             origParam[key] = customParam[key]
 
         if key == 'default':
-            origParam.setdefault('options', {})['overriden_default'] = True
+            options = origParam.setdefault('options', {})
+            options['overriden_default'] = True
+            if (baseDefault is not None) and (baseDefault != origParam['default']):
+                options.setdefault('vray_default', baseDefault)
 
 
 def loadPluginOnModule(plugin, pluginType):
@@ -303,13 +295,33 @@ def getUIFlagNameFromPropGroup(propGroup, widget):
     return f"{propGroup.rna_type.name}_{widget.get('name')}"
 
 
+def createPlugin(ctx: ExporterContext, pluginName: str, pluginType: str, allowTypeChanges = False):
+    """ Create a plugin which is really being exported, and count it.
+
+        Use this rather than vray.pluginCreate() directly. For an empty plugin created only
+        to resolve a reference, use forwardDeclarePlugin() instead.
+    """
+    vray.pluginCreate(ctx.renderer, pluginName, pluginType, allowTypeChanges)
+
+    ctx.sceneStats.addPlugin(pluginName)
+
+
+def forwardDeclarePlugin(ctx: ExporterContext, pluginName: str, pluginType: str):
+    """ Create an empty plugin so that a reference to it resolves even if the plugin proper has not
+        been exported yet.
+    """
+    vray.pluginCreate(ctx.renderer, pluginName, pluginType)
+
+    ctx.sceneStats.addForwardDeclaredPlugin(pluginName)
+
+
 def _attrPluginToVRay(attrPlugin: AttrPlugin):
     """ Convert AttrPlugin to vray.AttrPlugin """
     output = attrPlugin.output if attrPlugin.output is not None else ''
     return vray.AttrPlugin(attrPlugin.name, output)
 
 
-def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=True):
+def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=True, attrType=None):
     if type(val) is bool or type(val) is int:
         vray.pluginUpdateInt(renderer, pluginName, attrName, int(val), animatable)
 
@@ -341,7 +353,18 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=Tr
 
     elif type(val) is list:
         if len(val) == 0:
-            vray.pluginResetValue(renderer, pluginName, attrName)
+            # pluginResetValue assigns an empty plugin link, which leaves a scalar in a list
+            # param. The vrscene then carries a bare 0 and a reader gets one element instead of
+            # none. Send a typed empty list when the caller knows the declared type.
+            match attrType:
+                case 'INT_LIST':
+                    vray.pluginUpdateIntList(renderer, pluginName, attrName, [], animatable)
+                case 'FLOAT_LIST':
+                    vray.pluginUpdateFloatList(renderer, pluginName, attrName, [], animatable)
+                case 'VECTOR_LIST':
+                    vray.pluginUpdateVectorList(renderer, pluginName, attrName, [], animatable)
+                case _:
+                    vray.pluginResetValue(renderer, pluginName, attrName)
         elif type(val[0]) is str:
             vray.pluginUpdateStringList(renderer, pluginName, attrName, val)
         elif type(val[0]) is int:
@@ -349,8 +372,7 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=Tr
         elif type(val[0]) is float:
             vray.pluginUpdateFloatList(renderer, pluginName, attrName, val, animatable)
         elif type(val[0]) is AttrPlugin:
-            # Currently, plugin lists do not support setting a non-default output for the individual
-            # plugins, this is why the output is set to empty.
+            # Plugin lists do not support a non-default output for the individual plugins.
             convertedList = [vray.AttrPlugin(p.name, '') for p in val]
             vray.pluginUpdatePluginList(renderer, pluginName, attrName, convertedList, animatable)
         else:

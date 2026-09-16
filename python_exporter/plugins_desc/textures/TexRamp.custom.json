@@ -9,6 +9,10 @@
                 "default_closed": false,
                 "attrs": [
                     {
+                        "name": "color_ramp",
+                        "custom_draw": "widgetDrawRamp"
+                    },
+                    {
                         "name": "type"
                     },
                     {
@@ -97,6 +101,15 @@
     },
     "Parameters": [
         {
+            "attr": "color_ramp",
+            "type": "GRAD_RAMP",
+            "desc": "Ramp Colors",
+            "default": null,
+            "options": {
+               "derived": true
+            }
+        },
+        {
             "attr": "uvwgen",
             "ui" : {
                 "display_name": "Mapping"
@@ -104,14 +117,17 @@
             "type": "UVWGEN"
         }
     ],
+    "Node": {
+        "input_sockets": [
+            { "name": "color_ramp" },
+            { "name": "uvwgen" }
+        ]
+    },
     "Options": {
         "animatable": true,
         "excluded_parameters": [
             "compatibility_with",
             "alpha_from_intensity",
-            "positions",
-            "colors",
-            "interpolation",
             "invert_alpha",
             "color_mult",
             "color_offset",

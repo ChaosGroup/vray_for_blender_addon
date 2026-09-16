@@ -1,48 +1,102 @@
-// SPDX-FileCopyrightText: Chaos Software EOOD
+﻿// SPDX-FileCopyrightText: Chaos Software EOOD
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #pragma once
 
-#include <vector>
+#include <cstring>
+#include <new>
 #include <string>
+#include <vector>
 
 #include "base_types.h"
 #include "vassert.h"
 
 namespace VrayZmqWrapper{
 
+/// Append-only byte buffer. Not a std::vector: resize() value-initializes bytes we
+/// immediately overwrite, and growing after a reserve() is a sizing bug worth catching.
 class SerializerStream {
 public:
+	/// A Count stream allocates nothing and only tallies the bytes written to it, so a message
+	/// can be measured by the very code that serializes it. That is the only way to size a
+	/// message that cannot drift from what the message actually writes - see serializeMessage().
+	enum class Mode { Write, Count };
 
-	SerializerStream() {
-	}
+	explicit SerializerStream(Mode mode = Mode::Write)
+		: m_count(mode == Mode::Count)
+	{}
+
 	SerializerStream(const SerializerStream& other) = delete;
 	SerializerStream& operator=(const SerializerStream& other) = delete;
+
+	~SerializerStream() {
+		::operator delete(m_data);
+	}
 
 	void write(const char * data, size_t size) {
 		if (size == 0) {
 			return;
 		}
-		const size_t prevSize = stream.size();
-		stream.resize(size + stream.size());
-		memcpy(&stream[prevSize], data, size);
+		if (m_count) {
+			m_size += size;
+			return;
+		}
+		if (m_size + size > m_capacity) {
+			grow(m_size + size);
+		}
+		memcpy(m_data + m_size, data, size);
+		m_size += size;
 	}
 
 	size_t getSize() const {
-		return stream.size();
+		return m_size;
 	}
 
 	char * getData() {
-		return stream.data();
+		return m_data;
 	}
 
+	/// Make room for at least additionalBytes more, measured from the current size.
 	void reserve(size_t additionalBytes) {
-		stream.reserve(stream.size() + additionalBytes);
+		if (m_count) {
+			return;
+		}
+		const size_t needed = m_size + additionalBytes;
+		if (needed > m_capacity) {
+			grow(needed);
+		}
+		m_reserved = true;
 	}
 
 private:
-	std::vector<char> stream;
+	/// Below this, a wrong reservation is not worth complaining about.
+	static const size_t COPY_WARN_BYTES = 1024 * 1024;
+
+	void grow(size_t needed) {
+		vassert(!(m_reserved && (m_size >= COPY_WARN_BYTES))
+			&& "SerializerStream outgrew its reservation - the whole payload was just copied");
+
+		size_t capacity = m_capacity + m_capacity / 2;
+		if (capacity < needed) {
+			capacity = needed;
+		}
+
+		char* buffer = static_cast<char*>(::operator new(capacity));
+		if (m_size != 0) {
+			memcpy(buffer, m_data, m_size);
+		}
+		::operator delete(m_data);
+
+		m_data = buffer;
+		m_capacity = capacity;
+	}
+
+	char*  m_data     = nullptr;
+	size_t m_size     = 0;
+	size_t m_capacity = 0;
+	bool   m_reserved = false;
+	bool   m_count    = false;
 };
 
 
@@ -72,8 +126,9 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 
 template <typename Q>
 inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrList<Q> & list) {
+	const size_t bytes = static_cast<size_t>(list.getCount()) * sizeof(Q);
 	stream << list.getCount();
-	stream.write(reinterpret_cast<const char *>(list.getData()->data()), list.getCount() * sizeof(Q));
+	stream.write(reinterpret_cast<const char *>(list.getData()->data()), bytes);
 	return stream;
 }
 
@@ -118,8 +173,6 @@ inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTy
 
 
 inline SerializerStream & operator<<(SerializerStream & stream, const VRayBaseTypes::AttrImage & image) {
-	// Pre-reserve to avoid reallocation when appending the pixel data.
-	stream.reserve(image.size + 6 * sizeof(int));
 	stream << image.imageType << image.size << image.width << image.height << image.x << image.y;
 	stream.write(image.data.get(), image.size);
 	return stream;

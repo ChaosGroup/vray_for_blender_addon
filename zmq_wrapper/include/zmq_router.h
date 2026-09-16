@@ -9,9 +9,8 @@
 
 
 #define ZMQ_HAVE_POLLER
-#define ZMQ_BUILD_DRAFT_API	// for poller_t
 
-#include "cppzmq/zmq.hpp"
+#include <zmq.hpp>
 
 #include "zmq_common.hpp"
 #include "zmq_agent.h"

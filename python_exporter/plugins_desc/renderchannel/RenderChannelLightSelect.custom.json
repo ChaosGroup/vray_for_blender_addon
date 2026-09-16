@@ -44,10 +44,6 @@
                     }
                 }
             }
-        },
-        {
-            "attr": "light_select_in_lightmix",
-            "default": true
         }
     ],
     "Widget": {
@@ -87,6 +83,7 @@
                     },
                     {
                         "name": "light_path_expression",
+                        "custom_draw": "plugins.channel.render_channel_common.widgetDrawLightPathExpression",
                         "active": { "cond": "::light_select_mode=9" }
                     },
                     {

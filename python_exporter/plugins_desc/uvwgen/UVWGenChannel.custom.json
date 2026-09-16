@@ -13,6 +13,13 @@
             "ui": {
                 "min": 0
             }
+        },
+        {
+            "attr": "duvw_scale",
+            "ui": {
+                "soft_min": 0.01,
+                "soft_max": 100.0
+            }
         }
     ],
     "Node": {
@@ -74,6 +81,13 @@
                     },
                     {
                         "name": "coverage"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "duvw_scale",
+                        "label": "Filter Multiplier"
                     }
                 ]
             }
@@ -84,7 +98,6 @@
         "excluded_parameters": [
             "uvw_transform_tex",
             "uvw_coords",
-            "duvw_scale",
             "uvwgen",
             "use_double_sided_mode"
         ]

@@ -298,9 +298,10 @@ class VRAY_OT_pack_image(VRayOperatorBase):
             # The check for 'unique_id' ensures we only process V-Ray nodes.
             node = next((n for n in nodes if getattr(n, "unique_id", None) == self.nodeID), None)
 
-        if node and (image := node.texture.image):
-            if not image.packed_file:
-                node.texture.image.pack()
+        if not (node and (image := node.texture.image)) or image.packed_file:
+            return {'CANCELLED'}
+
+        node.texture.image.pack()
 
         return {'FINISHED'}
 

@@ -6,7 +6,7 @@ import bpy
 
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.lib import draw_utils
-from vray_blender.lib.plugin_utils import objectToAttrPlugin
+from vray_blender.lib.plugin_utils import objectToAttrPlugin, forwardDeclarePlugin
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.nodes.tools import getFilterFunction
 from vray_blender.nodes.utils import getNodeOfPropGroup
@@ -63,7 +63,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         if (not nested) and (drawContainer := widgetAttr.get('draw_container')):
             if drawContainer == 'ROLLOUT':
                 label = widgetAttr.get('label', getPluginAttr(pluginModule, attrName))
-                uniqueID = f"{self.as_pointer()}_{widgetAttr['name']}"
+                uniqueID = draw_utils.panelStateId(propGroup.id_data, pluginModule.ID, widgetAttr['name'])
                 panel = draw_utils.rollout(layout, uniqueID,  label)
 
         # 'panel' will be None if the rollout is collapsed
@@ -76,6 +76,11 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
             listLabel = widgetAttr['list_label']
             data, prop = TemplateMultiObjectSelect._getSearchCollectionProvider(context, collectionName)
             self.drawSelectorUI(context, layout, dataProvider=data, dataProperty=prop, listLabel=listLabel)
+
+
+    def getSelectorObjects(self, context: bpy.types.Context):
+        # The base implementation, using the collection this selector picks from (see the note there)
+        return common.VRayObjectSelector.getSelectedItems(self, context, self.getTemplateAttr('collection', ''))
 
 
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):
@@ -108,7 +113,7 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         # part of the object's export. Materials may refer to objects other than the ones they are attached to which may
         # not have been exported yet.
         for attrPlugin in pluginList:
-            vray.pluginCreate(exporterCtx.renderer, attrPlugin.name, attrPlugin.pluginType)
+            forwardDeclarePlugin(exporterCtx, attrPlugin.name, attrPlugin.pluginType)
 
         pluginDesc.setAttribute(boundProperty, pluginList)
         return True
@@ -141,7 +146,9 @@ class TemplateSelectGeometries(common.VRayObjectSelector):
 
 
     def draw(self, layout:bpy.types.UILayout, context: bpy.types.Context):
-        super().drawSelectorUI(context, layout, listLabel='Object List')
+        # No widget description to read a 'collection' from, and drawSelectorUI has no defaults
+        super().drawSelectorUI(context, layout, dataProvider=context.scene, dataProperty='objects',
+                               listLabel='Object List')
 
 
 

@@ -70,8 +70,18 @@ class TemplateSingleObjectSelect(common.VRayUITemplate):
         collectionName = self.getTemplateAttr('collection', '')
         data, prop = TemplateSingleObjectSelect._getSearchCollectionProvider(context, collectionName)
 
-        panel.prop_search( self, "boundPropObj", data, prop, text=label)
+        row = panel.row(align=True)
+        row.prop_search( self, "boundPropObj", data, prop, text=label)
 
+        # Toggle buttons showing the selected object in the viewport. Imported here because the
+        # module is only needed while drawing, i.e. never in background mode.
+        from vray_blender.ui.highlight_objects import drawHighlightButtons
+        drawHighlightButtons(row, self, enabled=(self.boundPropObj is not None), label='')
+
+
+    def getSelectorObjects(self, context: bpy.types.Context):
+        """ Return the selected object, or an empty list if none is selected. """
+        return [self.boundPropObj] if self.boundPropObj else []
 
 
     def exportToPluginDesc(self, exporterCtx: ExporterContext,  pluginDesc: PluginDesc):

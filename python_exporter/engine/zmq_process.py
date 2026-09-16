@@ -43,10 +43,17 @@ class ZMQProcess:
     """
 
     _started = False
+    _engineCallbacksAttached = False
 
     def ensureRunning(self):
         """ Start VRayZmqServer process if not already running and establish
             the control connection to it.
+
+            NOTE: This is the single entry point for starting the server. It is also used
+            by the Chaos Scatter addon, which may run while the vray_blender addon itself
+            is disabled, so nothing on this path may require vray_blender to be registered
+            (preferences, scene propgroups). Engine-specific callbacks are attached
+            separately via attachEngineCallbacks().
         """
         # Reset
         if not ZMQProcess._started:
@@ -74,20 +81,33 @@ class ZMQProcess:
         from vray_blender.utils.cosmos_handler import cosmosHandler
         cosmosHandler.abortDownload()
 
-        # Check if ZMQ server has crashed or exited normally
-        if msg in ("General error", "STD exception", "V-Ray exception", "Unknown error"):
-            debug.reportAsync('WARNING', "Restart is required! V-Ray internal error occurred.")
+        # Check if ZMQ server has crashed or exited normally. "Client communication error"
+        # means the failure was on our side of the connection, not the server process.
+        if msg in ("General error", "STD exception", "V-Ray exception", "Unknown error",
+                   "Client communication error"):
+            debug.report('WARNING', "Restart is required! V-Ray internal error occurred.")
 
     def _start(self):
-        from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus, assetImportCallback
-        from vray_blender.engine.vfb_event_handler import VfbEventHandler
-        from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
-        from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
-
         if not self._startServerProcess():
             return
 
         ZMQProcess._started = True
+
+
+    def attachEngineCallbacks(self):
+        """ Register the vray_blender engine callbacks (Cosmos, VFB, import, licensing) on the
+            ZmqServer connection. Called only when the vray_blender addon itself is active; the
+            Chaos Scatter addon starts the server without them. ZmqServer.stop() clears the
+            callback registry, so this must be re-run after every server (re)start.
+        """
+        from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus, assetImportCallback
+        from vray_blender.engine.vfb_event_handler import VfbEventHandler
+        from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
+
+        if ZMQProcess._engineCallbacksAttached or not ZMQProcess._started:
+            return
+
+        ZMQProcess._engineCallbacksAttached = True
 
         # Cosmos Browser download notifications callback
         self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
@@ -101,9 +121,18 @@ class ZMQProcess:
         self.scannedParamBlockCallback = lambda materialId, nodeName, paramBlock: scannedParamBlockCallback(materialId, nodeName, paramBlock)
         vray.setScannedParamBlockCallback(self.scannedParamBlockCallback)
 
+        # .vrscene import notifications. The callbacks only enqueue events for the
+        # import operator's modal loop; bpy data is never touched on this thread.
+        from vray_blender.nodes.operators.import_vrscene import vrsceneImportProgressCallback, vrsceneImportFinishedCallback
+        self._vrsceneImportProgress = lambda importId, pluginsDone, pluginsTotal, stage: \
+            vrsceneImportProgressCallback(importId, pluginsDone, pluginsTotal, stage)
+        vray.setVrsceneImportProgressCallback(self._vrsceneImportProgress)
+        self._vrsceneImportFinished = lambda importId, result: vrsceneImportFinishedCallback(importId, result)
+        vray.setVrsceneImportFinishedCallback(self._vrsceneImportFinished)
+
          # VFB start button callback
         self.renderStartCallback = lambda isViewport: VfbEventHandler.startInteractiveRender() if isViewport \
-            else VfbEventHandler.startProdRender(forceAnimationMode='AUTO', uiRegionContext = VRayRendererProdBase.getActiveUIRegionContext())
+            else VfbEventHandler.requestProdRender()
 
         vray.setRenderStartCallback(self.renderStartCallback)
 
@@ -152,6 +181,7 @@ class ZMQProcess:
                                 'immediately if there are pending production jobs.' )
             vray.stop()
             ZMQProcess._started = False
+            ZMQProcess._engineCallbacksAttached = False
 
 
     @staticmethod
@@ -168,14 +198,20 @@ class ZMQProcess:
             debug.printError(f"Can't find V-Ray ZMQ Server at path {executablePath}")
             return False
 
-        prefs = blender_utils.getVRayPreferences()
-        if hasattr(bpy.context, 'scene'):
+        from types import SimpleNamespace
+
+        try:
+            prefs = blender_utils.getVRayPreferences()
+        except Exception:
+            # The vray_blender addon is disabled (server started by the Chaos Scatter addon)
+            prefs = SimpleNamespace(verbose_level='2', enable_qt_logs=False)
+
+        if hasattr(bpy.context, 'scene') and hasattr(bpy.context.scene, 'vray'):
             settings = bpy.context.scene.vray.Exporter
         else:
-            from types import SimpleNamespace
-
             # During the add-on's registration, we are running in a restricted context
-            # where no scene is available
+            # where no scene is available. 'scene.vray' is missing when the vray_blender
+            # addon is disabled.
 
             settings = SimpleNamespace()
             setattr(settings, 'zmq_port', -1)                     # Ephemeral port
@@ -222,7 +258,9 @@ class ZMQProcess:
         success, err = vray.start(args)
 
         if not success:
-            debug.printError(err)
+            # report() not printError(), so the user sees why V-Ray is missing instead
+            # of only finding it in the log.
+            debug.report('ERROR', err)
             return False
 
         if bpy.app.background:

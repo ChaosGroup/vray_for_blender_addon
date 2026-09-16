@@ -7,7 +7,7 @@ import os
 
 from vray_blender.lib.blender_utils import updateShadowAttr
 from vray_blender.plugins.material.MtlVRmat import _getMaterialNamesFromMtlFile
-from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade, scopedForUpgrade
 
 
 UPGRADE_INFO = {
@@ -17,7 +17,7 @@ UPGRADE_INFO = {
 }
 
 def run():
-    for mtl in (m for m in bpy.data.materials if hasattr(m, 'node_tree') and m.node_tree):
+    for mtl in (m for m in scopedForUpgrade(bpy.data.materials) if hasattr(m, 'node_tree') and m.node_tree):
         for node in (n for n in mtl.node_tree.nodes if n.bl_idname == 'VRayNodeMtlVRmat'):
             propGroup = node.MtlVRmat
             

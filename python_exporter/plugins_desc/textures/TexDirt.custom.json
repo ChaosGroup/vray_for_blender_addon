@@ -114,7 +114,13 @@
         },
         {
             "attr": "render_nodes",
-            "desc": "Allows disabling the calculations of the dirt map for specific objects."
+            "desc": "Allows disabling the calculations of the dirt map for specific objects.",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
         },
         {
             "attr": "render_nodes_inclusive",
@@ -127,7 +133,13 @@
         },
         {
             "attr": "affect_result_nodes",
-            "desc": "Allows excluding objects from affecting the calculation of the dirt map. Excluded objects will be considered \"invisible\" for the calculations of the dirt map."
+            "desc": "Allows excluding objects from affecting the calculation of the dirt map. Excluded objects will be considered \"invisible\" for the calculations of the dirt map.",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
         },
         {
             "attr": "affect_result_nodes_inclusive",

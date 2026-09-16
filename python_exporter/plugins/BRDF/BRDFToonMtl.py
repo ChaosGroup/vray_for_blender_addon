@@ -24,6 +24,19 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 
 _PLUGIN_TYPE = 'BRDFToonMtl'
 
+# Per-material depth/angular line-width curve overrides. These mirror the global
+# VolumeVRayToon depth/angular scaling and are stored in dedicated (suffixed) curve
+# nodes, separate from the unsuffixed highlight-shape curve node used above.
+_LINE_WIDTH_CURVE_ATTRIBUTES = {'depth_curve': 'depth', 'angular_curve': 'angular'}
+_LINE_WIDTH_CURVE_TYPES = ('depth', 'angular')
+
+
+def _initLineWidthCurveDefaults(curvesNode: bpy.types.Node):
+    """Default line-width curve: full width at the near end, tapering to zero."""
+    curve = curvesNode.mapping.curves[3]
+    curve.points[0].location[1] = 1.0
+    curve.points[1].location[1] = 0.0
+
 REMAP_PRESETS = {
     "0": { # Default
         "points": ( (0.0, 1.0), (1.0, 1.0) ),
@@ -105,6 +118,10 @@ def nodeInit(node: bpy.types.Node):
     # node tree and use its widget.
     cn.createCurvesNode(node)
 
+    # Separate curve nodes for the per-material depth/angular line-width overrides.
+    for curveType in _LINE_WIDTH_CURVE_TYPES:
+        _initLineWidthCurveDefaults(cn.createCurvesNode(node, f'_{curveType}'))
+
     attrName = "highlight_preset"
     propGroup = node.BRDFToonMtl
     updateRemapWidget(propGroup, None, attrName)
@@ -113,6 +130,10 @@ def nodeInit(node: bpy.types.Node):
 def nodeFree(node: bpy.types.Node):
     """Executes upon node deletion."""
     cn.removeCurvesNode(node)
+
+    for curveType in _LINE_WIDTH_CURVE_TYPES:
+        if cn.hasCurvesNode(node, f'_{curveType}'):
+            cn.removeCurvesNode(node, f'_{curveType}')
 
 
 def nodeUpdate(node: bpy.types.Node):
@@ -132,6 +153,27 @@ def nodeUpdate(node: bpy.types.Node):
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
     """Handles the logic for copying the node."""
     cn.curvesCopy(copyNode, origNode)
+
+    for curveType in _LINE_WIDTH_CURVE_TYPES:
+        cn.copyCurvesData(cn.getCurvesNode(origNode, f'_{curveType}'),
+                          cn.createCurvesNode(copyNode, f'_{curveType}'))
+
+
+def _ensureLineWidthCurves(node: bpy.types.Node):
+    """Create the depth/angular line-width curve nodes if they don't exist yet
+    (e.g. for scenes saved before these overrides were added)."""
+    for curveType in _LINE_WIDTH_CURVE_TYPES:
+        if not cn.hasCurvesNode(node, f'_{curveType}'):
+            _initLineWidthCurveDefaults(cn.createCurvesNode(node, f'_{curveType}'))
+
+
+def registerNodeCurves(node: bpy.types.Node):
+    """Register update callbacks for all curve nodes of a BRDFToonMtl node:
+    the highlight-shape curve and the depth/angular line-width curves."""
+    cn.addCurvesUpdateCallback(node)
+    _ensureLineWidthCurves(node)
+    for curveType in _LINE_WIDTH_CURVE_TYPES:
+        cn.addCurvesUpdateCallback(node, cn.getCurvesNode(node, f'_{curveType}'))
 
 
 def widgetDrawRamp(context, layout: bpy.types.UILayout, propGroup, widgetAttr):
@@ -183,6 +225,7 @@ def exportTreeNode(nodeCtx: NodeContext):
         nodeCtx.exporterCtx.emissiveMaterials.append((pluginName, 'channels', node.name, nodeCtx.material.name))
 
     _fillCurvesMapWidgetData(nodeCtx, pluginDesc)
+    cn.exportLineWidthCurves(nodeCtx, pluginDesc, node)
 
     # Export all properties associated with the color ramps.
     # Variable names follow the description attribute name property.
@@ -210,8 +253,10 @@ def exportTreeNode(nodeCtx: NodeContext):
                 elif sock.vray_attr == "specular_ramp":
                     currRamp = specular_ramp
 
-                originNode = sock.links[0].from_node
-                colors, positions, interpolation = originNode.exportGradTreeNode(nodeCtx)
+                originNode = nodeLink.from_node
+                with nodeCtx.pushGroupPath(nodeLink.groupPath):
+                    colors, positions, interpolation = originNode.exportGradTreeNode(nodeCtx)
+
                 interpolations = [interpolation] * len(positions)
                 pluginDesc.setAttribute(currRamp['colAttrName'], colors)
                 pluginDesc.setAttribute(currRamp['posAttrName'], positions)
@@ -299,3 +344,11 @@ def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, pr
     node = getNodeOfPropGroup(propGroup)
     curvesNode = cn.getCurvesNode(node)
     layout.template_curve_mapping(curvesNode, "mapping", type="COLOR")
+
+
+def drawLineWidthCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup, widgetAttr):
+    """A "custom_draw" function for the depth/angular line-width CurveMapping widgets."""
+    node = getNodeOfPropGroup(propGroup)
+    curveType = _LINE_WIDTH_CURVE_ATTRIBUTES.get(widgetAttr['name'])
+    curvesNode = cn.getCurvesNode(node, f'_{curveType}')
+    layout.template_curve_mapping(curvesNode, "mapping", type='NONE')

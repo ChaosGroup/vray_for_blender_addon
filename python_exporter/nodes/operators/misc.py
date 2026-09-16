@@ -11,12 +11,17 @@ from vray_blender.lib import blender_utils
 from vray_blender.nodes.utils import getLightOutputNode
 from vray_blender.nodes.group.utils import isGroupNodesEnabled, VRAY_GROUP_NODE_TYPE
 from vray_blender.nodes.operators.wrangler.poll import hasEditTree
+from vray_blender.ui.properties_data_empty import drawEmptyGeometryMaterialSelector
+from vray_blender.nodes.tools import (TEXTURE_PLACEHOLDER_NODE_NAME, isTexturePlaceholder,
+                                      isVrayNode, markPendingFrame)
 from vray_blender.ui.properties_material import renderMaterialSelector
 from vray_blender.lib.mixin import VRayOperatorBase
 
 originalNodeEditorDraw = None
 originalContextMenuDraw = None
 originalNodeMenuDraw = None
+originalViewMenuDraw = None
+originalViewPieDraw = None
 
 def _redrawNodeEditor():
     if area := next((a for a in bpy.context.screen.areas if a.type == 'NODE_EDITOR'), None):
@@ -152,6 +157,8 @@ def _drawVRayNodeSelection(layout, context, snode):
         # If this is not a V-Ray world, show a to-vray conversion button
         if scene.world and not scene.world.vray.is_vray_class:
             layout.operator("vray.add_nodetree_world", icon="NODETREE", text="New V-Ray World Nodes")
+            if scene.world.node_tree:
+                layout.operator("vray.convert_world", icon="WORLD", text="Convert to V-Ray World")
 
     elif ob and (objType := getattr(ob, 'type', '')):
         hasMaterialSlots = objType in blender_utils.TypesThatSupportMaterial
@@ -174,6 +181,9 @@ def _drawVRayNodeSelection(layout, context, snode):
             else:
                 # Just show a label with the light name for now. Light's node trees are not interchangeable.
                 layout.label(text=ob.data.name, icon='LIGHT_DATA')
+
+        elif vrayTreeType == "SHADER" and blender_utils.isNonGeometryExportedAsGeometry(ob):
+            drawEmptyGeometryMaterialSelector(layout.row(), ob)
 
         elif vrayTreeType == "OBJECT" and hasMaterialSlots:
             if ob.vray.isVRayFur:
@@ -461,11 +471,59 @@ def _drawVRayNodeMenu(menu, context):
     layout.menu("NODE_MT_context_menu_show_hide_menu")
 
 
+def _drawVRayViewMenu(menu, context):
+    """ Blender's View menu with the framing entries routed to ours. The compositor and backdrop branches of the original are dead in
+        a V-Ray editor, so they are not carried over.
+    """
+    layout = menu.layout
+    snode = context.space_data
+
+    layout.prop(snode, "show_region_toolbar")
+    layout.prop(snode, "show_region_ui")
+
+    layout.separator()
+
+    sub = layout.column()
+    sub.operator_context = 'EXEC_REGION_WIN'
+    sub.operator("view2d.zoom_in")
+    sub.operator("view2d.zoom_out")
+
+    layout.separator()
+
+    layout.operator_context = 'INVOKE_REGION_WIN'
+    layout.operator(VRAY_OT_node_view_selected.bl_idname)
+    layout.operator(VRAY_OT_node_view_all.bl_idname)
+
+    layout.separator()
+
+    layout.menu("INFO_MT_area")
+
+
+def _drawVRayViewPie(menu, context):
+    pie = menu.layout.menu_pie()
+    pie.operator(VRAY_OT_node_view_all.bl_idname)
+    pie.operator(VRAY_OT_node_view_selected.bl_idname, icon='ZOOM_SELECTED')
+
+
 def vrayContextMenuDrawSwitch(menu, context):
     if _isVRayEditor(context):
         _drawVRayContextMenu(menu, context)
     else:
         originalContextMenuDraw(menu, context)
+
+
+def vrayViewMenuDrawSwitch(menu, context):
+    if _isVRayEditor(context):
+        _drawVRayViewMenu(menu, context)
+    else:
+        originalViewMenuDraw(menu, context)
+
+
+def vrayViewPieDrawSwitch(menu, context):
+    if _isVRayEditor(context):
+        _drawVRayViewPie(menu, context)
+    else:
+        originalViewPieDraw(menu, context)
 
 
 def vrayNodeMenuDrawSwitch(menu, context):
@@ -476,20 +534,28 @@ def vrayNodeMenuDrawSwitch(menu, context):
 
 
 def registerVrayMenuSwitches():
-    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node
-    global originalContextMenuDraw, originalNodeMenuDraw
+    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node, NODE_MT_view, NODE_MT_view_pie
+    global originalContextMenuDraw, originalNodeMenuDraw, originalViewMenuDraw, originalViewPieDraw
     originalContextMenuDraw = NODE_MT_context_menu.draw
     originalNodeMenuDraw = NODE_MT_node.draw
+    originalViewMenuDraw = NODE_MT_view.draw
+    originalViewPieDraw = NODE_MT_view_pie.draw
     NODE_MT_context_menu.draw = vrayContextMenuDrawSwitch
     NODE_MT_node.draw = vrayNodeMenuDrawSwitch
+    NODE_MT_view.draw = vrayViewMenuDrawSwitch
+    NODE_MT_view_pie.draw = vrayViewPieDrawSwitch
 
 
 def unregisterVrayMenuSwitches():
-    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node
+    from bl_ui.space_node import NODE_MT_context_menu, NODE_MT_node, NODE_MT_view, NODE_MT_view_pie
     if originalContextMenuDraw is not None:
         NODE_MT_context_menu.draw = originalContextMenuDraw
     if originalNodeMenuDraw is not None:
         NODE_MT_node.draw = originalNodeMenuDraw
+    if originalViewMenuDraw is not None:
+        NODE_MT_view.draw = originalViewMenuDraw
+    if originalViewPieDraw is not None:
+        NODE_MT_view_pie.draw = originalViewPieDraw
 
 
 class VRAY_OT_node_group_path_jump(bpy.types.Operator):
@@ -507,11 +573,125 @@ class VRAY_OT_node_group_path_jump(bpy.types.Operator):
         return {'FINISHED'}
 
 
+def _hasPlaceholder(ntree) -> bool:
+    return ntree.nodes.get(TEXTURE_PLACEHOLDER_NODE_NAME) is not None
+
+
+def frameVRayNodes(ntree):
+    """ Show a freshly created or converted tree - only its V-Ray nodes, since a converted material keeps its Cycles graph and the
+        new nodes are appended to the left of it.
+    """
+    if ntree is None:
+        return
+
+    names = {n.name for n in ntree.nodes if isVrayNode(n)}
+    if names and not frameNodesInEditors(ntree, names):
+        # Nothing to frame into yet - defer to the first editor that shows this tree.
+        markPendingFrame(ntree)
+
+
+def _editorsShowing(ntree):
+    """ (window, area, region) of every V-Ray node editor currently showing 'ntree'. """
+    for window in bpy.context.window_manager.windows:
+        for area in (a for a in window.screen.areas if a.type == 'NODE_EDITOR'):
+            space = area.spaces.active
+            # == , not 'is': separately fetched RNA wrappers don't compare identical.
+            if space.tree_type != 'VRayNodeTreeEditor' or space.edit_tree != ntree:
+                continue
+            if region := next((r for r in area.regions if r.type == 'WINDOW'), None):
+                yield window, area, region
+
+
+def frameNodesInEditors(ntree, names: set) -> bool:
+    """ Frame 'names' in every V-Ray node editor showing 'ntree'. False when none is open. """
+    if not names or next(_editorsShowing(ntree), None) is None:
+        return False
+
+    # A node Blender never drew has no draw_bounds, so view_selected would frame the origin.
+    try:
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+    except RuntimeError:
+        pass
+
+    for window, area, region in list(_editorsShowing(ntree)):
+        with bpy.context.temp_override(window=window, area=area, region=region):
+            _frameNodes(ntree, names)
+
+    return True
+
+
+def _frameNodes(ntree, wanted: set):
+    """ Frame Selected over 'wanted' node names, putting the user's selection back afterwards. Names, not node references:
+        separately fetched RNA wrappers don't compare identical.
+    """
+    selected = {n.name for n in ntree.nodes if n.select}
+    activeName = ntree.nodes.active.name if ntree.nodes.active else ""
+
+    for node in ntree.nodes:
+        node.select = node.name in wanted
+
+    result = bpy.ops.node.view_selected()
+
+    for node in ntree.nodes:
+        node.select = node.name in selected
+    ntree.nodes.active = ntree.nodes.get(activeName)
+
+    return result
+
+
+class _VRayNodeFrameBase(VRayOperatorBase):
+    """ Framing that ignores the off-canvas texture placeholder.
+
+        Blender's view_all/view_selected union the bounds of every node they are given with no way to opt one out, so the placeholder
+        shrank the whole material to an invisible sliver. Reframing a temporary selection avoids moving the placeholder itself, which
+        would dirty the tree on every keypress.
+    """
+    bl_options = {'INTERNAL'}
+
+    @classmethod
+    def poll(cls, context):
+        # A failing poll is what lets the key fall through to Blender's own binding elsewhere.
+        return _isVRayEditor(context) and hasEditTree(context)
+
+
+class VRAY_OT_node_view_all(_VRayNodeFrameBase):
+    """ Resize view so you can see all nodes """
+    bl_idname = 'vray.node_view_all'
+    bl_label  = "Frame All"
+
+    def execute(self, context):
+        ntree = context.space_data.edit_tree
+
+        if not _hasPlaceholder(ntree):
+            return bpy.ops.node.view_all()
+
+        return _frameNodes(ntree, {n.name for n in ntree.nodes if not isTexturePlaceholder(n)})
+
+
+class VRAY_OT_node_view_selected(_VRayNodeFrameBase):
+    """ Resize view so you can see selected nodes """
+    bl_idname = 'vray.node_view_selected'
+    bl_label  = "Frame Selected"
+
+    def execute(self, context):
+        ntree = context.space_data.edit_tree
+
+        # Select All takes the placeholder with it, so a plain Frame Selected after pressing A hits the same wall as Frame All did.
+        if not _hasPlaceholder(ntree):
+            return bpy.ops.node.view_selected()
+
+        wanted = {n.name for n in ntree.nodes if n.select and not isTexturePlaceholder(n)}
+
+        return _frameNodes(ntree, wanted) if wanted else {'CANCELLED'}
+
+
 def getRegClasses():
     return (
         VRAY_OT_show_ntree,
         VRAY_OT_ntree_sync_name,
         VRAY_OT_node_group_path_jump,
+        VRAY_OT_node_view_all,
+        VRAY_OT_node_view_selected,
     )
 
 

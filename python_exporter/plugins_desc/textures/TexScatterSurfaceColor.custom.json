@@ -1,0 +1,93 @@
+{
+    "ID": "TexScatterSurfaceColor",
+    "Name": "V-Ray Scatter Surface Color",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "source",
+            "desc": "The map to sample the instance color from",
+            "items": [
+                [ "0", "Surface Diffuse/Base Map", "The diffuse maps of the Chaos Scatter distribution surfaces" ],
+                [ "1", "Custom Map", "The map plugged into the Custom Map socket" ]
+            ]
+        },
+        {
+            "attr": "custom_map",
+            "desc": "The map to sample the instance color from"
+        },
+        {
+            "attr": "hue_randomness",
+            "desc": "Amount of random hue variation between the instances",
+            "ui": {
+                "min": 0.0,
+                "max": 1.0
+            }
+        },
+        {
+            "attr": "gamma_randomness",
+            "desc": "Amount of random gamma variation between the instances",
+            "ui": {
+                "min": 0.0,
+                "max": 1.0
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "source"
+                    },
+                    {
+                        "name": "custom_map",
+                        "active": {
+                            "cond": "::source=1"
+                        }
+                    },
+                    {
+                        "name": "hue_randomness"
+                    },
+                    {
+                        "name": "gamma_randomness"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "source"
+                    },
+                    {
+                        "name": "hue_randomness"
+                    },
+                    {
+                        "name": "gamma_randomness"
+                    }
+                ]
+            }
+        ],
+        "input_sockets": [
+            { "name": "custom_map", "visible": { "cond": "::source=1", "default": false } }
+        ],
+        "internal_links": {
+            "*": ["Custom Map"]
+        }
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "distribution_surface_maps",
+            "surface_map_ids",
+            "surface_nodes",
+            "surface_node_ids",
+            "presampled_source"
+        ]
+    }
+}

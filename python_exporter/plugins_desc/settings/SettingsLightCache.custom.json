@@ -164,7 +164,7 @@
                     },
                     {
                         "name": "path_guiding",
-                        "label": "Path Guiding (Experimantal)"
+                        "label": "Path Guiding (Experimental)"
                     },
                     {
                         "layout": "COLUMN",

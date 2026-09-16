@@ -43,6 +43,9 @@ def ensureRunning():
     from vray_blender.engine.vfb_event_handler import VfbEventHandler
 
     ZMQ.ensureRunning()
+    # The server may have been started without the engine callbacks (by the Chaos Scatter
+    # addon); attaching is idempotent per server run.
+    ZMQ.attachEngineCallbacks()
     VfbEventHandler.ensureRunning(reset=True)
 
     # The Asset Import and Set Viewport Mode timers have to be registered

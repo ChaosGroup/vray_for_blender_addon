@@ -1,0 +1,112 @@
+
+{
+    "Description" : "BRDFDiffuse",
+    "ID" : "BRDFDiffuse",
+    "Name" : "Diffuse",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.50, 0.50, 0.50 ],
+            "desc" : "Color of the material",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Color of the material using a texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex_mult",
+            "default" : 1.0,
+            "desc" : "Blends between color and color_tex. A value of 0 results in color being used. A value of 1 results in color_tex",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "The transparency of the material",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The transparency of the material using a texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex_mult",
+            "default" : 1.0,
+            "desc" : "Blends between transparency and transparency_tex. A value of 0 results in transparency being used. A value of 1 results in transparency_tex",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : [],
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "roughness",
+            "default" : 0.0,
+            "desc" : "The roughness of the material. Used to simulate rough surfaces or surfaces covered with dust (for example, skin, or the surface of the Moon)",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "use_irradiance_map",
+            "default" : true,
+            "desc" : "When enabled V-Ray can use cached GI solutions (irradiance map/light cache) to approximate the diffuse portion of the BRDF",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "color_tex_alpha_as_transparency",
+            "default" : false,
+            "desc" : "Use the alpha of color_tex as transparency",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

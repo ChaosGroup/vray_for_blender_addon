@@ -4,6 +4,7 @@
 
 import bpy
 import mathutils
+import numpy as np
 
 from vray_blender.lib import export_utils, lib_utils
 from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
@@ -21,6 +22,7 @@ from vray_blender import debug
 
 from vray_blender.vray_tools.vray_proxy import getProxyPreviewAppliedTransform
 
+from vray_blender.lib import plugin_utils
 from vray_blender.bin import VRayBlenderLib as vray
 
 def exportPluginWithStats(nodeCtx: NodeContext, plDesc: PluginDesc, trackPlugin = True) -> AttrPlugin:
@@ -127,6 +129,8 @@ def _exportVRayNodeImpl(nodeCtx: NodeContext, nodeLink: FarNodeLink):
             return node.getValue(nodeCtx.exporterCtx.ctx)
         case "VRayNodeMatrix" | "VRayNodeVector":
             return node.getValue()
+        case "VRayNodeGenericPlugin":
+            return _exportGenericPluginNode(nodeCtx)
 
         case _:
             if node.vray_plugin and (node.vray_plugin != 'NONE') and \
@@ -150,12 +154,11 @@ def exportVRayNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     with nodeCtx.push(node), nodeCtx.pushGroupPath(groupPath):
         # Check if the node is already exported.
         # When one node is connected to multiple sockets it will be iterated more than once.
-        # For cycles nodes the node cache is skipped since the output logic is handled there,
-        # this can be improved the including also the output name but this leads to other problems.
-        if (result := nodeCtx.getCachedNodePlugin(node)) is None or not hasattr(node, "vray_plugin"):
+        outputId = None if hasattr(node, "vray_plugin") else getattr(nodeLink.from_socket, "identifier", None)
+        if (result := nodeCtx.getCachedNodePlugin(node, outputId)) is None:
             with TrackNode(nodeCtx.nodeTracker, getNodeTrackId(node)):
                 result = _exportVRayNodeImpl(nodeCtx, nodeLink)
-                nodeCtx.cacheNodePlugin(node, result)
+                nodeCtx.cacheNodePlugin(node, result, outputId)
                 nodeFromCache = False
 
         # Meta nodes, e.g. object selectors, may export values other than AttrPlugin. It is responsibility
@@ -201,6 +204,92 @@ def _exportArbitraryNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     attrPlugin = exportPluginWithStats(nodeCtx, plDesc)
 
     return attrPlugin
+
+
+def _exportGenericPluginNode(nodeCtx: NodeContext):
+    """ Export a node standing in for a V-Ray plugin the addon generates no node class for.
+
+        Its values live in its sockets rather than in a property group, and V-Ray may ship no
+        description for the plugin at all, so the attribute descriptions exportNodeTree looks
+        up are built from the sockets instead. The sockets still do their own marshalling, so
+        values are converted exactly as they are for a generated node.
+
+        Only the attributes the node carries a socket for are written, and they are written
+        verbatim. The plugin was imported with the parameters the source .vrscene set, and
+        V-Ray's own defaults are a better answer for the rest than the addon's authoring
+        defaults - which the generic export path would otherwise write out, in the process
+        turning a description's default colour (a plain JSON list) into a float list.
+    """
+    from vray_blender.nodes.importing import generic_node
+
+    node = nodeCtx.node
+    plDesc = PluginDesc(Names.treeNode(nodeCtx), node.vray_plugin)
+
+    # Every socket of a list attribute writes to the same name, so they are collected and set
+    # once instead of each exporting on its own.
+    listValues = {}
+    sockByAttr = {}
+
+    for sock in node.inputs:
+        if not (attrName := getattr(sock, 'vray_attr', '')):
+            continue
+
+        sockByAttr.setdefault(attrName, sock)
+        attrDesc = generic_node.socketAttrDesc(sock)
+        link = getFarNodeLink(sock)
+
+        if node.isListAttr(attrName):
+            if link:
+                if linkValue := exportSocketLink(nodeCtx, link):
+                    listValues.setdefault(attrName, []).append(linkValue)
+            elif (value := getattr(sock, 'value', None)) is not None:
+                listValues.setdefault(attrName, []).append(value)
+            continue
+
+        if link:
+            if linkValue := exportSocketLink(nodeCtx, link):
+                sock.exportLinked(plDesc, attrDesc, linkValue)
+        else:
+            sock.exportUnlinked(nodeCtx, plDesc, attrDesc)
+
+    for attrName, values in listValues.items():
+        plDesc.setAttribute(attrName, values)
+
+    plDesc.node = node
+    nodeCtx.nodeTracker.trackPlugin(plDesc.name)
+    nodeCtx.stats.uniquePlugins.add(plDesc.name)
+    nodeCtx.stats.plugins += 1
+    nodeCtx.stats.attrs += len(plDesc.attrs)
+
+    if nodeCtx.customHandler:
+        return nodeCtx.customHandler(nodeCtx, plDesc)
+
+    exporterCtx = nodeCtx.exporterCtx
+    plugin_utils.createPlugin(exporterCtx, plDesc.name, plDesc.type)
+
+    for attrName, value in plDesc.attrs.items():
+        value = _coerceSocketArray(value, sockByAttr.get(attrName))
+        plugin_utils.updateValue(exporterCtx.renderer, plDesc.name, attrName, value)
+
+    return AttrPlugin(plDesc.name, pluginType=plDesc.type)
+
+
+# A socket whose value is a plain float vector hands out a bpy_prop_array, which the exporter
+# has no type for. Only the socket knows whether three floats are a colour or a vector.
+_ARRAY_TO_VRAY_VALUE = {
+    'VRaySocketColor':         mathutils.Color,
+    'VRaySocketGenericColor':  mathutils.Color,
+    'VRaySocketAColor':        AColor,
+    'VRaySocketGenericAColor': AColor,
+    'VRaySocketVector':        mathutils.Vector,
+}
+
+
+def _coerceSocketArray(value, sock):
+    if (type(value) is bpy.types.bpy_prop_array) and (sock is not None) \
+            and (convert := _ARRAY_TO_VRAY_VALUE.get(sock.vray_socket_base_type)):
+        return convert(value[:])
+    return value
 
 
 def _resolveGroupInputSocket(sock):
@@ -314,6 +403,15 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object, ins
 
     objMtls = _getObjectMaterials(obj)
     assert len(objMtls) == len(obj.material_slots)
+
+    # Blender gives an Empty no material slots at all, so the Empty-backed geometry plugins
+    # (infinite plane, perfect sphere) keep their material in a pointer on the object instead.
+    if not objMtls and (emptyGeomMtl := obj.original.vray.material):
+        objMtls = [emptyGeomMtl if emptyGeomMtl.use_nodes and emptyGeomMtl.node_tree else None]
+
+    # Handle V-Ray Proxy material override by geometry node.
+    if (slot := _getProxyCollapsedMaterialSlot(obj)) is not None:
+        objMtls = [objMtls[slot]]
 
     viewLayer = exporterCtx.dg.view_layer
     useCustomOverride = not exporterCtx.preview and viewLayer.vray.material_override_mode == '2'
@@ -450,7 +548,7 @@ def fillNodePluginDesc(exporterCtx: ExporterContext,
     nodeDesc.setAttribute("transform", transform)
 
     nodeDesc.setAttribute("objectID", obj.pass_index)
-    if exporterCtx.commonSettings.useMotionBlur:
+    if exporterCtx.commonSettings.exportMotionData:
         objProperties = obj.vray.VRayObjectProperties
         if objProperties.override_motion_blur_samples:
             nodeDesc.setAttribute("nsamples", objProperties.motion_blur_samples)
@@ -518,6 +616,37 @@ def exportNodePlugin(exporterCtx: ExporterContext,
         objTracker.trackPlugin(getObjTrackId(obj), nodePlugin.name, isInstance)
 
         return nodePlugin
+
+
+def _getProxyCollapsedMaterialSlot(obj: bpy.types.Object):
+    """ For a V-Ray proxy, return the material slot index that
+        a 'Set Material' or 'Set Material Index' geometry node assigns to the geometry,
+        or None when the object is not a proxy, has a single slot, or has no overridden materials.
+    """
+    if (not isObjectVrayProxy(obj)) or len(obj.material_slots) <= 1:
+        return None
+
+    # 'Full' and 'Preview' previews carry the per-face material indices of the .vrmesh shaders, so
+    # the presence of the attribute alone is not an override. Only a geometry node tree could have
+    # replaced them, and testing the modifiers first keeps the scan below off the common path.
+    if not any(m.type == 'NODES' for m in obj.modifiers):
+        return None
+
+    attr = obj.data.attributes.get("material_index")
+    if attr is None or (numFaces := len(attr.data)) == 0:
+        # There are no material overrides by geometry node tree.
+        return None
+
+    indices = np.empty(numFaces, dtype=np.int32)
+    attr.data.foreach_get("value", indices)
+
+    usedSlot = int(indices[0])
+    if (indices != usedSlot).any():
+        # Only a part of the faces is overridden. Keep the face material IDs of the .vrmesh.
+        return None
+
+    return usedSlot if 0 <= usedSlot < len(obj.material_slots) else None
+
 
 def _getObjectMaterials(obj: bpy.types.Object):
     mtls = []
@@ -611,7 +740,7 @@ def _forwardExportSceneObject(nodeCtx: NodeContext, obj: bpy.types.Object, isGeo
 
     if pluginName:
         # Export empty plugin because it might have not been created yet
-        vray.pluginCreate(nodeCtx.renderer, pluginName, pluginType)
+        plugin_utils.forwardDeclarePlugin(nodeCtx.exporterCtx, pluginName, pluginType)
         result = AttrPlugin(pluginName, pluginType=pluginType)
         result.auxData['object'] = obj
         result.useDefaultOutput()
@@ -629,7 +758,7 @@ def _exportVRayNodeSelectObjectGeometry(nodeCtx: NodeContext):
         ob = sceneObjects[node.objectName]
         if ob.type == 'MESH':
             geomName = Names.objectData(ob)
-            vray.pluginCreate(nodeCtx.renderer, geomName, "GeomStaticMesh")
+            plugin_utils.forwardDeclarePlugin(nodeCtx.exporterCtx, geomName, "GeomStaticMesh")
             attrPlugin = AttrPlugin(geomName)
             attrPlugin.auxData['object'] = ob.name
             attrPlugin.useDefaultOutput()

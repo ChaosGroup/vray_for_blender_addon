@@ -11,9 +11,12 @@ from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib import blender_utils, image_utils, path_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps, pruneColorRamps
+from vray_blender.nodes.curves_node import registerCurveNodeSubscriptions
+from vray_blender.nodes.links import clearScheduledLinkFixes
 from vray_blender.lib.image_utils import registerBitmapImageNodes
 from vray_blender.nodes.tree import upgradeTrees
 from vray_blender.plugins.BRDF.BRDFScanned import registerScannedNodes
+from vray_blender.utils import cosmos_asset_set, cosmos_scatter_preset, cosmos_drop_batch
 from vray_blender.utils.update_checker import autoCheckForUpdatesFeatureEnabled
 
 
@@ -28,6 +31,11 @@ _MSGBUS_OWNER = object()
 # crashes in rna_NodeTree_refine on the unbound typeinfo. Skipping while this flag is set
 # defers the call until load_post, when the next compositor refresh will retry safely.
 _blendFileLoadInProgress = False
+
+
+# True while we peek a source .blend's version during append (see _readSourceBaselineVersion).
+# Reading a source file links data and re-fires blend_import_post; this guards the reentry.
+_readingSourceVersion = False
 
 
 def isBlendFileLoading() -> bool:
@@ -67,6 +75,7 @@ def _onSavePost(e):
 
 @bpy.app.handlers.persistent
 def _onSavePre(e):
+    from vray_blender import UPGRADE_NUMBER
     from vray_blender.version import getBuildVersionString
 
     scene = bpy.context.scene
@@ -74,6 +83,16 @@ def _onSavePre(e):
     # Use the dictionary access syntax here in order to avoid updates to the scene
     scene.vray.Exporter['vrayAddonVersion'] = getBuildVersionString()
     scene.vray.SettingsVFB['vfb2_layers'] = VfbEventHandler.getVfbLayers()
+
+    # Stamp every V-Ray datablock with the current upgrade number so data appended from
+    # this file into another scene carries its version and can be upgraded precisely.
+    # Dictionary access avoids tagging the datablocks (and the file) as modified.
+    for collection in (bpy.data.materials, bpy.data.objects, bpy.data.lights,
+                       bpy.data.worlds, bpy.data.cameras, bpy.data.node_groups):
+        for db in collection:
+            vrayProps = getattr(db, 'vray', None)
+            if vrayProps is not None and hasattr(vrayProps, 'upgradeNumber'):
+                vrayProps['upgradeNumber'] = UPGRADE_NUMBER
 
 
 @bpy.app.handlers.persistent
@@ -87,6 +106,16 @@ def _onLoadPre(e):
         VRayRenderEngine.resetAll()
         VfbEventHandler.reset()
         vray.clearMainBitmapCache()
+        # An in-flight Cosmos Asset Set or Scatter preset holds references to objects in the file
+        # being replaced. Finalizing it after the load would touch freed data.
+        cosmos_asset_set.clearSessions()
+        cosmos_scatter_preset.clearSessions()
+        # A drop batch holds no object references, so nothing breaks if one survives the
+        # load - but it would go on claiming imports at coordinates that mean nothing in
+        # the new scene, and withhold their materials for doing so.
+        cosmos_drop_batch.clearBatches()
+        # Drop stale scheduled-fix keys before load.
+        clearScheduledLinkFixes()
     except Exception:
         _blendFileLoadInProgress = False
         raise
@@ -95,8 +124,6 @@ def _onLoadPre(e):
 @bpy.app.handlers.persistent
 def _onLoadPost(scenePath):
     from vray_blender import engine, debug
-    from vray_blender.nodes.curves_node import registerCurveNodes, addCurvesUpdateCallback
-    from vray_blender.plugins.effects.VolumeVRayToon import registerNodeCurves as registerVolumeVRayToonNodeCurves
     from vray_blender.lib.blender_utils import checkAndReportVersionIncompatibility
     from vray_blender.lib.sys_utils import StartupConfig
 
@@ -108,6 +135,11 @@ def _onLoadPost(scenePath):
     # any of its wired channels that have no compositor mapping.
     from vray_blender.engine.render_elements import resetUnmappedChannelWarnings
     resetUnmappedChannelWarnings()
+
+    # The property pages' back/forward history holds node names from the previous file; a
+    # same-named node in the newly loaded one would make Back jump somewhere unrelated.
+    from vray_blender.nodes.navigation import clearNavigationHistory
+    clearNavigationHistory()
 
     # Reset the global unique ID generator. This will keep the generated IDs to a
     # decent size and will also ensure that on reload, given that no changes have been
@@ -127,11 +159,7 @@ def _onLoadPost(scenePath):
     registerBitmapImageNodes()
 
     # Register all nodes that use a CurvesMap (Remap) widget.
-    registerCurveNodes({
-        'VRayNodeTexRemap': addCurvesUpdateCallback,
-        'VRayNodeBRDFToonMtl': addCurvesUpdateCallback,
-        'VRayNodeVolumeVRayToon': registerVolumeVRayToonNodeCurves,
-    })
+    registerCurveNodeSubscriptions()
 
     registerScannedNodes()
 
@@ -178,10 +206,19 @@ def _onLoadPost(scenePath):
 
 
 @bpy.app.handlers.persistent
+def _onRenderJobEnded(e):
+    # Starting the render killed any pending material preview jobs (Blender's
+    # WM_jobs_kill_all_except), leaving them as spinners forever. Re-kick them.
+    from vray_blender.engine.renderer_preview import scheduleStuckPreviewCheck
+    scheduleStuckPreviewCheck()
+
+
+@bpy.app.handlers.persistent
 def _onUndoPost(e):
     # Color ramp registrations are not stored with the scene and need to be recreated
     registerColorRamps()
     registerBitmapImageNodes()
+    registerCurveNodeSubscriptions()
 
 
 @bpy.app.handlers.persistent
@@ -189,6 +226,7 @@ def _onRedoPost(e):
     # Color ramp registrations are not stored with the scene and need to be recreated
     registerColorRamps()
     registerBitmapImageNodes()
+    registerCurveNodeSubscriptions()
 
 
 @bpy.app.handlers.persistent
@@ -263,14 +301,77 @@ def _onFrameChangePre(scene, depsgraph=None):
             _applyFCurveValue(ng, fc, frame)
 
 
+def _readSourceBaselineVersion(sourcePath: str) -> int:
+    """ Peek the source .blend an append/link came from and return the lowest V-Ray
+        scene upgrade number found - the version the imported data was created with,
+        so already-applied upgrade scripts are not re-run (which would corrupt the
+        data). Returns 0 if it can't be read (falls back to the whole chain).
+    """
+    global _readingSourceVersion
+    from vray_blender import version
+
+    if not sourcePath or not os.path.exists(sourcePath):
+        return 0
+
+    nums = []
+    _readingSourceVersion = True
+    try:
+        try:
+            with bpy.data.libraries.load(sourcePath, link=True) as (dataFrom, dataTo):
+                dataTo.scenes = list(dataFrom.scenes)
+        except Exception:
+            return 0
+        linkedScenes = [s for s in bpy.data.scenes
+                        if s.library and bpy.path.abspath(s.library.filepath) == sourcePath]
+        for scene in linkedScenes:
+            nums.append(int(version.getSceneUpgradeNumber(scene)))
+        # Remove the temporarily linked scenes and their now-orphan library (kept if
+        # a real link operation still references it).
+        libs = {s.library for s in linkedScenes}
+        for scene in linkedScenes:
+            bpy.data.scenes.remove(scene)
+        for lib in libs:
+            if lib and lib.users == 0:
+                try:
+                    bpy.data.libraries.remove(lib)
+                except Exception:
+                    pass
+    finally:
+        _readingSourceVersion = False
+
+    return min(nums) if nums else 0
+
+
 # bpy.types.BlendImportContext was added in 4.3
 if bpy.app.version >= (4, 3, 0):
     @bpy.app.handlers.persistent
     def _onImportPost(ctx: bpy.types.BlendImportContext):
+        # Guard reentry: _readSourceBaselineVersion links data and re-fires this handler.
+        if _readingSourceVersion:
+            return
+
+        from vray_blender import version
         from vray_blender.nodes.curves_node import initImportedCurveNodes
         from vray_blender.nodes import color_ramp
         from vray_blender.nodes.specials.gradient_ramp import VRayNodeColorRamp
         from vray_blender.plugins.texture.TexSoftbox import registerNodeColorRamps
+
+        # Appended/linked data may come from an older V-Ray version. Blender fires no
+        # load_post/version_update on append, so run the upgrade here, scoped to the
+        # imported datablocks (the active scene is untouched). Group by source file so
+        # each group is upgraded from the version it was created with - re-running
+        # already-applied scripts on imported data corrupts it. Runs before the fixups
+        # below so they operate on upgraded node trees. Silent - console log only.
+        bySource = {}
+        for item in ctx.import_items:
+            if not item.id:
+                continue
+            path = bpy.path.abspath(item.source_library.filepath) if item.source_library else ''
+            bySource.setdefault(path, set()).add(item.id.session_uid)
+
+        for path, uids in bySource.items():
+            baseline = _readSourceBaselineVersion(path) if path else 0
+            version.upgradeImportedData(uids, baseline)
 
         for item in ctx.import_items:
             if item.id_type in ('MATERIAL', 'WORLD'):
@@ -312,6 +413,8 @@ def register():
     blender_utils.addEvent(bpy.app.handlers.redo_post, _onRedoPost)
     blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
     blender_utils.addEvent(bpy.app.handlers.frame_change_pre, _onFrameChangePre)
+    blender_utils.addEvent(bpy.app.handlers.render_complete, _onRenderJobEnded)
+    blender_utils.addEvent(bpy.app.handlers.render_cancel, _onRenderJobEnded)
 
     # bpy.app.handlers.blend_import_post was added in 4.3
     if bpy.app.version >= (4, 3, 0):
@@ -348,6 +451,8 @@ def unregister():
     blender_utils.delEvent(bpy.app.handlers.redo_post, _onRedoPost)
     blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onUpdatePost)
     blender_utils.delEvent(bpy.app.handlers.frame_change_pre, _onFrameChangePre)
+    blender_utils.delEvent(bpy.app.handlers.render_complete, _onRenderJobEnded)
+    blender_utils.delEvent(bpy.app.handlers.render_cancel, _onRenderJobEnded)
 
     # bpy.app.handlers.blend_import_post was added in 4.3
     if bpy.app.version >= (4, 3, 0):

@@ -73,9 +73,11 @@ class VRAY_OT_includer_remove(VRayOperatorBase):
         vs = context.scene.vray
         module = vs.Includer
 
-        if module.nodes_selected >= 0:
-            module.nodes.remove(module.nodes_selected)
-            module.nodes_selected -= 1
+        if module.nodes_selected < 0:
+            return {'CANCELLED'}
+
+        module.nodes.remove(module.nodes_selected)
+        module.nodes_selected -= 1
 
         return {'FINISHED'}
 

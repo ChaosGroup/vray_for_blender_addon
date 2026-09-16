@@ -8,7 +8,7 @@ import bpy
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes.sockets import addOutput
 from vray_blender.nodes import links as NodeLinks
-from vray_blender.lib import plugin_utils, draw_utils
+from vray_blender.lib import plugin_utils, draw_utils, blender_utils
 from vray_blender.lib.defs import ExporterContext, PluginDesc
 from vray_blender.plugins import PLUGINS
 
@@ -36,10 +36,8 @@ class VRayObjectProps(VRayNodeBase):
 
 def _makeShadowCatcher(self, context):
     if obj := context.active_object:
-        objProps = obj.vray.VRayObjectProperties
-        objProps.affect_alpha = True
-        objProps.shadows = True
-        objProps.alpha_contribution = -1.0
+        # This node IS the matte node, so it must not ask for another one to be created.
+        blender_utils.makeShadowCatcher(obj, ensureMatteNode=False)
 
 class VRayObjectMatteProps(VRayObjectProps):
     bl_idname = 'VRayNodeObjectMatteProps'

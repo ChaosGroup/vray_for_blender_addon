@@ -279,11 +279,18 @@ CompatibleNonVrayNodes = {
     'ShaderNodeAddShader', # full
     'ShaderNodeMixShader', # full
     'ShaderNodeBsdfTranslucent', # full
+    'ShaderNodeBsdfTransparent', # full
+    'ShaderNodeLightPath', # partial (the 'Is ... Ray' flags -> TexRaySwitch; no depths/length)
+    'ShaderNodeBsdfHairPrincipled', # Chiang model -> BRDFHair4 (Hair Next)
+    'ShaderNodeHairInfo', # -> TexHairSampler (per-strand: Intercept/Random/Length)
 
     'ShaderNodeTexChecker', # partial
     "ShaderNodeNormal", # full
     'ShaderNodeNormalMap', # full
     'ShaderNodeMath', # partial
+    'ShaderNodeVectorMath', # partial (no cross product, project, reflect, refract, faceforward, snap, wrap, sign)
+    'ShaderNodeMapRange', # partial (float data type, linear and smoothstep interpolation)
+    'ShaderNodeFloatCurve', # full
     'ShaderNodeRGB', # full
     'ShaderNodeInvert', # partial (no factor)
     'ShaderNodeRGBToBW', # full
@@ -320,4 +327,7 @@ CompatibleNonVrayNodes = {
     'ShaderNodeHueSaturation', # full
     'ShaderNodeBrightContrast', # full
     'ShaderNodeTexNoise', # full
+    'ShaderNodeTexBrick', # flat average colour only - V-Ray has no brick procedural
+    'ShaderNodeTexWave', # flat average colour only - V-Ray has no wave procedural
+    'ShaderNodeTexSky', # partial (no scattering models in V-Ray)
 }

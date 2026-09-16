@@ -210,9 +210,11 @@ class VRAY_OT_user_attribute_del(VRayOperatorBase):
     def execute(self, context):
         ua = context.object.vray.UserAttributes
 
-        if ua.user_attributes_selected >= 0:
-           ua.user_attributes.remove(ua.user_attributes_selected)
-           ua.user_attributes_selected -= 1
+        if ua.user_attributes_selected < 0:
+           return {'CANCELLED'}
+
+        ua.user_attributes.remove(ua.user_attributes_selected)
+        ua.user_attributes_selected -= 1
 
         if len(ua.user_attributes) == 0:
            ua.user_attributes_selected = -1

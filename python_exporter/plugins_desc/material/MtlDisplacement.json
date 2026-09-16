@@ -88,6 +88,18 @@
         },
         
         {
+            "attr" : "out_of_frustum_mult",
+            "default" : 4.0,
+            "desc" : "Controls how the tessellation is lowered for parts of the object which are outside of the camera frustum",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Out of frustum multiplier",
+                "min" : 1.0
+            }
+        },
+        
+        {
             "attr" : "use_bounds",
             "default" : false,
             "desc" : "If true, the min/max values for the displacement texture are specified by the min_bound and max_bound parameters; if false, these are calculated automatically",

@@ -13,14 +13,30 @@
     "SettingsImageSampler":
     {
         "dmc_adaptive_method": 1,
-        "type": 3,
-        "progressive_maxSubdivs": 3,
-        "progressive_threshold": 0.1
+        "type": 1,
+
+        "dmc_minSubdivs": 1,
+        "dmc_maxSubdivs": 4,
+        "dmc_threshold": 0.07
     },
-    
-    "SettingsGI": 
+
+    "SettingsDMCSampler":
+    {
+        "adaptive_amount": 1.0,
+        "adaptive_threshold": 0.02,
+        "adaptive_min_samples": 4
+    },
+
+    "SettingsGI":
     {
         "primary_engine": 2,
-        "secondary_engine": 2
+        "secondary_engine": 2,
+        "reflect_caustics": false,
+        "refract_caustics": false
+    },
+
+    "SettingsDMCGI":
+    {
+        "depth": 2
     }
 }

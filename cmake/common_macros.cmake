@@ -28,6 +28,40 @@ macro(use_qt _qt_root)
 endmacro()
 
 
+# Split the debug info out of a binary that has just been installed and strip it, so the packed
+# installer ships no symbols and the .debug / .dSYM stays beside it to be archived. A no-op on
+# Windows, where the linker writes a separate .pdb to begin with.
+#
+# Call it after the install(TARGETS) that puts the binary in `destination`: install rules run in the
+# order they are declared. The build tree is left alone, so a local build still debugs.
+function(install_split_debug_info target destination)
+	if (WIN32)
+		return()
+	endif()
+
+	if (APPLE)
+		set(_style dsym)
+	else()
+		set(_style elf)
+	endif()
+
+	install(CODE "
+		execute_process(
+			COMMAND \"${CMAKE_COMMAND}\"
+				\"-DBINARY=${destination}/$<TARGET_FILE_NAME:${target}>\"
+				\"-DSPLIT_STYLE=${_style}\"
+				\"-DOBJCOPY=${CMAKE_OBJCOPY}\"
+				\"-DSTRIP=${CMAKE_STRIP}\"
+				-P \"${CMAKE_SOURCE_DIR}/cmake/split_debug_info.cmake\"
+			RESULT_VARIABLE _split_result
+		)
+		if (NOT _split_result EQUAL 0)
+			message(FATAL_ERROR \"Could not split the debug info of ${target}\")
+		endif()
+	")
+endfunction()
+
+
 macro(link_with_qt)
 	target_link_libraries(${PROJECT_NAME} Qt6Core)
 	target_link_libraries(${PROJECT_NAME} Qt6Gui)
@@ -124,45 +158,6 @@ function(cgr_rcc)
 	set(${PAR_FILE_OUT_VAR} "${FILE_OUT_DIR}/${PAR_FILE_OUT_NAME}" PARENT_SCOPE)
 
 endfunction()
-
-
-macro(use_zmq _zmq_root)
-	if (NOT EXISTS ${_zmq_root})
-		message(FATAL_ERROR "Could not find ZMQ: \"${_zmq_root}\"")
-	endif()
-
-	add_definitions(-DZMQ_STATIC)
-
-	link_directories(${_zmq_root}/lib)
-	#link_directories(${ZMQ_ROOT}/bin)
-	include_directories(${_zmq_root}/include)
-endmacro()
-
-
-macro(link_with_zmq _name)
-
-	set(visibility "") # Linkage visibility
-
-    # If optional argument is given to link_with_zmq() assign it to the
-	# visibility variable
-	set (extra_args ${ARGN})
-    list(LENGTH extra_args extra_count)
-	if (${extra_count} GREATER 0)
-        list(GET extra_args 0 visibility)
-    endif ()
-
-	if(UNIX)
-		target_link_libraries(${_name} ${visibility} libzmq.a)
-	elseif(WIN32)
-		if (MSVC_VERSION EQUAL 1800)
-			set(MSVC_DIR_NAME "v120")
-		elseif(MSVC_VERSION GREATER_EQUAL 1900)
-			set(MSVC_DIR_NAME "v142")
-		endif()
-		target_link_libraries(${_name} ${visibility} optimized Release/${MSVC_DIR_NAME}/libzmq-v142-mt-s-4_3_4)
-		target_link_libraries(${_name} ${visibility} wsock32 ws2_32 Iphlpapi)
-	endif()
-endmacro()
 
 
 macro(use_vray_appsdk _appsdk_root)
@@ -348,7 +343,6 @@ macro(fix_separators _path)
 		file(TO_CMAKE_PATH "${${_path}}" ${_path})
 	endif()
 endmacro()
-
 
 # Limit build configurations to a selected set
 macro(set_build_configurations)

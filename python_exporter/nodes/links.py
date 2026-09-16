@@ -23,9 +23,15 @@ from vray_blender.nodes.sockets import (
     MTL_SOCKET_TYPES,
     OBJECT_SOCKET_TYPES,
     SAME_TYPE_SOCKET_TYPES,
+    SPECIAL_CHANNEL_SOCKETS,
+    SPECIAL_CHANNEL_SOCKET_TYPES,
+    SPECIAL_CHANNEL_INPUT_TO_OUTPUT,
+    RENDER_CHANNEL_OUTPUT_TYPES,
+    getSpecialChannelSocket,
 )
-from vray_blender.plugins import getPluginModule
+from vray_blender.plugins import getPluginModule, findPluginModule
 from vray_blender.exporting.tools import getVRayBaseSockType, getFarNodeLink
+from vray_blender.lib.blender_utils import getFullPathToNode, resolveNodeFromPath
 
 
 def _sockType(sock: bpy.types.NodeSocket) -> str:
@@ -37,16 +43,30 @@ def _sockType(sock: bpy.types.NodeSocket) -> str:
     """
     return getVRayBaseSockType(sock) or sock.bl_idname
 
+
+# Keyed by node path, not pointer - a freed node's pointer can be reused.
 _ScheduledLinkFixes = set()
+_ScheduledRolloutRedirects = set()
+
+
+def clearScheduledLinkFixes():
+    """ Drop the pending-fix registries (called on file load). """
+    _ScheduledLinkFixes.clear()
+    _ScheduledRolloutRedirects.clear()
+
 
 def scheduleFixMisdirectedLink(node: bpy.types.Node, wrongSocketName: str, correctSocketName: str, validSourceTypes: set):
     """ When a node is dropped onto an existing link, Blender may connect it to the wrong socket
         because insert_link doesn't get called in that case. This schedules a deferred check to
         move the link to the correct socket if it ended up in the wrong one.
     """
+    if not (nodePath := getFullPathToNode(node)) or (nodePath in _ScheduledLinkFixes):
+        return
+
     def _fix():
-        _ScheduledLinkFixes.discard(node.as_pointer())
-        if not node or not node.id_data:
+        _ScheduledLinkFixes.discard(nodePath)
+        # Shadows the outer 'node' - do not reference it below.
+        if not (node := resolveNodeFromPath(nodePath)):
             return
         wrongSock = node.inputs.get(wrongSocketName)
         if wrongSock and wrongSock.is_linked:
@@ -57,10 +77,83 @@ def scheduleFixMisdirectedLink(node: bpy.types.Node, wrongSocketName: str, corre
                     node.id_data.links.new(link.from_socket, correctSock)
                     node.id_data.links.remove(link)
 
-    nodePtr = node.as_pointer()
-    if nodePtr not in _ScheduledLinkFixes:
-        _ScheduledLinkFixes.add(nodePtr)
-        bpy.app.timers.register(_fix)
+    _ScheduledLinkFixes.add(nodePath)
+    bpy.app.timers.register(_fix)
+
+
+def _getRolloutRedirectSocket(node: bpy.types.Node, rolloutSock: bpy.types.NodeSocket):
+    """ For a rollout header socket that declares a 'link_redirect' target in its plugin
+        description, return the input socket that dropped links should be forwarded to.
+        Returns None if the socket is not a rollout or the rollout has no redirect target.
+    """
+    from vray_blender.nodes.tools import getSocketPanel
+
+    if rolloutSock.bl_idname != 'VRaySocketRollout':
+        return None
+    if (pluginType := getattr(node, 'vray_plugin', 'NONE')) == 'NONE':
+        return None
+
+    panelDesc = getSocketPanel(getPluginModule(pluginType), rolloutSock.vray_attr)
+    if not panelDesc or not (targetAttr := panelDesc.get('link_redirect')):
+        return None
+
+    return next((s for s in node.inputs if s.vray_attr == targetAttr), None)
+
+
+def scheduleRolloutLinkRedirect(node: bpy.types.Node, link: bpy.types.NodeLink) -> bool:
+    """ Forward a link dropped onto a rollout header socket to the rollout's declared
+        'link_redirect' target (VBLD-2608). Rollout headers cannot hold a link themselves, so
+        the caller removes the header link; this schedules creation of the real link to the
+        target socket, matching Blender's single-input semantics (a new drop replaces the old).
+        Returns True if a redirect was scheduled.
+    """
+    rolloutSock = link.to_socket
+    targetSock = _getRolloutRedirectSocket(node, rolloutSock)
+    if not targetSock or not isConnectionAllowed(link.from_socket, targetSock):
+        return False
+
+    if not (nodePath := getFullPathToNode(node)):
+        return False
+
+    key = (nodePath, rolloutSock.name)
+    if key in _ScheduledRolloutRedirects:
+        return True
+    _ScheduledRolloutRedirects.add(key)
+
+    fromNodeName = link.from_node.name
+    fromSockId   = link.from_socket.identifier
+    targetAttr   = targetSock.vray_attr
+    rolloutName  = rolloutSock.name
+
+    def _redirect():
+        _ScheduledRolloutRedirects.discard(key)
+        # Shadows the outer 'node' - do not reference it below.
+        if node := resolveNodeFromPath(nodePath):
+            applyRolloutLinkRedirect(node, fromNodeName, fromSockId, targetAttr, rolloutName)
+
+    bpy.app.timers.register(_redirect)
+    return True
+
+
+def applyRolloutLinkRedirect(node: bpy.types.Node, fromNodeName: str, fromSockId: str, targetAttr: str, rolloutName: str):
+    """ Create the redirected link scheduled by scheduleRolloutLinkRedirect. Kept separate so the
+        deferred work can be exercised directly (bpy timers do not fire in background mode).
+    """
+    ntree = node.id_data
+    targetSock = next((s for s in node.inputs if s.vray_attr == targetAttr), None)
+    fromNode = ntree.nodes.get(fromNodeName)
+    fromSock = next((s for s in fromNode.outputs if s.identifier == fromSockId), None) if fromNode else None
+    if not (targetSock and fromSock) or not isConnectionAllowed(fromSock, targetSock):
+        return
+
+    # Match Blender's single-input semantics: a new drop replaces an existing link.
+    for existing in list(targetSock.links):
+        ntree.links.remove(existing)
+    ntree.links.new(fromSock, targetSock)
+
+    # Reveal the connected socket by opening the rollout the user dropped onto.
+    if rolloutSock := node.inputs.get(rolloutName):
+        rolloutSock.is_open = True
 
 
 @dataclass
@@ -110,8 +203,9 @@ def vrayNodeInsertLink(node: bpy.types.Node, link: bpy.types.NodeLink, customIns
     #   - the target socket reacts to being connected (e.g. auto-enables a 'use' toggle), or
     #   - a custom insert-link callback was supplied, or
     #   - the plugin module defines a nodeInsertLink callback.
-    hasPluginCallback = (getattr(node, 'vray_plugin', 'NONE') != 'NONE'
-                         and hasattr(getPluginModule(node.vray_plugin), "nodeInsertLink"))
+    # findPluginModule, not getPluginModule: a generic plugin node carries the type of a plugin
+    # V-Ray has no description for, and the latter raises for those.
+    hasPluginCallback = hasattr(findPluginModule(getattr(node, 'vray_plugin', 'NONE')), "nodeInsertLink")
 
     if customInsertLinkCallback or hasPluginCallback or hasattr(link.to_socket, "onLinkConnected"):
         global _NewlyCreatedLinks
@@ -137,6 +231,8 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
         if node.bl_idname == 'VRayNodeEffectsHolder':
             return fromSocket.bl_idname == 'VRaySocketEffectOutput'
         if node.bl_idname == 'VRayNodeRenderChannels':
+            # A special channel's own output type is not accepted here, so it cannot take a
+            # numbered socket
             return fromSocket.bl_idname == 'VRaySocketRenderChannelOutput'
         nodeVrayType = getattr(node, 'vray_type', 'NONE')
         if nodeVrayType == 'BRDF':
@@ -144,7 +240,7 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
         if nodeVrayType == 'MATERIAL':
             return fromSocket.bl_idname == 'VRaySocketBRDF' or _sockType(fromSocket) == 'VRaySocketMtl'
         if nodeVrayType == 'TEXTURE':
-            return fromSocket.bl_idname not in {'VRaySocketBRDF', 'VRaySocketEffectOutput', 'VRaySocketRenderChannelOutput'}
+            return fromSocket.bl_idname not in ({'VRaySocketBRDF', 'VRaySocketEffectOutput'} | RENDER_CHANNEL_OUTPUT_TYPES)
         return True
     if toSocket.node.bl_idname == 'VRayNodeObjectOutput':
         isGroup = fromSocket.node.bl_idname == 'VRayNodeGroup'
@@ -164,16 +260,28 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
             return False
         if toSocket.name == 'Channels' and fromNodeId not in {'VRayNodeRenderChannels', 'VRayNodeGroup'}:
             return False
+    # Import exception: a legacy glass BRDF's 'volume' slot takes a VolumeFog (effect output)
+    # directly so imported .vrscenes keep their per-material fog. That socket only exists on the
+    # hidden import-only BRDFs, so this does not expose effect->object linking in normal use.
+    if fromSocket.bl_idname == 'VRaySocketEffectOutput' and getattr(toSocket, 'vray_attr', '') == 'volume':
+        return True
     if (_sockType(toSocket) == 'VRaySocketEffect'
             and fromSocket.bl_idname != 'VRaySocketEffectOutput'):
         return False
     if (fromSocket.bl_idname == 'VRaySocketEffectOutput'
             and _sockType(toSocket) != 'VRaySocketEffect'):
         return False
+    # Light Mix and the Denoiser each have their own socket on the channels container, fed only
+    # by the matching output type. That also keeps them out of the numbered 'Channel N' slots,
+    # which take the generic channel output alone.
+    if _sockType(toSocket) in SPECIAL_CHANNEL_SOCKET_TYPES:
+        if fromSocket.node.bl_idname == 'VRayNodeGroup':
+            return True
+        return fromSocket.bl_idname == SPECIAL_CHANNEL_INPUT_TO_OUTPUT[_sockType(toSocket)]
     if (_sockType(toSocket) == 'VRaySocketRenderChannel'
             and fromSocket.bl_idname != 'VRaySocketRenderChannelOutput'):
         return False
-    if (fromSocket.bl_idname == 'VRaySocketRenderChannelOutput'
+    if (fromSocket.bl_idname in RENDER_CHANNEL_OUTPUT_TYPES
             and _sockType(toSocket) != 'VRaySocketRenderChannel'):
         return False
     if (_sockType(toSocket) == 'VRaySocketObjectProps'
@@ -207,6 +315,24 @@ def isConnectionAllowed(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.No
     return True
 
 
+def _specialChannelLinkWarning(fromSocket: bpy.types.NodeSocket, toSocket: bpy.types.NodeSocket) -> str:
+    """ The message for a rejected link between a render channel and the wrong socket of the
+        channels container, or an empty string when the link was rejected for another reason.
+        Light Mix and the Denoiser have a socket of their own, and without a warning the
+        rejected link would simply disappear with no hint as to why.
+    """
+    if (sockDesc := SPECIAL_CHANNEL_SOCKETS.get(fromSocket.node.bl_idname)) \
+            and _sockType(toSocket) == 'VRaySocketRenderChannel':
+        return f"The {sockDesc.name} render element has its own '{sockDesc.name}' socket on the " \
+               f"Render Channels Container and cannot use a numbered channel socket"
+
+    if sockDesc := next((d for d in SPECIAL_CHANNEL_SOCKETS.values()
+                         if d.inputType == _sockType(toSocket)), None):
+        return f"The '{sockDesc.name}' socket only accepts the {sockDesc.name} render element"
+
+    return ''
+
+
 def isLinkValid(node: bpy.types.Node, link: bpy.types.NodeLink) -> bool:
     """Checks different conditions to determine if a given link is valid."""
     if node == link.to_node and not isCompatibleNode(link.from_node):
@@ -215,7 +341,11 @@ def isLinkValid(node: bpy.types.Node, link: bpy.types.NodeLink) -> bool:
     if node == link.from_node and not isCompatibleNode(link.to_node):
         debug.report('WARNING', f"Node '{link.to_node.name}' not compatible with V-Ray node tree")
         return False
-    return isConnectionAllowed(link.from_socket, link.to_socket)
+    if not isConnectionAllowed(link.from_socket, link.to_socket):
+        if warning := _specialChannelLinkWarning(link.from_socket, link.to_socket):
+            debug.report('WARNING', warning)
+        return False
+    return True
 
 # Automatic node connections. When a node is added to a tree (and only on direct user edits,
 # i.e. outside a DisableAutoConnect block), it is wired up to the obvious target if there is one.
@@ -298,23 +428,32 @@ def autoConnectNode(node: bpy.types.Node):
             if containerType:
                 containerNode = getNodeByType(ntree, containerType)
                 if containerNode:
-                    # Find first unlinked input socket (excluding the extend socket)
-                    targetSocket = next((s for s in containerNode.inputs if not s.is_linked and s.bl_idname != 'VRaySocketExtend'), None)
+                    # A channel that owns a socket on the container may only go there. A taken
+                    # socket means the scene already has this channel, so leave the new node
+                    # unconnected rather than silently replacing the active one.
+                    if specialSocket := getSpecialChannelSocket(containerNode, node.bl_idname):
+                        targetSocket = None if specialSocket.is_linked else specialSocket
+                    else:
+                        # Find first unlinked input socket (excluding the extend and special sockets)
+                        targetSocket = next((s for s in containerNode.inputs
+                                             if not s.is_linked
+                                             and s.bl_idname != 'VRaySocketExtend'
+                                             and s.bl_idname not in SPECIAL_CHANNEL_SOCKET_TYPES), None)
 
-                    if not targetSocket:
-                        # Add a new socket
-                        from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
-                        sockNamePrefix = "Channel" if vrayType == 'RENDERCHANNEL' else "Effect"
+                        if not targetSocket:
+                            # Add a new socket
+                            from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
+                            sockNamePrefix = "Channel" if vrayType == 'RENDERCHANNEL' else "Effect"
 
-                        # Count existing regular sockets to determine next name
-                        existingSockets = [s for s in containerNode.inputs if s.bl_idname == socketType]
-                        targetSocket = addInput(containerNode, socketType, f"{sockNamePrefix} {len(existingSockets) + 1}")
+                            # Count existing regular sockets to determine next name
+                            existingSockets = [s for s in containerNode.inputs if s.bl_idname == socketType]
+                            targetSocket = addInput(containerNode, socketType, f"{sockNamePrefix} {len(existingSockets) + 1}")
 
-                        moveExtendSocketToBottom(containerNode)
+                            moveExtendSocketToBottom(containerNode)
 
                     if targetSocket:
                         # Find primary output socket of the node
-                        sourceSocket = next((s for s in node.outputs if s.bl_idname in {'VRaySocketRenderChannelOutput', 'VRaySocketEffectOutput'}), None)
+                        sourceSocket = next((s for s in node.outputs if s.bl_idname in (RENDER_CHANNEL_OUTPUT_TYPES | {'VRaySocketEffectOutput'})), None)
                         if not sourceSocket and node.outputs:
                             sourceSocket = node.outputs[0]
 

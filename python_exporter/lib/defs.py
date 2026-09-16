@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Mapping, Optional, TypeVar, Dict
 import bpy, mathutils
 from numpy import ndarray
@@ -69,6 +70,63 @@ class PersistedState:
         self.activeInstancers = set()
         self.activeGizmos     = set()
 
+        # Instancer `Node` plugins which are tracked under a track id other than that of the
+        # instancer object driving them, mapped from that instancer object. V-Ray Fur is the case:
+        # its instancer is keyed by the fur object so that the fur pruning can find it. One fur
+        # object drives one instancer per instancer object, and all of them are tracked under the
+        # same fur track id, so plugin names are the only granularity at which they can be told
+        # apart - pruneInstances() would otherwise hide every one of them at once.
+        self.derivedInstancerNodes: dict[int, set[str]] = {}
+
+        # Per instancer, a signature of the set of instances it produced during the previous export:
+        # (count, sum, xor) over the instanced objects' track ids. Blender reports a collection
+        # membership change by tagging the *collection*, not the instancer object, and not with any
+        # of the update flags the change predicates consult - so the only reliable way to notice that
+        # an instancer has gained or lost an instance is to compare the sets. Order independent on
+        # purpose, the instance iteration order is not guaranteed to be stable.
+        self.instancerMembership: dict[int, tuple[int, int, int]] = {}
+
+        # Cached scene-wide sets, rebuilt only when ExporterContext.structuralUpdate says the scene
+        # itself changed (object added / removed / re-linked / hidden). See the incremental passes in
+        # ExporterContext.syncSceneState().
+        #
+        # allObjectsTrackIds: the track ids of every object in the scene plus those from linked
+        # collections, i.e. what ExporterContext.allObjects holds, reduced to ints. Only the ids are
+        # persisted, never the bpy.types.Object wrappers: a wrapper outlives the object it points to,
+        # and once the object is freed the wrapper raises ReferenceError on any attribute access and
+        # its hash silently changes to 0 (measured on Blender 5.0.1), which quietly corrupts any set
+        # still holding it. Ids compare exactly for the same memory as the object set they replace,
+        # so this is a strict improvement over diffing the wrappers. None = not built.
+        self.allObjectsTrackIds: set[int] | None = None
+
+        # objTrackIds of the objects that could possibly be instancers, i.e. that need the expensive
+        # dg.object_instances walk re-run when one of them changes. An object qualifies if it has a
+        # NODES (geometry nodes) modifier, a particle system, is_instancer, or is a V-Ray Fur object.
+        # NOTE: geometry-nodes instancers are NOT reported by Object.is_instancer, on the original or
+        # on the evaluated object (measured on Blender 5.0.1), so the NODES modifier is the only way
+        # to spot them without walking every instance. None = not built.
+        self.instancerCandidates: set | None = None
+
+        # What syncActiveInstancers() computed on its last real rescan, so that a skipped cycle can
+        # reuse it. Written by that pass on every rescan, alongside instancerCandidates.
+        # NOT the same thing as activeInstancers above, and deliberately a separate field: that one
+        # is a snapshot of the *previous export cycle*, written only by the renderers'
+        # _persistState() and diffed against the current set by pruneInstances() / purgeFurInfo().
+        # Two different lifecycles, and only one of them is guaranteed to be written - the .vrscene
+        # animation export (renderer_prod._exportFullScene) never calls _persistState() at all, so
+        # reading the snapshot here would hand back an empty set from frame 2 onwards.
+        # None = not built.
+        self.syncedActiveInstancers: set | None = None
+
+        # The instanced objects seen under each instancer parent during the last real instance walk:
+        # {parentObjTrackId: set(instancedObjTrackId)}. Lets the instance pass decide whether anything
+        # it would export has changed without iterating the instances first.
+        self.instancedObjectsByParent: dict[int, set[int]] = {}
+
+        # Local view is a per-viewport state that Blender does not tag the depsgraph for at all, so
+        # entering or leaving it has to be detected by comparing this token.
+        self.localViewToken = None
+
         # Cache mapping for exported materials:
         # Each key is a session_uid of a Blender material that has been processed for export,
         # and the corresponding value is its AttrPlugin representation.
@@ -83,6 +141,10 @@ class PersistedState:
         # The frame of the previous export, so syncMtlExportCache re-exports animated bitmaps only
         # when the frame actually changed (not on every IPR edit). None until the first export.
         self.lastExportedFrame = None
+
+        # The names the previous export filtered the exported attributes by, see
+        # reference_collector.syncReferencedAttrNames(). None until the first export.
+        self.referencedAttrNames: dict | None = None
 
         self.activeFurInfo = set()
         self.activeMeshLightsInfo = set()
@@ -237,6 +299,12 @@ class ExporterContext:
         # range if motion blur is active.
         self.currentFrame: float = 0.0
 
+        # Camera to export as the active one, overriding the scene's own. Set while a production
+        # animation render re-exports the camera of a frame whose motion blur interval spans a
+        # camera switch, so that the frame's camera - and not the one the scene has switched to
+        # at that subframe - is the one whose values land inside its interval.
+        self.cameraOverride: bpy.types.Object = None
+
         # Settings values collected from the user interface
         self.commonSettings: CommonSettings = None
 
@@ -250,14 +318,58 @@ class ExporterContext:
         # A snapshot of the active instancer objects in the scene
         self.activeInstancers = set() # set of objTrackId
 
-        # All objects in the scene, inlcuding those from linked collections
-        self.allObjects = set()
+        # Backing store for the allObjects property. None = not collected on this cycle.
+        self._allObjects: set | None = None
+
+        # Backing store for the referencedAttrNames properties. None = not collected on this cycle.
+        self._referencedAttrNames: dict | None = None
 
         # State to carry over to the next rendering cycle
         self.persistedState = PersistedState()
 
-        # Depsgraph updates split by type.
-        self.dgUpdates: dict[str, set[int]] = {}    #   dict[update_type, set[objTrackId]]
+        # Depsgraph updates split by type. Initialised with all the keys present and empty because
+        # not every caller reaches syncSceneState() before the first read - the production path runs
+        # fur_export.syncFurInfo() first (it only consults these on incremental exports, and
+        # production is always a full export).
+        self.dgUpdates: dict[str, set[int]] = {   #   dict[update_type, set[objTrackId]]
+            'geometry':  set(),
+            'transform': set(),
+            'shading':   set(),
+            'all':       set(),
+        }
+
+        # The originals of the Object IDs reported in dg.updates. The incremental passes use this
+        # instead of walking the whole scene.
+        self.dgUpdatedObjects: set[bpy.types.Object] = set()
+
+        # True when dg.updates contains a Scene / ViewLayer / Collection entry, i.e. a change Blender
+        # cannot attribute to an individual object. Blender reports visibility changes ONLY this way -
+        # hiding an object with hide_set() produces a single flagless Scene update and does not
+        # mention the object at all - so this is what forces the full visibility rescan. Measured on
+        # Blender 5.0.1: raised by every hide/exclude/holdout/collection toggle and by object
+        # add/delete/relink, and NOT raised by object transforms or renames.
+        #
+        # IMPORTANT: selecting an object raises it too, with a byte-identical signature (one flagless
+        # Scene entry), and there is no way to tell the two apart from dg.updates. Since every click
+        # selects something, this flag is true on most interactive updates - so it must NOT be used to
+        # gate expensive work. Use objectsWithUpdatedVisibility (computed by syncObjVisibility, which
+        # is the pass that resolves the ambiguity) or allObjectsChanged instead.
+        self.structuralUpdate: bool = False
+
+        # True when the set of objects in the scene actually changed since the last export (added,
+        # deleted or re-linked). Unlike structuralUpdate this is a real topology signal, so it is safe
+        # to gate expensive work on.
+        self.allObjectsChanged: bool = True
+
+        # True when dg.updates contains a Collection entry. A subset of structuralUpdate, and the
+        # useful part of it: a selection change reports a Scene entry, never a Collection one, so this
+        # is NOT raised on every click and may be used to gate expensive work.
+        # Needed because changing the membership of an instanced collection is reported by tagging the
+        # collection alone - the instancer object and the instanced objects are not mentioned, and
+        # members of a collection that is not itself linked to the view layer do not even reach
+        # allObjects. See PersistedState.instancerMembership and InstancerExporter's
+        # canSkipInstanceWalk().
+        self.collectionUpdate: bool = False
 
         self.ctx: bpy.types.Context      = None
         self.dg: bpy.types.Depsgraph     = None
@@ -284,6 +396,15 @@ class ExporterContext:
 
         # Any stats that exporters wish to publish, e.g. number of entities processed
         self.stats: list[str] = []
+
+        # Counts for the whole export cycle, filled as the export runs and reported at the end.
+        # It has to be a single accumulator rather than one per pass: materials are exported from
+        # the object pass (node_export._exportObjectMaterial) long before mtl_export.run() gets to
+        # them, so a per-pass count attributes them to the wrong pass - and, because they are cached
+        # in exportedMtls by then, counts zero of them in the pass that is named after them.
+        # Shared by every exporter through _copyConstruct. Off until resetSceneStats() decides
+        # otherwise, so a context that never starts an export collects nothing.
+        self.sceneStats: SceneStats = FakeSceneStats()
 
         # There are some default plugins which may be referenced by multiple other plugins,
         # e.g. mapping etc. We only need one copy of those.
@@ -359,8 +480,14 @@ class ExporterContext:
         self.nodeTrackers           = other.nodeTrackers
         self.activeInstancers       = other.activeInstancers
         self.persistedState         = other.persistedState
-        self.allObjects             = other.allObjects
+        self._allObjects            = other._allObjects
+        self._referencedAttrNames   = other._referencedAttrNames
         self.dgUpdates              = other.dgUpdates
+        self.dgUpdatedObjects       = other.dgUpdatedObjects
+        self.structuralUpdate       = other.structuralUpdate
+        self.allObjectsChanged      = other.allObjectsChanged
+        self.collectionUpdate       = other.collectionUpdate
+        self.sceneStats             = other.sceneStats
         self.objectsWithUpdatedVisibility  = other.objectsWithUpdatedVisibility
         self.objectsWithUpdatedHoldout     = other.objectsWithUpdatedHoldout
         self.commonSettings         = other.commonSettings
@@ -376,6 +503,7 @@ class ExporterContext:
         self.fullExport             = other.fullExport
         self.exportOnly             = other.exportOnly
         self.currentFrame           = other.currentFrame
+        self.cameraOverride         = other.cameraOverride
         self.stats                  = other.stats
         self.defaultPlugins         = other.defaultPlugins
         self.objectsWithTempMeshes  = other.objectsWithTempMeshes
@@ -436,6 +564,57 @@ class ExporterContext:
         return self.ctx.scene.objects
 
     @property
+    def allObjects(self):
+        """ Every object in the scene, including those from linked collections (which are not in the
+            scene's depsgraph).
+
+            Collected by _syncAllObjects() when the scene topology changed, and on demand otherwise.
+            Never cached across export cycles - see PersistedState.allObjectsTrackIds - so it can
+            never hand back a wrapper whose object has since been deleted.
+        """
+        if self._allObjects is None:
+            self._allObjects = self._collectAllObjects()
+        return self._allObjects
+
+    @property
+    def instancedObjectTrackIds(self) -> set[int]:
+        """ The track ids of the objects the last instance walk found instanced.
+
+            An instance source does not have to be in the scene: the collection it lives in is often
+            not linked, whether it is instanced by an empty, a particle system or a geometry-nodes
+            tree. The instance pass still exports a plugin for each source and tracks it under the
+            source's own track id, so the prune passes have to be told that these ids are alive -
+            allObjects cannot see them. Read from the previous pass's snapshot, which is what the
+            trackers were filled from; pruning runs before this cycle's instance pass.
+        """
+        instanced = self.persistedState.instancedObjectsByParent
+        return set().union(*instanced.values()) if instanced else set()
+
+    @property
+    def collectedAttrNames(self):
+        """ The attribute names the scene refers to, so mesh and per-instance attributes nothing can
+            read are not exported. Both sets, see collectReferencedAttrNames(). Collected on demand,
+            once per exporter.
+        """
+        if self._referencedAttrNames is None:
+            # Imported here because reference_collector imports this module.
+            from vray_blender.exporting.reference_collector import collectReferencedAttrNames
+            self._referencedAttrNames = collectReferencedAttrNames(self)
+        return self._referencedAttrNames
+
+    @property
+    def referencedAttrNames(self):
+        """ Every referenced name. Gates the mesh attribute export. """
+        return self.collectedAttrNames['all']
+
+    @property
+    def referencedUserAttrNames(self):
+        """ Only the names read through a V-Ray user attribute. Gates the per-instance export,
+            since GeomInstancer.user_attributes is the only thing that can serve those.
+        """
+        return self.collectedAttrNames['userAttrs']
+
+    @property
     def visibleObjects(self):
         return self.persistedState.visibleObjects
 
@@ -458,36 +637,185 @@ class ExporterContext:
         if material is not None:
             self.persistedState.animatedBitmapMaterials.add(material.original.session_uid)
 
-    def calculateObjectVisibility(self):
-        """ Fill the visibility and active instancers info into ExporterContext """
+    def syncSceneState(self):
+        """ Collect the scene-wide state the export passes depend on: the depsgraph update index,
+            the active instancers and the list of all scene objects.
 
-        # Compile a list of the active instancers in the scene. There are two types of instancers:
-        #   1. Legacy, set through Data Properties -> Instancing
-        #   2. Objects made instancers through e.g. geometry nodes
-        #   3. V-Ray Fur Objects (they are also instancers if they have instancers selected)
-        # The depsgraph only includes the visible instancers. We need however a list of all instancers
-        # in the scene in order to determine which ones to delete and which to only hide.
-        legacyInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.is_instancer))
-        instancers = set((getObjTrackId(i.parent) for i in self.dg.object_instances if i.is_instance and (i.parent is not None)))
-        furInstancers = set((getObjTrackId(o) for o in self.sceneObjects if o.vray.isVRayFur))
+            Everything here used to be recomputed by walking the whole scene (and every instance)
+            on each interactive update. Now only the update index is built unconditionally; the
+            rest is cached in PersistedState and refreshed only when the scene really changed.
+            Full exports always rebuild.
 
-        self.activeInstancers = instancers.union(legacyInstancers).union(furInstancers)
+            NOTE: the active-instancer snapshot is deliberately NOT part of this call -
+            syncActiveInstancers() has to run after GeometryExporter.syncObjVisibility(). See there.
+        """
+        self._buildUpdateIndex()
+        self._syncAllObjects()
 
-        # Get a list of all objects in the scene, including objects from linked collections. We will
-        # need it in order to determine which objects can be deleted from the scene vs only be hidden.
-        self.allObjects = set([o for o in self.ctx.scene.objects])
 
-        # Add objects from linked collections as they are not included in scene's depsgraph
-        linkedCollections = [c for c in bpy.data.collections if c.library is not None]
-        for c in linkedCollections:
-            self.allObjects.update(c.all_objects)
+    def resetSceneStats(self):
+        """ Start a new set of export counts, or switch collection off entirely.
+
+            Must be called at the top of every export. In production the ExporterContext is created
+            once per job and reused for every animation frame (engine/renderer_prod.py:256), so
+            without this the counts - and the sets backing them - would grow for the whole job.
+
+            Collection is gated on the same debug_log_times property that decides whether the
+            numbers are ever printed (engine/renderer_ipr_viewport.py:150) and whether the C++ side
+            collects its own stats. With it off, every counting site becomes a no-op call.
+        """
+        collect = (self.dg is not None) and self.dg.scene.vray.Exporter.debug_log_times
+        self.sceneStats = SceneStats() if collect else FakeSceneStats()
+
+
+    def _buildUpdateIndex(self):
+        """ Index dg.updates once into the per-type sets the exporters query, and derive the
+            signals the incremental passes are driven by. """
+        geometry, transform, shading, allIds = set(), set(), set(), set()
+        updatedObjects = set()
+        structural = False
+        collection = False
+
+        for u in self.dg.updates:
+            original = u.id.original
+            allIds.add(original.session_uid)
+
+            if u.is_updated_geometry:
+                geometry.add(original.session_uid)
+            if u.is_updated_transform:
+                transform.add(original.session_uid)
+            if u.is_updated_shading:
+                shading.add(original.session_uid)
+
+            if isinstance(original, bpy.types.Object):
+                updatedObjects.add(original)
+            elif isinstance(original, (bpy.types.Scene, bpy.types.ViewLayer, bpy.types.Collection)):
+                # See the comment on self.structuralUpdate.
+                structural = True
+                collection = collection or isinstance(original, bpy.types.Collection)
 
         self.dgUpdates = {
-            'geometry':  set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_geometry)),
-            'transform': set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_transform)),
-            'shading':   set((u.id.original.session_uid for u in self.dg.updates if u.is_updated_shading)),
-            'all':       set(u.id.original.session_uid for u in self.dg.updates)
+            'geometry':  geometry,
+            'transform': transform,
+            'shading':   shading,
+            'all':       allIds,
         }
+        self.dgUpdatedObjects = updatedObjects
+        self.structuralUpdate = structural
+        self.collectionUpdate = collection
+
+
+    def _collectAllObjects(self):
+        """ Walk the scene for the set backing the allObjects property. """
+        allObjects = set(self.ctx.scene.objects)
+
+        for coll in [c for c in bpy.data.collections if c.library is not None]:
+            allObjects.update(coll.all_objects)
+
+        return allObjects
+
+
+    def _syncAllObjects(self):
+        """ Decide whether the set of objects in the scene changed since the last export, and
+            collect it when it did. Used to tell objects that can be deleted from V-Ray from those
+            that should only be hidden. """
+        cached = self.persistedState.allObjectsTrackIds
+
+        if (cached is not None) and (not self.fullExport) and (not self.structuralUpdate):
+            # Objects can only be added, removed or re-linked through a change Blender reports as a
+            # structural update, so the cached ids are still accurate here and the scene walk can be
+            # skipped altogether. _allObjects is left unset rather than carried over from the
+            # previous cycle: in production the same ExporterContext is reused for every animation
+            # frame, so carrying it would be exactly the stale-wrapper hazard the id cache avoids.
+            self._allObjects = None
+            self.allObjectsChanged = False
+            return
+
+        allObjects = self._collectAllObjects()
+        trackIds = set(getObjTrackId(obj) for obj in allObjects)
+
+        # structuralUpdate cannot distinguish a selection change from a real one, so diff the result:
+        # this is the signal the expensive passes are allowed to trust.
+        self.allObjectsChanged = (cached is None) or (trackIds != cached)
+        self.persistedState.allObjectsTrackIds = trackIds
+        self._allObjects = allObjects
+
+
+    def syncActiveInstancers(self):
+        """ The track ids of every instancer in the scene. Three kinds exist:
+              1. Legacy, set through Data Properties -> Instancing
+              2. Objects made instancers through e.g. geometry nodes
+              3. V-Ray Fur objects (also instancers when they have instancers selected)
+            The depsgraph only yields the visible instancers, but we need all of them in order to
+            tell which ones to delete from V-Ray and which to only hide.
+
+            Only kind 2 requires walking dg.object_instances, and that walk is the single most
+            expensive thing the interactive exporter does (~1 us per instance, so ~0.9 s for a
+            500k-instance scene) - so it is re-run only when an object that could plausibly be an
+            instancer changed. Everything else reuses the previous cycle's result.
+
+            MUST be called after GeometryExporter.syncObjVisibility(): an instancer enters or leaves
+            the depsgraph's instance list when its visibility changes, and objectsWithUpdatedVisibility
+            is the only precise signal for that. structuralUpdate cannot be used - Blender reports a
+            selection change identically to a hide, so it is set on nearly every click.
+        """
+        candidates = self.persistedState.instancerCandidates
+        cached = self.persistedState.syncedActiveInstancers
+        rescan = self.fullExport or self.allObjectsChanged \
+                    or (candidates is None) or (cached is None)
+
+        if not rescan:
+            # An object can only start or stop instancing if it was reported as updated. Testing the
+            # updated objects against both the known candidates and a fresh check also catches an
+            # object that has just become one (GN modifier added, show_instancer_* toggled) and one
+            # that has just stopped being one.
+            rescan = any(
+                (getObjTrackId(obj) in candidates) or __class__._isInstancerCandidate(obj)
+                for obj in self.dgUpdatedObjects
+            ) or bool(candidates & set(self.objectsWithUpdatedVisibility))
+
+        if not rescan:
+            # Copy rather than alias, so that a caller mutating ctx.activeInstancers cannot corrupt
+            # the cache the next skipped cycle will read.
+            self.activeInstancers = set(cached)
+            return
+
+        candidates = set()
+        legacyInstancers = set()
+        furInstancers = set()
+
+        for obj in self.sceneObjects:
+            if obj.is_instancer:
+                legacyInstancers.add(getObjTrackId(obj))
+            if obj.vray.isVRayFur:
+                furInstancers.add(getObjTrackId(obj))
+            if __class__._isInstancerCandidate(obj):
+                candidates.add(getObjTrackId(obj))
+
+        # Geometry-nodes instancers are invisible to Object.is_instancer, so they can only be found
+        # by walking the instances.
+        gnInstancers = set(
+            getObjTrackId(i.parent) for i in self.dg.object_instances
+            if i.is_instance and (i.parent is not None)
+        )
+
+        self.activeInstancers = gnInstancers | legacyInstancers | furInstancers
+
+        # Both caches are written here and nowhere else, so they cannot fall out of step with each
+        # other or depend on a caller remembering to persist anything.
+        self.persistedState.instancerCandidates = candidates
+        self.persistedState.syncedActiveInstancers = set(self.activeInstancers)
+
+
+    @staticmethod
+    def _isInstancerCandidate(obj: bpy.types.Object):
+        """ True if obj could be (or become) an instancer. See PersistedState.instancerCandidates. """
+        # isVRayFur is a plain BoolProperty on VRayObject (plugins/__init__.py), so it is present on
+        # every Object - read directly, the same way the loop above and every other caller does.
+        return obj.is_instancer \
+            or bool(obj.particle_systems) \
+            or any(m.type == 'NODES' for m in obj.modifiers) \
+            or obj.vray.isVRayFur
 
 
     def registerReferencedPluginParam(self, targetPluginName: str, attrName: str, value, append=False):
@@ -520,10 +848,10 @@ class ExporterContext:
         """ Mark a scene object as referenced by a plugin parameter so that it is exported even when
             it is invisible / disabled in renders. See the comment on self.referencedObjects.
 
-            Lights are ignored: they are exported by the light exporter, not the geometry force-export
-            pass that consumes self.referencedObjects, so registering one would be a no-op.
+            Two passes force-export from this: GeometryExporter._exportObjects and, for lights,
+            LightExporter._exportScene. Each skips what the other owns.
         """
-        if (obj is None) or (obj.type == 'LIGHT'):
+        if obj is None:
             return
         objTrackId = getObjTrackId(obj)
         self.referencedObjects.setdefault(objTrackId, obj)
@@ -571,6 +899,90 @@ class AttrDataLayer:
         self.name = name
         self.dataType = dataType
         self.domain = domain
+
+class MeshData:
+    """ Zero-copy description of a Blender mesh for vray.exportGeometry.
+
+        Every geometry field is a raw pointer into Blender's arrays, so the mesh must outlive
+        the export: immediately for asyncExport=False, until finishExport() otherwise. Here
+        rather than in obj_export.py because the Chaos Scatter preview builds one too.
+    """
+    NORMALS_FACE    = 0
+    NORMALS_POINT   = 1
+    NORMALS_CORNER  = 2
+
+    def __init__(self, name = ""):
+        from vray_blender.bin import VRayBlenderLib as vray
+
+        self.name           = name
+        self.normalsDomain  = MeshData.NORMALS_FACE
+        self.options        = vray.MeshExportOptions()
+        self.vertices       : DataArray = None
+        self.loopTris       : DataArray = None
+        self.loops          : DataArray = None
+        self.normals        : DataArray = None
+        self.loopTriPolys   : DataArray = None
+        self.cornerEdges    : DataArray = None
+        self.edgeCreases    : DataArray = DataArray()
+        self.edgeVertices   : DataArray = DataArray()
+        self.vertexCreases  : DataArray = DataArray()
+        self.polyMtlIndices : DataArray = None
+        self.mtlIdOffset = 0
+        self.loopUVs        : list[DataArray] = []
+        self.loopColors     : list[AttrDataLayer] = []
+
+        self.subdiv = SimpleNamespace(enabled=False, level=0, type=0, useCreases=False)
+
+        self.options.mergeChannelVerts = False
+
+    @staticmethod
+    def fromMesh(mesh, name: str, attrNames: set | None = None):
+        """ Fill the geometry pointers from an evaluated mesh. attrNames limits the exported mesh
+            attributes, None exports all. Callers set .options themselves.
+        """
+        # Function-level: blender_utils reaches back into lib.defs via ui.preferences
+        from vray_blender.lib.blender_utils import iterExportedMeshAttributes
+
+        mesh.calc_loop_triangles()
+
+        meshData = MeshData(name)
+        meshData.vertices     = DataArray(mesh.vertices[0].as_pointer(), len(mesh.vertices))
+        meshData.loops        = DataArray(mesh.loops[0].as_pointer(), len(mesh.loops))
+        meshData.loopTris     = DataArray(mesh.loop_triangles[0].as_pointer(), len(mesh.loop_triangles))
+        meshData.loopTriPolys = DataArray(mesh.loop_triangle_polygons[0].as_pointer(),
+                                          len(mesh.loop_triangle_polygons))
+        meshData.cornerEdges  = DataArray.fromAttribute(mesh, '.corner_edge')
+
+        meshData.edgeCreases = DataArray.fromAttribute(mesh, "crease_edge")
+        if meshData.edgeCreases.count > 0:
+            meshData.edgeVertices = DataArray(mesh.edges[0].as_pointer(), len(mesh.edges))
+        meshData.vertexCreases = DataArray.fromAttribute(mesh, "crease_vert")
+
+        # Blender adds 'material_index' to the mesh when extra material slots are created.
+        meshData.polyMtlIndices = DataArray.fromAttribute(mesh, 'material_index')
+
+        match mesh.normals_domain:
+            case 'FACE':
+                meshData.normals = DataArray(mesh.polygon_normals[0].as_pointer(), len(mesh.polygon_normals))
+                meshData.normalsDomain = MeshData.NORMALS_FACE
+            case 'POINT':
+                meshData.normals = DataArray(mesh.vertex_normals[0].as_pointer(), len(mesh.vertex_normals))
+                meshData.normalsDomain = MeshData.NORMALS_POINT
+            case 'CORNER':
+                meshData.normals = DataArray(mesh.corner_normals[0].as_pointer(), len(mesh.corner_normals))
+                meshData.normalsDomain = MeshData.NORMALS_CORNER
+
+        for layer in mesh.uv_layers:
+            # layer.data may be empty while the object's mesh is in edit mode
+            if len(layer.data) > 0:
+                meshData.loopUVs.append(DataArray(layer.data[0].as_pointer(), len(layer.data), layer.name))
+
+        for layer in iterExportedMeshAttributes(mesh):
+            if (attrNames is None) or (layer.name in attrNames):
+                meshData.loopColors.append(AttrDataLayer(layer.data[0].as_pointer(), len(layer.data),
+                                                         layer.name, layer.data_type, layer.domain))
+        return meshData
+
 
 @dataclass
 class NdDataArray:
@@ -734,6 +1146,10 @@ class AttrListValue:
             return 's'
         elif type(val) is AttrPlugin:
             return 'p'
+        elif type(val) is mathutils.Vector:
+            return 'v'
+        elif type(val) is mathutils.Color:
+            return 'c'
         elif type(val) is list:
             chType = 'l'
             for v in val:
@@ -762,7 +1178,12 @@ TSceneStats = TypeVar("TSceneStats", bound="SceneStats")
 
 
 class SceneStats:
-    """Statistics for a single scene export"""
+    """Statistics for a single scene export.
+
+        The 'unique*' sets and the plain counters answer different questions and both are kept: an
+        object re-exported once as a scene object and again as an instance source is two exports of
+        one object.
+    """
 
     def __init__(self):
         self.uniqueMtls     = set()
@@ -774,17 +1195,107 @@ class SceneStats:
         self.plugins: int   = 0
         self.attrs: int     = 0
 
+        # Plugins created empty only so that a reference to them resolves, see
+        # plugin_utils.forwardDeclarePlugin(). Deliberately NOT part of 'plugins': the same plugin is
+        # normally exported for real elsewhere, so adding these would count it twice. Their names do
+        # join 'uniquePlugins'.
+        self.forwardDeclared: int = 0
+
+    # Collection goes through these rather than through '+=' on the fields, so that FakeSceneStats
+    # can make the whole thing disappear. See resetSceneStats().
+    enabled = True
+
+    def addPlugin(self, pluginName: str):
+        self.plugins += 1
+        self.uniquePlugins.add(pluginName)
+
+    def addForwardDeclaredPlugin(self, pluginName: str):
+        self.forwardDeclared += 1
+        self.uniquePlugins.add(pluginName)
+
+    def addAttrs(self, count: int):
+        self.attrs += count
+
+    def addObject(self, objTrackId: int):
+        self.objs += 1
+        self.uniqueObjs.add(objTrackId)
+
+    def addMaterial(self, mtlName: str):
+        self.mtls += 1
+        self.uniqueMtls.add(mtlName)
+
     def __add__(self, v: TSceneStats):
         result = SceneStats()
         result.uniqueMtls = self.uniqueMtls.union( v.uniqueMtls)
+        result.uniqueObjs = self.uniqueObjs.union( v.uniqueObjs)
         result.uniquePlugins = self.uniquePlugins.union( v.uniquePlugins)
 
         result.mtls = self.mtls + v.mtls
         result.objs = self.objs + v.objs
         result.plugins = self.plugins + v.plugins
         result.attrs = self.attrs + v.attrs
+        result.forwardDeclared = self.forwardDeclared + v.forwardDeclared
 
         return result
+
+    def __sub__(self, v: TSceneStats):
+        """ The delta between two snapshots, so a single pass can report just its own share of the
+            cycle-wide accumulator. Only the counters are subtractable; the 'unique*' sets are
+            difference-of-sets. """
+        result = SceneStats()
+        result.uniqueMtls = self.uniqueMtls.difference(v.uniqueMtls)
+        result.uniqueObjs = self.uniqueObjs.difference(v.uniqueObjs)
+        result.uniquePlugins = self.uniquePlugins.difference(v.uniquePlugins)
+
+        result.mtls = self.mtls - v.mtls
+        result.objs = self.objs - v.objs
+        result.plugins = self.plugins - v.plugins
+        result.attrs = self.attrs - v.attrs
+        result.forwardDeclared = self.forwardDeclared - v.forwardDeclared
+
+        return result
+
+    def snapshot(self) -> SceneStats:
+        """ A copy that will not move when the export continues. """
+        result = SceneStats()
+        result.uniqueMtls = set(self.uniqueMtls)
+        result.uniqueObjs = set(self.uniqueObjs)
+        result.uniquePlugins = set(self.uniquePlugins)
+        result.mtls, result.objs = self.mtls, self.objs
+        result.plugins, result.attrs = self.plugins, self.attrs
+        result.forwardDeclared = self.forwardDeclared
+        return result
+
+
+class FakeSceneStats(SceneStats):
+    """ A no-op implementation, in the same spirit as FakeTimeStats and FakeObjTracker.
+
+        Used unless debug_log_times is on. The counters are touched once per plugin and once per
+        object, and 'uniquePlugins' would otherwise hold a name for every plugin in the scene - not
+        something to pay for, in time or in memory, when nobody is going to read the result. The
+        fields are still there and still read as zero, so the reporting code needs no guard of its
+        own beyond 'enabled'.
+    """
+    enabled = False
+
+    def addPlugin(self, pluginName: str):
+        pass
+
+    def addForwardDeclaredPlugin(self, pluginName: str):
+        pass
+
+    def addAttrs(self, count: int):
+        pass
+
+    def addObject(self, objTrackId: int):
+        pass
+
+    def addMaterial(self, mtlName: str):
+        pass
+
+    def snapshot(self):
+        # Nothing ever moves, so there is nothing to copy.
+        return self
 
 
 class NodeContext:
@@ -865,8 +1376,9 @@ class NodeContext:
     def _pushNode(self, node: bpy.types.Node):
         self.nodes.append(node)
 
-    def _cacheKey(self, node: bpy.types.Node) -> tuple:
-        return (node, self._groupInstancePath)
+    def _cacheKey(self, node: bpy.types.Node, outputId = None) -> tuple:
+        uvwKey = tuple(round(v, 6) for row in self.transformStack[-1] for v in row) if self.transformStack else None
+        return (node, self._groupInstancePath, outputId, uvwKey)
 
     def _popNode(self):
         assert self.nodes, "Nodes stack is empty"
@@ -900,16 +1412,16 @@ class NodeContext:
     def getTreeType(self):
         return self.ntree.vray.tree_type
 
-    def cacheNodePlugin(self, node: bpy.types.Node, attrPlugin: AttrPlugin = AttrPlugin()):
+    def cacheNodePlugin(self, node: bpy.types.Node, attrPlugin: AttrPlugin = AttrPlugin(), outputId = None):
         """ Caches the AttrPlugin of already exported V-Ray node.
             If the node doesn't have corresponding AttrPlugin, an empty one is added.
         """
-        self._exportedNodes[self._cacheKey(node)] = attrPlugin
+        self._exportedNodes[self._cacheKey(node, outputId)] = attrPlugin
 
-    def getCachedNodePlugin(self, node: bpy.types.Node):
+    def getCachedNodePlugin(self, node: bpy.types.Node, outputId = None):
         """ If the given node is cached returns its AttrPlugin, otherwise it returns None
         """
-        return self._exportedNodes.get(self._cacheKey(node), None)
+        return self._exportedNodes.get(self._cacheKey(node, outputId), None)
 
     def pushGroupPath(self, groupPath: tuple):
         """ Context manager: set the group instance path for the duration of exporting
@@ -945,7 +1457,7 @@ class NodeContext:
     def _reportErrors(self):
         for i, msg in enumerate(__class__._errorList):
             if i > 1:
-                debug.reportAsync('WARNING', "Multiple node export warnings")
+                debug.report('WARNING', "Multiple node export warnings")
                 break
             errMsg = f"{msg} [{self.rootObj.id_type} {self.rootObj.name}]"
             if self.sceneObj is not None:
@@ -954,7 +1466,7 @@ class NodeContext:
             if self.exporterCtx.fullExport and self.exporterCtx.interactive:
                 # To avoid pestering the user with status messages on each scene change, only
                 # report as status during the first export after switching to viewport/IPR.
-                debug.reportAsync('WARNING', errMsg)
+                debug.report('WARNING', errMsg)
             elif not self.exporterCtx.preview:
                 # In production or subsequnt changes to the scene while viewport render is running,
                 # only log the issues to the console. In preview mode, we don't want to print anything

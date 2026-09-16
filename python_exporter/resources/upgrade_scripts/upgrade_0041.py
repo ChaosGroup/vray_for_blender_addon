@@ -4,7 +4,7 @@
 
 import bpy
 from vray_blender.nodes.sockets import moveExtendSocketToBottom
-from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade, scopedForUpgrade
 from vray_blender.nodes.specials.material import addMtlMultiExtendSocket
 
 UPGRADE_INFO = {
@@ -52,17 +52,17 @@ def _upgradeTexGradRampType(ntree: bpy.types.NodeTree):
 
 
 def run():
-    for material in bpy.data.materials:
+    for material in scopedForUpgrade(bpy.data.materials):
         _upgradeTree(material.node_tree)
         _upgradeTexDirtRadius(material.node_tree)
         _upgradeTexGradRampType(material.node_tree)
 
-    for world in bpy.data.worlds:
+    for world in scopedForUpgrade(bpy.data.worlds):
         if getattr(world, 'use_nodes', False):
             _upgradeTexDirtRadius(world.node_tree)
             _upgradeTexGradRampType(world.node_tree)
 
-    for group in bpy.data.node_groups:
+    for group in scopedForUpgrade(bpy.data.node_groups):
         if hasattr(group, 'vray') and group.vray.tree_type == 'OBJECT':
             _upgradeTexDirtRadius(group)
             _upgradeTexGradRampType(group)

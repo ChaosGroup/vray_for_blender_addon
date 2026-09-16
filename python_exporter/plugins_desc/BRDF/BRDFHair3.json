@@ -1,0 +1,259 @@
+
+{
+    "Desciption" : "BRDFHair3",
+    "ID" : "BRDFHair3",
+    "Name" : "Hair 3",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "overall_color",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ],
+            "desc" : "Overall color multiplier",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "General parameters",
+                "tab" : "V-Ray Hair 3"
+            }
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Transparency",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "diffuse_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Diffuse hair color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Diffuse"
+            }
+        },
+        
+        {
+            "attr" : "diffuse_amount",
+            "default" : 1.0,
+            "desc" : "Multiplier for the diffuse color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_specular",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Primary specular color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. specular",
+                "rollout" : "Primary specular"
+            }
+        },
+        
+        {
+            "attr" : "primary_specular_amount",
+            "default" : 1.0,
+            "desc" : "Multiplier for the primary specular color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. specular amount",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "primary_glossiness",
+            "default" : 0.0,
+            "desc" : "Primary glossiness",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Prim. glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_lock_to_transmission",
+            "default" : true,
+            "desc" : "true to derive the secondary specular color from the transmission color",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Sec. lock to transmission",
+                "rollout" : "Secondary specular"
+            }
+        },
+        
+        {
+            "attr" : "secondary_specular",
+            "default" : [ 0.0, 0.0, 0.0, 1.0 ],
+            "desc" : "Secondary specular color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. specular"
+            }
+        },
+        
+        {
+            "attr" : "secondary_specular_amount",
+            "default" : 1.0,
+            "desc" : "Multiplier for the secondary specular color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. specular amount",
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "secondary_glossiness",
+            "default" : 0.0,
+            "desc" : "Secondary glossiness",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Sec. glossiness",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transmission",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Transmission color",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "rollout" : "Transmission"
+            }
+        },
+        
+        {
+            "attr" : "transmission_amount",
+            "default" : 1.0,
+            "desc" : "Multiplier for the transmission color",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "max" : 1000.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transmission_glossiness_length",
+            "default" : 0.0,
+            "desc" : "Transmission glossiness along strand length",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Trans. gloss. length",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "transmission_glossiness_width",
+            "default" : 0.0,
+            "desc" : "Transmission glossiness across strand width",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "display_name" : "Trans. gloss. width",
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "opaque_for_shadows",
+            "default" : false,
+            "desc" : "true to always compute the material as opaque for shadow rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "rollout" : "Options"
+            }
+        },
+        
+        {
+            "attr" : "opaque_for_gi",
+            "default" : false,
+            "desc" : "true to always compute the material as opaque for GI rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Opaque for GI"
+            }
+        },
+        
+        {
+            "attr" : "simplify_for_gi",
+            "default" : true,
+            "desc" : "true to use a simpler and less precise representation of the BRDF for GI rays",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Simplify for GI"
+            }
+        },
+        
+        {
+            "attr" : "use_cached_gi",
+            "default" : true,
+            "desc" : "true to use the light cache/irradiance map; false to always use brute force GI for the hair",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Use cached GI"
+            }
+        },
+        
+        {
+            "attr" : "transmission_in_specular",
+            "default" : false,
+            "desc" : "true to put transmission in specular render elements for compositing with light select",
+            "type" : "BOOL",
+            "ui" : 
+            {
+                "display_name" : "Comp in specular"
+            }
+        },
+        
+        {
+            "attr" : "light_multiplier",
+            "default" : 1.0,
+            "desc" : "A multiplier for the direct lighting of the hair; could be useful to brighten up the result when not using GI",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "rollout" : "Advanced"
+            }
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

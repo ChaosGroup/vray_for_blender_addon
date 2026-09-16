@@ -1,0 +1,13 @@
+{
+    "ID": "TexSimplexNoise",
+    "Name": "V-Ray Simplex Noise",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui": {
+                "display_name": "Mapping"
+            }
+        }
+    ]
+}

@@ -84,11 +84,8 @@ class VRayNodeUVWMapping(VRayNodeBase):
 
     def draw_buttons(self, context, layout):
         box = layout.column()
-        isOnlyRandomizerConnected = self._isOnlyRandomizerConnected()
-
-        if not isOnlyRandomizerConnected:
-            box.row().prop(self, 'mapping_node_type', expand=True)
-            box.separator()
+        box.row().prop(self, 'mapping_node_type', expand=True)
+        box.separator()
 
         mappingPluginType = _getMappingPluginType(self)
         mapPluginDesc = plugins.getPluginModule(mappingPluginType)
@@ -103,11 +100,8 @@ class VRayNodeUVWMapping(VRayNodeBase):
 
     def draw_buttons_ext(self, context, layout):
         box = layout.column()
-        isOnlyRandomizerConnected = self._isOnlyRandomizerConnected()
-
-        if not isOnlyRandomizerConnected:
-            box.row().prop(self, 'mapping_node_type', expand=True)
-            box.separator()
+        box.row().prop(self, 'mapping_node_type', expand=True)
+        box.separator()
 
         mappingPluginType = _getMappingPluginType(self)
         mapPluginDesc = plugins.getPluginModule(mappingPluginType)
@@ -123,24 +117,7 @@ class VRayNodeUVWMapping(VRayNodeBase):
             self
         )
 
-
-    def update(self):
-        # Called on node tree topology update
-        if self._isOnlyRandomizerConnected() and (self.mapping_node_type != 'UV'):
-            self.mapping_node_type = 'UV'
-
-        vrayNodeUpdate(self)
-
-
-    def _isOnlyRandomizerConnected(self):
-        # Return True if all links of the output socket are to UVWGenRandomizer nodes
-        outSock = self.outputs[0]
-        farLinks = getActiveOutputFarNodeLinks(outSock)
-        randomizerLinksCount = sum(1 for l in farLinks if l.to_socket.node.bl_idname == 'VRayNodeUVWGenRandomizer')
-
-        return (randomizerLinksCount > 0) and (randomizerLinksCount == len(farLinks))
-
-
+    
 def register():
     for pluginType in {
                      'UVWGenMayaPlace2dTexture',

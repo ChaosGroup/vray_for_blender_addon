@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import isImportScopeActive
 from vray_blender.lib.blender_utils import getVRayPreferences
 
 def _transferDevices(newDevices, perSceneDevices):
@@ -29,4 +30,6 @@ def run():
     prefs.loaded_from_scene = True
 
 def check():
+    if isImportScopeActive():
+        return False
     return not getVRayPreferences().loaded_from_scene

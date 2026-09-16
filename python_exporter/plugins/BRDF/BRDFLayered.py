@@ -172,7 +172,7 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
         layersCount = _getLayersCount(node)
 
         if layersCount == 0:
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         for i in range(layersCount, -1, -1):
             brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(i)
@@ -188,9 +188,11 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
                 node.inputs.remove(brdfSock)
                 node.inputs.remove(weightSock)
                 node.inputs.remove(opacitySock)
-                break
+                return {'FINISHED'}
 
-        return {'FINISHED'}
+        # Nothing was removed, so return CANCELLED to avoid an empty undo step (VBLD-2686).
+        self.report({'WARNING'}, "Cannot remove linked coat materials. Unlink and try again.")
+        return {'CANCELLED'}
 
 
 def _getLayersCount(node: bpy.types.Node):

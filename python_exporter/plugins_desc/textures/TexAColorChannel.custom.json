@@ -1,0 +1,53 @@
+{
+    "ID": "TexAColorChannel",
+    "Name": "V-Ray Color Channel",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "mode",
+            "default": "0",
+            "desc": "Which component of the input color to output",
+            "items": [
+                [ "0", "Red", "Red channel of the input color" ],
+                [ "1", "Green", "Green channel of the input color" ],
+                [ "2", "Blue", "Blue channel of the input color" ],
+                [ "3", "Alpha", "Alpha channel of the input color" ],
+                [ "4", "Intensity", "Intensity of the input color" ]
+            ],
+            "type": "ENUM",
+            "ui": {
+                "display_name": "Channel"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "mode" },
+                    { "layout": "SEPARATOR" },
+                    { "name": "color_a" },
+                    { "name": "mult_a" }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "mode" }
+                ]
+            }
+        ],
+        "input_sockets": [
+            { "name": "color_a" },
+            { "name": "mult_a" }
+        ],
+        "internal_links": {
+            "*": ["Input Color"]
+        }
+    }
+}

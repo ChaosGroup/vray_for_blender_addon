@@ -37,6 +37,9 @@
                 "soft_max": 10.0,
                 "spin_step": 0.1
             },
+            "options": {
+                "shadowed": true
+            },
             "update": "onUpdatePreview"
         },
         {
@@ -61,6 +64,9 @@
         },
         {
             "attr": "flip_axis",
+            "options": {
+                "shadowed": true
+            },
             "update": "onUpdatePreview"
         },
         {
@@ -87,6 +93,15 @@
             "attr": "basis_matrix",
             "type": "TRANSFORM",
             "desc": "Basis matrix for the initial geometry transform",
+            "default": [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "options": {
+               "derived": true
+            }
+        },
+        {
+            "attr": "applied_transform_backup",
+            "type": "TRANSFORM",
+            "desc": "Backup of the applied transform, captured while the basis is valid. Used to restore rotation/scale when a scale of 0 collapses the preview basis",
             "default": [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
             "options": {
                "derived": true

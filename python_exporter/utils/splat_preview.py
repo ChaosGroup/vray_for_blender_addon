@@ -12,8 +12,8 @@
     The preview is modeled on the V-Ray for C4D 'Preview' group:
       - Disabled / Bounding Box / Limited Point Cloud / Unlimited Point Cloud
       - per-point colors (average color of each Gaussian)
-      - point radius with an optional automatic multiplier derived from the on-screen extent
-        and the point count
+      - point radius, either a fixed pixel size or an automatic one derived from the spacing
+        between the points being drawn
       - the preview honors the splat's flip_axis and scale so it matches the render
 
     The preview points are *derived* data (like the V-Ray Proxy preview): vray_tools.vray_splat
@@ -27,9 +27,8 @@ import os
 import bpy
 import gpu
 import numpy as np
-from bpy_extras import view3d_utils
 from gpu_extras.batch import batch_for_shader
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Vector, kdtree
 
 from vray_blender.lib import blender_utils
 from vray_blender.vray_tools import vray_splat
@@ -41,6 +40,13 @@ _MAX_POINT_PIXELS = 64.0
 # Pixels per unit of preview_point_radius when auto radius is off.
 _BASE_POINT_PX = 4.0
 
+# How many points to measure when estimating the cloud's inter-point spacing.
+_SPACING_SAMPLES = 2000
+
+# How many spacings wide an automatically sized point is drawn. Points that just touch leave
+# gaps wherever the spacing varies, so they are overlapped a little to read as a surface.
+_POINT_OVERLAP = 2.0
+
 # GeomGaussians.preview_type enum values (see GeomGaussians.custom.json).
 _PREVIEW_DISABLED  = '0'
 _PREVIEW_BBOX      = '1'
@@ -50,8 +56,13 @@ _PREVIEW_UNLIMITED = '3'
 # filePath -> {'coords': (N,3) float32, 'colors': (N,4) float32, 'bbox': (Vector, Vector)} or None.
 _previewData: dict[str, dict | None] = {}
 
-# (filePath, count) -> GPU batch of subsampled points (None if there is nothing to draw).
+# (filePath, count) -> (GPU batch of subsampled points, inter-point spacing), (None, 0.0) if
+# there is nothing to draw.
 _previewBatches: dict = {}
+
+# Points are sized in world space, so the shader has to divide by the clip-space w; the builtin
+# POINT_FLAT_COLOR takes a uniform pixel size only. Built on first draw (needs a GPU context).
+_pointShader = None
 
 # Names of Gaussian splat objects in the current scene (None = cache invalid, rebuilt lazily on next draw).
 _splatObjectNames: set[str] | None = None
@@ -60,6 +71,68 @@ _drawHandler = None
 
 # Local indices of the 12 bounding-box edges, for the corner ordering produced in _drawBoundingBox.
 _BBOX_EDGES = ((0, 1), (2, 3), (4, 5), (6, 7), (0, 2), (1, 3), (4, 6), (5, 7), (0, 4), (1, 5), (2, 6), (3, 7))
+
+
+def _getPointShader():
+    """ Shader drawing each point at a world-space radius.
+
+        'worldSizeFactor' folds the radius and the projection scale into a single number, so the
+        per-vertex work is one divide by the clip-space w - the point's own view depth. A point
+        therefore keeps a fixed size *in the scene* and foreshortens with distance, instead of the
+        whole cloud sharing one pixel size derived from the camera. Setting 'worldSizeFactor' to 0
+        selects the fixed 'pixelSize' instead (manual radius).
+
+        w is 1 under an orthographic view, so the same expression covers both projections.
+    """
+    global _pointShader
+    if _pointShader is None:
+        iface = gpu.types.GPUStageInterfaceInfo("vray_splat_point_iface")
+        iface.flat('VEC4', "finalColor")
+
+        info = gpu.types.GPUShaderCreateInfo()
+        info.push_constant('MAT4', "ModelViewProjectionMatrix")
+        info.push_constant('FLOAT', "worldSizeFactor")
+        info.push_constant('FLOAT', "pixelSize")
+        info.vertex_in(0, 'VEC3', "pos")
+        info.vertex_in(1, 'VEC4', "color")
+        info.vertex_out(iface)
+        info.fragment_out(0, 'VEC4', "fragColor")
+        info.vertex_source(
+            "void main()"
+            "{"
+            "  vec4 clipPos = ModelViewProjectionMatrix * vec4(pos, 1.0f);"
+            "  gl_Position = clipPos;"
+            "  float size = (worldSizeFactor > 0.0f) ? worldSizeFactor / max(clipPos.w, 1e-4f) : pixelSize;"
+            f"  gl_PointSize = clamp(size, 1.0f, {_MAX_POINT_PIXELS}f);"
+            "  finalColor = color;"
+            "}"
+        )
+        info.fragment_source(
+            "void main()"
+            "{"
+            "  fragColor = finalColor;"
+            "}"
+        )
+        _pointShader = gpu.shader.create_from_info(info)
+    return _pointShader
+
+
+def _pointSpacing(coords) -> float:
+    """ Median distance between neighbouring points, in the model's own units.
+
+        This is the cloud's actual density, which is what an automatic point radius wants: it does
+        not depend on the camera, so the drawn size can never jump as the view moves. Sampling a
+        fixed number of points keeps the cost flat (~0.1s for a 100k-point cloud) and it is paid
+        once per cached batch.
+    """
+    kd = kdtree.KDTree(coords.shape[0])
+    for i, co in enumerate(coords):
+        kd.insert(co, i)
+    kd.balance()
+
+    step = max(1, coords.shape[0] // _SPACING_SAMPLES)
+    # find_n's first hit is the query point itself, so the neighbour is the second.
+    return float(np.median([kd.find_n(co, 2)[1][2] for co in coords[::step]]))
 
 
 def _getPreviewData(filePath: str):
@@ -78,7 +151,9 @@ def _dropBatches(filePath: str):
 
 
 def _getPointsBatch(filePath: str, count: int):
-    """ Return a cached GPU points batch with up to `count` (subsampled) points.
+    """ Return a cached (GPU points batch, inter-point spacing) for up to `count` (subsampled)
+        points. The spacing is measured on the points actually drawn, so thinning the preview
+        widens it and the points grow to match.
 
         At most one batch is kept per file path: building a batch for a new `count`
         first drops the file's previous batch. Otherwise dragging the preview_point_count
@@ -92,9 +167,9 @@ def _getPointsBatch(filePath: str, count: int):
     _dropBatches(filePath)
 
     data = _getPreviewData(filePath)
-    if not data or data['coords'].shape[0] == 0:
-        _previewBatches[key] = None
-        return None
+    if not data or data['coords'].shape[0] < 2:
+        _previewBatches[key] = (None, 0.0)
+        return _previewBatches[key]
 
     coords = data['coords']
     colors = data['colors']
@@ -106,10 +181,8 @@ def _getPointsBatch(filePath: str, count: int):
         coords = np.ascontiguousarray(coords[::step][:count])
         colors = np.ascontiguousarray(colors[::step][:count])
 
-    # POINT_FLAT_COLOR writes gl_PointSize from its 'size' uniform, so the point size is honored
-    # across GPU backends (unlike SMOOTH_COLOR, whose points ignore the requested size).
-    shader = gpu.shader.from_builtin('POINT_FLAT_COLOR')
-    _previewBatches[key] = batch_for_shader(shader, 'POINTS', {"pos": coords, "color": colors})
+    batch = batch_for_shader(_getPointShader(), 'POINTS', {"pos": coords, "color": colors})
+    _previewBatches[key] = (batch, _pointSpacing(coords))
     return _previewBatches[key]
 
 
@@ -183,36 +256,29 @@ def _gaussianTransform(obj: bpy.types.Object) -> Matrix:
     return obj.matrix_world @ flipMatrix @ Matrix.Scale(pg.scale, 4)
 
 
-def _computePointSizePx(obj: bpy.types.Object, transform: Matrix, bbox, count: int) -> float:
-    """ Point size in pixels.
-        - Auto radius: derived from the model's on-screen extent and point count, so points
-          scale with zoom and shrink for denser clouds (preview_point_radius fine-tunes it).
+def _computeSizeUniforms(obj: bpy.types.Object, transform: Matrix, spacing: float):
+    """ The (worldSizeFactor, pixelSize) pair for _getPointShader.
+        - Auto radius: each point is drawn a fixed multiple of the spacing between the points
+          being drawn, so the cloud reads as a surface at every zoom level and thinning it with
+          preview_point_count widens the points to compensate (preview_point_radius fine-tunes it).
         - Manual: preview_point_radius scaled to a fixed pixel size.
     """
     gg = obj.vray.GeomGaussians
     radius = gg.preview_point_radius
 
-    if gg.preview_auto_radius and bbox is not None and count > 0:
-        region = bpy.context.region
-        rv3d = bpy.context.region_data
-        if region and rv3d:
-            bbMin, bbMax = bbox
-            corners = [transform @ Vector((x, y, z))
-                       for x in (bbMin.x, bbMax.x) for y in (bbMin.y, bbMax.y) for z in (bbMin.z, bbMax.z)]
-            screen = [p for p in (view3d_utils.location_3d_to_region_2d(region, rv3d, c) for c in corners) if p is not None]
-            if len(screen) >= 2:
-                xs = [p.x for p in screen]
-                ys = [p.y for p in screen]
-                # Gaussian splats are surface reconstructions, so the projected points roughly
-                # tile the on-screen area of the model: a point covers ~ area / count, hence its
-                # size is ~ sqrt(area / count). This adapts to zoom (area) and density (count) and
-                # is independent of scene scale (it is measured in screen pixels). Using sqrt
-                # (surface) rather than a cube-root (volume) keeps the points from being huge.
-                screenArea = max((max(xs) - min(xs)) * (max(ys) - min(ys)), 1.0)
-                size = math.sqrt(screenArea / count) * radius
-                return min(max(size, 1.0), _MAX_POINT_PIXELS)
+    if not gg.preview_auto_radius or spacing <= 0.0:
+        return 0.0, radius * _BASE_POINT_PX
 
-    return min(max(radius * _BASE_POINT_PX, 1.0), _MAX_POINT_PIXELS)
+    region = bpy.context.region
+    if not region:
+        return 0.0, radius * _BASE_POINT_PX
+
+    # The spacing is in the model's own units; the transform carries it into the scene.
+    worldSpacing = spacing * sum(transform.col[i].to_3d().length for i in range(3)) / 3.0
+    # Clip space spans [-1, 1] over the region height, so a length L at depth w covers
+    # L * projScale * (height / 2) / w pixels. The shader supplies the division by w.
+    projScale = gpu.matrix.get_projection_matrix()[1][1]
+    return worldSpacing * _POINT_OVERLAP * projScale * (region.height / 2.0) * radius, 0.0
 
 
 def _drawBoundingBox(obj: bpy.types.Object, transform: Matrix, bbox):
@@ -252,7 +318,7 @@ def drawSplatPreview():
     if _splatObjectNames is None:
         _splatObjectNames = {o.name for o in bpy.context.scene.objects if o.vray.isVRayGaussian}
 
-    pointShader = gpu.shader.from_builtin('POINT_FLAT_COLOR')
+    pointShader = _getPointShader()
 
     for objName in _splatObjectNames:
         obj = bpy.data.objects.get(objName)
@@ -283,9 +349,11 @@ def drawSplatPreview():
 
         total = data['coords'].shape[0]
         count = total if previewType == _PREVIEW_UNLIMITED else min(gg.preview_point_count, total)
-        batch = _getPointsBatch(filePath, count)
+        batch, spacing = _getPointsBatch(filePath, count)
         if not batch:
             continue
+
+        worldSizeFactor, pixelSize = _computeSizeUniforms(obj, transform, spacing)
 
         prevDepthTest = gpu.state.depth_test_get()
         gpu.state.depth_test_set('LESS_EQUAL')
@@ -293,7 +361,8 @@ def drawSplatPreview():
         gpu.matrix.push()
         gpu.matrix.multiply_matrix(transform)
         pointShader.bind()
-        pointShader.uniform_float("size", _computePointSizePx(obj, transform, data['bbox'], count))
+        pointShader.uniform_float("worldSizeFactor", worldSizeFactor)
+        pointShader.uniform_float("pixelSize", pixelSize)
         batch.draw(pointShader)
         gpu.matrix.pop()
         gpu.state.program_point_size_set(False)

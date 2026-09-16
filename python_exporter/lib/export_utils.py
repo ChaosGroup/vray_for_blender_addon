@@ -21,7 +21,9 @@ from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.exporting.tools import getLinkedFromSocket, getNodeLinkToNode
 from dataclasses import dataclass
 
-NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault", "MtlSingleBRDF" ]
+# GeomScatter: exported with vrayPropGroup=None; writing descriptor defaults for its unset
+# texture params is destructive (e.g. surface_random_density_map=0.0 zeroes the density).
+NON_DEFAULT_EXPORTABLE_TYPES = [ "Node", "CameraDefault", "MtlSingleBRDF", "GeomScatter" ]
 
 def _getOverridesFor(ctx: ExporterContext, pluginType: str):
     mode = "PRODUCTION"
@@ -49,18 +51,40 @@ def _convertEnumValue(value):
     return str(value)
 
 
-def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
-    """ Export plugin from a pre-filled PluginDesc object.
-
-    Returns:
-        AttrPlugin: The exported plugin.
+class ParamSpec:
+    """ Precomputed, object-independent export spec for a single plugin parameter.
+        All the static per-parameter filter/flag decisions (derived, output/skipped type,
+        linked_only, animatable) are resolved once per plugin type instead of once per object.
     """
-    overriddenParams = _getOverridesFor(ctx, pluginDesc.type)
-    pluginModule = getPluginModule(pluginDesc.type)
+    __slots__ = ('attr', 'type', 'desc', 'animatable', 'skipUnlessExplicit')
+
+    def __init__(self, attr, type, desc, animatable, skipUnlessExplicit):
+        self.attr = attr
+        self.type = type
+        self.desc = desc
+        self.animatable = animatable
+        self.skipUnlessExplicit = skipUnlessExplicit
+
+
+class ExportDesc:
+    __slots__ = ('params', 'isNonDefaultExportable')
+
+    def __init__(self, params, isNonDefaultExportable):
+        self.params = params
+        self.isNonDefaultExportable = isNonDefaultExportable
+
+
+def _getExportDesc(pluginModule, pluginType: str) -> ExportDesc:
+    # Cache the descriptor on the plugin module itself (like ParametersByAttr). The plugin schema
+    # is fixed, so it is built once per plugin type.
+    exportDesc = getattr(pluginModule, 'ExportDesc', None)
+    if exportDesc is not None:
+        return exportDesc
 
     nonExportableParams = getNonExportablePluginProperties(pluginModule)
     pluginAnimatable = pluginModule.Options.get("animatable", True)
 
+    params = []
     for attrDesc in pluginModule.Parameters:
         attrName = attrDesc['attr']
         attrType = attrDesc['type']
@@ -71,9 +95,7 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
 
         options = attrDesc.get('options', {})
 
-        # Some attributes are not plugin properties ( i.e. they are only used in Blender ),
-        # but are added to the json descriptions to make them available through the standard
-        # property description mechanism. They are marked with a 'derived' field set to 'true'
+        # 'derived' attributes are Blender-only and never exported.
         if options.get('derived', False):
             continue
 
@@ -81,24 +103,55 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
         if attrType in attribute_types.NodeOutputTypes:
             continue
 
-        isExplicit = attrName in pluginDesc.attrs
+        # Skipped types and linked-only inputs are exported only when the value is explicit
+        # (present in pluginDesc.attrs). That check depends on the object, so it is deferred.
+        skipUnlessExplicit = (attrType in attribute_types.SkippedTypes) or \
+            (attrType in attribute_types.AllNodeInputTypes and options.get('linked_only', False))
 
-        # Type could be skipped, but mappedParams could contain a manually defined value for it
-        if attrType in attribute_types.SkippedTypes and not isExplicit:
+        paramAnimatable = (pluginAnimatable and options.get("animatable", pluginAnimatable))
+
+        params.append(ParamSpec(attrName, attrType, attrDesc, paramAnimatable, skipUnlessExplicit))
+
+    exportDesc = ExportDesc(params, pluginType in NON_DEFAULT_EXPORTABLE_TYPES)
+    pluginModule.ExportDesc = exportDesc
+    return exportDesc
+
+
+def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
+    """ Export plugin from a pre-filled PluginDesc object.
+
+    Returns:
+        AttrPlugin: The exported plugin.
+    """
+    pluginModule = getPluginModule(pluginDesc.type)
+    exportDesc = _getExportDesc(pluginModule, pluginDesc.type)
+
+    overriddenParams = _getOverridesFor(ctx, pluginDesc.type)
+    attrs = pluginDesc.attrs
+    vrayPropGroup = pluginDesc.vrayPropGroup
+    isNonDefaultExportable = exportDesc.isNonDefaultExportable
+    renderer = ctx.renderer
+    pluginName = pluginDesc.name
+
+    # Attributes are counted here rather than at the call sites: this is the bottom of every generic
+    # plugin export, so one counter covers settings, materials, node trees and object properties
+    # alike. Accumulated in a local and committed once - this is the hottest loop in the exporter.
+    # The plugin itself is counted by plugin_utils.createPlugin(), which every caller of this
+    # function has already gone through.
+    exportedAttrs = 0
+
+    for spec in exportDesc.params:
+        attrName = spec.attr
+        attrType = spec.type
+        isExplicit = attrName in attrs
+
+        if spec.skipUnlessExplicit and not isExplicit:
             continue
-
-        # Skip attributes that should only be exported when their input socket is linked.
-        if attrType in attribute_types.AllNodeInputTypes \
-                and options.get('linked_only', False) \
-                and (not isExplicit):
-            continue
-
-        value = None
 
         if attrName in overriddenParams:
             # Use the mode-specific user override read from the per-rendering-mode overrides/*.json file.
             value = overriddenParams[attrName]
-        elif attrName in pluginDesc.attrs:
+        elif isExplicit:
             # Use the value set from the export code for the plugin. If a node is created for the plugin,
             # the values of the node input sockets have already been added to the attrs collection.
             value = pluginDesc.getAttribute(attrName)
@@ -108,43 +161,46 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
                 continue
         else:
             # There is no node for the plugin, get the value from its propGroup
-            value = getattr(pluginDesc.vrayPropGroup, attrName, None)
+            value = getattr(vrayPropGroup, attrName, None)
 
         if value is None:
-            if pluginDesc.type in NON_DEFAULT_EXPORTABLE_TYPES:
+            if isNonDefaultExportable:
                 continue
             else:
-                value = attrDesc['default']
+                value = spec.desc['default']
 
         if value is None:
             # 'None' is a valid default for some attribute types
             value = AttrPlugin()
 
         # Handle special attribute types
-        match attrType:
-            case 'ENUM':
-                value = _convertEnumValue(value)
+        if attrType == 'ENUM':
+            value = _convertEnumValue(value)
 
-            case 'STRING':
-                subtype = attrDesc.get('subtype')
+        elif attrType == 'STRING':
+            subtype = spec.desc.get('subtype')
 
-                if subtype in ('FILE_PATH', 'VRAY_FILE_PATH'):
-                    value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
-                elif subtype == 'DIR_PATH':
-                    # Add a trailing slash to directory paths
-                    value = os.path.normpath(value) + os.sep
+            if subtype in ('FILE_PATH', 'VRAY_FILE_PATH'):
+                value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
+            elif subtype == 'DIR_PATH':
+                # Add a trailing slash to directory paths
+                value = os.path.normpath(value) + os.sep
 
-            case "COLOR_TEXTURE":
-                # Change the name of the attribute to export to the correct sub-attribute of the meta attribute.
-                attrName = attrDesc['tex_prop'] if type(value) == AttrPlugin else attrDesc['color_prop']
+        elif attrType == 'COLOR_TEXTURE':
+            # Change the name of the attribute to export to the correct sub-attribute of the meta attribute.
+            attrName = spec.desc['tex_prop'] if type(value) == AttrPlugin else spec.desc['color_prop']
 
-                # Resetting the 'tex_prop' because most plugins will use it instead of 'color_prop'.
-                if attrName == attrDesc['color_prop']:
-                    plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrDesc['tex_prop'], AttrPlugin())
+            # Resetting the 'tex_prop' because most plugins will use it instead of 'color_prop'.
+            if attrName == spec.desc['color_prop']:
+                plugin_utils.updateValue(renderer, pluginName, spec.desc['tex_prop'], AttrPlugin())
+            elif (flatColor := attrs.get(spec.desc['color_prop'])) is not None:
+                # Texture linked: also write the flat color so V-Ray falls back to it, not its default.
+                plugin_utils.updateValue(renderer, pluginName, spec.desc['color_prop'], flatColor)
 
-        paramAnimatable = (pluginAnimatable and options.get("animatable", pluginAnimatable))
-        plugin_utils.updateValue(ctx.renderer, pluginDesc.name, attrName, attribute_utils.convertUIValueToVRay(attrDesc, value), animatable=paramAnimatable)
+        plugin_utils.updateValue(renderer, pluginName, attrName, attribute_utils.convertUIValueToVRay(spec.desc, value), animatable=spec.animatable, attrType=attrType)
+        exportedAttrs += 1
 
+    ctx.sceneStats.addAttrs(exportedAttrs)
 
     return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
 
@@ -169,7 +225,7 @@ def _exportTemplates(ctx: ExporterContext, pluginDesc: PluginDesc):
 # NOTE: You could use this function from inside module's 'exportCustom'
 # @param overrideParams - override the default param export
 def exportPluginCommon(ctx: ExporterContext, pluginDesc: PluginDesc) -> AttrPlugin:
-    vray.pluginCreate(ctx.renderer, pluginDesc.name, pluginDesc.type)
+    plugin_utils.createPlugin(ctx, pluginDesc.name, pluginDesc.type)
 
     _exportTemplates(ctx, pluginDesc)
     return exportPluginParams(ctx, pluginDesc)
@@ -364,8 +420,25 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
     activeMeshesUpdateInfo = set()
 
 
-    def isUpdatedPair(updatedObjId, parentObj, geomObj):
-        return any(updatedObjId == ob or getObjTrackId(ob) not in exporterCtx.persistedState.processedObjects for ob in (parentObj, geomObj))
+    # The ids of everything the depsgraph reported, resolved once instead of re-iterating
+    # dg.updates for every parent object below.
+    updatedIds = exporterCtx.dgUpdates['all']
+    processedObjects = exporterCtx.persistedState.processedObjects
+
+    def isUpdatedPair(parentObj, geomObj):
+        """ A pair is updated if the depsgraph reported either half, or if either half has never
+            been exported.
+
+            NOTE - deliberate behaviour change: this used to be evaluated inside a
+            `for u in exporterCtx.dg.updates` loop, so an empty update list registered nothing even
+            for a pair the exporter had never seen. The never-exported half has to be exported
+            regardless of what the depsgraph reports, so gating it on dg.updates being non-empty was
+            wrong; the loop was only ever there to resolve the reported ids, which are now indexed
+            once by ExporterContext._buildUpdateIndex(). Reachable only where dg.updates can be
+            empty (dg.updates is populated only inside depsgraph_update_post), i.e. never in IPR.
+        """
+        return any((getObjTrackId(ob) in updatedIds) or (getObjTrackId(ob) not in processedObjects)
+                   for ob in (parentObj, geomObj))
 
     def registerPair(parentObj, geomObj, ntree=None):
         parentTrackId = getObjTrackId(parentObj)
@@ -378,10 +451,8 @@ def collectConnectedMeshInfo(exporterCtx: ExporterContext, parentObjects: list[b
             updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
             return
 
-        for u in exporterCtx.dg.updates:
-            updatedObjId = u.id.original
-            if isUpdatedPair(updatedObjId, parentObj, geomObj) or (ntree == updatedObjId):
-                updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
+        if isUpdatedPair(parentObj, geomObj) or ((ntree is not None) and (getObjTrackId(ntree) in updatedIds)):
+            updatedConnectedMeshes.add(UpdatedConnectedMeshInfo(parentObj, geomTrackId))
 
     def getNodeTree(obj: bpy.types.Object, treePath: str):
         props = obj
@@ -474,7 +545,7 @@ def exportObjProperties(obj: bpy.types.Object, exporterCtx: ExporterContext, ren
 
 def isObjectGeomUpdated(exporterCtx: ExporterContext, objTrackId: int):
     """ Check if the object needs to be updated. """
-    isFirstMotionBlurFrame = (exporterCtx.commonSettings.useMotionBlur and exporterCtx.motionBlurBuilder.isFirstFrame(exporterCtx.currentFrame))
+    isFirstMotionBlurFrame = (exporterCtx.commonSettings.exportMotionData and exporterCtx.motionBlurBuilder.isFirstFrame(exporterCtx.currentFrame))
 
     return exporterCtx.fullExport \
             or (objTrackId in exporterCtx.dgUpdates['geometry']) \

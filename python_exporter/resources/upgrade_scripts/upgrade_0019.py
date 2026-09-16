@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scoped
 
 def run():
-    for scene in bpy.data.scenes:
+    for scene in scoped(bpy.data.scenes):
         if not scene.world:
             continue
         denoiser = scene.world.vray.RenderChannelDenoiser
@@ -14,7 +15,7 @@ def run():
 
 
 def check():
-    for scene in bpy.data.scenes:
+    for scene in scoped(bpy.data.scenes):
         if hasattr(scene.world, "vray") and scene.world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser.enabled:
             return True
     return False

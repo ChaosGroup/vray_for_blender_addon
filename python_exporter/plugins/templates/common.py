@@ -46,7 +46,7 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
         row = layout.row()
         row.enabled = item.enabled
 
-        iconID = ''
+        iconID = 'X'
 
         # Set the icon of the list item corresponding to the object's type.
         # If the item is not valid (the object/collection it refers to has been deleted from the scene)
@@ -54,15 +54,14 @@ class VRAY_UL_SimpleList(bpy.types.UIList):
         # if the scene is updated and the UI  is redrawn correctly. However ATM we are not sure that all use
         # cases have been covered so the X icon will make it easier to identify the items
         # whose objects have been deleted in case removal of list items does not work as expected.
-        match item.objectType:
-            case ObjectType.COLLECTION:
-                iconID = 'COLLECTION_NEW'
-            case ObjectType.OBJECT:
-                iconID = f'{item.objectPtr.type}_DATA'
-            case ObjectType.MATERIAL:
-                iconID = f'{item.objectPtr.id_type.upper()}_DATA'
-            case _:
-                iconID = 'X'
+        if item.objectPtr is not None:
+            match item.objectType:
+                case ObjectType.COLLECTION:
+                    iconID = 'COLLECTION_NEW'
+                case ObjectType.OBJECT:
+                    iconID = f'{item.objectPtr.type}_DATA'
+                case ObjectType.MATERIAL:
+                    iconID = f'{item.objectPtr.id_type.upper()}_DATA'
 
         row.label(text=item.name, icon=iconID)
 
@@ -233,6 +232,24 @@ class VRayObjectSelector(VRayUITemplate):
 
         VRAY_OT_simple_button.create(buttonBox, 'Remove', 'Remove the selected item from the list', self, 'onRemoveListItem')
 
+        # Toggle buttons showing the listed objects in the viewport. Imported here because the
+        # module is only needed while drawing, i.e. never in background mode.
+        # The 'enabled' test mirrors getSelectedItems()' filter so leftover rows from deleted objects
+        # (the 'X' icon ones) do not enable the buttons. Calling it would walk the scene every redraw.
+        from vray_blender.ui.highlight_objects import drawHighlightButtons
+        drawHighlightButtons(layout, self,
+                             enabled=any(i.enabled and i.objectPtr for i in self.selectedItems))
+
+
+    def getSelectorObjects(self, context: bpy.types.Context):
+        """ Return the items shown in the selection list, with collections flattened to objects.
+
+            NOTE: VRayObjectSelector.getSelectedItems() is called explicitly because
+            TemplateIncludeExclude overrides it with an incompatible signature which may also
+            invert the selection. Here we always want the items exactly as listed in the UI.
+        """
+        return VRayObjectSelector.getSelectedItems(self, context, '')
+
 
     def getSelectedItems(self, context: bpy.types.Context, searchCollection: str):
         """ Return a list of all selected objects (flattening the collections and recursing any child collections) 
@@ -292,7 +309,7 @@ class VRayObjectSelector(VRayUITemplate):
     def onRemoveListItem(self, context: bpy.types.Context, selectorID: str):
         if -1 != self.activeItem:
             self.selectedItems.remove(self.activeItem)
-            self.activeItem = max(self.activeItem - 1, len(self.selectedItems) - 1)
+            self.activeItem = min(self.activeItem, len(self.selectedItems) - 1)
 
             if fnUpdate := getattr(self, 'onSelectionChanged', None):
                 fnUpdate(context)
@@ -306,20 +323,21 @@ class VRayObjectSelector(VRayUITemplate):
         """
         itemsToRemove = [i for i, item in enumerate(self.selectedItems) if not self._isItemValid(context, item)]
 
-        removed = 0         # How many items in total are removed?
-        activeItemShift = 0 # How many items before the active one are deleted?
+        if not itemsToRemove:
+            return False
 
-        for index in itemsToRemove:
-            self.selectedItems.remove(index + removed)
-            removed += 1
-            if self.activeItem < index:
-                activeItemShift += 1
+        # Remove back to front so that a removal never shifts the indices still to be removed.
+        for index in reversed(itemsToRemove):
+            self.selectedItems.remove(index)
 
-        if removed != 0:
-            self.activeItem -= activeItemShift
-            self.id_data.update_tag()
+        # Keep the active item on the same row it pointed to. len() - 1 is -1 for an emptied list,
+        # which is the 'no selection' value.
+        self.activeItem -= sum(1 for index in itemsToRemove if index < self.activeItem)
+        self.activeItem = min(self.activeItem, len(self.selectedItems) - 1)
 
-        return removed != 0
+        self.id_data.update_tag()
+
+        return True
 
 
     def _clearSelectorFields(self):
@@ -329,7 +347,7 @@ class VRayObjectSelector(VRayUITemplate):
             self.collectionSelector = None
 
     def _isItemValid(self, context: bpy.types.Context, item: TemplateListItem):
-        """ Return whether the list item points to a valid object. """ 
+        """ Return whether the list item points to a valid object. """
 
         if not item.objectType:
             # Try to fix unknown items to allow backward compatibility with old scenes.

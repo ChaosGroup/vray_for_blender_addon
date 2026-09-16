@@ -15,7 +15,7 @@ from vray_blender.lib.names import Names
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, findDataObjFromNode, getOriginalNode
-from vray_blender.vray_tools.vray_proxy import PreviewAction
+from vray_blender.vray_tools.vray_proxy import PreviewAction, runVRayTools
 
 import bpy, json, math, os, struct, queue
 from io import BufferedReader
@@ -73,8 +73,6 @@ class SerializablePreset:
         ) = data
 
 def _dumpPreset(scannedFile: str, binFile: str):
-    from subprocess import PIPE, run
-
     vrayToolsApp = path_utils.getBinTool(sys_utils.getPlatformName("vraytools"))
 
     cmd = [vrayToolsApp]
@@ -83,7 +81,7 @@ def _dumpPreset(scannedFile: str, binFile: str):
     cmd.extend(['-input', scannedFile])
     cmd.extend(['-output', binFile])
 
-    result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    result = runVRayTools(cmd)
 
     debug.printInfo(f"Running scanned preset tool: {' '.join(cmd)}")
 
@@ -149,7 +147,26 @@ def _scannedGlossinessToVRay(glossiness: float) -> float:
     return x
 
 
+_PresetReadEnabled = True
+
+
+class DisablePresetRead:
+    """ Stop a 'file' assignment from re-reading the preset over the parameters already on the
+        node - for repairing a moved file's path. """
+    def __enter__(self):
+        global _PresetReadEnabled
+        self.originalState = _PresetReadEnabled
+        _PresetReadEnabled = False
+        return self
+
+    def __exit__(self, type, value, traceback):
+        global _PresetReadEnabled
+        _PresetReadEnabled = self.originalState
+
+
 def onFileUpdate(brdfScanned, context = None, attrName = ''):
+    if not _PresetReadEnabled:
+        return
     scannedPath = path_utils.formatResourcePath(brdfScanned.file, False)
     if not os.path.exists(scannedPath):
         brdfScanned.file_info = '[Invalid Scanned Material Path]'
@@ -161,23 +178,22 @@ def onFileUpdate(brdfScanned, context = None, attrName = ''):
     info, preset = _readScannedPreset(binScannedFile)
     os.remove(binScannedFile)
     if preset.result == True:
-        # plain = 3 is a compatibility option that was added so that assets could force triplanar mapping
-        # without changing the scanned material itself in V-Ray Core.
+        # plain = 3 is a compatibility option that forces triplanar mapping.
         if preset.plain == 3:
             brdfScanned.plain = "1"
-            brdfScanned.enable_triplanar = True
+            brdfScanned.triplanar = True
         else:
             brdfScanned.plain = str(preset.plain)
         brdfScanned.ccior = preset.ccior
         brdfScanned.bumpmul = preset.bumpmul
         brdfScanned.bumpstart = preset.bumpstart
-        brdfScanned.depthmul = preset.depthmul
+        brdfScanned.DepthMul = preset.depthmul
         brdfScanned.ccbump = preset.ccbump
         brdfScanned.ccmul = preset.ccmul
         brdfScanned.enable_clear_coat = not math.isclose(preset.ccior, 1.0)
         brdfScanned.ccglossy = _scannedGlossinessToVRay(preset.orggls)
         brdfScanned.ccglossyvar = preset.orgglvar
-    # Set this at the end, it's used to prevent unnecessary parameter encoding from just loading a preset.
+    # Set this at the end.
     brdfScanned.file_info = info
 
 
@@ -200,7 +216,9 @@ def _fillScannedPluginDesc(pluginDesc: PluginDesc, node: bpy.types.Node, propGro
     if propGroup.use_filter:
         usedMaps |= 2
     if propGroup.enable_clear_coat:
-        ccmultSocket = getInputSocketByAttr(node, "ccmul")
+        # 'ccmult' has no socket of its own - it is driven by the ccmult_enabler meta socket.
+        # 'ccmul' is a hidden socket and can never carry a link.
+        ccmultSocket = getInputSocketByAttr(node, "ccmult_enabler")
         if ccmultSocket and ccmultSocket.hasActiveFarLink():
             usedMaps |= 4
 
@@ -211,6 +229,39 @@ def _fillScannedPluginDesc(pluginDesc: PluginDesc, node: bpy.types.Node, propGro
         pluginDesc.setAttribute("ccior", 1.0)
         pluginDesc.setAttribute("ccbump", 0.0)
     pluginDesc.setAttribute("usedmaps", usedMaps)
+
+
+# Attributes that _fillScannedPluginDesc() encodes and applyImportedAttrs() decodes, plus the
+# ones the import must not touch at all. Passed to _fillNodeProperties as its skip list:
+#   file       - assigned separately, before the rest
+#   param_block- the binary encoding of every scanned param
+IMPORT_SKIPPED_ATTRS = {'file', 'param_block', 'invgamma', 'triplanar', 'ccglossy', 'usedmaps'}
+
+
+def applyImportedAttrs(propGroup, attrs: dict):
+    """ The inverse of _fillScannedPluginDesc(). """
+    if invgamma := attrs.get('invgamma'):
+        propGroup.invgamma = 1.0 / invgamma
+
+    if (triplanar := attrs.get('triplanar')) is not None:
+        triplanar = int(triplanar)
+        # Never clear the flag onFileUpdate() set for a 'plain'=3 preset.
+        propGroup.triplanar                 = bool(triplanar & 1) or propGroup.triplanar
+        propGroup.triplanar_random_offset   = bool(triplanar & 2)
+        propGroup.triplanar_random_rotation = bool(triplanar & 4)
+
+    if (ccglossy := attrs.get('ccglossy')) is not None:
+        propGroup.ccglossy = _scannedGlossinessToVRay(ccglossy)
+
+    # 'usedmaps' bits: 1 paint, 2 filter, 4 clear coat multiplier.
+    usedMaps = int(attrs.get('usedmaps', 0))
+    propGroup.use_paint  = bool(usedMaps & 1)
+    propGroup.use_filter = bool(usedMaps & 2)
+
+    # 'enable_clear_coat' is both the clear coat gate and the 'use' flag of the ccmult socket.
+    # Only ever add to it here.
+    if usedMaps & 4:
+        propGroup.enable_clear_coat = True
 
 
 def onParameterUpdate(brdfScanned, context, attrName):
@@ -239,7 +290,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     propGroup = getVrayPropGroup(node)
     pluginName = Names.treeNode(nodeCtx)
     
-    # Changing the file name doesn't work in IPR so the plugin should be re-created.
+    # Changing the file name doesn't work in IPR.
     pluginReCreated = False
     filePrevValue = getShadowAttr(propGroup, 'file')
     

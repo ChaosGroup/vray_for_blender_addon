@@ -4,12 +4,10 @@
 
 #pragma once
 
-#define ZMQ_BUILD_DRAFT_API
-
 #include <string>
 #include <vector>
 
-#include "cppzmq/zmq.hpp"
+#include <zmq.hpp>
 #include "base_types.h"
 #include "zmq_serializer.hpp"
 #include "zmq_deserializer.hpp"
@@ -133,7 +131,16 @@ static DeserializerStream& operator&& (DeserializerStream& s, Type& msg) {\
 /// Serialize a protocol message including its type.
 template <typename TMsg>
 static zmq::message_t serializeMessage(const TMsg& msg) {
+	// Measure the message with the same operators that write it, so the buffer is allocated
+	// once. Sizing it any other way means a second description of the wire format that drifts
+	// from this one: a member only ever reserves for itself, so every field written after a
+	// multi-MB one reallocated the buffer and copied the whole payload to append a few bytes.
+	// The count pass allocates nothing and does not touch the payload bytes.
+	SerializerStream sizer(SerializerStream::Mode::Count);
+	sizer && msg.getType() && msg;
+
 	SerializerStream *stream = new SerializerStream();
+	stream->reserve(sizer.getSize());
 	(*stream) && msg.getType() && msg;
 
 	// Transfer ownership of the stream serializer to the zmq message itself to avoid copying the

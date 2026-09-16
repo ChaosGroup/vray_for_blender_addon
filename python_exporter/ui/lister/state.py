@@ -22,9 +22,15 @@ class VRayListerState(bpy.types.PropertyGroup):
         default = False,
     )
 
+    # Whether the Material Lister window was open, for the reopen on file load.
+    material_lister_open: bpy.props.BoolProperty(
+        options = {'HIDDEN'},
+        default = False,
+    )
+
     active_category: bpy.props.EnumProperty(
         name = "Category",
-        description = "Scene Lister category to show",
+        description = "Object Lister category to show",
         items = categoryEnumItems,
         update = _redraw,
     )
@@ -32,6 +38,14 @@ class VRayListerState(bpy.types.PropertyGroup):
     search: bpy.props.StringProperty(
         name = "Search",
         description = "Filter rows by object name",
+        options = {'TEXTEDIT_UPDATE'},
+        update = _redraw,
+    )
+
+    # The Material Lister window's own search, separate from the Scene Lister's.
+    material_search: bpy.props.StringProperty(
+        name = "Search",
+        description = "Filter materials by name",
         options = {'TEXTEDIT_UPDATE'},
         update = _redraw,
     )
@@ -60,6 +74,13 @@ class VRayListerState(bpy.types.PropertyGroup):
     show_vray_materials_only: bpy.props.BoolProperty(
         name = "V-Ray Materials Only",
         description = "In the Materials section, show only V-Ray materials (hide standard Blender materials)",
+        default = False,
+        update = _redraw,
+    )
+
+    show_missing_assets_only: bpy.props.BoolProperty(
+        name = "Missing Only",
+        description = "In the Assets section, show only assets whose file is missing on disk",
         default = False,
         update = _redraw,
     )

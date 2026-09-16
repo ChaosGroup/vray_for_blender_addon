@@ -45,6 +45,10 @@
             }
         },
         {
+            "attr": "create_rest_channel",
+            "desc": "Include an additional \"Rest\" channel, holding the lighting not covered by the other Light Mix channels, when saving to file."
+        },
+        {
             "attr": "denoise",
             "desc": "Enables the render element's denoising, provided the Denoiser render element is present."
         },
@@ -68,6 +72,10 @@
                     },
                     {
                         "name": "separate_emissive_material"
+                    },
+                    {
+                        "name": "create_rest_channel",
+                        "label": "Save \"Rest\" Channel"
                     },
                     {
                         "name": "denoise"
