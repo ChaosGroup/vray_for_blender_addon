@@ -60,7 +60,7 @@ class TemplateIncludeExclude(multi_select.TemplateMultiObjectSelect):
         if drawContainer := widgetAttr.get('draw_container'):
             if drawContainer == 'ROLLOUT':
                 label = widgetAttr.get('label', getPluginAttr(pluginModule, widgetAttr['name']))
-                uniqueID = f"{self.as_pointer()}_{widgetAttr['name']}"
+                uniqueID = draw_utils.panelStateId(propGroup.id_data, pluginModule.ID, widgetAttr['name'])
                 panel = draw_utils.rollout(layout, uniqueID,  label)
 
         # 'panel' will be None if the rollout is collapsed.

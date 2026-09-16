@@ -6,7 +6,7 @@ import bpy
 from vray_blender import debug
 from vray_blender.engine import forceCompositorRefresh
 from vray_blender.lib.mixin import VRayNodeBase
-from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
+from vray_blender.nodes.sockets import addInput, getChannelOutput, getSpecialChannelSocket, moveExtendSocketToBottom
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.exporting.tools import getLinkedFromSocket
 from vray_blender.nodes import tree_defaults
@@ -38,22 +38,25 @@ def _createRenderChannel(channelsNode: bpy.types.Node, nodeName: str):
 
     renderChannel = tree.nodes.new(nodeName)
 
-    targetSock = next(
-        (s for s in channelsNode.inputs if not s.is_linked and s.bl_idname == 'VRaySocketRenderChannel'),
-        None
-    )
+    targetSock = getSpecialChannelSocket(channelsNode, nodeName)
+
+    if targetSock is None:
+        targetSock = next(
+            (s for s in channelsNode.inputs if not s.is_linked and s.bl_idname == 'VRaySocketRenderChannel'),
+            None
+        )
 
     if targetSock is None:
         sockCount = sum(1 for s in channelsNode.inputs if s.bl_idname == 'VRaySocketRenderChannel')
         targetSock = addInput(channelsNode, 'VRaySocketRenderChannel', f"Channel {sockCount + 1}")
         moveExtendSocketToBottom(channelsNode)
 
-    sockPos = sum(1 for s in channelsNode.inputs if s.bl_idname == 'VRaySocketRenderChannel' and s.is_linked)
+    sockPos = next((i for i, s in enumerate(channelsNode.inputs) if s == targetSock), 0)
 
     renderChannel.location.y = channelsNode.location.y - (80 * sockPos)
     renderChannel.location.x = channelsNode.location.x - VRayNodeBase.bl_width_default - 50
 
-    tree.links.new(renderChannel.outputs['Channel'], targetSock)
+    tree.links.new(getChannelOutput(renderChannel), targetSock)
 
 
 def _removeRenderChannel(channelsNode: bpy.types.Node, nodeName: str):
@@ -64,11 +67,15 @@ def _removeRenderChannel(channelsNode: bpy.types.Node, nodeName: str):
             # container). Remove from whichever tree actually owns it.
             channelNode = inputSock.links[0].from_node
             channelNode.id_data.nodes.remove(channelNode)
-            channelsNode.inputs.remove(inputSock)
+
+            # The special sockets are a permanent part of the container, so only the
+            # numbered ones are removed along with their channel node.
+            if inputSock.bl_idname == 'VRaySocketRenderChannel':
+                channelsNode.inputs.remove(inputSock)
 
     channelCnt = 1
     for inputSock in channelsNode.inputs:
-        if inputSock.bl_idname != 'VRaySocketExtend':
+        if inputSock.bl_idname == 'VRaySocketRenderChannel':
             inputSock.name = f"Channel {channelCnt}"
             channelCnt += 1
 

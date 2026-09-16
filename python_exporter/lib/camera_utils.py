@@ -197,6 +197,7 @@ class RenderSizes:
         self.rgnTop         = 0
         self.rgnWidth       = 0
         self.rgnHeight      = 0
+        self.manageRenderRegion = True # Whether the exporter controls the VFB "Render Region" button for this resize.
 
 
     def isEqualTo(self, other: RenderSizes):
@@ -213,6 +214,7 @@ class RenderSizes:
             and self.cropRgnTop == other.cropRgnTop
             and self.cropRgnWidth == other.cropRgnWidth
             and self.cropRgnHeight == other.cropRgnHeight
+            and self.manageRenderRegion == other.manageRenderRegion
         )
 
 
@@ -475,6 +477,16 @@ def aspectCorrectForFovOrtho(vp: ViewParams):
         vp.renderView.ortho_width  *= aspect
 
 
+def correctFovForAspectOnImport(fov: float, aspect: float) -> float:
+    """ Inverse of aspectCorrectForFovOrtho(): a source RenderView.fov was written by an
+        exporter applying that same correction, so for a portrait render (aspect < 1.0) it is
+        not directly a Blender horizontal camData.angle - it must be un-corrected first, or
+        re-exporting the imported camera re-frames the shot (narrower FOV than the original). """
+    if aspect < 1.0:
+        return 2.0 * math.atan(math.tan(fov / 2.0) / aspect)
+    return fov
+
+
 def setRegionBorder(vp: ViewParams, borderRect: Rect):
     vp.regionStart.w = int(borderRect.xmin * vp.viewportW)
     # Coordinate system origin is bottom-left
@@ -500,7 +512,7 @@ def sceneResolutionLimitedByCE(scene: bpy.types.Scene, printWarning: bool = True
         if printWarning:
             warningMsg = f'Resolution is limited by Community Edition to {MAX_CE_REGION_DIMENSION}x{MAX_CE_REGION_DIMENSION}'
             vray.logVfbMessage(int(debug.VfbMessageLevel.MessageWarning), warningMsg)
-            debug.reportAsync('WARNING', warningMsg)
+            debug.report('WARNING', warningMsg)
         return True
 
     return False
@@ -596,6 +608,11 @@ def camObjUsesMotionBlur(cameraObj: bpy.types.Object, settingsMotionBlur):
 
     return False
 
+# Shutter interval used when motion data is exported without rendering motion blur, e.g. for the
+# Velocity render element.
+VELOCITY_MB_INTERVAL_CENTER = 0.5
+VELOCITY_MB_DURATION = 1.0
+
 def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
     """ Get the duration and interval center for motion blur from the camera object """
 
@@ -612,15 +629,18 @@ def getMBlurIntCenterAndDuration(camera: bpy.types.Camera, commonSettings):
 
         frameDuration = 1.0 / commonSettings.animation.fps
 
+        rollingShutterMode = physCamera.rolling_shutter_mode
+        rollingShutterDuration = 0 if rollingShutterMode == '0' else 1.0 / (physCamera.rolling_shutter_duration * frameDuration)
+
         match cameraType:
             case PhysicalCameraType.Still:
-                mbDuration = 1.0 / (physCamera.shutter_speed * frameDuration)
+                mbDuration = 1.0 / (physCamera.shutter_speed * frameDuration) + rollingShutterDuration
                 intervalCenter = mbDuration * 0.5
             case PhysicalCameraType.Cinematic:
-                mbDuration =  physCamera.shutter_angle / math.radians(360.0)
+                mbDuration =  physCamera.shutter_angle / math.radians(360.0) + rollingShutterDuration
                 intervalCenter = (physCamera.shutter_offset / math.radians(360.0)) + mbDuration * 0.5
             case PhysicalCameraType.Video:
-                mbDuration = 1.0 + physCamera.latency / frameDuration
+                mbDuration = 1.0 + physCamera.latency / frameDuration + rollingShutterDuration
                 intervalCenter = -mbDuration * 0.5
             case _:
                 assert False, f"Unknown physical camera type: {cameraType}"

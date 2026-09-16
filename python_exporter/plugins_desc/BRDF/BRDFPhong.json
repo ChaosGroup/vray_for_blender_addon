@@ -1,0 +1,297 @@
+
+{
+    "Description" : "BRDFPhong",
+    "ID" : "BRDFPhong",
+    "Name" : "Phong",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "color",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Base color texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "color_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "",
+            "type" : "COLOR",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Base transparency texture",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "transparency_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "cutoff",
+            "default" : 0.009999999776482582,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "back_side",
+            "default" : false,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trace_reflections",
+            "default" : true,
+            "desc" : "",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "trace_depth",
+            "default" : -1,
+            "desc" : "The maximum reflection depth (-1 is controlled by the global options)",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "affect_alpha",
+            "default" : 0,
+            "desc" : "Specifies how render channels are propagated through the BRDF (0 - only the color channel; 1 - color and alpha; 2 - all channels",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect_exit_color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The color to use when the maximum depth is reached",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect_dim_distance_on",
+            "default" : false,
+            "desc" : "True to enable dim distance",
+            "type" : "BOOL",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "reflect_dim_distance",
+            "default" : 9.999999843067494e+17,
+            "desc" : "How much to dim reflection as length of rays increases",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "reflect_dim_distance_falloff",
+            "default" : 0.0,
+            "desc" : "Fall off for the dim distance",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "hilightGlossiness",
+            "default" : 0.8000000119209290,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "hilightGlossiness_tex",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "hilightGlossiness_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "reflectionGlossiness",
+            "default" : 0.8000000119209290,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "reflectionGlossiness_tex",
+            "default" : 0.0,
+            "desc" : "",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "reflectionGlossiness_tex_mult",
+            "default" : 1.0,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "attributes" : []
+            }
+        },
+        
+        {
+            "attr" : "subdivs",
+            "default" : 8,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 1000,
+                "min" : 1
+            }
+        },
+        
+        {
+            "attr" : "glossyAsGI",
+            "default" : 1,
+            "desc" : "Determines if the glossy rays are treated by V-Ray as GI rays: 0 - never; 1 - only for rays that are already marked as GI rays; 2 - always",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "soften_edge",
+            "default" : 0.0,
+            "desc" : "Soften edge of the BRDF at light/shadow transition",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "interpolation_on",
+            "default" : 0,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "imap_min_rate",
+            "default" : -1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "imap_max_rate",
+            "default" : 1,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "imap_color_thresh",
+            "default" : 0.250,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "imap_norm_thresh",
+            "default" : 0.4000000059604645,
+            "desc" : "",
+            "type" : "FLOAT",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "imap_samples",
+            "default" : 20,
+            "desc" : "",
+            "type" : "INT",
+            "ui" : {}
+        }
+    ],
+    "Type" : "BRDF",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

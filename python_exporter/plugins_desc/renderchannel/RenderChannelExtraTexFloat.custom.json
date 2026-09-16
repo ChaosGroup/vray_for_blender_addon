@@ -1,0 +1,86 @@
+{
+    "ID": "RenderChannelExtraTexFloat",
+    "Name": "Extra Tex Float",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "exclude_list",
+            "type": "INCLUDE_EXCLUDE_LIST",
+            "inclusion_mode_prop": "exclude_list_as_inclusive_set",
+            "options": {
+                "link_info": {
+                    "link_type": "OBJECTS",
+                    "filter_function": "filters.filterGeometries"
+                }
+            }
+        },
+        {
+            "attr": "object_select",
+            "type": "TEMPLATE",
+            "desc": "List of objects to include/exclude in the channel",
+            "options": {
+                "template": {
+                    "type": "templateIncludeExclude",
+                    "args": {
+                        "bound_property": "exclude_list",
+                        "mode_bound_property": "exclude_list_as_inclusive_set",
+                        "filter_function": "filters.filterGeometries"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "name",
+            "default": "Extra Tex Float",
+            "update": "plugins.channel.render_channel_common.onUpdateChannelName"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "name",
+                        "label": "Channel Name"
+                    },
+                    {
+                        "name": "object_select",
+                        "label": "Affected objects",
+                        "list_label": "Object List",
+                        "draw_container": "ROLLOUT"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "enableDeepOutput",
+                        "label": "Enable Deep Output"
+                    },
+                    {
+                        "name": "default_value"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "texmap"
+            },
+            {
+                "name": "exclude_list",
+                "label": "Objects"
+            }
+        ]
+    },
+    "Options": {
+        "animatable": false,
+        "excluded_parameters": [
+            "affect_matte_objects",
+            "force_32_bit_output",
+            "force_lossless_compression"
+        ]
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "Name": "V-Ray Max Gamma",
+    "Subtype": "UTILITY",
+    "Node": {
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
+}

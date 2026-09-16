@@ -92,6 +92,14 @@
                                 "name": "max_subdivs"
                             }
                         ]
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "out_of_frustum_mult"
+                            }
+                        ]
                     }
                 ]
             }

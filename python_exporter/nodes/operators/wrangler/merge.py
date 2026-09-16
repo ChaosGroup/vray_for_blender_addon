@@ -260,13 +260,16 @@ class VRAY_OT_WR_lazy_mix(VRayOperatorBase):
         if event.type == 'RIGHTMOUSE' and event.value == 'RELEASE':
             self._removeDrawHandler()
             target = _nodeAtPos(nodes, context, event)
-            if self._source and target and target is not self._source:
-                deselectNodes(ntree)
-                self._source.select = True
-                target.select = True
-                nodes.active = self._source
-                bpy.ops.vray.wr_merge_nodes(mode=self.mode)
-            return {'FINISHED'}
+            if not (self._source and target and target is not self._source):
+                # Released over empty space or over the source itself - nothing merged.
+                return {'CANCELLED'}
+
+            deselectNodes(ntree)
+            self._source.select = True
+            target.select = True
+            nodes.active = self._source
+            # Propagate the delegate's status - it cancels when the nodes cannot be merged.
+            return bpy.ops.vray.wr_merge_nodes(mode=self.mode)
 
         if event.type == 'ESC':
             self._removeDrawHandler()

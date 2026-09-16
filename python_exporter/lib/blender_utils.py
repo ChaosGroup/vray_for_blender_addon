@@ -16,6 +16,8 @@ import math
 import mathutils
 import re
 
+from contextlib import contextmanager
+
 from vray_blender import debug
 from vray_blender.lib import lib_utils, path_utils
 from vray_blender.ui.preferences import VRayExporterPreferences
@@ -66,10 +68,18 @@ NC_LAMP     = 3
 def isNonGeometryExportedAsGeometry(ob) -> bool:
     """ True for objects whose type is not a geometry type (so the normal geometry
         iteration skips them) but which V-Ray still exports through the geometry
-        pipeline. Currently only Gaussian splats (Empties flagged isVRayGaussian);
-        add future "non-geometry object exported as geometry" cases here so they flow
+        pipeline: Empties flagged as Gaussian splats, infinite planes or perfect spheres.
+        Add future "non-geometry object exported as geometry" cases here so they flow
         through the main export loop instead of needing a separate pass. """
-    return ob.type == 'EMPTY' and ob.vray.isVRayGaussian
+    vray = ob.vray
+    return ob.type == 'EMPTY' and (vray.isVRayGaussian or vray.isVRayInfinitePlane or vray.isVRayPerfectSphere)
+
+
+def getActiveMaterial(ob):
+    """ The active material of an object, or the material pointer of an Empty-backed geometry. """
+    if ob is None:
+        return None
+    return ob.vray.material if isNonGeometryExportedAsGeometry(ob) else ob.active_material
 
 
 def geometryObjectIt(objects):
@@ -484,6 +494,16 @@ def setFloatFrame(frameController: bpy.types.RenderEngine | bpy.types.Scene, fra
     frac, whole = modf(frame)
     frameController.frame_set(int(whole), subframe=frac)
 
+@contextmanager
+def preserveInitialFrame(scene: bpy.types.Scene):
+    """ Restore the scene's initial (scene.frame_current) when the block is exited.
+    """
+    savedFrame = scene.frame_current
+    try:
+        yield
+    finally:
+        setFloatFrame(scene, savedFrame)
+
 def getFCurves(obj, ensure: bool = False):
     """ Return the fcurves collection on obj.animation_data.action across Blender versions.
 
@@ -539,6 +559,50 @@ def getPropertyDefaultValue(propGroup, attrName:str):
     """ Returns the default value of a property in a property group """
     propDef = type(propGroup).__annotations__.get(attrName)
     return propDef.keywords['default']
+
+
+def makeShadowCatcher(obj: bpy.types.Object, ensureMatteNode = True):
+    """ Apply the shadow-catcher preset to an object's V-Ray object properties.
+
+        This is the single definition of the preset. It matches V-Ray for Cinema 4D
+        (VRayObjectProperties::makeShadowCatcher) and V-Ray for Maya
+        (vrayCreateShadowCatcherProperties), which set these four properties and nothing else.
+
+        'matte_surface' is not a stored value but a proxy for "a Matte Properties node is
+        connected", backed by mattePropsSetter, which creates and links a new node on every
+        assignment. Hence the guard, and hence ensureMatteNode=False for callers that are
+        themselves such a node and so must not add a second one (VBLD-2432).
+    """
+    props = obj.vray.VRayObjectProperties
+
+    if ensureMatteNode and not props.matte_surface:
+        props.matte_surface = True
+
+    props.shadows            = True
+    props.affect_alpha       = True
+    props.alpha_contribution = -1.0
+
+
+def isShadowCatcher(obj: bpy.types.Object) -> bool:
+    """ Check whether an object's V-Ray object properties currently match the
+        shadow-catcher preset applied by makeShadowCatcher().
+    """
+    props = obj.vray.VRayObjectProperties
+    return props.matte_surface and props.shadows and props.affect_alpha and props.alpha_contribution == -1.0
+
+
+def revertShadowCatcher(obj: bpy.types.Object):
+    """ Undo the shadow-catcher preset applied by makeShadowCatcher(), restoring
+        the four properties it sets back to their plugin defaults.
+    """
+    props = obj.vray.VRayObjectProperties
+
+    if props.matte_surface:
+        props.matte_surface = False
+
+    props.shadows            = False
+    props.affect_alpha       = False
+    props.alpha_contribution = 1.0
 
 
 class TestBreak:
@@ -607,7 +671,10 @@ def resolveNodeFromPath(fullPythonPath: str):
         pathStartIdx = fullPythonPath.find("]", match.end(0) - 1) + 2
         relativePath = fullPythonPath[pathStartIdx:]
         
-        return idBlock.path_resolve(relativePath)
+        try:
+            return idBlock.path_resolve(relativePath)
+        except ValueError:
+            return None
 
     except Exception as e:
         debug.printExceptionInfo(e, f"blender_utils.resolveNodeFromPath('{fullPythonPath}')")

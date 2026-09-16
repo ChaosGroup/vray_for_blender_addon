@@ -1,0 +1,49 @@
+{
+    "Name": "V-Ray User Integer",
+    "Subtype": "UTILITY",
+    "Parameters": [],
+    "Widget": {
+        "widgets": [
+            {
+                "attrs": [
+                    {
+                        "name": "user_attribute"
+                    },
+                    {
+                        "name": "default_value"
+                    }
+                ],
+                "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "label": "attribute",
+                        "name": "user_attribute"
+                    }
+                ]
+            }
+        ],
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Integer",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            }
+        ],
+        "internal_links": {
+            "*": ["*"]
+        }
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "scalar"
+        ]
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "Name": "V-Ray Combine Color",
+    "Subtype": "UTILITY",
+    "Node": {
+        "internal_links": {
+            "*": ["*"]
+        }
+    }
+}

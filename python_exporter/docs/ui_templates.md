@@ -47,6 +47,8 @@ The registration procedure will always register two properties for each template
 
 **NOTE:** See the template class help strings for description of supported template properties.
 
+**NOTE:** Viewport highlight of the selected objects is not a template. All object selectors draw a group of toggle buttons which highlight the selected objects in the 3D viewport (bounding box / tint / x-ray). The highlight stays up until the lit button is clicked again or Esc is pressed, so the scene can be navigated while it is shown. The buttons are drawn by `ui/highlight_objects.py::drawHighlightButtons()`, and the only thing they need from their host is a `getSelectorObjects(context)` method returning the selected objects (or materials, which are resolved to the objects using them). A new selector gets the buttons for free by hosting that call. Objects a tint cannot be built for fall back to a wireframe box, so every selector gets a usable highlight. Lights, empties and cameras report an all-zero `bound_box` and are marked with a fixed-size box at their origin (like the light gizmos in `ui/draw_callbacks.py`); hair, point cloud and volume objects cannot be converted to a mesh and get their real bounding box.
+
 ### TemplateMultiObjectSelect 
 
 ![MultiSelect](images/TemplateMultiObjectSelect.png)

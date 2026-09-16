@@ -20,4 +20,12 @@ V-Ray parameters should be added to the Blender's command line separated from Bl
   * change the location of VRayZmqServer
 
 `--dumpInfoLog path_to_folder`
-  * enable writing of VRayZmqServer log to the specified location 
+  * enable writing of VRayZmqServer log to the specified location
+
+`--vray-with-all-features`
+  * force-enable every feature flag, ignoring the per-feature defaults defined in `features.py`
+  * takes no value
+  * without this flag, the per-feature defaults in `features.py` are used
+  * a disabled feature is hidden from the UI and from Blender's F3 operator search; its code stays in the addon
+  * example:
+    * `blender.exe -- --vray-with-all-features`

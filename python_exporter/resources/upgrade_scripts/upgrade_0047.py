@@ -11,6 +11,7 @@
 # shadow already matches.
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 from vray_blender.lib.blender_utils import hasShadowedAttrChanged, updateShadowAttr
 from vray_blender.nodes.utils import getNodeByType
@@ -24,7 +25,7 @@ def _unitsPropGroups():
         non-node storage (light.vray.<Plugin>) and the node storage (the plugin node in
         the light's node tree).
     """
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         for pluginType in _SHADOWED_LIGHT_TYPES:
             yield getattr(light.vray, pluginType)
             if node := getNodeByType(light.node_tree, f'VRayNode{pluginType}'):

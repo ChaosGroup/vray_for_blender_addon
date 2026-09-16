@@ -142,12 +142,6 @@ class VRayExporter(bpy.types.PropertyGroup):
         update = _stereoToggleUpdate
     )
 
-    use_still_motion_blur: bpy.props.BoolProperty(
-        name        = "Still Motion Blur",
-        description = "Generate data for motion blur",
-        default     = False
-    )
-
     use_hair: bpy.props.BoolProperty(
         name = "Export Hair",
         description = "Render hair",

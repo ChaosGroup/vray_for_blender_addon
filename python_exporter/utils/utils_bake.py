@@ -426,10 +426,13 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
 
         self._updateSceneSettings(context)
 
+        baked = 0
+
         for item in self._items:
             try:
                 obj, dataSrc = item
-                self._startBake(context, obj, dataSrc, block=True)
+                if self._startBake(context, obj, dataSrc, block=True):
+                    baked += 1
 
             except Exception as e:
                 errMsg = f"Error baking object {obj.name_full}"
@@ -438,7 +441,7 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
 
         self._restoreSettings(context)
 
-        return {'FINISHED'}
+        return {'FINISHED'} if baked else {'CANCELLED'}
 
 
     def _startBake(self, context: bpy.types.Context, obj: bpy.types.Object, dataSrc: bpy.types.PropertyGroup, block: bool):

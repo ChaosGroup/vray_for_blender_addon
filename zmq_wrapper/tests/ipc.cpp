@@ -21,11 +21,6 @@ namespace {
 }
 
 
-#include <boost/interprocess/windows_shared_memory.hpp>
-#include <boost/interprocess/mapped_region.hpp>
-
-namespace ipc = boost::interprocess;
-
 TEST_CASE("IPC")
 {
 	SECTION("Successful write-read") {

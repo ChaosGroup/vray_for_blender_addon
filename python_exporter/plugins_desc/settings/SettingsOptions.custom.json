@@ -211,6 +211,9 @@
                         "active": {
                             "cond": "::ray_max_intensity_on>0"
                         }
+                    },
+                    {
+                        "name": "toon_lineWidthMult"
                     }
                 ]
             },

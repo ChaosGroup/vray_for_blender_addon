@@ -10,6 +10,7 @@ from vray_blender.lib.plugin_utils import updateValue, isGenAIDisabled
 from vray_blender.lib.defs import *
 from vray_blender.nodes.tools import isVrayNodeTree
 from vray_blender.nodes import utils as NodesUtils
+from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
 
 import mathutils
 
@@ -22,6 +23,10 @@ ENVIRONMENT_OVERRIDES = (
     ('refract_color', 'refract_tex', 'refract_tex_mult', 'use_refract'),
     ('secondary_matte_color', 'secondary_matte_tex', 'secondary_matte_tex_mult', 'use_secondary_matte'),
 )
+
+# A Cycles world lights every ray type with one shader, so all four slots get filled. An unset
+# slot is not a fallback to the background - V-Ray shades those rays black.
+CONVERTED_ENVIRONMENT_SLOTS = ENVIRONMENT_OVERRIDES[:4]
 
 
 def _exportToonOutlinesVolume(nodeCtx: NodeContext):
@@ -90,6 +95,10 @@ def sockConnectedToEnhancer(sock: bpy.types.NodeSocket):
     link = getFarNodeLink(sock)
     return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelEnhancer"
 
+def sockConnectedToVelocity(sock: bpy.types.NodeSocket):
+    link = getFarNodeLink(sock)
+    return link is not None and link.from_node.bl_idname == "VRayNodeRenderChannelVelocity"
+
 def _exportViewportDenoiser(nodeCtx: NodeContext):
     # Export denoiser for the viewport. Except for the engine selection, 
     # always use the default settings in order to have the best performance.
@@ -98,6 +107,22 @@ def _exportViewportDenoiser(nodeCtx: NodeContext):
     pluginDesc = PluginDesc(denoiserPluginName, "RenderChannelDenoiser")
     pluginDesc.setAttribute("enabled", True)
     pluginDesc.setAttribute("engine", viewportDenoiserEngine)
+    export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
+
+
+# The BEAUTY channel variants are exactly the elements VFB2 sums to reconstruct the RGB image, so the subtype doubles as the Back to Beauty slot list.
+# Keep it 1:1 with BackToBeautyAliases in vutils/include/backtobeauty.hpp, minus the Gaussian splats slot which VFB2 only requires when the scene registers that channel.
+BACK_TO_BEAUTY_ALIASES = {c['params']['alias'] for c in customRenderChannelNodesDesc if c['Subtype'] == 'BEAUTY'}
+
+
+def _exportBackToBeauty(nodeCtx: NodeContext):
+    """ Export the marker channel that makes VFB2 build its 'Back To Beauty' composite folder.
+
+        The plugin has no parameters and stores no data - VFB2 just checks whether its alias is registered, and does
+        nothing at all when it is absent. So the composite has to be asked for explicitly even though every channel
+        it sums is already exported.
+    """
+    pluginDesc = PluginDesc(Names.singletonPlugin("RenderChannelBackToBeauty"), "RenderChannelBackToBeauty")
     export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
 
 
@@ -146,11 +171,13 @@ class WorldExporter(ExporterBase):
         channelsNode = channelsLink.from_node
 
         exportSettingsPlugin = False
+        exportedAliases = set()
 
         # Export channel plugins and their node trees
         with nodeCtx.push(channelsNode), nodeCtx.pushGroupPath(channelsLink.groupPath):
             if nodeCtx.getCachedNodePlugin(channelsNode) is None: # Node already exported
                 nodeCtx.cacheNodePlugin(channelsNode)
+                showVelocityWarning = False
                 for channelLink in [getFarNodeLink(s) for s in channelsNode.inputs]:
                     if not channelLink:
                         continue
@@ -162,12 +189,27 @@ class WorldExporter(ExporterBase):
                         continue
 
                     if not nodeCtx.exporterCtx.viewport:
+                        showVelocityWarning |= nodeCtx.exporterCtx.commonSettings.isGpu and sockConnectedToVelocity(inSock)
+
                         exportSocketLink(nodeCtx, channelLink)
                         exportSettingsPlugin = True
+
+                        # The channel type is selected by the 'alias' property of the plugin, so
+                        # read it off the node instead of matching node class names.
+                        propGroup = NodesUtils.getPropGroupOfNode(channelLink.from_node)
+                        if (alias := getattr(propGroup, 'alias', None)) is not None:
+                            exportedAliases.add(alias)
+
+                if showVelocityWarning:
+                    debug.report('WARNING', "The Velocity render element is only supported on CPU. It will not render correctly on GPU.")
 
         # Export the SettingsRenderChannels plugin if any of its sockets are connected
         if exportSettingsPlugin:
             _exportSettingsRenderChannels(nodeCtx)
+
+        # VFB2 can only reconstruct the beauty when every element it sums is present
+        if BACK_TO_BEAUTY_ALIASES.issubset(exportedAliases):
+            _exportBackToBeauty(nodeCtx)
 
 
     def _exportWorld(self, nodeCtx: NodeContext) -> bool:
@@ -181,12 +223,13 @@ class WorldExporter(ExporterBase):
         nodeOutput = NodesUtils.getOutputNode(world.node_tree, 'WORLD')
 
         if not world.original.vray.is_vray_class:
-            # Cannot export non-vray node trees
             if nodeOutput:
                 debug.report(severity="WARNING",
                              msg=f"The World tree '{world.name}' has a V-Ray Output node but no V-Ray node tree."\
                                 " Check if 'Use V-Ray World Nodes' has been pressed")
-            return False
+                return False
+            # A native Cycles world, converted on the fly like a Cycles material.
+            return self._exportCyclesWorld(nodeCtx)
 
         if not nodeOutput:
             debug.printError(f"Output node not found in world tree '{world.name}'")
@@ -240,6 +283,63 @@ class WorldExporter(ExporterBase):
 
         if not worldValid:
             self._exportOutlinesWithoutWorld(nodeCtx)
+
+    def _exportCyclesWorld(self, nodeCtx: NodeContext) -> bool:
+        """ Convert a native Cycles world into SettingsEnvironment. The colour branch goes through
+            the same node conversion the material exporter uses, so an Environment or Sky Texture
+            arrives as a real V-Ray texture. """
+        from vray_blender.exporting.world_convert import convertCyclesWorld
+
+        world = nodeCtx.rootObj
+        if (env := convertCyclesWorld(world)) is None:
+            return False
+        envColor, envStrength, envSocket = env
+
+        # Plugin naming needs a node on the stack.
+        outputNode = next((n for n in world.node_tree.nodes
+                           if n.bl_idname == 'ShaderNodeOutputWorld' and n.is_active_output), None)
+        if outputNode is None:
+            return False
+
+        with (  nodeCtx,
+                nodeCtx.push(outputNode),
+                TrackObj(self.nodeTracker, getObjTrackId(world)),
+                TrackNode(self.nodeTracker, getNodeTrackId(outputNode))):
+            tex = AttrPlugin()
+            color = envColor * envStrength
+
+            if envSocket is not None:
+                # 'xxx_tex_mult' blends on CPU but multiplies on GPU, so Strength is baked
+                # into the texture graph instead.
+                with nodeCtx.push(envSocket.node):
+                    tex = exportLinkedSocket(nodeCtx, envSocket) or AttrPlugin()
+                    if (not tex.isEmpty()) and (envStrength != 1.0):
+                        multDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexAColorOp"), "TexAColorOp")
+                        multDesc.setAttribute("color_a", tex)
+                        multDesc.setAttribute("mult_a", envStrength)
+                        tex = exportPluginWithStats(nodeCtx, multDesc)
+                        tex.output = "result_a"
+                if not tex.isEmpty():
+                    color = mathutils.Color((1.0, 1.0, 1.0))   # fallback behind the texture
+
+            pluginDesc = PluginDesc(Names.singletonPlugin("SettingsEnvironment"), "SettingsEnvironment")
+            for colorAttr, texAttr, texMultAttr, useAttr in CONVERTED_ENVIRONMENT_SLOTS:
+                pluginDesc.setAttribute(colorAttr, color)
+                pluginDesc.setAttribute(texAttr, tex)
+                pluginDesc.setAttribute(texMultAttr, 1.0)
+                pluginDesc.setAttribute(useAttr, True)
+
+            # Effects live on the V-Ray world output's 'Effects' socket, which a Cycles world
+            # has no equivalent of. Toon outlines come from the materials and still apply.
+            environmentVolume = []
+            if toonVolume := _exportToonOutlinesVolume(nodeCtx):
+                environmentVolume.append(toonVolume)
+            pluginDesc.setAttribute("environment_volume", environmentVolume)
+
+            exportPluginWithStats(nodeCtx, pluginDesc)
+
+        return True
+
 
     def _exportEnvironmentSettings(self, nodeCtx: NodeContext):
         """ Gets settings from 'Environment' node and applies them to SettingsEnvironment plugin """

@@ -12,7 +12,8 @@ from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.sockets import MATERIAL_SOCKET_COLOR, addInput, addOutput, VRayValueSocket, removeInputs, moveExtendSocketToBottom
 from vray_blender.nodes.nodes import vrayNodeInit, vrayNodeDraw, vrayNodeDrawSide
-from vray_blender.nodes.utils import selectedObjectTagUpdate, getActiveTreeNode
+from vray_blender.nodes.navigation import getPanelNode
+from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.nodes.links import getPluginModule, scheduleFixMisdirectedLink, vrayNodeInsertLink, autoConnectNode
 from vray_blender.ui import classes
 
@@ -74,8 +75,20 @@ def getMaterialSockets(node):
 def _getMtlNodeFromOperatorContext(context: bpy.types.Context):
     if hasattr(context, "node"):
         return context.node
-    elif context.material and context.material.node_tree:
-        return getActiveTreeNode(context.material.node_tree, 'MATERIAL')
+
+    # getattr, not context.material: the member only exists in the Properties editor, and this is
+    # also reached from the Scene Lister's material editor, which lives in a Preferences window.
+    material = getattr(context, 'material', None)
+
+    if material and material.node_tree:
+        # Resolve exactly as the Material tab does, so the button acts on the node the user sees.
+        # Unlike the resolver this replaced, getPanelNode always returns something (it falls back
+        # to the tree's root shader), so the type has to be checked here or addMaterial() would be
+        # called on a node that has no such method.
+        node = getPanelNode(material.node_tree, 'MATERIAL')
+        return node if (node and node.bl_idname == 'VRayNodeMtlMulti') else None
+
+    return None
 
 class VRAY_OT_node_mtlmulti_socket_add(VRayOperatorBase):
     bl_idname      = 'vray.node_mtlmulti_socket_add'
@@ -225,7 +238,7 @@ class VRayNodeMtlMulti(VRayNodeBase):
         mtlsPanel = draw_utils.subPanel(layout)
 
         for sockMtl in getMaterialSockets(self):
-            uniqueID = f"{self.as_pointer()}_{sockMtl.identifier}"
+            uniqueID = draw_utils.panelStateId(self, sockMtl.identifier)
 
             if panelBody := draw_utils.rollout(mtlsPanel, uniqueID, sockMtl.name):
                 sockMtl.draw_property(context, draw_utils.subPanel(panelBody), text="")

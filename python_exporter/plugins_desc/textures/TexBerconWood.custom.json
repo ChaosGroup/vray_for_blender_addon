@@ -1,5 +1,6 @@
 {
     "ID": "TexBerconWood",
+    "Name": "V-Ray Bercon Wood",
     "Widget": {
         "widgets": [
             {
@@ -184,7 +185,9 @@
                     },
                     {
                         "name": "invert_alpha",
-                        "active": {"cond": "::invert!=0"}
+                        "active": {
+                            "cond": "::invert!=0"
+                        }
                     }
                 ],
                 "layout": "COLUMN"
@@ -261,8 +264,134 @@
         {
             "attr": "uvwgen",
             "type": "UVWGEN",
-            "ui" : {
+            "ui": {
                 "display_name": "Mapping"
+            }
+        },
+        {
+            "attr": "noise_map1",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "noise_map2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "noise_map3",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map2",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_size",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_low",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_high",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_skew",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_width_var",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_gain_var",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_trunk_str",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_trunk_freq",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_radial_str",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_radial_freq",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_z_str",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_ang_str",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_ang_freq",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_ang_rad",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_grain_str",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "tex_grain_freq",
+            "options": {
+                "linked_only": true
             }
         }
     ]

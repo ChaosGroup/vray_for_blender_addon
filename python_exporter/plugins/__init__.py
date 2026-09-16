@@ -394,6 +394,13 @@ class VRayCosmosAsset(VRayEntity, bpy.types.PropertyGroup):
         default = 0
     )
 
+    cosmos_asset_name: bpy.props.StringProperty(
+        name = "V-Ray Cosmos Asset Name",
+        description = "The name of the asset as shown in Chaos Cosmos. Kept so the original "
+                      "name is still known after the datablock has been renamed",
+        default = ""
+    )
+
 
 class VRayObject(VRayEntity, bpy.types.PropertyGroup):
     data_updated: bpy.props.IntProperty(
@@ -456,6 +463,26 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
         name = "Is V-Ray Gaussians Object",
         description = "True if this is a Gaussian splat object.",
         default = False
+    )
+
+    isVRayInfinitePlane: bpy.props.BoolProperty(
+        name = "Is V-Ray Infinite Plane Object",
+        description = "True if this is an infinite plane object.",
+        default = False
+    )
+
+    isVRayPerfectSphere: bpy.props.BoolProperty(
+        name = "Is V-Ray Perfect Sphere Object",
+        description = "True if this is a perfect sphere object.",
+        default = False
+    )
+
+    material: bpy.props.PointerProperty(
+        name = "Material",
+        description = "Material of an object that Blender cannot give a material slot to. "
+                      "Used by the Empty-backed V-Ray geometry (infinite plane, perfect sphere)",
+        type = bpy.types.Material,
+        update = selectedObjectTagUpdate
     )
 
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
@@ -563,6 +590,7 @@ class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
             ('SUN',            'Sun',            ""),
             ('RECT',        'Rectangle',    ""),
             ('DOME',        'Dome',            ""),
+            ('LUMINAIRE',   'Luminaire',    ""),
         ),
         default = 'BLENDER'
     )
@@ -583,7 +611,33 @@ class VRayLight(VRayCosmosAsset, bpy.types.PropertyGroup):
 
 
 
+# Quick-toggle proxy for the Common > Denoiser rollout. The denoiser is off if either the
+# channel node is missing or the plugin's 'enabled' is False, and 'enabled' is editable from
+# the node and the advanced popup too, so only a proxy over both keeps the header in sync.
+def _getQuickDenoiser(self):
+    if not (world := bpy.context.scene.world):
+        return False
+    return world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser.enabled \
+        and world.vray.RenderChannelDenoiser.enabled
+
+def _setQuickDenoiser(self, value):
+    world = bpy.context.scene.world
+    if value:
+        world.vray.RenderChannelDenoiser.enabled = True
+    # Adds/removes the channel node.
+    world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser.enabled = bool(value)
+
+
 class VRayWorld(VRayEntity, bpy.types.PropertyGroup):
+    # No storage of its own, hence no ANIMATABLE. On the World, whose ID is undoable.
+    quick_denoiser: bpy.props.BoolProperty(
+        name        = "Denoiser",
+        description = "Enable the Denoiser render element",
+        get         = _getQuickDenoiser,
+        set         = _setQuickDenoiser,
+        options     = set()
+    )
+
     is_vray_class : bpy.props.BoolProperty(
         name = "V-Ray Class Tag",
         description = "True if this is a V-Ray world object.",
@@ -600,6 +654,19 @@ class VRayWorld(VRayEntity, bpy.types.PropertyGroup):
     )
 
 
+# Per-datablock V-Ray upgrade version. Stored on each datablock that can carry upgradeable
+# V-Ray data so appended/linked data can be upgraded independently of the scene. Unset
+# (is_property_set() is False) means "inherit the scene number on full load / treat as 0
+# (oldest) on append". Stamped to UPGRADE_NUMBER once upgraded or on save.
+for _cls in (VRayCamera, VRayObject, VRayMaterial, VRayLight, VRayWorld, VRayNodeTreeSettings):
+    _cls.__annotations__['upgradeNumber'] = bpy.props.IntProperty(
+        name = "V-Ray Data Upgrade Number",
+        description = "Upgrade version of the V-Ray data stored on this datablock",
+        default = 0,
+        options = {'HIDDEN'}
+    )
+
+
 class VRayTexture(VRayEntity, bpy.types.PropertyGroup):
     __annotations__ = {}
 
@@ -607,26 +674,6 @@ class VRayTexture(VRayEntity, bpy.types.PropertyGroup):
 class VRayRenderChannel(VRayEntity, bpy.types.PropertyGroup):
     __annotations__ = {}
 
-
-class VRayScene(VRayEntity, bpy.types.PropertyGroup):
-    ntree: bpy.props.PointerProperty(
-        name = "Node Tree",
-        type = bpy.types.NodeTree,
-        poll = lambda s, p: p.bl_idname == 'VRayEntityScene',
-        description = "V-Ray scene node tree",
-    )
-
-    viewport_resolution_override: bpy.props.EnumProperty(
-        name = "Viewport Resolution",
-        default = "auto",
-        items = (
-            ("auto", "Auto", "Auto"),
-            ("0.25", "25%", "25%"),
-            ("0.5", "50%", "50%"),
-            ("0.75", "75%", "75%"),
-            ("1.0", "100%", "100%")
-        )
-    )
 
 # Quick-toggle proxies for the Common > Rendering panel. They mirror underlying
 # scene-level V-Ray properties so a single Blender checkbox can flip an enum or
@@ -661,18 +708,37 @@ def _setQuickCaustics(self, value):
         vrayScene.SettingsCaustics.mode = "2" if vrayScene.SettingsImageSampler.type == "3" else "0"
 
 
-class VRayCommonTabUI(bpy.types.PropertyGroup):
-    """ UI-only state for the Common tab: quick-toggle proxies, force-open flags
-        for nested rollouts, and highlight (alert) state used when redirecting
-        the user to a deeply-nested parameter.
-    """
+class VRayScene(VRayEntity, bpy.types.PropertyGroup):
+    ntree: bpy.props.PointerProperty(
+        name = "Node Tree",
+        type = bpy.types.NodeTree,
+        poll = lambda s, p: p.bl_idname == 'VRayEntityScene',
+        description = "V-Ray scene node tree",
+    )
 
-    # Quick-toggle BoolProperty proxies for the Common > Rendering rollout.
+    viewport_resolution_override: bpy.props.EnumProperty(
+        name = "Viewport Resolution",
+        default = "auto",
+        items = (
+            ("auto", "Auto", "Auto"),
+            ("0.25", "25%", "25%"),
+            ("0.5", "50%", "50%"),
+            ("0.75", "75%", "75%"),
+            ("1.0", "100%", "100%")
+        )
+    )
+
+    # Quick-toggle BoolProperty proxies for the Common > Rendering rollout. They live on
+    # the Scene rather than on the WindowManager because Blender never pushes an undo step
+    # for a button whose owner ID is the window manager (ID_CHECK_UNDO excludes ID_WM), so
+    # WM-hosted proxies would silently change scene data without being undoable.
+    # ANIMATABLE is cleared because the proxies have no storage of their own.
     quick_auto_exposure: bpy.props.BoolProperty(
         name        = "Auto Exposure",
         description = "Enable Automatic exposure correction (requires Light cache to be ON for interactive rendering)",
         get         = _getQuickAutoExposure,
         set         = _setQuickAutoExposure,
+        options     = set()
     )
 
     quick_auto_white_balance: bpy.props.BoolProperty(
@@ -680,6 +746,7 @@ class VRayCommonTabUI(bpy.types.PropertyGroup):
         description = "Enable automatic white balance",
         get         = _getQuickAutoWhiteBalance,
         set         = _setQuickAutoWhiteBalance,
+        options     = set()
     )
 
     quick_motion_blur: bpy.props.BoolProperty(
@@ -687,6 +754,7 @@ class VRayCommonTabUI(bpy.types.PropertyGroup):
         description = "Enable Motion blur for non V-Ray Cameras",
         get         = _getQuickMotionBlur,
         set         = _setQuickMotionBlur,
+        options     = set()
     )
 
     quick_caustics: bpy.props.BoolProperty(
@@ -694,7 +762,15 @@ class VRayCommonTabUI(bpy.types.PropertyGroup):
         description = "Enable Caustics",
         get         = _getQuickCaustics,
         set         = _setQuickCaustics,
+        options     = set()
     )
+
+
+class VRayCommonTabUI(bpy.types.PropertyGroup):
+    """ UI-only state for the Common tab: force-open flags for nested rollouts, and
+        highlight (alert) state used when redirecting the user to a deeply-nested
+        parameter.
+    """
 
     # Programmatic open/close state for inner rollouts driven by `layout.panel_prop`.
     # The settings buttons in the Common > Rendering rollout flip these to True when
@@ -718,6 +794,21 @@ class VRayCommonTabUI(bpy.types.PropertyGroup):
         name    = "Highlight Target",
         default = "",
     )
+
+
+class VRaySlotTarget(bpy.types.PropertyGroup):
+    """ Transient address of the texture slot whose picker menu is open.
+
+        Written by VRAY_OT_slot_open_picker just before it pops the menu, read by the menu to stamp
+        each entry's operator. A menu cannot carry operator properties, and context_pointer_set is
+        not an option: those pointers are not refcounted, and a socket is not an ID and moves when a
+        node's socket list changes, so a tree edit or an undo while the menu is open would
+        dereference freed memory. UI-only state: never saved, never part of undo.
+    """
+    owner_type: bpy.props.StringProperty()
+    owner_name: bpy.props.StringProperty()
+    node_name:  bpy.props.StringProperty()
+    attr_name:  bpy.props.StringProperty()
 
 
 class VRayWindowManager(bpy.types.PropertyGroup):
@@ -757,6 +848,13 @@ class VRayWindowManager(bpy.types.PropertyGroup):
         name = "Common Tab UI",
         type = VRayCommonTabUI,
         description = "UI-only state for the Common tab"
+    )
+
+    # The texture slot whose picker menu is currently open.
+    slot_target: bpy.props.PointerProperty(
+        name = "Texture Slot Target",
+        type = VRaySlotTarget,
+        description = "UI-only address of the slot whose texture picker is open"
     )
 
 class VRayFur(VRayEntity, bpy.types.PropertyGroup):
@@ -1121,6 +1219,7 @@ def register():
 
 
     bpy.utils.register_class(VRayCommonTabUI)
+    bpy.utils.register_class(VRaySlotTarget)
     bpy.utils.register_class(VRayWindowManager)
     bpy.types.WindowManager.vray = bpy.props.PointerProperty(
         name = "V-Ray Settings",
@@ -1139,6 +1238,7 @@ def unregister():
 
     bpy.utils.unregister_class(VRayScene)
     bpy.utils.unregister_class(VRayWindowManager)
+    bpy.utils.unregister_class(VRaySlotTarget)
     bpy.utils.unregister_class(VRayCommonTabUI)
 
     for pluginName in PLUGIN_MODULES:

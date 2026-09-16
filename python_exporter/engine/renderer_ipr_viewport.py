@@ -64,6 +64,10 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         # The region dimensions of the last draw operation. Used to detect if the region dimensions have changed .
         self.lastRegionDimensions = (0, 0)
 
+        # Set by stop() so that the render-stopped callback can tell our own stop apart from
+        # one requested elsewhere, e.g. from the VFB's 'Stop render' button.
+        self._stopRequested = False
+
     @staticmethod
     def isActive():
         """ Return True if an interactive renderer is currently active """
@@ -86,6 +90,8 @@ class VRayRendererIprViewport(VRayRendererIprBase):
 
     def stop(self, block=True):
         if self.renderer:
+            # Blender is already leaving RENDERED shading, don't let the callback change it.
+            self._stopRequested = True
             vray.renderEnd(self.renderer)
 
             if block:
@@ -96,6 +102,11 @@ class VRayRendererIprViewport(VRayRendererIprBase):
             VRayRendererIprViewport._activeRenderer = None
             VRayRendererIprViewport._activeInstance = None
             self._imageUpdatePending = True
+
+            # Ending the RENDERED session makes Blender kill any pending material preview
+            # jobs, leaving them as spinners forever. Re-kick them once the teardown settles.
+            from vray_blender.engine.renderer_preview import scheduleStuckPreviewCheck
+            scheduleStuckPreviewCheck()
 
     def _startDrawPoller(self):
         # Start a poller to trigger redraw operation when a new rendered image is received.
@@ -170,7 +181,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
                 renderSizesOnly = region3d.view_matrix == self.persistedState.prevRegion3dViewMatrix
                 self.viewParams = exportViewportView(ctx, self.viewParams, renderSizesOnly)
 
-                engine.update_stats("", vray.getEngineUpdateMessage(self.renderer))
+                self._updateStats(engine)
 
                 self._drawViewport(context)
                 self.persistedState.prevRegion3dViewMatrix = region3d.view_matrix.copy()
@@ -191,6 +202,13 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         def onStopped(isAborted: bool):
             if isAborted:
                 bpy.app.timers.register(lambda: debug.reportError("Connection to renderer lost. Restart viewport rendering."))
+            elif self._stopRequested:
+                # We ended the render ourselves, so Blender has already left RENDERED shading.
+                # Forcing SOLID would stomp the mode the user just selected. See VBLD-2602.
+                return
+
+            # The render was stopped behind Blender's back (aborted, or stopped from the VFB).
+            # Switch to SOLID as the viewport is still in RENDERED with a dead renderer.
             VfbEventHandler.stopViewportRender()
 
         self.cbRenderStopped = lambda isAborted: onStopped(isAborted)
@@ -230,7 +248,7 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         if self.lastRegionDimensions != (region.width, region.height) and \
             region.width != getRegionWidth(region): 
             
-            debug.reportAsync(
+            debug.report(
                 'WARNING',
                 "The image was scaled down due to the viewport"
                 " resolution exceeding the Community Edition's limit."
@@ -243,6 +261,24 @@ class VRayRendererIprViewport(VRayRendererIprBase):
         if vray.withProfiling:
             self._calculateFps()
             self._drawFps(region)
+
+    def _updateStats(self, engine: bpy.types.RenderEngine):
+        """ Report the stage V-Ray is working on as viewport text. Titles come from V-Ray, so this
+            covers every phase - 'Compiling kernels', 'Building light cache', 'Compiling geometry' ...
+        """
+        stage = ""
+
+        # Only the stages waited through with an empty viewport - after that the image speaks for itself.
+        if self.drawData is None:
+            # From the control connection - the renderer one does not flush its sends while
+            # startSync() blocks it, which is what happens during GPU kernel compilation.
+            stage, progress = vray.getRenderStage()
+
+            # V-Ray clamps its estimate short of the end, so truncate rather than round to 100%.
+            if stage and progress > 0.0:
+                stage = f"{stage} {int(progress * 100)}%"
+
+        engine.update_stats(stage, vray.getEngineUpdateMessage(self.renderer))
 
     def _calculateFps(self):
         receivedCount = vray.getReceivedImagesCount(self.renderer)

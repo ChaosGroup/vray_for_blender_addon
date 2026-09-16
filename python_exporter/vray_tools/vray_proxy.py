@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import math
 import struct
 from pathlib import PurePath
 import os
@@ -15,7 +16,7 @@ from mathutils import Vector, Matrix
 from vray_blender import debug
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVrayScene, matrixLayoutToMatrix, mat4x4ToTuple
 from vray_blender.lib import blender_utils, sys_utils, path_utils
-from vray_blender.lib.blender_utils import hasShadowedAttrChanged, updateShadowAttr, getPropertyDefaultValue
+from vray_blender.lib.blender_utils import hasShadowedAttrChanged, updateShadowAttr, getShadowAttr, getPropertyDefaultValue
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.vray_tools import vray_proxy
 
@@ -39,6 +40,21 @@ _PREVIEW_TYPES = {
 }
 
 
+def runVRayTools(cmd: list[str]):
+    """ Run a 'vraytools' command line and return the CompletedProcess.
+
+        Shared by all callers of the tool so that the logic is reused.
+    """
+    from subprocess import PIPE, run
+
+    # On Windows the tool had a load-time dependency on vray.dll, now the code below is left just
+    # in case future shared library dependency appears.
+    appSdkPath = sys_utils.getAppSdkPath()
+    cwd = appSdkPath if os.path.isdir(appSdkPath) else None
+
+    return run(cmd, cwd=cwd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+
+
 def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int):
     """ Run vraytools utility to dump the requested data from a mesh file (.vrmesh, .abc etc) into a simplified
         binary format which can that be easily loaded by the Python code.
@@ -53,7 +69,6 @@ def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: i
     Returns:
         str | None: Error message on failure, None on success
     """
-    from subprocess import PIPE, run
 
     vrayToolsApp = path_utils.getBinTool(sys_utils.getPlatformName("vraytools"))
 
@@ -66,7 +81,7 @@ def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: i
     cmd.extend(['-previewFaces', str(previewFaces)])
     cmd.extend(['-flipAxis', str(flipAxis)])
 
-    result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    result = runVRayTools(cmd)
 
     debug.printInfo(f"Running mesh preview tool: {' '.join(cmd)}")
 
@@ -96,7 +111,6 @@ def _dumpVrSceneFile(sceneFile: str, binFile: str, previewType: int, previewFace
     Returns:
         str | None: Error message on failure, None on success
     """
-    from subprocess import PIPE, run
 
     vrayToolsApp = path_utils.getBinTool(sys_utils.getPlatformName("vraytools"))
 
@@ -111,7 +125,7 @@ def _dumpVrSceneFile(sceneFile: str, binFile: str, previewType: int, previewFace
 
     debug.printInfo(f"Calling: {' '.join(cmd)}")
 
-    result = run(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    result = runVRayTools(cmd)
 
     debug.printInfo(f"Running scene preview tool: {' '.join(cmd)}")
 
@@ -185,6 +199,22 @@ def _basisMatrixFromVectors(v0, v1, v2, v3):
             (v0.z, v1.z, v2.z, v3.z),
             (1.0,  1.0,  1.0,  1.0)
         ))
+
+
+def _flipAxisMatrix(flipAxis: str) -> Matrix:
+    """ Return the rotation that the vraytools '-flipAxis' option bakes into the preview
+        vertices, so the same reorientation can be applied in Blender without regenerating
+        the preview.
+    """
+    # GeomMeshFile.flip_axis exposes 0/1/2, VRayScene.flip_axis exposes 0/2/3. The '2' meaning
+    # is the same in both; Y-Up->Z-Up is '1' for the proxy and '3' for the scene.
+    match flipAxis:
+        case '1' | '3': # Y-Up->Z-Up (Maya->Max)
+            return Matrix.Rotation(math.radians(90.0), 4, 'X')
+        case '2': # Z-Up->Y-Up (Max->Maya)
+            return Matrix.Rotation(math.radians(-90.0), 4, 'X')
+        case _: # as-is
+            return Matrix.Identity(4)
 
 
 def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray):
@@ -351,21 +381,11 @@ def _applyTransformToVertex(vertex: Vector, mat: Matrix):
 
 def _replaceObjMesh(mesh: bpy.types.Mesh, meshData):
     # Replace object's mesh using fast foreach_set path
-    vertices = meshData['vertices']
     faces = meshData['faces']
-    numVerts = len(vertices)
     numFaces = len(faces)
-    numLoops = numFaces * 3
 
-    tempMesh = bpy.data.meshes.new("VRayProxyPreviewTemporary")
-    tempMesh.vertices.add(numVerts)
-    tempMesh.loops.add(numLoops)
-    tempMesh.polygons.add(numFaces)
-
-    tempMesh.vertices.foreach_set('co', np.ascontiguousarray(vertices, dtype=np.float32).ravel())
-    tempMesh.loops.foreach_set('vertex_index', np.ascontiguousarray(faces, dtype=np.int32).ravel())
-    tempMesh.polygons.foreach_set('loop_start', np.arange(0, numLoops, 3, dtype=np.int32))
-    tempMesh.polygons.foreach_set('loop_total', np.full(numFaces, 3, dtype=np.int32))
+    from vray_blender.lib.mesh_build_utils import buildTriMeshBase
+    tempMesh = buildTriMeshBase("VRayProxyPreviewTemporary", meshData['vertices'], faces)
     tempMesh.update()
 
     blender_utils.replaceObjectMesh(mesh, tempMesh)
@@ -425,6 +445,11 @@ def loadVRayProxyPreviewMesh(geomMeshFile, filePath: str, animFrame = 0, outMeta
         # In addition to the scale, we also apply the transform of the previous proxy so that the new
         # object appeared at the same position
         appliedTransform = _computeAppliedTransform(geomMeshFile, mesh)
+        # Capture the applied transform while the basis is still valid. If the scale is later
+        # dragged through 0, the anchors collapse onto a single point and rotation/scale can no
+        # longer be derived from the mesh; _computeAppliedTransform reuses this to restore the
+        # full rotation + translation when the scale is raised again.
+        geomMeshFile['applied_transform_backup'] = mat4x4ToTuple(appliedTransform)
         meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], appliedTransform)
         parentObjPos = Vector(geomMeshFile['initial_preview_mesh_pos'])
         for proxyObj in (o for o in bpy.data.objects if o.data is mesh):
@@ -454,6 +479,56 @@ def loadVRayProxyPreviewMesh(geomMeshFile, filePath: str, animFrame = 0, outMeta
         geomMeshFile['num_preview_faces'] = len(meshData['faces'])
 
     updateShadowAttr(geomMeshFile, 'file')
+
+
+def applyProxyPreviewTransform(geomMeshFile, context):
+    """ Fast path for 'scale'/'flip_axis' changes: transform the already-loaded preview mesh in
+        place with a delta matrix instead of regenerating it through the external vraytools process.
+    """
+    mesh = geomMeshFile.id_data
+
+    prevScale = getShadowAttr(geomMeshFile, 'scale')
+    prevFlip  = getShadowAttr(geomMeshFile, 'flip_axis')
+    newScale  = geomMeshFile.scale
+    newFlip   = geomMeshFile.flip_axis
+
+    # Nothing loaded yet (no file, or an empty mesh).
+    if (not geomMeshFile.file) or (len(mesh.vertices) == 0):
+        updateShadowAttr(geomMeshFile, 'scale')
+        updateShadowAttr(geomMeshFile, 'flip_axis')
+        return
+
+    if (prevScale == newScale) and (prevFlip == newFlip):
+        return
+
+    if prevScale == 0.0:
+        if err := loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current):
+            debug.reportError(err)
+    else:
+        # Tool-space delta from the previously baked (scale, flip) to the new one.
+        flipDelta  = _flipAxisMatrix(newFlip) @ _flipAxisMatrix(prevFlip).inverted()
+        scaleRatio = newScale / prevScale
+        delta = Matrix.Scale(scaleRatio, 4) @ flipDelta
+        appliedTransform = _computeAppliedTransform(geomMeshFile, mesh)
+        localDelta = appliedTransform @ delta @ appliedTransform.inverted()
+        geomMeshFile['applied_transform_backup'] = mat4x4ToTuple(appliedTransform)
+
+        # Update the preview mesh.
+        mesh.transform(localDelta)
+        mesh.update()
+
+        # Keep basis_matrix consistent with the moved anchor verts.
+        basisMatrix = matrixLayoutToMatrix(geomMeshFile.basis_matrix)
+        geomMeshFile['basis_matrix'] = mat4x4ToTuple(delta @ basisMatrix)
+
+        # Reposition any lights attached to the proxy, exactly as the full load does.
+        parentObjPos = Vector(geomMeshFile.initial_preview_mesh_pos)
+        for proxyObj in (o for o in bpy.data.objects if o.data is mesh):
+            _positionProxyLights(proxyObj, parentObjPos)
+
+    updateShadowAttr(geomMeshFile, 'scale')
+    updateShadowAttr(geomMeshFile, 'flip_axis')
+
 
 def loadVRayScenePreviewMesh(vrayScene, absFilePath: str):
     """ Load preview from a file format compatible with VRayScene.
@@ -713,6 +788,25 @@ def _computeAppliedTransform(propGroup, mesh: bpy.types.Mesh):
     currDiffVecs = [currPts[i + 1] - currPts[0] for i in range(3)]
     baseDiffMatrix = Matrix(tuple(zip(*baseDiffVecs)))
     currDiffMatrix = Matrix(tuple(zip(*currDiffVecs)))
+
+    # The anchors collapse onto a single point - so rotation/scale can no longer be derived and
+    # inverted_safe() below would yield a near-zero matrix that collapses the reloaded geometry to
+    # a point (invisible preview) - in two cases:
+    #   * GeomMeshFile.scale == 0 collapses the stored reference (baseDiffMatrix). The collapse
+    #     point still marks the object's position, so keep the translation recovered from it.
+    #   * The mesh itself is scaled to 0 in Edit Mode, collapsing the live anchors
+    #     (currDiffMatrix). Their position is the Edit Mode pivot and carries no meaning, so keep
+    #     the full backup transform to restore the proxy where it was.
+    # In both cases take the rotation/scale from the transform captured by loadVRayProxyPreviewMesh
+    # while the basis was still valid. Returning the backup (instead of a degenerate matrix) also
+    # keeps callers from writing a corrupted value back into 'applied_transform_backup'.
+    baseSingular = baseDiffMatrix.determinant() == 0.0
+    if baseSingular or (currDiffMatrix.determinant() == 0.0):
+        result = matrixLayoutToMatrix(propGroup.applied_transform_backup)
+        if baseSingular:
+            result.translation = currPts[0] - basePts[0]
+        return result
+
     rotScaleMatrix = currDiffMatrix @ baseDiffMatrix.inverted_safe()
 
     result = rotScaleMatrix.to_4x4()

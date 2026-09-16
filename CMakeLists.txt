@@ -31,10 +31,13 @@ set(ADDON_PATH          "${_default_addon_path}" CACHE PATH "Path to the Blender
 
 set(BINTOOLS_PATH       ""  CACHE STRING  "Path to cgrepo (parent of bintools). If not set, xpaks won't be used.")
 set(INSTALL_LOCAL       ON  CACHE BOOL    "Configure Install step")
-set(WITH_DR2            ON  CACHE BOOL    "Enable DR2")
+set(INSTALL_AUTOMATIC   ON  CACHE BOOL    "Include the INSTALL target in the MSVS default build")
 set(CUSTOM_APPSDK_ROOT  ""  CACHE PATH    "Root directory of the App SDK (optional)")
 set(WITH_PROFILING      "None" CACHE STRING "Profiling features to enable")
 set(WITH_OSL            OFF CACHE BOOL    "Enables OSL materials")
+set(WITH_COSMOS         ON  CACHE BOOL    "Build the Chaos Cosmos browser and importer into VRayZmqServer")
+set(WITH_VERAS          ON  CACHE BOOL    "Build the Chaos Veras upload window into VRayZmqServer")
+set(WITH_CHAOS_SCATTER  ON  CACHE BOOL    "Install the Chaos Scatter add-on beside vray_blender")
 set(WITH_DYNAMIC_DEOPT  OFF CACHE BOOL    "Enable MSVS /dynamicdeopt")
 set(NANOBIND_LIBDIR     ""  CACHE STRING  "Path to Nanobind library")
 set_property(CACHE WITH_PROFILING PROPERTY STRINGS None Profiling Messages All)
@@ -42,6 +45,10 @@ set_property(CACHE WITH_PROFILING PROPERTY STRINGS None Profiling Messages All)
 if (MSVC)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN NOGDI _CRT_SECURE_NO_WARNINGS)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT ProgramDatabase)
+    if (INSTALL_AUTOMATIC)
+        # Build Solution runs INSTALL too, instead of it having to be built separately.
+        set(CMAKE_VS_INCLUDE_INSTALL_TO_DEFAULT_BUILD ON)
+    endif()
     if (WITH_DYNAMIC_DEOPT)
         add_compile_options($<$<CONFIG:Release>:/dynamicdeopt>)
         add_link_options($<$<CONFIG:Release>:/dynamicdeopt>)
@@ -78,10 +85,6 @@ if(UNIX)
     endif()
 endif()
 
-if (WITH_DR2)
-    add_compile_definitions(WITH_DR2)
-endif()
-
 if (WITH_PROFILING STREQUAL "Profiling")
     add_compile_definitions(WITH_PROFILING)
 elseif (WITH_PROFILING STREQUAL "Messages")
@@ -114,8 +117,12 @@ if (INSTALL_LOCAL AND ADDON_PATH)
     endif()
 endif()
 
-set (INSTALL_PREFIX "${ADDON_PATH}/bin")
-fix_separators(INSTALL_PREFIX)
+# Fallback destination for components that got no explicit VRAY_*_INSTALL_PREFIX.
+# Guarded, or an empty ADDON_PATH would turn it into the literal "/bin".
+if (ADDON_PATH)
+    set (INSTALL_PREFIX "${ADDON_PATH}/bin")
+    fix_separators(INSTALL_PREFIX)
+endif()
 
 fix_separators(VRAY_LIB_INSTALL_PREFIX)
 fix_separators(VRAY_ZMQ_SERVER_INSTALL_PREFIX)
@@ -127,7 +134,14 @@ if (FULL_BUILD)
 
     xpak_work_dir()
 
-    install_xpak(PAK ${BLENDER_SDK_XPAK} VERSION ${BLENDER_SDK_XPAK_VERSION})
+    # No Blender SDK pack for win_arm64, and everything used from it there - the Boost and
+    # jpeg headers, the tinyxml sources, the Qt conf - carries no architecture anyway.
+    set(_blender_sdk_arch "")
+    if (CGR_TARGET_ARCH STREQUAL "win_arm64")
+        set(_blender_sdk_arch ARCH x64)
+    endif()
+
+    install_xpak(PAK ${BLENDER_SDK_XPAK} VERSION ${BLENDER_SDK_XPAK_VERSION} ${_blender_sdk_arch})
     set(SDK_ROOT     "${${BLENDER_SDK_XPAK}_ROOT}")
 
     if (CUSTOM_APPSDK_ROOT)
@@ -167,6 +181,98 @@ set_target_properties(tsl::robin_map PROPERTIES
 )
 
 ####################################################
+# ZMQ
+#
+# The full build takes all of ZMQ from the 'libzmq' libpak in the xsdk submodule: zmq.h and the
+# header-only cppzmq binding from its sources, the static library from the libpak build.
+#
+# The open-source build has no libpak tooling, so the caller supplies libzmq through
+# ZMQ_LIBRARIES / ZMQ_INCLUDE_DIRS. Those name the library files outright rather than a root to
+# search, so nothing here has to know how the library was named - that varies by toolset, libzmq
+# version and whoever built it. ZMQ_CPPZMQ_DIR can override cppzmq as well, which is what lets the
+# open-source build work without an xsdk checkout at all.
+
+set(XSDK_LIBZMQ_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/xsdk/libzmq")
+
+set(_zmq_includes "")
+set(_zmq_libs     "")
+set(_zmq_defines
+    # Without this zmq.h declares every entry point __declspec(dllimport) on Windows.
+    ZMQ_STATIC
+    # The wrapper uses draft sockets (poller_t), so zmq.h has to declare them and cppzmq has to
+    # wrap them. libzmq itself must be built with drafts enabled or the two disagree.
+    ZMQ_BUILD_DRAFT_API
+)
+
+if (FULL_BUILD)
+    set(ZMQ_LIBPAK "libzmq")
+    install_libpak(PAK ${ZMQ_LIBPAK})
+
+    list(APPEND _zmq_includes "${XSDK_LIBZMQ_ROOT}/libzmq/include")
+
+    # Not overridable here: these headers have to be the ones the libpak was packaged from.
+    set(ZMQ_CPPZMQ_DIR "${XSDK_LIBZMQ_ROOT}/cppzmq")
+    set(_cppzmq_hint   "run 'git submodule update --init'")
+
+    # zmq_s is the payload of the libpak's xsdk_libzmq_s target - the static half. Its sibling
+    # zmq.lib is the import library of the DLL half, which we do not use. Located rather than
+    # spelled out, and unset first because the artifacts path moves with the libpak version.
+    unset(_zmq_libpak_lib CACHE)
+    find_library(_zmq_libpak_lib NAMES zmq_s PATHS "${${ZMQ_LIBPAK}_ROOT}" NO_DEFAULT_PATH)
+    if (NOT _zmq_libpak_lib)
+        message(FATAL_ERROR "Static libzmq not found in the libzmq libpak artifacts (${${ZMQ_LIBPAK}_ROOT})")
+    endif()
+    list(APPEND _zmq_libs "${_zmq_libpak_lib}")
+else()
+    set(ZMQ_LIBRARIES    "" CACHE STRING "libzmq library file(s) to link, as full paths.")
+    set(ZMQ_INCLUDE_DIRS "" CACHE STRING "Directories holding zmq.h.")
+    set(ZMQ_CPPZMQ_DIR "" CACHE PATH "Directory holding zmq.hpp and zmq_addon.hpp.")
+
+    fix_separators(ZMQ_LIBRARIES)
+    fix_separators(ZMQ_INCLUDE_DIRS)
+    fix_separators(ZMQ_CPPZMQ_DIR)
+
+    if (ZMQ_LIBRARIES)
+        list(APPEND _zmq_libs ${ZMQ_LIBRARIES})
+    else()
+        message(FATAL_ERROR "ZMQ_LIBRARIES is empty - set it to the libzmq library file(s) to link.")
+    endif()
+
+    if (ZMQ_INCLUDE_DIRS)
+        list(APPEND _zmq_includes ${ZMQ_INCLUDE_DIRS})
+    else()
+        message(FATAL_ERROR "ZMQ_INCLUDE_DIRS is empty - set it to the directories holding zmq.h.")
+    endif()
+
+    if (ZMQ_CPPZMQ_DIR)
+        set(_cppzmq_hint   "check ZMQ_CPPZMQ_DIR")
+    else()
+        message(FATAL_ERROR "ZMQ_CPPZMQ_DIR is empty - set it to the directory holding zmq.hpp and zmq_addon.hpp.")
+    endif()
+endif()
+
+if (NOT EXISTS "${ZMQ_CPPZMQ_DIR}/zmq.hpp")
+    message(FATAL_ERROR "cppzmq not found in \"${ZMQ_CPPZMQ_DIR}\" - ${_cppzmq_hint}")
+endif()
+list(APPEND _zmq_includes "${ZMQ_CPPZMQ_DIR}")
+
+if (WIN32)
+    # Winsock, UuidCreateSequential and GetAdaptersAddresses respectively. A static libzmq
+    # carries no import records, so its consumers have to link these themselves.
+    list(APPEND _zmq_libs ws2_32.lib rpcrt4.lib iphlpapi.lib)
+endif()
+
+message(STATUS "ZMQ: ${_zmq_libs}")
+message(STATUS "cppzmq: ${ZMQ_CPPZMQ_DIR}")
+
+add_library(zmq::zmq INTERFACE IMPORTED)
+set_target_properties(zmq::zmq PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${_zmq_includes}"
+    INTERFACE_COMPILE_DEFINITIONS "${_zmq_defines}"
+    INTERFACE_LINK_LIBRARIES      "${_zmq_libs}"
+)
+
+####################################################
 # Open-source components
 
 # VRayZmqWrapper
@@ -198,6 +304,12 @@ endif()
 
 if(INSTALL_LOCAL AND ADDON_PATH)
     install(DIRECTORY "python_exporter/" DESTINATION "${ADDON_PATH}")
+
+    # The Chaos Scatter addon installs beside vray_blender so it can be enabled independently.
+    if (WITH_CHAOS_SCATTER)
+        get_filename_component(_addonsRoot "${ADDON_PATH}" DIRECTORY)
+        install(DIRECTORY "chaos_scatter/" DESTINATION "${_addonsRoot}/chaos_scatter")
+    endif()
 endif()
 
 if (FULL_BUILD)

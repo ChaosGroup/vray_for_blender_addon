@@ -3,11 +3,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scoped
 from vray_blender.plugins.settings.SettingsImageSampler import _maxSubdivsGPUToSamplesLimit, _maxSubdivsCPUToSamplesLimit
 from vray_blender.lib.sys_utils import isGPUEngine
 
 def run():
-    for scene in bpy.data.scenes:
+    for scene in scoped(bpy.data.scenes):
         vrayScene = scene.vray
         settingsImageSampler = vrayScene.SettingsImageSampler
 

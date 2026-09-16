@@ -11,7 +11,7 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.nodes.curves_node import addCurvesUpdateCallback, copyCurvesData, createCurvesNode, getCurvesNode, hasCurvesNode, removeCurvesNode
+from vray_blender.nodes.curves_node import addCurvesUpdateCallback, copyCurvesData, createCurvesNode, getCurvesNode, hasCurvesNode, removeCurvesNode, exportLineWidthCurves
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -99,21 +99,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginDesc = PluginDesc(pluginName, node.vray_plugin)
     pluginDesc.vrayPropGroup = propGroup
 
-    for curveType in _CURVE_TYPES:
-        curvesNode = getCurvesNode(node, f'_{curveType}')
-        curve  = curvesNode.mapping.curves[3]
-
-        pluginDesc.setAttribute(f"{curveType}CurvePositions", [point.location[0] for point in curve.points])
-        pluginDesc.setAttribute(f"{curveType}CurveInterpolations", [("3" if "AUTO" in point.handle_type else "1") for point in curve.points])
-
-        # The Y coordinate of the points should be exported as TEXTURE_FLOAT_LIST, i.e. a list of plugins
-        pointYCoords = []
-        for point in curve.points:
-            texPlugin = PluginDesc(Names.nextVirtualNode(nodeCtx, 'FloatToTex'), 'FloatToTex')
-            texPlugin.setAttribute('input', point.location[1])
-            pointYCoords.append(commonNodesExport.exportPluginWithStats(nodeCtx, texPlugin))
-
-        pluginDesc.setAttribute(f"{curveType}CurveValues", pointYCoords )
+    exportLineWidthCurves(nodeCtx, pluginDesc, node)
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc)
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)

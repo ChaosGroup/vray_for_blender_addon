@@ -44,6 +44,32 @@
             "attr": "opacity_tex",
             "desc": "Opacity of the cartoon line",
             "default": 1.0
+        },
+        {
+            "attr": "depth_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the depth-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "angular_curve",
+            "type": "INT",
+            "desc": "Curve for controlling the view-angle-based line width",
+            "default": 0,
+            "options": {
+                "derived": true
+            }
+        },
+        {
+            "attr": "depthCurveOn",
+            "desc": "Enable depth-based line width"
+        },
+        {
+            "attr": "angularCurveOn",
+            "desc": "Enable view-angle-based line width"
         }
     ],
     "Widget": {
@@ -100,6 +126,56 @@
                         "name": "overlapThreshold"
                     }
                 ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "depth scaling",
+                "label": "Depth Scaling",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "depthCurveOn"
+                    },
+                    {
+                        "layout": "BOX",
+                        "active": { "cond": "::depthCurveOn!=0" },
+                        "attrs": [
+                            {
+                                "name": "minDepth"
+                            },
+                            {
+                                "name": "maxDepth"
+                            },
+                            {
+                                "name": "depth_curve",
+                                "label": "Depth Curve",
+                                "custom_draw": "drawLineWidthCurveTemplate"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "angular scaling",
+                "label": "Angular Scaling",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "angularCurveOn"
+                    },
+                    {
+                        "layout": "BOX",
+                        "active": { "cond": "::angularCurveOn!=0" },
+                        "attrs": [
+                            {
+                                "name": "angular_curve",
+                                "label": "Angular Curve",
+                                "custom_draw": "drawLineWidthCurveTemplate"
+                            }
+                        ]
+                    }
+                ]
             }
         ]
     },
@@ -146,7 +222,9 @@
             "lineColor_tex",
             "lineColorInner",
             "lineColorInner_tex",
-            "opacity"
+            "opacity",
+            "depthCurveExternal",
+            "angularCurveExternal"
         ]
     }
 }

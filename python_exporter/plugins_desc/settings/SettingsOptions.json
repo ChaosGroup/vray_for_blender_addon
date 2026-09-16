@@ -304,6 +304,19 @@
         },
         
         {
+            "attr" : "toon_lineWidthMult",
+            "default" : 1.0,
+            "desc" : "Global multiplier applied to all VRayToon outer and inner line widths",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Toon line width multiplier",
+                "min" : 0.0,
+                "soft_max" : 10.0
+            }
+        },
+        
+        {
             "attr" : "misc_abortOnMissingAsset",
             "default" : false,
             "desc" : "Abort rendering when a required file is missing",

@@ -209,7 +209,7 @@ class VRAY_OT_pattern_fix(VRayOperatorBase):
             pattern_ob = context.scene.objects[GeomVRayPattern.pattern_object]
 
         if pattern_ob is None:
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         GeomVRayPattern.crop_size = pattern_ob.dimensions
 

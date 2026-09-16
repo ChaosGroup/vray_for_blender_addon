@@ -12,10 +12,9 @@
 
 
 #define ZMQ_HAVE_POLLER
-#define ZMQ_BUILD_DRAFT_API		// for poller_t
 
-#include "cppzmq/zmq.hpp"
-#include "cppzmq/zmq_addon.hpp"
+#include <zmq.hpp>
+#include <zmq_addon.hpp>
 
 #include "zmq_common.hpp"
 
@@ -101,6 +100,10 @@ public:
 	/// Returns 'true' when the poller thread has exited and the agent can safely be destroyed
 	bool isStopped () const;
 
+	/// Returns 'true' if the agent stopped because libzmq aborted. The connection is then
+	/// dead for good, so callers should report a failure rather than try to reconnect.
+	bool hasAborted () const;
+
 private:
 	void pollerLoop	(std::string addr);
 
@@ -130,6 +133,7 @@ private:
 	ExporterType workerType;		///< The type of worker to create. This value is transparent to the protocol.
 	bool isClient;                  ///< Client will initiate the handshake
 	std::atomic<State> state;       ///< The running state of the agent
+	std::atomic_bool aborted;       ///< Set when the poller loop was killed by a libzmq abort
 
 	ZmqTimeouts timeouts;           ///< Timeout settings
 	MsgQueue msgQueue;              ///< Queue for outgoing messages

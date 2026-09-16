@@ -5,7 +5,7 @@
 
 import bpy
 
-from ..importing import _getInputSocketNameByAttr
+from ..importing import getInputSocketNameByAttr
 from ..sockets import addInput, addOutput
 from ..links import autoConnectSingleSocket
 from ..operators import sockets as SocketOperators

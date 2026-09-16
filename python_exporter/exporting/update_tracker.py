@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import bpy
+from contextlib import contextmanager
 from enum import IntEnum, IntFlag
 
 from vray_blender.exporting.plugin_tracker import getObjTrackId
@@ -33,7 +34,12 @@ class UpdateTracker:
     """
     # Dictionary {UpdateTarget: {obj.session_uid: UpdateFlags}}
     updates: dict[int, UpdateFlags] = {}
-           
+
+    # Material names whose topology tag is pending, while deferMtlTopology() is active.
+    # Names, not datablocks: the deferral spans a whole scene build, over which a held
+    # reference can go stale.
+    deferredMtlTopology: set[str] | None = None
+
     @staticmethod
     def clear():
         UpdateTracker.updates = {}
@@ -59,6 +65,10 @@ class UpdateTracker:
     def tagMtlTopology(context: bpy.types.Context, mtl: bpy.types.Material):
         """ A helper method to tag material topology and all scene objects related to this material """
 
+        if UpdateTracker.deferredMtlTopology is not None:
+            UpdateTracker.deferredMtlTopology.add(mtl.name)
+            return
+
         # Tag the material proper
         UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
 
@@ -66,8 +76,50 @@ class UpdateTracker:
         objects = context.scene.objects
 
         for obj in objects:
-            if any([s for s in obj.material_slots if s.material == mtl]):
+            if any(s.material == mtl for s in obj.material_slots) or (obj.vray.material == mtl):
                 UpdateTracker.tagUpdate(obj, UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
+
+    @staticmethod
+    def tagMtlTopologyBatch(context: bpy.types.Context, mtlNames: set[str]):
+        """ tagMtlTopology() for a set of materials in one pass over the scene objects.
+
+            tagMtlTopology() walks every object per material, so tagging N materials one by
+            one costs N * objectCount slot comparisons - 320 * 42k on an imported
+            object-heavy scene. Tagging is a flag OR into a dict keyed by track id, so the
+            single inverted pass records exactly the same updates.
+        """
+        mtls = {mtl for name in mtlNames if (mtl := bpy.data.materials.get(name))}
+        if not mtls:
+            return
+
+        for mtl in mtls:
+            UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
+
+        for obj in context.scene.objects:
+            if any(s.material in mtls for s in obj.material_slots) or (obj.vray.material in mtls):
+                UpdateTracker.tagUpdate(obj, UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
+
+    @staticmethod
+    @contextmanager
+    def deferMtlTopology():
+        """ Collect the materials passed to tagMtlTopology() and tag each of them once on exit.
+
+            tagMtlTopology() walks every object in the scene, and the node-tree update callback
+            calls it once per node per topology change - so building a tree of N nodes tags the
+            same material O(N^2) times. Under this guard a bulk scene build (import, conversion,
+            upgrade) pays for a single walk for all the materials instead.
+        """
+        if UpdateTracker.deferredMtlTopology is not None:
+            yield   # Already deferring; the outermost guard does the flush.
+            return
+
+        UpdateTracker.deferredMtlTopology = set()
+        try:
+            yield
+        finally:
+            mtlNames = UpdateTracker.deferredMtlTopology
+            UpdateTracker.deferredMtlTopology = None
+            UpdateTracker.tagMtlTopologyBatch(bpy.context, mtlNames)
 
     @staticmethod
     def tagCrossObjectUpdates(exporterCtx: ExporterContext, data, updateTarget: UpdateTarget):

@@ -96,7 +96,7 @@ def _getVRayShaderTreeData(context):
         if ob.type == 'LIGHT':
             if ob.data.node_tree:
                 return ob.data.node_tree, ob.data, ob
-        elif material := ob.active_material:
+        elif material := blender_utils.getActiveMaterial(ob):
             return material.node_tree, material, ob
 
     return (None, None, None)
@@ -140,24 +140,6 @@ class VRayNodeTreeEditor(bpy.types.NodeTree):
                 return _getVRayWordNTreeData(context)
 
         return (None, None, None)
-
-
-_OBJECT_TREE_TYPES = {'OBJECT', 'FUR', 'DECAL'}
-
-def iterVRayNodeTrees():
-    """Yield all VRay node trees in the scene.
-
-    Covers material, world, and light node trees, plus object-level VRay trees
-    (displacement, fur, decal) stored as node groups.
-    """
-    for collection in (bpy.data.materials, bpy.data.worlds, bpy.data.lights):
-        for item in collection:
-            if ntree := getattr(item, 'node_tree', None):
-                yield ntree
-
-    for ng in bpy.data.node_groups:
-        if hasattr(ng, 'vray') and ng.vray.tree_type in _OBJECT_TREE_TYPES:
-            yield ng
 
 
 def upgradeTrees():

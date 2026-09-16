@@ -5,6 +5,7 @@
 import bpy
 
 from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
+from vray_blender.engine.plugin_property_readback import queuePluginPropertyValues
 
 from vray_blender.exporting.plugin_tracker import ObjTracker, FakeScopedNodeTracker
 from vray_blender.exporting.tools import FakeTimeStats
@@ -229,6 +230,12 @@ class VRayRendererProdBase:
             Call AFTER the render-job wait loop completes and BEFORE end_result.
             getMetadata isn't valid until V-Ray has finished and sent the final image.
         """
+        # Read back the parameters V-Ray wrote during the frame. Deliberately before the
+        # renderResult check: the values do not come with the pixels, so they are available
+        # even when image_to_blender is off.
+        if self.renderer:
+            queuePluginPropertyValues(vray.getPluginPropertyValues(self.renderer))
+
         if not self.renderResult:
             return
         self._setCryptomatteMetadata(engine)
@@ -287,6 +294,11 @@ class VRayRendererProdBase:
             vray.renderEnd(self.renderer)
             if self.isPreview:
                 vray.deletePreviewRenderer(self.renderer)
+            else:
+                # Does not destroy the main renderer, which is reused across render sessions -
+                # it only gives up this job's claim on it. One that a teardown had to hand over
+                # to this job, because it was still running, is freed from here.
+                vray.releaseMainRenderer(self.renderer)
             self.renderer = None
             self.renderResult = None
             self.renderScene = None
@@ -296,14 +308,26 @@ class VRayRendererProdBase:
         """ Perform a full export of the scene. The depsgraph will be re-evaluated
             in order to pick up any animated values.
         """
+        exporterCtx.resetSceneStats()
+
         try:
+            # Has to be first: it builds the dg.updates index that the passes below read. In
+            # particular syncFurInfo() reaches export_utils.collectConnectedMeshInfo(), which decides
+            # which fur pairs are updated from exporterCtx.dgUpdates. Production reuses one
+            # ExporterContext for every animation frame and clears fullExport after the first
+            # (engine/renderer_prod.py), so running it later would have frames 2..N deciding from the
+            # previous frame's update set.
+            exporterCtx.syncSceneState()
+
             # Has to be called before syncObjVisibility for proper update of the visibility of the fur objects.
             fur_export.syncFurInfo(exporterCtx)
 
-            exporterCtx.calculateObjectVisibility()
             mtl_export.syncMtlExportCache(exporterCtx)
 
             obj_export.GeometryExporter(exporterCtx).syncObjVisibility()
+
+            # Has to be after syncObjVisibility - see ExporterContext.syncActiveInstancers().
+            exporterCtx.syncActiveInstancers()
 
             light_export.syncLightMeshInfo(exporterCtx)
             light_export.collectLightMixInfo(exporterCtx)
@@ -449,8 +473,9 @@ class VRayRendererProdBase:
         settings_export.SettingsExporter(exporterCtx).export()
 
 
-    def _exportCameras(self, exporterCtx: ExporterContext, prevViewParams: dict[str, ViewParams]):
-        return view_export.ViewExporter(exporterCtx).exportProdCameras(prevViewParams)
+    def _exportCameras(self, exporterCtx: ExporterContext, prevViewParams: dict[str, ViewParams],
+                       camerasOnly = False):
+        return view_export.ViewExporter(exporterCtx).exportProdCameras(prevViewParams, camerasOnly)
 
 
     def _exportBakeView(self, exporterCtx: ExporterContext):

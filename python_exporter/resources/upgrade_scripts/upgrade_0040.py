@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 from vray_blender.nodes.sockets import addInput
 
 
@@ -25,12 +26,12 @@ def _upgradeTree(ntree: bpy.types.NodeTree):
 
 
 def run():
-    for material in bpy.data.materials:
+    for material in scopedForUpgrade(bpy.data.materials):
         _upgradeTree(material.node_tree)
 
 
 def check():
     return any(
         _treeNeedsUpgrade(material.node_tree)
-        for material in bpy.data.materials
+        for material in scopedForUpgrade(bpy.data.materials)
     )

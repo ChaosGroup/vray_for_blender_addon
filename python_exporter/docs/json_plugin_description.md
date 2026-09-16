@@ -129,6 +129,7 @@ A list of the visible sockets on the node. Sockets are created for all non-exclu
 `desc`:    	(string) Override the description set in Parameters section  
 `active`:   (bool or [condition](#conditions)) Controls whether the socket is enabled. If false, the socket is shown as disabled.  
 `visible`:  (bool or [condition](#conditions)) Controls the visibility of the socket. If false, the socket is hidden from the node.  
+`link_redirect`: (string) Only for a `ROLLOUT` socket. The name of a grouped param socket that a link dropped on the collapsed rollout header is forwarded to (rollout headers cannot hold links themselves). The rollout auto-expands to reveal the connection. Example: on a "Bump" rollout, `"link_redirect": "bump_map"` lets a texture be dropped straight onto the header.  
 
 ### **output_sockets**
 

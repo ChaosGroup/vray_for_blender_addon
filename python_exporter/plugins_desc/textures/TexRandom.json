@@ -1,0 +1,82 @@
+
+{
+    "Description" : "TexRandom",
+    "ID" : "TexRandom",
+    "Name" : "Random",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "seed",
+            "default" : 42,
+            "desc" : "Random seed. Mixed with color_seed or float_seed",
+            "type" : "INT",
+            "ui" : 
+            {
+                "soft_max" : 1000,
+                "soft_min" : 0
+            }
+        },
+        
+        {
+            "attr" : "color_seed",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Each color component at the shading point affects seed",
+            "type" : "TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "float_seed",
+            "default" : 0.0,
+            "desc" : "Float value at the shading point affects seed",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "range_min",
+            "default" : 0.0,
+            "desc" : "Random value range minimum value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "range_max",
+            "default" : 1.0,
+            "desc" : "Random value range maximum value",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 1.0,
+                "soft_min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "color",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "The resulting random color",
+            "type" : "OUTPUT_TEXTURE",
+            "ui" : {}
+        },
+        
+        {
+            "attr" : "value",
+            "default" : 0.0,
+            "desc" : "The resulting random value",
+            "type" : "OUTPUT_FLOAT_TEXTURE",
+            "ui" : {}
+        }
+    ],
+    "Type" : "TEXTURE",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

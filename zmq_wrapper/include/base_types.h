@@ -615,11 +615,11 @@ struct AttrList {
 	ValueType getType() const ;
 
 	AttrList(DataType && data)
-	    : m_Ptr(new DataType(std::move(data)))
+	    : m_Ptr(std::make_shared<DataType>(std::move(data)))
 	{}
 
 	AttrList(std::initializer_list<T> items) {
-		m_Ptr = DataArrayPtr(new DataType(items));
+		m_Ptr = std::make_shared<DataType>(items);
 	}
 
 	AttrList() {
@@ -632,7 +632,7 @@ struct AttrList {
 	}
 
 	void init() {
-		m_Ptr = DataArrayPtr(new DataType);
+		m_Ptr = std::make_shared<DataType>();
 	}
 
 	void resize(int cnt) {
@@ -645,6 +645,10 @@ struct AttrList {
 
 	void append(const T &value) {
 		m_Ptr.get()->push_back(value);
+	}
+
+	void append(T &&value) {
+		m_Ptr.get()->push_back(std::move(value));
 	}
 
 	void fill(const T &value, int count) {
@@ -683,11 +687,7 @@ struct AttrList {
 		return !m_Ptr || (m_Ptr.get()->size() == 0);
 	}
 
-	inline const DataArrayPtr getData() const {
-		return m_Ptr;
-	}
-
-	inline DataArrayPtr getData() {
+	inline const DataArrayPtr & getData() const {
 		return m_Ptr;
 	}
 
@@ -872,6 +872,18 @@ struct AttrValue {
 		copyInitData(o);
 	}
 
+	AttrValue(AttrValue && o) noexcept {
+		moveInitData(std::move(o));
+	}
+
+	AttrValue & operator=(AttrValue && o) noexcept {
+		if (this != & o) {
+			destroyData();
+			moveInitData(std::move(o));
+		}
+		return *this;
+	}
+
 	void defaultInitData() {
 		vassert(type != ValueTypeUnknown && "Cannot default init unknown type!");
 		switch(type) {
@@ -912,6 +924,29 @@ struct AttrValue {
 		case ValueTypeImageSet:      new(asPtr<AttrImageSet>())AttrImageSet(other.as<AttrImageSet>()); break;
 		default: memcpy(data, other.data, ATTR_DATA_SIZE); break; // others are POD so we can memcpy
 		}
+	}
+
+	// Mirrors copyInitData - keep the two case lists in sync.
+	void moveInitData(AttrValue && other) {
+		type = other.type;
+		switch(other.type) {
+		case ValueTypeString:        new(asPtr<AttrSimpleType<std::string>>())AttrSimpleType<std::string>(std::move(other.as<AttrSimpleType<std::string>>())); break;
+		case ValueTypePlugin:        new(asPtr<AttrPlugin>())AttrPlugin(std::move(other.as<AttrPlugin>())); break;
+		case ValueTypeListInt:       new(asPtr<AttrListInt>())AttrListInt(std::move(other.as<AttrListInt>())); break;
+		case ValueTypeListFloat:     new(asPtr<AttrListFloat>())AttrListFloat(std::move(other.as<AttrListFloat>())); break;
+		case ValueTypeListColor:     new(asPtr<AttrListColor>())AttrListColor(std::move(other.as<AttrListColor>())); break;
+		case ValueTypeListVector:    new(asPtr<AttrListVector>())AttrListVector(std::move(other.as<AttrListVector>())); break;
+		case ValueTypeListVector2:   new(asPtr<AttrListVector2>())AttrListVector2(std::move(other.as<AttrListVector2>())); break;
+		case ValueTypeListMatrix:    new(asPtr<AttrListMatrix>())AttrListMatrix(std::move(other.as<AttrListMatrix>())); break;
+		case ValueTypeListTransform: new(asPtr<AttrListTransform>())AttrListTransform(std::move(other.as<AttrListTransform>())); break;
+		case ValueTypeListString:    new(asPtr<AttrListString>())AttrListString(std::move(other.as<AttrListString>())); break;
+		case ValueTypeListPlugin:    new(asPtr<AttrListPlugin>())AttrListPlugin(std::move(other.as<AttrListPlugin>())); break;
+		case ValueTypeListValue:     new(asPtr<AttrListValue>())AttrListValue(std::move(other.as<AttrListValue>())); break;
+		case ValueTypeMapChannels:   new(asPtr<AttrMapChannels>())AttrMapChannels(std::move(other.as<AttrMapChannels>())); break;
+		case ValueTypeImageSet:      new(asPtr<AttrImageSet>())AttrImageSet(std::move(other.as<AttrImageSet>())); break;
+		default: memcpy(data, other.data, ATTR_DATA_SIZE); break; // others are POD so we can memcpy
+		}
+		other.destroyData();
 	}
 
 	void destroyData() {

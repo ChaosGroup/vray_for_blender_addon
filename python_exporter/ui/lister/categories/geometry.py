@@ -14,6 +14,7 @@ from vray_blender.ui.lister.core import (
     makeStatusCell as _makeStatusCell, makeFileCell as _makeFileCell,
 )
 from vray_blender.ui.lister.categories import clippers
+from vray_blender.nodes.utils import getNodeByType, treeHasNodes
 
 
 def _drawDecalBend(row, obj, propGroup):
@@ -38,6 +39,27 @@ def _drawDecalMaterial(row, obj, propGroup):
         row.prop(slots[0], 'material', text="")
     else:
         row.label(text="")
+
+
+def _furUsesPerArea(propGroup) -> bool:
+    """ Whether the fur's hair count comes from the per-unit-area field (distribution
+        'Per area', == '1') rather than the per-face field ('Per face', == '0'). """
+    return getattr(propGroup, 'distribution', '1') == '1'
+
+
+def _drawFurHairs(row, obj, propGroup):
+    """ Hair count for a V-Ray Fur object: the per-unit-area count when Distribution is
+        'Per area', the per-face count when 'Per face' - the field the fur properties
+        panel keeps active for the chosen distribution. """
+    if propGroup is None:
+        row.label(text="")
+        return
+    row.prop(propGroup, 'perArea' if _furUsesPerArea(propGroup) else 'perFace', text="")
+
+
+def _furHairsSortValue(obj, propGroup):
+    attr = 'perArea' if _furUsesPerArea(propGroup) else 'perFace'
+    return getattr(propGroup, attr, 0)
 
 
 def _geomKind(obj: bpy.types.Object):
@@ -123,6 +145,8 @@ def _columnsForKind(kind: str):
     if kind == 'FUR':
         return [
             _COL_SELECT, _COL_NAME,
+            ColumnSpec('distribution', "Distribution", attr='distribution', width=1.6),
+            ColumnSpec('hairs', "Hairs/Unit", draw=_drawFurHairs, sortValue=_furHairsSortValue, width=1.6),
             ColumnSpec('length_base', "Length", attr='length_base', width=1.4),
             ColumnSpec('thickness_base', "Thickness", attr='thickness_base', width=1.4),
             ColumnSpec('gravity_base', "Gravity", attr='gravity_base', width=1.4),
@@ -136,9 +160,26 @@ def _columnsForKind(kind: str):
     return [_COL_SELECT, _COL_NAME]
 
 
+def _outputNodePropGroup(obj: bpy.types.Object, nodeType: str):
+    """ The propgroup of a fur / decal object's output node, or None when the object has no
+        node tree. Once such a node exists it holds the settings the properties panel edits
+        and the exporter reads, so the lister has to edit it too - the object's own propgroup
+        is left behind and only used while there is no node tree. """
+    if not treeHasNodes(obj.vray.ntree):
+        return None
+    node = getNodeByType(obj.vray.ntree, nodeType)
+    return getattr(node, node.vray_plugin) if node is not None else None
+
+
 def _propGroupForKind(obj: bpy.types.Object, kind: str):
     if kind == 'GAUSSIAN':
         return getattr(obj.vray, 'GeomGaussians', None)
+    if kind == 'FUR':
+        if (propGroup := _outputNodePropGroup(obj, 'VRayNodeFurOutput')) is not None:
+            return propGroup
+    elif kind == 'DECAL':
+        if (propGroup := _outputNodePropGroup(obj, 'VRayNodeDecalOutput')) is not None:
+            return propGroup
     vrayData = getattr(obj.data, 'vray', None)
     if vrayData is None:
         return None

@@ -13,8 +13,9 @@ from vray_blender.lib import plugin_utils
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
-def _updateSystemGamma(self, context):
-    if self.sync_with_gamma:
+def _updateSystemGamma(self, context, attrName=None):
+    # attrName: also invoked as a plugin custom-update callback (propGroup, context, attrName).
+    if self.sync_with_gamma and self.gamma:
         view_settings = context.scene.view_settings
         view_settings.gamma = 1.0 / self.gamma
 

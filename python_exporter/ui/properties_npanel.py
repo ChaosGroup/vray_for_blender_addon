@@ -14,6 +14,8 @@
 import bpy
 import dataclasses
 
+from vray_blender import features
+from vray_blender.features import Feature
 from vray_blender.lib import blender_utils, lib_utils
 from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.plugins import getPluginModule
@@ -29,6 +31,7 @@ _LIGHT_ICON = {
     'LightDome':       'LIGHT_DOME',
     'LightMesh':       'LIGHT_MESH',
     'LightIES':        'LIGHT_IES',
+    'LightLuminaire':  'LIGHT_LUMINAIRE',
     'SunLight':        'LIGHT_SUN',
     'LightSpot':       'LIGHT_SPOT',
     'LightOmni':       'LIGHT_OMNI',
@@ -102,11 +105,20 @@ def _resolveGeometry(obj: bpy.types.Object):
             propGroup = getattr(outputNode, outputNode.vray_plugin)
         return NPanelDesc('VRAY_FUR', 'GeomHair', propGroup, node, 'OBJECT', 'VRAY_PT_context_fur')
 
-    if obj.type == 'EMPTY' and vray.isVRayGaussian:
+    if obj.type == 'EMPTY' and vray.isVRayGaussian and features.isEnabled(Feature.GAUSSIAN_SPLATS):
         # A Gaussian splat is an Empty, which is a non-geometry type, so it has no object
         # node tree - nodeTreeType is left empty to hide the "Open in Node Editor" button.
         return NPanelDesc('VRAY_PLACEHOLDER', 'GeomGaussians', obj.vray.GeomGaussians,
                           None, '', 'VRAY_PT_VRayGaussians')
+
+    # The infinite plane and the perfect sphere are Empties too - same no-node-tree handling.
+    if obj.type == 'EMPTY' and vray.isVRayInfinitePlane:
+        return NPanelDesc('VRAY_PLACEHOLDER', 'GeomPlane', obj.vray.GeomPlane,
+                          None, '', 'VRAY_PT_VRayInfinitePlane')
+
+    if obj.type == 'EMPTY' and vray.isVRayPerfectSphere:
+        return NPanelDesc('VRAY_PLACEHOLDER', 'GeomPerfectSphere', obj.vray.GeomPerfectSphere,
+                          None, '', 'VRAY_PT_VRayPerfectSphere')
 
     return None
 

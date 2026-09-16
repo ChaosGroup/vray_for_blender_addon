@@ -82,7 +82,7 @@ def registerColorRamps():
     """ Called from the Load Post event handler to register all color ramps for which
         update notifications will be processed in syncColorRamps().
     """
-    from vray_blender.nodes.tree import iterVRayNodeTrees
+    from vray_blender.nodes.tools import iterVRayNodeTrees
     for ntree in iterVRayNodeTrees():
         for node in ntree.nodes:
             if hasattr(node, 'TexSoftbox'):

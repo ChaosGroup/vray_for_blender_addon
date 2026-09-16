@@ -4,7 +4,7 @@
 
 import bpy
 from vray_blender.nodes.utils import getPropGroupOfNode
-from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import sceneNeedsUpgrade, scopedForUpgrade
 
 UPGRADE_INFO = {
     'nodes': {
@@ -32,7 +32,7 @@ def _upgradeTree(ntree: bpy.types.NodeTree):
             propGroup.color_mode = propGroup.color_mode
 
 def run():
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         _upgradeTree(light.node_tree)
 
 def check():

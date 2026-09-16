@@ -28,7 +28,19 @@ def evaluateCondition(propGroup, node: bpy.types.Node, cond):
         Conditions can be applied to any attribute of a widget. This function only
         evaluates the condition to True or False. The semantics of the condition
         itself (i.e. what will happen if it is true) are implemented by the caller.
+
+        Fields documented as 'bool or condition' (e.g. 'active', 'visible') may also be
+        given a literal bool in the plugin description, which evaluates to itself. This is
+        how a permanently disabled property is expressed: "active": false.
     """
+
+    if type(cond) is bool:
+        return cond
+
+    if not isCondition(cond):
+        # NOTE: 'cond' may contain quote chars so don't use an f-string to construct the message
+        errMsg = "Not a condition or a bool [" + str(cond) + f"] in {propGroup.bl_rna.name}."
+        raise Exception(errMsg)
 
     if not 'evaluate' in cond:
         # NOTE: 'cond' may contain quote chars so don't use an f-string to construct the message  

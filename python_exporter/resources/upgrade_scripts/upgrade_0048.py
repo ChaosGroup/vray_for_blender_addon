@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 # The 'mode' property of the LightMix render channel gained a new 'instanced' value, and its
 # default was changed from the legacy empty string to 'instanced'. A scene created before this
@@ -17,8 +18,8 @@ def _lightMixPropGroups():
     """ Yield every LightMix render-channel node in the file. LightMix lives in world node trees,
         but may also sit inside a V-Ray group, so scan the shared node groups as well.
     """
-    trees = [w.node_tree for w in bpy.data.worlds if getattr(w, 'node_tree', None)]
-    trees.extend(bpy.data.node_groups)
+    trees = [w.node_tree for w in scopedForUpgrade(bpy.data.worlds) if getattr(w, 'node_tree', None)]
+    trees.extend(scopedForUpgrade(bpy.data.node_groups))
 
     for ntree in trees:
         for node in ntree.nodes:

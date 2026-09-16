@@ -65,6 +65,42 @@ MESH_OBJECT_TYPES = ('MESH', 'META', 'SURFACE', 'FONT', 'CURVE')
 GEOMETRY_OBJECT_TYPES = MESH_OBJECT_TYPES + ('CURVES','POINTCLOUD', 'VOLUME')
 EXPORTED_OBJECT_TYPES = GEOMETRY_OBJECT_TYPES + ('LIGHT',)
 
+# Blender fills the unused levels of DepsgraphObjectInstance.persistent_id with INT32_MAX.
+DUPLI_PID_UNUSED = 0x7FFFFFFF
+
+
+def isRedundantGeometryInstance(inst: bpy.types.DepsgraphObjectInstance):
+    """ Return True for depsgraph instances whose geometry is already delivered by another
+        depsgraph entry. Exporting them would render the same mesh twice at the same
+        transform, causing z-fighting artifacts (VBLD-2165).
+
+        Blender presents the evaluated mesh of non-mesh objects (e.g. a curve converted
+        through bevel or geometry nodes) as an instance of the object itself with a
+        single-level persistent id (see make_duplis_geometry_set_impl in Blender). The object
+        export pass already exports that mesh via Object.to_mesh(), so the self-instance is
+        redundant. Instances of raw geometry-nodes geometry also have parent == object, but
+        carry a multi-level persistent id and must be kept.
+
+        Similarly, an instanced CURVE/SURFACE/FONT object is delivered twice: as an instance
+        carrying the object's own data, and as a recursive instance carrying the evaluated
+        mesh. The mesh instance is the one to keep. The two dupli generators that do not
+        recurse into the instanced object (particles and 'Object as Font') deliver only the
+        object-typed instance, which then must be exported.
+    """
+    obj = inst.object
+
+    if obj.type == 'MESH':
+        return (inst.parent.type in MESH_OBJECT_TYPES) \
+            and (obj.original == inst.parent.original) \
+            and (inst.persistent_id[1] == DUPLI_PID_UNUSED)
+
+    if obj.type in ('CURVE', 'SURFACE', 'FONT'):
+        isParticleInstance = inst.particle_system is not None
+        isObjectFontInstance = (inst.parent.type == 'FONT') and (inst.parent.instance_type == 'VERTS')
+        return not (isParticleInstance or isObjectFontInstance)
+
+    return False
+
 
 def getOutSocketSelector(sock: bpy.types.NodeSocket):
     """ Get output selector string for the socket - the string appended to the exported plugin name
@@ -136,6 +172,21 @@ def isObjectVRayDecal(obj: bpy.types.Object):
 
 def isObjectVRayGaussian(obj: bpy.types.Object):
     return obj.vray.isVRayGaussian
+
+def isObjectVRayInfinitePlane(obj: bpy.types.Object):
+    return obj.vray.isVRayInfinitePlane
+
+def isObjectVRayPerfectSphere(obj: bpy.types.Object):
+    return obj.vray.isVRayPerfectSphere
+
+def isObjectChaosScatter(obj: bpy.types.Object):
+    """ True for the carrier object of a Chaos Scatter setup - a PointCloud, or a vertices-only
+        Mesh on Blender versions where a PointCloud cannot be sized from Python (pre-5.1). The
+        'chaos_scatter' property group is registered by the separate Chaos Scatter addon; when
+        that addon is disabled, no object can match.
+    """
+    cs = getattr(obj.original, 'chaos_scatter', None)
+    return (obj.type in ('POINTCLOUD', 'MESH')) and (cs is not None) and cs.is_scatter
 
 def isObjectNonMeshClipper(obj: bpy.types.Object):
     vrayClipper = obj.vray.VRayClipper
@@ -265,44 +316,54 @@ _groupExportStack: list = []
 
 def _resolveNodeSocketImpl(
     toSocket: bpy.types.NodeSocket,
-    _groupStack: tuple = (),
+    groupStack: tuple = (),
+    nearLink: bpy.types.NodeLink = None,
 ) -> tuple:
     """ Internal implementation.  Returns (resolved_socket_or_None, group_path_at_return).
 
-        _groupStack accumulates the VRayNodeGroup nodes entered during this recursive
+        groupStack accumulates the VRayNodeGroup nodes entered during this recursive
         traversal.  It is separate from _groupExportStack, which reflects the group
         context established by the outer export loop.
+
+        nearLink is toSocket's active incoming link when the caller has already resolved it.
+        Purely an optimization: deriving it here yields the same link, at the cost of another
+        NodeSocket.links scan.
     """
-    if toSocket.is_linked and (link := toSocket.links[0]) and _isNearSocketLinkActive(link):
+    if (link := nearLink) is None and toSocket.is_linked:
+        candidate = toSocket.links[0]
+        link = candidate if _isNearSocketLinkActive(candidate) else None
+
+    if link is not None:
 
         fromNode   = link.from_node
         fromSocket = link.from_socket
 
         if fromNode.mute:
-            _, resolvedSock = resolveInternalLink(fromSocket)
-            return resolvedSock, _groupStack
+            _, resolvedSock, resolvedStack = resolveInternalLink(fromSocket, groupStack)
+            return resolvedSock, resolvedStack
 
         elif fromNode.bl_idname == "NodeReroute":
-            return _resolveNodeSocketImpl(fromNode.inputs[0], _groupStack)
+            return _resolveNodeSocketImpl(fromNode.inputs[0], groupStack)
 
         elif fromNode.bl_idname in ("ShaderNodeGroup", "VRayNodeGroup"):
             nodeGroup = fromNode.node_tree
             if not nodeGroup:
-                return None, _groupStack
-            groupOutput = next((n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput'), None)
+                return None, groupStack
+            groupOutputs = [n for n in nodeGroup.nodes if n.bl_idname == 'NodeGroupOutput']
+            groupOutput = next((n for n in groupOutputs if n.is_active_output), groupOutputs[0] if groupOutputs else None)
             if not groupOutput:
-                return None, _groupStack
+                return None, groupStack
             for idx, outSocket in enumerate(fromNode.outputs):
                 if outSocket == fromSocket:
-                    return _resolveNodeSocketImpl(groupOutput.inputs[idx], _groupStack + (fromNode,))
-            return None, _groupStack
+                    return _resolveNodeSocketImpl(groupOutput.inputs[idx], groupStack + (fromNode,))
+            return None, groupStack
 
         elif fromNode.bl_idname == "NodeGroupInput":
             # Determine the outer group node.  Prefer the in-traversal stack, then the
             # export-loop context, and fall back to the slower user_map search.
-            if _groupStack:
-                outerGroupNode = _groupStack[-1]
-                newStack       = _groupStack[:-1]
+            if groupStack:
+                outerGroupNode = groupStack[-1]
+                newStack       = groupStack[:-1]
             elif _groupExportStack:
                 ctxPath        = _groupExportStack[-1]
                 outerGroupNode = ctxPath[-1] if ctxPath else None
@@ -323,9 +384,9 @@ def _resolveNodeSocketImpl(
         elif not isCompatibleNode(fromNode):
             from vray_blender.lib.defs import NodeContext
             NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
-            return None, _groupStack
+            return None, groupStack
 
-    return toSocket, _groupStack
+    return toSocket, groupStack
 
 
 def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | None:
@@ -341,8 +402,12 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
     return socket
 
 
-def resolveInternalLink(outSocket: bpy.types.NodeSocket):
-    """ Return a resolved input socket following the best-matching internal link of a muted node. """
+def resolveInternalLink(outSocket: bpy.types.NodeSocket, groupStack: tuple = ()):
+    """ Return a resolved input socket following the best-matching internal link of a muted node.
+
+        Return:
+        (inSocket, resolvedSocket, groupStack).
+    """
     from vray_blender.nodes.utils import getPluginTypeOfNode
     from vray_blender.plugins import getPluginModule
 
@@ -350,18 +415,19 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
 
     if isVrayNode(node):
         if fnResolve := getattr(node, 'resolveInternalLink', None):
-            return fnResolve(outSocket)
+            inSock, resolvedSock = fnResolve(outSocket)
+            return inSock, resolvedSock, groupStack
 
         pluginType = getPluginTypeOfNode(node)
 
         if pluginType is None:
-            return None, None
+            return None, None, groupStack
 
         pluginModule = getPluginModule(pluginType)
 
         if 'internal_links' not in pluginModule.Node:
             # A missing internal_links list means there are no valid internal links
-            return None, None
+            return None, None, groupStack
 
         # If there is no internal_links property on Node, treat all possible links as valid
         internalLinks = pluginModule.Node.get('internal_links')
@@ -389,11 +455,11 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
                 sockNamePrefix = inSockName[:-1]
                 for inSock in node.inputs:
                     if inSock.name.startswith(sockNamePrefix):
-                        return inSock, resolveNodeSocket(inSock)
+                        return inSock, *_resolveNodeSocketImpl(inSock, groupStack)
             else:
                 inSock = node.inputs.get(inSockName)
                 assert inSock, f"Invalid socket '{inSockName}' in internal links list of plugin {pluginType}"
-                return inSock, resolveNodeSocket(inSock)
+                return inSock, *_resolveNodeSocketImpl(inSock, groupStack)
 
     else: # Cycles node
         # Walk all internal links and return the first match. The links are
@@ -402,9 +468,9 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket):
             # In an internal link, to and from sockets are reversed:
             # 'from_socket' is the input socket and 'to_socket' is the output socket
             if l.to_socket == outSocket:
-                return l.to_socket, resolveNodeSocket(l.from_socket)
+                return l.to_socket, *_resolveNodeSocketImpl(l.from_socket, groupStack)
 
-    return None, None
+    return None, None, groupStack
 
 
 class FarNodeLink:
@@ -445,14 +511,26 @@ def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
     """
     assert not toSock.is_multi_input
 
-    if (not toSock.is_linked) or (not _isNearSocketLinkActive(toSock.links[0])):
+    if not toSock.is_linked:
+        return None
+
+    # toSock is single-input, so this is its one and only link. It is passed down and reused
+    # below instead of being looked up again: NodeSocket.links is implemented in Python and
+    # rescans the whole tree's link list per access, which makes it the dominant cost of this
+    # function - and this function runs for every link on every node-tree update.
+    nearLink = toSock.links[0]
+    if not _isNearSocketLinkActive(nearLink):
         return None
 
     # Seed the group stack from the export-loop context so that nodes inside a
     # group are still associated with the correct group instance even when
     # getFarNodeLink is called fresh (not through an initial group traversal).
     initialStack = _groupExportStack[-1] if _groupExportStack else ()
-    socket, groupPath = _resolveNodeSocketImpl(toSock, initialStack)
+    socket, groupPath = _resolveNodeSocketImpl(toSock, initialStack, nearLink)
+    if socket is toSock:
+        # Nothing to see through (no reroute, muted node or group in the way) - by far the
+        # common case, and nearLink is already toSock's link.
+        return FarNodeLink(nearLink.from_socket, toSock, groupPath=groupPath)
     if socket and socket.is_linked:
         return FarNodeLink(socket.links[0].from_socket, toSock, groupPath=groupPath)
 

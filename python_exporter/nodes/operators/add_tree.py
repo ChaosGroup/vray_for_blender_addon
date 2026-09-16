@@ -4,7 +4,7 @@
 
 import bpy
 
-from vray_blender.nodes.operators.misc import _redrawNodeEditor
+from vray_blender.nodes.operators.misc import _redrawNodeEditor, frameVRayNodes
 from vray_blender.nodes import tree_defaults
 from vray_blender.lib import blender_utils
 from vray_blender.lib.attribute_utils import copyPropGroupValues
@@ -14,7 +14,7 @@ from vray_blender.plugins import getPluginModule
 
 
 def _getPinnedMaterial(context: bpy.types.Context):
-    return blender_utils.getPinnedDataFromEditorContext(context, getattr(context.object, 'active_material', None))
+    return blender_utils.getPinnedDataFromEditorContext(context, blender_utils.getActiveMaterial(context.object))
 
 
 def _getPinnedWorld(context):
@@ -119,8 +119,10 @@ class VRAY_OT_add_nodetree_world(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        tree_defaults.addWorldNodeTree(_getPinnedWorld(context))
+        world = _getPinnedWorld(context)
+        tree_defaults.addWorldNodeTree(world)
         bpy.ops.vray.show_ntree(data='WORLD')
+        frameVRayNodes(world.node_tree if world else bpy.context.scene.world.node_tree)
         return {'FINISHED'}
 
 
@@ -137,6 +139,7 @@ class VRAY_OT_add_new_world(VRayOperatorBase):
         tree_defaults.addWorldNodeTree(None)
 
         _redrawNodeEditor()
+        frameVRayNodes(context.scene.world.node_tree)
         return {'FINISHED'}
 
 
@@ -156,6 +159,7 @@ class VRAY_OT_replace_nodetree_material(VRayOperatorBase):
             tree_defaults.addMaterialNodeTree(activeMtl, appendLeft=True)
 
             _redrawNodeEditor()
+            frameVRayNodes(activeMtl.node_tree)
             return {'FINISHED'}
         else:
             self.report({'ERROR_INVALID_CONTEXT'}, "No active material!")
@@ -169,11 +173,22 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
     bl_description = "Convert Cycles Material to its V-Ray"
     bl_options     = {'INTERNAL', 'UNDO'}
 
+    # Empty means the active / pinned material; the Material Lister has no node editor to
+    # look one up in, so it names its own. SKIP_SAVE keeps that name out of the next invoke.
+    material: bpy.props.StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+    def _targetMaterial(self, context: bpy.types.Context):
+        """ The material to convert, or None if there is nothing convertible. A material with
+            no node tree has no Cycles shading to read, and would fault on .node_tree below. """
+        mtl = bpy.data.materials.get(self.material) if self.material else _getPinnedMaterial(context)
+        return mtl if (mtl is not None and mtl.use_nodes) else None
+
     def execute(self, context):
-        if activeMtl := _getPinnedMaterial(context):
+        if activeMtl := self._targetMaterial(context):
             from vray_blender.nodes.importing import convertMaterial
             convertMaterial(activeMtl, self)
             _redrawNodeEditor()
+            frameVRayNodes(activeMtl.node_tree)
 
             return {'FINISHED'}
         else:
@@ -190,11 +205,12 @@ class VRAY_OT_convert_nodetree_material(VRAY_OT_message_box_base):
     def draw(self, context):
         self.layout.label(text="There are V-Ray nodes in this tree.")
         self.layout.label(text="If you proceed, they will be deleted.")
+        self._cursorWarp(context)
 
     def _checkForExistingVrayNodes(self, context: bpy.types.Context):
         from vray_blender.nodes.tools import isVrayNode
 
-        if (activeMtl := _getPinnedMaterial(context)) is not None:
+        if (activeMtl := self._targetMaterial(context)) is not None:
             return any([n for n in activeMtl.node_tree.nodes if isVrayNode(n)])
 
         return False
@@ -213,7 +229,8 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
 
     def execute(self, context):
         if ob := getattr(context, 'active_object'):
-            if (ob.type in blender_utils.NonGeometryTypes) and (not ob.vray.isVRayFur):
+            isEmptyGeom = blender_utils.isNonGeometryExportedAsGeometry(ob)
+            if (ob.type in blender_utils.NonGeometryTypes) and not (ob.vray.isVRayFur or isEmptyGeom):
                 self.report({'ERROR'}, "Object type doesn't support materials!")
                 return {'CANCELLED'}
 
@@ -228,7 +245,9 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
             # the newly created tree.
             tree_defaults.removeNonVRayNodes(newMtl.node_tree)
 
-            if len(ob.material_slots) == 0:
+            if isEmptyGeom:
+                ob.vray.material = newMtl
+            elif len(ob.material_slots) == 0:
                 # Object has no material slots, add the new material to a new slot
                 ob.data.materials.append(newMtl)
             else:
@@ -236,6 +255,7 @@ class VRAY_OT_add_new_material(VRayOperatorBase):
                 ob.material_slots[ob.active_material_index].material = newMtl
 
             _redrawNodeEditor()
+            frameVRayNodes(newMtl.node_tree)
             return {'FINISHED'}
         else:
             self.report({'ERROR_INVALID_CONTEXT'}, "No active object!")
@@ -251,15 +271,23 @@ class VRAY_OT_copy_material(VRayOperatorBase):
     bl_options     = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        if ((ob := getattr(context, 'active_object')) is None) or (not ob.material_slots):
+        if (ob := getattr(context, 'active_object')) is None:
             return {'CANCELLED'}
 
-        if ob.type in blender_utils.NonGeometryTypes:
-            self.report({'ERROR'}, "Object type doesn't support materials!")
-            return {'CANCELLED'}
+        if blender_utils.isNonGeometryExportedAsGeometry(ob):
+            if not ob.vray.material:
+                return {'CANCELLED'}
+            ob.vray.material = ob.vray.material.copy()
+        else:
+            if not ob.material_slots:
+                return {'CANCELLED'}
 
-        mtlSlot = ob.material_slots[ob.active_material_index]
-        mtlSlot.material = mtlSlot.material.copy()
+            if ob.type in blender_utils.NonGeometryTypes:
+                self.report({'ERROR'}, "Object type doesn't support materials!")
+                return {'CANCELLED'}
+
+            mtlSlot = ob.material_slots[ob.active_material_index]
+            mtlSlot.material = mtlSlot.material.copy()
 
         _redrawNodeEditor()
         return {'FINISHED'}

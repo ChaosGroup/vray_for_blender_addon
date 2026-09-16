@@ -14,6 +14,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <vector>
 
 
 #include "render_image.h"
@@ -111,6 +112,7 @@ public:
 	float         getRenderProgress() const;
 	void          requestRenderChannel(int channelType, const std::string& pluginInstanceName = "", int subIndex = 0);
 	std::string   getMetadata(const std::string& key) const { return m_exporter->getMetadata(key); }
+	std::vector<proto::PluginPropertyValueData> getPluginPropertyValues() const { return m_exporter->getPluginPropertyValues(); }
 	void          setElementPasses(const nb::list& passes) { m_policy->setElementPasses(passes); }
 
 	std::string   getEngineUpdateMessage(); // Returns status of the renderring in text
@@ -134,6 +136,21 @@ protected:
 
 	std::mutex               engineUpdateMsgMtx;
 	std::string              engineUpdateMessage;
+
+	// Python refs owned by asset data handed to async export tasks. A worker cannot release its
+	// ref without taking the GIL, and the main thread only yields the GIL every
+	// sys.getswitchinterval() while it churns through the export, so the worker idles there
+	// instead of picking up the next mesh. Workers move the ref here instead - moving an
+	// nb::object only transfers the pointer, so it needs no GIL - and finishExport() drops the
+	// whole batch under a single acquire.
+	std::mutex               m_pendingRefsMtx;
+	std::vector<nb::object>  m_pendingRefs;
+
+	/// Hand a Python ref over to be dropped later. Callable without the GIL.
+	void                     queuePendingRef(nb::object&& ref);
+
+	/// Drop every queued Python ref, taking the GIL once for the whole batch.
+	void                     drainPendingRefs();
 
 	std::atomic_bool         m_vrsceneExportInProgress = false; // Waiting for response to a requested .vrscene export operation
 	std::atomic_bool         m_proxyExportInProgress = false;   // Waiting for response to a requested .vrmesh export operation

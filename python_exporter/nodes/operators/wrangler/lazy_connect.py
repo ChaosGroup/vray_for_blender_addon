@@ -285,19 +285,26 @@ class VRAY_OT_WR_lazy_connect(VRayOperatorBase):
         if event.type == 'RIGHTMOUSE' and event.value == 'RELEASE':
             self._removeDrawHandler()
             target = _nodeAtPos(nodes, context, event)
-            if self._source and target and target is not self._source:
-                if self.with_menu:
-                    # Expose source & target to the picker menus; they link on pick.
-                    _PICKER_STATE['source_name'] = self._source.name
-                    _PICKER_STATE['target_name'] = target.name
-                    outputs = [output for output in self._source.outputs if output.enabled]
-                    if len(outputs) > 1 and target.inputs:
-                        bpy.ops.wm.call_menu('INVOKE_DEFAULT', name='VRAY_MT_WR_lazy_connect_outputs')
-                    elif len(outputs) == 1:
-                        bpy.ops.vray.wr_lazy_connect_pick_input('INVOKE_DEFAULT', from_index=0)
-                else:
-                    _autoLink(self._source, target, ntree.links)
-                    ntree.update_tag()
+            if not (self._source and target and target is not self._source):
+                # Released over empty space or over the source itself - nothing linked.
+                return {'CANCELLED'}
+
+            if self.with_menu:
+                # Expose source & target to the picker menus; they link on pick and
+                # push their own undo step, so this operator changed nothing itself.
+                _PICKER_STATE['source_name'] = self._source.name
+                _PICKER_STATE['target_name'] = target.name
+                outputs = [output for output in self._source.outputs if output.enabled]
+                if len(outputs) > 1 and target.inputs:
+                    bpy.ops.wm.call_menu('INVOKE_DEFAULT', name='VRAY_MT_WR_lazy_connect_outputs')
+                elif len(outputs) == 1:
+                    bpy.ops.vray.wr_lazy_connect_pick_input('INVOKE_DEFAULT', from_index=0)
+                return {'CANCELLED'}
+
+            if not _autoLink(self._source, target, ntree.links):
+                return {'CANCELLED'}
+
+            ntree.update_tag()
             return {'FINISHED'}
 
         if event.type == 'ESC' and event.value == 'PRESS':
@@ -362,15 +369,22 @@ class VRAY_OT_WR_lazy_connect_pick_input(VRayOperatorBase):
         if self.from_index >= len(source.outputs):
             return {'CANCELLED'}
         if len(target.inputs) > 1:
+            # Only hosts the second picker menu; 'vray.wr_lazy_connect_make_link'
+            # performs the link and pushes the undo step.
             bpy.ops.wm.call_menu(
                 'INVOKE_DEFAULT', name='VRAY_MT_WR_lazy_connect_inputs',
             )
-        elif len(target.inputs) == 1:
-            try:
-                ntree.links.new(source.outputs[self.from_index], target.inputs[0])
-                ntree.update_tag()
-            except RuntimeError:
-                pass
+            return {'CANCELLED'}
+
+        if len(target.inputs) != 1:
+            return {'CANCELLED'}
+
+        try:
+            ntree.links.new(source.outputs[self.from_index], target.inputs[0])
+        except RuntimeError:
+            return {'CANCELLED'}
+
+        ntree.update_tag()
         return {'FINISHED'}
 
 

@@ -1,0 +1,36 @@
+{
+    "//Comment1": "GeomPerfectSphere is attached to the Object (not its data) because the sphere is represented by an Empty object, which has no data block.",
+    "//Comment2": "Overriding the Type to OBJECT makes the property group available as obj.vray.GeomPerfectSphere.",
+    "//Comment3": "radius drives the Empty's display size so the viewport glyph matches the rendered sphere, as in V-Ray for 3ds Max and Maya.",
+    "Name": "V-Ray Perfect Sphere",
+    "Type": "OBJECT",
+    "Parameters": [
+        {
+            "attr": "radius",
+            "update": "onRadiusUpdate"
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "sphere",
+                "label": "Sphere",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "radius" },
+                    { "name": "flip_normals" }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "radius" },
+                    { "name": "flip_normals" }
+                ]
+            }
+        ]
+    }
+}

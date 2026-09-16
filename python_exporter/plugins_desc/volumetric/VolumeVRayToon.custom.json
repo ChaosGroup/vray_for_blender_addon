@@ -27,6 +27,12 @@
             "desc": "Determines the color of the inner lines"
         },
         {
+            "attr": "lineWidth",
+            "options": {
+                "visible": false
+            }
+        },
+        {
             "attr": "lineWidth_tex",
             "desc": "Determines the width of the outlines in the currently selected units",
             "default": 1.5,
@@ -34,6 +40,12 @@
                 "soft_min": 0.0,
                 "soft_max": 10.0,
                 "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "lineWidthInner",
+            "options": {
+                "visible": false
             }
         },
         {
@@ -200,6 +212,9 @@
                     },
                     {
                         "name": "traceBias"
+                    },
+                    {
+                        "name": "outerEdgeStyle"
                     }
                 ]
             },
@@ -326,8 +341,6 @@
             "angularCurveExternal",
             "lineColor",
             "lineColorInner",
-            "lineWidth",
-            "lineWidthInner",
             "opacity"
         ]
     }

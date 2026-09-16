@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 from mathutils import Vector
 import numpy as np
@@ -24,7 +25,7 @@ def arrayFromMeshVertices(mesh: bpy.types.Mesh):
 
 
 def run():
-    for obj in bpy.data.objects:
+    for obj in scopedForUpgrade(bpy.data.objects):
         if isObjectVrayScene(obj):
             from mathutils import Matrix
             import vray_blender.vray_tools.vray_proxy as proxy
@@ -77,4 +78,4 @@ def run():
 
 
 def check():
-    return any(isObjectVrayScene(obj) for obj in bpy.data.objects)
+    return any(isObjectVrayScene(obj) for obj in scopedForUpgrade(bpy.data.objects))

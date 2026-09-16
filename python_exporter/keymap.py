@@ -15,14 +15,14 @@ def register():
     if bpy.app.background:
         # In headless mode, no keymaps can be used
         return
-    
-    # On first activation, register the same keymap for V-Ray's Render command as 
+
+    # On first activation, register the same keymap for V-Ray's Render command as
     # the one set for the Blender's Render. From then on, the user is responsible
-    # for managing the keymap 
+    # for managing the keymap
     # TODO: If the user deletes the keymap, the next add-on activation will re-create it.
     # Find a way to identify the first-ever activation of the add-on.
     wm = bpy.context.window_manager
-    
+
     # The currently active keyconfig (the one selected in the UI). Its contents is merged with the
     # Blender's default keyconfig in runtime.
     kconfActive = wm.keyconfigs.active.keymaps
@@ -57,6 +57,47 @@ def register():
                 vrayKeymap.properties.forceMode = "ANIMATION" if blenderKeymap.properties.animation else "FRAME"
 
     _registerGroupNodeKeymaps()
+    _registerFramingKeymaps()
+    _registerHiddenSearchKeymap()
+
+
+def _registerHiddenSearchKeymap():
+    """ Bind VRAY_MT_hidden_search to an unused key so its operators, which are not placed
+        in any menu, are still discoverable via F3 search - search only lists operators
+        reachable from a menu or from an active keymap item.
+    """
+    if bpy.app.background:
+        return
+
+    wm = bpy.context.window_manager
+    kconfVray = wm.keyconfigs.addon.keymaps
+
+    km = kconfVray.get('Window', kconfVray.new(name='Window'))
+    items = km.keymap_items
+
+    if not any(item.idname == 'wm.call_menu' and item.properties.name == 'VRAY_MT_hidden_search' for item in items):
+        kmi = items.new('wm.call_menu', 'F24', 'PRESS')
+        kmi.properties.name = 'VRAY_MT_hidden_search'
+
+
+def _registerFramingKeymaps():
+    """ Framing in a V-Ray node editor ignores the off-canvas texture placeholder. The operators poll false in other editors, so the
+        keys fall through to Blender's own framing there.
+    """
+    if bpy.app.background:
+        return
+
+    kconfVray = bpy.context.window_manager.keyconfigs.addon.keymaps
+    km = kconfVray.get('Node Editor', kconfVray.new(name='Node Editor', space_type='NODE_EDITOR'))
+    items = km.keymap_items
+
+    # Mirrors Blender's own node-editor bindings for view_all / view_selected.
+    if 'vray.node_view_all' not in items:
+        items.new('vray.node_view_all', 'HOME', 'PRESS')
+        items.new('vray.node_view_all', 'NDOF_BUTTON_FIT', 'PRESS')
+
+    if 'vray.node_view_selected' not in items:
+        items.new('vray.node_view_selected', 'NUMPAD_PERIOD', 'PRESS')
 
 
 def _registerGroupNodeKeymaps():
@@ -92,4 +133,3 @@ def unregister():
     # after the add-on is unregistered. Until then, it will live under different name
     # (idname vs name) regardless of whether we remove it here or not.
     pass
-            

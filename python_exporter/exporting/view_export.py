@@ -82,6 +82,11 @@ def getActiveCamera(ctx: ExporterContext):
     """ Return the view-local camera, if active. Otherwise return the scene camera.
         NOTE: The view camera is not necessarily of type Camera, may be any object.
     """
+    # A frame whose motion blur interval spans a camera switch has its camera re-exported with
+    # this override set, so the scene's own (already switched) camera must not win here.
+    if ctx.cameraOverride is not None:
+        return ctx.cameraOverride
+
     if ctx.uiRegionContext:
         view3d = ctx.uiRegionContext.view3d
 
@@ -117,11 +122,15 @@ class ViewExporter(ExporterBase):
         self.cameraTracker = ctx.objTrackers['CAMERA']
 
 
-    def exportProdCameras(self, prevPerCameraViewParams: dict[str, ViewParams]):
+    def exportProdCameras(self, prevPerCameraViewParams: dict[str, ViewParams], camerasOnly = False):
         """ Export all cameras in the scene, prodiction only.
 
             Parameters:
             perCameraViewParams: camera object full name => last evaluated ViewParams
+            camerasOnly: export just the camera plugins, leaving SettingsOutput alone. Used when
+                a production animation render restores the camera of a frame whose motion blur
+                interval spans a camera switch - only the camera values are wrong there, and the
+                output settings must not be rewritten in the middle of a render sequence.
         """
         assert self.production or self.preview, "Method should only be called for prod and preview renders"
 
@@ -145,7 +154,7 @@ class ViewExporter(ExporterBase):
         for cameraObj in (c.evaluated_get(self.dg) for c in cameras):
             cameraName = cameraObj.name_full
             viewParams = prevPerCameraViewParams.get(cameraName, None)
-            if exportedViewParams := self._exportProdCamera(cameraObj, viewParams):
+            if exportedViewParams := self._exportProdCamera(cameraObj, viewParams, camerasOnly):
                 perCameraViewParams[cameraName] = exportedViewParams
             self.exportProgress.update(self.engine)
         # The active camera settings have been exported to a dedicated set of
@@ -202,16 +211,18 @@ class ViewExporter(ExporterBase):
             cameraTracker.forget(objTrackId)
 
 
-    def _exportProdCamera(self, camera: bpy.types.Camera, prevViewParams: ViewParams = None):
+    def _exportProdCamera(self, camera: bpy.types.Camera, prevViewParams: ViewParams = None,
+                          camerasOnly = False):
         """ Exports the camera in the selected mode ( normal or bake ) """
         assert not self.viewport, "Method shouldn't be called for viewport renders"
 
         viewParams: ViewParams = self._getProdViewParams(camera)
 
         if self._isActiveCamera(viewParams.cameraObject):
-            # Some plugins depend on SettingsOutput and have to be exported AFTER it, so export
-            # it before anything else
-            SettingsOutputExporter(self, viewParams, prevViewParams=None).export()
+            if not camerasOnly:
+                # Some plugins depend on SettingsOutput and have to be exported AFTER it, so export
+                # it before anything else
+                SettingsOutputExporter(self, viewParams, prevViewParams=None).export()
             viewParams.isActiveCamera = True
 
         self._exportCamera(viewParams, prevViewParams, isRenderCamera=viewParams.isActiveCamera)
@@ -536,7 +547,12 @@ class ViewExporter(ExporterBase):
 
         rs = self.scene.render
         viewParams = self._getViewFromViewport()
-        viewParams.calcRenderSizes(regionRender=self.iprVFB and (rs.use_border and not rs.use_crop_to_border))
+        viewParams.calcRenderSizes(regionRender=self.iprVFB and viewParams.isCameraView \
+                                                and rs.use_border and not rs.use_crop_to_border)
+
+        # In non-camera VFB IPR the region is VFB-owned; don't let the export drive the VFB
+        # "Render Region" button, so a previously enabled region survives starting the render.
+        viewParams.renderSizes.manageRenderRegion = not (self.iprVFB and not viewParams.isCameraView)
 
         return viewParams
 
@@ -610,8 +626,9 @@ class ViewExporter(ExporterBase):
 
         ct.aspectCorrectForFovOrtho(viewParams)
 
-        if view3d.use_render_border:
-            # Only the region within the border should be rendered
+        # In VFB IPR a free-navigation (non-camera) view renders the full view; the viewport
+        # render border must not crop it. The crop still applies for viewport IPR.
+        if view3d.use_render_border and not self.iprVFB:
             ct.setRegionBorder(viewParams, ct.getView3dRenderBorder(view3d))
             viewParams.crop = True
 
@@ -906,7 +923,7 @@ class ViewExporter(ExporterBase):
             "film_width"         : filmWidth,
             "lens_shift"         : lensShift,
             "focus_distance"     : focusDist,
-            "enable_thin_lens_equation": False
+            "enable_thin_lens_equation": physicalCamera.enable_thin_lens_equation
         })
 
 

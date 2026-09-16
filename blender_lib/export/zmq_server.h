@@ -20,6 +20,7 @@
 #include <stop_token>
 #include <string>
 #include <thread>
+#include <utility>
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -78,6 +79,12 @@ public:
 	///  Indicates that license is obtained
 	bool licenseAcquired() const;
 
+	/// Current render stage (e.g. "Compiling kernels") and its progress in [0, 1]. Empty if none.
+	std::pair<std::string, float> getRenderStage() const;
+
+	/// Reset per render, else the previous render's stage shows while the next one starts up.
+	void clearRenderStage();
+
 	// Adds python callback to the callbacks list
 	void setPythonCallback(const std::string &name, nb::callable&& callback);
 
@@ -122,7 +129,10 @@ private:
 
 
 private:
-	zmq::context_t   m_ctx;               /// Zmq context. Needed for all communication operations through ZMQ
+	/// Zmq context. Null until start(): zmq_ctx_new() aborts if it cannot build its signaler
+	/// socketpair (VBLD-2667), and a half-constructed context_t aborts again - uncatchably,
+	/// via cppzmq's assert() - on the next close().
+	std::unique_ptr<zmq::context_t> m_ctx;
 	ZmqAgentPtr      m_conn;              /// The connection to ZMQ Server used for control (non-render) messages
 	ZmqServerArgs	 m_args;              /// Configuration information for the ZmqServer process
 
@@ -139,6 +149,9 @@ private:
 	std::atomic_bool m_mainRendererCreated = false; /// Flag for indication that the main renderer in the ZMQ server is created
 	std::atomic_bool m_licenseAcquired = false; /// Flag for indication of license acquisition
 
+	mutable std::mutex m_renderStageLock;  /// Guards m_renderStage
+	std::string m_renderStage;             /// Current render stage
+	std::atomic<float> m_renderStageProgress = 0.0f; /// Its progress in [0, 1]
 };
 
 } // namespace VRayForBlender

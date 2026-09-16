@@ -86,6 +86,9 @@ def formatAttributeName(nameOrLabel):
         return nameOrLabel
 
 def getAttrDesc(pluginModule, attrName):
+    # Use the O(1) index built at plugin load time when present.
+    if (byAttr := getattr(pluginModule, 'ParametersByAttr', None)) is not None:
+        return byAttr.get(attrName)
     return next((p for p in pluginModule.Parameters if p['attr'] == attrName), None)
 
 
@@ -152,8 +155,8 @@ def convertUIValueToVRay(attrDesc, value):
         assert type(value) in (int, float)
         return value / multiplier
 
-    if (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
-        assert type(value) in (int, float)
+    if (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE') \
+            and type(value) in (int, float):
         if units == 'centimeters':
             return value * 100
         elif units == 'millimeters':
@@ -220,9 +223,15 @@ UNIT_MULTIPLIER_FUNC = {
 }
 
 def scaleToSceneLengthUnit(attrValue, lengthUnit):
-    """ Scales 'attrValue' to scene length unit """
+    """ Scales 'attrValue' (scalar or vector/list) to scene length unit """
     if lengthUnit in  UNIT_MULTIPLIER_FUNC:
-        return attrValue * UNIT_MULTIPLIER_FUNC[lengthUnit](bpy.context)
+        multiplier = UNIT_MULTIPLIER_FUNC[lengthUnit](bpy.context)
+        if isinstance(attrValue, (int, float)) and not isinstance(attrValue, bool):
+            return attrValue * multiplier
+        if isinstance(attrValue, (list, tuple)) and \
+                all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in attrValue):
+            return [v * multiplier for v in attrValue]
+        return attrValue  # non-numeric / nested: leave unchanged rather than crash
     else:
         debug.printWarning(f"Unsupported V-Ray Plugin attribute '{lengthUnit}' scaling unit")
     return attrValue
@@ -791,7 +800,7 @@ def _setEnumAttribute(attrDesc, attrArgs, attrName):
 
     def setEnum(self, value):
         if vray.isCommunityEdition() and valueToId.get(value) in disabledIds:
-            debug.reportAsync('WARNING', getCELimitedFeatureMsg())
+            debug.report('WARNING', getCELimitedFeatureMsg())
             return
         if userSet:
             userSet(self, value)

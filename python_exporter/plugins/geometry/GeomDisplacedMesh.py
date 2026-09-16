@@ -13,10 +13,16 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 def _addNewTexSocket(node, texSock, newSockType):
     if getVRayBaseSockType(texSock) != newSockType:
 
+        # Rebuilding the socket would drop its link, so carry it over to the new socket.
+        fromSocket = texSock.links[0].from_socket if (texSock is not None and texSock.is_linked) else None
+
         if texSock is not None:
             node.inputs.remove(texSock)
 
-        addInput(node, newSockType, "Displacement Texture")
+        newSock = addInput(node, newSockType, "Displacement Texture")
+
+        if fromSocket is not None:
+            node.id_data.links.new(fromSocket, newSock)
 
 
 def onUpdateDisplacementType(src, context, attrName):

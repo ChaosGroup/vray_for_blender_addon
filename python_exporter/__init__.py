@@ -12,7 +12,7 @@ bl_info = {
     "doc_url"     : "https://documentation.chaos.com/space/VBLD",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "40", "00")
+    "version"     : ("7", "40", "01")
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data
@@ -21,7 +21,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 48
+UPGRADE_NUMBER = 51
 
 try:
     import numpy as np
@@ -58,6 +58,7 @@ def _isCommunityEdition():
 vray.isCommunityEdition = _isCommunityEdition
 
 from vray_blender import debug
+from vray_blender import features
 from vray_blender import plugins
 from vray_blender import operators
 from vray_blender import proxy
@@ -68,15 +69,25 @@ from vray_blender import keymap
 from vray_blender import ui
 from vray_blender import events
 from vray_blender import utils
+from vray_blender import cosmos_drag_drop
 from vray_blender.lib import image_utils
 
 _isRegistered = False
+_isVRayInitialized = False
 
 def initVRay():
-    """ Initialize VRayBlenderLib """
+    """ Initialize VRayBlenderLib. Guarded once-per-process: also called by the Chaos Scatter
+        addon, in any order relative to vray_blender's own register(), and the native init is
+        not idempotent (it would stack duplicate log writers).
+    """
     from vray_blender.lib.path_utils import getV4BTempDir
     from vray_blender.lib.sys_utils import StartupConfig
     import os
+
+    global _isVRayInitialized
+    if _isVRayInitialized:
+        return
+    _isVRayInitialized = True
 
     # Keep things tidy in a dedicated temp folder
     logDir = getV4BTempDir()
@@ -118,7 +129,18 @@ def initVRay():
     print(f"V-Ray for Blender logging to {logFile}")
     vray.init(logFile)
 
-   
+
+def exitVRay():
+    """ Tear down VRayBlenderLib and re-arm initVRay(). vray.exit() stops the logging subsystem
+        (which clears its writers), so the guard MUST be reset here - otherwise a re-enable of this
+        addon (or a start triggered by the Chaos Scatter addon) would skip vray.init() and run with
+        no logging at all. Symmetric with the once-per-process init guard.
+    """
+    global _isVRayInitialized
+    vray.exit()
+    _isVRayInitialized = False
+
+
 def _getModules():
     """ Modules requiring registration/unregistration """
     return (
@@ -130,7 +152,8 @@ def _getModules():
         proxy,
         keymap,
         utils,
-        image_utils
+        image_utils,
+        cosmos_drag_drop,
     )
 
 
@@ -140,7 +163,11 @@ def register():
 
     # Init VRayBlenderLib first as it sets up the logging subsystem
     initVRay()
-    
+
+    # Resolve feature flags before anything is registered so that disabled
+    # features are hidden from the UI and Blender's F3 operator search.
+    features.init()
+
     debug.register()
 
     # Parse command line
@@ -148,6 +175,11 @@ def register():
 
     for mod in _getModules():
         mod.register()
+
+    # Make the bundled presets (e.g. Image Sampler quality levels under
+    # <addon>/presets/) discoverable by Blender's preset menus.
+    import os
+    bpy.utils.register_preset_path(os.path.dirname(__file__))
 
     events.register()
 
@@ -193,6 +225,9 @@ def unregister():
     VRayRenderEngine.resetAll()
     VfbEventHandler.stop()
 
+    import bpy, os
+    bpy.utils.unregister_preset_path(os.path.dirname(__file__))
+
     debug.unregister()
     events.unregister()
 
@@ -202,4 +237,4 @@ def unregister():
     # The order is important, the engine must be shuted down before unregistration!!!
     engine.shutdown()
     engine.unregister()
-    vray.exit()
+    exitVRay()

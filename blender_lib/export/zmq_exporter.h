@@ -12,6 +12,7 @@
 #include <ipc.h>
 #include <zmq_common.hpp>
 #include <zmq_message.hpp>
+#include <zmq_scatter_message.hpp>
 #include <zmq_agent.h>
 
 #include <tsl/robin_map.h>
@@ -50,6 +51,8 @@ class ZmqExporter{
 	using ExporterCallback = std::function<void(void)>;
 	using RenderStoppedCallback = std::function<void(bool)>;
 	using AsyncOpCompleteCb = std::function<void(proto::RendererAsyncOp, bool, const std::string&)>;
+	using ScatterResultCb = std::function<void(const proto::MsgScatterPreviewResult&)>;
+	using ScatterPresetResultCb = std::function<void(const proto::MsgScatterPresetResult&)>;
 
 	struct AttrStats {
 		int64_t num  = 0;
@@ -106,6 +109,10 @@ public:
 	void        setImageToBlender(bool enabled) { m_imageToBlender = enabled; }
 	bool        getImageToBlender() const { return m_imageToBlender; }
 
+	/// The render sizes last set through the VRayRenderer interface, including the
+	/// output region (rgnLeft/rgnTop/...) used to place the rendered area in the image.
+	const proto::RenderSizes& getRenderSizes() const { return m_cachedValues.renderSizes; }
+
 	void        renderSequence(const vray::AttrList<int>& sequences);
 	void        continueRenderSequence();
 	void        stopRendering();
@@ -140,6 +147,12 @@ public:
 	void        requestRenderChannel(int channelType, const std::string& pluginInstanceName = "", int subIndex = 0);
 	std::string getMetadata(const std::string& key) const;
 
+	/// Plugin parameters V-Ray filled in during the render, as of the last finished frame.
+	/// Like getMetadata(), the values only become available once the frame has completed;
+	/// the server sends them ahead of the frame's image so a caller which waited for the
+	/// render to finish is guaranteed to see them. Reset at the start of every render.
+	std::vector<proto::PluginPropertyValueData> getPluginPropertyValues() const;
+
 	/// Point the main render layer at an externally-owned pixel buffer (e.g. Blender's RenderPass
 	/// ibuf) so that ZmqRenderImage::update() writes directly into it with no extra copy.
 	/// Call with buffer=nullptr to release the reference (e.g. on renderEnd).
@@ -168,6 +181,8 @@ public:
 	void		set_callback_on_vfb_layers_updated(UpdateMessageCb cb)  { std::scoped_lock l(m_callbacksMutex); callback_on_vfb_layers_updated = cb; }
 	void		set_callback_on_render_stopped(RenderStoppedCallback cb){ std::scoped_lock l(m_callbacksMutex); callback_on_render_stopped = cb; }
 	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_async_op_complete = cb; }
+	void		set_callback_on_scatter_result(ScatterResultCb cb)      { std::scoped_lock l(m_callbacksMutex); callback_on_scatter_result = cb; }
+	void		set_callback_on_scatter_preset_result(ScatterPresetResultCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_scatter_preset_result = cb; }
 
 private:
 	bool readViewportImage  (int imgID, int bufferIndex);
@@ -183,6 +198,7 @@ private:
 	void processRendererOnAsyncOpComplete(const proto::MsgRendererOnAsyncOpComplete& message);
 	void processRendererOnProgress(const proto::MsgRendererOnProgress& message);
 	void processRendererOnElementReady(const proto::MsgRendererOnElementReady& message);
+	void processRendererOnPluginPropertyValues(const proto::MsgRendererOnPluginPropertyValues& message);
 
 	void fireStopEvent(bool isAborted);
 
@@ -197,6 +213,8 @@ private:
 	UpdateMessageCb       callback_on_vfb_layers_updated;
 	RenderStoppedCallback callback_on_render_stopped;
 	AsyncOpCompleteCb     callback_on_async_op_complete;
+	ScatterResultCb       callback_on_scatter_result;
+	ScatterPresetResultCb callback_on_scatter_preset_result;
 
 	bool              m_dirty = true;  // Set to true if scene has to be re-rendered
 	std::atomic<bool> m_isRendering = false;
@@ -209,6 +227,7 @@ private:
 	ImageMap          m_layerImages;
 	ElementDestinationMap m_elementDestinations;   ///< Pass-buffer write targets for the SHM element path. Guarded by m_imgMutex.
 	std::unordered_map<std::string, std::string> m_metadata; ///< Metadata from render elements (e.g. Cryptomatte)
+	std::vector<proto::PluginPropertyValueData> m_pluginPropertyValues; ///< Values V-Ray wrote into in/out plugin params. Guarded by m_imgMutex.
 	int               m_imgId = -1;
 	ImgReaderPtr      m_imgReaders[2];  ///< One reader per double-buffer slot
 	ImgReaderPtr      m_elementReader;  ///< Reader for the per-element SHM region. Lazy-opened, dropped on renderEnd.

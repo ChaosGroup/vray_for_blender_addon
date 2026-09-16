@@ -193,9 +193,19 @@ class VRayNodeSelectObject(VRayNodeBase):
             self.objectName = node.objectName
 
     def draw_buttons(self, context: bpy.types.Context, layout: bpy.types.UILayout):
-        layout.prop_search(self, 'objectPtr',
-                           context.scene, 'objects',
-                           text="")
+        row = layout.row(align=True)
+        row.prop_search(self, 'objectPtr',
+                        context.scene, 'objects',
+                        text="")
+
+        # Toggle buttons showing the selected object in the viewport. Imported here because the
+        # module is only needed while drawing, i.e. never in background mode.
+        from vray_blender.ui.highlight_objects import drawHighlightButtons
+        drawHighlightButtons(row, self, enabled=(self.objectPtr is not None), label='')
+
+    def getSelectorObjects(self, context: bpy.types.Context):
+        """ Return the selected object, or an empty list if none is selected. """
+        return [obj] if (obj := self.getSelected(context)) else []
 
     def removeDeletedItems(self, context: bpy.types.Context):
         if self.objectName and self.objectName not in context.scene.objects:

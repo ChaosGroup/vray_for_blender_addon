@@ -114,7 +114,11 @@ class FurExporter(ExporterBase):
     def exportFursOfObject(self, obj: bpy.types.Object, instance: bpy.types.DepsgraphObjectInstance = None):
         """ Export the GeomHair plugins for the fur objects that have selected the given object. """
 
-        gizmoObjTrackId = getObjTrackId(obj) if not instance else getObjTrackId(instance.parent)
+        # Keyed by the growth mesh the fur object selected, for instances too. The instanced object
+        # *is* the selected object - resolving the key from 'instance.parent' instead looked the map
+        # up by the instancer, which only matched when the fur happened to grow on the instancer
+        # itself, so a fur inside an instanced collection produced no GeomHair at all.
+        gizmoObjTrackId = getObjTrackId(obj)
         return [
             (nodePlugin.name, furTrackId, furName)
             for furTrackId, furName in self._furGizmoObjTrackIdMap[gizmoObjTrackId]
@@ -125,8 +129,19 @@ class FurExporter(ExporterBase):
         objTrackId = getObjTrackId(object)
         for furTrackId, _ in self._furGizmoObjTrackIdMap[objTrackId]:
             for pluginName in self.objTracker.getPlugins(furTrackId):
-                if pluginName.startswith("node@") and Names.object(object) in pluginName:
-                    vray.pluginUpdateInt(self.renderer, pluginName, "visible", isShown)
+                if not (pluginName.startswith("node@") and Names.object(object) in pluginName):
+                    continue
+
+                # The name of an instanced fur node contains the name of the growth mesh, so the
+                # match above also picks up the instancer's source nodes. Those have to stay
+                # invisible - they are tracked as instanced precisely so that the visibility syncs
+                # leave them alone, and making one visible draws the fur a second time at the
+                # source node's own (identity) transform. GeometryExporter.syncObjVisibility()
+                # guards the same way.
+                if self.objTracker.getPluginInstanced(pluginName):
+                    continue
+
+                vray.pluginUpdateInt(self.renderer, pluginName, "visible", isShown)
 
     def _exportGeomHairPlugin(self, furObjTrackId: int, geometryObject: bpy.types.Object,
         instance: bpy.types.DepsgraphObjectInstance = None):
@@ -147,7 +162,9 @@ class FurExporter(ExporterBase):
         isInstance = instance is not None
 
 
-        isVisible = False if isInstance else ((objTrackId in self.visibleObjects) and (furObjTrackId in self.visibleObjects))
+        # Visibility depends only on the fur object, not the growth mesh it selects (which can
+        # legitimately be hide_render=True).
+        isVisible = False if isInstance else (furObjTrackId in self.visibleObjects)
 
         furPluginName = getGeomHairPluginName(Names.object(furObject), objName)
         furPluginDesc.name = furPluginName

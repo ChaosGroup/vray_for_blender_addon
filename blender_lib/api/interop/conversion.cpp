@@ -45,6 +45,23 @@ void pyListToAttrList(vray::AttrListValue& attrList, std::string::iterator& list
 				attrList.append(vray::AttrPlugin(nb::cast<const char*>(elem)));
 				break;
 			}
+			case 'v': {
+				// mathutils.Vector (any sequence of 3 floats)
+				const nb::sequence seq = nb::cast<nb::sequence>(elem);
+				const vray::AttrVector vec(nb::cast<float>(seq[0]), nb::cast<float>(seq[1]), nb::cast<float>(seq[2]));
+				attrList.append(vray::AttrValue(vec));
+				break;
+			}
+			case 'c': {
+				// mathutils.Color (any sequence of 3 floats)
+				const nb::sequence seq = nb::cast<nb::sequence>(elem);
+				vray::AttrColor color;
+				color.r = nb::cast<float>(seq[0]);
+				color.g = nb::cast<float>(seq[1]);
+				color.b = nb::cast<float>(seq[2]);
+				attrList.append(vray::AttrValue(color));
+				break;
+			}
 			default:
 				vassert(!"pyListToAttrList: unsupported type");
 				break;
@@ -75,6 +92,8 @@ proto::RenderSizes fromRenderSizes(const nb::object& obj)
 	sz.rgnTop = static_cast<int>(nb::cast<float>(obj.attr("rgnTop")));
 	sz.rgnWidth = static_cast<int>(nb::cast<float>(obj.attr("rgnWidth")));
 	sz.rgnHeight = static_cast<int>(nb::cast<float>(obj.attr("rgnHeight")));
+
+	sz.manageRenderRegion = nb::cast<bool>(obj.attr("manageRenderRegion"));
 
 	return sz;
 }

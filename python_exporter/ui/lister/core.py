@@ -64,9 +64,6 @@ class ListerCategory:
     # hidden when combined view is on; the 'combined' category (Geometry) when it is off.
     # Empty = always shown.
     geometryRole: str = ''
-    # Force Independent alignment regardless of the global 'Column Alignment' setting. Used by
-    # Materials, whose group types have very different columns the Unified Grid would misalign.
-    forceIndependentAlignment: bool = False
     # Per-category feature applicability. Datablock sections (Materials, Assets) get a fake-user
     # column and the Cleanup menu; every section but the read-only Assets file list can be renamed.
     hasFakeUserColumn: bool = False
@@ -75,6 +72,8 @@ class ListerCategory:
     # Draw the category's own full-width header (status + actions) on its own row, leaving the
     # shared row to the feature actions. Default: header and feature actions share one row.
     ownsHeaderRow: bool = False
+    # False for a category with no column table (Materials). Such a category defines no columns.
+    hasTable: bool = True
 
     def enumerate(self, context: bpy.types.Context) -> list:
         """ Return the entities belonging to this category. """
@@ -115,11 +114,43 @@ class ListerCategory:
             object groups with non-object groups (e.g. Displacement: objects + materials). """
         return self.selectable
 
+    def visibilityObject(self, entity, key: str, context: bpy.types.Context):
+        """ The scene object whose viewport/render visibility gates this row in the
+            'Viewport visible only' / 'Render visible only' filters, or None to leave the
+            row unfiltered. Object sections gate on the row object itself; the Assets
+            section maps a file reference to the object that owns it (texture / material /
+            world references have no single owner and stay unfiltered). """
+        return entity if self.isGroupSelectable(key) else None
+
+    def supportsSolo(self, key: str = "") -> bool:
+        """ Whether this group's rows offer the solo (isolate) feature, i.e. the solo column.
+            Defaults to the group's selectability (only object rows can be soloed); override
+            for categories whose rows drive an object-visibility solo without being objects
+            themselves (Materials). """
+        return self.isGroupSelectable(key)
+
+    def soloScope(self, context: bpy.types.Context) -> list:
+        """ The objects whose visibility solo toggles. Defaults to this category's own
+            entities; override where the soloable rows are not themselves the objects to hide
+            (a Material can be used by any object, so Materials scopes the whole view layer). """
+        return self.enumerate(context)
+
+    def soloMatches(self, obj, targetName: str) -> bool:
+        """ Whether 'obj' (from soloScope) is the solo target and should stay visible.
+            Defaults to a name match; override where the row identity is not the object name
+            (Materials: an object matches when it uses the soloed material). """
+        return obj.name == targetName
+
     def drawHeader(self, layout: bpy.types.UILayout, context: bpy.types.Context, entities: list):
         """ Optional category-level toolbar drawn above the table (e.g. bulk actions).
             'entities' is the already-enumerated, filtered list (so the header needs no
             second scan). Default: nothing. """
         pass
+
+    def emptyMessage(self, state) -> str:
+        """ Message shown when the section has no rows to display. Categories whose active
+            filters change what "empty" means (e.g. Assets with 'missing only') override this. """
+        return f"No {self.label.lower()} in the scene."
 
     def pickerSections(self, context: bpy.types.Context, state):
         """ Optional per-group breakdown for the column picker. Return a list of
@@ -134,7 +165,7 @@ class ListerCategory:
             column sets (Materials, Displacement) return this from pickerSections. """
         sections = []
         for key in self.groupOrder():
-            cols = [c for c in self.columns(key) if c.id not in ('select', 'name')]
+            cols = [c for c in self.columns(key) if c.id not in ('select', 'name', 'assign')]
             if cols:
                 sections.append((self.groupLabel(key), cols))
         return sections
@@ -261,20 +292,34 @@ def drawMaterialUsersCell(row: bpy.types.UILayout, mtl, propGroup: Any):
 
 
 def drawVisibilityCell(row: bpy.types.UILayout, obj, propGroup: Any):
-    """ Eye / camera toggles for the object's "Disable in Viewports" (hide_viewport) and
-        "Disable in Renders" (hide_render) flags. """
+    """ The object's three visibility toggles, in the same order and with the same glyphs as
+        the Outliner's restriction columns:
+          - eye     "Hide in Viewport"     - temporary, per view layer (hide_get/hide_set)
+          - monitor "Disable in Viewports" - global, saved in the file (hide_viewport)
+          - camera  "Disable in Renders"   - global, saved in the file (hide_render)
+        The eye is the Outliner's default viewport toggle, so without it a row hidden from the
+        Outliner looked unchanged here and vice versa (VBLD-2616).
+    """
     line = row.row(align=True)
+    # The eye is a Base (per-view-layer) flag, which Blender does not expose to Python as a
+    # property, hence an operator instead of a prop; HIDE_ON/OFF are the Outliner's own glyphs
+    hidden = obj.hide_get()
+    op = line.operator("vray.lister_hide", text="",
+                       icon='HIDE_ON' if hidden else 'HIDE_OFF', emboss=False)
+    op.object_name = obj.name
+
+    # Gaps so the three toggles read as separate controls
+    line.separator(factor=0.4)
     # No explicit icon, so each toggle picks up its property's native RNA icon and on/off glyph
     # switching; hard-coding RESTRICT_VIEW_*/RESTRICT_RENDER_* showed the wrong glyph when off
     line.prop(obj, 'hide_viewport', text="", emboss=False)
-    # Gap so the viewport and render toggles read as two separate controls
     line.separator(factor=0.4)
     line.prop(obj, 'hide_render', text="", emboss=False)
 
 
 # Shared visibility toggle column, auto-injected after the select column in every object
-# section (see _effectiveColumns). A touch wider than two icons so the eye/camera gap fits.
-COL_VISIBILITY = ColumnSpec('hide', "", draw=drawVisibilityCell, fixedWidth=1.9, center=True,
+# section (see effectiveColumns). A touch wider than three icons so their gaps fit.
+COL_VISIBILITY = ColumnSpec('hide', "", draw=drawVisibilityCell, fixedWidth=2.9, center=True,
                             pickerLabel="Visibility")
 
 
@@ -289,7 +334,7 @@ def makeStatusCell(kind: str, attr: str):
     """
     def draw(row: bpy.types.UILayout, obj, propGroup: Any):
         from vray_blender.ui import icons
-        from vray_blender.ui.lister.relink import _isMissing
+        from vray_blender.ui.lister.relink import isFileMissing
 
         vrayData = getattr(getattr(obj, 'data', None), 'vray', None)
         isCosmos = bool(getattr(vrayData, 'cosmos_package_id', ""))
@@ -299,7 +344,7 @@ def makeStatusCell(kind: str, attr: str):
             row.label(text="", icon='BLANK1')
             return
 
-        if not _isMissing(path):
+        if not isFileMissing(path):
             if isCosmos:
                 row.label(text="", icon_value=icons.getIcon('COSMOS'))
             else:
@@ -341,7 +386,10 @@ def drawTextureRef(row: bpy.types.UILayout, textureNode):
         displacement, ...). A V-Ray Bitmap becomes a button whose tooltip shows the file
         path and whose click jumps to that texture in the Assets tab; any other (procedural)
         texture shows a plain labelled icon. """
-    name = textureNode.label or textureNode.name
+    # The user's own label, else the node type. Never node.name: the .vrscene and Cosmos importers
+    # name nodes '<Type>_<UUID>', so a raw name shows a UUID. The file name is deliberately left
+    # out - this column is narrow and the button's tooltip already carries the path.
+    name = textureNode.label or textureNode.bl_label
     from vray_blender.ui.lister import relink
     bitmap = relink.bitmapAssetRef(textureNode)
     if bitmap is None:
@@ -355,6 +403,8 @@ def drawTextureRef(row: bpy.types.UILayout, textureNode):
 
 def isCategoryVisible(category: ListerCategory, combined: bool) -> bool:
     """ Whether a category appears in the navbar for the current combine toggle. """
+    if category.id == 'MATERIALS':
+        return False  # materials live in their own window, the Material Lister
     if combined and category.geometryRole == 'split':
         return False
     if (not combined) and category.geometryRole == 'combined':
@@ -423,7 +473,7 @@ def toggleColumn(state, categoryId: str, colId: str):
     state.hidden_columns = _toggleToken(state.hidden_columns, _columnToken(categoryId, colId))
 
 
-def applyColumnPreset(state, category: 'ListerCategory', context, showAll: bool):
+def applyColumnPreset(state, category: 'ListerCategory', showAll: bool):
     """ Bulk-set a section's column visibility to a preset, by writing the per-column
         toggles directly (so the picker checkboxes match):
           - showAll=False ("Default"): drop the section's toggles -> default columns.
@@ -432,7 +482,7 @@ def applyColumnPreset(state, category: 'ListerCategory', context, showAll: bool)
     prefix = f"{category.id}::"
     tokens = [t for t in state.hidden_columns.split() if not t.startswith(prefix)]
     if showAll:
-        for col in collectCategoryColumns(category, context, state):
+        for col in collectCategoryColumns(category):
             if col.defaultHidden:
                 tokens.append(_columnToken(category.id, col.id))
     state.hidden_columns = " ".join(tokens)
@@ -447,7 +497,7 @@ def isColumnVisible(state, categoryId: str, col: 'ColumnSpec') -> bool:
     return visible
 
 
-def _effectiveColumns(category: ListerCategory, key: str) -> list:
+def effectiveColumns(category: ListerCategory, key: str) -> list:
     """ A category's columns, with the shared hide/visibility toggle injected right
         after the select column for object (selectable) sections. Centralising it here
         means every object section gets it without each category repeating it. """
@@ -462,7 +512,7 @@ def _effectiveColumns(category: ListerCategory, key: str) -> list:
 
 def _visibleColumns(category: ListerCategory, key: str, representativePropGroup: Any, state):
     cols = []
-    for col in _effectiveColumns(category, key):
+    for col in effectiveColumns(category, key):
         if not isColumnVisible(state, category.id, col):
             continue
         if col.attr is not None and not _attrExists(representativePropGroup, col.attr):
@@ -471,7 +521,7 @@ def _visibleColumns(category: ListerCategory, key: str, representativePropGroup:
     return cols
 
 
-def collectCategoryColumns(category: ListerCategory, context: bpy.types.Context, state):
+def collectCategoryColumns(category: ListerCategory):
     """ Deduplicated columns across all of the category's group kinds, for the per-
         section column picker. Uses the category's declared group order rather than
         only the groups present in the scene, so the picker still works when the
@@ -480,8 +530,8 @@ def collectCategoryColumns(category: ListerCategory, context: bpy.types.Context,
     seen = set()
     ordered = []
     for key in category.groupOrder():
-        for col in _effectiveColumns(category, key):
-            if col.id in ('select', 'name') or col.id in seen:
+        for col in effectiveColumns(category, key):
+            if col.id in ('select', 'name', 'assign') or col.id in seen:
                 continue
             seen.add(col.id)
             ordered.append(col)
@@ -519,8 +569,9 @@ def _collectGroups(category: ListerCategory, context: bpy.types.Context, state):
     # regex escapes (see makeSearchMatcher)
     search = state.search.strip()
     selectedOnly = state.show_selected_only
-    viewportOnly = getattr(state, 'show_viewport_visible_only', False)
-    renderOnly = getattr(state, 'show_render_visible_only', False)
+    viewportOnly = state.show_viewport_visible_only
+    renderOnly = state.show_render_visible_only
+    missingOnly = state.show_missing_assets_only
 
     # Matched as a regex, falling back to a plain substring on an invalid pattern
     searchMatch = makeSearchMatcher(search)
@@ -529,15 +580,25 @@ def _collectGroups(category: ListerCategory, context: bpy.types.Context, state):
     for entity in category.enumerate(context):
         if search and not searchMatch(category.entityName(entity)):
             continue
+        # Assets-only "missing files" filter: an AssetRef exposes isMissing (True/False); other
+        # entities don't, so getattr yields None and this is a no-op outside the Assets section
+        # (which is the only section that shows the toggle).
+        if missingOnly and getattr(entity, 'isMissing', None) is False:
+            continue
         key = category.groupKey(entity)
-        # The selection / visibility filters only apply to selectable (scene-object) groups
-        if category.isGroupSelectable(key):
-            if selectedOnly and not _isSelected(entity):
-                continue
-            if viewportOnly and not entity.visible_get():
-                continue
-            if renderOnly and entity.hide_render:
-                continue
+        # 'Selected only' applies only to selectable (scene-object) groups.
+        if category.isGroupSelectable(key) and selectedOnly and not _isSelected(entity):
+            continue
+        # The visibility filters test the object a row maps to: the row object itself for
+        # object sections, or an asset's owning object in the Assets section. None means the
+        # row is not tied to a single object (a material / world reference), so it is exempt.
+        if viewportOnly or renderOnly:
+            visObj = category.visibilityObject(entity, key, context)
+            if visObj is not None:
+                if viewportOnly and not visObj.visible_get():
+                    continue
+                if renderOnly and visObj.hide_render:
+                    continue
         groups.setdefault(key, []).append(entity)
 
     sortColId = state.sort_column
@@ -590,13 +651,7 @@ def toggleGroup(state, categoryId: str, key: str):
 
 def drawLister(context: bpy.types.Context, layout: bpy.types.UILayout, category: ListerCategory, state):
     """ Render the lister for a category in the layout chosen by state.layout_mode. """
-    # NAVBAR/SPLIT placements replace the table with a master-detail editor; TABLE keeps the
-    # table and appends the detail editor below it (after the table draw). No-op otherwise.
-    editorMode = materialEditorMode(context) if category.id == 'MATERIALS' else None
-    if editorMode in ('NAVBAR', 'SPLIT'):
-        drawMaterialEditor(context, layout, state)
-        return
-
+    # Only table categories get here. Materials has its own window, see drawMaterialLister*.
     groups = _collectGroups(category, context, state)
 
     # Header toolbar: the category's bulk actions and the feature actions (Copy to Selected,
@@ -617,18 +672,13 @@ def drawLister(context: bpy.types.Context, layout: bpy.types.UILayout, category:
 
     if not groups:
         box = layout.box()
-        box.label(text=f"No {category.label.lower()} in the scene.", icon='INFO')
+        box.label(text=category.emptyMessage(state), icon='INFO')
         return
 
     if state.layout_mode == 'STACKED':
         _drawStacked(layout, category, groups, state)
     else:
         _drawTabbed(layout, category, groups, state)
-
-    # The selected material's detail editor below the table
-    if editorMode == 'TABLE':
-        layout.separator()
-        drawMaterialDetail(context, layout, state)
 
 
 def _drawTabbed(layout, category, groups, state):
@@ -658,10 +708,8 @@ def _drawStacked(layout, category, groups, state):
     visibleByKey = {key: _visibleColumns(category, key, category.getPropGroup(entities[0]), state)
                     for key, entities in groups}
 
-    # Some categories (Materials) always draw Independent: their group types have very
-    # different columns that the Unified Grid would line up into blank cells
-    alignMode = 'NONE' if category.forceIndependentAlignment else getattr(state, 'alignment_mode', 'NONE')
-    hideExclusive = bool(getattr(state, 'unified_hide_exclusive', False))
+    alignMode = state.alignment_mode
+    hideExclusive = state.unified_hide_exclusive
     unionSlots = _unionSlots(category, groups, visibleByKey, hideExclusive) if alignMode == 'UNIFIED' else None
 
     for key, entities in groups:
@@ -820,7 +868,7 @@ def _drawColumnHeader(uiCol, col: ColumnSpec, state, centered: bool):
 #
 # These add columns (injectColumns), a header action row (drawHeaderExtras) or change how the
 # collector filters/orders rows (makeSearchMatcher / applyPinnedOrder). The operators they
-# invoke live in ops.py; the shared runtime state (_solo, _editorMaterial) lives here.
+# invoke live in ops.py; the shared runtime state (soloState, the editor material) lives here.
 ############################################################
 
 def _entityId(entity) -> str:
@@ -835,21 +883,22 @@ def _entityId(entity) -> str:
     return getattr(entity, 'element', str(entity))
 
 
-# Runtime-only solo state: category id -> {'target': objName, 'prev': {objName: hide_get}}.
-# Not persisted - solo is a momentary view state.
-_solo: dict = {}
+# Runtime-only solo state: category id -> {'targets': [name, ...], 'prev': {objName: hide_get}}.
+# 'targets' is a list because solo is multi-select (Shift/Ctrl-click adds rows). Not persisted -
+# solo is a momentary view state. Written by ops.VRAY_OT_lister_solo.
+soloState: dict = {}
 
 
-def _soloTarget(categoryId: str):
-    return _solo.get(categoryId, {}).get('target')
+def soloTargets(categoryId: str) -> list:
+    return soloState.get(categoryId, {}).get('targets', [])
 
 
-def _restoreSolo(category, context):
+def restoreSolo(category, context):
     """ Restore the pre-solo viewport visibility for a category, if it is soloed. """
-    state = _solo.pop(category.id, None)
+    state = soloState.pop(category.id, None)
     if state is None:
         return
-    for obj in category.enumerate(context):
+    for obj in category.soloScope(context):
         if obj.name in state['prev']:
             try:
                 obj.hide_set(state['prev'][obj.name])
@@ -861,7 +910,7 @@ def _soloColumn(category):
     categoryId = category.id
 
     def draw(row, obj, propGroup):
-        soloed = _soloTarget(categoryId) == getattr(obj, 'name', None)
+        soloed = getattr(obj, 'name', None) in soloTargets(categoryId)
         # Filled vs hollow circle, not the star (SOLO_ON/OFF), which is too easily confused
         # with the pin icon
         op = row.operator("vray.lister_solo", text="",
@@ -909,15 +958,15 @@ def makeSearchMatcher(search: str):
         return lambda name: lowered in name.lower()
 
 
-def _pinnedSet(view) -> set:
+def pinnedSet(view) -> set:
     raw = getattr(view, 'lister_pinned', "") if view is not None else ""
     return set(raw.splitlines())
 
 
-def _pinnedColumn(category):
+def _pinnedColumn():
     # Build the pinned set once per column, not per cell, to avoid re-splitting the stored
     # string for every row
-    pinned = _pinnedSet(getListerView(bpy.context))
+    pinned = pinnedSet(getListerView(bpy.context))
 
     def draw(row, entity, propGroup):
         eid = _entityId(entity)
@@ -931,7 +980,7 @@ def _pinnedColumn(category):
 
 def applyPinnedOrder(state, entities):
     """ Stable-pin pinned rows to the front of an already-sorted group. """
-    pinned = _pinnedSet(state)
+    pinned = pinnedSet(state)
     if pinned:
         entities.sort(key=lambda e: 0 if _entityId(e) in pinned else 1)
 
@@ -940,38 +989,65 @@ def applyPinnedOrder(state, entities):
 # Material editor view (master-detail full draw)
 ############################################################
 
-# Runtime-only "which material is open in the editor" (momentary view state)
+# Runtime-only "which material is open in the editor" (momentary view state). 'name' is what
+# was clicked, 'displayed' what the parameters pane actually drew (it falls back to the first
+# material when nothing was clicked). Write through setEditorMaterial().
 _editorMaterial = {'name': ''}
 
 
-def _shaderNodeOf(mat):
-    """ The shader node feeding the material output (deterministic - NOT the node tree's
-        active node, which is often the Output node), or None. """
+def setEditorMaterial(name: str):
+    """ Open a material in the editor. Drops 'displayed' too, so editorMaterialName() cannot
+        keep reporting the previously shown material until the parameters pane redraws. """
+    _editorMaterial['name'] = name
+    _editorMaterial.pop('displayed', None)
+
+
+def _drawNoShaderHint(layout, ntree):
+    """ Name the actual fault. All three states look identical otherwise, and 'not connected'
+        is plain wrong for a tree that has no output node to connect to. """
     from vray_blender.nodes import utils as NodesUtils
-    nodeTree = getattr(mat, 'node_tree', None)
-    if nodeTree is None:
-        return None
-    output = NodesUtils.getOutputNode(nodeTree, "MATERIAL")
-    if output is None:
-        return None
-    link = NodesUtils.getFarNodeLink(output.inputs["Material"])
-    return link.from_node if link else None
+
+    if ntree is None or not ntree.nodes:
+        layout.label(text="This material has no node tree.", icon='ERROR')
+    elif NodesUtils.getOutputNode(ntree, 'MATERIAL') is None:
+        layout.label(text="No V-Ray Material Output node in this material.", icon='ERROR')
+    else:
+        layout.label(text="No shader connected to the material output.", icon='INFO')
 
 
 def _drawMaterialShader(layout, context, mat):
-    """ The shader's grouped node UI (rollouts / widgets), same as the Material Properties tab. """
-    from vray_blender.ui import classes
+    """ The node UI (rollouts / widgets) of the material's shader, same as the Material Properties
+        tab: it follows the user's node selection rather than being stuck on the BRDF, carries the
+        navigation trail, and offers the texture pickers.
+
+        The tree is passed explicitly instead of via navigation.getEditedTree(): the lister lives in
+        a Preferences window, so scanning context.screen for a node editor is a guaranteed miss. """
+    from vray_blender.lib import draw_utils
+    from vray_blender.nodes import navigation as NodesNav
+    from vray_blender.ui import classes, node_nav, node_slots
     from vray_blender.plugins import PLUGINS
 
-    node = _shaderNodeOf(mat)
+    ntree = getattr(mat, 'node_tree', None)
+    node = NodesNav.getPanelNode(ntree, 'MATERIAL')
     if node is None:
-        layout.label(text="No shader connected to the material output.", icon='INFO')
+        _drawNoShaderHint(layout, ntree)
         return
+
+    slotContext = node_slots.makeSlotContext(context, mat, ntree)
+
+    if slotContext is not None:
+        navCol = layout.column(align=True)
+        navCol.use_property_split = False
+        node_nav.drawNavigation(navCol, context, slotContext.ownerType, slotContext.ownerName,
+                                ntree, 'MATERIAL', node)
+        layout.separator()
+
     body = layout.column()
     body.use_property_split = True
     body.use_property_decorate = True
     try:
-        classes.drawActiveNodePanel(context, body, node, PLUGINS)
+        with draw_utils.slotEditing(slotContext):
+            classes.drawActiveNodePanel(context, body, node, PLUGINS)
     except Exception as ex:
         layout.label(text=f"Could not draw parameters: {ex}", icon='ERROR')
 
@@ -986,20 +1062,32 @@ def _indentBody(layout):
     return split.column()
 
 
+############################################################
+# Material parameters pane
+############################################################
+
 def _drawMaterialParams(layout, context, category, mat):
-    """ The right-hand panel: name, fake-user, a preview, then two rollouts - 'Material'
-        (the shader UI) and 'Output Options' (the per-material output plugins). """
+    """ The parameters pane: name, fake-user, then the Preview, Material and Output Options
+        rollouts. Keep this pane in its own editor area - layout.panel() paints across the region. """
+    from vray_blender.nodes import utils as NodesUtils
+
     header = layout.row(align=True)
     header.prop(mat, 'name', text="")
     header.prop(mat, 'use_fake_user', text="",
                 icon='FAKE_USER_ON' if mat.use_fake_user else 'FAKE_USER_OFF')
 
-    previewBox = layout.box()
-    previewBox.label(text="Preview", icon='MATERIAL')
-    try:
-        previewBox.template_preview(mat, show_buttons=False)
-    except Exception:
-        previewBox.label(text="(preview unavailable)")
+    # Collapsible: template_preview() is what starts the preview render job (ED_preview_draw),
+    # so a closed rollout costs nothing.
+    previewHeader, previewBody = layout.panel("mateditor_preview", default_closed=False)
+    previewHeader.label(text="Preview", icon='MATERIAL')
+    if previewBody is not None:
+        try:
+            # The token changes only when a material no object uses was edited, which is the one
+            # case a stable id cannot serve: see nodes.utils.tagMaterialPreview.
+            previewBody.template_preview(mat, show_buttons=False,
+                                         preview_id=f"mateditor_preview_{NodesUtils.loosePreviewToken['n']}")
+        except Exception:
+            previewBody.label(text="(preview unavailable)")
 
     if not getattr(getattr(mat, 'vray', None), 'is_vray_class', False):
         layout.label(text="Non-V-Ray material", icon='INFO')
@@ -1007,16 +1095,16 @@ def _drawMaterialParams(layout, context, category, mat):
         return
 
     # Material rollout: the shader's grouped parameters, indented under the header
-    matHeader, matBody = layout.panel("mateditor_material", default_closed=False)
-    matHeader.label(text=f"Material - {category.groupLabel(category.groupKey(mat))}", icon='NODE_MATERIAL')
-    if matBody is not None:
-        _drawMaterialShader(_indentBody(matBody), context, mat)
+    materialHeader, materialBody = layout.panel("mateditor_material", default_closed=False)
+    materialHeader.label(text=f"Material - {category.shaderLabel(mat)}", icon='NODE_MATERIAL')
+    if materialBody is not None:
+        _drawMaterialShader(_indentBody(materialBody), context, mat)
 
     # Output Options rollout: the per-material output plugins (Wrapper / ID / ...)
-    optHeader, optBody = layout.panel("mateditor_output", default_closed=True)
-    optHeader.label(text="Output Options", icon='SETTINGS')
-    if optBody is not None:
-        _drawMaterialOptions(_indentBody(optBody), context, mat)
+    outputHeader, outputBody = layout.panel("mateditor_output", default_closed=True)
+    outputHeader.label(text="Output Options", icon='SETTINGS')
+    if outputBody is not None:
+        _drawMaterialOptions(_indentBody(outputBody), context, mat)
 
 
 # Per-material option plugins (the "Material Options" subpanels of the Material tab):
@@ -1055,13 +1143,15 @@ def _drawMaterialOptions(layout, context, mat):
 
 
 def _editorMaterials(context, category):
-    """ The materials shown in the editor, honouring the header search. """
-    state = makeListerState(context)
+    """ The materials shown in the editor, honouring the Material Lister's own search. """
+    view = getListerView(context)
     materials = category.enumerate(context)
-    search = state.search.lower().strip()
+    # Raw, not lowercased: makeSearchMatcher is case-insensitive already, and lowercasing
+    # would corrupt regex escapes (see its docstring)
+    search = (view.material_search if view is not None else '').strip()
     if search:
         match = makeSearchMatcher(search)
-        materials = [m for m in materials if match(category.entityName(m).lower())]
+        materials = [m for m in materials if match(category.entityName(m))]
     return materials
 
 
@@ -1069,237 +1159,172 @@ def _editorSelectedMaterial(materials):
     """ The material open in the detail panel (selected one, or the first as a fallback). """
     selectedName = _editorMaterial.get('name', '')
     mat = bpy.data.materials.get(selectedName) if selectedName else None
-    if mat is None or mat not in set(materials):
+    if mat is None or mat not in materials:
         mat = materials[0] if materials else None
-    # Remember what the detail panel actually shows (may be the materials[0] fallback) so the
-    # depsgraph-driven preview refresh can watch it without re-enumerating materials itself
+    # Remember what the detail panel actually shows (may be the materials[0] fallback) so
+    # editorMaterialName() reports it without re-enumerating materials itself
     _editorMaterial['displayed'] = mat.name if mat is not None else ''
     return mat
 
 
-def _drawMaterialListInto(layout, materials):
-    """ Draw the clickable material list (shared by the navbar and split placements). Either a
-        compact text list or a grid of preview thumbnails, per the List Display preference. """
+def isUnassigned(mat) -> bool:
+    """ Nothing in the scene uses this material. Worth flagging: it is dropped on reload unless
+        it has a fake user, and it is in no depsgraph (see nodes.utils.tagMaterialPreview).
+        Also decides how long the panes keep repainting - see window._repaintWhileRendering. """
+    return (mat.users - (1 if mat.use_fake_user else 0)) <= 0
+
+
+def _drawUnassignedMark(row, mat):
+    """ Subtle 'nothing uses this' marker. Always drawn - blank for a used material - so the
+        name button keeps the same width and place whether or not the marker is showing. """
+    mark = row.row()
+    mark.active = False  # dim it; there is nothing to click here
+    mark.label(text="", icon='UNLINKED' if isUnassigned(mat) else 'BLANK1')
+
+
+def _drawMaterialSolo(row, matName):
+    """ Per-material solo toggle. Shift/Ctrl-click adds to the solo set. """
+    soloed = matName in soloTargets('MATERIALS')
+    op = row.operator("vray.lister_solo", text="",
+                      icon='RADIOBUT_ON' if soloed else 'RADIOBUT_OFF', emboss=False, depress=soloed)
+    op.object_name = matName
+    op.category = 'MATERIALS'
+
+
+def editorMaterialName() -> str:
+    """ The material the editor is showing. 'displayed' is what got drawn, 'name' what was clicked. """
+    return _editorMaterial.get('displayed') or _editorMaterial.get('name', '')
+
+
+# Thumbnail grid geometry, in UI units. The cell adds the box border around the preview. Large
+# is Blender's own preview resolution; past it the same image is just drawn upscaled.
+_THUMBNAIL_SCALES = {'SMALL': 3.0, 'MEDIUM': 5.0, 'LARGE': 6.5}
+_THUMBNAIL_CELL_PADDING_UNITS = 1.4
+
+
+def thumbnailScale(context) -> float:
+    return _THUMBNAIL_SCALES[getListerPrefs(context).material_thumbnail_size]
+
+
+def _drawMaterialThumbCell(layout, mat, selectedName: str, scale: float):
+    """ One thumbnail cell: preview, then the solo toggle and name. """
+    cell = layout.box().column(align=True)
+    try:
+        cell.template_icon(icon_value=mat.preview_ensure().icon_id, scale=scale)
+    except Exception:
+        cell.label(text="", icon='MATERIAL')
+    nameRow = cell.row(align=True)
+    _drawMaterialSolo(nameRow, mat.name)
+    op = nameRow.operator("vray.lister_editor_select_material", text=mat.name,
+                          depress=(mat.name == selectedName))
+    op.material = mat.name
+    _drawUnassignedMark(nameRow, mat)
+
+
+def _drawMaterialThumbnailGrid(layout, materials, selectedName: str, listWidth: float):
+    """ Grid of preview thumbnails, packed from the left at a fixed cell size. Built from nested
+        split() calls - row() and grid_flow() stretch a lone cell and ignore ui_units_x. """
+    widgetUnit = 20.0 * bpy.context.preferences.system.ui_scale
+    scale = thumbnailScale(bpy.context)
+    cellWidth = (scale + _THUMBNAIL_CELL_PADDING_UNITS) * widgetUnit
+    avail = max(listWidth, cellWidth)
+    columns = max(1, int(avail // cellWidth))
+
+    grid = layout.column(align=True)
+    container = None
+    remaining = avail
+    for i, mat in enumerate(materials):
+        if (i % columns) == 0:
+            container = grid.row(align=True)
+            remaining = avail
+        # Keep the factor below 1.0 - the split needs a remainder for the next cell.
+        cellSplit = container.split(factor=min(0.999, cellWidth / max(remaining, 1.0)), align=True)
+        _drawMaterialThumbCell(cellSplit.column(align=True), mat, selectedName, scale)
+        container = cellSplit.column(align=True)
+        remaining -= cellWidth
+
+
+def _drawMaterialListInto(layout, materials, listWidth: float = 0.0):
+    """ The clickable material list, as text rows or a thumbnail grid per the List Display
+        preference. 'listWidth' is the pane's drawable width in pixels (0 = unknown). """
     col = layout.column(align=True)
     col.label(text=f"Materials  ({len(materials)})", icon='MATERIAL')
-    selectedName = _editorMaterial.get('name', '')
+    # The name the parameters pane is showing, so the highlighted row matches it even when
+    # nothing was clicked and the pane fell back to the first material
+    selectedName = editorMaterialName()
     if not materials:
         col.label(text="No materials.", icon='INFO')
         return
 
-    thumbnails = getattr(getListerPrefs(bpy.context), 'mat_editor_list_display', 'LIST') == 'THUMBNAILS'
+    thumbnails = getListerPrefs(bpy.context).material_editor_list_display == 'THUMBNAILS'
     if thumbnails:
-        # Grid of preview thumbnails: template_icon shows the preview with the clickable name
-        # button under it; preview_ensure() generates the preview lazily
-        grid = col.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=False, align=True)
-        for mat in materials:
-            cell = grid.box().column(align=True)
-            try:
-                cell.template_icon(icon_value=mat.preview_ensure().icon_id, scale=5.0)
-            except Exception:
-                cell.label(text="", icon='MATERIAL')
-            op = cell.operator("vray.lister_editor_select_material", text=mat.name,
-                              depress=(mat.name == selectedName))
-            op.material = mat.name
+        _drawMaterialThumbnailGrid(col, materials, selectedName, listWidth)
         return
 
     listCol = col.column(align=True)
     for mat in materials:
-        op = listCol.operator("vray.lister_editor_select_material", text=mat.name,
-                              icon='MATERIAL', depress=(mat.name == selectedName))
+        row = listCol.row(align=True)
+        _drawMaterialSolo(row, mat.name)
+        # Each row shows the material's own swatch, like Blender's material slot list. Beyond
+        # looking right, the icon render job notifies NC_WINDOW, which is what repaints this
+        # Preferences-hosted area - template_preview's NC_MATERIAL notifier is dropped here
+        # (every SPACE_USERPREF region listener is a stub), so the big preview relies on it.
+        try:
+            iconId = mat.preview_ensure().icon_id
+        except Exception:
+            iconId = 0
+        op = row.operator("vray.lister_editor_select_material", text=mat.name,
+                          icon_value=iconId, depress=(mat.name == selectedName))
         op.material = mat.name
+        _drawUnassignedMark(row, mat)
 
 
-def materialEditorMode(context):
-    """ The Material Editor list placement ('NAVBAR' / 'SPLIT' / 'TABLE' / 'PLAIN') if the
-        Materials section is active, else None. """
-    prefs = getListerPrefs(context)
-    view = getListerView(context)
-    if view is not None and view.active_category == 'MATERIALS':
-        return getattr(prefs, 'mat_editor_layout', 'NAVBAR')
-    return None
+############################################################
+# Material Lister panes
+############################################################
+
+# Approximate panel inset from the region edge, in UI units. Only feeds the thumbnail column count.
+_PANEL_INSET_UNITS = 0.5
+
+# Padding the list's box() eats out of the pane, in UI units. Approximate.
+_LIST_BOX_PAD_UNITS = 1.0
 
 
-def editorUsesNavbarList(context) -> bool:
-    """ True when the Material Editor is active and set to the NAVBAR placement - the navbar
-        drops the category tabs (they move to a header dropdown) and hosts only the list. """
-    return materialEditorMode(context) == 'NAVBAR'
-
-
-def _matEditorLayout() -> str:
-    """ The editor placement read straight from prefs (for injectColumns, which has no
-        context). """
-    return getattr(getListerPrefs(bpy.context), 'mat_editor_layout', 'NAVBAR')
-
-
-def _editorOpenColumn():
-    """ Per-row 'open in the editor below' button for the TABLE placement. """
-    def draw(row, mat, propGroup):
-        selected = _editorMaterial.get('name', '') == getattr(mat, 'name', '')
-        op = row.operator("vray.lister_editor_select_material", text="",
-                          icon='PROPERTIES', emboss=False, depress=selected)
-        op.material = mat.name
-
-    return ColumnSpec('editor_open', "", draw=draw, fixedWidth=1.2, center=True,
-                      pickerLabel="Open in Editor")
-
-
-def drawMaterialList(layout, context):
-    """ The material list for the navbar region (NAVBAR placement). """
-    category = getCategory('MATERIALS')
-    if category is not None:
-        _drawMaterialListInto(layout, _editorMaterials(context, category))
-
-
-def drawMaterialDetail(context, layout, state):
-    """ The detail panel (preview + parameters) for the selected material, with no list.
-        Used by the NAVBAR placement (content region) and the TABLE placement (below the
-        materials table). """
+def drawMaterialListerParams(context, layout):
+    """ The Material Lister's right pane: the selected material's preview and parameters. """
     category = getCategory('MATERIALS')
     if category is None:
         return
-    mat = _editorSelectedMaterial(_editorMaterials(context, category))
-    if mat is None:
-        layout.label(text="Select a material (the 'open in editor' button) to edit it here.",
-                     icon='INFO')
-        return
-    _drawMaterialParams(layout.column(), context, category, mat)
-
-
-def drawMaterialEditor(context, layout, state):
-    """ The Material Editor content for the Materials section (NAVBAR / SPLIT placements). """
-    category = getCategory('MATERIALS')
-    if category is None:
-        return
-    prefs = getListerPrefs(context)
     materials = _editorMaterials(context, category)
     mat = _editorSelectedMaterial(materials)
+    if mat is None:
+        layout.label(text="Select a material to edit.", icon='INFO')
+    else:
+        _drawMaterialParams(layout, context, category, mat)
 
-    if getattr(prefs, 'mat_editor_layout', 'NAVBAR') == 'SPLIT':
-        topbar = layout.row()
-        topbar.alignment = 'RIGHT'
-        widthCtl = topbar.row()
-        widthCtl.ui_units_x = 9
-        widthCtl.prop(prefs, 'mat_editor_panel_width', text="Editor Width", slider=True)
 
-        # Split so the editor panel keeps the chosen fixed width and the material list takes the
-        # rest; split() honours the factor strictly, so panels stay put on resize / rollout toggle
-        editorUnits = max(12.0, min(64.0, float(getattr(prefs, 'mat_editor_panel_width', 24.0))))
-        widgetUnit = 20.0 * getattr(context.preferences.system, 'ui_scale', 1.0)
-        regionWidth = max(getattr(context.region, 'width', 0) or 0, 1)
-        listFactor = max(0.1, min(0.9, 1.0 - (editorUnits * widgetUnit) / regionWidth))
-        split = layout.split(factor=listFactor)
-        _drawMaterialListInto(split.box().column(align=True), materials)
-        right = split.box().column()
-        if mat is None:
-            right.label(text="Select a material to edit.", icon='INFO')
-        else:
-            _drawMaterialParams(right, context, category, mat)
+def drawMaterialListerMain(context, layout):
+    """ The Material Lister's left pane: the material list, as text rows or a thumbnail grid. """
+    category = getCategory('MATERIALS')
+    if category is None:
         return
-
-    # NAVBAR placement: detail only (the list is drawn in the navbar region)
-    drawMaterialDetail(context, layout, state)
-
-
-############################################################
-# Material preview auto-refresh (depsgraph-driven, no timer)
-############################################################
-
-# V-Ray param edits tag the selected objects, not the material datablock, so Blender's
-# material_changed -> preview-dirty path never fires and the preview goes stale. So we watch
-# the open material's params and, when they change, call mat.update_tag() ourselves to drive
-# the re-render.
-
-_previewWatch = {'fingerprint': None}
-
-
-def _hashableValue(value):
-    if hasattr(value, '__len__') and not isinstance(value, str):
-        try:
-            return tuple(value)
-        except Exception:
-            return str(value)
-    return value
-
-
-def _materialFingerprint(mat):
-    """ A cheap hash of everything the editor can change on a material, so the depsgraph
-        handler knows when to re-render its preview. """
-    parts = [mat.name]
-    node = _shaderNodeOf(mat)
-    if node is not None:
-        pluginType = getattr(node, 'vray_plugin', '')
-        propGroup = getattr(node, pluginType, None) if pluginType else None
-        if propGroup is not None:
-            for p in propGroup.bl_rna.properties:
-                if p.identifier == 'rna_type' or p.is_readonly or p.type == 'POINTER':
-                    continue
-                try:
-                    parts.append((p.identifier, _hashableValue(getattr(propGroup, p.identifier))))
-                except Exception:
-                    pass
-        for sock in node.inputs:
-            for valAttr in ('value', 'default_value'):
-                if hasattr(sock, valAttr):
-                    try:
-                        parts.append((sock.identifier, valAttr, _hashableValue(getattr(sock, valAttr))))
-                    except Exception:
-                        pass
-    vrayMtl = getattr(mat, 'vray', None)
-    if vrayMtl is not None:
-        for attr, _pt, _lbl in _MATERIAL_OPTIONS:
-            pg = getattr(vrayMtl, attr, None)
-            if pg is not None and 'use' in pg.bl_rna.properties:
-                parts.append((attr, bool(pg.use)))
-    try:
-        return hash(tuple(parts))
-    except TypeError:
-        return hash(repr(parts))
-
-
-def onDepsgraphUpdate(scene, depsgraph):
-    """ Called from the lister's depsgraph_update_post handler (event-driven, no timer).
-        When the Material Editor is open and the shown material's parameters have changed,
-        tag the material so its preview re-renders - V-Ray param edits tag only the selected
-        objects, so material_changed (and the preview's UI_PREVIEW_TAG_DIRTY) never fires on
-        its own. The fingerprint comparison scopes this to real parameter changes AND breaks
-        the recursion our own update_tag would otherwise cause (the self-induced update leaves
-        the fingerprint unchanged, so no re-tag). """
-    try:
-        context = bpy.context
-        if materialEditorMode(context) is None:
-            _previewWatch['fingerprint'] = None
-            return
-        # Watch the name the draw stashed in 'displayed' (the panel falls back to the first
-        # material when nothing is clicked), not just the clicked 'name'. Runs on every
-        # depsgraph update, so it stays O(1) and never enumerates bpy.data.materials.
-        selectedName = _editorMaterial.get('displayed') or _editorMaterial.get('name', '')
-        mat = bpy.data.materials.get(selectedName) if selectedName else None
-        if mat is None or not getattr(getattr(mat, 'vray', None), 'is_vray_class', False):
-            return
-        fingerprint = _materialFingerprint(mat)
-        if fingerprint != _previewWatch.get('fingerprint'):
-            _previewWatch['fingerprint'] = fingerprint
-            try:
-                mat.update_tag()   # -> material_changed -> preview marked dirty -> re-render
-            except Exception:
-                pass
-    except Exception:
-        pass
+    # The pane owns its whole region, less the inset either side and the box padding.
+    widgetUnit = 20.0 * context.preferences.system.ui_scale
+    listWidth = max(context.region.width - (2.0 * _PANEL_INSET_UNITS + _LIST_BOX_PAD_UNITS) * widgetUnit, 1.0)
+    _drawMaterialListInto(layout, _editorMaterials(context, category), listWidth)
 
 
 def resetRuntimeState():
-    """ Drop the runtime-only view state (solo target, open material, preview watch) on file
-        load: the freshly loaded file has different objects and materials, so a stale solo
-        target would leave the header showing "Exit Solo" for a row that no longer exists. """
-    _solo.clear()
+    """ Drop the runtime-only view state (solo target, open material) on file load: the freshly
+        loaded file has different objects and materials, so a stale solo target would keep hiding
+        rows for a solo the new file knows nothing about. """
+    soloState.clear()
     _editorMaterial.clear()
     _editorMaterial['name'] = ''
-    _previewWatch['fingerprint'] = None
 
 
 ############################################################
-# Column injection hook (core._effectiveColumns)
+# Column injection hook (core.effectiveColumns)
 ############################################################
 
 def _insertColumns(cols, leftCols, afterNameCols, appendCols):
@@ -1322,16 +1347,14 @@ def _insertColumns(cols, leftCols, afterNameCols, appendCols):
 
 def injectColumns(category, key, cols):
     """ Add the lister's extra feature columns to a group's column list. Called from
-        _effectiveColumns. """
+        effectiveColumns. """
     leftCols, afterNameCols, appendCols = [], [], []
 
-    leftCols.append(_pinnedColumn(category))
-    if category.isGroupSelectable(key):
+    leftCols.append(_pinnedColumn())
+    if category.supportsSolo(key):
         leftCols.append(_soloColumn(category))
     if category.id == 'CAMERAS':
         afterNameCols.append(_renderColumn())
-    if category.id == 'MATERIALS' and _matEditorLayout() == 'TABLE':
-        leftCols.append(_editorOpenColumn())
     if category.hasFakeUserColumn:
         appendCols.append(_fakeUserColumn(category))
 
@@ -1344,36 +1367,28 @@ def injectColumns(category, key, cols):
 # Header toolbar hook (drawLister) + Options popover (window.py)
 ############################################################
 
-def drawHeaderExtras(layout, context, category):
-    """ The lister's header actions (Copy to Selected, Rename, Cleanup, Exit Solo), drawn as a
-        compact button group into the shared (right-aligned) header row. """
-    soloActive = category.selectable and _soloTarget(category.id)
+def drawHeaderExtras(layout, context, category, iconOnly: bool = False):
+    """ The lister's header actions (Copy to Selected, Rename, Cleanup) as a compact button group.
+        iconOnly drops the button text for the material list's icon-only header. """
     showCopy = category.selectable
     showRename = category.supportsRename
     showCleanup = category.hasCleanup
 
-    if not (soloActive or showCopy or showRename or showCleanup):
+    if not (showCopy or showRename or showCleanup):
         return
 
     bar = layout.row(align=True)
     if showCopy:
-        bar.operator("vray.lister_copy_to_selected", text="Copy to Selected", icon='PASTEDOWN').category = category.id
+        bar.operator("vray.lister_copy_to_selected", text="" if iconOnly else "Copy to Selected",
+                     icon='PASTEDOWN').category = category.id
     if showRename:
-        bar.operator("vray.lister_batch_rename", text="Rename", icon='SORTALPHA').category = category.id
+        bar.operator("vray.lister_batch_rename", text="" if iconOnly else "Rename",
+                     icon='SORTALPHA').category = category.id
     if showCleanup:
-        bar.menu("VRAY_MT_lister_cleanup", text="Cleanup", icon='TRASH')
-    if soloActive:
-        bar.separator()
-        op = bar.operator("vray.lister_solo", text="Exit Solo", icon='SOLO_OFF')
-        op.object_name = ""
-        op.category = category.id
+        bar.menu("VRAY_MT_lister_cleanup", text="" if iconOnly else "Cleanup", icon='TRASH')
 
 
 def drawOptions(layout, prefs):
-    """ The Material Editor placement + list-display options in the lister Options popover. The
-        other lister features are always on, so only these remain a user choice. """
+    """ The lister Options popover's tail. List Display lives in the Material Lister's header. """
     layout.separator()
-    layout.prop(prefs, 'mat_editor_layout', text="Editor List")
-    # List display only applies where a separate material list is shown (Navbar / Split)
-    if getattr(prefs, 'mat_editor_layout', 'NAVBAR') in ('NAVBAR', 'SPLIT'):
-        layout.prop(prefs, 'mat_editor_list_display', text="List Display")
+    layout.prop(prefs, 'assign_highlight', text="Highlight Drop Target")

@@ -3,9 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 def run():
-    for cam in bpy.data.cameras:
+    for cam in scopedForUpgrade(bpy.data.cameras):
         cameraOverridesEnabled = cam.vray.SettingsCamera.override_camera_settings
         defaultClippingValueUsed = not cam.vray.RenderView.is_property_set("clipping")
 
@@ -15,7 +16,7 @@ def run():
             cam.vray.RenderView.clipping = True
 
 def check():
-    for camera in bpy.data.cameras:
+    for camera in scopedForUpgrade(bpy.data.cameras):
         cameraOverridesEnabled = camera.vray.SettingsCamera.override_camera_settings
         if cameraOverridesEnabled and not camera.vray.RenderView.is_property_set("clipping"):
             return True

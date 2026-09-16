@@ -2,8 +2,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import bpy, sys
+import bpy, sys, os
 from bpy.types import Context
+from bl_operators.presets import AddPresetBase
+from bl_ui.utils import PresetPanel
 
 from vray_blender.engine import ZMQ
 from vray_blender.lib import draw_utils
@@ -178,7 +180,7 @@ class VRAY_PT_Common_Rendering(classes.VRayRenderPanel):
     bl_label = "Rendering"
     bl_panel_groups = RenderPanelGroups
 
-    # (label, quick BoolProperty name on wm.vray, jump-target enum value)
+    # (label, quick BoolProperty name on scene.vray, jump-target enum value)
     _QUICK_TOGGLES = (
         ("Auto Exposure",      "quick_auto_exposure",      "AUTO_EXPOSURE"),
         ("Auto White Balance", "quick_auto_white_balance", "AUTO_WHITE_BALANCE"),
@@ -187,13 +189,13 @@ class VRAY_PT_Common_Rendering(classes.VRayRenderPanel):
     )
 
     def draw(self, context):
-        commonUI = context.window_manager.vray.common_tab
+        vrayScene = context.scene.vray
         layout = self.layout
 
         grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True, align=False)
         for label, propName, target in self._QUICK_TOGGLES:
             row = grid.row(align=True)
-            row.prop(commonUI, propName, text=label)
+            row.prop(vrayScene, propName, text=label)
             opRow = row.row(align=True)
             opRow.alignment = 'RIGHT'
             opRow.operator(VRAY_OT_jump_to_setting.bl_idname, text="", icon='PRESET').target = target
@@ -203,25 +205,15 @@ class VRAY_PT_Common_Denoiser(classes.VRayRenderPanel):
     bl_label = "Denoiser"
     bl_panel_groups = RenderPanelGroups
 
-    def _getDenoiserChannel(self, context):
-        if context.scene.world:
-            return context.scene.world.vray.VRayRenderChannels.VRayNodeRenderChannelDenoiser
-        return None
-
     def drawPanelCheckBox(self, context):
         if context.scene.world:
-            denoiserChannel = self._getDenoiserChannel(context)
-            if not denoiserChannel.enabled:
-                self.layout.prop(denoiserChannel, 'enabled', text="")
-            else:
-                denoiserPropGroup = context.scene.world.vray.RenderChannelDenoiser
-                self.layout.prop(denoiserPropGroup, 'enabled', text="")
+            self.layout.prop(context.scene.world.vray, 'quick_denoiser', text="")
 
     def draw_header_preset(self, context):
         if context.scene.world:
             row = self.layout.row()
             row.alignment = 'RIGHT'
-            row.enabled = self._getDenoiserChannel(context).enabled
+            row.enabled = context.scene.world.vray.quick_denoiser
             row.operator('vray.show_denoiser_advanced_settings', text="", icon='PRESET', emboss=False)
 
     def draw(self, context):
@@ -233,10 +225,9 @@ class VRAY_PT_Common_Denoiser(classes.VRayRenderPanel):
         layout = draw_utils.subPanel(self.layout)
         layout.use_property_decorate = False
 
-        denoiserChannel = self._getDenoiserChannel(context)
         denoiserPropGroup = context.scene.world.vray.RenderChannelDenoiser
 
-        layout.active = denoiserChannel.enabled and denoiserPropGroup.enabled
+        layout.active = context.scene.world.vray.quick_denoiser
         layout.prop(denoiserPropGroup, 'engine')
         if denoiserPropGroup.engine == '0':
             layout.prop(denoiserPropGroup, 'preset')
@@ -395,15 +386,138 @@ class VRAY_PT_GpuTextureOptions(classes.VRayRenderPanel):
  ##  ##     ## ##     ## ##    ##  ##          ##    ## ##     ## ##     ## ##        ##       ##       ##    ##
 #### ##     ## ##     ##  ######   ########     ######  ##     ## ##     ## ##        ######## ######## ##     ##
 
+_SAMPLING_PRESET_SUBDIR = "vray/sampling"
+
+# Absolute path of the bundled (factory) sampling presets shipped in the addon.
+# Used to block deletion of the default presets, the way Blender protects its own.
+_BUNDLED_SAMPLING_PRESET_DIR = os.path.normcase(os.path.normpath(
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "presets", "vray", "sampling")))
+
+
+def _isBundledSamplingPreset(filepath):
+    return os.path.normcase(os.path.normpath(os.path.dirname(filepath))) == _BUNDLED_SAMPLING_PRESET_DIR
+
+
+class VRAY_PT_sampling_presets(PresetPanel, bpy.types.Panel):
+    """ Header-popover preset control for the Image Sampler panel.
+        Lists the bundled sampling-quality levels plus any the user has saved.
+    """
+    bl_label = "Sampling Presets"
+    preset_subdir       = _SAMPLING_PRESET_SUBDIR
+    preset_operator     = "script.execute_preset"
+    preset_add_operator = "vray.sampling_preset_add"
+
+    # The bundled levels, in quality order. The stock preset popover sorts files
+    # alphabetically; we list them explicitly instead so the .py files can keep
+    # clean names (Low.py, High_plus_.py, ...) without a sort-prefix hack.
+    _FACTORY_ORDER = ("Low", "Low+", "Medium", "Medium+", "High", "High+")
+
+    def draw(self, context):
+        # Mirrors bpy.types.Menu.draw_preset / UILayout.path_menu, but lists the
+        # bundled levels in _FACTORY_ORDER first (then any user presets) rather
+        # than in filename order.
+        import os
+
+        layout = self.layout
+        layout.emboss = 'PULLDOWN_MENU'
+        layout.operator_context = 'EXEC_DEFAULT'
+
+        # Collect presets (bundled + user-saved) as {label: filepath};
+        # first match across the search paths wins.
+        entries = {}
+        for directory in bpy.utils.preset_paths(self.preset_subdir):
+            if not os.path.isdir(directory):
+                continue
+            for fileName in os.listdir(directory):
+                if fileName.endswith(".py"):
+                    label = bpy.path.display_name(fileName, title_case=False)
+                    entries.setdefault(label, os.path.join(directory, fileName))
+
+        labels = [n for n in self._FACTORY_ORDER if n in entries]
+        labels += sorted(n for n in entries if n not in self._FACTORY_ORDER)
+
+        col = layout.column(align=True)
+        for label in labels:
+            row = col.row(align=True)
+            opExec = row.operator(self.preset_operator, text=label)
+            opExec.filepath    = entries[label]
+            opExec.menu_idname = self.bl_idname
+            opRemove = row.operator(self.preset_add_operator, text="", icon='REMOVE')
+            opRemove.name        = label
+            opRemove.remove_name = True
+
+        # "Save current settings as a new preset" field, as in the stock popover.
+        layout.separator()
+        row = layout.row()
+        sub = row.row()
+        sub.emboss = 'NORMAL'
+        sub.prop(bpy.data.window_managers[0], "preset_name", text="")
+        row.operator(self.preset_add_operator, text="", icon='ADD').name = \
+            bpy.data.window_managers[0].preset_name
+
+
+class VRAY_OT_add_sampling_preset(AddPresetBase, bpy.types.Operator):
+    """ Save the current image-sampler settings as a preset (or remove the active one) """
+    bl_idname = "vray.sampling_preset_add"
+    bl_label  = "Add Sampling Preset"
+    preset_menu   = "VRAY_PT_sampling_presets"
+    preset_subdir = _SAMPLING_PRESET_SUBDIR
+
+    preset_defines = [
+        "vs = bpy.context.scene.vray",
+    ]
+
+    # These are the exact params V-Ray for SketchUp/Rhino drive from their Quality
+    # preset (Scene::enumQualityPreset). One named level sets the quality knob for
+    # every sampler branch (CPU bucket, CPU progressive, GPU) so the preset stays
+    # consistent whichever image-sampler 'type' / render device is active. It does
+    # not change the sampler type or render device - those are the user's mode
+    # choice, not a quality level - nor min_shade_rate / time limit (VfS leaves
+    # those to the user too).
+    #
+    # samples_limit is listed before dmc_maxSubdivs on purpose: setting samples_limit
+    # fires onUpdateSamplesLimit, which mirrors it into dmc_maxSubdivs (GPU derives
+    # its subdivs from samples_limit). Restoring the explicit dmc_maxSubdivs afterwards
+    # keeps the CPU value authoritative while the GPU path uses the samples_limit-derived one.
+    preset_values = [
+        "vs.SettingsImageSampler.samples_limit",
+        "vs.SettingsImageSampler.dmc_minSubdivs",
+        "vs.SettingsImageSampler.dmc_maxSubdivs",
+        "vs.SettingsImageSampler.dmc_threshold",
+        "vs.SettingsImageSampler.progressive_minSubdivs",
+        "vs.SettingsImageSampler.progressive_maxSubdivs",
+        "vs.SettingsImageSampler.progressive_threshold",
+        "vs.SettingsRTEngine.noise_threshold",
+    ]
+
+    def execute(self, context):
+        # Bundled quality levels ship in the addon and must not be deletable.
+        # Blender only guards presets under its own install dir; our factory
+        # presets live in the user addon dir, so guard them ourselves - matching
+        # Blender's "Unable to remove default presets" behaviour.
+        if self.remove_active or self.remove_name:
+            name = getattr(bpy.types, self.preset_menu).bl_label if self.remove_active else self.name
+            filepath = (bpy.utils.preset_find(name, self.preset_subdir, ext=".py")
+                        or bpy.utils.preset_find(name, self.preset_subdir, display_name=True, ext=".py"))
+            if filepath and _isBundledSamplingPreset(filepath):
+                self.report({'WARNING'}, "Unable to remove default presets")
+                return {'CANCELLED'}
+        return super().execute(context)
+
+
 class VRAY_PT_ImageSampler(classes.VRayRenderPanel):
     bl_label = "Image Sampler"
     bl_panel_groups = RenderPanelGroups
+
+    def draw_header_preset(self, context):
+        # The little PRESET popover on the right of the panel header.
+        VRAY_PT_sampling_presets.draw_panel_header(self.layout)
 
     def draw(self, context):
         vrayScene = context.scene.vray
         settingsImageSampler = vrayScene.SettingsImageSampler
 
-        layout = self.layout
+        layout = draw_utils.subPanel(self.layout)
         layout.use_property_decorate = False
 
         classes.drawPluginUI(context, layout, settingsImageSampler, getPluginModule('SettingsImageSampler'))
@@ -437,12 +551,13 @@ class VRAY_PT_BucketSize(classes.VRayRenderPanel):
         return settingsImageSampler.type != "3"
 
     def draw(self, context):
-        layout = self.layout
+        layout = draw_utils.subPanel(self.layout)
         vrayScene = context.scene.vray
 
         if vrayScene.Exporter.device_type == 'CPU':
             col = layout.column()
             col.use_property_split = True
+            col.use_property_decorate = False
             col.prop(vrayScene.SettingsRegionsGenerator, 'xc', text='Bucket Size')
 
         classes.drawPluginUI(context, layout, vrayScene.SettingsRegionsGenerator, getPluginModule('SettingsRegionsGenerator'))
@@ -689,6 +804,8 @@ def getRegClasses():
         VRAY_PT_Device,
         # Sampler
         VRAY_PT_GpuTextureOptions,
+        VRAY_PT_sampling_presets,
+        VRAY_OT_add_sampling_preset,
         VRAY_PT_ImageSampler,
         VRAY_PT_BucketSize,
 

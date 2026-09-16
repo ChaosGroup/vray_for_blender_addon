@@ -8,14 +8,15 @@ from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
 from vray_blender.nodes import utils as NodeUtils, links as NodeLinks, specials
 from vray_blender.nodes.tools import isVrayNode
-from vray_blender.plugins import PLUGINS, getPluginModule
+from vray_blender.plugins import PLUGINS, getPluginModule, findPluginModule
 from vray_blender.exporting.tools import resolveInternalLink
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget
 from vray_blender.lib import class_utils, draw_utils, blender_utils, lib_utils
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.ui import classes
-from vray_blender.plugins.skipped_plugins import MANUALLY_CREATED_PLUGINS, SKIPPED_PLUGINS, HIDDEN_PLUGINS
+from vray_blender.plugins.skipped_plugins import (MANUALLY_CREATED_PLUGINS, SKIPPED_PLUGINS, HIDDEN_PLUGINS,
+                                                   THIRD_PARTY_INTEGRATION_PLUGINS)
 
 
 VRayNodeTypes = {
@@ -202,6 +203,10 @@ def buildItemsList(nodeType, subType=None):
     def _hidePlugin(pluginName):
         if pluginName in SKIPPED_PLUGINS or pluginName in HIDDEN_PLUGINS:
             return True
+        # Third-party host-integration plugins are never user-creatable - they are only
+        # meaningful in their originating host app, so they must not appear in the add menu.
+        if pluginName in THIRD_PARTY_INTEGRATION_PLUGINS:
+            return True
         _name_filter = ('Maya', 'TexMaya', 'MtlMaya', 'TexModo', 'TexXSI', 'texXSI', 'volumeXSI')
         if pluginName.startswith(_name_filter):
             return True
@@ -300,7 +305,8 @@ def _pollDecalNodeTreeSelected(context):
 
 def _pollMaterialNodeTreeSelected(context):
     return context.object and \
-        context.object.type in blender_utils.TypesThatSupportMaterial and \
+        (context.object.type in blender_utils.TypesThatSupportMaterial
+         or blender_utils.isNonGeometryExportedAsGeometry(context.object)) and \
         context.scene.vray.ActiveNodeEditorType == "SHADER"
 
 
@@ -478,10 +484,15 @@ class NODE_MT_vray_add_texture_utilities(bpy.types.Menu):
             # the Red/Green/Blue/Alpha channel outputs already exposed, so it acts as a
             # color splitter out of the box. The outputs are revealed by the
             # 'internal_separate' update callback when this setting is applied on creation.
+            # The node label is also set so it reads 'Separate Color' instead of the
+            # default 'Color Arithmetic' type name.
             props = _nodeOperator(layout, 'VRayNodeTexAColorOp', label='Separate Color')
             s = props.settings.add()
             s.name  = 'TexAColorOp.internal_separate'
             s.value = repr('rgba')
+            s = props.settings.add()
+            s.name  = 'label'
+            s.value = repr('Separate Color')
 
             # Search-only alias so typing 'Combine Color' also finds the Compose Color node.
             if getattr(context, 'is_menu_search', False):
@@ -694,6 +705,12 @@ class NODE_MT_vray_add_render_channels(bpy.types.Menu):
         # Use a higher weight so render elements appear first when searching.
         if not isInSwapMenu:
             _nodeOperator(layout, 'VRayNodeRenderChannels', label='V-Ray Channels Container', searchWeight=5.0, isInSwapMenu = isInSwapMenu)
+
+            # Add Light Mix and Denoiser nodes to the menu.
+            for itemIdname, itemLabel in buildItemsList('RENDERCHANNEL', 'SPECIAL'):
+                if itemIdname == 'VRayNodeRenderChannelEnhancer':
+                    continue
+                _nodeOperator(layout, itemIdname, label=itemLabel, searchWeight=5.0)
 
         for channelMenuClass in _getRenderChannelMenuClasses(isInSwapMenu = isInSwapMenu):
             layout.menu(channelMenuClass.bl_idname)
@@ -935,11 +952,11 @@ def vrayNodeUpdate(self: VRayNodeBase):
     if not NodeUtils.isNodeConnectedToTreeOutput(self):
         return
 
-    if self.vray_plugin != 'NONE':
-        # Call custom nodeUpdate() function, if defined
-        pluginModule = getPluginModule(self.vray_plugin)
-        if hasattr(pluginModule, "nodeUpdate"):
-            pluginModule.nodeUpdate(self)
+    # Call custom nodeUpdate() function, if defined. findPluginModule, not getPluginModule: a
+    # generic plugin node carries the type of a plugin V-Ray has no description for, and the
+    # latter raises for those.
+    if fnNodeUpdate := getattr(findPluginModule(self.vray_plugin), "nodeUpdate", None):
+        fnNodeUpdate(self)
 
     # For V-Ray nodes, update the object whose nodetree has changed
     if hasattr(parentNodeTree, 'vray'):
@@ -949,12 +966,12 @@ def vrayNodeUpdate(self: VRayNodeBase):
                     if not lib_utils.isRestrictedContext(bpy.context):
                         UpdateTracker.tagMtlTopology(bpy.context, mtl)
                     # Force-redraw Properties areas so the material preview widget picks up
-                    # the dirty flag set by mtl.update_tag() below. Without this, Blender
+                    # the dirty flag set by tagMaterialPreview() below. Without this, Blender
                     # never redraws Properties on its own when the change originates in
                     # .texRemapTree (a hidden node group unconnected to the material's node
                     # tree), so the preview never re-renders until the user hovers over it.
                     NodeUtils.tagRedrawPropertyEditor()
-                    mtl.update_tag()
+                    NodeUtils.tagMaterialPreview(mtl)
             case 'OBJECT':
                 if obj := NodeUtils.findDataObjFromNode(bpy.data.objects, self, isObjTreeNode=True):
                     obj.update_tag()
@@ -995,7 +1012,7 @@ def updateNodeMutedState(node: bpy.types.Node):
 
     for outSock in node.outputs:
         if outSock.is_linked:
-            inSock, _ = resolveInternalLink(outSock)
+            inSock, _, _ = resolveInternalLink(outSock)
             if inSock:
                 outSock.display_shape = shape
                 inSock.display_shape = shape
@@ -1170,6 +1187,8 @@ def _loadDynamicNodes():
     VRayNodeTypes['TEXTURE'].append(specials.texture.VRayNodeTexLayeredMax)
     VRayNodeTypes['TEXTURE'].append(specials.material.VRayNodeTexOSL)
 
+    VRayNodeTypes['RENDERCHANNEL'].append(specials.renderchannels.VRayNodeRenderChannelDenoiser)
+
     # Sort texture list alphabetically. This will be the order the Texture nodes
     # will show on the Node Add list.
     VRayNodeTypes['TEXTURE'].sort(key=lambda e: e.bl_label)
@@ -1207,15 +1226,25 @@ class NodeSidePropertiesDraw:
     @staticmethod
     def _drawSidebarProps(self, context):
         if context.engine == 'VRAY_RENDER_RT':
+            from vray_blender.lib import draw_utils
+            from vray_blender.ui import node_slots
+
             layout = self.layout
             node = context.active_node
             # set 'node' context pointer for the panel layout
             layout.context_pointer_set("node", node)
 
-            if hasattr(node, "draw_buttons_ext"):
-                node.draw_buttons_ext(context, layout)
-            elif hasattr(node, "draw_buttons"):
-                node.draw_buttons(context, layout)
+            # The sidebar gets the same texture slot rows as the property pages. The tree is
+            # space.edit_tree, not space.id.node_tree, so a group open in the editor is addressed as
+            # the group rather than as its owner's root tree.
+            space = context.space_data
+            slotContext = node_slots.makeSlotContext(context, space.id, space.edit_tree)
+
+            with draw_utils.slotEditing(slotContext):
+                if hasattr(node, "draw_buttons_ext"):
+                    node.draw_buttons_ext(context, layout)
+                elif hasattr(node, "draw_buttons"):
+                    node.draw_buttons(context, layout)
         else:
             NodeSidePropertiesDraw.original(self, context)
 
@@ -1268,9 +1297,11 @@ def _drawNonVRayConversionOptions(layout, context, vrayType):
         if not world.vray.is_vray_class:
             layout.operator_context = 'INVOKE_DEFAULT'
             layout.operator("vray.add_nodetree_world", icon="NODETREE", text="New V-Ray World Nodes")
+            if world.node_tree:
+                layout.operator("vray.convert_world", icon="WORLD", text="Convert to V-Ray World")
             return True
     elif vrayType == 'SHADER':
-        mtl = snode.id_from if pinned else (context.object.active_material if context.object else None)
+        mtl = snode.id_from if pinned else blender_utils.getActiveMaterial(context.object)
         if mtl is not None and not mtl.vray.is_vray_class:
             layout.operator_context = 'INVOKE_DEFAULT'
             layout.operator("vray.replace_nodetree_material", icon="NODETREE", text="Use V-Ray Material Nodes")

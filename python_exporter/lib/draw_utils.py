@@ -7,6 +7,8 @@ import bpy
 import importlib
 import json
 
+from contextlib import contextmanager
+
 from vray_blender import debug
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.exporting.tools import getInputSocketByAttr
@@ -43,6 +45,31 @@ def getAttrLabel(pluginModule, widgetAttr: dict, propGroup, node: bpy.types.Node
         return attribute_utils.formatAttributeName(displayName)
 
     return attribute_utils.formatAttributeName(attrName)
+
+
+# Blender's own property-split ratio (UI_ITEM_PROP_SEP_DIVIDE in interface_layout.cc).
+_PROP_SPLIT_FACTOR = 0.4
+
+
+def propertySplitRow(layout: bpy.types.UILayout, label: str):
+    """ Return the field-side layout of a property-split row whose label column lines up with the
+        rows Blender splits by itself.
+
+        Needed only for rows that contain no prop() call and so get no automatic label column - a
+        texture slot replaces its value widget with buttons. When the layout is not property-split
+        there is no column to match, so fall back to a plain labelled row.
+    """
+    if not layout.use_property_split:
+        row = layout.row(align=True)
+        if label:
+            row.label(text=label)
+        return row
+
+    split = layout.split(factor=_PROP_SPLIT_FACTOR, align=True)
+    labelCol = split.column(align=True)
+    labelCol.alignment = 'RIGHT'
+    labelCol.label(text=label or "")
+    return split.row(align=True)
 
 
 def subPanel(layout: bpy.types.UILayout):
@@ -97,6 +124,20 @@ def rollout(layout: bpy.types.UILayout, uniqueID: str, label: str, defaultClosed
     return subPanel(body)
 
 
+def panelStateId(owner, *parts) -> str:
+    """ Build the uniqueID under which Blender stores a rollout's open/closed state.
+
+    The ID must stay the same across undo/redo and file reload. Undo re-reads the datablocks
+    at new addresses, so an ID built from as_pointer() changes and Blender then finds no stored
+    state for it and falls back to `default_closed`, collapsing every rollout the user opened.
+
+    Args:
+        owner: the node or datablock the rollout belongs to, identified by its name.
+        parts: further tokens distinguishing the rollout within that owner.
+    """
+    return "_".join((owner.name, *(str(p) for p in parts)))
+
+
 def isHighlighted(highlightKey: str) -> bool:
     """ Return True if `highlightKey` matches the active highlight target stored
         on `wm.vray.common_tab`. The one-shot timer registered by
@@ -110,6 +151,37 @@ def isHighlighted(highlightKey: str) -> bool:
 
 
 
+_slotContext = None
+
+
+@contextmanager
+def slotEditing(slotContext):
+    """ Enable the property-page texture slot rows for everything drawn inside the block.
+
+    The panel cannot simply pass a flag to UIPainter: it does not construct one. It calls
+    node.draw_buttons_ext(context, layout) - a signature Blender owns - and that builds the painter
+    (VRayNodeMetaImageTexture builds two). So the state is set here and read in UIPainter.__init__,
+    which is the only seam that reaches every painter in the call chain.
+
+    Outside the block the painter behaves exactly as before, which is what keeps the pickers out of
+    the node editor's node body (vrayNodeDraw) and its N-panel.
+
+    Pass None to disable, e.g. for library-linked data or a tree we cannot address.
+    """
+    global _slotContext
+    previous = _slotContext
+    _slotContext = slotContext
+    try:
+        yield
+    finally:
+        _slotContext = previous
+
+
+def getSlotContext():
+    """ The slot context of the innermost active slotEditing() block, or None outside one. """
+    return _slotContext
+
+
 class UIPainter:
     def __init__(self, context: bpy.types.Context, pluginModule, propGroup, node: bpy.types.Node = None,
                  showAnimDecorators: bool = True):
@@ -119,6 +191,28 @@ class UIPainter:
         self.pluginModule = pluginModule
         # When False, suppress the per-property animation "dots" (e.g. in the compact N-panel).
         self.showAnimDecorators = showAnimDecorators
+        # Set only while drawing inside a slotEditing() block; see _drawSocketRow.
+        self.slotContext = _slotContext
+
+    def _drawSocketRow(self, layout: bpy.types.UILayout, socket, label: str, drawArgs: dict = None):
+        """ Draw a plugin attribute that is backed by a node input socket.
+
+            The single funnel for both drawAttr() and _drawAttrWidget(), so the texture slot
+            decoration also reaches the META attributes (COLOR_TEXTURE / COLOR_USE / BRDF_USE),
+            which arrive through _drawCustomAttr -> drawAttr. A light's colour is one of those.
+
+            drawArgs is passed through verbatim rather than defaulted here: draw_property() declares
+            slider=True while the widget path passes slider=False unless the JSON says otherwise, so
+            substituting defaults would silently turn sliders into plain number fields.
+        """
+        if self.slotContext is not None \
+                and self.slotContext.drawSlot(self.context, layout, socket, label, drawArgs or {}):
+            return
+
+        if hasattr(socket, "draw_property"):
+            socket.draw_property(self.context, layout, label, **(drawArgs or {}))
+        else:
+            socket.draw(self.context, layout, self.node, label)
 
     def drawAttr(self, layout: bpy.types.UILayout, attrName, label: str):
         """ Draw a single attribute of the plugin. This method will select between drawing node sockets
@@ -130,10 +224,7 @@ class UIPainter:
             # We're drawing a node and the property is exposed as a node socket, let the socket draw itself
             # in both the node and the property pages. This is necessary because, due to Blender limitations,
             # only the values of sockets can be animated, and not the fields of the prop group of the node.
-            if hasattr(socket, "draw_property"):
-                socket.draw_property(self.context, layout, label)
-            else:
-                socket.draw(self.context, layout, self.node, label)
+            self._drawSocketRow(layout, socket, label)
         elif hasattr(self.propGroup, attrName):
             # Draw property of a plugin that is not part of a nodetree
             layout.prop(self.propGroup, attrName, text=label)
@@ -160,11 +251,7 @@ class UIPainter:
                 # If there is a socket for the attribute, draw it instead of the value from the property
                 # group. In this way what is shown in self.node and in the property pages will always stay in sync.
                 label = label if (label is not None) else socket.name
-
-                if hasattr(socket, "draw_property"):
-                    socket.draw_property(self.context, layout, label, expand=expand, slider=slider)
-                else:
-                    socket.draw(self.context, layout, self.node, label)
+                self._drawSocketRow(layout, socket, label, {'expand': expand, 'slider': slider})
             else:
                 # Call Blender to draw the default widget for the attribute's data type
                 layout.prop(self.propGroup, attrName, slider=slider, expand=expand, text=label)
@@ -235,7 +322,9 @@ class UIPainter:
         container = layout
         attrName = widgetAttr['name']
 
-        if active := widgetAttr.get('active', None):
+        # 'is not None' rather than a truthiness test: "active": false is a valid way to
+        # spell a permanently disabled property, and it must not be mistaken for 'unset'.
+        if (active := widgetAttr.get('active', None)) is not None:
             # Individual layout properties cannot be enabled/disabled. Here we create a
             # sub-layout which will host the attribute and will be enabled/disabled
             # instead.
@@ -284,7 +373,7 @@ class UIPainter:
 
         label = self._getAttrLabel(widget)
         useProp = widget.get('use_prop', None)
-        uniqueID = f"{self.propGroup.as_pointer()}_{widget['name']}"
+        uniqueID = panelStateId(self.node or self.propGroup.id_data, self.pluginModule.ID, widget['name'])
         defaultClosed = widget.get('default_closed', True)
 
         return rollout(layout, uniqueID, label, defaultClosed, self.propGroup, useProp,
@@ -360,20 +449,18 @@ class UIPainter:
                 if isGPUEngine(self.context.scene) and (not self._isAttributeSupportedOnGpu(widgetAttr)):
                     continue
 
-                if (('visible' not in widgetAttr) or evaluateCondition(self.propGroup, self.node, widgetAttr['visible'])):
+                if evaluateCondition(self.propGroup, self.node, widgetAttr.get('visible', True)):
                     self._renderItem(container, widgetAttr)
 
 
     def renderWidget(self, layout: bpy.types.UILayout, widget: dict, nodeWidget=False):
         """ Render a single widget onto the supplied layout """
-        # If the widget has a 'visible' condition, check it first
-
-        if (showCond := widget.get('visible')) and not evaluateCondition(self.propGroup, self.node, showCond):
+        # If the widget has a 'visible' condition (or a literal bool), check it first
+        if not evaluateCondition(self.propGroup, self.node, widget.get('visible', True)):
             return None
 
         # Create a container to put widget's attributes in
-        if ('visible' not in widget) or evaluateCondition(self.propGroup, self.node, widget['visible']):
-            container = self._renderContainer(layout, widget)
+        container = self._renderContainer(layout, widget)
 
         if not container:
             # The rest of the widget is hidden ( e.g. a closed rollout ).

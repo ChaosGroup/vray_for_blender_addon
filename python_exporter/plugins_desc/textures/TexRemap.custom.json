@@ -130,6 +130,21 @@
         ]
     },
     "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "type",
+                        "label": "Type"
+                    },
+                    {
+                        "name": "color_spline_type",
+                        "custom_draw": "drawCurveTemplate"
+                    }
+                ]
+            }
+        ],
         "output_sockets": [
             {
                 "name": "out_color"

@@ -54,7 +54,11 @@
         },
         {
             "attr": "ies_file",
-            "subtype": "VRAY_FILE_PATH"
+            "subtype": "VRAY_FILE_PATH",
+            "update": "onUpdateIesFile",
+            "options": {
+                "shadowed": true
+            }
         },
         {
             "attr": "ies_file_selector",
@@ -119,6 +123,10 @@
         {
             "attr": "shadowBias",
             "default": 0.005
+        },
+        {
+            "attr": "soft_shadows",
+            "default": "1"
         },
         {
             "attr": "color_temp_control",
@@ -320,19 +328,45 @@
                 "default_closed": true,
                 "attrs": [
                     {
-                        "name": "ies_light_shape"
+                        "name": "soft_shadows"
                     },
                     {
-                        "name": "ies_light_width"
+                        "layout": "SEPARATOR"
                     },
                     {
-                        "name": "ies_light_length"
-                    },
-                    {
-                        "name": "ies_light_height"
-                    },
-                    {
-                        "name": "ies_light_diameter"
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::soft_shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "ies_light_shape"
+                            },
+                            {
+                                "name": "ies_light_width",
+                                "active": {
+                                    "cond": "plugins.light.LightIES.isShapeWidthActive"
+                                }
+                            },
+                            {
+                                "name": "ies_light_length",
+                                "active": {
+                                    "cond": "plugins.light.LightIES.isShapeLengthActive"
+                                }
+                            },
+                            {
+                                "name": "ies_light_height",
+                                "active": {
+                                    "cond": "plugins.light.LightIES.isShapeHeightActive"
+                                }
+                            },
+                            {
+                                "name": "ies_light_diameter",
+                                "active": {
+                                    "cond": "plugins.light.LightIES.isShapeDiameterActive"
+                                }
+                            }
+                        ]
                     }
                 ]
             }

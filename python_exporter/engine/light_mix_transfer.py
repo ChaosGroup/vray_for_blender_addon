@@ -27,6 +27,8 @@ _LIGHT_PROPS = {
     'LightOmni':       ('color_colortex', 'intensity'),
     'LightAmbient':    ('color_colortex', 'intensity'),
     'MayaLightDirect': ('color_colortex', 'intensity'),
+    # Both are multipliers over the radiance baked into the luminaire cache.
+    'LightLuminaire':  ('color_colortex', 'intensity'),
 }
 
 
@@ -181,7 +183,11 @@ def _changeLightProperties(obj: bpy.types.Object, colorR, colorG, colorB, intens
         setattr(propGroup, colorProp, newColor)
 
     # Apply intensity multiplier (skip if 1.0 / no change)
-    if not math.isclose(intensityMult, 1.0):
+    if intensityMult == 0.0:
+        # Zeroing the scene intensity is irreversible - any further transfer would
+        # multiply by 0 again. Turn the light off and keep its intensity instead.
+        enabled = False
+    elif not math.isclose(intensityMult, 1.0):
         oldIntensity = getattr(propGroup, intensityProp)
         setattr(propGroup, intensityProp, oldIntensity * intensityMult)
 

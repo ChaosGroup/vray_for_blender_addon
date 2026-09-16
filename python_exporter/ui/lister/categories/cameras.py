@@ -156,7 +156,7 @@ class CamerasCategory(ListerCategory):
         OVERRIDE = {'vray_override', 'vray_type'}
         COMMON = {'active', 'physical', 'dome'}
 
-        common = [c for c in core._effectiveColumns(self, 'PHYSICAL')
+        common = [c for c in core.effectiveColumns(self, 'PHYSICAL')
                   if c.id == 'hide' or c.id in COMMON]
         seen = {c.id for c in common} | {'select', 'name'}
 

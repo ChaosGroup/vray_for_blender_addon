@@ -1,0 +1,1569 @@
+
+{
+    "Desciption" : "GeomScatter",
+    "ID" : "GeomScatter",
+    "Name" : "Geom Scatter",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "targets",
+            "default" : null,
+            "desc" : "Geometry to scatter on",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "target_factors",
+            "default" : 1.0,
+            "desc" : "Relative scatter probability factors for target meshes",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "targets_tangent_mode",
+            "default" : "0",
+            "desc" : "Tangents computation mode for target surfaces",
+            "items" : 
+            [
+                [ "0", "UV independent", "UV independent" ],
+                [ "1", "UV aligned", "UV aligned" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "models",
+            "default" : null,
+            "desc" : "Objects to be scattered",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "model_frequencies",
+            "default" : 1.0,
+            "desc" : "Relative frequency with which models are selected",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "model_parents",
+            "default" : -1,
+            "desc" : "Parent index of the models",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "model_cluster_group_ids",
+            "default" : -1,
+            "desc" : "The group IDs of the models",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "model_instance_colors",
+            "default" : [ 1.0, 1.0, 0.0 ],
+            "desc" : "The instance colors of the models",
+            "elements_count" : 0,
+            "type" : "COLOR_LIST"
+        },
+        
+        {
+            "attr" : "model_handles",
+            "default" : -1,
+            "desc" : "Exporter-specific unique handles for the models",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "scatter_type",
+            "default" : "1",
+            "desc" : "Scatter type (Splines/Surfaces/In bounding box",
+            "items" : 
+            [
+                [ "0", "1D - On Splines", "1D - On Splines" ],
+                [ "1", "2D - On surfaces", "2D - On surfaces" ],
+                [ "2", "3D - In bounding box", "3D - In bounding box" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "instance_count_limit",
+            "default" : 1000000,
+            "desc" : " Limits the maximum number of scattered instances",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0,
+                "soft_max" : 1000000
+            }
+        },
+        
+        {
+            "attr" : "seed",
+            "default" : 1,
+            "desc" : "The seed of the random distribution",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 31337,
+                "min" : 1,
+                "soft_max" : 100
+            }
+        },
+        
+        {
+            "attr" : "rest_pose_enabled",
+            "default" : false,
+            "desc" : "Enable temporal consistency",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "rest_pose_frame",
+            "default" : 0.0,
+            "desc" : "Rest pose frame used for temporal consistency",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "avoid_collisions",
+            "default" : false,
+            "desc" : "Discard colliding instances",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "avoid_collisions_spacing",
+            "default" : 1.0,
+            "desc" : "Bounding box multiplier for collision detection",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.009999999776482582
+            }
+        },
+        
+        {
+            "attr" : "surface_scatter_mode",
+            "default" : "0",
+            "desc" : "Surface scatter mode (Random/UV)",
+            "items" : 
+            [
+                [ "0", "Random", "Random" ],
+                [ "1", "UV map", "UV map" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_random_count",
+            "default" : 1000,
+            "desc" : "Surface scatter count",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0,
+                "soft_max" : 100000
+            }
+        },
+        
+        {
+            "attr" : "surface_random_use_density",
+            "default" : false,
+            "desc" : "Use instances per area",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "surface_random_edge_size",
+            "default" : 10.0,
+            "desc" : "Square size for distribution per area",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "surface_random_density_map",
+            "default" : 0.0,
+            "desc" : "Distribution density texture",
+            "type" : "FLOAT_TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "surface_random_density_map_pattern",
+            "default" : "0",
+            "desc" : "Distribution density texture pattern",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "CustomMap", "CustomMap" ],
+                [ "2", "DummyUVGrid", "DummyUVGrid" ],
+                [ "3", "DummyUVGridRunning", "DummyUVGridRunning" ],
+                [ "4", "DummyUVGridHexagonal", "DummyUVGridHexagonal" ],
+                [ "5", "DistortedStreaksHigh", "DistortedStreaksHigh" ],
+                [ "6", "DistortedStreaksLow", "DistortedStreaksLow" ],
+                [ "7", "GroupsHigh", "GroupsHigh" ],
+                [ "8", "GroupsLow", "GroupsLow" ],
+                [ "9", "FractalPatchesHigh", "FractalPatchesHigh" ],
+                [ "10", "FractalPatchesLow", "FractalPatchesLow" ],
+                [ "11", "StraightLinesHigh", "StraightLinesHigh" ],
+                [ "12", "StraightLinesLow", "StraightLinesLow" ],
+                [ "13", "StretchedPatchesHigh", "StretchedPatchesHigh" ],
+                [ "14", "StretchedPatchesLow", "StretchedPatchesLow" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_map_pattern",
+            "default" : "0",
+            "desc" : "UV mapping pattern",
+            "items" : 
+            [
+                [ "0", "Grid", "Grid" ],
+                [ "1", "Running Grid", "Running Grid" ],
+                [ "2", "Hex Grid", "Hex Grid" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_map_planar",
+            "default" : false,
+            "desc" : "Override by planar mapping",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "surface_map_planar_axis",
+            "default" : "2",
+            "desc" : "The projection axis for planar mapping on non-planar meshes",
+            "items" : 
+            [
+                [ "0", "X-axis", "X-axis" ],
+                [ "1", "Y-axis", "Y-axis" ],
+                [ "2", "Z-axis", "Z-axis" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_map_lock_v",
+            "default" : true,
+            "desc" : "Lock V for spacing, jitter and offset",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "surface_map_spacing_u",
+            "default" : 0.1000000014901161,
+            "desc" : "Surface map spacing U",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "surface_map_spacing_v",
+            "default" : 0.1000000014901161,
+            "desc" : "Surface map spacing V",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "surface_map_jitter_u",
+            "default" : 0.0,
+            "desc" : "Surface map jitter U",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 2.0,
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "surface_map_jitter_v",
+            "default" : 0.0,
+            "desc" : "Surface map jitter V",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 2.0,
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "surface_map_offset_u",
+            "default" : 0.50,
+            "desc" : "Surface map offset U",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "surface_map_offset_v",
+            "default" : 0.50,
+            "desc" : "Surface map offset V",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "map_channel",
+            "default" : 0,
+            "desc" : "Target meshes mapping channel index",
+            "type" : "INT",
+            "ui" : 
+            {
+                "max" : 100,
+                "min" : 0
+            }
+        },
+        
+        {
+            "attr" : "map_channel_name",
+            "default" : "",
+            "desc" : "Target meshes mapping channel name. Overrides \"map_channel\" if not empty",
+            "type" : "STRING"
+        },
+        
+        {
+            "attr" : "surface_slope_limit_enabled",
+            "default" : true,
+            "desc" : "Slope limit enabled (false/true)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "surface_slope_limit_mode",
+            "default" : "0",
+            "desc" : "Slope limit up axis mode (Local/World)",
+            "items" : 
+            [
+                [ "0", "Local", "Local" ],
+                [ "1", "World", "World" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_slope_limit_min",
+            "default" : 0.0,
+            "desc" : "Minimum slope in radians",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 3.141592502593994,
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "surface_slope_limit_max",
+            "default" : 3.141592741012573,
+            "desc" : "Maximum slope in radians",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 3.141592502593994,
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_enabled",
+            "default" : false,
+            "desc" : "Altitude limit enabled (false/true)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_mode",
+            "default" : "0",
+            "desc" : "Altitude limit mode (Position independent/World)",
+            "items" : 
+            [
+                [ "0", "Position independent", "Position independent" ],
+                [ "1", "World", "World" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_min",
+            "default" : 0.0,
+            "desc" : "Minimum altitude",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_max",
+            "default" : 0.0,
+            "desc" : "Maximum altitude",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_falloff_curve",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Altitude falloff curve control points",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "surface_altitude_limit_falloff_curve_interp",
+            "default" : "0",
+            "desc" : "Altitude falloff curve interpolation",
+            "items" : 
+            [
+                [ "0", "Piecewise cubic", "Piecewise cubic" ],
+                [ "1", "Piecewise linear", "Piecewise linear" ],
+                [ "2", "Piecewise cubic uniform", "Piecewise cubic uniform" ],
+                [ "3", "Piecewise linear uniform", "Piecewise linear uniform" ],
+                [ "4", "Bezier cubic", "Bezier cubic" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "surface_sampling_extrapolation_delta",
+            "default" : 0.0250,
+            "desc" : "The time delta used for sampling the surface instance distribution in case of exactly 2 motion blur samples",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "spline_vertices",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Spline target vertices. Allows for multiple separate splines one after the other. For two separate splines spline_vertices will contain all vertices and spline_vertex_counts will contain two numbers",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "spline_vertex_counts",
+            "default" : 0,
+            "desc" : "Spline target vertex counts",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "spline_transforms",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Spline target transforms",
+            "elements_count" : 0,
+            "type" : "TRANSFORM_LIST"
+        },
+        
+        {
+            "attr" : "spline_spacing",
+            "default" : 0.50,
+            "desc" : "Distance between instances on spline",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "spline_jitter",
+            "default" : 0.0,
+            "desc" : "Amount of randomness in on-spline distribution",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 2.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "spline_offset",
+            "default" : 0.0,
+            "desc" : "Offset for all instances, 1 means the instances will shift by one place",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "soft_max" : 1.0,
+                "soft_min" : -1.0
+            }
+        },
+        
+        {
+            "attr" : "spline_follow_amount",
+            "default" : 1.0,
+            "desc" : "Controls orientation of instances. 1.0 - follow spline direction, 0.0 - unchanged",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "volume_random_count",
+            "default" : 1000,
+            "desc" : "Volume scatter count",
+            "type" : "INT",
+            "ui" : 
+            {
+                "min" : 0,
+                "soft_max" : 100000
+            }
+        },
+        
+        {
+            "attr" : "volume_random_use_density",
+            "default" : false,
+            "desc" : "Use instances per volume",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "volume_random_edge_size",
+            "default" : 10.0,
+            "desc" : "Cube size for distribution per volume",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "transforms_translation_from",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Translation From",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "transforms_translation_to",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Translation To",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "transforms_translation_step",
+            "default" : 0.0,
+            "desc" : "Translation Step",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance",
+                "soft_max" : 100.0
+            }
+        },
+        
+        {
+            "attr" : "transforms_translation_step_x",
+            "default" : true,
+            "desc" : "Enable translation stepping on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_translation_step_y",
+            "default" : true,
+            "desc" : "Enable translation stepping on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_translation_step_z",
+            "default" : true,
+            "desc" : "Enable translation stepping on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_translation_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Translation map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "transforms_translation_map_mode",
+            "default" : "0",
+            "desc" : "Mode for interpreting translation map",
+            "items" : 
+            [
+                [ "0", "Fixed", "Fixed" ],
+                [ "1", "Random amount", "Random amount" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "transforms_translation_map_x",
+            "default" : true,
+            "desc" : "Enable translation map on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_translation_map_y",
+            "default" : true,
+            "desc" : "Enable translation map on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_translation_map_z",
+            "default" : true,
+            "desc" : "Enable translation map on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_from",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Rotation From",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "quantityType" : "angle",
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "transforms_rotation_to",
+            "default" : [ 0.0, 0.0, 6.283185482025146 ],
+            "desc" : "Rotation To",
+            "type" : "VECTOR",
+            "ui" : 
+            {
+                "quantityType" : "angle",
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "transforms_rotation_step",
+            "default" : 0.0,
+            "desc" : "Rotation Step",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 6.283189773559570,
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "radians"
+            }
+        },
+        
+        {
+            "attr" : "transforms_rotation_step_x",
+            "default" : true,
+            "desc" : "Enable rotation stepping on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_step_y",
+            "default" : true,
+            "desc" : "Enable rotation stepping on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_step_z",
+            "default" : true,
+            "desc" : "Enable rotation stepping on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_normal_alignment",
+            "default" : 0.0,
+            "desc" : "Normal Alignment",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "transforms_rotation_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Rotation map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "transforms_rotation_map_mode",
+            "default" : "0",
+            "desc" : "Mode for interpreting rotation map",
+            "items" : 
+            [
+                [ "0", "Fixed", "Fixed" ],
+                [ "1", "Random amount", "Random amount" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "transforms_rotation_map_x",
+            "default" : true,
+            "desc" : "Enable rotation map on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_map_y",
+            "default" : true,
+            "desc" : "Enable rotation map on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_map_z",
+            "default" : true,
+            "desc" : "Enable rotation map on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_rotation_preserve",
+            "default" : false,
+            "desc" : "Preserve model rotation",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "look_at_enabled",
+            "default" : false,
+            "desc" : "Look at auto-rotation enabled (false/true)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "look_at_target",
+            "default" : null,
+            "desc" : "Reference to the focus target object selected by the user",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "look_at_falloff_distance",
+            "default" : 0.0,
+            "desc" : "Max fallOff  distance from the focusDirection position",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "look_at_falloff_curve",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Look at falloff curve control points",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "look_at_falloff_curve_interp",
+            "default" : "0",
+            "desc" : "Look at falloff curve interpolation",
+            "items" : 
+            [
+                [ "0", "Piecewise cubic", "Piecewise cubic" ],
+                [ "1", "Piecewise linear", "Piecewise linear" ],
+                [ "2", "Piecewise cubic uniform", "Piecewise cubic uniform" ],
+                [ "3", "Piecewise linear uniform", "Piecewise linear uniform" ],
+                [ "4", "Bezier cubic", "Bezier cubic" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "look_at_models_orientation_axis",
+            "default" : "0",
+            "desc" : "Model objects orientation axis",
+            "items" : 
+            [
+                [ "0", "X", "X" ],
+                [ "1", "Y", "Y" ],
+                [ "2", "Z", "Z" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "look_at_models_orientation_axis_invert",
+            "default" : false,
+            "desc" : "Model objects orientation axis inversion (false/true)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "look_at_horizontal",
+            "default" : false,
+            "desc" : "When true,instances are rotated horizontally (only)",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_from",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Scale From",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "transforms_scale_to",
+            "default" : [ 1.0, 1.0, 1.0 ],
+            "desc" : "Scale To",
+            "type" : "VECTOR"
+        },
+        
+        {
+            "attr" : "transforms_scale_step",
+            "default" : 0.0,
+            "desc" : "Scale Step",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "soft_max" : 1.0
+            }
+        },
+        
+        {
+            "attr" : "transforms_scale_step_x",
+            "default" : true,
+            "desc" : "Enable scale stepping on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_step_y",
+            "default" : true,
+            "desc" : "Enable scale stepping on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_step_z",
+            "default" : true,
+            "desc" : "Enable scale stepping on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_uniform",
+            "default" : true,
+            "desc" : "Uniform Scaling",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Scale map",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "transforms_scale_map_mode",
+            "default" : "0",
+            "desc" : "Mode for interpreting scale map",
+            "items" : 
+            [
+                [ "0", "Fixed", "Fixed" ],
+                [ "1", "Random amount", "Random amount" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "transforms_scale_map_x",
+            "default" : true,
+            "desc" : "Enable scale map on X axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_map_y",
+            "default" : true,
+            "desc" : "Enable scale map on Y axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_map_z",
+            "default" : true,
+            "desc" : "Enable scale map on Z axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "transforms_scale_preserve",
+            "default" : false,
+            "desc" : "Preserve model scale",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "area_modifiers_vertices",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "Include/exclude spline vertices",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "area_modifiers_vertex_counts",
+            "default" : 0,
+            "desc" : "Include/exclude spline vertex counts",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "area_modifiers",
+            "default" : null,
+            "desc" : "Include/exclude meshes or GeomScatterSpline",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "area_modifiers_operation",
+            "default" : "0",
+            "desc" : "Area Modifiers operator (Include/Exclude)",
+            "items" : 
+            [
+                [ "0", "Include", "Include" ],
+                [ "1", "Exclude", "Exclude" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "area_modifiers_falloff_near",
+            "default" : 0.0,
+            "desc" : "Area Modifiers near falloff",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "area_modifiers_falloff_far",
+            "default" : 0.0,
+            "desc" : "Area Modifiers far falloff",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "area_modifiers_scale",
+            "default" : 0.0,
+            "desc" : "Area Modifiers scale",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "area_modifiers_density",
+            "default" : 0.0,
+            "desc" : "Area Modifiers density",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST",
+            "ui" : 
+            {
+                "max" : 1.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "area_modifiers_axis",
+            "default" : "2",
+            "desc" : "Area Modifiers axis (X/Y/Z)",
+            "items" : 
+            [
+                [ "0", "X", "X" ],
+                [ "1", "Y", "Y" ],
+                [ "2", "Z", "Z" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "flip_axis",
+            "default" : "1",
+            "desc" : "Determine which axis is Up for the target and model geometry objects",
+            "items" : 
+            [
+                [ "0", "None", "None" ],
+                [ "1", "Automatic", "Automatic" ],
+                [ "2", "Z up", "Z up" ],
+                [ "3", "Y up", "Y up" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "edge_trimming_enabled",
+            "default" : "0",
+            "desc" : "Edge trimming enable flag",
+            "items" : 
+            [
+                [ "0", "Disabled", "Disabled" ],
+                [ "1", "Enabled", "Enabled" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "camera_clipping_enabled",
+            "default" : false,
+            "desc" : "Camera clipping enable flag",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "camera_clipping_mode",
+            "default" : "0",
+            "desc" : "Camera clipping mode",
+            "items" : 
+            [
+                [ "0", "RenderCamera", "RenderCamera" ],
+                [ "1", "SelectedCamera", "SelectedCamera" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "camera_clipping_selected_cam",
+            "default" : null,
+            "desc" : "Selected clipping camera plugin, if the mode='SelectedCamera'",
+            "type" : "PLUGIN"
+        },
+        
+        {
+            "attr" : "camera_clipping_extend_view",
+            "default" : 10.0,
+            "desc" : "Uniform extension to camera view frustum in all directions",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "camera_clipping_near_far_enabled",
+            "default" : false,
+            "desc" : "Camera near/far clipping enable flag",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "camera_clipping_near_distance",
+            "default" : 0.0,
+            "desc" : "Camera near clipping distance",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "camera_clipping_far_distance",
+            "default" : 10000.0,
+            "desc" : "Camera far clipping distance",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "instance_override_info_packs",
+            "default" : 0,
+            "desc" : "List of IDs for the overridden instances, where each pack of 3 integeres represents uint64 ID hi&low part and override flags",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "instance_override_transforms",
+            "default" : [ 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0 ],
+            "desc" : "List of transforms for the overridden instances",
+            "elements_count" : 0,
+            "type" : "TRANSFORM_LIST"
+        },
+        
+        {
+            "attr" : "instance_override_placements",
+            "default" : [ 0.0, 0.0, 0.0 ],
+            "desc" : "List of placements (barycoors and target triangle index) for the overridden instances",
+            "elements_count" : 0,
+            "type" : "VECTOR_LIST"
+        },
+        
+        {
+            "attr" : "presample_surface_color_map",
+            "default" : true,
+            "desc" : "Enable/disable surface color maps presample",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "instances_cryptomatte_override",
+            "default" : true,
+            "desc" : "If true - override all instance names, paths and attributes with those of the scatter node;if false - have instance match their prototype names. Used for altering Cryptomatte node name channel appearance",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "clustered_distribution_enabled",
+            "default" : 0,
+            "desc" : "Clusters enabled",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "clustered_distribution_mode",
+            "default" : "0",
+            "desc" : "Clustered distribution mode",
+            "items" : 
+            [
+                [ "0", "Generate", "Generate" ],
+                [ "1", "ColorMap", "ColorMap" ],
+                [ "2", "ClustersByLayers", "ClustersByLayers" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "clusters_gen_mapping",
+            "default" : "0",
+            "desc" : "Clusters generator mapping type",
+            "items" : 
+            [
+                [ "0", "XY", "XY" ],
+                [ "1", "UV", "UV" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "clusters_gen_uv_chanel",
+            "default" : 0,
+            "desc" : "Clusters generator UV channel to use",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "clusters_gen_seed",
+            "default" : 1,
+            "desc" : "Clusters generator randomization seed",
+            "type" : "INT"
+        },
+        
+        {
+            "attr" : "clusters_gen_scale",
+            "default" : 0.0,
+            "desc" : "Clusters generator scaling for the UV mapping mode",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100000.0,
+                "min" : 9.999999747378752e-05
+            }
+        },
+        
+        {
+            "attr" : "clusters_gen_size",
+            "default" : 5.0,
+            "desc" : " Clusters generator Average sizing of a single cluster in the XY mapping mode based on the current system units;",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_rotation",
+            "default" : 0.0,
+            "desc" : "Clusters generator rotation in radians",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_offset_x",
+            "default" : 0.0,
+            "desc" : "Clusters generator X offset in XY units",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_offset_y",
+            "default" : 0.0,
+            "desc" : "Clusters generator Y offset in XY units",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_offset_u",
+            "default" : 0.0,
+            "desc" : "Clusters generator u offset in UV space",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_offset_v",
+            "default" : 0.0,
+            "desc" : "Clusters generator v offset in UV space",
+            "type" : "FLOAT"
+        },
+        
+        {
+            "attr" : "clusters_gen_roughness",
+            "default" : 0.0,
+            "desc" : "Clusters generator roughness percentage",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clusters_gen_edge_blend",
+            "default" : 0.0,
+            "desc" : "Clusters generator edge blend percentage",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "clusters_gen_diversity",
+            "default" : 0.0,
+            "desc" : "Clusters generator diversity",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "max" : 100.0,
+                "min" : 0.0
+            }
+        },
+        
+        {
+            "attr" : "cluster_instances_color_map",
+            "default" : [ 0.0, 0.0, 0.0, 0.0 ],
+            "desc" : "Instance color map for clustering",
+            "type" : "TEXTURE",
+            "ui" : 
+            {
+                "attributes" : 
+                [
+                    [ "textureSlot", 2 ]
+                ]
+            }
+        },
+        
+        {
+            "attr" : "clusters_layer_model_subset_sizes",
+            "default" : 0,
+            "desc" : "List of subset sizes for the layer models",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_models",
+            "default" : 0,
+            "desc" : "List of models associated with layers, consisting of subsets for each layer",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_records",
+            "default" : 0,
+            "desc" : "Packed cluster strokes data, consisting of {numOfStrokePoints, targetIndex, layerIndex, subLayerIndex}",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_radiuses",
+            "default" : 0.0,
+            "desc" : "List of radiuses for all stroke records ",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_points",
+            "default" : 0.0,
+            "desc" : "List of 2D points / float pairs for all stroke records {pointX, pointY}",
+            "elements_count" : 0,
+            "type" : "FLOAT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_points_target_face",
+            "default" : 0,
+            "desc" : "List of triangle/face indices, for all 2D points listed in 'clusters_layer_stroke_points'",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_splines",
+            "default" : null,
+            "desc" : "List of splines for all stroke records",
+            "elements_count" : 0,
+            "type" : "PLUGIN_LIST"
+        },
+        
+        {
+            "attr" : "clusters_layer_stroke_axes",
+            "default" : 0,
+            "desc" : "List of axes along which the stroke splines are projected onto the meshes",
+            "elements_count" : 0,
+            "type" : "INT_LIST"
+        },
+        
+        {
+            "attr" : "compatibility_skip_transformations_rebase",
+            "default" : true,
+            "desc" : "If true - skip transformations rebase related to the up axis",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_skip_original_rotation",
+            "default" : true,
+            "desc" : "If true - skip original model rotation, which is used to influence instances scattering on a spline",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_sample_model_tm_at_rest_pose",
+            "default" : true,
+            "desc" : "If true - acquire the preserved model transform at rest pose time",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_spline_scatter_normals_refdir",
+            "default" : true,
+            "desc" : "If true - use static/constant reference direction for spline scattering normals",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_planar_map_no_scale_swap",
+            "default" : true,
+            "desc" : "If true - use the old planar map calculation, which does not swap scale factors on axis swap",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_light_bounding_box_mode",
+            "default" : "2",
+            "desc" : "If 0 - use the lights object space bounding boxes. If 1 - use max-specific lights object space bounding boxes (area lights related). If 2 - use the lights world bounding boxes to approximate object-space bounding boxes (legacy)",
+            "items" : 
+            [
+                [ "0", "LightBBoxModeObjectSpace", "LightBBoxModeObjectSpace" ],
+                [ "1", "LightBBoxModeObjectSpaceMax", "LightBBoxModeObjectSpaceMax" ],
+                [ "2", "LightBBoxModeWorldSpace", "LightBBoxModeWorldSpace" ]
+            ],
+            "type" : "ENUM"
+        },
+        
+        {
+            "attr" : "compatibility_single_channel_limitation",
+            "default" : true,
+            "desc" : "If true - use the old single user channel limitation, which does not allow using different channels for different plugged maps",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_edited_instances_avoidance_legacy",
+            "default" : false,
+            "desc" : "If true - use the legacy incorrect population rearrangement in the vicinity of edited instances",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_omit_rest_pose_transformations",
+            "default" : false,
+            "desc" : "If true - use the legacy insufficient treatment in the temporal consistency of the collision avoidance in animated scenes with changing transformations",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_tiny_triangles_scattering",
+            "default" : false,
+            "desc" : "If true - use the old too benevolent treatment of instances scattered onto very small triangles of the mesh when using UV-distribution",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_altitude_falloff_unstable_randomization",
+            "default" : false,
+            "desc" : "If true - use the old altitude falloff density randomization, which may show differences under specific circumstances",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_altitude_falloff_inconsistency",
+            "default" : true,
+            "desc" : "If true - use the old altitude falloff density calculations, which may suffer  inconsistencies under different paltform/os",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_transforms_inconsistency",
+            "default" : true,
+            "desc" : "If true - enable the legacy transforms calculation, which may suffer inconsistencies under different paltform/os",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_use_volatile_edited_instance_ids",
+            "default" : false,
+            "desc" : "If true - enable the legacy volatile/unsafe instance IDs for the edited instances; If false - have them safe",
+            "type" : "BOOL"
+        },
+        
+        {
+            "attr" : "compatibility_cyclic_map_channel_selection",
+            "default" : true,
+            "desc" : "If true - brings back the map channel cyclic selection; If false use the exact channel selected or 0 the channel isn't available)",
+            "type" : "BOOL"
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

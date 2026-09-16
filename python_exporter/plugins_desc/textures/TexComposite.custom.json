@@ -1,0 +1,130 @@
+{
+    "ID": "TexComposite",
+    "Name": "V-Ray Composite",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "operation",
+            "type": "ENUM",
+            "default": "0",
+            "desc": "How color_a is composited over color_b",
+            "items": [
+                [
+                    "0",
+                    "None",
+                    "Replaces the background"
+                ],
+                [
+                    "1",
+                    "Over",
+                    "Composites over the background"
+                ],
+                [
+                    "2",
+                    "In",
+                    "Shows only where the background is opaque"
+                ],
+                [
+                    "3",
+                    "Out",
+                    "Shows only where the background is transparent"
+                ],
+                [
+                    "4",
+                    "Add",
+                    "Adds to the background"
+                ],
+                [
+                    "5",
+                    "Subtract",
+                    "Subtracts from the background"
+                ],
+                [
+                    "6",
+                    "Multiply",
+                    "Multiplies with the background"
+                ],
+                [
+                    "7",
+                    "Difference",
+                    "Absolute difference with the background"
+                ],
+                [
+                    "8",
+                    "Lighten",
+                    "Keeps the lighter of the two"
+                ],
+                [
+                    "9",
+                    "Darken",
+                    "Keeps the darker of the two"
+                ],
+                [
+                    "10",
+                    "Saturate",
+                    "Increases background saturation"
+                ],
+                [
+                    "11",
+                    "Desaturate",
+                    "Decreases background saturation"
+                ],
+                [
+                    "12",
+                    "Illuminate",
+                    "Brightens or darkens as a light source"
+                ]
+            ],
+            "ui": {
+                "display_name": "Operation"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "operation"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_a"
+                    },
+                    {
+                        "name": "alpha_a"
+                    },
+                    {
+                        "name": "color_b"
+                    },
+                    {
+                        "name": "alpha_b"
+                    },
+                    {
+                        "name": "factor"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "operation"
+                    }
+                ]
+            }
+        ],
+        "internal_links": {
+            "*": [
+                "*"
+            ]
+        }
+    }
+}

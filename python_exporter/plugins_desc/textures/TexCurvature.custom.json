@@ -48,6 +48,7 @@
             "attr": "scale",
             "desc": "The scale relative to which the curvature is computed.",
             "ui": {
+                "display_name": "Radius",
                 "soft_max": 10.0
             }
         },
@@ -107,46 +108,81 @@
                         "name": "mode"
                     },
                     {
-                        "layout": "SEPARATOR"
+                        "name": "scale"
                     },
                     {
-                        "name": "subdivs"
+                        "name": "threshold"
                     },
                     {
                         "name": "sample_spread"
                     },
                     {
-                        "name": "ignore_bump"
+                        "layout": "ROLLOUT",
+                        "name": "output",
+                        "label": "Ouptut",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "out_color_min",
+                                "label": "Color min"
+                            },
+                            {
+                                "name": "out_color_max",
+                                "label": "Color max"
+                            },
+                            {
+                                "name": "out_color_gain",
+                                "label": "Gain"
+                            },
+                            {
+                                "name": "out_color_lift",
+                                "label": "Lift"
+                            },
+                            {
+                                "name": "out_color_gamma",
+                                "label": "Gamma"
+                            },
+                            {
+                                "name": "out_color_pivot",
+                                "label": "Pivot"
+                            },
+                            {
+                                "name": "out_color_clamp",
+                                "label": "Clamp"
+                            }
+                        ]
                     },
                     {
-                        "name": "out_color_min"
-                    },
-                    {
-                        "name": "out_color_max"
-                    },
-                    {
-                        "name": "out_color_gain"
-                    },
-                    {
-                        "name": "out_color_lift"
-                    },
-                    {
-                        "name": "out_color_gamma"
-                    },
-                    {
-                        "name": "out_color_pivot"
-                    },
-                    {
-                        "name": "out_color_clamp"
-                    },
-                    {
-                        "name": "scale"
-                    },
-                    {
-                        "name": "threshold"
+                        "layout": "ROLLOUT",
+                        "name": "options",
+                        "label": "Options",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "name": "ignore_bump"
+                            },
+                            {
+                                "name": "subdivs"
+                            }
+                        ]
                     }
                 ]
             }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "mode" },
+                    { "name": "scale" },
+                    { "name": "threshold" }
+                ]
+            }
+        ],
+        "input_sockets": [
+            {  "name": "sample_spread" }
         ]
     },
     "Options": {

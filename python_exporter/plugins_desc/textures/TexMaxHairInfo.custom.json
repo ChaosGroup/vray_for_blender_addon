@@ -1,0 +1,12 @@
+{
+    "ID": "TexMaxHairInfo",
+    "Name": "V-Ray Max Hair Info",
+    "Parameters": [
+        {
+            "attr": "max_distance",
+            "ui": {
+                "quantityType": "distance"
+            }
+        }
+    ]
+}

@@ -97,6 +97,9 @@ public:
 	/// Set max log level to be printed
 	void setLogLevel(LogLevel value);
 
+	/// Whether a message at @level passes the current log level (Always always passes).
+	bool shouldLog(LogLevel level) const { return !(m_logLevel < level); }
+
 	/// Initialize the logger, needs to be called only once.
 	void startLogging();
 
@@ -123,7 +126,7 @@ public:
 		// percentage sign has to be escaped (%%). If no variadic arguments are provided the message
 		// will be printed directly(mainly for message coming from the ZMQ server).
 
-		if (m_logLevel < level){
+		if (!shouldLog(level)){
 			return;
 		}
 

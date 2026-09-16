@@ -156,6 +156,18 @@
         },
         
         {
+            "attr" : "out_of_frustum_mult",
+            "default" : 4.0,
+            "desc" : "Controls how the tessellation is lowered for parts of the object which are outside of the camera frustum",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "display_name" : "Out of frustum multiplier",
+                "min" : 1.0
+            }
+        },
+        
+        {
             "attr" : "use_bounds",
             "default" : false,
             "desc" : "If true, the min/max values for the displacement texture are specified by the min_bound and max_bound parameters; if false, these are calculated automatically",
@@ -214,6 +226,14 @@
             {
                 "display_name" : "Classic Catmull-Clark"
             }
+        },
+        
+        {
+            "attr" : "displacement_vector_tex_prescaled",
+            "default" : false,
+            "desc" : "If true vector range conversion (e.g. value*2.0f-1.0f) won't be performed and assumed already done for the input texture",
+            "type" : "BOOL",
+            "ui" : {}
         }
     ],
     "Type" : "GEOMETRY",

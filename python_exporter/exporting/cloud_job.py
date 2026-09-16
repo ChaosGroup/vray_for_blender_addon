@@ -75,7 +75,9 @@ class VCloudJob:
                 try:
                     stdout, stderr = process.communicate()
                     if process.returncode != 0:
-                        bpy.app.timers.register(lambda: debug.report("ERROR", "Chaos Cloud failed to submit job, check the console" + stderr))
+                        # debug.report() is safe to call from this worker thread; it defers
+                        # the UI display to the main loop itself.
+                        debug.report("ERROR", "Chaos Cloud failed to submit job, check the console" + stderr)
                 finally:
                     # Owns cleanup of the temp scene dir on both success and failure paths.
                     shutil.rmtree(pathlib.Path(self.sceneFile).parent, ignore_errors=True)

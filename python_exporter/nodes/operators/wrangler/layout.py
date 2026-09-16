@@ -16,7 +16,7 @@ import bpy
 
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.exporting.tools import getInputSocketByAttr
-from vray_blender.nodes.tools import deselectNodes
+from vray_blender.nodes.tools import deselectNodes, isTexturePlaceholder
 from vray_blender.nodes.operators.wrangler.helpers import absLoc
 from vray_blender.nodes.operators.wrangler.poll import isVrayEditor, hasEditTree, hasSelection
 
@@ -43,7 +43,8 @@ class VRAY_OT_WR_align_selected(VRayOperatorBase):
         nodes = context.space_data.edit_tree.nodes
         margin = self.margin
 
-        selection = [node for node in nodes if node.select and node.type != 'FRAME']
+        # Skip the off-canvas texture placeholder, which Select All takes with it - laying it out would drag it into view.
+        selection = [node for node in nodes if node.select and node.type != 'FRAME' and not isTexturePlaceholder(node)]
         if not selection:
             self.report({'WARNING'}, "No nodes to arrange in selection.")
             return {'CANCELLED'}
@@ -106,8 +107,8 @@ class VRAY_OT_WR_center_nodes(VRayOperatorBase):
         return isVrayEditor(context) and hasEditTree(context) and hasSelection(context)
 
     def execute(self, context):
-        # Only move outermost selected nodes (children move with their frames).
-        roots = [node for node in context.selected_nodes if not (node.parent and node.parent.select)]
+        # Only move outermost selected nodes (children move with their frames). Skip the off-canvas texture placeholder.
+        roots = [node for node in context.selected_nodes if not (node.parent and node.parent.select) and not isTexturePlaceholder(node)]
         if not roots:
             return {'CANCELLED'}
 

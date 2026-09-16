@@ -482,9 +482,11 @@ class VRAY_OT_ui_list_item_del(VRayOpListBase, VRayOperatorBase):
     def execute(self, context):
         listAttr = lib_utils.getPropGroup(context.scene, self.list_attr)
 
-        if listAttr.list_item_selected >= 0:
-           listAttr.list_items.remove(listAttr.list_item_selected)
-           listAttr.list_item_selected -= 1
+        if listAttr.list_item_selected < 0:
+           return {'CANCELLED'}
+
+        listAttr.list_items.remove(listAttr.list_item_selected)
+        listAttr.list_item_selected -= 1
 
         if len(listAttr.list_items):
             if listAttr.list_item_selected < 0:

@@ -1,0 +1,348 @@
+{
+    "ID": "LightLuminaire",
+    "Name": "Luminaire Light",
+    "Parameters": [
+        {
+            "//Comment": "Multipliers over the baked cache, not the light's own color/intensity - the labels say so (WEBUI-7145).",
+            "attr": "color_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "color",
+            "tex_prop": "color_tex",
+            "ui": {
+                "display_name": "Color Multiplier"
+            },
+            "desc": "A color multiplier applied over the radiance stored in the luminaire cache",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ]
+        },
+        {
+            "attr": "intensity",
+            "ui": {
+                "display_name": "Intensity Multiplier",
+                "min": 0.0,
+                "soft_max": 100.0,
+                "spin_step": 0.01
+            },
+            "desc": "An intensity multiplier applied over the radiance stored in the luminaire cache"
+        },
+        {
+            "attr": "file",
+            "subtype": "VRAY_FILE_PATH"
+        },
+        {
+            "attr": "file_selector",
+            "type": "TEMPLATE",
+            "options": {
+                "template": {
+                    "type": "templateFileSelect",
+                    "args": {
+                        "bound_property": "file",
+                        "object_type": "shader_node"
+                    }
+                }
+            },
+            "ui": {
+                "display_name": "Luminaire File"
+            }
+        },
+        {
+            "attr": "filter_strength",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "scale",
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.1
+            }
+        },
+        {
+            "attr": "shadowColor_colortex",
+            "type": "COLOR_TEXTURE",
+            "subtype": "COLOR",
+            "color_prop": "shadowColor",
+            "tex_prop": "shadowColor_tex",
+            "ui": {
+                "display_name": "Shadow color"
+            },
+            "desc": "The shadow color. Anything but black is not physically accurate",
+            "default": [
+                0.0,
+                0.0,
+                0.0
+            ]
+        },
+        {
+            "//Comment": "As every other V-Ray light in Blender. Maya's and 3ds Max's 0.02 is in centimeters.",
+            "attr": "shadowBias",
+            "default": 0.005
+        },
+        {
+            "attr": "bumped_below_surface_check",
+            "default": true
+        },
+        {
+            "attr": "decay_near_start",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "decay_near_end",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "decay_far_start",
+            "ui": {
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "decay_far_end",
+            "ui": {
+                "spin_step": 0.01
+            }
+        }
+    ],
+    "Widget": {
+        "//Comment": "Mirrors the Cinema 4D layout. 'units', 'lod_on' and 'bumped_below_surface_check' are not drawn (VC4D-2591, VC4D-2610) but are still exported.",
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "general",
+                "label": "General",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "file_selector"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "color_colortex"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "filtering"
+                    },
+                    {
+                        "name": "filter_strength",
+                        "active": {
+                            "cond": "::filtering!=0"
+                        }
+                    },
+                    {
+                        "name": "scale"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "options",
+                "label": "Options",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "invisible"
+                    },
+                    {
+                        "name": "affectDiffuse"
+                    },
+                    {
+                        "name": "affectSpecular"
+                    },
+                    {
+                        "name": "affectAtmospherics"
+                    },
+                    {
+                        "name": "diffuse_contribution",
+                        "active": {
+                            "cond": "::affectDiffuse!=0"
+                        }
+                    },
+                    {
+                        "name": "specular_contribution",
+                        "active": {
+                            "cond": "::affectSpecular!=0"
+                        }
+                    },
+                    {
+                        "name": "atmospherics_contribution",
+                        "active": {
+                            "cond": "::affectAtmospherics!=0"
+                        }
+                    },
+                    {
+                        "name": "lpe_label",
+                        "label": "LPE Label"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "shadows",
+                "label": "Shadows",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "shadows"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::shadows!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "shadowBias"
+                            },
+                            {
+                                "name": "shadowColor_colortex"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "photon emission",
+                "label": "Photon Emission",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "causticSubdivs"
+                    },
+                    {
+                        "name": "causticMult"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "sampling",
+                "label": "Sampling",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "cutoffThreshold"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "decay",
+                "label": "Decay",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "decay_near_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_near_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_near_start"
+                            },
+                            {
+                                "name": "decay_near_end"
+                            }
+                        ]
+                    },
+                    {
+                        "name": "decay_far_on"
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "active": {
+                            "cond": "::decay_far_on!=0"
+                        },
+                        "attrs": [
+                            {
+                                "name": "decay_far_start"
+                            },
+                            {
+                                "name": "decay_far_end"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "npanel": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "enabled"
+                    },
+                    {
+                        "name": "file_selector"
+                    },
+                    {
+                        "name": "color_colortex"
+                    },
+                    {
+                        "name": "intensity"
+                    },
+                    {
+                        "layout": "SEPARATOR"
+                    },
+                    {
+                        "name": "shadows"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "input_sockets": [
+            {
+                "name": "color_colortex"
+            },
+            {
+                "name": "shadowColor_colortex"
+            },
+            {
+                "name": "intensity_tex"
+            }
+        ]
+    },
+    "Options": {
+        "//Comment": "What Cinema 4D excludes, minus what the Blender light exporter fills in itself. Params only hidden from the UI must stay OUT, or their imported values never reach V-Ray.",
+        "excluded_parameters": [
+            "channels_diffuse",
+            "channels_full",
+            "channels_raw",
+            "channels_specular",
+            "use_global_light_level",
+            "photonSubdivs",
+            "diffuseMult",
+            "storeWithIrradianceMap",
+            "pivot_offset"
+        ],
+        "animatable": true
+    }
+}

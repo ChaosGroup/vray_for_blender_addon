@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 from vray_blender import debug
 from vray_blender.nodes.nodes import vrayNodeCopy
 from vray_blender.nodes.utils import copyVRayPropGroup
@@ -172,8 +173,8 @@ def replaceNodeTree(nodeTree, parentName):
 def run():
     debug.printDebug("Converting materials:")
     debug.printDebug("=====================")
-    for material in bpy.data.materials:
-        if material.use_nodes:       
+    for material in scopedForUpgrade(bpy.data.materials):
+        if material.use_nodes:
             debug.printDebug(f"MTL: {material.name}")
             replaceNodeTree(material.node_tree, material.name)
     debug.printDebug("\n")
@@ -181,14 +182,14 @@ def run():
 
     debug.printDebug("Converting lights:")
     debug.printDebug("==================")
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         if lightNtree := light.node_tree:
             replaceNodeTree(lightNtree, light.name)
     debug.printDebug("\n")
 
     debug.printDebug("Converting objects:")
     debug.printDebug("===================")
-    for obj in bpy.data.objects:
+    for obj in scopedForUpgrade(bpy.data.objects):
         if obj.type not in {'MESH', 'META' , 'SURFACE' , 'FONT' , 'CURVE'}:
             continue
         if obj.vray.ntree:
@@ -199,7 +200,7 @@ def run():
     debug.printDebug("Converting worlds:")
     debug.printDebug("==================")
     if bpy.data.worlds:
-        for world in bpy.data.worlds:
+        for world in scopedForUpgrade(bpy.data.worlds):
             if getattr(world, 'use_nodes', False):
                 debug.printDebug(f"WORLD: {world.name}")
                 replaceNodeTree(world.node_tree, world.name)

@@ -4,11 +4,11 @@
 
 import bpy
 
-from vray_blender.utils.upgrade_scene import upgradeScene, sceneNeedsUpgrade
+from vray_blender.utils.upgrade_scene import upgradeScene, sceneNeedsUpgrade, scopedForUpgrade
 
 
 def directLights() :
-    for l in [l for l in bpy.data.lights if l.vray.light_type == 'DIRECT' and l.node_tree is None]:
+    for l in [l for l in scopedForUpgrade(bpy.data.lights) if l.vray.light_type == 'DIRECT' and l.node_tree is None]:
         yield l
     
 def run():

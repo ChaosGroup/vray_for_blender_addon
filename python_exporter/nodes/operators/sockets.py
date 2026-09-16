@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from vray_blender import debug
 from vray_blender.exporting.tools import getInputSocketByName
 from vray_blender.nodes.sockets import addInput
 
@@ -40,20 +39,21 @@ class VRayNodeDelCustomSocket:
         node = context.node
         sockNamePrefix = f"{self.vray_socket_name} "
 
-        nSockets = len([s for s in node.inputs if s.name.startswith(sockNamePrefix)])
-        
-        if not nSockets:
-            return {'FINISHED'}
+        # Locate the sockets by position rather than by a name rebuilt from their count, as the
+        # index embedded in the name may be non-consecutive (e.g. for an imported scene).
+        sockets = [s for s in node.inputs if s.name.startswith(sockNamePrefix)]
 
-        # Remove the last socket if it is not linked.
-        sockID = nSockets
-        sockName = f"{sockNamePrefix}{sockID}"
-        sock = getInputSocketByName(node, sockName)
-        
-        if not sock.is_linked:
-            node.inputs.remove(sock)
-        else:
-            debug.report('INFO', 'Cannot remove socket while it is linked, disconnect and try again')
-        
+        if not sockets:
+            return {'CANCELLED'}
+
+        # Remove the last socket if it is not linked. Report CANCELLED when nothing is
+        # removed, otherwise Blender would push an empty undo step (VBLD-2686).
+        sock = sockets[-1]
+
+        if sock.is_linked:
+            self.report({'WARNING'}, "Cannot remove socket while it is linked, disconnect and try again")
+            return {'CANCELLED'}
+
+        node.inputs.remove(sock)
         return {'FINISHED'}
 

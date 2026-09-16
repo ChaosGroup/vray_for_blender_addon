@@ -7,16 +7,21 @@
 #include "utils/logger.hpp"
 
 #include <filesystem>
+#include <optional>
 
 #ifdef _WIN32
 #include <windows.h>
+#else
+#include <cstdlib>
 #endif
 
 #include <ipc.h>
+#include <seh_guard.h>
 #include <zmq_common.hpp>
 #include <zmq_message.hpp>
 
 #include <boost/process/child.hpp>
+#include <boost/process/start_dir.hpp>
 
 #include "api/interop/conversion.hpp"
 
@@ -30,6 +35,110 @@ using namespace VrayZmqWrapper;
 using namespace VRayBaseTypes;
 
 #define ZMQ_SERVER_ALLOW_ATTACH 0
+
+/// Reported to the Python abort callback when the client side failed rather than the
+/// ZmqServer process exiting. Must match the string tested in zmq_process.py.
+static const char* CLIENT_COMM_ERROR = "Client communication error";
+
+namespace {
+
+/// Sets the variables ZmqServer needs on this process - it inherits them - and restores them on
+/// destruction. PATH is not among them, see startServerProcess().
+///
+/// Not boost's environment view: a block boost rebuilds from a copy of ours loses entries, and
+/// the server then fails to load its DLLs. Native encoding throughout, because the narrow Win32
+/// API converts through the active code page and the guard writes back what it read.
+class ScopedEnv {
+public:
+	ScopedEnv() = default;
+	ScopedEnv(const ScopedEnv&) = delete;
+	ScopedEnv& operator=(const ScopedEnv&) = delete;
+
+	~ScopedEnv() {
+		for (auto it = m_saved.rbegin(); it != m_saved.rend(); ++it) {
+			assign(it->first, it->second ? it->second->c_str() : nullptr);
+		}
+	}
+
+	/// Both arguments are UTF-8.
+	void set(const std::string& name, const std::string& value) {
+		const String nativeName = toNative(name);
+		const String nativeValue = toNative(value);
+
+		m_saved.emplace_back(nativeName, get(nativeName));
+		assign(nativeName, nativeValue.c_str());
+	}
+
+private:
+#ifdef _WIN32
+	using Char = wchar_t;
+#else
+	using Char = char;
+#endif
+	using String = std::basic_string<Char>;
+
+	static String toNative(const std::string& utf8) {
+#ifdef _WIN32
+		if (utf8.empty()) {
+			return String();
+		}
+
+		const int size = static_cast<int>(utf8.size());
+		const int length = ::MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), size, nullptr, 0);
+		if (length <= 0) {
+			return String();
+		}
+
+		String wide(length, L'\0');
+		::MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), size, wide.data(), length);
+		return wide;
+#else
+		return utf8;
+#endif
+	}
+
+	static std::optional<String> get(const String& name) {
+#ifdef _WIN32
+		// With no buffer the reported size includes the terminator, with one it does not - and a
+		// result of at least 'size' means the value grew in between and has to be re-read.
+		String value;
+		for (DWORD size = ::GetEnvironmentVariableW(name.c_str(), nullptr, 0); size != 0; ) {
+			value.resize(size);
+			const DWORD length = ::GetEnvironmentVariableW(name.c_str(), value.data(), size);
+			if (length == 0) {
+				break;
+			}
+			if (length < size) {
+				value.resize(length);
+				return value;
+			}
+			size = length;
+		}
+		return std::nullopt;
+#else
+		const char* value = ::getenv(name.c_str());
+		return value ? std::optional<String>(value) : std::nullopt;
+#endif
+	}
+
+	/// A null value removes the variable.
+	static void assign(const String& name, const Char* value) {
+#ifdef _WIN32
+		::SetEnvironmentVariableW(name.c_str(), value);
+#else
+		if (value) {
+			::setenv(name.c_str(), value, 1);
+		}
+		else {
+			::unsetenv(name.c_str());
+		}
+#endif
+	}
+
+	std::vector<std::pair<String, std::optional<String>>> m_saved;
+};
+
+} // namespace
 
 #ifdef _WIN32
 /// Intercepts the console close event (clicking X on the console window) to shut down
@@ -82,12 +191,21 @@ ZmqServer::~ZmqServer() {
 void ZmqServer::start(const ZmqServerArgs& args) {
 	vassert(!m_conn && "ZmqServer::start() can only be called in stopped state.");
 
+	// Double-start would leak a second server process in release builds.
+	if (m_conn) {
+		Logger::warning("ZmqServer::start() called while already running - ignored");
+		return;
+	}
+
 #ifdef _WIN32
 	SetConsoleCtrlHandler(zmqConsoleCtrlHandler, TRUE);
 #endif
 
 	m_args = args;
-	m_ctx = zmq::context_t(1);
+
+	// On abort m_ctx stays null and ZmqAbortError escapes to the caller, which turns it
+	// into a start() failure Python can report.
+	runGuarded([this] { m_ctx = std::make_unique<zmq::context_t>(1); });
 
 	// Reset the stop token as this function may be called multiple times
 	std::stop_source fresh;
@@ -109,7 +227,22 @@ void ZmqServer::stop() {
 		m_conn.reset();
 	}
 
-	m_ctx.close();
+	// zmq_ctx_term can abort like creation can. Caught here rather than rethrown: stop()
+	// runs from ~ZmqServer, where throwing would mean std::terminate.
+	try {
+		runGuarded([this] {
+			if (m_ctx) {
+				m_ctx->close();
+			}
+		});
+	}
+	catch (const ZmqAbortError& e) {
+		// close() was abandoned mid-way, so the context still holds a live handle and
+		// ~context_t would call it again - that second failure trips cppzmq's assert(),
+		// which no SEH guard can catch. Leak it deliberately; we are shutting down.
+		Logger::error("Blender: libzmq aborted during shutdown: %1%", e.what());
+		(void)m_ctx.release();
+	}
 
 	if (m_processRunner.joinable()) {
 		m_processRunner.join();
@@ -172,8 +305,8 @@ nb::handle ZmqServer::getPythonCallback(const std::string &name)
 
 
 zmq::context_t& ZmqServer::context() {
-	vassert(m_conn && "Zmq context not initialized. Call ZmqServer::start() method first.");
-	return m_ctx;
+	vassert(m_ctx && "Zmq context not initialized. Call ZmqServer::start() method first.");
+	return *m_ctx;
 }
 
 
@@ -205,6 +338,19 @@ bool ZmqServer::vrayInitialized() const
 bool ZmqServer::licenseAcquired() const
 {
 	return m_licenseAcquired;
+}
+
+std::pair<std::string, float> ZmqServer::getRenderStage() const
+{
+	std::scoped_lock l(m_renderStageLock);
+	return { m_renderStage, m_renderStageProgress.load() };
+}
+
+void ZmqServer::clearRenderStage()
+{
+	std::scoped_lock l(m_renderStageLock);
+	m_renderStage.clear();
+	m_renderStageProgress = 0.0f;
 }
 
 
@@ -299,17 +445,16 @@ void ZmqServer::runServer() {
 }
 
 bp::child ZmqServer::startServerProcess() {
-	// Add environment variables VRayZmqServer process needs to the current environment.
-	auto env = boost::this_process::environment();
-	env["VRAY_ZMQSERVER_APPSDK_PATH"] = m_args.vrayLibPath;
-	env["QT_PLUGIN_PATH"] = m_args.appSDKPath;
+	// Restored when 'env' goes out of scope, by which point the child has its own copy.
+	ScopedEnv env;
+	env.set("VRAY_ZMQSERVER_APPSDK_PATH", m_args.vrayLibPath);
+	env.set("QT_PLUGIN_PATH", m_args.appSDKPath);
 
 #ifdef _WIN32
-	env["PATH"] = m_args.appSDKPath;
-	env["QT_QPA_PLATFORM_PLUGIN_PATH"] = (fs::path(m_args.appSDKPath) / "platforms").string();
+	env.set("QT_QPA_PLATFORM_PLUGIN_PATH", (fs::path(m_args.appSDKPath) / "platforms").string());
 #else
-	env["QTWEBENGINE_RESOURCES_PATH"] = (fs::path(m_args.appSDKPath) / "resources").string();
-	env["QTWEBENGINE_LOCALES_PATH"] = (fs::path(m_args.appSDKPath) / "translations" / "qtwebengine_locales").string();
+	env.set("QTWEBENGINE_RESOURCES_PATH", (fs::path(m_args.appSDKPath) / "resources").string());
+	env.set("QTWEBENGINE_LOCALES_PATH", (fs::path(m_args.appSDKPath) / "translations" / "qtwebengine_locales").string());
 #endif
 
 	auto args = std::vector<std::string>({
@@ -329,7 +474,24 @@ bp::child ZmqServer::startServerProcess() {
 		args.push_back("-dumpInfoLog");
 		args.push_back(m_args.dumpLogFile);
 	}
-	auto process = bp::child(m_args.exePath, bp::args(args));
+	// Windows has no rpath and the server's shared libraries live in the AppSDK folder, one level
+	// below the exe. A process' working directory is searched ahead of PATH, so starting it there
+	// resolves them without touching our PATH. Unix has rpath and keeps the inherited directory.
+	std::string startDir;
+#ifdef _WIN32
+	std::error_code dirError;
+	if (fs::is_directory(m_args.appSDKPath, dirError)) {
+		startDir = m_args.appSDKPath;
+	}
+	else {
+		Logger::error("AppSDK folder is missing, ZmqServer will fail to start: %1%", m_args.appSDKPath);
+	}
+#endif
+
+	// An empty start_dir would make boost throw, on a thread with no handler above it.
+	auto process = startDir.empty()
+		? bp::child(m_args.exePath, bp::args(args))
+		: bp::child(m_args.exePath, bp::args(args), bp::start_dir(startDir));
 	process.detach();
 	return process;
 }
@@ -368,18 +530,33 @@ bool ZmqServer::obtainServerEndpointInfo(int zmqServerPID) {
 
 void ZmqServer::startControlConn() {
 
+	if (!m_ctx) {
+		// The context was abandoned after a libzmq abort. The monitor thread can still
+		// reach here while shutting down, and there is nothing left to connect with.
+		return;
+	}
+
 	const std::string endpoint = m_args.getAddress(m_zmqServerPort);
 
 	Logger::info("Blender: Starting control client for %1%", endpoint);
 
-	auto newConn = std::make_unique<ZmqAgent>(m_ctx, ID_CONTROL_CONN, ExporterType::FIRST_TYPE, ZmqAgent::Client);
+	auto newConn = std::make_unique<ZmqAgent>(*m_ctx, ID_CONTROL_CONN, ExporterType::FIRST_TYPE, ZmqAgent::Client);
 
 	newConn->setMsgCallback([this](zmq::message_t&& payload) {
 			SAFE_CALL(handleMsg(payload))
 		});
 
 	newConn->setErrorCallback([this, connPtr = newConn.get()](const std::string& err) {
-			Logger::error("Blender: control connection error: '%1%', reconnecting.", err);
+			if (connPtr->hasAborted()) {
+				// Nothing to reconnect to. Same path as a ZmqServer crash: resets the
+				// renderers and tells the user a restart is needed.
+				Logger::error("Blender: control connection died: '%1%'", err);
+				invokePythonCallback("zmqServerAbortCallback", getPythonCallback("zmqServerAbort"),
+				                     std::string(CLIENT_COMM_ERROR));
+			}
+			else {
+				Logger::error("Blender: control connection error: '%1%', reconnecting.", err);
+			}
 			connPtr->stop();
 		});
 
@@ -412,14 +589,31 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 	cosmosSettings.matFile = message.materialFile;
 	cosmosSettings.objFile = message.objectFile;
 	cosmosSettings.lightFile = message.lightFile;
+	cosmosSettings.luminaireFile = message.luminaireFile;
+	cosmosSettings.settingsFile = message.settingsFile;
+	cosmosSettings.setInstanceToken = message.setInstanceToken;
 	cosmosSettings.packageId = message.packageId;
 	cosmosSettings.revisionId = message.revisionId;
+	cosmosSettings.assetName = message.packageName;
 	cosmosSettings.isAnimated = message.isAnimated;
 	cosmosSettings.planeWidth = message.planeWidth;
 	cosmosSettings.planeHeight = message.planeHeight;
 	cosmosSettings.applyTriplanarMapping = message.applyTriplanarMapping;
 	cosmosSettings.texRealWorldWidth = message.texRealWorldWidth;
 	cosmosSettings.texRealWorldHeight = message.texRealWorldHeight;
+	// Drop-origin fields (populated only for drag-and-drop imports).
+	cosmosSettings.hasDropCoords = message.hasDropCoords;
+	cosmosSettings.worldX = message.worldX;
+	cosmosSettings.worldY = message.worldY;
+	cosmosSettings.worldZ = message.worldZ;
+	cosmosSettings.dropTargetObject = message.dropTargetObject;
+	cosmosSettings.dropTargetSlot = message.dropTargetSlot;
+	cosmosSettings.hasHitNormal = message.hasHitNormal;
+	cosmosSettings.normalX = message.normalX;
+	cosmosSettings.normalY = message.normalY;
+	cosmosSettings.normalZ = message.normalZ;
+	cosmosSettings.surfaceAttachment = message.surfaceAttachment;
+	cosmosSettings.forceNormalAlign = message.forceNormalAlign;
 
 	const AttrListString::DataArrayPtr assetData=message.assetNames.getData();
 	const AttrListString::DataArrayPtr assetLocationsData=message.assetLocations.getData();
@@ -447,6 +641,12 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 			break;
 		case ImportedAssetType::ParallaxInterior:
 			cosmosSettings.assetType = "ParallaxInterior";
+			break;
+		case ImportedAssetType::AssetSet:
+			cosmosSettings.assetType = "AssetSet";
+			break;
+		case ImportedAssetType::ScatterPreset:
+			cosmosSettings.assetType = "ScatterPreset";
 			break;
 	}
 
@@ -547,6 +747,18 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 		case MsgType::ControlOnRendererStatus: {
 			const auto& message = deserializeMessage<MsgControlOnRendererStatus>(stream);
 			processControlOnRendererStatus(message);
+			break;
+		}
+		case MsgType::ControlOnRenderStage: {
+			const auto& message = deserializeMessage<MsgControlOnRenderStage>(stream);
+			{
+				std::scoped_lock l(m_renderStageLock);
+				m_renderStage = message.stage;
+			}
+			// Stages reporting no work units send totalElements == 0.
+			m_renderStageProgress = (message.totalElements != 0)
+				? (static_cast<float>(message.elements) / message.totalElements)
+				: 0.0f;
 			break;
 		}
 		case MsgType::ControlOnGetComputeDevices:{

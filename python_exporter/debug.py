@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+import functools
 import sys
+import threading
 import traceback
 import time
 import datetime
@@ -172,42 +174,15 @@ class ExceptionLogger:
 ############  Reports in Blender's UI  ############
 
 class VRAY_OT_report(VRayOperatorBase):
-    """ Implements reporting in Blender status area regardless of the context """
+    """ Implements reporting in Blender's status area regardless of the context.
+
+        The report is driven from the operator's own TIMER event. modal() must never
+        finish on a user input event: returning {'FINISHED'} consumes the triggering
+        event, and if that event is the mouse-button release, the window manager keeps
+        the mouse stuck in the 'down' state (hovering then activates other widgets
+        without a click).
+    """
     bl_idname = "vray.report"
-    bl_label = "Report"
-
-    message: bpy.props.StringProperty()
-    reportType: bpy.props.StringProperty(default="ERROR")
-
-    def execute(self, context):
-        if context.window:
-            context.window_manager.modal_handler_add(self)
-            return {'RUNNING_MODAL'}
-        
-        printMsg(self.message, level=_LOG_LEVEL_MAP[self.reportType])
-        return {"CANCELLED"}
-    
-    def modal(self, context, event):
-        try:
-            self.report({self.reportType}, self.message)
-            return {'FINISHED'}
-        except:
-            return {'PASS_THROUGH'}
-        
-
-    @classmethod
-    def poll(cls, context):
-        # The operator should be callable even if the default engine is not V-Ray.
-        return True
-    
-
-# This operator is a fix for the problem with the stuck mouse-down after 
-# showing the message. This operator should replace the original debug.report
-# operator after proper testing
-  
-class VRAY_OT_reportDelayed(VRayOperatorBase):
-    """ Implements reporting in Blender status area regardless of the context """
-    bl_idname = "vray.report_delayed"
     bl_label = "Report"
 
     message: bpy.props.StringProperty()
@@ -217,10 +192,6 @@ class VRAY_OT_reportDelayed(VRayOperatorBase):
 
     def execute(self, context):
         if context.window:
-            # Drive the report from our own timer event. modal() must never finish on a
-            # user input event: returning {'FINISHED'} consumes the triggering event, and if
-            # that event is the mouse-button release, the window manager keeps the mouse
-            # stuck in the 'down' state (hovering then activates other widgets without a click).
             wm = context.window_manager
             self._timer = wm.event_timer_add(0.001, window=context.window)
             wm.modal_handler_add(self)
@@ -244,7 +215,6 @@ class VRAY_OT_reportDelayed(VRayOperatorBase):
             pass
         return {'FINISHED'}
 
-
     @classmethod
     def poll(cls, context):
         # The operator should be callable even if the default engine is not V-Ray.
@@ -252,47 +222,48 @@ class VRAY_OT_reportDelayed(VRayOperatorBase):
 
 
 
-def report(severity: str, msg: str, delayed=False):
-    """ Report in Blender's status area. This function is a replacement
-        for the report() method of blender classes (e.g. operators)
-        that can be used in any context.
-        
-        All reported messages will also be printed to the console as logs
-        with the corresponsing severity level.
-        
-        NOTE: depending on the current operation and Blender state, showing the status
-        message may not be possible. No error will be generated. but the function will 
-        have no effect. For these cases, consider using the reportAsync() function
+# State for coalescing identical, rapidly-repeated reports (see report()).
+_reportLock          = threading.Lock()
+_lastReport          = None    # (severity, msg) of the last shown/queued report
+_lastReportTime      = 0.0     # time.monotonic() of that report
+_REPORT_COALESCE_SEC = 0.5     # suppress identical repeats within this window
+
+
+def report(severity: str, msg: str):
+    """ Show a message in Blender's status area and log it to the V-Ray console.
+
+        This is the single public entry point for status reporting. It is safe to call
+        from ANY context - the main thread, worker/native threads, property update/set
+        callbacks, depsgraph/draw handlers and the restricted startup context. The UI
+        display is deferred to the next main-loop tick via a one-shot timer, so bpy.ops
+        is never invoked from an unsafe context. The message is also always printed to
+        the console with the corresponding severity level.
 
     Args:
         severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
         msg (str): The message to show.
-        delayed(bool): temporary. Remove when debug.report is replaced by debug.report_delayed
     """
-    if delayed:
-        bpy.ops.vray.report_delayed(reportType=severity, message=f"V-Ray: {msg}")
-    else:
-        bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
-    
+    now = time.monotonic()
+    with _reportLock:
+        global _lastReport, _lastReportTime
+        # Coalesce identical messages fired in rapid succession (e.g. from draw or
+        # depsgraph handlers) so they neither flood the console nor spawn a report
+        # operator per frame. Distinct messages are never dropped.
+        if (severity, msg) == _lastReport and (now - _lastReportTime) < _REPORT_COALESCE_SEC:
+            return
+        _lastReport, _lastReportTime = (severity, msg), now
+
     printMsg(msg, level=_LOG_LEVEL_MAP[severity])
+    bpy.app.timers.register(functools.partial(_showReport, severity, msg))
 
 
-def reportAsync(severity: str, msg: str, delayed=False):
-    """ Report in Blender's status area. This function is a replacement
-        for the report() method of blender classes (e.g. operators)
-        that can be used in any context.
-
-        NOTE: This function will queue a ReportStatus event to VfbEvent handler and it should
-        work instates where report() will not. The status message disaplay however may be 
-        perceptibly delayed.
-
-    Args:
-        severity (str): One of the enum values in https://docs.blender.org/api/current/bpy_types_enum_items/wm_report_items.html#rna-enum-wm-report-items
-        msg (_type_): The message to show.
-        delayed: switch between invoking ops.vray.report and ops.vray.report_delayed
+def _showReport(severity: str, msg: str):
+    """ Invoke the report operator on the main thread from a one-shot timer - a context
+        in which bpy.ops is valid. Returns None to unregister after a single run.
     """
-    from vray_blender.engine.vfb_event_handler import VfbEventHandler
-    VfbEventHandler.reportStatus(severity, msg, delayed)
+    if bpy.context.window:
+        bpy.ops.vray.report(reportType=severity, message=f"V-Ray: {msg}")
+    return None
 
 
 
@@ -301,7 +272,6 @@ def reportAsync(severity: str, msg: str, delayed=False):
 def getRegClasses():
     return (
         VRAY_OT_report,
-        VRAY_OT_reportDelayed,
     )
 
 

@@ -16,7 +16,7 @@ from vray_blender.lib.attribute_utils import getAttrDisplayName, formatAttribute
 from vray_blender.lib.condition_processor import isCondition
 from vray_blender.lib.sys_utils import importFunction
 from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel
-from vray_blender.lib.blender_utils import tagUsersForUpdate
+from vray_blender.lib.blender_utils import isNonGeometryExportedAsGeometry, tagUsersForUpdate
 
 
 class PropertyContext:
@@ -149,6 +149,11 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
     visited.add(fromNode)
 
     for output in fromNode.outputs:
+        # NodeSocket.links is implemented in Python and rescans the whole tree's link list on
+        # every access, so an unlinked socket is not free to ask; is_linked is a plain flag.
+        if not output.is_linked:
+            continue
+
         for link in output.links:
             nextNode = link.to_node
 
@@ -362,7 +367,7 @@ def _addDefaultOutputForPluginCategory(node: bpy.types.Node, pluginModule):
         The plugin descriptions do not explicitly include properties for the default output type.
         This function adds the default output socket based on the plugin category.
     """
-    from vray_blender.nodes.sockets import addOutput
+    from vray_blender.nodes.sockets import addChannelOutput, addOutput
 
     match pluginModule.Category:
         case 'TEXTURE':
@@ -381,7 +386,7 @@ def _addDefaultOutputForPluginCategory(node: bpy.types.Node, pluginModule):
         case 'EFFECT':
             addOutput(node, 'VRaySocketEffectOutput', "Effect")
         case 'RENDERCHANNEL':
-            addOutput(node, 'VRaySocketRenderChannelOutput', "Channel")
+            addChannelOutput(node)
 
 
 def addOutputs(node: bpy.types.Node, pluginModule):
@@ -498,7 +503,13 @@ def isNodeConnectedToTreeOutput(node: bpy.types.Node) -> bool:
     else:
         outputNodes = [getOutputNode(ntree, treeType)]
 
-    return any((node == outputNode) or areNodesInterconnected(node, outputNode) for outputNode in outputNodes)
+    # With nothing on its outputs the node has no path to anywhere, so it can only qualify by
+    # being an output node itself - the walk below would scan the tree to reach the same answer.
+    # This callback runs for every node on every node-tree update, so the walk is worth skipping.
+    hasOutgoingLink = any(sock.is_linked for sock in node.outputs)
+
+    return any((node == outputNode) or (hasOutgoingLink and areNodesInterconnected(node, outputNode))
+               for outputNode in outputNodes)
 
 
 def tagGroupTreeUsers(groupTree):
@@ -557,6 +568,57 @@ def tagGroupTreeUsers(groupTree):
     _propagate(groupTree)
 
 
+# Bumped when a material no object uses has its previews invalidated. The Material Lister folds
+# it into its template_preview id: an id Blender has not seen builds a fresh uiPreview, which
+# starts dirty. The only way in, as ED_previews_tag_dirty_by_id is depsgraph-only.
+loosePreviewToken = {'n': 0}
+
+
+def getChangedMaterial(propHolder):
+    """ The material a property update belongs to - the one hosting the property group (material
+        options live on the Material itself) or the one owning its node tree. None if neither. """
+    idData = getattr(propHolder, 'id_data', None)
+
+    if isinstance(idData, bpy.types.Material):
+        return idData
+    if isinstance(idData, bpy.types.ShaderNodeTree):
+        return next((m for m in bpy.data.materials if m.node_tree == idData), None)
+    return None
+
+
+def revalidateTreeLinks(ntree: bpy.types.NodeTree):
+    """ Make Blender recompute a tree's socket link flags.
+
+        A tree copied with ID.copy() keeps its links, but every socket reports is_linked False
+        until Blender revalidates the topology - which never happens for a material no object
+        uses. getFarNodeLink() tests is_linked first, so until then the whole tree reads as
+        unconnected and the shader panel says "No shader connected". Re-creating one link tags
+        the tree, and the update that follows fixes every socket at once. Multi-input sockets
+        are skipped, as links.new() appends to those instead of replacing.
+    """
+    if ntree is None:
+        return
+    if link := next((l for l in ntree.links if not l.to_socket.is_multi_input), None):
+        ntree.links.new(link.from_socket, link.to_socket)
+
+
+def tagMaterialPreview(mtl: bpy.types.Material):
+    """ Tag a material so its icon and its preview widget re-render.
+
+        update_tag() only works while some object uses the material: with no users it has no
+        depsgraph node and the tag is dropped whole (deg_graph_node_tag_zero), so both previews
+        keep showing the last render. The lister's New and Duplicate make exactly those. """
+    mtl.update_tag()
+
+    # A fake user is a save-time refcount, not depsgraph membership.
+    if (mtl.users - (1 if mtl.use_fake_user else 0)) > 0:
+        return
+
+    if mtl.preview is not None:
+        mtl.preview.reload()   # BKE_previewimg_clear - reschedules the icon on the next draw
+    loosePreviewToken['n'] += 1
+
+
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
     """ Triggers an update of the currently selected object or node tree and a redraw of the
         property editor. This function is set as the 'update' callback of node sockets
@@ -586,6 +648,14 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
         tagRedrawPropertyEditor()
         return
 
+    # Refresh the preview of the material the change actually belongs to. Done here rather than
+    # in the active-object dispatch below, which is a different material altogether when the edit
+    # came from the Material Lister - that edits any material in the file, including ones no
+    # object uses, whose previews nothing else can reach (see tagMaterialPreview).
+    changedMtl = getChangedMaterial(self)
+    if changedMtl is not None:
+        tagMaterialPreview(changedMtl)
+
     activeEditor = context.scene.vray.ActiveNodeEditorType
 
     if isinstance(self, bpy.types.Node):
@@ -612,7 +682,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                     if ob.vray and ob.vray.ntree:
                         tagUsersForUpdate(ob.vray.ntree)
 
-                elif (mtl := ob.active_material) and mtl.node_tree:
+                elif (mtl := changedMtl or ob.active_material) and mtl.node_tree:
 
                     srcType = type(self).__name__
 
@@ -638,6 +708,8 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                         UpdateTracker.tagUpdate(mtl, UpdateTarget.MATERIAL, UpdateFlags.DATA)
 
 
+                    mtl.update_tag()
+
             case 'LIGHT':
                 # A Light node's property has changed
                 UpdateTracker.tagUpdate(ob.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
@@ -647,9 +719,10 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
                 ob.update_tag()
 
             case 'EMPTY':
-                # V-Ray Gaussian splats store their parameters on obj.vray.GeomGaussians (an
-                # Empty has no data block). Tag the object so the change is re-exported in IPR.
-                if ob.vray.isVRayGaussian:
+                # Empty-backed V-Ray geometry (Gaussian splats, infinite plane, perfect sphere)
+                # stores its parameters on obj.vray.<Plugin> (an Empty has no data block). Tag the
+                # object so the change is re-exported in IPR.
+                if isNonGeometryExportedAsGeometry(ob):
                     ob.update_tag()
 
     tagRedrawPropertyEditor()
@@ -777,7 +850,17 @@ def tagRedrawNodeEditor():
 
 def tagRedrawViewport():
     """ Tag 3D Viewport for redraw """
-    tagRedrawArea('VIEW3D')
+    tagRedrawArea('VIEW_3D')
+
+
+def tagRedrawShadingEditors():
+    """ Tag every editor that can be showing a V-Ray shading graph.
+
+        Includes PREFERENCES because the Scene Lister hijacks a Preferences window, so its
+        material editor would otherwise keep painting a stale node after a navigation click.
+    """
+    for areaType in ('PROPERTIES', 'NODE_EDITOR', 'PREFERENCES'):
+        tagRedrawArea(areaType)
 
 
 
@@ -851,43 +934,25 @@ def getLightOutputNode(lightNtree: bpy.types.NodeTree):
     return next((n for n in lightNtree.nodes if isVrayNode(n) and (n.vray_type == 'LIGHT')), None)
 
 
-def getActiveTreeNode(ntree: bpy.types.NodeTree, treeType: str):
-    """ Return the active (selected) node in a tree.
-
-        @param ntree - the node tree to search
-        @param treeType - the type of the tree (see getOutputNode())
-        @return Return the selected node or None if there is no selection. If more than 1 nodes are
-                selected, return the Output node with priority, or the last node in the list.
-    """
-
-    if not treeHasNodes(ntree):
-        return None
-
-    selectedNodes = [x for x in ntree.nodes if x.select]
-    if not selectedNodes:
-        return None
-
-    if len(selectedNodes) == 1:
-        return selectedNodes[-1]
-    else:
-        outputNode = getOutputNode(ntree, treeType)
-        isOutputNodeSelected = any(n for n in selectedNodes if n.bl_idname == outputNode.bl_idname) if outputNode else False
-        return outputNode if isOutputNodeSelected else selectedNodes[-1]
-
-
 _AutoConnectEnabled = True
 
 class DisableAutoConnect:
     """ Context manager to temporarily disable automatic node connections. """
     def __enter__(self):
         global _AutoConnectEnabled
+        from vray_blender.exporting.update_tracker import UpdateTracker
         self.original_state = _AutoConnectEnabled
         _AutoConnectEnabled = False
+        # A bulk build re-tags the same material from every node-tree update it triggers;
+        # collect those tags and apply them once per material at the end.
+        self._deferTags = UpdateTracker.deferMtlTopology()
+        self._deferTags.__enter__()
         return self
 
     def __exit__(self, type, value, traceback):
         global _AutoConnectEnabled
         _AutoConnectEnabled = self.original_state
+        self._deferTags.__exit__(type, value, traceback)
 
 
 def isAutoConnectEnabled():

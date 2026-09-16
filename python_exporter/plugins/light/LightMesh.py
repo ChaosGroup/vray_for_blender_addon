@@ -5,11 +5,12 @@
 import bpy
 
 from vray_blender import debug
-from vray_blender.exporting.tools import getFarNodeLink
+from vray_blender.exporting.tools import getFarNodeLink, getLinkedFromSocket
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.defs import AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
+from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -19,6 +20,30 @@ def nodeUpdate(node: bpy.types.Node):
         node.mute = False
 
 
+def getLightMeshGeometryObjects(ctx: ExporterContext, lightObj: bpy.types.Object):
+    """ Resolve the geometry ('gizmo') objects attached to a mesh light.
+
+        The gizmos may be selected either through a selector node connected to the 'Geometry' socket
+        of the LightMesh node, or - when no such node is connected - through the object selector on
+        the light's property page (which is stored on the node's property group when a tree is used).
+    """
+    propGroup = lightObj.data.vray.LightMesh
+
+    if ntree := lightObj.data.node_tree:
+        if lightNode := getNodeByType(ntree, 'VRayNodeLightMesh'):
+            propGroup = lightNode.LightMesh
+            if fromSock := getLinkedFromSocket(lightNode.inputs['Geometry']):
+
+                linkedNode = fromSock.node
+                if linkedNode.bl_idname not in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
+                    debug.printError(f"A non-selector node attached to 'Geometry' socket of {lightNode.name}.")
+                    return []
+                
+                return getObjectsFromSelector(linkedNode, ctx.ctx)
+
+    return propGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
+
+
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     # The LightMesh node allows either a single or a group object selector to be plugged into it.
     # This procedure will export one instance of LightMesh for each selected object and will
@@ -26,33 +51,10 @@ def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     geomObjects: list[bpy.types.Object] = []  # A list of geometry objects attached to the same LightMesh
     exportedLights: list[AttrPlugin]   = []   # A list of the expored LightMesh plugins
 
-    exportedObjectSelectorNode = False
+    obj = ctx.objectContext.get()
+    assert obj and obj.data.vray.light_type == 'MESH', "No LightMesh object in the current object context."
 
-    if node := pluginDesc.node:
-        geometrySocket = node.inputs['Geometry']
-        if geomLink := getFarNodeLink(geometrySocket):
-            # Even if an empty selector or a wrong node is attached to the 'geometry' socket, we
-            # want to suppress the usage of internal objects list because it will be confusing
-            # to the users (as list is hidden in the UI).
-            exportedObjectSelectorNode = True
-
-            linkedNode = geomLink.from_node
-
-            if linkedNode.bl_idname not in ('VRayNodeSelectObject', 'VRayNodeMultiSelect'):
-                debug.printError(f"A non-selector node attached to 'Geometry' socket of {node.name}.")
-            elif linkedItem := pluginDesc.getAttribute('geometry'):
-                if type(linkedItem) is list:
-                    # The node has an group selector connected to its 'geometry' socket
-                    geomObjects = [pl.auxData['object'] for pl in linkedItem]
-                elif (type(linkedItem) is AttrPlugin) and (not linkedItem.isEmpty()):
-                    # The node has an object selector connected to its 'geometry' socket
-                    geomObjects = [linkedItem.auxData['object']]
-
-    if not exportedObjectSelectorNode:
-        # The 'geometry' socket is not linked, use the value from the property page if any
-        geomObjects = pluginDesc.vrayPropGroup.object_selector.getSelectedItems(ctx.ctx, 'objects')
-
-    if geomObjects:
+    if geomObjects := getLightMeshGeometryObjects(ctx, obj):
         baseName = pluginDesc.name
 
         # LightMesh plugin can only have one target geometry, so export one LightMesh plugin for each geometry

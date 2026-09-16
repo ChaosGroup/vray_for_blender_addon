@@ -118,6 +118,12 @@
                         "active": {
                             "cond": "::random_texture_offset=1;::random_texture_rotation=1;::random_axis=1;::random_frame_rotation=1"
                         }
+                    },
+                    {
+                        "name": "random_user_attribute",
+                        "active": {
+                            "cond": "::random_texture_offset=1;::random_texture_rotation=1;::random_axis=1;::random_frame_rotation=1,::random_mode=4"
+                        }
                     }
                 ]
             }
@@ -183,7 +189,6 @@
     },
     "Options": {
         "excluded_parameters": [
-            "random_user_attribute",
             "out_intensity",
             "rest_position_tex",
             "rest_normal_tex",

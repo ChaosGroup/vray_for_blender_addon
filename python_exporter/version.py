@@ -24,20 +24,24 @@ def getAddonUpgradeNumber():
     return f"{UPGRADE_NUMBER:-04}"
 
 
-def getSceneUpgradeNumber():
+def getSceneUpgradeNumber(scene: bpy.types.Scene = None):
     """ Returns the V-Ray version number of the scene in format '0000'.
         The first upgrade script is numbered 0001, so we can return 0 for
         both pre-version scenes and such not created with V-Ray. In both
         cases all upgrade scripts need to be run.
+
+        `scene` defaults to the active scene; pass a specific scene (e.g. one
+        linked from a source file during append) to read that scene's number.
     """
 
     from vray_blender.lib.blender_utils import isDefaultScene
 
-    upgradeNum = bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber
+    scene = scene or bpy.context.scene
+    upgradeNum = scene.vray.Exporter.vrayAddonUpgradeNumber
     if upgradeNum == 0:
         # 0 is a special number for legacy scenes created before the concept of upgrade version
         # number was introduced, and for scenes that were not created using V-Ray.
-        sceneVer = getNumericVersion(getSceneVersionString())
+        sceneVer = getNumericVersion(getSceneVersionString(scene))
         if sceneVer == '6.20.00':
             upgradeNum = 0 # Explicitly set to the same value just for clarity
         if sceneVer== '7.00.10':
@@ -65,6 +69,21 @@ def setSceneUpgradeNumber(upgradeNum: int):
     bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber = upgradeNum
 
 
+def getDatablockUpgradeNumber(datablock, defaultWhenUnset: int) -> int:
+    """ Return the V-Ray upgrade number stamped on a datablock's `.vray` group.
+        If it was never stamped (e.g. data from an older file, or appended data),
+        return `defaultWhenUnset` - the scene number on a full load, 0 on append.
+    """
+    vrayProps = datablock.vray
+    if vrayProps.is_property_set('upgradeNumber'):
+        return vrayProps.upgradeNumber
+    return defaultWhenUnset
+
+
+def setDatablockUpgradeNumber(datablock, upgradeNum: int):
+    datablock.vray.upgradeNumber = upgradeNum
+
+
 def getBuildVersionString():
     """ Get the full version string identifying the current build of the addon. """
     try:
@@ -82,9 +101,9 @@ def getBuildVersionString():
         raise Exception("Could not read V-Ray addon data!")
 
 
-def getSceneVersionString():
-    """ Get the V-Ray addon version used to save the scene. """
-    return bpy.context.scene.vray.Exporter.vrayAddonVersion
+def getSceneVersionString(scene: bpy.types.Scene = None):
+    """ Get the V-Ray addon version used to save the scene (defaults to active scene). """
+    return (scene or bpy.context.scene).vray.Exporter.vrayAddonVersion
 
 
 def getHostAppVersionString():
@@ -142,13 +161,16 @@ def findUpgradeScripts(fromUpgradeNum: str, toUpgradeNum: str):
     return sorted(relevantScripts)
 
 
-def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
+def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str, writeSceneNumber: bool = True):
     """ Upgrade the currently loaded scene by running in turn all available upgrade
         scripts for versions between from and to upgarde numbers.
 
     Args:
         fromUpgradeNum (str): the version to upgrade from
         toUpgradeNum (str): the version to upgrade to
+        writeSceneNumber (bool): advance the active scene's upgrade number after each
+            script. Set False for append/link, where the active scene must not change
+            (the imported datablocks carry their own numbers, see upgradeImportedData).
 
     Returns:
         bool: True if the upgrade was successful
@@ -156,6 +178,7 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     from vray_blender.lib.blender_utils import isDefaultScene
     from vray_blender.lib.sys_utils import importModule
     from vray_blender.nodes.utils import DisableAutoConnect
+    from vray_blender.utils.upgrade_scene import setCurrentScriptNum
 
     sceneName = "default scene" if isDefaultScene() else f"'{bpy.data.filepath}'"
     debug.printAlways(f"Update scene from v{int(fromUpgradeNum)} to v{int(toUpgradeNum)}: {sceneName}")
@@ -177,6 +200,10 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
 
         debug.printDebug(f"Running version update script {upgradeScriptModule}")
 
+        # Tell the scope helpers which script is running so scripts can gate their
+        # per-datablock iterations via scopedForUpgrade().
+        setCurrentScriptNum(int(upgradeNum))
+
         try:
             # Not all upgrades in the range may affect the current scene, run only the ones that do
             if upgradeModule.check():
@@ -184,7 +211,8 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
                     upgradeModule.run()
 
             # Set the new upgrade number to the scene
-            setSceneUpgradeNumber(int(upgradeNum))
+            if writeSceneNumber:
+                setSceneUpgradeNumber(int(upgradeNum))
         except  Exception as e:
             debug.reportError(f'Scene version update failed. See console log for details.', exc=e)
             return False
@@ -192,6 +220,36 @@ def upgradeScene(fromUpgradeNum: str, toUpgradeNum: str):
     debug.printAlways("Scene successfully updated to current VRay for Blender version.")
 
     return True
+
+
+def upgradeImportedData(importedUids: set, baselineVersion: int = 0) -> bool:
+    """ Upgrade appended/linked datablocks.
+
+        Runs the upgrade chain scoped to the imported datablocks, starting from
+        `baselineVersion` - the version the imported data was created with (read from
+        the source file's scene) so already-applied scripts are NOT re-run. A stamped
+        datablock (from a newer file) uses its own recorded number instead. The active
+        scene's upgrade number is left untouched; imported datablocks are stamped to
+        the current addon version on success.
+
+    Args:
+        importedUids (set[int]): session_uid values of the imported datablocks.
+        baselineVersion (int): version to upgrade un-stamped imported data from.
+
+    Returns:
+        bool: True if the upgrade was successful
+    """
+    from vray_blender.utils.upgrade_scene import UpgradeScope, stampScopedDatablocks
+
+    if not importedUids:
+        return True
+
+    addonUpgradeNum = getAddonUpgradeNumber()
+    with UpgradeScope(importedUids, defaultVersion=baselineVersion):
+        ok = upgradeScene(f"{baselineVersion:-04}", addonUpgradeNum, writeSceneNumber=False)
+        if ok:
+            stampScopedDatablocks(int(addonUpgradeNum))
+    return ok
 
 
 def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
@@ -208,15 +266,17 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
     """
 
     from vray_blender.lib.sys_utils import importModule
+    from vray_blender.utils.upgrade_scene import setCurrentScriptNum
 
     if fromUpgradeNum == toUpgradeNum:
         return False
-    
+
     scriptInfos = findUpgradeScripts(fromUpgradeNum, toUpgradeNum)
 
     # Run in succession all scripts needed to upgrade from the scene version to the
     # current addon version. Any error will abort the procedure and alert the user.
     for scriptInfo in scriptInfos:
+        upgradeNum    = scriptInfo[0]
         upgradeScript = scriptInfo[1]
 
         upgradeScriptModule = f"resources.upgrade_scripts.{upgradeScript}"
@@ -225,6 +285,9 @@ def checkIfSceneNeedsUpgrade(fromUpgradeNum: str, toUpgradeNum: str):
         if (upgradeModule := importModule(upgradeScriptModule)) is None:
             debug.reportError(f"Scene version updatecheck failed. See console log for details.")
             return False
+
+        # Gate scripts' per-datablock iterations (scopedForUpgrade) to this script.
+        setCurrentScriptNum(int(upgradeNum))
 
         try:
             if upgradeModule.check():

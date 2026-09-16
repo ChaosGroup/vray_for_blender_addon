@@ -254,46 +254,7 @@ customRenderChannelNodesDesc = (
         "Subtype" : "UTILITY",
     },
     #RAW
-    {
-        "params":{
-            "alias":  111,
-            "name": "Raw Lighting"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "RAW",
-    },
-    {
-        "params":{
-            "alias":  110,
-            "name": "Raw GI"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "RAW",
-    },
-    {
-        "params":{
-            "alias":  130,
-            "name": "Raw Total Light"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "RAW"
-    },
-    {
-        "params":{
-            "alias":  119,
-            "name": "Raw Reflection"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "RAW",
-    },
-    {
-        "params":{
-            "alias":  121,
-            "name": "Raw Refraction"
-        },
-        "base_plugin_type": "RenderChannelColor",
-        "Subtype" : "RAW",
-    },
+    # Sorted by name - the list order is what the Render Channels panel shows.
     {
         "params":{
             "alias":  189,
@@ -312,8 +273,56 @@ customRenderChannelNodesDesc = (
     },
     {
         "params":{
-            "alias":  183,
-            "name": "Raw Sheen Filter"
+            "alias":  150,
+            "name": "Raw Diffuse Filter"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  110,
+            "name": "Raw GI"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  111,
+            "name": "Raw Lighting"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  119,
+            "name": "Raw Reflection"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  151,
+            "name": "Raw Reflection Filter"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  121,
+            "name": "Raw Refraction"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  152,
+            "name": "Raw Refraction Filter"
         },
         "base_plugin_type": "RenderChannelColor",
         "Subtype" : "RAW",
@@ -328,8 +337,24 @@ customRenderChannelNodesDesc = (
     },
     {
         "params":{
+            "alias":  183,
+            "name": "Raw Sheen Filter"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
             "alias":  184,
             "name": "Raw Sheen Reflection"
+        },
+        "base_plugin_type": "RenderChannelColor",
+        "Subtype" : "RAW",
+    },
+    {
+        "params":{
+            "alias":  130,
+            "name": "Raw Total Light"
         },
         "base_plugin_type": "RenderChannelColor",
         "Subtype" : "RAW",

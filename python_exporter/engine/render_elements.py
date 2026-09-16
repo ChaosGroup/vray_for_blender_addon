@@ -31,6 +31,7 @@ _BL_IDNAME_CRYPTOMATTE   = "VRayNodeRenderChannelCryptomatte"
 _BL_IDNAME_OBJECT_SELECT = "VRayNodeRenderChannelObjectSelect"
 _BL_IDNAME_DENOISER      = "VRayNodeRenderChannelDenoiser"
 _BL_IDNAME_ENHANCER      = "VRayNodeRenderChannelEnhancer"
+_BL_IDNAME_VELOCITY      = "VRayNodeRenderChannelVelocity"
 
 _SPECIAL_CHANNEL_IDNAMES = frozenset((
     _BL_IDNAME_CRYPTOMATTE,
@@ -102,6 +103,10 @@ def _isDenoiserWired(world) -> bool:
     return any(node.bl_idname == _BL_IDNAME_DENOISER for _, node in iterChannelLinks(world))
 
 
+def isVelocityWired(world) -> bool:
+    return any(node.bl_idname == _BL_IDNAME_VELOCITY for _, node in iterChannelLinks(world))
+
+
 def enumerateSpecialPasses(world):
     """ Yield (passName, channelType, instanceName) for passes not tied to a channel node:
         'Effects Result' (always-on) and 'Denoised' (when a denoiser is wired -- its
@@ -126,7 +131,10 @@ _warnedUnmappedChannels: set[str] = set()
 
 # Render elements that are intentionally VFB-only: they have no Blender compositor pass
 # by design, so the "missing mapping" warning would just be noise for them.
-_VFB_ONLY_PASSES: frozenset[str] = frozenset({"Lighting Analysis", "Light Mix"})
+_VFB_ONLY_PASSES: frozenset[str] = frozenset({
+    "Lighting Analysis",
+    "Light Mix",
+})
 
 
 def resetUnmappedChannelWarnings():
@@ -148,7 +156,7 @@ def enumerateGenericChannelNodes(world):
             if passName not in _VFB_ONLY_PASSES and passName not in _warnedUnmappedChannels:
                 _warnedUnmappedChannels.add(passName)
                 from vray_blender import debug
-                debug.reportAsync("WARNING",
+                debug.report("WARNING",
                     f"Render element '{passName}' has no Blender compositor mapping; it renders "
                     "in the V-Ray VFB but will not appear as a render pass.")
             continue
@@ -199,6 +207,9 @@ RE = {
     "Raw Reflection":                 { "type": "color",  "channelType": 119 },
     "Refraction Filter":              { "type": "color",  "channelType": 120 },
     "Raw Refraction":                 { "type": "color",  "channelType": 121 },
+    "Raw Diffuse Filter":             { "type": "color",  "channelType": 150 },
+    "Raw Reflection Filter":          { "type": "color",  "channelType": 151 },
+    "Raw Refraction Filter":          { "type": "color",  "channelType": 152 },
     "Background":                     { "type": "color",  "channelType": 124 },
     "Matte Shadow":                   { "type": "color",  "channelType": 128 },
     "Total Light":                    { "type": "color",  "channelType": 129 },
@@ -212,6 +223,7 @@ RE = {
     "Refraction Glossiness":          { "type": "value",  "channelType": 137 },
     "Reflection IOR":                 { "type": "color",  "channelType": 140 },
     "Metalness":                      { "type": "value",  "channelType": 165 },
+    "Light Select":                   { "type": "color",  "channelType": 163 },
 
     # Toon
     "Toon":                           { "type": "color",  "channelType": 154 },

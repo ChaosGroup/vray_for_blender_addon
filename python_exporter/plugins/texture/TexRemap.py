@@ -66,7 +66,7 @@ def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, pr
 
     node = getNodeOfPropGroup(propGroup)
     curvesNode = cn.getCurvesNode(node)
-    curveType = { "1":"COLOR", "2":"HUE" }[node.TexRemap.type]
+    curveType = { "1":"COLOR", "2":"HUE" }[propGroup.type]
     layout.template_curve_mapping(curvesNode, "mapping", type=curveType)
 
 

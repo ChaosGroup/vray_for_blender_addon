@@ -14,7 +14,6 @@ from vray_blender.lib import export_utils, plugin_utils
 from vray_blender.lib.blender_utils import getPinnedDataFromEditorContext
 from vray_blender.nodes.utils import getNodeOfPropGroup
 from vray_blender.vray_tools.vrmat_parser import getMaterialNamesFromVRMatFile
-from vray_blender.vray_tools.vrscene_parser import getMaterialNamesFromVRScene
 
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -63,6 +62,14 @@ class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
         return {'FINISHED'}
 
 
+def _getMaterialNamesFromVRScene(filePath):
+    """ List the names of the Mtl* plugins in a .vrscene, read through the server
+        importer (starts the ZMQ server if needed). """
+    from vray_blender.vray_tools.vrscene_import import importVrsceneSync
+    return [p['Name'] for p in importVrsceneSync(filePath, typeFilter="Mtl")
+            if p['ID'].startswith('Mtl') and p['Name'] != 'MANOMATERIALISSET']
+
+
 def _getMaterialNamesFromMtlXFile(matlxFile):
     # Returns a list of material names from .mtlx file
     import xml.etree.ElementTree as ET
@@ -82,7 +89,7 @@ def _getMaterialNamesFromMtlFile(fileName):
     if os.path.exists(filePath):
         match pathlib.Path(filePath).suffix:
             case ".vrscene":
-                return getMaterialNamesFromVRScene(filePath)
+                return _getMaterialNamesFromVRScene(filePath)
             case ".vrmat" | ".vismat":
                 return getMaterialNamesFromVRMatFile(filePath)
             case ".mtlx":
@@ -97,7 +104,9 @@ class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
     bl_idname      = "vray.get_vrscene_material_name"
     bl_label       = "Get Material Name"
     bl_description = "Get material name from *.vrscene file"
-    bl_options     = {'INTERNAL', 'UNDO'}
+    # No 'UNDO' - this only opens the menu. The material name is set by
+    # 'vray.set_vrscene_material_name', which pushes the undo step itself.
+    bl_options     = {'INTERNAL'}
 
     nodeName: bpy.props.StringProperty()
     mtlName: bpy.props.StringProperty()

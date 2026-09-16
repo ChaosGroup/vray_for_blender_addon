@@ -1,5 +1,6 @@
 {
     "ID": "TexWater",
+    "Name": "V-Ray Water",
     "Widget": {
         "widgets": [
             {
@@ -73,7 +74,7 @@
         {
             "attr": "uvwgen",
             "type": "UVWGEN",
-            "ui" : {
+            "ui": {
                 "display_name": "Mapping"
             }
         }

@@ -27,7 +27,6 @@ class _Event:
     RenderInteractiveStop   = 7     # Stop IPR(Interactive) Rendering
     ExportVrscene           = 8     # Export the current scene to a .vrscene files
     CloudSubmit             = 9     # Submit scene for V-Ray Cloud rendering
-    ReportStatus            = 10    # Report to Bleder status area
     UpgradeScene            = 11    # Run a scene version upgrade
     RenderVantageStart      = 12    # Start Vantage Live Link
     RenderVantageStop       = 13    # Stop Vantage Live Link
@@ -37,6 +36,7 @@ class _Event:
     ShowMessagesWindow      = 17    # Open the Blender system console (Windows only)
     ExportProxy             = 18    # Export selected scene geometry to .vrmesh
     VFBRenderRegionChanged  = 19    # Mirror VFB render region changes to scene.render.border_*
+    RenderProdRequest       = 20    # VFB requested a prod render; route through vray.render so the overwrite check runs
 
 DrawHandlers = []
 
@@ -154,6 +154,20 @@ class _VfbEventHandler:
         self.stopInteractiveRender()
         self.addEvent(_Event.RenderProd, forceAnimationMode=forceAnimationMode, uiRegionContext=uiRegionContext)
 
+    def requestProdRender(self):
+        """ Request a production render from the VFB. Unlike startProdRender(), this routes the
+            request through the vray.render operator so that the output-overwrite check (and its
+            confirmation dialog) run, exactly as when rendering is started from the Blender UI.
+        """
+        from vray_blender.engine.renderer_prod import VRayRendererProd
+
+        if self._isEventInQueue(_Event.RenderProdRequest) or self._isEventInQueue(_Event.RenderProd) \
+                or VRayRendererProd.isActive():
+            # This could happen if the user clicks several times in rapid succession on the
+            # 'Start Prod Render' VFB button
+            return
+        self.addEvent(_Event.RenderProdRequest)
+
     def stopVantageLiveLink(self):
         self.addEvent(_Event.RenderVantageStop)
 
@@ -174,11 +188,6 @@ class _VfbEventHandler:
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.CloudSubmit, uiRegionContext=uiRegionContext)
-
-    def reportStatus(self, severity: set, msg: str, delayed=False):
-        """ Report to Blender's status field """
-        self.addEvent(_Event.ReportStatus, severity, msg, delayed)
-
 
     def upgradeScene(self):
         """ Run a scene upgrade """
@@ -329,6 +338,11 @@ class _VfbEventHandler:
                     self.setLightMixSupported(True)
                     processed = self.startProdRenderSync(ProdRenderMode.RENDER, *event.args, **event.kwargs)
 
+                case _Event.RenderProdRequest:
+                    # Route the VFB-initiated prod render through the operator so its output-overwrite
+                    # check and confirmation dialog run, just like a render started from the Blender UI.
+                    bpy.ops.vray.render('INVOKE_DEFAULT')
+
                 case _Event.ExportVrscene:
                     processed = self.startProdRenderSync(ProdRenderMode.EXPORT_VRSCENE, *event.args, **event.kwargs)
 
@@ -344,9 +358,6 @@ class _VfbEventHandler:
 
                 case _Event.RenderInteractiveStop:
                     self._stopInteractiveRender()
-
-                case _Event.ReportStatus:
-                    debug.report(*event.args, **event.kwargs)
 
                 case _Event.UpgradeScene:
                     bpy.ops.vray.upgrade_scene('INVOKE_DEFAULT')
@@ -619,9 +630,17 @@ class _VfbEventHandler:
 
         from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
         from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
+        from vray_blender.engine.renderer_ipr_base import VRayRendererIprBase
 
         if VRayRendererIprViewport.isActive():
             return
+
+        # In VFB IPR the render region is decoupled from the scene border while the bound view
+        # is in free navigation (non-camera), so ignore region changes coming from the VFB.
+        if VRayRendererIprVfb.isActive():
+            uiCtx = VRayRendererIprBase.getActiveUIRegionContext()
+            if uiCtx is not None and uiCtx.region3d.view_perspective != 'CAMERA':
+                return
 
         with self._lock:
             payload = self._lastVfbRenderRegion

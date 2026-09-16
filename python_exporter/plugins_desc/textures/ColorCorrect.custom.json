@@ -1,0 +1,35 @@
+{
+    "ID": "ColorCorrect",
+    "Name": "V-Ray Color Correct (Max)",
+    "Subtype": "UTILITY",
+    "Parameters": [
+        {
+            "attr": "source_color_colortex",
+            "type": "COLOR_TEXTURE",
+            "color_prop": "source_color",
+            "tex_prop": "texture_map",
+            "default": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "desc": "Source color, or the texture that replaces it",
+            "ui": {
+                "display_name": "Source Color"
+            }
+        }
+    ],
+    "Node": {
+        "internal_links": {
+            "*": [
+                "*"
+            ]
+        }
+    },
+    "Options": {
+        "excluded_parameters": [
+            "source_color",
+            "texture_map"
+        ]
+    }
+}

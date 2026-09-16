@@ -1,0 +1,38 @@
+{
+    "ID": "TexVectorOp",
+    "Name": "V-Ray Vector Op",
+    "Subtype": "UTILITY",
+    "Node": {
+        "output_sockets": [
+            {
+                "name": "_default_",
+                "label": "Dot Product",
+                "type": "OUTPUT_FLOAT_TEXTURE"
+            },
+            {
+                "name": "cross_product"
+            },
+            {
+                "name": "sum"
+            },
+            {
+                "name": "difference"
+            },
+            {
+                "name": "result_a"
+            },
+            {
+                "name": "result_b"
+            },
+            {
+                "name": "x"
+            },
+            {
+                "name": "y"
+            },
+            {
+                "name": "z"
+            }
+        ]
+    }
+}

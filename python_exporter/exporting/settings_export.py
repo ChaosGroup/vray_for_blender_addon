@@ -4,7 +4,7 @@
 
 from vray_blender.lib import export_utils
 from vray_blender.lib.names import Names
-from vray_blender.lib.defs import ExporterContext, ExporterBase, PluginDesc, SceneStats
+from vray_blender.lib.defs import ExporterContext, ExporterBase, PluginDesc
 from vray_blender.plugins import PLUGINS
 from vray_blender.exporting.tools import IGNORED_PLUGINS
 
@@ -14,7 +14,6 @@ class SettingsExporter(ExporterBase):
     """
     def __init__(self, ctx: ExporterContext):
         super().__init__(ctx)
-        self.stats = SceneStats()
 
 
     def export(self):
@@ -37,8 +36,6 @@ class SettingsExporter(ExporterBase):
 
         for pluginType in toExport:
             self.exportPlugin(pluginType)
-
-        return self.stats
 
 
     def exportPlugin(self, pluginType: str):

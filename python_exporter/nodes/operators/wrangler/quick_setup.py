@@ -21,17 +21,17 @@ import bpy
 from bpy.props import BoolProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
 
+from vray_blender.lib import blender_utils
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.exporting.tools import getInputSocketByAttr
-from vray_blender.nodes.tools import rearrangeTree, calculateTreeBounds
-from vray_blender.nodes.sockets import addInput, moveExtendSocketToBottom
+from vray_blender.nodes.tools import rearrangeTree, arrangeNodes
+from vray_blender.nodes.sockets import addInput, getChannelOutput, moveExtendSocketToBottom
 from vray_blender.nodes.specials.material import getMaterialSockets
 from vray_blender.nodes.utils import getNodeByType, getOutputNode, getLightOutputNode, DisableAutoConnect
 from vray_blender.nodes.operators.wrangler.helpers import _OUTPUT_BY_TREE_TYPE
 from vray_blender.nodes.operators.wrangler.poll import isVrayEditor, hasEditTree, hasSelection
-from vray_blender.nodes.operators.wrangler.pbr_import import (
-    _newBitmap, _tryLink,
-)
+from vray_blender.nodes.operators.wrangler.pbr_import import _newBitmap
+from vray_blender.nodes.slots import tryLink
 
 
 # Beauty render-element bl_idnames derived from customRenderChannelNodesDesc.
@@ -78,14 +78,14 @@ def _newHdriBitmap(ntree: bpy.types.NodeTree, filepath: str, makeRelative: bool)
     bitmapNode, bitmapOut = _newBitmap(ntree, filepath, isData=False, makeRelative=makeRelative)
     uvwNode = ntree.nodes.new('VRayNodeUVWMapping')
     uvwNode.mapping_node_type = 'ENVIRONMENT'   # triggers _mappingTypeUpdate
-    _tryLink(ntree, uvwNode.outputs.get('Mapping'), getInputSocketByAttr(bitmapNode, 'uvwgen'))
+    tryLink(ntree, uvwNode.outputs.get('Mapping'), getInputSocketByAttr(bitmapNode, 'uvwgen'))
     return bitmapNode, bitmapOut, uvwNode
 
 
 # ---------- Arrange Tree ----------
 
 class VRAY_OT_WR_arrange_tree(VRayOperatorBase):
-    """Topology-sort the node tree from its output node outward"""
+    """Arrange the node tree. With 2+ nodes selected, only those are arranged (kept in place); otherwise the whole tree is arranged from its output node"""
     bl_idname = "vray.wr_arrange_tree"
     bl_label = "Arrange Tree"
     bl_options = {'REGISTER', 'UNDO', 'INTERNAL'}
@@ -96,14 +96,42 @@ class VRAY_OT_WR_arrange_tree(VRayOperatorBase):
 
     def execute(self, context):
         ntree = context.space_data.edit_tree
-        treeType = getattr(getattr(ntree, 'vray', None), 'tree_type', '')
-        outputNode = getOutputNode(ntree, treeType)
-        if outputNode is None:
-            self.report({'WARNING'}, "No output node found to arrange from")
-            return {'CANCELLED'}
-        bounds = calculateTreeBounds(ntree)
-        rearrangeTree(ntree, outputNode, bounds=bounds)
+
+        # node.dimensions is only filled while the node editor draws. Force one redraw
+        # so every node reports its real size; otherwise nodes that have not been drawn
+        # (or were off-screen) report (0,0) and fall back to the coarse height estimate,
+        # which is what made e.g. TexTriPlanar nodes overlap.
+        try:
+            bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+        except RuntimeError:
+            pass
+
+        # Arrange only the selection when the user has picked a subset of nodes, keeping
+        # them centred on their current position; otherwise lay out the whole tree.
+        # (context.selected_nodes is not exposed in every node-editor context, so read
+        # the selection straight off the tree - same approach as the align operators.)
+        selected = [n for n in ntree.nodes if n.select and n.type != 'FRAME']
+        if len(selected) >= 2:
+            arrangeNodes(ntree, selected)
+        else:
+            treeType = getattr(getattr(ntree, 'vray', None), 'tree_type', '')
+            outputNode = getOutputNode(ntree, treeType)
+            if outputNode is None:
+                self.report({'WARNING'}, "No output node found to arrange from")
+                return {'CANCELLED'}
+            rearrangeTree(ntree, outputNode)
+
         ntree.update_tag()
+
+        # Re-frame the editor so the rearranged graph stays on screen.
+        try:
+            if selected:
+                bpy.ops.node.view_selected('INVOKE_DEFAULT')
+            else:
+                bpy.ops.node.view_all('INVOKE_DEFAULT')
+        except RuntimeError:
+            pass
+
         return {'FINISHED'}
 
 
@@ -121,6 +149,10 @@ class VRAY_OT_WR_add_disp_subdiv(VRayOperatorBase):
 
     def execute(self, context):
         ntree = context.space_data.edit_tree
+        # _getOrCreateOutput may add the output node, which is itself a change that has
+        # to count towards the status - CANCELLED would leave it without an undo step.
+        created = 0 if getOutputNode(ntree, _treeType(context)) else 1
+
         outputNode = _getOrCreateOutput(ntree)
         if outputNode is None:
             self.report({'WARNING'}, "No object output node")
@@ -138,16 +170,21 @@ class VRAY_OT_WR_add_disp_subdiv(VRayOperatorBase):
         if dispSock and not dispSock.is_linked:
             with DisableAutoConnect():
                 dispNode = ntree.nodes.new('VRayNodeDisplacement')
-            _tryLink(ntree, dispNode.outputs.get('Displacement'), dispSock)
+            tryLink(ntree, dispNode.outputs.get('Displacement'), dispSock)
             dispNode.location = (gapX, outputNode.location.y + 100.0)
+            created += 1
 
         if subdivSock and not subdivSock.is_linked:
             with DisableAutoConnect():
                 subdivNode = ntree.nodes.new('VRayNodeGeomStaticSmoothedMesh')
             # Plugin-backed geometry nodes expose their geometry on outputs[0].
             subdivOut = subdivNode.outputs[0] if subdivNode.outputs else None
-            _tryLink(ntree, subdivOut, subdivSock)
+            tryLink(ntree, subdivOut, subdivSock)
             subdivNode.location = (gapX, outputNode.location.y - 140.0)
+            created += 1
+
+        if not created:
+            return {'CANCELLED'}
 
         ntree.update_tag()
         return {'FINISHED'}
@@ -179,21 +216,15 @@ class VRAY_OT_WR_add_shadow_catcher(VRayOperatorBase):
             self.report({'WARNING'}, "No object output node")
             return {'CANCELLED'}
 
-        # Don't create the matte node here. Assigning matte_surface = True triggers
-        # mattePropsSetter (plugins/misc/VRayObjectProperties.py), which builds and
-        # wires the VRayNodeObjectMatteProps node itself; doing it manually first
-        # leaves an orphan node behind when the setter replaces the link. Guard the
-        # assignment so re-running the operator doesn't make the setter add another
-        # duplicate.
+        # Don't create the matte node here. makeShadowCatcher assigns matte_surface, which
+        # triggers mattePropsSetter (plugins/misc/VRayObjectProperties.py) to build and wire
+        # the VRayNodeObjectMatteProps node itself; doing it manually first leaves an orphan
+        # node behind when the setter replaces the link.
         try:
-            p = obj.vray.VRayObjectProperties
-            if not p.matte_surface:
-                p.matte_surface = True
-            p.affect_alpha       = True
-            p.shadows            = True
-            p.alpha_contribution = -1.0
+            blender_utils.makeShadowCatcher(obj)
         except AttributeError:
             self.report({'WARNING'}, "Could not set matte properties on " + obj.name)
+            return {'CANCELLED'}
 
         ntree.update_tag()
         self.report({'INFO'}, f"Shadow catcher applied to '{obj.name}'")
@@ -243,14 +274,14 @@ class VRAY_OT_WR_add_disp_texture(VRayOperatorBase, ImportHelper):
                 dispNode = ntree.nodes.new('VRayNodeDisplacement')
             dispSock = outputNode.inputs.get('Displacement')
             if dispSock and not dispSock.is_linked:
-                _tryLink(ntree, dispNode.outputs.get('Displacement'), dispSock)
+                tryLink(ntree, dispNode.outputs.get('Displacement'), dispSock)
             dispNode.location = (outputNode.location.x - 550.0, outputNode.location.y)
 
         # Create the bitmap node (marked as data / non-colour for displacement maps).
         bitmapNode, bitmapOut = _newBitmap(ntree, self.filepath, isData=True,
                                            makeRelative=self.relative_path)
         texSock = dispNode.inputs.get('Displacement Texture')
-        _tryLink(ntree, bitmapOut, texSock)
+        tryLink(ntree, bitmapOut, texSock)
         bitmapNode.location = (dispNode.location.x - 380.0, dispNode.location.y)
 
         ntree.update_tag()
@@ -314,7 +345,7 @@ class VRAY_OT_WR_add_hdri(VRayOperatorBase, ImportHelper):
             envNode = ntree.nodes.new('VRayNodeEnvironment')
             envSock = outputNode.inputs.get('Environment')
             if envSock and not envSock.is_linked:
-                _tryLink(ntree, envNode.outputs.get('Environment'), envSock)
+                tryLink(ntree, envNode.outputs.get('Environment'), envSock)
             envNode.location = (outputNode.location.x - 380.0, outputNode.location.y + 80.0)
 
         # HDRI bitmap fed by an Environment (spherical) UVW mapping node.
@@ -322,18 +353,18 @@ class VRAY_OT_WR_add_hdri(VRayOperatorBase, ImportHelper):
 
         # Background is always wired; enable the use checkbox so the override is active.
         bgSock = getInputSocketByAttr(envNode, 'bg_tex')
-        _tryLink(ntree, bitmapOut, bgSock)
+        tryLink(ntree, bitmapOut, bgSock)
         if bgSock:
             bgSock.use = True
 
         if self.link_gi:
             giSock = getInputSocketByAttr(envNode, 'gi_tex')
-            _tryLink(ntree, bitmapOut, giSock)
+            tryLink(ntree, bitmapOut, giSock)
             if giSock:
                 giSock.use = True
         if self.link_reflection:
             reflectSock = getInputSocketByAttr(envNode, 'reflect_tex')
-            _tryLink(ntree, bitmapOut, reflectSock)
+            tryLink(ntree, bitmapOut, reflectSock)
             if reflectSock:
                 reflectSock.use = True
 
@@ -390,7 +421,7 @@ class VRAY_OT_WR_add_dome_hdri(VRayOperatorBase, ImportHelper):
         # Wire the bitmap into the dome's "Dome Color" texture socket. The
         # VRaySocketColorTexture meta socket sets use_dome_tex=True on export
         # whenever it is linked, so no explicit toggle is required here.
-        _tryLink(ntree, bitmapOut, getInputSocketByAttr(domeNode, 'color_colortex'))
+        tryLink(ntree, bitmapOut, getInputSocketByAttr(domeNode, 'color_colortex'))
 
         # Layout: uvw <- bitmap <- domeNode
         bitmapNode.location = (domeNode.location.x - 380.0, domeNode.location.y + 40.0)
@@ -472,12 +503,12 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
         if wrapOut is None:
             return
         for toSock in preserved:
-            _tryLink(ntree, wrapOut, toSock)
+            tryLink(ntree, wrapOut, toSock)
         if not preserved:
             if outNode := _getOrCreateOutput(ntree):
                 mtlSock = outNode.inputs.get('Material')
                 if mtlSock and not mtlSock.is_linked:
-                    _tryLink(ntree, wrapOut, mtlSock)
+                    tryLink(ntree, wrapOut, mtlSock)
 
     def _buildSingleWrapper(self, ntree, srcNode, nodeType, preferredTypes):
         srcOut = _firstEnabledOutput(srcNode, *preferredTypes)
@@ -490,7 +521,7 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
         with DisableAutoConnect():
             wrapNode = ntree.nodes.new(nodeType)
 
-        _tryLink(ntree, srcOut, wrapNode.inputs.get('Base Material'))
+        tryLink(ntree, srcOut, wrapNode.inputs.get('Base Material'))
 
         wrapOut = wrapNode.outputs[0] if wrapNode.outputs else None
         self._rewireDownstream(ntree, preserved, wrapOut)
@@ -528,7 +559,7 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
         # Link each source to a material socket by position; the ID in the 'Material X' name
         # need not be consecutive.
         for (_, srcOut), mtlSock in zip(sources, getMaterialSockets(wrapNode)):
-            _tryLink(ntree, srcOut, mtlSock)
+            tryLink(ntree, srcOut, mtlSock)
 
         wrapOut = wrapNode.outputs.get('Material') or wrapNode.outputs[0]
         self._rewireDownstream(ntree, preserved, wrapOut)
@@ -562,7 +593,7 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
             wrapNode = ntree.nodes.new('VRayNodeBRDFLayered')
 
         # Wire base material (bottom of coat stack = first / topmost selected).
-        _tryLink(ntree, sources[0][1], wrapNode.inputs.get('Base Material'))
+        tryLink(ntree, sources[0][1], wrapNode.inputs.get('Base Material'))
 
         # Wire coat layers.  Layer 1 sockets are already created by nodeInit;
         # layers 2+ are added via the shared helper.
@@ -570,7 +601,7 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
         for layerIdx, (_, srcOut) in enumerate(sources[1:], start=1):
             if layerIdx > 1:
                 addCoatLayer(wrapNode)
-            _tryLink(ntree, srcOut, wrapNode.inputs.get(f"Coat Material {layerIdx}"))
+            tryLink(ntree, srcOut, wrapNode.inputs.get(f"Coat Material {layerIdx}"))
 
         wrapOut = wrapNode.outputs.get('BRDF') or wrapNode.outputs[0]
         self._rewireDownstream(ntree, preserved, wrapOut)
@@ -589,10 +620,7 @@ class VRAY_OT_WR_wrap_selected(VRayOperatorBase):
 def _addChannelToContainer(ntree, channelNode, containerNode):
     """Wire channelNode's output into the next free slot of containerNode,
     growing the socket list if needed."""
-    channelOut = next(
-        (s for s in channelNode.outputs if s.bl_idname == 'VRaySocketRenderChannelOutput'),
-        channelNode.outputs[0] if channelNode.outputs else None,
-    )
+    channelOut = getChannelOutput(channelNode) or (channelNode.outputs[0] if channelNode.outputs else None)
     if channelOut is None:
         return
     freeSock = next(
@@ -605,7 +633,7 @@ def _addChannelToContainer(ntree, channelNode, containerNode):
                        if s.bl_idname == 'VRaySocketRenderChannel') + 1
         freeSock = addInput(containerNode, 'VRaySocketRenderChannel', f"Channel {humanIdx}")
         moveExtendSocketToBottom(containerNode)
-    _tryLink(ntree, channelOut, freeSock)
+    tryLink(ntree, channelOut, freeSock)
 
 
 class VRAY_OT_WR_add_beauty_channels(VRayOperatorBase):
@@ -627,6 +655,8 @@ class VRAY_OT_WR_add_beauty_channels(VRayOperatorBase):
 
         # Find or create the channels container and wire it to the world output.
         channelsNode = getNodeByType(ntree, 'VRayNodeRenderChannels')
+        # Creating the container is a change in its own right, so it counts towards the status.
+        containerCreated = channelsNode is None
         if channelsNode is None:
             channelsNode = ntree.nodes.new('VRayNodeRenderChannels')
             outputNode   = _getOrCreateOutput(ntree)
@@ -634,7 +664,7 @@ class VRAY_OT_WR_add_beauty_channels(VRayOperatorBase):
                 chanSock = outputNode.inputs.get('Channels')
                 chanOut  = channelsNode.outputs.get('Channels')
                 if chanSock and not chanSock.is_linked:
-                    _tryLink(ntree, chanOut, chanSock)
+                    tryLink(ntree, chanOut, chanSock)
             channelsNode.location = (
                 outputNode.location.x - 380.0 if outputNode else 0.0,
                 outputNode.location.y - 220.0 if outputNode else 0.0,
@@ -677,7 +707,7 @@ class VRAY_OT_WR_add_beauty_channels(VRayOperatorBase):
         if skipped:
             msg += f", {skipped} already present"
         self.report({'INFO'}, msg)
-        return {'FINISHED'}
+        return {'FINISHED'} if (added or containerCreated) else {'CANCELLED'}
 
 
 # ---------- Registration ----------

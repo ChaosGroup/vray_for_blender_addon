@@ -261,7 +261,8 @@
             {
                 "name": "flakes_rollout",
                 "label": "Flakes Layer",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "flake_color"
             },
             { "name": "flake_color" },
             { "name": "flake_random_color" },
@@ -269,7 +270,8 @@
             {
                 "name": "coat_rollout",
                 "label": "Coat Layer",
-                "type": "ROLLOUT"
+                "type": "ROLLOUT",
+                "link_redirect": "coat_color"
             },
             { "name": "coat_color" },
             { "name": "coat_amount" },

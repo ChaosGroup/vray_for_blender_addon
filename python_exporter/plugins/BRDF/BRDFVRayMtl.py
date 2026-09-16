@@ -15,7 +15,7 @@ from vray_blender.lib.defs import PluginDesc, NodeContext, AttrPlugin, ExporterC
 from vray_blender.lib.names import Names
 from vray_blender.lib.settings_defs import GIEngine
 from vray_blender.nodes.tools import isVraySocket
-from vray_blender.nodes.utils import _AutoConnectEnabled, getNodeOfPropGroup, findDataObjFromNode, areNodesInterconnected, getOutputNode
+from vray_blender.nodes.utils import _AutoConnectEnabled, isAutoConnectEnabled, getNodeOfPropGroup, findDataObjFromNode, areNodesInterconnected, getOutputNode
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -119,11 +119,16 @@ def onUpdateUseRoughness(propGroup, context: bpy.types.Context, attrName: str):
     
     if not hasShadowedAttrChanged(propGroup, 'option_use_roughness'):
         return
-    
-    propGroup.reflect_glossiness = 1.0 - propGroup.reflect_glossiness
-    propGroup.coat_glossiness    = 1.0 - propGroup.coat_glossiness
-    propGroup.sheen_glossiness   = 1.0 - propGroup.sheen_glossiness
-    
+
+    # Skip the glossiness<->roughness inversion during bulk import / conversion. There both
+    # reflect_glossiness and option_use_roughness come from the source and are already
+    # consistent (V-Ray's reflect_glossiness already holds roughness when option_use_roughness=1),
+    # so inverting would corrupt the imported value. Interactive UI toggling still inverts.
+    if isAutoConnectEnabled():
+        propGroup.reflect_glossiness = 1.0 - propGroup.reflect_glossiness
+        propGroup.coat_glossiness    = 1.0 - propGroup.coat_glossiness
+        propGroup.sheen_glossiness   = 1.0 - propGroup.sheen_glossiness
+
     updateShadowAttr(propGroup, 'option_use_roughness')
 
 
@@ -170,12 +175,10 @@ def _reportLightCacheRequirement(context: bpy.types.Context):
     isLightCacheEngine = (int(settingsGI.secondary_engine) == GIEngine.LightCache)
 
     if not isLightCacheEngine:
-        debug.reportAsync('INFO',
-            '“Light Cache” and "Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect',
-            delayed = True)
+        debug.report('INFO',
+            '“Light Cache” and "Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect')
     elif not settingsGI.use_light_cache_for_interactive:
-        debug.reportAsync('INFO',
-            '"Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect',
-            delayed = True)
+        debug.report('INFO',
+            '"Use Light Cache for Interactive rendering" must be enabled to see the Quick Caustics effect')
 
 

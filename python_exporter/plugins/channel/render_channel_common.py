@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from vray_blender.lib.draw_utils import getAttrLabel
 from vray_blender.nodes.nodes import setUniqueRenderChannelName
 from vray_blender.nodes.utils import getNodeOfPropGroup
+from vray_blender.plugins import getPluginModule
 
 
 def drawChannelType(layout, channelType):
@@ -34,3 +36,16 @@ def widgetDrawLightingAnalysisUpdate(context, layout, propGroup, widgetAttr):
         panel used). Lighting Analysis is a post-process over the rendered data, so its
         parameters can be re-applied without a new render. """
     layout.operator("vray.update_lighting_analysis", text="Update", icon='FILE_REFRESH')
+
+
+def widgetDrawLightPathExpression(context, layout, propGroup, widgetAttr):
+    """ "custom_draw" function for the light_path_expression attribute that also draws a button
+        opening the online LPE builder, on the same row as the expression it composes. """
+    attrLabel = getAttrLabel(getPluginModule('RenderChannelLightSelect'), widgetAttr, propGroup, node=None)
+
+    row = layout.row(align=True)
+    row.prop(propGroup, widgetAttr['name'], text=attrLabel)
+
+    op = row.operator("vray.url_open", text="", icon='URL')
+    op.url = "https://lpe-builder.chaosgroup.com/"
+    op.description = "Open the Light Path Expression builder in a web browser"

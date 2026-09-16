@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+from vray_blender.utils.upgrade_scene import scopedForUpgrade, isImportScopeActive
 import os
 
 from mathutils import Vector
@@ -142,6 +143,16 @@ def arrayFromMeshVertices(mesh: bpy.types.Mesh):
     return coords.reshape(count, 3)
 
 
+def _setPreviewTypeRaw(geomMeshFile, identifier: str):
+    """ Set previewType without firing its update callback (which rebuilds the
+        preview mesh). The raw IDProperty behind an EnumProperty is its INT value -
+        assigning the identifier string fails on scenes where the property was
+        ever changed ("Cannot assign a 'str' value to the existing Int IDProperty").
+    """
+    enumValue = geomMeshFile.bl_rna.properties['previewType'].enum_items[identifier].value
+    geomMeshFile['previewType'] = enumValue
+
+
 def upgradeProxy(obj: bpy.types.Object):
     from mathutils import Matrix
     import vray_blender.vray_tools.vray_proxy as proxy
@@ -154,10 +165,10 @@ def upgradeProxy(obj: bpy.types.Object):
         debug.reportError(f"Failed to upgrade V-Ray Proxy {obj.name}. Mesh file '{absFilePath}' is missing.")
         return _ERROR_FILE_MISSING
     
-    # Regardless of whether this is a point preview, we need to compute the anchor transform 
+    # Regardless of whether this is a point preview, we need to compute the anchor transform
     # from an actual mesh
     originalPreviewType = geomMeshFile.previewType
-    geomMeshFile['previewType'] = 'Preview'
+    _setPreviewTypeRaw(geomMeshFile, 'Preview')
     meshData, boxVertices, err = proxy._constructPreview(geomMeshFile, absFilePath, isProxy=True)
     if err:
         return _ERROR_IMPORT_FAILED
@@ -173,7 +184,7 @@ def upgradeProxy(obj: bpy.types.Object):
     geomMeshFileScale = Matrix.Scale(geomMeshFile.scale, 4)
     geomMeshFile['basis_matrix'] = mat4x4ToTuple(geomMeshFileScale @ basisMatrix)
     geomMeshFile['basis_vertex_indices'] = pointIndices
-    geomMeshFile['previewType'] = originalPreviewType
+    _setPreviewTypeRaw(geomMeshFile, originalPreviewType)
 
     if len(addedVertices) > 0:
         # If any anchor vertices were added, set them to the mesh
@@ -200,7 +211,7 @@ def upgradeProxy(obj: bpy.types.Object):
 def run():
     
     missingFiles = False
-    for obj in bpy.data.objects:
+    for obj in scopedForUpgrade(bpy.data.objects):
         if isObjectVrayProxy(obj):
             try:
                 if err := upgradeProxy(obj):
@@ -215,13 +226,17 @@ def run():
         msg = ( "Scene update failed for one or more V-Ray Proxy Objects\n"
                 "because their mesh files are missing. Download all missing\n"
                 "Comsos assets and then reload the scene to retry the update.")
-        
-        bpy.utils.register_class(VRAY_OT_prompt_missing_files)
-        bpy.ops.vray.prompt_missing_files('INVOKE_DEFAULT', message=msg)
+
+        # On append/link the upgrade runs silently - log instead of popping a dialog.
+        if isImportScopeActive():
+            debug.reportError(msg.replace("\n", " "))
+        else:
+            bpy.utils.register_class(VRAY_OT_prompt_missing_files)
+            bpy.ops.vray.prompt_missing_files('INVOKE_DEFAULT', message=msg)
 
 
 def check():
-    return any(isObjectVrayProxy(obj) for obj in bpy.data.objects)
+    return any(isObjectVrayProxy(obj) for obj in scopedForUpgrade(bpy.data.objects))
 
 
 class VRAY_OT_prompt_missing_files(VRAY_OT_message_box_base):
@@ -253,3 +268,4 @@ class VRAY_OT_prompt_missing_files(VRAY_OT_message_box_base):
         lines = self.message.split('\n')
         for line in lines:
             box.label(text=line)
+        self._cursorWarp(context)

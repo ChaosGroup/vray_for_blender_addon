@@ -1,0 +1,34 @@
+
+{
+    "Description" : "GeomPerfectSphere",
+    "ID" : "GeomPerfectSphere",
+    "Name" : "Geom Perfect Sphere",
+    "Parameters" : 
+    [
+        
+        {
+            "attr" : "radius",
+            "default" : 1.0,
+            "desc" : "The radius of the sphere in object space",
+            "type" : "FLOAT",
+            "ui" : 
+            {
+                "min" : 0.0,
+                "quantityType" : "distance"
+            }
+        },
+        
+        {
+            "attr" : "flip_normals",
+            "default" : false,
+            "desc" : "Flips the normals of the sphere",
+            "type" : "BOOL",
+            "ui" : {}
+        }
+    ],
+    "Type" : "GEOMETRY",
+    "Widget" : 
+    {
+        "widgets" : []
+    }
+}

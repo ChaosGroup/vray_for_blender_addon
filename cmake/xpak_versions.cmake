@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-set(APPSDK_XPAK_VERSION "74000.20260713" )
+set(APPSDK_XPAK_VERSION "74005.20260910" )
 
 set(QT_XPAK "AppSDKQT6")
 if (WIN32)

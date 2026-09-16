@@ -235,9 +235,6 @@
                         }
                     },
                     {
-                        "name": "precision"
-                    },
-                    {
                         "name": "tight_bounds"
                     },
                     {
@@ -276,6 +273,14 @@
                                 "name": "max_subdivs"
                             }
                         ]
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "attrs": [
+                            {
+                                "name": "out_of_frustum_mult"
+                            }
+                        ]
                     }
                 ]
             }
@@ -286,7 +291,8 @@
         "animatable": false,
         "use_animation_layout": true,
         "excluded_parameters": [
-            "mesh"
+            "mesh",
+            "precision"
         ]
     }
 }

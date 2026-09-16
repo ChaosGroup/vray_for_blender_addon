@@ -1,0 +1,31 @@
+{
+    "ID": "TexBerconDistortion",
+    "Name": "V-Ray Bercon Distortion",
+    "Parameters": [
+        {
+            "attr": "uvwgen",
+            "type": "UVWGEN",
+            "ui": {
+                "display_name": "Mapping"
+            }
+        },
+        {
+            "attr": "map_source",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
+            "attr": "dist_map2",
+            "options": {
+                "linked_only": true
+            }
+        }
+    ]
+}

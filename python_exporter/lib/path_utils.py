@@ -21,8 +21,7 @@ from vray_blender.lib import sys_utils
 
 
 def getRootFolder():
-    import vray_blender
-    return os.path.dirname(vray_blender.__file__)
+    return sys_utils.getExporterPath()
 
 
 def getScenePath() -> str:

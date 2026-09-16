@@ -99,8 +99,8 @@
             "attr": "clouds_offset_x",
             "subtype": "DISTANCE",
             "ui": {
-                "soft_min": -10.0,
-                "soft_max": 10.0,
+                "soft_min": -1000.0,
+                "soft_max": 1000.0,
                 "spin_step": 10
             }
         },
@@ -108,8 +108,8 @@
             "attr": "clouds_offset_y",
             "subtype": "DISTANCE",
             "ui": {
-                "soft_min": -10.0,
-                "soft_max": 10.0,
+                "soft_min": -1000.0,
+                "soft_max": 1000.0,
                 "spin_step": 10
             }
         },
@@ -149,8 +149,8 @@
             "attr": "clouds_contrails_offset_x",
             "subtype": "DISTANCE",
             "ui": {
-                "soft_min": -10.0,
-                "soft_max": 10.0,
+                "soft_min": -1000.0,
+                "soft_max": 1000.0,
                 "spin_step": 0.1
             }
         },
@@ -158,8 +158,8 @@
             "attr": "clouds_contrails_offset_y",
             "subtype": "DISTANCE",
             "ui": {
-                "soft_min": -10.0,
-                "soft_max": 10.0,
+                "soft_min": -1000.0,
+                "soft_max": 1000.0,
                 "spin_step": 0.1
             }
         },

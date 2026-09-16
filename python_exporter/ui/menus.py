@@ -3,10 +3,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+import math
 import os
 from pathlib import PurePath
 
 from vray_blender import debug
+from vray_blender import features
+from vray_blender.features import Feature
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.lib import blender_utils, lib_utils
 from vray_blender.lib.path_utils import tryGetRelativePath
@@ -17,18 +20,29 @@ from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive
 from vray_blender.ui import classes, icons
 from vray_blender.menu import VRAY_OT_open_vfb
 from vray_blender.vray_tools import vray_proxy
-from vray_blender.exporting.tools import MESH_OBJECT_TYPES
+from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, MESH_OBJECT_TYPES
+from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTarget, UpdateTracker
 from vray_blender.plugins.geometry.VRayDecal import createDecalObject, generateDecalPreviewMesh
 from vray_blender.proxy import VRAY_SCENE_FILTER_GLOB, VRAY_PROXY_FILTER_GLOB
 
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.mixin import VRayOperatorBase
 
+# The camera operators below all act on the 3D viewport, so they should be greyed out
+# instead of throwing when invoked from another editor (e.g. through the F3 search).
+def _pollCameraOperator(cls, context: bpy.types.Context):
+    return classes.pollEngine(context) and context.space_data and context.space_data.type == 'VIEW_3D'
+
+
 class VRAY_OT_set_view(VRayOperatorBase):
     bl_idname = "vray.set_view"
     bl_label = "Set View"
 
     view_type: bpy.props.StringProperty(default='TOP')
+
+    @classmethod
+    def poll(cls, context):
+        return _pollCameraOperator(cls, context)
 
     def execute(self, context):
         bpy.ops.view3d.view_axis(type=self.view_type, align_active=False)
@@ -38,14 +52,21 @@ class VRAY_OT_set_view(VRayOperatorBase):
 class VRAY_OT_set_camera(VRayOperatorBase):
     bl_idname = "vray.set_camera"
     bl_label = "Set Active Camera"
+    bl_options = { "UNDO" }
 
     camera: bpy.props.StringProperty()
 
+    @classmethod
+    def poll(cls, context):
+        return _pollCameraOperator(cls, context)
+
     def execute(self, context):
-        if self.camera:
-            context.scene.camera = context.scene.objects[self.camera]
-            if context.area.spaces[0].region_3d.view_perspective not in {'CAMERA'}:
-                bpy.ops.view3d.view_camera()
+        if not (camera := context.scene.objects.get(self.camera)):
+            return {'CANCELLED'}
+
+        context.scene.camera = camera
+        if context.area.spaces[0].region_3d.view_perspective not in {'CAMERA'}:
+            bpy.ops.view3d.view_camera()
         return {'FINISHED'}
 
 
@@ -53,15 +74,25 @@ class VRAY_OT_select_camera(VRayOperatorBase):
     bl_idname = "vray.select_camera"
     bl_label = "Select Active Camera"
 
+    @classmethod
+    def poll(cls, context):
+        return _pollCameraOperator(cls, context)
+
     def execute(self, context):
-        if context.scene.camera:
-            bpy.ops.object.select_camera()
+        if not context.scene.camera:
+            return {'CANCELLED'}
+
+        bpy.ops.object.select_camera()
         return {'FINISHED'}
 
 
 class VRAY_OT_camera_lock_unlock_view(VRayOperatorBase):
     bl_idname = "vray.camera_lock_unlock_view"
     bl_label = "Lock / Unlock Camera To View"
+
+    @classmethod
+    def poll(cls, context):
+        return _pollCameraOperator(cls, context)
 
     def execute(self, context):
         context.space_data.lock_camera = not context.space_data.lock_camera
@@ -145,6 +176,48 @@ class VRAY_OT_add_object_vray_light_mesh(VRAY_OT_add_object_vray_light):
         super().__init__(*args, **kwargs)
         self.lightType = "MESH"
         self.lightName = "VRayLightMesh"
+
+
+class VRAY_OT_create_mesh_light(VRAY_OT_add_object_vray_light_mesh):
+    """ Create a mesh light for the selected geometry objects. Unlike the plain 'add light'
+        operator, it fills in the light's geometry selector with the current selection.
+    """
+    bl_idname = "vray.create_mesh_light"
+    bl_label = "Create Mesh Light"
+    bl_description = "Create a V-Ray Mesh Light from the selected geometry objects"
+
+    def execute(self, context):
+        # Any object V-Ray exports as geometry can light up a mesh light, not just meshes.
+        # This is also what the light's own geometry selector accepts (filters.filterGeometries).
+        geometryObjects = [obj for obj in context.selected_objects if obj.type in GEOMETRY_OBJECT_TYPES]
+
+        if not geometryObjects:
+            self.report({'WARNING'}, "No object selected, please select geometry to create a mesh light")
+            return {'CANCELLED'}
+
+        lightObject = self._createLightObject()
+        context.collection.objects.link(lightObject)
+
+        # The light has no node tree yet, so set the selection on the light data property group.
+        # It is copied to the node's property group when the tree is created (addLightNodeTree).
+        for obj in geometryObjects:
+            lightObject.data.vray.LightMesh.object_selector.addListItem(context, obj)
+
+        blender_utils.selectObject(lightObject)
+
+        return {'FINISHED'}
+
+
+class VRAY_OT_add_object_vray_light_luminaire(VRAY_OT_add_object_vray_light):
+    bl_idname = "vray.add_object_vray_light_luminaire"
+    bl_label = "V-Ray Luminaire Light"
+    bl_description = "V-Ray Luminaire Light. Emits the light of a whole fixture baked into a " \
+                     "luminaire cache file, as shipped with Chaos Cosmos light assets"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lightType = "LUMINAIRE"
+        self.lightName = "VRayLuminaireLight"
 
 
 class VRAY_OT_add_object_vray_light_omni(VRAY_OT_add_object_vray_light):
@@ -312,6 +385,9 @@ class VRAY_OT_add_object_vray_light_dome(VRAY_OT_add_object_vray_light):
 
 
 def getLightAddOperators():
+    """ Every V-Ray light, in V-Ray > Lights menu order; also what gets registered. The Add
+        (Shift+A) menu shows only the subset in getMenuLightAddOperators().
+    """
     return (
         VRAY_OT_add_object_vray_light_rect,
         VRAY_OT_add_object_vray_light_sphere,
@@ -324,13 +400,14 @@ def getLightAddOperators():
         VRAY_OT_add_object_vray_light_omni,
         VRAY_OT_add_object_vray_light_direct,
         VRAY_OT_add_object_vray_light_ambient,
+        VRAY_OT_add_object_vray_light_luminaire,
     )
 
 def addVRayLightsToMenu(self, context):
     """ Callback to add all V-Ray lights to a menu. To be used with Menu.append() """
 
     # List operators after which to draw a separator in the menu
-    separatorsAfter = [VRAY_OT_add_object_vray_sun_sky]
+    separatorsAfter  = [VRAY_OT_add_object_vray_sun_sky]
 
     # Forbid creation of lights in Edit mode (it can produce errors).
     classes.disableLayoutInEditMode(self.layout, context)
@@ -340,6 +417,278 @@ def addVRayLightsToMenu(self, context):
             self.layout.operator(op.bl_idname, text=op.bl_label, icon_value=icons.getUIIcon(op))
             if op in separatorsAfter:
                 self.layout.separator()
+
+
+####### LIGHT ADJUSTMENT FROM THE OBJECT CONTEXT MENU ##########
+################################################################
+
+# The 'Adjust ...' items shown for a V-Ray light in the object context menu, per light plugin
+# type: (attribute, label, input scale, proportional drag), with None standing for a separator.
+# Blender's own items drive native light properties (data.energy, data.shadow_soft_size,
+# data.angle, ...) which V-Ray does not read, so they are replaced by these (VBLD-2673). The
+# exception is the area light size, which V-Ray does read off the Blender light - see
+# light_export._setLightRectLightAttrs.
+#
+# The item order and grouping follow Blender's own for the same light: the power first, then
+# the size / radius, then the spot cone angles in a group of their own.
+#
+# The intensities use a proportional drag: their magnitude depends on the photometric unit, so
+# a single additive step is either unusably coarse (Default) or imperceptible (Lumens).
+_LIGHT_ADJUST_ATTRS = {
+    'LightAmbient'    : (('intensity',            "Light Intensity",            0.01, True),
+                         ('shadowRadius',         "Shadow Radius",              0.01, False)),
+    'LightDome'       : (('intensity',            "Light Intensity",            0.01, True),),
+    'LightIES'        : (('power',                "Light Power",                10.0, False),
+                         ('ies_light_diameter',   "Light Diameter",             0.01, False)),
+    'LightMesh'       : (('intensity',            "Light Intensity",            0.01, True),),
+    'LightOmni'       : (('intensity',            "Light Intensity",            0.01, True),
+                         ('shadowRadius',         "Shadow Radius",              0.01, False)),
+    'LightRectangle'  : (('intensity',            "Light Intensity",            0.01, True),),
+    'LightSphere'     : (('intensity',            "Light Intensity",            0.01, True),
+                         ('radius',               "Light Radius",               0.01, False)),
+    'LightSpot'       : (('intensity',            "Light Intensity",            0.01, True),
+                         ('shadowRadius',         "Shadow Radius",              0.01, False),
+                         None,
+                         ('coneAngle',            "Spot Light Beam Angle",      0.01, False),
+                         ('penumbraAngle',        "Spot Light Penumbra Angle",  0.01, False)),
+    'MayaLightDirect' : (('intensity',            "Light Intensity",            0.01, True),
+                         ('beamRadius',           "Beam Radius",                0.01, False),
+                         ('shadowRadius',         "Shadow Radius",              0.01, False)),
+    'SunLight'        : (('intensity_multiplier', "Light Intensity",            0.01, True),
+                         ('size_multiplier',      "Sun Light Size",             0.01, False)),
+}
+
+
+class VRAY_OT_adjust_light_prop(VRayOperatorBase):
+    """ Adjust a V-Ray light property with a mouse drag.
+
+        Modelled on wm.context_modal_mouse, but the property is resolved per light through
+        getLightPropGroup() instead of a fixed RNA path, so it reaches the values that are
+        actually exported for both node and non-node lights.
+    """
+    bl_idname  = "vray.adjust_light_prop"
+    bl_label   = "Adjust V-Ray Light Property"
+    bl_options = {'GRAB_CURSOR', 'BLOCKING', 'UNDO', 'INTERNAL'}
+
+    attr_name:   bpy.props.StringProperty(options={'SKIP_SAVE'})
+    prop_label:  bpy.props.StringProperty(options={'SKIP_SAVE'})
+    input_scale: bpy.props.FloatProperty(default=0.01, options={'SKIP_SAVE'})
+    relative:    bpy.props.BoolProperty(default=False, options={'SKIP_SAVE'})
+    initial_x:   bpy.props.IntProperty(options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        self._targets = []
+
+        for obj in context.selected_editable_objects:
+            if (obj.type != 'LIGHT') or not hasattr(obj.data, 'vray'):
+                continue
+
+            propGroup = lib_utils.getLightPropGroup(obj.data, lib_utils.getLightPluginType(obj.data))
+            if (value := getattr(propGroup, self.attr_name, None)) is None:
+                continue
+
+            self._targets.append((obj, propGroup, value))
+
+        if not self._targets:
+            self.report({'WARNING'}, f"No selected V-Ray light has a '{self.attr_name}' property")
+            return {'CANCELLED'}
+
+        # Angles are stored in radians but shown in degrees, both in the property pages
+        # and in the header text below.
+        self._isAngle = self._targets[0][1].bl_rna.properties[self.attr_name].subtype == 'ANGLE'
+
+        self.initial_x = event.mouse_x
+        self._prevX = event.mouse_x
+        self._precisionOffset = 0.0
+
+        context.window_manager.modal_handler_add(self)
+        return {'RUNNING_MODAL'}
+
+    def modal(self, context, event):
+        # Factor for SHIFT precision tweaking, matching wm.context_modal_mouse.
+        PRECISION_FAC = 0.05
+
+        match event.type:
+            case 'MOUSEMOVE':
+                if event.shift:
+                    self._precisionOffset += event.mouse_x - self._prevX
+                self._prevX = event.mouse_x
+
+                offset = (event.mouse_x - self.initial_x) - self._precisionOffset * (1.0 - PRECISION_FAC)
+                delta = offset * self.input_scale
+
+                self._applyDelta(delta)
+                self._setHeaderText(context, delta)
+
+            case 'LEFTMOUSE':
+                context.area.header_text_set(None)
+                return {'FINISHED'}
+
+            case 'RIGHTMOUSE' | 'ESC':
+                self._applyDelta(0.0)
+                context.area.header_text_set(None)
+                return {'CANCELLED'}
+
+        return {'RUNNING_MODAL'}
+
+    def _applyDelta(self, delta: float):
+        for obj, propGroup, valueOrig in self._targets:
+            if self.relative and (valueOrig != 0.0):
+                # Proportional drag, in stops: an input scale of 0.01 doubles the value
+                # over 100 pixels regardless of the unit it is expressed in. A zero start
+                # value has no proportion to scale, so it falls back to the additive drag.
+                value = valueOrig * (2.0 ** delta)
+            else:
+                value = valueOrig + delta
+
+            setattr(propGroup, self.attr_name, value)
+
+            # The property's own update callback only tags the active object, so tag every
+            # light we touch or the rest of a multi-selection is not re-exported during IPR.
+            UpdateTracker.tagUpdate(obj.data, UpdateTarget.LIGHT, UpdateFlags.DATA)
+            obj.update_tag()
+
+    def _setHeaderText(self, context, delta: float):
+        if len(self._targets) > 1:
+            context.area.header_text_set(f"{self.prop_label}: {delta:.3f} (delta)")
+            return
+
+        value = getattr(self._targets[0][1], self.attr_name)
+
+        if self._isAngle:
+            context.area.header_text_set(f"{self.prop_label}: {math.degrees(value):.2f} deg")
+        else:
+            context.area.header_text_set(f"{self.prop_label}: {value:.3f}")
+
+
+def _drawNativeLightAdjustItem(layout: bpy.types.UILayout, label: str, dataPath: str):
+    """ Draw a stock 'Adjust ...' item driving a native Blender light property. """
+    props = layout.operator("wm.context_modal_mouse", text=f"Adjust {label}")
+    props.data_path_iter = "selected_editable_objects"
+    props.data_path_item = dataPath
+    props.header_text = f"{label}: %.3f"
+
+
+def _drawLightAdjustItems(layout: bpy.types.UILayout, light: bpy.types.Light):
+    """ Draw the 'Adjust ...' items for a V-Ray light, in place of Blender's own. """
+    pluginType = lib_utils.getLightPluginType(light)
+    propGroup  = lib_utils.getLightPropGroup(light, pluginType)
+
+    for item in _LIGHT_ADJUST_ATTRS.get(pluginType, ()):
+        if item is None:
+            layout.separator()
+            continue
+
+        attrName, label, inputScale, relative = item
+        if attrName not in propGroup.bl_rna.properties:
+            continue
+
+        props = layout.operator(VRAY_OT_adjust_light_prop.bl_idname, text=f"Adjust {label}")
+        props.attr_name   = attrName
+        props.prop_label  = label
+        props.input_scale = inputScale
+        props.relative    = relative
+
+    if light.type == 'AREA':
+        # A disc light has a single dimension, the other one is derived from it
+        # (see light_export._fixBlenderRectLight and LightRectangle.onUpdateWidth).
+        if light.shape in ('SQUARE', 'DISK') or getattr(propGroup, 'is_disc', False):
+            _drawNativeLightAdjustItem(layout, "Area Light Size", "data.size")
+        else:
+            _drawNativeLightAdjustItem(layout, "Area Light X Size", "data.size")
+            _drawNativeLightAdjustItem(layout, "Area Light Y Size", "data.size_y")
+
+    # Divider from the rest of the menu. Blender's own is dropped together with the items
+    # it grouped, see _ObjectContextMenuLayout.
+    layout.separator()
+
+
+class _DiscardedOperatorProps:
+    """ Stand-in for the properties object returned by UILayout.operator(), for the menu
+        items dropped by _ObjectContextMenuLayout. It absorbs the caller's assignments.
+    """
+    def __setattr__(self, name, value):
+        pass
+
+
+class _ObjectContextMenuLayout:
+    """ Wraps UILayout to replace the native light 'Adjust ...' items of the object context
+        menu with the V-Ray ones: the first native item is swapped for the whole V-Ray set
+        and the rest are dropped, along with the separators that grouped them - those would
+        otherwise all pile up after the replacement. _drawLightAdjustItems draws its own.
+    """
+
+    def __init__(self, real, light):
+        object.__setattr__(self, "_real", real)
+        object.__setattr__(self, "_light", light)
+        object.__setattr__(self, "_inLightSection", False)
+
+    def operator(self, idname, *args, **kwargs):
+        if idname == "wm.context_modal_mouse":
+            if not self._inLightSection:
+                object.__setattr__(self, "_inLightSection", True)
+                _drawLightAdjustItems(self._real, self._light)
+
+            return _DiscardedOperatorProps()
+
+        # The light section holds nothing but the adjust items, so any other operator marks
+        # its end. From there on the separators belong to the rest of the menu.
+        object.__setattr__(self, "_inLightSection", False)
+        return self._real.operator(idname, *args, **kwargs)
+
+    def separator(self, *args, **kwargs):
+        if not self._inLightSection:
+            self._real.separator(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+    def __setattr__(self, name, value):
+        # Forward attribute writes (e.g. operator_context) to the wrapped layout.
+        setattr(self._real, name, value)
+
+
+_originalObjectContextMenuDraw = None
+
+
+def _patchedObjectContextMenuDraw(self, context):
+    obj = context.object
+
+    if classes.pollEngine(context) and obj and (obj.type == 'LIGHT') and hasattr(obj.data, 'vray'):
+        layout = _ObjectContextMenuLayout(self.layout, obj.data)
+        _originalObjectContextMenuDraw(_MenuWithLayout(self, layout), context)
+    else:
+        _originalObjectContextMenuDraw(self, context)
+
+
+def register_object_context_menu_draw():
+    """ Substitute the patched draw function for Blender's own in the object context menu.
+
+        The substitution is made in the menu's list of draw functions rather than by assigning
+        to VIEW3D_MT_object_context_menu.draw, so that it composes with the prepend() call in
+        menu.py and with any append() made by another add-on: assigning to 'draw' would discard
+        the dispatcher Blender installs for those, and with it their menu items.
+    """
+    global _originalObjectContextMenuDraw
+
+    menu = bpy.types.VIEW3D_MT_object_context_menu
+    drawFuncs = menu._dyn_ui_initialize()
+
+    # Blender's own draw is the one defined alongside the menu class. It is not necessarily
+    # the first entry in the list - a prepend() inserts ahead of it.
+    index = next(i for i, f in enumerate(drawFuncs) if f.__module__ == menu.__module__)
+
+    _originalObjectContextMenuDraw = drawFuncs[index]
+    drawFuncs[index] = _patchedObjectContextMenuDraw
+
+
+def unregister_object_context_menu_draw():
+    global _originalObjectContextMenuDraw
+
+    if _originalObjectContextMenuDraw is not None:
+        drawFuncs = bpy.types.VIEW3D_MT_object_context_menu._dyn_ui_initialize()
+        drawFuncs[drawFuncs.index(_patchedObjectContextMenuDraw)] = _originalObjectContextMenuDraw
+        _originalObjectContextMenuDraw = None
 
 
 ####### OPERATORS FOR CAMERA CREATION #########
@@ -568,6 +917,49 @@ class VRAY_OT_add_object_splat(VRayOperatorBase):
         return {'FINISHED'}
 
 
+class VRAY_OT_add_object_infinite_plane(VRayOperatorBase):
+    """ Add a V-Ray Infinite Plane object: an Empty that renders as an infinite plane. """
+
+    bl_idname = "vray.add_object_infinite_plane"
+    bl_label = "Add V-Ray Infinite Plane"
+    bl_description = "Add a V-Ray infinite plane object"
+    bl_options = { 'UNDO' }
+
+    def execute(self, context):
+        obj = bpy.data.objects.new("V-Ray Infinite Plane", None)
+        obj.vray.isVRayInfinitePlane = True
+        # The plane spans the object's XY plane, so its only visual cue is the +Z normal. Size it
+        # like the other integrations' plane gizmos (V-Ray for Houdini defaults to 2.0) - at the
+        # Empty's default of 1.0 the arrow is easy to miss.
+        obj.empty_display_type = 'SINGLE_ARROW'
+        obj.empty_display_size = 2.0
+        obj.location = context.scene.cursor.location
+        context.collection.objects.link(obj)
+
+        blender_utils.selectObject(obj)
+        return {'FINISHED'}
+
+
+class VRAY_OT_add_object_perfect_sphere(VRayOperatorBase):
+    """ Add a V-Ray Perfect Sphere object: an Empty that renders as an analytic sphere. """
+
+    bl_idname = "vray.add_object_perfect_sphere"
+    bl_label = "Add V-Ray Perfect Sphere"
+    bl_description = "Add a V-Ray perfect sphere object"
+    bl_options = { 'UNDO' }
+
+    def execute(self, context):
+        obj = bpy.data.objects.new("V-Ray Perfect Sphere", None)
+        obj.vray.isVRayPerfectSphere = True
+        obj.empty_display_type = 'SPHERE'
+        obj.empty_display_size = obj.vray.GeomPerfectSphere.radius
+        obj.location = context.scene.cursor.location
+        context.collection.objects.link(obj)
+
+        blender_utils.selectObject(obj)
+        return {'FINISHED'}
+
+
 def getMenuLightAddOperators():
     """ The V-Ray lights shown in the Add (Shift+A) menu, in display order. """
     return (
@@ -579,6 +971,15 @@ def getMenuLightAddOperators():
         VRAY_OT_add_object_vray_light_sun,
         VRAY_OT_add_object_vray_sun_sky,
     )
+
+
+def addChaosScatterToMenu(layout: bpy.types.UILayout):
+    """ Draw the Chaos Scatter add command. Chaos Scatter is a separate add-on which the user may
+        have turned off; its operator is then not registered and drawing it would raise, so key
+        off the property group it installs on Object.
+    """
+    if hasattr(bpy.types.Object, 'chaos_scatter'):
+        layout.operator('chaos_scatter.add', text="Chaos Scatter", icon_value=icons.getIcon('CHAOS_SCATTER'))
 
 
 class VRAY_MT_add(bpy.types.Menu):
@@ -617,10 +1018,12 @@ class VRAY_MT_add(bpy.types.Menu):
         vraySceneLayout.operator(VRAY_OT_add_object_vrayscene.bl_idname, text="V-Ray Scene", icon_value=icons.getUIIcon(VRAY_OT_add_object_vrayscene))
 
         layout.operator(VRAY_OT_add_object_proxy.bl_idname, text="V-Ray Proxy", icon_value=icons.getUIIcon(VRAY_OT_add_object_proxy))
-        # Still not ready for production
-        # layout.operator(VRAY_OT_add_object_splat.bl_idname, text="V-Ray Gaussians", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
+        if features.isEnabled(Feature.GAUSSIAN_SPLATS):
+            layout.operator(VRAY_OT_add_object_splat.bl_idname, text="V-Ray Gaussians", icon_value=icons.getUIIcon(VRAY_OT_add_object_splat))
         layout.operator(VRAY_OT_add_object_fur.bl_idname, text="V-Ray Fur", icon_value=icons.getUIIcon(VRAY_OT_add_object_fur))
         layout.operator(VRAY_OT_add_object_decal.bl_idname, text="V-Ray Decal", icon_value=icons.getUIIcon(VRAY_OT_add_object_decal))
+        layout.operator(VRAY_OT_add_object_infinite_plane.bl_idname, text="V-Ray Infinite Plane", icon_value=icons.getUIIcon(VRAY_OT_add_object_infinite_plane))
+        addChaosScatterToMenu(layout)
 
 
 class _AddMenuLayout:
@@ -643,8 +1046,8 @@ class _AddMenuLayout:
         setattr(self._real, name, value)
 
 
-class _AddMenu:
-    """Wraps a Menu instance to substitute self.layout with an _AddMenuLayout."""
+class _MenuWithLayout:
+    """Wraps a Menu instance to substitute self.layout with a wrapped layout."""
 
     def __init__(self, realSelf, layout):
         self._real = realSelf
@@ -658,7 +1061,7 @@ _originalAddMenuDraw = None
 
 
 def _patchedAddMenuDraw(self, context):
-    _originalAddMenuDraw(_AddMenu(self, _AddMenuLayout(self.layout)), context)
+    _originalAddMenuDraw(_MenuWithLayout(self, _AddMenuLayout(self.layout)), context)
 
 
 def register_add_menu_draw():
@@ -692,7 +1095,8 @@ def topbar_render_draw(self, context):
     if classes.pollEngine(context):
         layout = self.layout
         layout.enabled = vray.isInitialized()
-        layout.operator(VRAY_OT_render.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render))
+        layout.operator(VRAY_OT_render.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render)).forceMode = 'FRAME'
+        layout.operator(VRAY_OT_render.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render), text="Render Animation").forceMode = 'ANIMATION'
         layout.operator(VRAY_OT_render_interactive.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render_interactive))
         layout.separator()
         layout.operator(VRAY_OT_open_vfb.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_open_vfb))
@@ -716,28 +1120,43 @@ def getRegClasses():
         VRAY_OT_set_view,
         VRAY_OT_add_object_vrayscene,
         VRAY_OT_add_object_proxy,
-        # Still not ready for production
-        # VRAY_OT_add_object_splat,
+        VRAY_OT_add_object_splat,
         VRAY_OT_add_object_fur,
         VRAY_OT_add_object_decal,
+        VRAY_OT_add_object_infinite_plane,
+        VRAY_OT_add_object_perfect_sphere,
         VRAY_OT_select_camera,
         VRAY_OT_camera_lock_unlock_view,
         VRAY_MT_add,
-        VRAY_OT_add_physical_camera
+        VRAY_OT_add_physical_camera,
+        VRAY_OT_adjust_light_prop,
+        VRAY_OT_create_mesh_light
     ) + getLightAddOperators()
+
+
+# Classes registered only when their feature flag is enabled.
+_GATED_CLASSES = {
+    VRAY_OT_add_object_splat: Feature.GAUSSIAN_SPLATS,
+}
 
 
 def register():
     for regClass in getRegClasses():
+        if regClass in _GATED_CLASSES and not features.isEnabled(_GATED_CLASSES[regClass]):
+            continue
         bpy.utils.register_class(regClass)
 
     register_add_menu_draw()
+    register_object_context_menu_draw()
     register_topbar_render_draw()
 
 
 def unregister():
     for regClass in getRegClasses():
+        if regClass in _GATED_CLASSES and not features.isEnabled(_GATED_CLASSES[regClass]):
+            continue
         bpy.utils.unregister_class(regClass)
 
     unregister_add_menu_draw()
+    unregister_object_context_menu_draw()
     unregister_topbar_render_draw()

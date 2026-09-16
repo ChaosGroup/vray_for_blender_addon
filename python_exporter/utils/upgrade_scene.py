@@ -14,6 +14,102 @@ _DEBUG_OUTPUT = True         # Turn debug logs on and enable lowest verbosity le
 _DEBUG_LEVEL_VERBOSE = False # Enable verbose log level
 
 
+# ----------------------------------------------------------------------------
+# Upgrade scope + per-datablock version gate
+#
+# A "scope" restricts which datablocks an upgrade run touches, and supplies the
+# version assumed for datablocks that were never stamped. Two callers:
+#   - Full file load: no scope (all datablocks), default version = the scene number.
+#     The orchestrator only runs scripts in (sceneNumber, addonNumber], so the gate
+#     is always-true and behaviour is identical to the pre-per-datablock code.
+#   - Append/link: scope = the imported datablocks (by session_uid), default version
+#     = 0 (oldest), so the whole chain is (re)evaluated per imported item.
+# The orchestrator calls setCurrentScriptNum() before each script's check()/run(),
+# so scripts gate their datablock iterations through scopedForUpgrade().
+# ----------------------------------------------------------------------------
+
+# session_uid set of in-scope datablocks, or None meaning "all datablocks".
+_scopeUids = None
+# Version assumed for a datablock that has never been stamped.
+_scopeDefaultVersion = 0
+# The upgrade script number currently being run (set by the orchestrator).
+_currentScriptNum = 0
+
+
+class UpgradeScope:
+    """ Context manager activating an append/link upgrade scope for its duration. """
+    def __init__(self, uids, defaultVersion: int):
+        self._uids = uids
+        self._defaultVersion = defaultVersion
+
+    def __enter__(self):
+        beginScope(self._uids, self._defaultVersion)
+        return self
+
+    def __exit__(self, *args):
+        endScope()
+
+
+def beginScope(uids, defaultVersion: int):
+    global _scopeUids, _scopeDefaultVersion
+    _scopeUids = uids
+    _scopeDefaultVersion = defaultVersion
+
+
+def endScope():
+    global _scopeUids, _scopeDefaultVersion, _currentScriptNum
+    _scopeUids = None
+    _scopeDefaultVersion = 0
+    _currentScriptNum = 0
+
+
+def isImportScopeActive() -> bool:
+    """ True while an append/link scope is active (i.e. not a full-file upgrade). """
+    return _scopeUids is not None
+
+
+def setCurrentScriptNum(scriptNum: int):
+    global _currentScriptNum
+    _currentScriptNum = scriptNum
+
+
+def scoped(collection):
+    """ Yield only the in-scope datablocks of `collection` (all of them when no
+        scope is active). """
+    if _scopeUids is None:
+        yield from collection
+    else:
+        for db in collection:
+            if db.session_uid in _scopeUids:
+                yield db
+
+
+def scopedForUpgrade(collection):
+    """ Yield in-scope datablocks of `collection` that have not yet had the current
+        upgrade script applied. Upgrade scripts iterate this instead of
+        `bpy.data.<collection>` directly. Datablocks without a V-Ray version field
+        (e.g. geometry node trees in bpy.data.node_groups) are skipped. """
+    from vray_blender.version import getDatablockUpgradeNumber
+    for db in scoped(collection):
+        vrayProps = getattr(db, 'vray', None)
+        if vrayProps is None or not hasattr(vrayProps, 'upgradeNumber'):
+            continue
+        if getDatablockUpgradeNumber(db, _scopeDefaultVersion) < _currentScriptNum:
+            yield db
+
+
+def stampScopedDatablocks(toNum: int):
+    """ Mark every in-scope V-Ray datablock as upgraded through `toNum`. Called once
+        at the end of an append/link upgrade so imported data carries its version. """
+    from vray_blender.version import setDatablockUpgradeNumber
+    for collection in (bpy.data.materials, bpy.data.objects, bpy.data.lights,
+                       bpy.data.worlds, bpy.data.cameras, bpy.data.node_groups):
+        for db in scoped(collection):
+            vrayProps = getattr(db, 'vray', None)
+            if vrayProps is not None and hasattr(vrayProps, 'upgradeNumber'):
+                setDatablockUpgradeNumber(db, toNum)
+
+
 @dataclass
 class UpgradeContext:
     """ Context data about the current upgrade. """
@@ -326,7 +422,7 @@ def upgradeScene(upgradeInfo: dict):
 
 
     logVerboseMsg("Updating scene materials ...")
-    for material in bpy.data.materials:
+    for material in scopedForUpgrade(bpy.data.materials):
         if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):
             logVerboseMsg(f"Updating material '{material.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = material.node_tree,
@@ -336,7 +432,7 @@ def upgradeScene(upgradeInfo: dict):
 
 
     logVerboseMsg("Updating scene lights ...")
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         if _hasUpgradeableNodes(light, upgradeInfo):
             logVerboseMsg(f"Updating light '{light.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = light.node_tree,
@@ -346,7 +442,7 @@ def upgradeScene(upgradeInfo: dict):
 
 
     logVerboseMsg("Updating scene worlds ...")
-    for world in bpy.data.worlds:
+    for world in scopedForUpgrade(bpy.data.worlds):
         if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world, upgradeInfo):
             logVerboseMsg(f"Updating world '{world.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = world.node_tree,
@@ -355,7 +451,7 @@ def upgradeScene(upgradeInfo: dict):
                                             nodesUpgradeInfo  = upgradeInfo['nodes']))
 
     logVerboseMsg("Updating scene object node trees ...")
-    for group in bpy.data.node_groups:
+    for group in scopedForUpgrade(bpy.data.node_groups):
         if hasattr(group, 'vray') and (group.vray.tree_type == 'OBJECT') and _hasUpgradeableNodes(group, upgradeInfo):
             logVerboseMsg(f"Updating object node tree '{group.name}'")
             _upgradeNodeTree(UpgradeContext(nodeTree     = group,
@@ -367,20 +463,20 @@ def upgradeScene(upgradeInfo: dict):
 
 
 def sceneNeedsUpgrade(upgradeInfo: dict):
-    """ Return True if the scene contains data that need to be upgraded. """
-    for material in bpy.data.materials:
+    """ Return True if the (in-scope) data contains node trees that need upgrading. """
+    for material in scopedForUpgrade(bpy.data.materials):
         if material.use_nodes and _hasUpgradeableNodes(material, upgradeInfo):
             return True
 
-    for light in bpy.data.lights:
+    for light in scopedForUpgrade(bpy.data.lights):
         if _hasUpgradeableNodes(light, upgradeInfo):
             return True
 
-    for world in bpy.data.worlds:
+    for world in scopedForUpgrade(bpy.data.worlds):
         if getattr(world, 'use_nodes', False) and _hasUpgradeableNodes(world, upgradeInfo):
            return True
 
-    for group in bpy.data.node_groups:
+    for group in scopedForUpgrade(bpy.data.node_groups):
         if hasattr(group, 'vray') and _hasUpgradeableNodes(group, upgradeInfo):
             return True
     return False

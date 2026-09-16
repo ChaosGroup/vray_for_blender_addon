@@ -271,6 +271,15 @@ struct PointCloudData
 using PointCloudDataPtr = std::shared_ptr<PointCloudData>;
 
 
+/// Payload type of one per-instance user attribute column.
+/// Mirrors the KIND_* constants in python_exporter/exporting/instance_attrs.py.
+enum class InstancerUserAttrKind : int
+{
+	Int   = 0,  ///< int ndarray (N,)
+	Float = 1,  ///< float ndarray (N,)
+	Color = 2,  ///< float ndarray (N,3), exported as a vector list
+};
+
 struct InstancerData
 {
 	explicit InstancerData(nb::object obj);
@@ -281,6 +290,7 @@ struct InstancerData
 	nb::object   tms;       // ndarray<float32, (N,12)> — transforms in AttrTransform layout
 	nb::object   meshes;    // list[str] — unique mesh plugin names
 	nb::object   indices;   // ndarray<int32, (N,)> — per-instance mesh index
+	nb::object   userAttrs; // list[tuple[str, InstancerUserAttrKind, ndarray]] — per-instance user attributes
 	nb::object   ref;
 };
 
@@ -343,8 +353,19 @@ struct CosmosAssetSettings
 	PROPERTY(std::string, matFile, "")
 	PROPERTY(std::string, objFile, "")
 	PROPERTY(std::string, lightFile, "")
+	// See MsgControlOnImportAsset::luminaireFile.
+	PROPERTY(std::string, luminaireFile, "")
+	// The settings.json manifest of a Chaos Cosmos Asset Set. Set only for assetType
+	// "AssetSet", which has no other file - the addon parses it and imports the members.
+	PROPERTY(std::string, settingsFile, "")
+	// Non-empty only for a member of an Asset Set: the token the addon passed to
+	// vray.importCosmosAsset() for this member, echoed back so it can be matched to the
+	// manifest instance and placed at its authored transform.
+	PROPERTY(std::string, setInstanceToken, "")
 	PROPERTY(std::string, packageId, "")
 	PROPERTY(int, revisionId, 0)
+	// The asset's name in the Cosmos browser. Empty falls back to naming by plugin / file name.
+	PROPERTY(std::string, assetName, "")
 	PROPERTY(nb::dict, locationsMap, nb::dict())
 	PROPERTY(bool, isAnimated, false)
 	// Plane dimensions in centimeters for ParallaxInterior assets; zero otherwise.
@@ -357,6 +378,55 @@ struct CosmosAssetSettings
 	// the triplanar size; zero when unknown.
 	PROPERTY(float, texRealWorldWidth, 0.0f)
 	PROPERTY(float, texRealWorldHeight, 0.0f)
+	// Set when the asset was imported via drag-and-drop; worldX/Y/Z is the
+	// world-space placement computed by the drop operator via raycast. When
+	// hasDropCoords is false Python should fall back to default placement
+	// (scene 3D cursor / origin).
+	PROPERTY(bool, hasDropCoords, false)
+	PROPERTY(double, worldX, 0.0)
+	PROPERTY(double, worldY, 0.0)
+	PROPERTY(double, worldZ, 0.0)
+	// Name of the Blender scene object the drop ray hit (empty on miss or
+	// for non-drop imports). Consumed by the addon to assign dropped
+	// Material assets to the hovered object.
+	PROPERTY(std::string, dropTargetObject, "")
+	// Specific material-slot index for Material drops, or -1 for "use the
+	// default policy" (clear and append to slot 0). Set from the hit
+	// face's material_index for viewport drops, or from
+	// active_material_index for Outliner drops.
+	PROPERTY(int, dropTargetSlot, -1)
+	// Surface normal at the drop hit point in world space. Valid only when
+	// hasHitNormal is true (the drop ray hit actual geometry). Used on the
+	// Python side to orient Decals so they project INTO the hit surface.
+	PROPERTY(bool, hasHitNormal, false)
+	PROPERTY(double, normalX, 0.0)
+	PROPERTY(double, normalY, 0.0)
+	PROPERTY(double, normalZ, 0.0)
+	// Cosmos surface-attachment tag for this asset. "wall" / "ceiling" /
+	// "" (no special handling). When the drop ray hit a surface and this
+	// is non-empty the Python side pre-rotates the imported VRMesh so the
+	// tagged side ends up facing the drop surface (matches the 3dsmax
+	// VMAX-12393 behavior).
+	PROPERTY(std::string, surfaceAttachment, "")
+	// Set when Ctrl was held during the drop. Asks the Python side to
+	// align an arbitrary asset's local +Z to the hit surface normal -
+	// the user-driven override for assets that wouldn't otherwise be
+	// re-oriented.
+	PROPERTY(bool, forceNormalAlign, false)
+};
+
+/// Final status of a .vrscene import session, passed to the import finished callback.
+struct VrsceneImportResult
+{
+	// Mirrors VrayZmqWrapper::ImportStatus: 0 Ok, 1 ParseError, 2 Cancelled, 3 InternalError.
+	PROPERTY(int, status, 0)
+	PROPERTY(std::string, errorText, "")
+	PROPERTY(std::string, errorFile, "")
+	PROPERTY(int, errorLine, 0)
+	PROPERTY(int, pluginCount, 0)
+	PROPERTY(int, paramCount, 0)
+	// Directory of the imported .vrscene, for client-side relative path resolution.
+	PROPERTY(std::string, sceneBaseDir, "")
 };
 
 } // VRayForBlender::Interop

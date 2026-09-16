@@ -6,10 +6,14 @@
 import bpy
 
 from vray_blender.ui      import classes
+from vray_blender.ui      import node_nav
+from vray_blender.ui      import node_slots
 from vray_blender.ui      import ui_operators
+from vray_blender.lib     import draw_utils
 from vray_blender.lib     import lib_utils
+from vray_blender.nodes   import navigation as NodesNav
 from vray_blender.nodes   import utils as NodesUtils
-from vray_blender.plugins import VRayLight, getPluginModule
+from vray_blender.plugins import PLUGINS, VRayLight, getPluginModule
 from vray_blender.plugins.templates.common import VRayObjectSelector
 
 
@@ -57,10 +61,6 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
             # No light is selected, show the pinned light
             layout.template_ID(context.space_data, "pin_id")
 
-        headerRow = layout.row(align=True)
-        headerRow.label(text=lightPluginModule.NAME)
-        ui_operators.drawPropertyPageButtons(headerRow, context, 'LIGHT')
-
         # The property values are stored in different places for light with node trees and such without
         outputNode = None
         lightPropGroup = None
@@ -70,10 +70,33 @@ class VRAY_PT_context_lamp(classes.VRayLampPanel):
         else:
             lightPropGroup = getattr(vrayLight, lightPluginType)
 
+        # The panel follows the tree's selection, so a texture entered from one of the light's slot
+        # rows shows its own parameters here - the same rule the Material and World tabs use. Without
+        # this the panel was pinned to outputNode and 'enter the texture' appeared to do nothing.
+        activeNode = NodesNav.getPanelNode(light.node_tree, 'LIGHT') if outputNode else None
+
+        headerRow = layout.row(align=True)
+        headerRow.label(text=activeNode.bl_label if (activeNode and activeNode != outputNode) else lightPluginModule.NAME)
+        ui_operators.drawPropertyPageButtons(headerRow, context, 'LIGHT')
 
         if lightPropGroup:
             layout.separator()
-            classes.drawPluginUI(context, layout, lightPropGroup, lightPluginModule, outputNode)
+            # A node-mode light drives its colour through a socket on outputNode, so it gets the
+            # texture picker. A light without a node tree has no sockets and simply draws as before.
+            slotContext = node_slots.makeSlotContext(context, light, light.node_tree) if outputNode else None
+
+            if slotContext is not None:
+                navCol = layout.column(align=True)
+                navCol.use_property_split = False
+                node_nav.drawNavigation(navCol, context, slotContext.ownerType, slotContext.ownerName,
+                                        light.node_tree, 'LIGHT', activeNode)
+                layout.separator()
+
+            with draw_utils.slotEditing(slotContext):
+                if (activeNode is None) or (activeNode == outputNode):
+                    classes.drawPluginUI(context, layout, lightPropGroup, lightPluginModule, outputNode)
+                else:
+                    classes.drawActiveNodePanel(context, layout, activeNode, PLUGINS)
 
 
 

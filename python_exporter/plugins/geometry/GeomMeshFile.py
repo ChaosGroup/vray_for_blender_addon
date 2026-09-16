@@ -9,7 +9,7 @@ from vray_blender import debug
 from vray_blender.lib import plugin_utils, export_utils
 from vray_blender.lib.blender_utils import getShadowAttr
 from vray_blender.lib.defs import PluginDesc
-from vray_blender.vray_tools.vray_proxy import isAlembicFile, loadVRayProxyPreviewMesh
+from vray_blender.vray_tools.vray_proxy import isAlembicFile, loadVRayProxyPreviewMesh, applyProxyPreviewTransform
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -32,7 +32,13 @@ def onUpdatePreviewFile(src, context, attrName):
 
 
 def onUpdatePreview(src, context, attrName):
-    if err := loadVRayProxyPreviewMesh(src, src.file, context.scene.frame_current):
+    # 'scale' and 'flip_axis' only reorient/rescale the existing preview geometry, so transform
+    # the loaded mesh in place instead of regenerating it through the external tool (which reads
+    # the whole source file and freezes the UI). 'previewType'/'num_preview_faces' change what
+    # geometry the tool produces, so they still require a full regeneration.
+    if (attrName in ('scale', 'flip_axis')):
+        applyProxyPreviewTransform(src, context)  
+    elif err := loadVRayProxyPreviewMesh(src, src.file, context.scene.frame_current):
         debug.reportError(err)
 
 

@@ -33,7 +33,7 @@ def _exportEnvFogMeshGizmoFromObject(nodeCtx: NodeContext, objectName: str):
         if domainObj.type == 'MESH':
             # Export empty plugin because the plugin could be created later
             domainObGeomName = Names.objectData(domainObj)
-            vray.pluginCreate(nodeCtx.renderer, domainObGeomName, "GeomStaticMesh")
+            plugin_utils.forwardDeclarePlugin(nodeCtx.exporterCtx, domainObGeomName, "GeomStaticMesh")
             
             fogMeshPluginName = Names.nextVirtualNode(nodeCtx, "EnvFogMeshGizmo")
             fogMesh = PluginDesc(fogMeshPluginName, "EnvFogMeshGizmo")

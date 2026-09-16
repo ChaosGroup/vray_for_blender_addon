@@ -39,6 +39,14 @@ SceneExporter::~SceneExporter()
 void SceneExporter::init(ExporterBase* policy, const ExporterSettings& settings) {
 	m_settings = settings;
 
+	// The main renderer is reused across render sessions, so reset the sticky status message -
+	// otherwise a message from a previous render (e.g. a warning shown at a higher log level)
+	// would linger in the viewport status line for the next render.
+	{
+		std::lock_guard<std::mutex> grd(engineUpdateMsgMtx);
+		engineUpdateMessage.clear();
+	}
+
 	if (!m_exporter || m_exporter->isStopped()) {
 		const auto exporterType = static_cast<VrayZmqWrapper::ExporterType>(settings.exporterType);
 		m_exporter.reset(new ZmqExporter(exporterType));
@@ -206,6 +214,28 @@ void SceneExporter::requestRenderChannel(int channelType, const std::string& plu
 }
 
 
+void SceneExporter::queuePendingRef(nb::object&& ref)
+{
+	std::lock_guard lock(m_pendingRefsMtx);
+	m_pendingRefs.push_back(std::move(ref));
+}
+
+
+void SceneExporter::drainPendingRefs()
+{
+	std::vector<nb::object> refs;
+	{
+		std::lock_guard lock(m_pendingRefsMtx);
+		refs.swap(m_pendingRefs);
+	}
+
+	if (!refs.empty()) {
+		nb::gil_scoped_acquire gil;
+		refs.clear();
+	}
+}
+
+
 void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 {
 	if (asyncExport) {
@@ -223,10 +253,8 @@ void SceneExporter::exportMesh(MeshDataPtr mesh, bool asyncExport)
 
 			m_exporter->exportPlugin(pluginDesc);
 
-			{
-				nb::gil_scoped_acquire gil;
-				mesh.reset();
-			}
+			queuePendingRef(std::move(mesh->ref));
+			mesh.reset();
 		}, ThreadManager::Priority::LOW);
 	} else {
 		PluginDesc pluginDesc(mesh->name, "GeomStaticMesh");
@@ -333,8 +361,15 @@ void SceneExporter::finishExport(bool interactive)
 {
 	nb::gil_scoped_release noGIL;
 
-	ScopeTimer tm("finish_export: wait");
-	m_wg->wait();
+	{
+		ScopeTimer tm("finish_export: wait");
+		m_wg->wait();
+	}
+
+	{
+		ScopeTimer tm("finish_export: drain refs");
+		drainPendingRefs();
+	}
 
 
 	if (interactive)

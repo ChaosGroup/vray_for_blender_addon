@@ -75,10 +75,10 @@ class VRAY_OT_proxy_load_preview(VRayOperatorBase):
 
         if not proxyFilepath:
             self.report({'ERROR'}, "Proxy filepath is not set!")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         if not os.path.exists(proxyFilepath):
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         err = vray_proxy.loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current - 1)
 
@@ -145,18 +145,11 @@ def _buildMeshFromProxyData(meshData, meshName, scale, existingMaterials):
     if vertices is None or faces is None or len(vertices) == 0 or len(faces) == 0:
         return None
 
-    numVerts = len(vertices)
     numFaces = len(faces)
     numLoops = numFaces * 3  # all faces are triangles
 
-    mesh = bpy.data.meshes.new(meshName)
-    mesh.vertices.add(numVerts)
-    mesh.loops.add(numLoops)
-    mesh.polygons.add(numFaces)
-    mesh.vertices.foreach_set('co', np.ascontiguousarray(vertices, dtype=np.float32).ravel())
-    mesh.loops.foreach_set('vertex_index', np.ascontiguousarray(faces, dtype=np.int32).ravel())
-    mesh.polygons.foreach_set('loop_start', np.arange(0, numLoops, 3, dtype=np.int32))
-    mesh.polygons.foreach_set('loop_total', np.full(numFaces, 3, dtype=np.int32))
+    from vray_blender.lib.mesh_build_utils import buildTriMeshBase
+    mesh = buildTriMeshBase(meshName, vertices, faces)
 
     if scale != 1.0:
         mesh.transform(Matrix.Scale(scale, 4))
@@ -202,7 +195,7 @@ def _buildMeshFromProxyData(meshData, meshName, scale, existingMaterials):
             channelCount += 1
             
             if channelCount > 8:
-                debug.reportAsync('WARNING', 
+                debug.report('WARNING',
                     f"UV channel count ({channelCount}) exceeds the supported maximum (8); "
                     "only the first 8 channels will be imported.")
                 break;
@@ -308,10 +301,8 @@ class VRAY_OT_proxy_to_mesh(VRayOperatorBase):
     bl_description = "Convert V-Ray Proxy to a full Blender mesh with materials and UV channels"
     bl_options     = {'UNDO'}
 
-    @classmethod
-    def poll(cls, context):
-        from vray_blender.exporting.tools import isObjectVrayProxy
-        return context.active_object is not None and isObjectVrayProxy(context.active_object)
+    # When set, convert this object instead of the active one (used by the Scene Lister).
+    object_name: bpy.props.StringProperty(default="", options={'HIDDEN'})
 
     def execute(self, context):
         from vray_blender.exporting.tools import isObjectVrayProxy
@@ -319,8 +310,8 @@ class VRAY_OT_proxy_to_mesh(VRayOperatorBase):
 
         self.report({'WARNING'}, "Blender may be unresponsive during the conversion")
 
-        ob = context.active_object
-        if not isObjectVrayProxy(ob):
+        ob = context.scene.objects.get(self.object_name) if self.object_name else context.active_object
+        if ob is None or not isObjectVrayProxy(ob):
             self.report({'ERROR'}, "Active object is not a V-Ray Proxy")
             return {'CANCELLED'}
 
@@ -435,7 +426,7 @@ def _pollVrmeshDragDrop(cls, context: bpy.types.Context):
 class VRAY_OT_import_drop_vrmesh(bpy.types.Operator):
     bl_idname = "vray.import_drop_vrmesh"
     bl_label = "Add V-Ray Proxy"
-    options = { 'INTERNAL', 'UNDO' }
+    bl_options = { 'INTERNAL', 'UNDO' }
 
     directory: bpy.props.StringProperty(subtype='DIR_PATH', options={'SKIP_SAVE', 'HIDDEN'})
     files: bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'SKIP_SAVE', 'HIDDEN'})
@@ -447,6 +438,7 @@ class VRAY_OT_import_drop_vrmesh(bpy.types.Operator):
     def execute(self, context):
         from pathlib import PurePath
         from vray_blender.nodes.operators.import_file import importProxyFromMeshFile
+        imported = 0
         for file in self.files:
             filename = bpy.path.basename(file.name)
             filepath = os.path.join(self.directory, filename)
@@ -457,7 +449,10 @@ class VRAY_OT_import_drop_vrmesh(bpy.types.Operator):
             _, err = importProxyFromMeshFile(context, matPath, filepath)
             if err:
                 self.report({'WARNING'}, err)
-        return {'FINISHED'}
+            else:
+                imported += 1
+
+        return {'FINISHED'} if imported else {'CANCELLED'}
 
 
 class VRAY_FH_vrmesh_handler(bpy.types.FileHandler):
@@ -538,7 +533,8 @@ def _precomputeProxyMaterialSlots(exporterCtx: ExporterContext, exportOnlySelect
 def _setupProxyExporterContext(exporterCtx: ExporterContext, exportOnlySelected: bool):
     precomputedSlotOffsets, precomputedSlotList = _precomputeProxyMaterialSlots(exporterCtx, exportOnlySelected)
     exporterCtx.fullExport = True
-    exporterCtx.calculateObjectVisibility()
+    exporterCtx.syncSceneState()
+    exporterCtx.syncActiveInstancers()
     exporterCtx.proxyExportSettings.exportOnlySelected = exportOnlySelected
     exporterCtx.proxyExportSettings.proxyMaterialSlotOffsets = dict(precomputedSlotOffsets or {})
     exporterCtx.proxyExportSettings.proxyMaterialSlots = list(precomputedSlotList or [])
@@ -605,7 +601,8 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
         for frame in exportFrames:
             setFloatFrame(engine, frame)
             vray.setRenderFrame(renderer, frame)
-            exporterCtx.calculateObjectVisibility()
+            exporterCtx.syncSceneState()
+            exporterCtx.syncActiveInstancers()
             geomExporter = obj_export.run(exporterCtx)
             instancer_export.run(exporterCtx, geomExporter, lightExporter=None)
             exporterCtx.fullExport = False
@@ -657,6 +654,21 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
         if success:
             engine.report({'INFO'}, f"Exported proxy: {preferences.export_proxy_file_path}")
 
+# Reported when the export scope holds no object that can go into a .vrmesh file.
+_NO_PROXY_OBJECTS_MSG = "No V-Ray proxy-convertible objects found for export."
+
+
+def _hasProxyConvertibleObjects(context: bpy.types.Context):
+    """ True if the objects in the configured export scope include at least one
+        that can be exported to a .vrmesh file.
+    """
+    preferences = getVRayPreferences(context)
+    exportOnlySelected = preferences.export_proxy_scope == 'SELECTION'
+    scopeObjects = context.selected_objects if exportOnlySelected else context.scene.objects
+
+    return any(export_tools.isProxyConvertibleGeometryType(obj) for obj in scopeObjects)
+
+
 class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
     bl_idname = "vray.export_vrmesh"
     bl_label = "Export V-Ray Proxy"
@@ -667,11 +679,8 @@ class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
             self.report({'WARNING'}, getCELimitedFeatureMsg())
             return {'CANCELLED'}
 
-        preferences = getVRayPreferences(context)
-        exportOnlySelected = preferences.export_proxy_scope == 'SELECTION'
-        scopeObjects = context.selected_objects if exportOnlySelected else context.scene.objects
-        if not any(export_tools.isProxyConvertibleGeometryType(obj) for obj in scopeObjects):
-            self.report({'ERROR'}, f"No V-Ray proxy-convertible objects found for export.")
+        if not _hasProxyConvertibleObjects(context):
+            self.report({'ERROR'}, _NO_PROXY_OBJECTS_MSG)
             return {'CANCELLED'}
 
         debug.report('INFO', 'Started V-Ray Proxy export. Blender UI will be unresponsive until the operation is complete.')
@@ -687,6 +696,12 @@ class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
         return {'FINISHED'}
 
     def invoke(self, context, event):
+        # Warn before showing the dialog so that the command behaves like the other object
+        # commands when there is nothing to export. The CE upsell popup takes precedence.
+        if (not vray.isCommunityEdition()) and (not _hasProxyConvertibleObjects(context)):
+            self.report({'WARNING'}, _NO_PROXY_OBJECTS_MSG)
+            return {'CANCELLED'}
+
         self._centerDialog(context, event)
 
         windowTitle = "Export V-Ray Proxy (.vrmesh)"
@@ -727,7 +742,7 @@ class VRAY_OT_export_vrmesh(VRAY_OT_message_box_base):
             col.prop(preferences, 'export_proxy_start_frame')
             col.prop(preferences, 'export_proxy_end_frame')
 
-        self._cursorWrap(context)
+        self._cursorWarp(context)
 
     @classmethod
     def description(cls, context, properties):

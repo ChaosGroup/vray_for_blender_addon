@@ -5,8 +5,13 @@
 
 import bpy
 
+from vray_blender.exporting.tools import getInputSocketByAttr
+from vray_blender.lib import draw_utils
 from vray_blender.ui import classes
-from vray_blender.plugins import PLUGINS
+from vray_blender.ui import node_nav
+from vray_blender.ui import node_slots
+from vray_blender.plugins import PLUGINS, getPluginModule
+from vray_blender.nodes import navigation as NodesNav
 from vray_blender.nodes import utils as NodesUtils
 
 
@@ -39,25 +44,75 @@ class VRAY_PT_ContextWorld(classes.VRayPanel):
                 layout.template_ID(scene, "world", new="vray.add_new_world")
 
         if world:
-            VRayWorld = world.vray
-
             layout.separator()
-            layout.prop(VRayWorld, 'global_light_level', slider=True)
+            layout.prop(world.vray, 'global_light_level', slider=True)
 
-            if not NodesUtils.treeHasNodes(world.node_tree):
-                return
 
-            if not (activeNode := NodesUtils.getActiveTreeNode(world.node_tree, 'WORLD')):
-                return
+# The SettingsEnvironment parameters the Environment node exposes as sockets, in display order.
+_ENV_ATTRS = ('bg_tex', 'gi_tex', 'reflect_tex', 'refract_tex', 'secondary_matte_tex')
 
+
+def drawEnvironmentNode(layout, context, envNode):
+    """ Draw the Environment node's parameters.
+
+        VRayNodeEnvironment is hand-written: vray_plugin is 'NONE' and it implements neither
+        draw_buttons nor draw_buttons_ext, so classes.drawActiveNodePanel() cannot draw it at all
+        and falls through to "Selected node has no properties to show". Its parameters really
+        belong to SettingsEnvironment and live on its input sockets, so paint them with a UIPainter
+        bound to that plugin. Going through the painter is also what earns these sockets a texture
+        picker, rather than hand-drawing them a second time.
+    """
+    painter = draw_utils.UIPainter(context, getPluginModule('SettingsEnvironment'), None, envNode)
+
+    for attrName in _ENV_ATTRS:
+        if socket := getInputSocketByAttr(envNode, attrName):
+            painter.drawAttr(layout, attrName, socket.name)
+
+
+class VRAY_PT_world_environment(classes.VRayPanel):
+    """ The world's environment, mirroring the Material tab: the node currently being edited, with
+        a breadcrumb back to the Environment node. """
+    bl_space_type  = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context     = 'world'
+    bl_label       = "Environment"
+
+    @classmethod
+    def poll_custom(cls, context):
+        world = context.world
+        return world and world.vray.is_vray_class and NodesUtils.treeHasNodes(world.node_tree)
+
+    def draw(self, context):
+        layout = self.layout
+        world = context.world
+
+        if not (activeNode := NodesNav.getPanelNode(world.node_tree, 'WORLD')):
+            return
+
+        layout.use_property_split = True
+        layout.use_property_decorate = True
+
+        slotContext = node_slots.makeSlotContext(context, world, world.node_tree)
+
+        if slotContext is not None:
+            navCol = layout.column(align=True)
+            navCol.use_property_split = False
+            node_nav.drawNavigation(navCol, context, slotContext.ownerType, slotContext.ownerName,
+                                    world.node_tree, 'WORLD', activeNode)
             layout.separator()
-            classes.drawActiveNodePanel(context, self.layout, activeNode, PLUGINS)
+
+        with draw_utils.slotEditing(slotContext):
+            if activeNode.bl_idname == 'VRayNodeEnvironment':
+                drawEnvironmentNode(layout, context, activeNode)
+            else:
+                classes.drawActiveNodePanel(context, layout, activeNode, PLUGINS)
 
 
 def getRegClasses():
     return (
-        VRAY_PT_WorldPreview,
         VRAY_PT_ContextWorld,
+        VRAY_PT_WorldPreview,
+        VRAY_PT_world_environment,
     )
 
 

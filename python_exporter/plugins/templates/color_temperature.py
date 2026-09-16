@@ -19,7 +19,16 @@ class TemplateColorTemperature(common.VRayUITemplate):
             temperature_bound_property: name of the temperature bound property
     """
 
-    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context, 
+    @staticmethod
+    def _lightNode(context: bpy.types.Context):
+        """ The light's node, which carries the colour socket, or None for a light without a tree. """
+        from vray_blender.nodes.utils import getLightOutputNode, treeHasNodes
+
+        lightObj = getPinnedDataFromEditorContext(context, context.object)
+        ntree = getattr(getattr(lightObj, 'data', None), 'node_tree', None)
+        return getLightOutputNode(ntree) if treeHasNodes(ntree) else None
+
+    def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context,
                     pluginModule, propGroup, widgetAttr: dict, text, nested=False):
         
         colorModeAttr = self.getTemplateAttr('color_mode')
@@ -37,8 +46,13 @@ class TemplateColorTemperature(common.VRayUITemplate):
         colorMode = getattr(propGroup, colorModeAttr)
 
         if colorMode == '0':
-            # Color
-            layout.prop(propGroup, colorAttr, text="Color")
+            # Color. Offer the texture picker when the colour is backed by a socket on the light's
+            # node - this template owns its layout, so it never passes through the painter's socket
+            # path and would otherwise be the one light parameter with no picker.
+            from vray_blender.ui.node_slots import drawSlotRow
+
+            if not drawSlotRow(context, layout, self._lightNode(context), colorAttr, "Color"):
+                layout.prop(propGroup, colorAttr, text="Color")
         else:
             # Temperature
             from vray_blender.ui import icons
