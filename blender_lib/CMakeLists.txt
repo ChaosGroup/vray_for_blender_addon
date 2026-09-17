@@ -308,6 +308,8 @@ function(setup_nanobind_target PYTHON_VERSION STABLE_ABI)
 
     set_target_properties(${NANOBIND_TARGET} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
+    string(REPLACE "." "" PYTHON_VERSION_NO_DOT "${PYTHON_VERSION}")
+
     set(PYTHON_VERSION_INCLUDES "")
     if (STABLE_ABI)
         # nanobind supports stable abi from python3.12, so we just use an appsdk python
@@ -317,10 +319,13 @@ function(setup_nanobind_target PYTHON_VERSION STABLE_ABI)
 		set(PYTHON_VERSION_INCLUDES python3.12)
 	endif()
     else()
+        # The Blender SDK names its python by version, following Blender's own build files:
+        # 'python/311', 'python/313', ... on Windows, and a single 'python' root with
+        # version-tagged includes ('include/python3.13') everywhere else.
         if (WIN32)
-            set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python/311)
+            set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python/${PYTHON_VERSION_NO_DOT})
         else()
-            set(PYTHON_VERSION_INCLUDES python3.11)
+            set(PYTHON_VERSION_INCLUDES python${PYTHON_VERSION})
             set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python)
         endif()
     endif()
@@ -346,23 +351,19 @@ function(setup_nanobind_target PYTHON_VERSION STABLE_ABI)
         if (STABLE_ABI)
             target_link_libraries(${NANOBIND_TARGET} PUBLIC python3)
         else()
-            string(REPLACE "." "" VERSION_NO_DOT "${PYTHON_VERSION}")
-            target_link_libraries(${NANOBIND_TARGET} PUBLIC python${VERSION_NO_DOT})
+            target_link_libraries(${NANOBIND_TARGET} PUBLIC python${PYTHON_VERSION_NO_DOT})
         endif()
     endif()
 
     target_link_libraries(${NANOBIND_TARGET} PUBLIC tsl::robin_map)
 endfunction()
 
+# Determines the suffix to name the module with, e.g. '.cp311-win_amd64.pyd'. It encodes both
+# the interpreter version and the platform tag, so it is queried from the very python the module
+# is built against - PYTHON_PATH is the one setup_nanobind_target() resolved.
 function(set_lib_suffix VERSION STABLE_ABI PYTHON_PATH)
     if (STABLE_ABI)
-        set(PYTHON_EXECUTABLE ${X_PAK}/AppsdkPython312/python)
-    elseif(WIN32)
-        set(PYTHON_EXECUTABLE ${BLENDER_SDK_ROOT}/python/311/bin/python)
-    else()
-	set(PYTHON_EXECUTABLE ${BLENDER_SDK_ROOT}/python/bin/python3.11)
-    endif()
-    if (STABLE_ABI)
+        # A stable-ABI module carries no version tag, so there is nothing to query.
         if (WIN32)
             set(EXT_SUFFIX ".pyd")
         else()
@@ -370,19 +371,35 @@ function(set_lib_suffix VERSION STABLE_ABI PYTHON_PATH)
             # be .cpython3.11.so -> abi3.so -> .so, but add it just in case.
             set(EXT_SUFFIX ".abi3.so")
         endif()
-    else()
-        execute_process(
-            COMMAND "${PYTHON_EXECUTABLE}" "-c" "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))"
-            RESULT_VARIABLE SUFFIX_CMD_RET
-            OUTPUT_VARIABLE EXT_SUFFIX
-            OUTPUT_STRIP_TRAILING_WHITESPACE
-        )
 
-        if(SUFFIX_CMD_RET AND NOT SUFFIX_CMD_RET EQUAL 0)
-		    # message(FATAL_ERROR "Python sysconfig query to find 'EXT_SUFFIX' property failed ${PYTHON_EXECUTABLE}!")
-            # Temporary workaround because of a problematic python in our Blender SDK MacOS xpak.
-            set(EXT_SUFFIX ".so")
-        endif()
+        set(EXT_SUFFIX ${EXT_SUFFIX} PARENT_SCOPE)
+        return()
+    endif()
+
+    if (WIN32)
+        set(PYTHON_EXECUTABLE "${PYTHON_PATH}/bin/python.exe")
+        set(FALLBACK_EXT_SUFFIX ".pyd")
+    else()
+        set(PYTHON_EXECUTABLE "${PYTHON_PATH}/bin/python${VERSION}")
+        set(FALLBACK_EXT_SUFFIX ".so")
+    endif()
+
+    execute_process(
+        COMMAND "${PYTHON_EXECUTABLE}" "-c" "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))"
+        RESULT_VARIABLE SUFFIX_CMD_RET
+        OUTPUT_VARIABLE EXT_SUFFIX
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+
+    # The interpreter is not always usable - the python in our Blender SDK MacOS xpak fails to
+    # run. Fall back to the platform's generic suffix, which every interpreter accepts as an
+    # extension suffix, just without the version and platform tags. Not '.so' on Windows, which
+    # is what the previous fallback produced there and Blender cannot import.
+    if (NOT "${SUFFIX_CMD_RET}" STREQUAL "0" OR "${EXT_SUFFIX}" STREQUAL "")
+        message(WARNING "Python sysconfig query for 'EXT_SUFFIX' failed (${PYTHON_EXECUTABLE}) - "
+                        "naming the module '${FALLBACK_EXT_SUFFIX}'")
+        set(EXT_SUFFIX "${FALLBACK_EXT_SUFFIX}")
     endif()
 
     set(EXT_SUFFIX ${EXT_SUFFIX} PARENT_SCOPE)
@@ -434,7 +451,7 @@ if (BLENDER_VER VERSION_GREATER_EQUAL "5.1")
         set(STARTUP_PROJECT "VRayBlenderLib-3.12-stable")
     else()
         add_python_module(3.13)
-        set(STARTUP_PROJECT "VRayBlenderLib-3.11")
+        set(STARTUP_PROJECT "VRayBlenderLib-3.13")
     endif()
 elseif(UNIX AND NOT APPLE)
     set(STARTUP_PROJECT "VRayBlenderLib-3.11")
