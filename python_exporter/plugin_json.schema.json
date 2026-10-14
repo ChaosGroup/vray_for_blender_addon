@@ -2,6 +2,7 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "VBlender json schema",
     "type": "object",
+    "patternProperties": { "^//": {} },
     "additionalProperties": false,
     "$defs": {
         "paramType": {
@@ -36,7 +37,29 @@
                 "OUTPUT_PLUGIN",
                 "OUTPUT_TEXTURE",
                 "OUTPUT_FLOAT_TEXTURE",
-                "INT_LIST"
+                "INT_LIST",
+                "ACOLOR",
+                "BOOL_LIST",
+                "COLOR_LIST",
+                "FLOAT_LIST",
+                "FLOAT_TEXTURE_LIST",
+                "GRAD_RAMP",
+                "INDEX_VECTOR_4",
+                "LIST",
+                "LIST_LIST",
+                "MAPCHANNEL_LIST",
+                "MATERIAL",
+                "OUTPUT_COLOR",
+                "OUTPUT_INT_TEXTURE",
+                "OUTPUT_TRANSFORM_TEXTURE",
+                "OUTPUT_VECTOR_TEXTURE",
+                "RENDERCHANNEL",
+                "STRING_LIST",
+                "TEXTURE_LIST",
+                "TRANSFORM_LIST",
+                "TRANSFORM_TEXTURE",
+                "VECTOR_LIST",
+                "VECTOR_TEXTURE"
             ]
         },
         "multiRuleCondition": {
@@ -125,6 +148,14 @@
                     },
                     "attrs": {
                         "$ref": "#/$defs/widgetsArray"
+                    },
+                    "panel_prop": {
+                        "type": "object",
+                        "properties": {
+                            "wm_data": { "type": "string" },
+                            "name": { "type": "string" }
+                        },
+                        "additionalProperties": false
                     }
                 },
                 "additionalProperties": false
@@ -144,7 +175,11 @@
                 "UVWGEN",
                 "SYSTEM",
                 "GEOMETRY",
-                "RENDERCHANNEL"
+                "RENDERCHANNEL",
+                "BRDF",
+                "LIGHT",
+                "MATERIAL",
+                "VOLUMETRIC"
             ]
         },
         "BASE": {
@@ -154,6 +189,9 @@
             "type": "string"
         },
         "Desciption": {
+            "type": "string"
+        },
+        "Description": {
             "type": "string"
         },
         "Name": {
@@ -179,6 +217,9 @@
             "items": {
                 "type": "object",
                 "properties": {
+                    "items_disabled_in_CE": {"type": "array", "items": {"type": "string"}},
+                    "items_disabled_in_CE_tooltip": {"type": "string"},
+                    "default_in_CE": {},
                     "attr": {
                         "type": "string"
                     },
@@ -197,7 +238,8 @@
                             "DISTANCE_CAMERA",
                             "VRAY_ROTATION",
                             "VRAY_OFFSET",
-                            "VRAY_FILE_PATH"
+                            "VRAY_FILE_PATH",
+                            "NONE"
                         ]
                     },
                     "precision": {
@@ -253,8 +295,11 @@
                     },
                     "ui": {
                         "type": "object",
+                        "patternProperties": { "^//": {} },
                         "additionalProperties": false,
                         "properties": {
+                            "file_names": {"type": "array", "items": {"type": "string"}},
+                            "file_op": {"type": "string"},
                             "gpuSupport": {
                                 "type": "string",
                                 "enum": [ "full", "none" ]
@@ -329,6 +374,8 @@
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
+                            "skipUnitScale": {"type": "boolean"},
+                            "spin_step": {"type": "number"},
                             "value_conv_factor": {
                                 "type": "number"
                             },
@@ -376,7 +423,8 @@
                                             "templateMultiObjectSelect",
                                             "templateSingleObjectSelect",
                                             "templateFileSelect",
-                                            "templateColorTemperature"
+                                            "templateColorTemperature",
+                                            "templateProxyObjectHierarchy"
                                         ]
                                     },
                                     "custom_exporter": {
@@ -409,6 +457,9 @@
                                             },
                                             "temperature_bound_property": {
                                                 "type": "string"
+                                            },
+                                            "file_property": {
+                                                "type": "string"
                                             }
                                         }
                                     }
@@ -439,13 +490,17 @@
                 "required": [
                     "attr"
                 ],
+                "patternProperties": { "^//": {} },
                 "additionalProperties": false
             }
         },
         "Widget": {
             "type": "object",
+            "patternProperties": { "^//": {} },
             "additionalProperties": false,
             "properties": {
+                "npanel": {"$ref": "#/$defs/widgetsArray"},
+                "render_mask": {"$ref": "#/$defs/widgetsArray"},
                 "widgets": {
                     "$ref": "#/$defs/widgetsArray"
                 },
@@ -462,34 +517,8 @@
             "additionalProperties": false,
             "properties": {
                 "widgets": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "layout": {
-                                "type": "string",
-                                "enum": [ "ROLLOUT", "COLUMN", "SEPARATOR", "ROW" ]
-                            },
-                            "align": {
-                                "type": "boolean"
-                            },
-                            "attrs": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "name": {
-                                            "type": "string"
-                                        }
-                                    },
-                                    "required": [
-                                        "name"
-                                    ]
-                                }
-                            }
-                        },
-                        "additionalProperties": false
-                    }
+                    "$comment": "Same shape as Widget.widgets. UIPainter.renderWidget() draws both, so a node section can nest containers and carry labels and conditions as well.",
+                    "$ref": "#/$defs/widgetsArray"
                 },
                 "output_sockets": {
                     "type": "array",
@@ -575,6 +604,7 @@
         },
         "Options": {
             "type": "object",
+            "patternProperties": { "^//": {} },
             "additionalProperties": false,
             "properties": {
                 "animatable": {

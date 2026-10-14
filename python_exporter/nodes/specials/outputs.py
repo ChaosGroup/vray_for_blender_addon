@@ -158,10 +158,6 @@ class VRayNodeOutputMaterial(VRayNodeBase):
         options     = set()
     )
 
-    MtlMaterialID: bpy.props.PointerProperty(
-        type = class_utils.TYPES['VRayMtlMaterialID']
-    )
-
     def draw_buttons(self, context, layout):
         layout.prop(self, 'dontOverride')
 
@@ -224,6 +220,12 @@ def getRegClasses():
 def register():
     addAttributes(getPluginModule("GeomHair"), VRayNodeFurOutput)
     addAttributes(getPluginModule("VRayDecal"), VRayNodeDecalOutput)
+
+    # Set here and not in the class body: the property group is generated again on every
+    # registration of the add-on.
+    VRayNodeOutputMaterial.__annotations__['MtlMaterialID'] = bpy.props.PointerProperty(
+        type = class_utils.TYPES['VRayMtlMaterialID']
+    )
 
     for regClass in getRegClasses():
         bpy.utils.register_class(regClass)

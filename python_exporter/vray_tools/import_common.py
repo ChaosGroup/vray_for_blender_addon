@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """ Leaf helpers shared by all import paths (server-side .vrscene import, cosmos .vrmat
-    import, material import). No bpy dependencies - importable from both nodes/ and
-    vray_tools/ without cycles.
+    import, material import). No bpy dependencies, so both nodes/ and vray_tools/ can
+    import it without cycles.
 """
 
 import os
@@ -19,11 +19,11 @@ def sceneName(attrs: dict, fallback: str) -> str:
     """ The original host-app name of a plugin (scene_name), used to name the imported
         datablock instead of the mangled V-Ray plugin name. scene_name is a STRING_LIST
         for geometry/material/light plugins and a STRING for RenderView. """
-    sn = attrs.get('scene_name')
-    if isinstance(sn, (list, tuple)) and len(sn) and sn[0]:
-        return sn[0]
-    if isinstance(sn, str) and sn:
-        return sn
+    sceneNameAttr = attrs.get('scene_name')
+    if isinstance(sceneNameAttr, (list, tuple)) and len(sceneNameAttr) and sceneNameAttr[0]:
+        return sceneNameAttr[0]
+    if isinstance(sceneNameAttr, str) and sceneNameAttr:
+        return sceneNameAttr
     return fallback
 
 
@@ -54,6 +54,38 @@ WRAPPER_BASE_ATTRS = {
 }
 
 
+def parseUserAttributeString(text):
+    """ Yield (name, valueType, value) from the "name=value;..." user-attribute form. Types
+        are guessed: comma triple -> Color, int-parsable -> Int, float -> Float, else String.
+        valueType is a VRayUserAttributeItem.value_type. """
+    if not isinstance(text, str) or not text:
+        return
+    for pair in text.split(';'):
+        name, sep, raw = pair.partition('=')
+        name = name.strip()
+        if not sep or not name:
+            continue
+        raw = raw.strip()
+        parts = raw.split(',')
+        if len(parts) == 3:
+            try:
+                yield name, '2', tuple(float(p) for p in parts)
+                continue
+            except ValueError:
+                pass
+        try:
+            yield name, '0', int(raw)
+            continue
+        except ValueError:
+            pass
+        try:
+            yield name, '1', float(raw)
+            continue
+        except ValueError:
+            pass
+        yield name, '3', raw
+
+
 def isScaledDistanceAttr(attrDesc) -> bool:
     """ True for distance-typed attrs that participate in import unit conversion:
         quantityType 'distance' without options.skipUnitScale (the marker for values
@@ -62,16 +94,6 @@ def isScaledDistanceAttr(attrDesc) -> bool:
         return False
     return attrDesc.get('ui', {}).get('quantityType') == 'distance' \
         and not attrDesc.get('options', {}).get('skipUnitScale')
-
-
-def getImportDir(vrsceneDict) -> str:
-    """ Directory of the source scene file, from the synthetic 'Import Settings' record.
-        Handles both storage conventions: top-level 'Dirpath' (vrmat parser) and
-        Attributes['dirpath'] (vrscene parser; the server import provides both). """
-    if importSettings := getPluginByName(vrsceneDict, "Import Settings"):
-        return importSettings.get('Dirpath') \
-            or importSettings.get('Attributes', {}).get('dirpath', "")
-    return ""
 
 
 def findAssetUnderDir(path: str, baseDir: str):
@@ -84,9 +106,9 @@ def findAssetUnderDir(path: str, baseDir: str):
         return None
     parts = [p for p in path.replace('\\', '/').split('/') if p and p not in ('.', '..')]
     for i in range(len(parts)):
-        cand = os.path.join(baseDir, *parts[i:])
-        if os.path.isfile(cand):
-            return cand
+        candidate = os.path.join(baseDir, *parts[i:])
+        if os.path.isfile(candidate):
+            return candidate
     return None
 
 
@@ -166,3 +188,18 @@ def getPluginByType(vrsceneDict, pluginType):
         if pluginDesc['ID'] == pluginType:
             return pluginDesc
     return None
+
+
+def getPluginsByType(vrsceneDict, pluginType) -> list:
+    """ Every plugin of a type, O(1) on an IndexedVrsceneDict. """
+    if (typeIndex := getattr(vrsceneDict, 'typeIndex', None)) is not None:
+        return typeIndex.get(pluginType, [])
+    return [p for p in vrsceneDict if p['ID'] == pluginType]
+
+
+def metersScaleOf(unitsInfo) -> float:
+    """ One source scene unit in meters, off a SettingsUnitsInfo descriptor (None if absent). An omitted or zero
+        meters_scale reads as 1.0; every consumer divides or multiplies by this. """
+    if not unitsInfo:
+        return 1.0
+    return float(unitsInfo['Attributes'].get('meters_scale', 1.0)) or 1.0

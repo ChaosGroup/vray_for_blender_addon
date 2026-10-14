@@ -17,6 +17,18 @@
     and the next viewport click drops it - the preview following the cursor sells the same feel.
     The modal only acts on a fresh LEFTMOUSE PRESS, so the button's own release never triggers a
     stray drop.
+
+    The viewport is not the only place a material can be dropped. An editor can offer targets of
+    its own - the V-Ray Proxy Object Hierarchy rollout draws the name of every row that can carry
+    a material as a button while a pickup is in progress - and those cannot be found by the
+    raycast. They are ordinary buttons, so the modal passes every event outside a viewport on
+    rather than consuming it, and the operator behind the button calls dropPickedUpMaterial() to
+    take the material and end the pickup. One consequence is that a click outside a viewport no
+    longer cancels the pickup: it goes to whatever is underneath, and Esc is the way out.
+
+    The cursor swatch follows the pointer over the editors in _SWATCH_EDITORS too, since the
+    pickup is one mode wherever the cursor happens to be and losing the swatch at the edge of the
+    viewport would read as it having ended.
 """
 
 import bpy
@@ -26,6 +38,7 @@ import numpy as np
 from gpu_extras.batch import batch_for_shader
 from bpy_extras import view3d_utils
 
+from vray_blender.lib.blender_utils import findViewport, WindowScope
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.ui import gpu_overlay
 from vray_blender.ui.lister import core
@@ -51,6 +64,42 @@ _QUAD_UVS = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
 _PREVIEW_SIZE = 96
 _ICON_SIZE = 28
 
+# The editors the cursor swatch is drawn over, besides the 3D viewport. Purely a drawing concern -
+# nothing routes events by it, since everything outside a viewport is passed through anyway - so
+# this is only where _updateHover() tracks a region, where _tagHoverRedraw() repaints, and which
+# space types _draw() is registered on. Only the Properties editor for now: that is where the
+# V-Ray Proxy Object Hierarchy rollout draws the lists whose rows take a drop.
+_SWATCH_EDITORS = {'PROPERTIES'}
+
+# Whether a UIList takes a material drop, by class name. Filled in by whatever draws them through
+# setListTakesDrop(), so that this module needs to know nothing about them.
+_dropTargetLists = {}
+
+
+def setListTakesDrop(listId: str, takesDrop: bool):
+    """ Record whether the rows of a UIList are drop targets for a material pickup.
+
+        Called from the draw of the list rather than declared once at registration, because it is
+        not a property of the list but of what it is drawing: the V-Ray Proxy visibility list
+        carries a material only where the shader sets of the proxy file are its objects, and
+        carries none at all otherwise. The pickup cursor and its swatch appear over a list only
+        while this says a drop would land there.
+    """
+    _dropTargetLists[listId] = takesDrop
+
+
+def _tagHoverRedraw(context: bpy.types.Context):
+    """ Repaint everything the cursor swatch can appear over, so that it follows the pointer and
+        the editor it has just left is cleared of it.
+
+        Not every area: this runs on each mouse move, and the swatch is only ever drawn in a
+        viewport or in one of the editors that take a drop.
+    """
+    for window in context.window_manager.windows:
+        for area in window.screen.areas:
+            if (area.type == 'VIEW_3D') or (area.type in _SWATCH_EDITORS):
+                area.tag_redraw()
+
 
 class VRAY_OT_lister_assign_material(VRayOperatorBase):
     bl_idname = "vray.lister_assign_material"
@@ -70,7 +119,7 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
     _superseded = False
 
     def invoke(self, context, event):
-        self._mat = bpy.data.materials.get(self.material)
+        self._mat = core.materialFromKey(self.material)
         if self._mat is None:
             return {'CANCELLED'}
 
@@ -83,9 +132,11 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
         # mouse events per-window and a modal handler is bound to a single window, so a modal added
         # in the lister window would never see the viewport's mouse - find the window that actually
         # hosts a 3D viewport and bind the modal there instead.
-        self._win = self._findViewportWindow(context)
+        # With no viewport open at all, fall back to the window the button was clicked in: the
+        # viewport drop is then out of reach, but the drop targets in the lists still work.
+        viewport = findViewport(context, WindowScope.ACTIVE_LAST)
+        self._win = viewport.window if viewport else None
         if self._win is None:
-            self.report({'WARNING'}, "Open a 3D viewport to drop the material onto")
             return {'CANCELLED'}
 
         self._buildSwatch(context)
@@ -102,10 +153,17 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
         self._highlightHandler = bpy.types.SpaceView3D.draw_handler_add(
             self._drawHighlight, (), 'WINDOW', 'POST_VIEW')
 
-        # Paintbrush cursor on every window - the pickup is a session-wide mode.
+        # The same swatch over the editors that take a drop. A draw handler is per space type, so
+        # drawing it in both places takes two of them; _draw() picks the hovered region out.
+        self._propsHandler = bpy.types.SpaceProperties.draw_handler_add(
+            self._draw, (), 'WINDOW', 'POST_PIXEL')
+
+        # Paintbrush cursor on every window - the pickup is a session-wide mode. _updateCursor()
+        # takes it from here, dropping it back to the ordinary pointer away from a drop target.
         self._cursorWindows = list(context.window_manager.windows)
+        self._cursor = 'PAINT_BRUSH'
         for w in self._cursorWindows:
-            w.cursor_modal_set('PAINT_BRUSH')
+            w.cursor_modal_set(self._cursor)
 
         with context.temp_override(window=self._win):
             context.window_manager.modal_handler_add(self)
@@ -118,52 +176,59 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
                 with context.temp_override(window=w):
                     bpy.ops.vray.lister_assign_relay('INVOKE_DEFAULT')
 
-        gpu_overlay.tagRedrawView3D()
+        # Every area, not only the viewports: the editors that draw drop targets have to repaint
+        # for those to appear. _finish() does the same when the pickup ends and they go away again.
+        core.tagAllRedraw(context)
         return {'RUNNING_MODAL'}
-
-    def _findViewportWindow(self, context):
-        """ The window hosting a usable 3D viewport, preferring one other than the window the
-            button was clicked in (the lister's Preferences window). """
-        windows = sorted(context.window_manager.windows,
-                         key=lambda w: 0 if w != context.window else 1)
-        for win in windows:
-            for area in win.screen.areas:
-                if area.type != 'VIEW_3D':
-                    continue
-                region = next((r for r in area.regions if r.type == 'WINDOW'), None)
-                if region is not None and getattr(area.spaces.active, 'region_3d', None) is not None:
-                    return win
-        return None
 
     def modal(self, context, event):
         if self._superseded:
             return {'CANCELLED'}
 
-        if event.type == 'MOUSEMOVE':
-            self._updateHover(context, event)
-            if self._highlight:
-                self._updateTarget(context, event)
-            gpu_overlay.tagRedrawView3D()
-            return {'RUNNING_MODAL'}
-
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
             self._finish(context)
             return {'CANCELLED'}
+
+        if event.type == 'MOUSEMOVE':
+            self._updateHover(context, event)
+            if self._highlight:
+                # Off a viewport the raycast misses and this clears the tint by itself.
+                self._updateTarget(context, event)
+            _tagHoverRedraw(context)
+
+            if self._hoverRV3D is None:
+                # Outside a viewport the cursor may be over a drop target in another editor, and
+                # the move has to reach it. Blender activates the button under the cursor only
+                # while handling MOUSEMOVE (ui_handle_button_over), and a button that was never
+                # activated ignores the click that follows - so swallowing the move here would
+                # silently break the drop even though the click itself is passed on.
+                return {'PASS_THROUGH'}
+
+            return {'RUNNING_MODAL'}
 
         # Let the user orbit / zoom to aim before dropping.
         if event.type in {'MIDDLEMOUSE', 'WHEELUPMOUSE', 'WHEELDOWNMOUSE'}:
             return {'PASS_THROUGH'}
 
-        # Only a fresh press drops - the button's own release (which invoked us) is a RELEASE and
-        # is ignored, so nothing is assigned by accident on start-up.
-        if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
+        if event.type == 'LEFTMOUSE':
             self._updateHover(context, event)
-            assigned = self._tryAssign(context, event)
-            self._finish(context)
-            if assigned:
-                self.report({'INFO'}, f"Assigned '{self._mat.name}' to '{assigned}'")
-                return {'FINISHED'}
-            return {'CANCELLED'}
+
+            if self._hoverRV3D is None:
+                # Not over a viewport: the click belongs to whatever is underneath. A drop target
+                # in a list is an ordinary button, and it only fires if the modal lets both the
+                # press and the release through, since Blender runs a button's operator on the
+                # release. The target ends the pickup itself, through dropPickedUpMaterial().
+                return {'PASS_THROUGH'}
+
+            # Only a fresh press drops - the button's own release (which invoked us) is a RELEASE
+            # and is ignored, so nothing is assigned by accident on start-up.
+            if event.value == 'PRESS':
+                assigned = self._tryAssign(context, event)
+                self._finish(context)
+                if assigned:
+                    self.report({'INFO'}, f"Assigned '{self._mat.name}' to '{assigned}'")
+                    return {'FINISHED'}
+                return {'CANCELLED'}
 
         return {'RUNNING_MODAL'}
 
@@ -234,11 +299,21 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
         self._hoverRegion = None
         self._hoverRegionPtr = 0
         self._hoverRV3D = None
+        self._hoverList = ""
         self._localMouse = (0.0, 0.0)
 
     def _updateHover(self, context, event):
-        """ Find the 3D viewport region under the cursor in the event's window and cache the
-            region-local mouse position for both drawing and raycasting. """
+        """ Find the region under the cursor in the event's window and cache the region-local
+            mouse position for both drawing and raycasting.
+
+            A _SWATCH_EDITORS region counts as well as a 3D viewport, so that the swatch follows
+            the pointer over one - the drop is the same drop, and losing the swatch at the edge of
+            the viewport would read as the pickup having ended.
+
+            Only a viewport leaves _hoverRV3D set, and that is what everything keys off: _raycast()
+            refuses to run without it, and modal() reads it as 'not over a viewport, pass the event
+            on'. A region that is tracked here and one that is not therefore behave the same for
+            events - the difference is only whether the swatch can be drawn there. """
         self._resetHover()
         win = context.window
         if win is None:
@@ -246,7 +321,7 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
 
         mx, my = event.mouse_x, event.mouse_y
         for area in win.screen.areas:
-            if area.type != 'VIEW_3D':
+            if area.type != 'VIEW_3D' and area.type not in _SWATCH_EDITORS:
                 continue
             region = next((r for r in area.regions if r.type == 'WINDOW'), None)
             if region is None:
@@ -255,8 +330,53 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
                 self._hoverRegion = region
                 self._hoverRegionPtr = region.as_pointer()
                 self._hoverRV3D = getattr(area.spaces.active, 'region_3d', None)
+                self._hoverList = self._listUnderCursor(context, area, region)
                 self._localMouse = (mx - region.x, my - region.y)
-                return
+                break
+
+        self._updateCursor()
+
+    @staticmethod
+    def _listUnderCursor(context, area, region):
+        """ The class name of the UIList under the cursor, "" when there is none.
+
+            A list is as fine as this gets: Blender exposes no hit test for a single widget, so a
+            hover can be narrowed to the list but never to the one row's name inside it.
+        """
+        if area.type == 'VIEW_3D':
+            return ""
+
+        try:
+            with context.temp_override(area=area, region=region):
+                uiList = context.ui_list
+        except (AttributeError, TypeError, RuntimeError):
+            # The context member is simply absent when the cursor is over no list at all.
+            return ""
+
+        return type(uiList).__name__ if uiList is not None else ""
+
+    def _overDropTarget(self):
+        """ True when the cursor is over a list whose rows take the drop. """
+        return _dropTargetLists.get(self._hoverList, False)
+
+    def _updateCursor(self):
+        """ Wear the pickup cursor only where a drop would actually land.
+
+            Over the rest of an editor it goes back to the ordinary pointer, so that the cursor
+            says where the material can go rather than implying the whole editor takes it.
+        """
+        cursor = 'PAINT_BRUSH' if (self._hoverRV3D is not None) or self._overDropTarget() \
+                 else 'DEFAULT'
+
+        if cursor == getattr(self, '_cursor', None):
+            return
+
+        self._cursor = cursor
+
+        # Repeating this is safe: WM_cursor_modal_set() records the cursor to go back to only the
+        # first time round, so cursor_modal_restore() still restores the one from before the pickup.
+        for w in getattr(self, '_cursorWindows', []):
+            w.cursor_modal_set(cursor)
 
     ############################################################
     # Drop-target highlight (region of the mesh that will receive the material)
@@ -336,17 +456,44 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
             self._tex = None
 
     def _draw(self):
-        # Draw only in the viewport region the cursor is currently over.
+        # Draw only in the region the cursor is currently over - a viewport, or one of the editors
+        # that take a drop. Registered on both space types, so this runs for every region of each.
         region = bpy.context.region
         if region is None or region.as_pointer() != self._hoverRegionPtr:
+            return
+
+        # Outside a viewport the swatch only shows over a list that takes the drop, for the same
+        # reason the cursor does: over the rest of the editor there is nothing to drop onto.
+        if (self._hoverRV3D is None) and not self._overDropTarget():
             return
 
         # Keep dpi/72 here, not ui_scale, matching nodes/tools.py _dpiFac.
         uiScale = bpy.context.preferences.system.dpi / 72.0
         x, y = self._localMouse
         size = self._size * uiScale
+        gap = 8 * uiScale
+        offset = 20 * uiScale
+
+        # What a drop does here is not what it does in the viewport, so it is not offered as such:
+        # there is no new slot to add, and the target is a cell of a list rather than the object.
+        overEditor = getattr(bpy.context.area, 'type', None) in _SWATCH_EDITORS
+        hint = "Click a name to assign  -  Esc: cancel" if overEditor \
+               else "Click to assign  -  Alt: new slot  -  Esc: cancel"
+
+        nameSize, hintSize = 13 * uiScale, 11 * uiScale
+        textWidth = max(self._textWidth(self._mat.name, nameSize), self._textWidth(hint, hintSize))
+
         # Offset to the lower-right of the cursor so the swatch does not sit under the pointer.
-        px = x + 20 * uiScale
+        px = x + offset
+        textX = px + size + gap
+
+        # An editor that takes a drop is a good deal narrower than a viewport, and the region
+        # clips rather than scrolls, so mirror the whole block to the left of the cursor when it
+        # would run off the right - but only where the left has the room the right lacks.
+        if (px + size + gap + textWidth > region.width) and (x - offset - size - gap - textWidth >= 0):
+            px = x - offset - size
+            textX = px - gap - textWidth
+
         py = y - size - 6 * uiScale
 
         gpu.state.blend_set('ALPHA')
@@ -358,10 +505,15 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
             self._fillRect(px, py, size, size, self._fallbackColor)
         gpu.state.blend_set('NONE')
 
-        textX = px + size + 8 * uiScale
-        self._drawText(textX, py + size / 2 + 3 * uiScale, self._mat.name, 13 * uiScale, (1.0, 1.0, 1.0, 1.0))
-        self._drawText(textX, py + size / 2 - 14 * uiScale,
-                       "Click to assign  -  Alt: new slot  -  Esc: cancel", 11 * uiScale, (0.8, 0.8, 0.8, 1.0))
+        self._drawText(textX, py + size / 2 + 3 * uiScale, self._mat.name, nameSize, (1.0, 1.0, 1.0, 1.0))
+        self._drawText(textX, py + size / 2 - 14 * uiScale, hint, hintSize, (0.8, 0.8, 0.8, 1.0))
+
+    @staticmethod
+    def _textWidth(text, size):
+        """ The width the text will take at this size, to decide which side of the cursor it fits. """
+        fontId = 0
+        blf.size(fontId, size)
+        return blf.dimensions(fontId, text)[0]
 
     def _fillRect(self, x, y, w, h, color):
         shader = gpu_overlay.colorShader()
@@ -401,11 +553,15 @@ class VRAY_OT_lister_assign_material(VRayOperatorBase):
         if VRAY_OT_lister_assign_material._activeInstance is self:
             VRAY_OT_lister_assign_material._activeInstance = None
 
-        for attr in ('_drawHandler', '_highlightHandler'):
+        # Each handler goes back to the space type it was added to - handing one to the wrong space
+        # raises, and the swatch would be left painted over that editor for the rest of the session.
+        for spaceType, attr in ((bpy.types.SpaceView3D, '_drawHandler'),
+                                (bpy.types.SpaceView3D, '_highlightHandler'),
+                                (bpy.types.SpaceProperties, '_propsHandler')):
             handle = getattr(self, attr, None)
             if handle is not None:
                 try:
-                    bpy.types.SpaceView3D.draw_handler_remove(handle, 'WINDOW')
+                    spaceType.draw_handler_remove(handle, 'WINDOW')
                 except (ValueError, RuntimeError):
                     pass
                 setattr(self, attr, None)
@@ -448,7 +604,7 @@ class VRAY_OT_lister_assign_relay(VRayOperatorBase):
             active._updateHover(context, event)
             if active._highlight:
                 active._updateTarget(context, event)
-            gpu_overlay.tagRedrawView3D()
+            _tagHoverRedraw(context)
             return {'PASS_THROUGH'}
 
         if event.type in {'ESC', 'RIGHTMOUSE'} and event.value == 'PRESS':
@@ -456,10 +612,12 @@ class VRAY_OT_lister_assign_relay(VRayOperatorBase):
             active._finish(context)
             return {'CANCELLED'}
 
-        # Drop only over a 3D viewport of this window.
+        # Drop only over a 3D viewport of this window - the same test the primary modal makes, and
+        # everything else falls through for the same reason: a drop target in a list is an
+        # ordinary button and takes the click itself.
         if event.type == 'LEFTMOUSE' and event.value == 'PRESS':
             active._updateHover(context, event)
-            if active._hoverRegion is not None:
+            if active._hoverRV3D is not None:
                 assigned = active._tryAssign(context, event)
                 active._superseded = True
                 active._finish(context)
@@ -469,6 +627,40 @@ class VRAY_OT_lister_assign_relay(VRayOperatorBase):
                 return {'CANCELLED'}
 
         return {'PASS_THROUGH'}
+
+
+############################################################
+# The pickup as a drop target outside the viewport sees it
+############################################################
+
+def pickedUpMaterial():
+    """ The material a pickup is currently carrying, None when none is in progress.
+
+        What an editor tests to know whether to draw its drop targets at all.
+    """
+    active = VRAY_OT_lister_assign_material._activeInstance
+
+    return active._mat if active is not None else None
+
+
+def dropPickedUpMaterial(context: bpy.types.Context):
+    """ End the pickup in progress and hand back the material it was carrying, None when there is
+        none.
+
+        For a target that is hit by Blender's own button handling rather than found by the
+        raycast. The pickup is ended the way the relay ends it: the modal is still on the handler
+        stack, and marking it superseded is what it notices on its next event.
+    """
+    active = VRAY_OT_lister_assign_material._activeInstance
+
+    if active is None:
+        return None
+
+    material = active._mat
+    active._superseded = True
+    active._finish(context)
+
+    return material
 
 
 def getRegClasses():

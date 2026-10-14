@@ -14,6 +14,12 @@ from vray_blender.nodes import utils as NodesUtils
 from vray_blender.plugins import findPluginModule
 
 
+def hasCyclesVolumeLink(outputNode: bpy.types.Node):
+    """ True when a Cycles material output's 'Volume' socket is connected. """
+    sock = getInputSocketByName(outputNode, 'Volume')
+    return (sock is not None) and (getFarNodeLink(sock, requireCompatibleNode=False) is not None)
+
+
 def getMtlTopologyUpdates():
     """ Return the track IDs of the Material data objects whose node tree topology has changed """
     topologyUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.MATERIAL, UpdateFlags.TOPOLOGY)
@@ -114,6 +120,33 @@ def syncMtlExportCache(exporterCtx: ExporterContext):
         for mtlId in (exporterCtx.exportedMtls.keys() & updatedMtlIDs):
             del exporterCtx.exportedMtls[mtlId]
 
+
+def dropMtlsFromExportCache(exporterCtx: ExporterContext, removedPlugins: set[str]):
+    """ Forget the cached materials whose V-Ray plugin has just been removed from the renderer.
+
+        A material's own plugin is tracked against every object using it (node_export
+        .fillNodePluginDesc), so the sweep over the deleted objects removes it as soon as the last
+        object that was tracking it is gone. That says nothing about the material: it may still be
+        in the scene and be exported again in this very cycle. A V-Ray Proxy shaded through the
+        overrides of its Object Hierarchy rollout is exactly that case - it holds materials that no
+        object slot does, and the object that did hold one may have just been deleted, or undone
+        away by an Undo of the proxy-to-mesh conversion.
+
+        Left in the cache, such a material is reported as already exported and never re-created, so
+        every reference to it fails to resolve ("Invalid plugin name") and the geometry using it
+        renders black until the renderer is restarted. Dropping the entry costs one re-export of the
+        material in the same cycle, and leaves a material nothing references any more removed, as
+        the sweep intended.
+    """
+    if not removedPlugins:
+        return
+
+    cache = exporterCtx.exportedMtls
+
+    for mtlId in [mtlId for mtlId, plugin in cache.items() if plugin.name in removedPlugins]:
+        del cache[mtlId]
+
+
 DEFAULT_MATERIAL_NAME = "defaultMtl"
 
 # Attribute types whose value is a color in V-Ray
@@ -194,9 +227,19 @@ class MtlExporter(ExporterBase):
                 if isConversion:
                     return None, SceneStats()
 
-                defaultMtlPlugin = MtlExporter.exportDefaultMaterial(self)
-                self.exportedMtls[mtlId] = defaultMtlPlugin
-                return defaultMtlPlugin, SceneStats()
+                if (not isVRayMtl) and hasCyclesVolumeLink(outputNode):
+                    mtlPlugin = MtlExporter.exportTransparentMaterial(self)
+                else:
+                    mtlPlugin = MtlExporter.exportDefaultMaterial(self)
+
+                self.exportedMtls[mtlId] = mtlPlugin
+                return mtlPlugin, SceneStats()
+
+            if (not isVRayMtl) and (nodeLink.from_node.bl_idname == 'ShaderNodeHoldout'):
+                with nodeCtx.push(outputNode):
+                    mtlPlugin = MtlExporter.exportHoldoutMaterial(self, nodeCtx if isConversion else None)
+                self.exportedMtls[mtlId] = mtlPlugin
+                return mtlPlugin, SceneStats()
 
             with nodeCtx.push(outputNode):
                 # Track the plugins exported for each node of the tree
@@ -286,6 +329,62 @@ class MtlExporter(ExporterBase):
             defaultMaterial = export_utils.exportPlugin(exporterCtx, defaultMtlDesc)
             exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = defaultMaterial
             return defaultMaterial
+
+
+    @staticmethod
+    def exportTransparentMaterial(exporterCtx: ExporterContext):
+        """ A fully transparent material, for surfaces Blender does not shade at all. """
+        TRANSPARENT_PLUGIN_TYPE = "MtlSingleBRDF@Transparent"
+        if TRANSPARENT_PLUGIN_TYPE in exporterCtx.defaultPlugins:
+            return exporterCtx.defaultPlugins[TRANSPARENT_PLUGIN_TYPE]
+
+        brdfDesc = PluginDesc("transparentBRDF", "BRDFVRayMtl")
+        brdfDesc.setAttribute("opacity_color", AColor((0.0, 0.0, 0.0, 1.0)))    # not 'opacity', which is hidden
+        brdf = export_utils.exportPlugin(exporterCtx, brdfDesc)
+
+        mtlDesc = PluginDesc("transparentMtl", "MtlSingleBRDF")
+        mtlDesc.setAttribute("brdf", brdf)
+        mtlDesc.setAttribute("scene_name", ["TRANSPARENT_MATERIAL"])
+        mtl = export_utils.exportPlugin(exporterCtx, mtlDesc)
+        exporterCtx.defaultPlugins[TRANSPARENT_PLUGIN_TYPE] = mtl
+        return mtl
+
+    @staticmethod
+    def exportHoldoutMaterial(exporterCtx: ExporterContext, nodeCtx: NodeContext = None):
+        """ A material reading rgba(0, 0, 0, 0) to the camera, for the Cycles Holdout shader.
+
+            With nodeCtx the plugins go through the Cycles -> V-Ray conversion collector.
+        """
+        HOLDOUT_PLUGIN_TYPE = "MtlWrapper@Holdout"
+        if (nodeCtx is None) and (HOLDOUT_PLUGIN_TYPE in exporterCtx.defaultPlugins):
+            return exporterCtx.defaultPlugins[HOLDOUT_PLUGIN_TYPE]
+
+        def export(pluginDesc, useCommon=False):
+            if nodeCtx is not None:
+                return exportPluginWithStats(nodeCtx, pluginDesc)
+            # Keep exportPluginCommon for MtlWrapper.
+            expfn = export_utils.exportPluginCommon if useCommon else export_utils.exportPlugin
+            return expfn(exporterCtx, pluginDesc)
+
+        brdfDesc = PluginDesc("holdoutBRDF", "BRDFVRayMtl")
+        # Keep the converted colour at 3 channels.
+        black = (0.0, 0.0, 0.0) if nodeCtx is not None else AColor((0.0, 0.0, 0.0, 1.0))
+        brdfDesc.setAttribute("diffuse", black)
+        brdf = export(brdfDesc)
+
+        mtlDesc = PluginDesc("holdoutBaseMtl", "MtlSingleBRDF")
+        mtlDesc.setAttribute("brdf", brdf)
+        mtlDesc.setAttribute("scene_name", ["HOLDOUT_MATERIAL"])
+        baseMtl = export(mtlDesc)
+
+        wrapperDesc = PluginDesc("holdoutMtl", "MtlWrapper")
+        wrapperDesc.setAttribute("base_material", baseMtl)
+        wrapperDesc.setAttribute("alpha_contribution", -1.0)
+        holdoutMtl = export(wrapperDesc, useCommon=True)
+
+        if nodeCtx is None:
+            exporterCtx.defaultPlugins[HOLDOUT_PLUGIN_TYPE] = holdoutMtl
+        return holdoutMtl
 
 
     def _exportBRDFToonOverrideForOutlines(self, nodeCtx: NodeContext, outlinesNode, baseBrdf: AttrPlugin) -> AttrPlugin:

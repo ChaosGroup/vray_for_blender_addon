@@ -6,7 +6,10 @@
 
 import bpy
 
-from vray_blender.nodes.tools import deselectNodes, arrangeImportedTree
+from vray_blender.nodes.tools import deselectNodes, arrangeImportedTree, isVrayNode
+from vray_blender.nodes.group.utils import (isGroupNodesEnabled, VRAY_GROUP_TREE_TYPE,
+                                            NON_GROUPABLE_NODE_TYPES)
+from vray_blender.nodes.group.operators import makeGroupFromNodes
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.vray_tools.import_common import getPluginByName
@@ -14,56 +17,43 @@ from vray_blender.nodes.importing.engine import (
     ImportContext,
     createNode,
     fixPluginParams,
-    _pluginAttrsToPropGroup,
+    pluginAttrsToPropGroup,
 )
 
 
-def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
-    from vray_blender.exporting.mtl_export import MtlExporter
+def _conversionNodeContext(rootObj, ntree: bpy.types.NodeTree, trackerName: str):
+    """ A NodeContext that exports one datablock into a vrscene dict instead of to the renderer. Returns it with
+        the dict its handler fills.
+
+        Both conversions run the real exporter over a Cycles tree and feed the result back through the import
+        engine, so nothing is tracked or timed and references come out as strings, not AttrPlugin objects. """
     from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
     from vray_blender.exporting.tools import FakeTimeStats
-    from vray_blender.lib.defs import ExporterContext, AttrPlugin, RendererMode, NodeContext, ExporterType, PluginDesc
+    from vray_blender.lib.defs import AttrPlugin, ExporterContext, NodeContext, PluginDesc, RendererMode
     from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
-
-    syncObjectUniqueName(material, reset=False)
-    syncObjectUniqueName(material.original, reset=False)
-
-    # Remove any pre-existing V-Ray nodes from the tree to avoid confusion.
-    # It is the responsibility of the caller of this function to notify the user
-    # that existing nodes will be deleted.
-    _removeVRayNodes(material.node_tree)
-
-    _fakeNodeTrackers = dict([(t, FakeScopedNodeTracker()) for t in NODE_TRACKERS])
-    _fakeObjTrackers = dict([(t, FakeObjTracker()) for t in OBJ_TRACKERS])
 
     exporterContext = ExporterContext()
     exporterContext.rendererMode = RendererMode.Preview
-    exporterContext.objTrackers  = _fakeObjTrackers
-    exporterContext.nodeTrackers = _fakeNodeTrackers
+    exporterContext.objTrackers  = {t: FakeObjTracker() for t in OBJ_TRACKERS}
+    exporterContext.nodeTrackers = {t: FakeScopedNodeTracker() for t in NODE_TRACKERS}
     exporterContext.ctx          = bpy.context
     exporterContext.fullExport   = True
     exporterContext.ts           = FakeTimeStats()
 
     vrsceneDict = []
-    # Custom handler that converts exportable plugins to an importable vrscene dict.
-    def _vrsceneDictCollector(nodeCtx: NodeContext, pluginDesc: PluginDesc):
+
+    def collect(nodeCtx: NodeContext, pluginDesc: PluginDesc):
+        # The import engine reads a reference as a "name" / "name::output" string.
         for key, value in pluginDesc.attrs.items():
             if isinstance(value, AttrPlugin):
-                if value.output:
-                    pluginDesc.attrs[key] = value.name+"::"+value.output
-                else:
-                    pluginDesc.attrs[key] = value.name
-            if isinstance(value, list) and all(isinstance(item, AttrPlugin) for item in value):
-                plNames = []
-                for pl in value:
-                    plNames.append(pl.name)
-                pluginDesc.attrs[key] = plNames
-        # Group instance path, (instanceName, groupDefName) per element, used to rebuild
-        # the Cycles groups as V-Ray groups on import; empty for top-level plugins.
-        groupPath = tuple(
-            (g.name, (g.node_tree.name if getattr(g, 'node_tree', None) else g.name))
-            for g in nodeCtx._groupInstancePath
-        )
+                pluginDesc.attrs[key] = f"{value.name}::{value.output}" if value.output else value.name
+            elif isinstance(value, list) and all(isinstance(item, AttrPlugin) for item in value):
+                pluginDesc.attrs[key] = [plugin.name for plugin in value]
+
+        # The Cycles group instances the plugin came from, (instanceName, groupDefName) per element, which
+        # _regroupConvertedTree rebuilds as V-Ray groups. Empty at the top level.
+        groupPath = tuple((g.name, (g.node_tree.name if getattr(g, 'node_tree', None) else g.name))
+                          for g in nodeCtx._groupInstancePath)
         vrsceneDict.append({
             "ID"         : pluginDesc.type,
             "Name"       : pluginDesc.name,
@@ -73,10 +63,27 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
         return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
 
     nodeCtx = NodeContext(exporterContext, bpy.context.scene, bpy.data, None)
-    nodeCtx.rootObj = material
-    nodeCtx.nodeTracker = _fakeNodeTrackers['MTL']
-    nodeCtx.ntree = material.node_tree
-    nodeCtx.customHandler = _vrsceneDictCollector
+    nodeCtx.rootObj       = rootObj
+    nodeCtx.ntree         = ntree
+    nodeCtx.nodeTracker   = exporterContext.nodeTrackers[trackerName]
+    nodeCtx.customHandler = collect
+
+    return nodeCtx, vrsceneDict
+
+
+def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
+    from vray_blender.exporting.mtl_export import MtlExporter
+    from vray_blender.lib.defs import NodeContext
+
+    syncObjectUniqueName(material, reset=False)
+    syncObjectUniqueName(material.original, reset=False)
+
+    # Remove any pre-existing V-Ray nodes from the tree to avoid confusion.
+    # It is the responsibility of the caller of this function to notify the user
+    # that existing nodes will be deleted.
+    _removeVRayNodes(material.node_tree)
+
+    nodeCtx, vrsceneDict = _conversionNodeContext(material, material.node_tree, 'MTL')
     nodeCtx.material = material
 
     def reportErrors():
@@ -87,7 +94,7 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
                 msg += '\n\t ' + err
             operator.report({ 'WARNING' }, msg)
 
-    mtlExporter = MtlExporter(exporterContext)
+    mtlExporter = MtlExporter(nodeCtx.exporterCtx)
     exportedMaterial, _ = mtlExporter.exportMtl(material, nodeCtx)
     if not exportedMaterial:
         reportErrors()
@@ -100,6 +107,7 @@ def convertMaterial(material: bpy.types.Material, operator: bpy.types.Operator):
     with NodeUtils.DisableAutoConnect():
         importContext = ImportContext(material.node_tree, vrsceneDict, isConversion=True)
         _convertMaterialFromDict(importContext)
+        _applyConvertedMtlWrapper(material, vrsceneDict)
 
     syncObjectUniqueName(material, reset=False)
     syncObjectUniqueName(material.original, reset=False)
@@ -114,13 +122,10 @@ def convertWorld(world: bpy.types.World, operator: bpy.types.Operator = None):
         Texture arrives as real V-Ray nodes. Same result world_export produces on the fly, only
         editable. Returns True if converted, False if skipped.
     """
-    from vray_blender.exporting.plugin_tracker import FakeScopedNodeTracker, FakeObjTracker
-    from vray_blender.exporting.tools import FakeTimeStats
     from vray_blender.exporting.world_convert import convertCyclesWorld
     from vray_blender.exporting.node_export import exportLinkedSocket
-    from vray_blender.lib.defs import ExporterContext, AttrPlugin, RendererMode, NodeContext, PluginDesc
+    from vray_blender.lib.defs import NodeContext
     from vray_blender.nodes.tree_defaults import addWorldNodeTree
-    from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
 
     if world is None or world.vray.is_vray_class:
         return False
@@ -134,27 +139,7 @@ def convertWorld(world: bpy.types.World, operator: bpy.types.Operator = None):
     rootPlugin = None
 
     if envSocket is not None:
-        exporterContext = ExporterContext()
-        exporterContext.rendererMode = RendererMode.Preview
-        exporterContext.objTrackers  = dict((t, FakeObjTracker()) for t in OBJ_TRACKERS)
-        exporterContext.nodeTrackers = dict((t, FakeScopedNodeTracker()) for t in NODE_TRACKERS)
-        exporterContext.ctx          = bpy.context
-        exporterContext.fullExport   = True
-        exporterContext.ts           = FakeTimeStats()
-
-        def _collect(nodeCtx: NodeContext, pluginDesc: PluginDesc):
-            for key, value in pluginDesc.attrs.items():
-                if isinstance(value, AttrPlugin):
-                    pluginDesc.attrs[key] = f"{value.name}::{value.output}" if value.output else value.name
-            vrsceneDict.append({"ID": pluginDesc.type, "Name": pluginDesc.name,
-                                "Attributes": pluginDesc.attrs, "GroupPath": ()})
-            return AttrPlugin(pluginDesc.name, pluginType=pluginDesc.type)
-
-        nodeCtx = NodeContext(exporterContext, bpy.context.scene, bpy.data, None)
-        nodeCtx.rootObj       = world
-        nodeCtx.ntree         = world.node_tree
-        nodeCtx.nodeTracker   = exporterContext.nodeTrackers['WORLD']
-        nodeCtx.customHandler = _collect
+        nodeCtx, vrsceneDict = _conversionNodeContext(world, world.node_tree, 'WORLD')
 
         with nodeCtx, nodeCtx.push(envSocket.node):
             rootPlugin = exportLinkedSocket(nodeCtx, envSocket)
@@ -186,7 +171,7 @@ def convertWorld(world: bpy.types.World, operator: bpy.types.Operator = None):
         sock = next(s for s in envNode.inputs if s.name == sockName)
         sock.use = True
         if texNode is not None:
-            sock.value = (1.0, 1.0, 1.0)
+            sock.value = (0.0, 0.0, 0.0)
             sock.multiplier = envStrength
             ntree.links.new(texNode.outputs[0], sock)
         else:
@@ -200,8 +185,11 @@ def convertWorld(world: bpy.types.World, operator: bpy.types.Operator = None):
 def convertLight(light: bpy.types.Light):
     """ Convert a native Blender light to a V-Ray light.
 
-        Mirrors convertMaterial's export->import flow: the light is first 'exported' to a V-Ray
-        light plugin description, which is then 'imported' onto the light's V-Ray property group.
+        Mirrors convertMaterial's export->import flow. The light is first 'exported' to a V-Ray light plugin
+        description, which is then 'imported' onto the light's V-Ray property group.
+
+        A textured Emission collapses to a constant for now. Wiring one onto color_tex instead will need the
+        node building here.
 
         Returns True if the light was converted, False if skipped (already a V-Ray light or an
         unsupported light type).
@@ -227,7 +215,7 @@ def convertLight(light: bpy.types.Light):
     # Apply the converted attributes as a programmatic (non-user) change: 'units' carries an
     # already-converted 'intensity', so the units update callback must not rescale it.
     with NodeUtils.DisableAutoConnect():
-        _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType)
+        pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType)
 
     return True
 
@@ -237,9 +225,9 @@ def _convertMaterialFromDict(importContext: ImportContext):
     deselectNodes(importContext.nodeTree)
 
     endNodePluginDesc = None
-    for plgDesc in importContext.vrsceneDict:
-        if plgDesc['ID']=='MtlSingleBRDF':
-            endNodePluginDesc = plgDesc
+    for pluginDesc in importContext.vrsceneDict:
+        if pluginDesc['ID']=='MtlSingleBRDF':
+            endNodePluginDesc = pluginDesc
     if endNodePluginDesc is None:
         return
 
@@ -252,37 +240,31 @@ def _convertMaterialFromDict(importContext: ImportContext):
 
     # When group nodes are enabled, rebuild the Cycles node groups as V-Ray groups
     # before laying out the tree, then lay out the top tree and every inner group tree.
-    from vray_blender.nodes.group.utils import isGroupNodesEnabled
     if isGroupNodesEnabled():
         _regroupConvertedTree(importContext)
         arrangeImportedTree(importContext.nodeTree, outputNode, appendLeft=True, recurse=True)
     else:
         arrangeImportedTree(importContext.nodeTree, outputNode, appendLeft=True)
 
-    return {'FINISHED'}
-
 
 def _regroupConvertedTree(importContext: ImportContext):
     """ Reconstruct nested V-Ray groups in the converted material tree from the
-        per-plugin GroupPath captured during conversion (see _vrsceneDictCollector).
+        per-plugin GroupPath captured during conversion (see _conversionNodeContext).
 
-        Each converted plugin carries a 'GroupPath' - a tuple of (instanceName,
+        Each converted plugin carries a 'GroupPath', a tuple of (instanceName,
         groupDefName) describing which Cycles ShaderNodeGroup instance(s) it came
         from. Nodes are folded back into nested V-Ray groups deepest-first, so a
         child group node is copied (with its node_tree preserved) into its parent
-        group. The group construction itself reuses makeGroupFromNodes - the same
-        code path as the interactive 'Make Group' operator.
+        group. The group construction reuses makeGroupFromNodes, the same code path
+        as the interactive 'Make Group' operator.
     """
-    from vray_blender.nodes.group.utils import VRAY_GROUP_TREE_TYPE, NON_GROUPABLE_NODE_TYPES
-    from vray_blender.nodes.group.operators import makeGroupFromNodes
 
     nodeTree = importContext.nodeTree
 
-    # Group membership was recorded at creation time on importContext.groupPathByNode
-    # (both real plugin nodes and the import-side Transform helpers). Top-level nodes
-    # have an empty path; tree-level anchors are never grouped.
+    # groupPathByNode holds only the nodes that came from a group, plugin nodes and Transform helpers alike.
+    # Tree-level anchors are never grouped.
     pathByNode = {n: p for n, p in importContext.groupPathByNode.items()
-                  if p and n.bl_idname not in NON_GROUPABLE_NODE_TYPES}
+                  if n.bl_idname not in NON_GROUPABLE_NODE_TYPES}
 
     if not pathByNode:
         return
@@ -293,8 +275,8 @@ def _regroupConvertedTree(importContext: ImportContext):
         for depth in range(1, len(groupPath) + 1):
             instancePaths.add(groupPath[:depth])
 
-    # Process deepest paths first: a child group is created (as a VRayNodeGroup node
-    # left in the flat tree) before its parent group is built and folds it in.
+    # Deepest paths first, so a child group exists as a VRayNodeGroup in the flat tree before its parent
+    # is built and folds it in.
     for path in sorted(instancePaths, key=len, reverse=True):
         members = [n for n, p in pathByNode.items() if p == path]
         if not members:
@@ -313,8 +295,18 @@ def _regroupConvertedTree(importContext: ImportContext):
             pathByNode[groupNode] = parentPath
 
 
+def _applyConvertedMtlWrapper(material: bpy.types.Material, vrsceneDict):
+    """ Move a converted MtlWrapper onto the material's Mtl Wrapper options and switch them on. """
+    wrapperDesc = next((p for p in vrsceneDict if p['ID'] == 'MtlWrapper'), None)
+    if wrapperDesc is None:
+        return
+
+    propGroup = material.vray.MtlWrapper
+    pluginAttrsToPropGroup(wrapperDesc, propGroup, 'MtlWrapper')
+    propGroup.use = True
+
+
 def _removeVRayNodes(nodeTree: bpy.types.NodeTree):
-    from vray_blender.nodes.tools import isVrayNode
 
     vrayNodes = [n for n in nodeTree.nodes if isVrayNode(n)]
 

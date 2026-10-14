@@ -29,6 +29,9 @@ plugin_utils.loadPluginOnModule(globals(), __name__)
 _PLUGIN_TYPE = 'TexMulti'
 _TEX_SOCKET_PREFIX = 'Texture '
 
+_MODE_COLOR_ID = '30'
+
+
 class VRaySocketTexMulti(VRaySocketColorMult):
     bl_idname = 'VRaySocketTexMulti'
     bl_label  = 'TexMulti Socket'
@@ -52,12 +55,12 @@ class VRaySocketTexMulti(VRaySocketColorMult):
         left = split.column()
         left.enabled = self.use
 
-        texSplit = left.split(factor=0.4)
-        texSplit.prop(self, 'value', text='')
+        texSplit = left.split(factor=0.6)
         if self.hasActiveFarLink():
             texSplit.prop(self, 'multiplier', text='')
         elif type(self.value) is mathutils.Color:
             texSplit.label(text=self.name)
+        texSplit.prop(self, 'value', text='')
 
         row = split.row(align=True)
         row.alignment = 'RIGHT'
@@ -309,7 +312,7 @@ def nodeInit(node: bpy.types.Node):
     _applyDefaultTexSocketValues(_getTexSockets(node))
 
     addTexMultiExtendSocket(node)
-    getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != "30")
+    getInputSocketByAttr(node, 'id_gen_tex').hide = (node.TexMulti.mode != _MODE_COLOR_ID)
 
 
 def nodeReset(node: bpy.types.Node):
@@ -381,18 +384,11 @@ def exportTreeNode(nodeCtx: NodeContext):
     textures = []
     textureIDs = []
 
-    for sock in [s for s in node.inputs if s.bl_idname == 'VRaySocketTexMulti']:
+    for sock in _getTexSockets(node):
         if not sock.use:
             continue
 
-        if nodeLink := getFarNodeLink(sock):
-            texPlugin = commonNodesExport.exportSocketLink(nodeCtx, nodeLink)
-            textures.append(texPlugin)
-        else:
-            # The socket is not connected, export a color wrapped in a TexCombineColor plugin.
-            clrPlugin = commonNodesExport._exportCombineTexture(nodeCtx, sock.value, None, 1, asFloat=False)
-            textures.append(clrPlugin)
-
+        textures.append(_exportTexSocket(nodeCtx, sock))
         textureIDs.append(sock.id)
 
     if textures:
@@ -405,6 +401,11 @@ def exportTreeNode(nodeCtx: NodeContext):
     pluginDesc.setAttribute('random_mode', _getRandomMode(node))
 
     commonNodesExport.exportNodeTree(nodeCtx, pluginDesc, skippedSockets=[])
+
+    if (node.TexMulti.mode == _MODE_COLOR_ID) and not _isSwitchIdTexLinked(node):
+        # Set after exportNodeTree() so the override wins over the socket's own (default 0.0) export.
+        _setConstantSwitchIdAttrs(pluginDesc, node)
+
     return commonNodesExport.exportPluginWithStats(nodeCtx, pluginDesc)
 
 
@@ -413,7 +414,7 @@ def onUpdateMode(src, context: bpy.types.Context, attrName: str):
     propGroup = src
     propContext = getUpdateCallbackPropertyContext(propGroup, _PLUGIN_TYPE)
 
-    getInputSocketByAttr(propContext.node, 'id_gen_tex').hide = (propGroup.mode != "30")
+    getInputSocketByAttr(propContext.node, 'id_gen_tex').hide = (propGroup.mode != _MODE_COLOR_ID)
 
 
 def onRemoveTexture(node: bpy.types.Node, context: bpy.types.Context, selectorID: str):
@@ -433,6 +434,65 @@ def onRemoveTexture(node: bpy.types.Node, context: bpy.types.Context, selectorID
         sockID += 1
 
     selectedObjectTagUpdate(node, context)
+
+
+def _exportTexSocket(nodeCtx: NodeContext, sock: bpy.types.NodeSocket):
+    """ Export the texture connected to a color socket, or the color set to the socket
+        if it is not connected.
+
+        Returns:
+        AttrPlugin - the exported texture plugin
+    """
+    if nodeLink := getFarNodeLink(sock):
+        return commonNodesExport.exportSocketLink(nodeCtx, nodeLink)
+
+    # The socket is not connected, export a color wrapped in a TexCombineColor plugin.
+    return commonNodesExport._exportCombineTexture(nodeCtx, sock.value, None, 1, asFloat=False)
+
+
+def _isSwitchIdTexLinked(node: bpy.types.Node) -> bool:
+    """ True if a texture is connected to the 'Switch ID Texture' (id_gen_tex) socket """
+    if node is None:
+        return False
+    texSock = getInputSocketByAttr(node, 'id_gen_tex')
+    return (texSock is not None) and texSock.hasActiveFarLink()
+
+
+def switchIdActive(propGroup, node: bpy.types.Node) -> bool:
+    """ 'Switch ID' is only editable while no texture feeds 'Switch ID Texture'. """
+    if node is None:
+        return True
+    return not _isSwitchIdTexLinked(node)
+
+
+def idGenTexParamsActive(propGroup, node: bpy.types.Node) -> bool:
+    """ 'Round Mode'/'Interpolate' only apply while 'Switch ID Texture' is linked. """
+    if node is None:
+        return False
+    return _isSwitchIdTexLinked(node)
+
+
+def loopTexturesActive(propGroup, node: bpy.types.Node) -> bool:
+    """ Disabled for 'Random by Composite Key' (existing rule), and additionally for
+        'Color ID' while its Switch ID Texture socket is unlinked (a constant switch ID
+        selects one texture; looping does not apply).
+    """
+    if propGroup.mode == '12':
+        return False
+    if (propGroup.mode == _MODE_COLOR_ID) and not _isSwitchIdTexLinked(node):
+        return False
+    return True
+
+
+def _setConstantSwitchIdAttrs(pluginDesc: PluginDesc, node: bpy.types.Node):
+    """ Fill in Color ID mode setttings when manual Switch ID is active. """
+    pluginDesc.setAttributes({
+        'id_gen_tex'            : float(node.TexMulti.switch_id),
+
+        # A manually typed ID selects a texture by its exact ID. 
+        'id_gen_tex_round_mode' : '0', # Round Nearest
+        'interpolate'           : False
+    })
 
 
 def _getRandomMode(node):

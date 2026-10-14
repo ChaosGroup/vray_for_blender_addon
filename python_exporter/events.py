@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
+import functools
 import bpy
 
 from vray_blender.bin import VRayBlenderLib as vray
@@ -11,12 +11,13 @@ from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib import blender_utils, image_utils, path_utils
 from vray_blender.lib.names import IdGenerator, syncUniqueNames
 from vray_blender.nodes.color_ramp import syncColorRamps, registerColorRamps, pruneColorRamps
-from vray_blender.nodes.curves_node import registerCurveNodeSubscriptions
+from vray_blender.nodes.curves_node import registerCurveNodeSubscriptions, storeAllCurvesData
 from vray_blender.nodes.links import clearScheduledLinkFixes
+from vray_blender.nodes.utils import unshareNodeTextures
 from vray_blender.lib.image_utils import registerBitmapImageNodes
 from vray_blender.nodes.tree import upgradeTrees
 from vray_blender.plugins.BRDF.BRDFScanned import registerScannedNodes
-from vray_blender.utils import cosmos_asset_set, cosmos_scatter_preset, cosmos_drop_batch
+from vray_blender.utils import cosmos_asset_set, cosmos_scatter_preset, cosmos_drop_batch, cosmos_variants
 from vray_blender.utils.update_checker import autoCheckForUpdatesFeatureEnabled
 
 
@@ -31,11 +32,6 @@ _MSGBUS_OWNER = object()
 # crashes in rna_NodeTree_refine on the unbound typeinfo. Skipping while this flag is set
 # defers the call until load_post, when the next compositor refresh will retry safely.
 _blendFileLoadInProgress = False
-
-
-# True while we peek a source .blend's version during append (see _readSourceBaselineVersion).
-# Reading a source file links data and re-fires blend_import_post; this guards the reentry.
-_readingSourceVersion = False
 
 
 def isBlendFileLoading() -> bool:
@@ -59,6 +55,13 @@ def _onRenderEngineChange():
                         space.tree_type = 'VRayNodeTreeEditor'
                     elif scene.render.engine not in VRayEngines and space.tree_type == 'VRayNodeTreeEditor':
                         space.tree_type = 'ShaderNodeTree'
+
+    # Carry Cycles' Depth pass checkbox over to the V-Ray Z Depth channel. Only into a world that
+    # is already V-Ray's, the channel setter would otherwise convert it.
+    world = scene.world
+    if (scene.render.engine in VRayEngines and world and world.node_tree and world.vray.is_vray_class
+            and any(vl.use_pass_z for vl in scene.view_layers)):
+        world.vray.VRayRenderChannels.VRayNodeRenderChannelZDepth.enabled = True
 
 
 @bpy.app.handlers.persistent
@@ -94,6 +97,9 @@ def _onSavePre(e):
             if vrayProps is not None and hasattr(vrayProps, 'upgradeNumber'):
                 vrayProps['upgradeNumber'] = UPGRADE_NUMBER
 
+    # Append and link rebuild the curve widgets from this stored copy.
+    storeAllCurvesData()
+
 
 @bpy.app.handlers.persistent
 def _onLoadPre(e):
@@ -114,6 +120,12 @@ def _onLoadPre(e):
         # load - but it would go on claiming imports at coordinates that mean nothing in
         # the new scene, and withhold their materials for doing so.
         cosmos_drop_batch.clearBatches()
+        # A pending variant swap names an object in the file being replaced, and its reply would
+        # otherwise be applied to whatever the new file happens to call by that name.
+        cosmos_variants.clearSwaps()
+        # Imports queued for the file being replaced.
+        from vray_blender.utils.cosmos_handler import clearImportQueue
+        clearImportQueue()
         # Drop stale scheduled-fix keys before load.
         clearScheduledLinkFixes()
     except Exception:
@@ -141,6 +153,10 @@ def _onLoadPost(scenePath):
     from vray_blender.nodes.navigation import clearNavigationHistory
     clearNavigationHistory()
 
+    # A file saved during a viewport render holds the neutral color management. Restore the user's.
+    from vray_blender.engine.draw_scheduler import restoreViewTransform
+    restoreViewTransform()
+
     # Reset the global unique ID generator. This will keep the generated IDs to a
     # decent size and will also ensure that on reload, given that no changes have been
     # made to the scene, the IDs will remain the same
@@ -148,6 +164,10 @@ def _onLoadPost(scenePath):
 
     # Upgrade trees coming from Blender 4.5, not completely clear why but they seem to have an empty tree_type.
     upgradeTrees()
+
+    # Before anything below reads them.
+    from vray_blender.utils.upgrade_scene import upgradeLinkedData
+    upgradeLinkedData()
 
     # Set unique ids to all objects with VRay properties
     syncUniqueNames(reset=True)
@@ -187,6 +207,13 @@ def _onLoadPost(scenePath):
     image_utils.clearSavedImages()
     image_utils.trackImageUpdates()
 
+    # Node thumbnails hold GPU textures and content keys for the previous file's trees
+    try:
+        from vray_blender.preview import thumbs
+        thumbs.onFileLoad()
+    except Exception as ex:
+        debug.printError(f"Node thumbnails reset failed: {ex}")
+
     # Run upgrade for the loaded scene, if necessary
     if bpy.app.background:
         # In headless mode, the rendering may start before the scene is upgraded.
@@ -204,6 +231,12 @@ def _onLoadPost(scenePath):
     global _blendFileLoadInProgress
     _blendFileLoadInProgress = False
 
+    # update_render_passes() skipped every call made while the flag was set, so the
+    # compositor's Render Layers node declared no passes and its sockets are disabled.
+    # Re-query the engine now that touching world.node_tree is safe again.
+    for viewLayer in bpy.context.scene.view_layers:
+        viewLayer.update_render_passes()
+
 
 @bpy.app.handlers.persistent
 def _onRenderJobEnded(e):
@@ -215,18 +248,33 @@ def _onRenderJobEnded(e):
 
 @bpy.app.handlers.persistent
 def _onUndoPost(e):
+    unshareNodeTextures()
     # Color ramp registrations are not stored with the scene and need to be recreated
     registerColorRamps()
     registerBitmapImageNodes()
     registerCurveNodeSubscriptions()
+    _invalidateNodeThumbnails()
 
 
 @bpy.app.handlers.persistent
 def _onRedoPost(e):
+    unshareNodeTextures()
     # Color ramp registrations are not stored with the scene and need to be recreated
     registerColorRamps()
     registerBitmapImageNodes()
     registerCurveNodeSubscriptions()
+    _invalidateNodeThumbnails()
+
+
+def _invalidateNodeThumbnails():
+    """ Undo and redo restore node properties without running their update callbacks, the only
+        signal node thumbnails have that a node changed.
+    """
+    try:
+        from vray_blender.preview import thumbs
+        thumbs.onUndoRedo()
+    except Exception as ex:
+        debug.printError(f"Node thumbnails invalidation failed: {ex}")
 
 
 @bpy.app.handlers.persistent
@@ -251,10 +299,19 @@ def _onUpdatePost(scene, depsgraph):
     # Invalidate the render channels panel cache on any World/node-tree change (catches
     # link swaps, muting and group sub-tree edits). Route via PLUGIN_MODULES to hit the
     # bare-name module instance that owns the getter - a package-path import would no-op.
-    if any(isinstance(u.id, (bpy.types.World, bpy.types.NodeTree)) for u in depsgraph.updates):
+    if depsgraph.id_type_updated('WORLD') or depsgraph.id_type_updated('NODETREE'):
         from vray_blender import plugins
         if rcPanel := plugins.PLUGIN_MODULES.get('VRayRenderChannels'):
             rcPanel.invalidateConnectedChannelsCache()
+
+    # Node thumbnails hold a content key per node. A graph change drops them so the next redraw
+    # rehashes what is visible.
+    try:
+        from vray_blender.preview.thumbs import service as thumbService
+        thumbService.onDepsgraphUpdate(scene, depsgraph)
+    except Exception as ex:
+        from vray_blender import debug
+        debug.printError(f"Node thumbnails sync failed: {ex}")
 
     # Push Blender's camera-view render region to VFB whenever the scene changes
     # and no render is running. syncVfbRenderRegionFromScene() dedupes against
@@ -275,7 +332,17 @@ def _applyFCurveValue(idBlock, fc, frame):
         current = getattr(parent, propName, None)
         if current is None:
             return
+        # fc.evaluate() is always a float. Convert it the way Blender's animsys does.
         value = fc.evaluate(frame)
+        prop = parent.bl_rna.properties[propName]
+        if prop.type == 'BOOLEAN':
+            value = value >= 0.5
+        elif prop.type == 'INT':
+            value = int(value)
+        elif prop.type == 'ENUM':
+            value = next((e.identifier for e in prop.enum_items if e.value == int(value)), None)
+            if value is None:
+                return
         try:
             current[fc.array_index] = value
         except (TypeError, AttributeError):
@@ -301,56 +368,27 @@ def _onFrameChangePre(scene, depsgraph=None):
             _applyFCurveValue(ng, fc, frame)
 
 
-def _readSourceBaselineVersion(sourcePath: str) -> int:
-    """ Peek the source .blend an append/link came from and return the lowest V-Ray
-        scene upgrade number found - the version the imported data was created with,
-        so already-applied upgrade scripts are not re-run (which would corrupt the
-        data). Returns 0 if it can't be read (falls back to the whole chain).
-    """
-    global _readingSourceVersion
-    from vray_blender import version
-
-    if not sourcePath or not os.path.exists(sourcePath):
-        return 0
-
-    nums = []
-    _readingSourceVersion = True
-    try:
-        try:
-            with bpy.data.libraries.load(sourcePath, link=True) as (dataFrom, dataTo):
-                dataTo.scenes = list(dataFrom.scenes)
-        except Exception:
-            return 0
-        linkedScenes = [s for s in bpy.data.scenes
-                        if s.library and bpy.path.abspath(s.library.filepath) == sourcePath]
-        for scene in linkedScenes:
-            nums.append(int(version.getSceneUpgradeNumber(scene)))
-        # Remove the temporarily linked scenes and their now-orphan library (kept if
-        # a real link operation still references it).
-        libs = {s.library for s in linkedScenes}
-        for scene in linkedScenes:
-            bpy.data.scenes.remove(scene)
-        for lib in libs:
-            if lib and lib.users == 0:
-                try:
-                    bpy.data.libraries.remove(lib)
-                except Exception:
-                    pass
-    finally:
-        _readingSourceVersion = False
-
-    return min(nums) if nums else 0
 
 
 # bpy.types.BlendImportContext was added in 4.3
 if bpy.app.version >= (4, 3, 0):
     @bpy.app.handlers.persistent
-    def _onImportPost(ctx: bpy.types.BlendImportContext):
-        # Guard reentry: _readSourceBaselineVersion links data and re-fires this handler.
-        if _readingSourceVersion:
+    def _onImportPre(ctx: bpy.types.BlendImportContext):
+        from vray_blender.utils.upgrade_scene import isReadingSourceFile
+        if isReadingSourceFile():
             return
 
-        from vray_blender import version
+        from vray_blender.nodes.curves_node import recordCurvesNodesBeforeImport
+        recordCurvesNodesBeforeImport()
+
+    @bpy.app.handlers.persistent
+    def _onImportPost(ctx: bpy.types.BlendImportContext):
+        from vray_blender.utils.upgrade_scene import isReadingSourceFile, upgradeFromSource, readSourceCurvesData
+
+        # Guard reentry: reading a source file links data and re-fires this handler.
+        if isReadingSourceFile():
+            return
+
         from vray_blender.nodes.curves_node import initImportedCurveNodes
         from vray_blender.nodes import color_ramp
         from vray_blender.nodes.specials.gradient_ramp import VRayNodeColorRamp
@@ -370,21 +408,28 @@ if bpy.app.version >= (4, 3, 0):
             bySource.setdefault(path, set()).add(item.id.session_uid)
 
         for path, uids in bySource.items():
-            baseline = _readSourceBaselineVersion(path) if path else 0
-            version.upgradeImportedData(uids, baseline)
+            upgradeFromSource(path, uids)
+
+        # Read once per source file, and only if some curve is not stored on its node.
+        getSourceCurvesData = functools.cache(readSourceCurvesData)
 
         for item in ctx.import_items:
-            if item.id_type in ('MATERIAL', 'WORLD'):
+            if item.id_type in ('MATERIAL', 'WORLD', 'LIGHT'):
                 ntree = getattr(item.id, 'node_tree', None)
             elif item.id_type == 'OBJECT':
                 ntree = getattr(getattr(item.id, 'vray', None), 'ntree', None)
+            elif item.id_type == 'NODETREE':
+                # Node groups arrive as datablocks of their own, and cannot be reached from the
+                # tree of the material that uses them.
+                ntree = item.id
             else:
                 continue
 
             if not ntree:
                 continue
 
-            initImportedCurveNodes(ntree)
+            path = bpy.path.abspath(item.source_library.filepath) if item.source_library else ''
+            initImportedCurveNodes(ntree, lambda: getSourceCurvesData(path))
 
             for node in ntree.nodes:
                 if node.bl_idname == VRayNodeColorRamp.bl_idname:
@@ -416,8 +461,9 @@ def register():
     blender_utils.addEvent(bpy.app.handlers.render_complete, _onRenderJobEnded)
     blender_utils.addEvent(bpy.app.handlers.render_cancel, _onRenderJobEnded)
 
-    # bpy.app.handlers.blend_import_post was added in 4.3
+    # bpy.app.handlers.blend_import_pre/post were added in 4.3
     if bpy.app.version >= (4, 3, 0):
+        blender_utils.addEvent(bpy.app.handlers.blend_import_pre, _onImportPre)
         blender_utils.addEvent(bpy.app.handlers.blend_import_post, _onImportPost)
 
     # Explicitly run VfbEventHandler as the add-on registration won't trigger
@@ -454,8 +500,9 @@ def unregister():
     blender_utils.delEvent(bpy.app.handlers.render_complete, _onRenderJobEnded)
     blender_utils.delEvent(bpy.app.handlers.render_cancel, _onRenderJobEnded)
 
-    # bpy.app.handlers.blend_import_post was added in 4.3
+    # bpy.app.handlers.blend_import_pre/post were added in 4.3
     if bpy.app.version >= (4, 3, 0):
+        blender_utils.delEvent(bpy.app.handlers.blend_import_pre, _onImportPre)
         blender_utils.delEvent(bpy.app.handlers.blend_import_post, _onImportPost)
 
     from vray_blender.utils.update_checker import onCheckTimer

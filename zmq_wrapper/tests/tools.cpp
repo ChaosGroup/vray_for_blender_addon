@@ -24,3 +24,19 @@ if (WITH_TRACES_ON) {
 		});
 	}
 }
+
+
+std::string runRouterEphemeral(ZmqRouterPtr& router, const std::string& workerEndpoint, const VrayZmqWrapper::ZmqTimeouts& timeouts) {
+	ConditionalWait started;
+	std::string clientEndpoint;
+
+	router->setStartedCallback([&started, &clientEndpoint](int port) {
+		clientEndpoint = "tcp://127.0.0.1:" + std::to_string(port);
+		started.notify();
+	});
+
+	router->run("tcp://127.0.0.1:0", workerEndpoint, timeouts);
+	started.wait(std::chrono::milliseconds(3000));
+
+	return clientEndpoint;
+}

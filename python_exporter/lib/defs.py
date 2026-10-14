@@ -13,6 +13,8 @@ from vray_blender import debug
 from vray_blender.exporting.tools import TimeStats, FakeTimeStats
 from vray_blender.exporting.plugin_tracker import getObjTrackId, ObjTracker, ObjDataTracker, FakeObjTracker, ScopedNodeTracker, FakeScopedNodeTracker
 from vray_blender.lib.motion_blur import MotionBlurBuilder
+from vray_blender.nodes.tools import OBJECT_TREE_TYPES
+from vray_blender.exporting.update_tracker import UpdateTracker, UpdateTarget, UpdateFlags
 
 
 class RendererMode:
@@ -123,6 +125,12 @@ class PersistedState:
         # it would export has changed without iterating the instances first.
         self.instancedObjectsByParent: dict[int, set[int]] = {}
 
+        # {carrierTrackId: set(modelObjTrackId)} of the last exported GeomScatter.
+        self.scatterModelsByCarrier: dict[int, set[int]] = {}
+
+        # {carrierTrackId: chaos_scatter.resolve.collectionSources()} of the last exported GeomScatter.
+        self.scatterCollectionsByCarrier: dict[int, tuple] = {}
+
         # Local view is a per-viewport state that Blender does not tag the depsgraph for at all, so
         # entering or leaving it has to be detected by comparing this token.
         self.localViewToken = None
@@ -157,9 +165,10 @@ class PersistedState:
         # It is used to ensure that there is a change in the 3D viewport, indicating that the scene should be redrawn.
         self.prevRegion3dViewMatrix = None
 
-        # Points Names.object(obj, instance) to geom plugin name.
-        # It is used for easy access to the geom plugin name of already exported objects.
-        # it is set during the export of node plugins.
+        # Geometry plugin names of already exported objects, so that a Node can be re-exported
+        # without re-running the geometry export. It holds two mappings: Names.objectData() to the
+        # base geometry plugin of the data block (shared by every object using that data block),
+        # and Names.object() to the plugin the object's own OBJECT node tree produced, if any.
         self.objDataTracker = ObjDataTracker()
 
         # Stores the render mask state for the current export.
@@ -331,15 +340,19 @@ class ExporterContext:
         # not every caller reaches syncSceneState() before the first read - the production path runs
         # fur_export.syncFurInfo() first (it only consults these on incremental exports, and
         # production is always a full export).
+        # 'objTree' holds the objects whose object node tree (OBJECT, FUR or DECAL) was updated. Such
+        # changes tag only the tree, since it may be shared, so _buildUpdateIndex() maps the tree to
+        # the objects using it and adds them to 'shading' and 'all' as well.
         self.dgUpdates: dict[str, set[int]] = {   #   dict[update_type, set[objTrackId]]
             'geometry':  set(),
             'transform': set(),
             'shading':   set(),
             'all':       set(),
+            'objTree':   set(),
         }
 
-        # The originals of the Object IDs reported in dg.updates. The incremental passes use this
-        # instead of walking the whole scene.
+        # The originals of the Object IDs reported in dg.updates, plus the users of the updated
+        # object trees. The incremental passes use this instead of walking the whole scene.
         self.dgUpdatedObjects: set[bpy.types.Object] = set()
 
         # True when dg.updates contains a Scene / ViewLayer / Collection entry, i.e. a change Blender
@@ -675,6 +688,7 @@ class ExporterContext:
         updatedObjects = set()
         structural = False
         collection = False
+        updatedObjTrees = set()
 
         for u in self.dg.updates:
             original = u.id.original
@@ -693,12 +707,34 @@ class ExporterContext:
                 # See the comment on self.structuralUpdate.
                 structural = True
                 collection = collection or isinstance(original, bpy.types.Collection)
+            elif isinstance(original, bpy.types.NodeTree) and hasattr(original, 'vray') \
+                    and (original.vray.tree_type in OBJECT_TREE_TYPES) \
+                    and (u.is_updated_geometry or u.is_updated_transform or u.is_updated_shading):
+                # A flagless report carries no render change, e.g. selecting a node or moving
+                # one that is not connected to the output.
+                updatedObjTrees.add(original.session_uid)
+
+        # Trees which are not part of the depsgraph yet are recorded by tagObjectTree()
+        updatedObjTrees.update(sid for sid, _ in UpdateTracker.getUpdatesOfType(UpdateTarget.OBJECT_TREE, UpdateFlags.ALL))
+
+        # Object tree changes tag only the tree, so map them to the objects using it. All objects
+        # are scanned, as the instanced ones may not be linked to the scene.
+        objTreeUsers = set()
+        if updatedObjTrees:
+            for obj in bpy.data.objects:
+                if ((ntree := obj.vray.ntree) is not None) and (ntree.session_uid in updatedObjTrees):
+                    objTreeUsers.add(obj.session_uid)
+                    updatedObjects.add(obj)
+
+            shading |= objTreeUsers
+            allIds  |= objTreeUsers
 
         self.dgUpdates = {
             'geometry':  geometry,
             'transform': transform,
             'shading':   shading,
             'all':       allIds,
+            'objTree':   objTreeUsers,
         }
         self.dgUpdatedObjects = updatedObjects
         self.structuralUpdate = structural

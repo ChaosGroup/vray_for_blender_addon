@@ -4,7 +4,7 @@
 
 import bpy
 
-from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS
+from vray_blender.engine import NODE_TRACKERS, OBJ_TRACKERS, waitForRenderStop
 
 from vray_blender import debug
 from vray_blender.lib import gl_draw
@@ -286,7 +286,6 @@ def _syncNames(exporterCtx: ExporterContext):
 class VRayRendererIprBase:
     """ Viewport (interactive) render engine implementation """
 
-
     # Flag that indicates if the scene should be reset on "view_update" execution
     _resetRenderer = False
 
@@ -409,6 +408,8 @@ class VRayRendererIprBase:
         from vray_blender.lib.blender_utils import getFirstAvailableView3D
 
         def getLastActiveSpace():
+            # Reports whether the bound space still exists at all, on any screen. See
+            # findLastView3dArea() for the narrower 'is it on screen right now' lookup.
             if not __class__._lastView3dPtr:
                 return None
             
@@ -448,6 +449,23 @@ class VRayRendererIprBase:
             __class__._lastView3dPtr = view3d.as_pointer()
             __class__._lastWindowPtr = window.as_pointer()
             return UIRegionContext(view3d, window)
+
+        return None
+
+    @staticmethod
+    def findLastView3dArea():
+        """ Return the on-screen area currently drawing the space the renderer is bound to,
+            or None if it is not visible.
+        """
+        if not (view3dPtr := __class__._lastView3dPtr):
+            return None
+
+        for window in bpy.context.window_manager.windows:
+            for area in (a for a in window.screen.areas if a.type == 'VIEW_3D'):
+                # The currently active space is guaranteed to be the first one on the list
+                space = next((s for s in area.spaces if s.type == 'VIEW_3D'), None)
+                if space and (space.as_pointer() == view3dPtr):
+                    return area
 
         return None
 
@@ -562,6 +580,21 @@ class VRayRendererIprBase:
         if self.renderer == 0:
             from vray_blender.engine.render_engine import VRayRenderEngine
             debug.reportError(VRayRenderEngine.ERR_MSG_ZMQ_SERVER_DOWN)
+
+    def _endRenderJob(self, block: bool):
+        """ End the render job and, if 'block' is set, wait for it to stop. Never raises, so that
+            stop() can always release the renderer, e.g. after the server has crashed.
+        """
+        try:
+            vray.renderEnd(self.renderer)
+
+            if block:
+                # The main renderer is reused by the next session, so let the Stopped event
+                # of this one arrive first or it would be delivered to the new session.
+                if not waitForRenderStop(self.renderer):
+                    debug.report('WARNING', "V-Ray did not stop the interactive render in time.")
+        except Exception as ex:
+            debug.printExceptionInfo(ex, f"{type(self).__name__}::stop()")
 
     @staticmethod
     def _clearTempState(exporterCtx: ExporterContext):

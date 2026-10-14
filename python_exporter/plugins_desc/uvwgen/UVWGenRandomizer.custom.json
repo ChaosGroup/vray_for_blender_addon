@@ -160,7 +160,8 @@
                         "name": "random_by_render_id"
                     },
                     {
-                        "name": "random_by_particle"
+                        "name": "random_by_particle",
+                        "visible": { "cond": "::random_by_particle=1" }
                     },
                     {
                         "name": "random_by_instance"
@@ -169,7 +170,8 @@
                         "name": "random_by_object_id"
                     },
                     {
-                        "name": "random_by_node_handle"
+                        "name": "random_by_node_handle",
+                        "visible": { "cond": "::random_by_node_handle=1" }
                     },
                     {
                         "name": "random_by_node_name"

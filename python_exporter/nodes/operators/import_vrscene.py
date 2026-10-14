@@ -12,7 +12,6 @@
 """
 
 import os
-import queue
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
@@ -22,36 +21,16 @@ from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.sys_utils import activeRendererExists
 from vray_blender.nodes.utils import DisableAutoConnect
-
-# Import status codes, mirroring VrayZmqWrapper::ImportStatus
-_STATUS_OK = 0
-_STATUS_PARSE_ERROR = 1
-_STATUS_CANCELLED = 2
-_STATUS_INTERNAL_ERROR = 3
+from vray_blender.vray_tools.vrscene_import import (importEvents, formatImportError,
+                                                    STATUS_OK, STATUS_CANCELLED)
 
 # Wall-clock budget (seconds) for scene-build work per modal timer tick. The loop returns to
 # the modal handler after this so Blender can process events (ESC cancel) between batches.
 _APPLY_TIME_BUDGET = 0.04
 
-# Percent of the bar the server's read+enumerate stage gets, the rest going to scene assembly.
-# Measured on two ~350 MB scenes: 9.3 s of 35.9 s (26%) on ts_202423 and 3.9 s of 22.5 s (17%)
-# on AE60_001_vlado. It was 50%, which put the halfway mark at a fifth of the elapsed time.
-# A constant is the best available: the apply cost cannot be estimated until the plugin data
-# has arrived, which is the moment this stage ends.
+# The server's read+enumerate share of the progress bar, measured at 26% and 17% on two
+# ~350 MB scenes. Constant because the apply cost is unknown until this stage ends.
 _SERVER_BAR_SHARE = 25
-
-
-# Events from the native import callbacks, consumed by the modal operator's timer.
-# The callbacks are invoked on a connection thread and must not touch bpy data.
-_importEvents = queue.Queue()
-
-
-def vrsceneImportProgressCallback(importId: int, pluginsDone: int, pluginsTotal: int, stage: str):
-    _importEvents.put(('progress', importId, pluginsDone, pluginsTotal, stage))
-
-
-def vrsceneImportFinishedCallback(importId: int, result):
-    _importEvents.put(('finished', importId, result))
 
 
 class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
@@ -117,6 +96,13 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         default=False
     )
 
+    import_animation: bpy.props.BoolProperty(
+        name="Animation",
+        description="Import keyframed parameters as Blender animation. Deforming meshes and "
+                    "per-instance instancer animation are not supported",
+        default=False
+    )
+
     import_render_channels: bpy.props.BoolProperty(
         name="Render Elements",
         description="Import render elements/channels (denoiser, cryptomatte, etc.) into the world",
@@ -148,6 +134,13 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         default=True
     )
 
+    relative_path: bpy.props.BoolProperty(
+        name="Relative Paths",
+        description="Store imported file paths relative to the current .blend file. "
+                    "Has no effect while the .blend is unsaved",
+        default=True
+    )
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, "import_mode", expand=True)
@@ -165,6 +158,7 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         grid.prop(self, "import_lights")
         grid.prop(self, "import_camera")
         grid.prop(self, "import_environment")
+        grid.prop(self, "import_animation")
         grid.prop(self, "import_render_settings")
         grid.prop(self, "import_render_channels")
         grid.prop(self, "import_vfb_layers")
@@ -175,6 +169,10 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         col = layout.column()
         col.enabled = self.import_mode == 'OBJECTS'
         col.prop(self, "create_collection")
+
+        relCell = layout.row()
+        relCell.enabled = bool(bpy.data.filepath)
+        relCell.prop(self, "relative_path")
 
     @classmethod
     def poll(cls, context):
@@ -187,7 +185,7 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         # Show the options dialog first (rather than importing immediately) so the
         # user can choose what to import.
         # 'directory' and 'files' are SKIP_SAVE, so they are set only by an actual drop and
-        # never linger from a previous run - unlike 'filepath', which persists.
+        # never linger from a previous run, unlike 'filepath', which persists.
         if self.files or self.directory:
             self.filepath = self._droppedFilePath()
             return context.window_manager.invoke_props_dialog(self, width=400)
@@ -200,8 +198,8 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         """ The path of a dropped file.
 
             The drop handler fills 'filepath' with the full path and 'directory' + 'files'
-            alongside it, but either can arrive Blender-relative ('//name.vrscene') - which
-            os.path cannot read - so both are resolved and the one that names a real file wins.
+            alongside it, but either can arrive Blender-relative ('//name.vrscene'), which
+            os.path cannot read. Both are resolved and the one that names a real file wins.
         """
         candidates = [self.filepath]
         if self.directory and self.files:
@@ -218,7 +216,7 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         self.filepath = bpy.path.abspath(self.filepath)
 
         if not os.path.isfile(self.filepath):
-            # Name what was actually received - a path that arrived relative to an unsaved .blend
+            # Name what was actually received. A path that arrived relative to an unsaved .blend
             # cannot be resolved, and the raw inputs are the only way to tell that apart.
             detail = f"File does not exist: {self.filepath}"
             if self.directory or self.files:
@@ -232,7 +230,7 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
             # no server round-trip / scene assembly needed.
             return self._importAsVRaySceneObject(context)
 
-        self._importId = vray.importVrsceneStart(self.filepath)
+        self._importId = vray.importVrsceneStart(self.filepath, readKeyframes=self.import_animation)
         self._applyGen = None
         self._importer = None
         self._autoConnectGuard = None
@@ -252,28 +250,16 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         return {'RUNNING_MODAL'}
 
     def _importAsVRaySceneObject(self, context):
-        """ Create a single V-Ray Scene reference object (rendered from the file at
-            render time), mirroring vray.add_object_vrayscene. """
+        """ Create a single V-Ray Scene reference object, rendered from the file at render time. """
         from vray_blender.vray_tools import vray_proxy
-        from vray_blender.lib import blender_utils
 
-        name = f"VRayScene@{os.path.splitext(os.path.basename(self.filepath))[0]}"
-        mesh = bpy.data.meshes.new(name)
-        obj = bpy.data.objects.new(name, mesh)
-        obj.location = context.scene.cursor.location
-        context.scene.collection.objects.link(obj)
-
-        obj.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
-        vrayScene = obj.data.vray.VRayScene
-
-        if err := vray_proxy.loadVRayScenePreviewMesh(vrayScene, self.filepath):
+        # 'filepath' persists between runs and may hold a '//' path; createVRaySceneObject needs it absolute.
+        absFilePath = os.path.normpath(bpy.path.abspath(self.filepath))
+        _, err = vray_proxy.createVRaySceneObject(context, absFilePath, self.relative_path)
+        if err:
             self.report({'ERROR'}, err)
-            bpy.data.objects.remove(obj, do_unlink=True)
-            bpy.data.meshes.remove(mesh)
             return {'CANCELLED'}
 
-        vrayScene['filepath'] = self.filepath
-        blender_utils.selectObject(obj)
         self.report({'INFO'}, f"Added V-Ray Scene object for {os.path.basename(self.filepath)}")
         return {'FINISHED'}
 
@@ -296,24 +282,24 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
 
     def _pollImportEvents(self, context):
         """ Waiting for the server: show progress, start the apply when data arrives. """
-        while not _importEvents.empty():
-            evt = _importEvents.get()
+        while not importEvents.empty():
+            event = importEvents.get()
 
-            if evt[1] != self._importId:
+            if event[1] != self._importId:
                 continue   # Stale event from an abandoned session
 
-            if evt[0] == 'progress':
-                _, _, done, total, stage = evt
+            if event[0] == 'progress':
+                _, _, done, total, stage = event
                 if total > 0:
                     context.window_manager.progress_update(int(_SERVER_BAR_SHARE * done / total))
                     self._setStatus(context, f"V-Ray import: reading scene {done}/{total}")
                 else:
                     self._setStatus(context, f"V-Ray import: {stage}")
 
-            elif evt[0] == 'finished':
-                result = evt[2]
+            elif event[0] == 'finished':
+                result = event[2]
 
-                if result.status != _STATUS_OK:
+                if result.status != STATUS_OK:
                     self._reportImportError(result)
                     return self._cleanUp(context, 'CANCELLED', cancelServer=False)
 
@@ -326,22 +312,23 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         from vray_blender.vray_tools.vrscene_import import buildVrsceneDict
         from vray_blender.vray_tools.scene_import import SceneImporter, SceneImportOptions
 
-        vrsceneDict = buildVrsceneDict(self._importId, self.filepath)
+        vrsceneDict = buildVrsceneDict(self._importId)
 
         options = SceneImportOptions(
             filePath=self.filepath,
-            sceneBaseDir=result.sceneBaseDir,
             importGeometry=self.import_geometry,
             importMaterials=self.import_materials,
             importLights=self.import_lights,
             importCamera=self.import_camera,
             importEnvironment=self.import_environment,
+            importAnimation=self.import_animation,
             importRenderSettings=self.import_render_settings,
             importRenderChannels=self.import_render_channels,
             importVfbLayers=self.import_vfb_layers,
             importInstances=self.import_instances,
             importHair=self.import_hair,
             createCollection=self.create_collection,
+            relativePaths=self.relative_path,
         )
 
         self._autoConnectGuard = DisableAutoConnect()
@@ -352,7 +339,7 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
 
     def _advanceApply(self, context):
         """ Run scene-build steps for a short time budget per timer tick, then return so the
-            modal loop can process events (ESC to cancel) between batches - the build runs on
+            modal loop can process events (ESC to cancel) between batches. The build runs on
             the main thread and cannot be interrupted mid-step, so per-step granularity is the
             finest cancellation point. Scene assembly occupies the bar above
             _SERVER_BAR_SHARE, which the server enumeration filled. """
@@ -404,13 +391,10 @@ class VRAY_OT_import_vrscene(VRayOperatorBase, ImportHelper):
         return {status}
 
     def _reportImportError(self, result):
-        if result.status == _STATUS_PARSE_ERROR:
-            location = f" at {result.errorFile}:{result.errorLine}" if result.errorFile else ""
-            self.report({'ERROR'}, f"Failed to parse {self.filepath}{location}: {result.errorText}")
-        elif result.status == _STATUS_CANCELLED:
+        if result.status == STATUS_CANCELLED:
             self.report({'INFO'}, "V-Ray scene import cancelled")
         else:
-            self.report({'ERROR'}, f"V-Ray scene import failed: {result.errorText}")
+            self.report({'ERROR'}, formatImportError(result, self.filepath))
 
     @staticmethod
     def _setStatus(context, text):

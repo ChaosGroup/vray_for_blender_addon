@@ -32,6 +32,7 @@ from bpy.props import BoolProperty, CollectionProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
 
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.exporting.tools import getInputSocketByAttr
 from vray_blender.nodes.slots import firstOutput, loadImage, tryLink
 from vray_blender.nodes.tools import rearrangeTree
@@ -198,11 +199,8 @@ class VRAY_OT_WR_add_pbr_setup(VRayOperatorBase, ImportHelper):
 
         directory = bpy.path.abspath(self.directory)
         importDir = self.directory
-        if self.relative_path and bpy.data.filepath:
-            try:
-                importDir = bpy.path.relpath(self.directory)
-            except ValueError:
-                pass
+        if self.relative_path and (relative := tryGetRelativePath(self.directory)) is not None:
+            importDir = relative
 
         # Discard slots with no filename match or a missing file on disk.
         resolved = []

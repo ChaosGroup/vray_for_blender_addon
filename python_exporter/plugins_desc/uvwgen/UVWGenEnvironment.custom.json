@@ -2,6 +2,24 @@
     "ID": "UVWGenEnvironment",
     "Parameters": [
         {
+            "attr": "mapping_type",
+            "items": [
+                [ "angular", "Angular", "Angular map, as used by light probe images" ],
+                [ "cubic", "Cubic", "Cubic environment map" ],
+                [ "spherical", "Spherical", "Spherical environment map" ],
+                [ "mirror_ball", "Mirror Ball", "Mirror ball image" ],
+                [ "screen", "Screen", "The environment is projected onto the screen" ],
+                [ "max_spherical", "Spherical (3ds Max)", "Spherical mapping matching 3ds Max" ],
+                [ "spherical_vray", "Spherical (V-Ray)", "Spherical mapping matching V-Ray for 3ds Max" ],
+                [ "max_cylindrical", "Cylindrical (3ds Max)", "Cylindrical mapping matching 3ds Max" ],
+                [ "max_shrink_wrap", "Shrink Wrap (3ds Max)", "Shrink wrap mapping matching 3ds Max" ],
+                [ "max_world_xyz", "World XYZ (3ds Max)", "World XYZ mapping matching 3ds Max" ]
+            ],
+            "ui": {
+                "display_name": "Mapping Type"
+            }
+        },
+        {
             "attr" : "ground_on",
             "default" : false,
             "type" : "BOOL"

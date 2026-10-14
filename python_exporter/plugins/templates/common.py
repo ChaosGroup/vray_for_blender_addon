@@ -7,7 +7,7 @@ import bpy
 
 from vray_blender import debug
 from vray_blender.nodes.utils import tagRedrawNodeEditor, tagRedrawPropertyEditor
-from vray_blender.lib.blender_utils import isCollection
+from vray_blender.lib.blender_utils import isCollection, resolveNodeFromPath
 from vray_blender.plugins import getPluginAttr, getPluginModule
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.plugin_utils import TEMPLATE_ATTRIBUTES
@@ -18,6 +18,18 @@ class ObjectType(StrEnum):
     OBJECT = "OBJECT"
     MATERIAL = "MATERIAL"
     UNKNOWN = ""
+
+def _getSelectorPathFromID(selector):
+    # path_from_id() cannot build a path to a template hosted on a node, so build it from the node's path.
+    if (not isinstance(selector, bpy.types.Node)) and isinstance(selector.id_data, bpy.types.NodeTree):
+        for node in selector.id_data.nodes:
+            if getattr(getattr(node, selector.vray_plugin, None), selector.vray_attr, None) == selector:
+                return f"{node.path_from_id()}.{selector.vray_plugin}.{selector.vray_attr}"
+    return selector.path_from_id()
+
+def _clearSelectorFieldsByPath(selectorPath: str):
+    if selector := resolveNodeFromPath(selectorPath):
+        selector._clearSelectorFields()
 
 def _getObjectType(obj: bpy.types.ID):
     if obj is not None:
@@ -259,7 +271,14 @@ class VRayObjectSelector(VRayUITemplate):
 
         selected = set()
 
-        for i in [i for i in self.selectedItems if i.enabled and (i.objectPtr is not None)]:
+        # During export this list may belong to Blender's evaluated copy of the scene. Its items point
+        # to object copies that Blender deletes when an object is disabled in viewports, so read the
+        # items from the original list instead.
+        original = self
+        if (idData := self.id_data).original != idData:
+            original = idData.original.path_resolve(_getSelectorPathFromID(self))
+
+        for i in [i for i in original.selectedItems if i.enabled and (i.objectPtr is not None)]:
             obj = i.objectPtr.original
             if isCollection(obj):
                 selected.update([o for o in obj.all_objects if o in dataProvider.values() and self._filterObject(o)])
@@ -301,8 +320,10 @@ class VRayObjectSelector(VRayUITemplate):
         # a new object could be selected. We however cannot reset the value of objectSelector here, 
         # because Blender will check for the value at the end of the Eyedropper operator execution
         # and show an error status message if nothing has been selected. To work around this, use
-        # a one-time timer to delay resetting the field.
-        bpy.app.timers.register(self._clearSelectorFields)
+        # a one-time timer to delay resetting the field. The timer resolves the selector by path, as
+        # an undo before it fires frees 'self'.
+        selectorPath = f"{repr(self.id_data)}.{_getSelectorPathFromID(self)}"
+        bpy.app.timers.register(lambda: _clearSelectorFieldsByPath(selectorPath))
 
 
     # Callback for VRAY_OT_node_button

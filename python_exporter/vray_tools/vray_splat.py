@@ -63,10 +63,11 @@ def _dumpSplatFile(splatFile: str, binFile: str):
 
 
 def _readSplatObjectFromBinFile(file: BufferedReader):
-    """ Read a single splat object (positions and colors channels) from a .vrbin file.
+    """ Read a single splat object (positions, colors and primitive count) from a .vrbin file.
 
     Returns:
-        tuple(np.ndarray, np.ndarray): (N, 3) positions and (N, 4) RGBA colors
+        tuple(np.ndarray, np.ndarray, int): (N, 3) positions, (N, 4) RGBA colors, primitive count
+        (0 if the file has no count channel).
     """
     def _readString(file):
         length = binRead(file, 'I', 1)
@@ -77,31 +78,38 @@ def _readSplatObjectFromBinFile(file: BufferedReader):
 
     chunks = []
     for _ in range(tocSize):
-        itemType  = binRead(file, 'c', 1)    # char, channel type ('p' or 'c')
+        itemType  = binRead(file, 'c', 1)    # char, channel type ('p', 'c' or 'n')
         itemCount = binRead(file, 'Q', 1)    # uint64, number of items
         binRead(file, 'Q', 1)                # uint64, data offset (channels are read in order)
         chunks.append((itemType, itemCount))
 
     coords = np.empty((0, 3), dtype=np.float32)
     colors = np.empty((0, 4), dtype=np.float32)
+    primitives = 0
+
+    def _readVectors(itemCount):
+        floatArray = binRead(file, 'f', itemCount * 3) if itemCount else ()  # 3 floats per item
+        return np.asarray(floatArray, dtype=np.float32).reshape(-1, 3)
 
     for itemType, itemCount in chunks:
-        floatArray = binRead(file, 'f', itemCount * 3) if itemCount else ()  # 3 floats per item
-        arr = np.asarray(floatArray, dtype=np.float32).reshape(-1, 3)
         match itemType:
             case 'p':
-                coords = arr
+                coords = _readVectors(itemCount)
             case 'c':
+                arr = _readVectors(itemCount)
                 colors = np.ones((arr.shape[0], 4), dtype=np.float32)  # opaque alpha
                 colors[:, :3] = arr
+            case 'n':
+                primitives = binRead(file, 'Q', itemCount)
             case _:
                 raise Exception(f"Unsupported Gaussian preview channel type '{itemType}'")
 
-    return coords, colors
+    return coords, colors, primitives
 
 
 def readBinSplatFile(filePath: str):
-    """ Read a .vrbin file produced by the vraytools 'DumpGaussian' action into (coords, colors). """
+    """ Read a .vrbin file produced by the vraytools 'DumpGaussian' action into
+        (coords, colors, primitives). """
     assert os.path.isfile(filePath)
 
     with open(os.path.expanduser(filePath), "rb") as file:
@@ -119,7 +127,8 @@ def loadVRaySplatPreview(filePath: str):
 
     Returns:
         dict | None: { 'coords': (N,3) float32, 'colors': (N,4) float32,
-                       'bbox': (Vector, Vector) | None }, or None on failure.
+                       'bbox': (Vector, Vector) | None, 'primitives': int },
+                     or None on failure. 'primitives' counts the model, not the preview points.
     """
     if not filePath or not os.path.isfile(filePath):
         return None
@@ -130,7 +139,7 @@ def loadVRaySplatPreview(filePath: str):
         return None
 
     try:
-        coords, colors = readBinSplatFile(binFile)
+        coords, colors, primitives = readBinSplatFile(binFile)
     except Exception as ex:
         debug.printExceptionInfo(ex, f"Failed to read Gaussian preview file '{binFile}'")
         return None
@@ -139,4 +148,4 @@ def loadVRaySplatPreview(filePath: str):
             os.unlink(binFile)
 
     bbox = (Vector(coords.min(axis=0)), Vector(coords.max(axis=0))) if coords.shape[0] > 0 else None
-    return {'coords': coords, 'colors': colors, 'bbox': bbox}
+    return {'coords': coords, 'colors': colors, 'bbox': bbox, 'primitives': primitives}

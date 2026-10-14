@@ -67,3 +67,8 @@ using ZmqAgentPtr = std::unique_ptr<VrayZmqWrapper::ZmqAgent>;
 static const bool WITH_TRACES_ON = false;
 
 void setUpTracing(ZmqAgentPtr& client, ZmqRouterPtr& router);
+
+/// Bind the router to an ephemeral TCP port on 127.0.0.1 instead of a hardcoded one, so tests
+/// don't collide with another process bound to the same port on a shared CI machine. Blocks
+/// until the router reports it is bound and returns the endpoint clients should connect to.
+std::string runRouterEphemeral(ZmqRouterPtr& router, const std::string& workerEndpoint, const VrayZmqWrapper::ZmqTimeouts& timeouts);

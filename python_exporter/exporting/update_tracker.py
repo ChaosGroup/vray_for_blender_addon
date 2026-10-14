@@ -23,6 +23,7 @@ class UpdateTarget(IntEnum):
     OBJECT_MTL_OPTIONS = 2
     LIGHT = 3
     WORLD = 4
+    OBJECT_TREE = 5     # Object trees tagged while not part of the depsgraph, see nodes.utils.tagObjectTree()
 
 
 class UpdateTracker:
@@ -36,7 +37,7 @@ class UpdateTracker:
     updates: dict[int, UpdateFlags] = {}
 
     # Material names whose topology tag is pending, while deferMtlTopology() is active.
-    # Names, not datablocks: the deferral spans a whole scene build, over which a held
+    # Names, not datablocks, because the deferral spans a whole scene build, over which a held
     # reference can go stale.
     deferredMtlTopology: set[str] | None = None
 

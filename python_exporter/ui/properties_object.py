@@ -22,7 +22,15 @@ class VRAY_PT_context_node(classes.VRayObjectPanel):
     def draw(self, context):
         VRayObject = context.object.vray
 
-        classes.ntreeWidget(self.layout, VRayObject, "Object Tree", "vray.add_nodetree_object", 'OBJECT')
+        # Fur and decal objects need their own output node; the generic object tree breaks their export.
+        if VRayObject.isVRayFur:
+            addOp = "vray.add_nodetree_fur"
+        elif VRayObject.isVRayDecal:
+            addOp = "vray.add_nodetree_decal"
+        else:
+            addOp = "vray.add_nodetree_object"
+
+        classes.ntreeWidget(self.layout, VRayObject, "Object Tree", addOp, 'OBJECT')
 
 
 class VRAY_PT_VRayPattern(classes.VRayObjectPanel):
@@ -168,40 +176,11 @@ class VRAY_PT_VRayClipper(classes.VRayObjectPanel):
         self.layout.prop(vrayClipper, 'clipper_enabled', text="")
 
     def draw(self, context):
-        layout  = self.layout
         vrayClipper = context.object.vray.VRayClipper
 
-        layout.active = vrayClipper.enabled
-        layout.alignment = 'CENTER'
-
-        split = layout.split(align = True)
-        col = split.column()
-        col.prop(vrayClipper, 'affect_light')
-        col.prop(vrayClipper, 'clip_lights')
-
-        col.prop(vrayClipper, 'only_camera_rays')
-        col.prop(vrayClipper, 'use_obj_mtl')
-        col = layout.column()
-        col.active = not vrayClipper.set_material_id and not vrayClipper.use_obj_mtl
-        col.prop(vrayClipper, 'selectedMaterial')
-
-        col.prop(vrayClipper, 'use_obj_mesh')
-        col = layout.column()
-        col.active = vrayClipper.use_obj_mesh
-        col.prop(vrayClipper, 'invert_inside')
-
-        col = layout.column(align=True)
-        col.prop(vrayClipper, 'exclusion_mode', text="As exclusive set")
-        searchBoxLabel = "Exclude" if vrayClipper.exclusion_mode else "Include"
-        col.prop_search(vrayClipper, 'exclusion_nodes_ptr', bpy.data, 'collections', text=searchBoxLabel)
-
-        # TODO: Don't know how to export this parameter, is it even used by VRay
-        # when setting clipper materials?
-
-        # layout.prop(vrayClipper, 'set_material_id')
-        # col = layout.column()
-        # col.active = vrayClipper.set_material_id and not vrayClipper.use_obj_mtl
-        # col.prop(vrayClipper, 'material_id')
+        self.layout.active = vrayClipper.enabled
+        draw_utils.UIPainter(context, getPluginModule('VRayClipper'), vrayClipper,
+                             showAnimDecorators=False).renderPluginUI(self.layout)
 
 
 class VRAY_PT_UserAttributes(classes.VRayObjectPanel):

@@ -97,6 +97,13 @@
                         }
                     },
                     {
+                        "name": "vertical_fov",
+                        "label": "Vertical FOV",
+                        "active": {
+                            "cond": "::type=9;::type=11"
+                        }
+                    },
+                    {
                         "name": "auto_fit",
                         "active": {
                             "cond": "::type=5"
@@ -124,12 +131,7 @@
                            {
                                "name": "fov",
                                "active": {"cond": "::override_fov!=0"}
-                            },
-                            {
-                                "name": "vertical_fov",
-                                "label": "Vertical FOV",
-                                "active": {"cond": "::override_fov!=0,::type=9"}
-                           }
+                            }
 
                         ]
                     }

@@ -9,6 +9,9 @@
     dedicated "npanel" Widget section in the corresponding plugin's *.custom.json and is
     rendered with UIPainter.renderWidgetsSection, so it always matches the control types and
     logic of the Object Data tab.
+
+    The same parameter block is shown in Blender's "Adjust Last Operation" box after a V-Ray
+    object is added - see VRAY_PT_add_object_params.
 """
 
 import bpy
@@ -151,6 +154,97 @@ def resolveNPanelObject(obj: bpy.types.Object):
     return _resolveGeometry(obj)
 
 
+def drawNPanelParams(layout: bpy.types.UILayout, context: bpy.types.Context, obj: bpy.types.Object) -> bool:
+    """ Draw the 'npanel' parameter block of a V-Ray object into any layout.
+
+        Used by both the N-panel and VRAY_PT_add_object_params, so the two can never drift.
+
+        @return False if the object is not one of the types the N-panel covers.
+    """
+    if (desc := resolveNPanelObject(obj)) is None:
+        return False
+
+    painter = UIPainter(context, getPluginModule(desc.pluginModuleName), desc.propGroup, desc.node,
+                        showAnimDecorators=False)
+    painter.renderWidgetsSection(layout, 'npanel')
+    return True
+
+
+class VRayAddObjectMixin:
+    """ Mix-in for the "Add V-Ray <object>" operators. It records the object the operator created,
+        which VRAY_PT_add_object_params then shows in Blender's "Adjust Last Operation" box.
+    """
+
+    # The name of the object created by the last execute(). Blender rebuilds the operator from its
+    # RNA properties before the box is drawn, so an instance attribute set in execute() would not
+    # survive - the name has to be an operator property. HIDDEN keeps it out of any auto-drawn
+    # layout, SKIP_SAVE stops a new invocation from inheriting the previous object.
+    added_object: bpy.props.StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+    def setAddedObject(self, obj: bpy.types.Object):
+        self.added_object = obj.name if obj else ""
+
+    def draw(self, context: bpy.types.Context):
+        """ Draws nothing, deliberately - do not delete.
+
+            Blender hides the whole "Adjust Last Operation" box unless WM_operator_ui_poll()
+            passes, and that only accepts an operator which either defines this method or has a
+            property that is not hidden. These operators have neither ('added_object' is hidden),
+            so without it the box - and the parameters VRAY_PT_add_object_params draws inside it -
+            would never appear.
+
+            The parameters cannot be drawn from here: everything the redo panel draws goes into a
+            UI block whose handler re-runs the operator on every edit, which recreates the object
+            and discards the change. A panel of its own gets a clean block, hence the split.
+        """
+
+
+def _lastAddedObject(context: bpy.types.Context):
+    """ The object created by the most recent V-Ray Add operator, or None if the last registered
+        operator was not one of them - in which case the Add box is not showing our operator
+        either, and the parameters must not be drawn.
+    """
+    operators = context.window_manager.operators
+    if not operators:
+        return None
+
+    objName = getattr(operators[-1].properties, 'added_object', "")
+    # The object may have been removed (undo) or renamed since it was recorded.
+    return bpy.data.objects.get(objName) if objName else None
+
+
+class VRAY_PT_add_object_params(bpy.types.Panel):
+    """ The V-Ray parameters of a newly added object, shown in Blender's "Adjust Last Operation"
+        box under the name of the Add operator.
+
+        A panel of its own, rather than something the operator's own draw() renders, because each
+        panel is drawn into its own UI block. The redo panel's block carries a handler that undoes
+        and re-runs the operator whenever any of its widgets is edited, which would recreate the
+        object and throw the edit away. A separate block is free of it, so these parameters edit
+        the object directly, like the N-panel's.
+
+        It is a sub-panel and not a sibling because Blender sizes a floating region from
+        region->panels.last alone ("only single panel support at the moment", ED_region_panels_
+        layout_ex). A sibling left the box one row tall, with everything else clipped; a child's
+        height is folded into the parent's by panel_calculate_size_recursive, so the box grows to
+        fit.
+
+        The box itself is Blender's, and it only exists while an operator is repeatable - see
+        VRayAddObjectMixin.draw for what keeps it alive.
+    """
+    bl_space_type  = 'VIEW_3D'
+    bl_region_type = 'HUD'
+    bl_parent_id   = 'OPERATOR_PT_redo'  # Blender's own "Adjust Last Operation" panel
+    bl_label       = "V-Ray Parameters"
+
+    @classmethod
+    def poll(cls, context):
+        return classes.pollEngine(context) and _lastAddedObject(context) is not None
+
+    def draw(self, context):
+        drawNPanelParams(self.layout, context, _lastAddedObject(context))
+
+
 class VRAY_PT_npanel(classes.VRayPanel):
     """ The "V-Ray" tab in the 3D Viewport sidebar (N-panel). """
     bl_space_type  = 'VIEW_3D'
@@ -181,14 +275,13 @@ class VRAY_PT_npanel(classes.VRayPanel):
 
         layout.separator()
 
-        pluginModule = getPluginModule(desc.pluginModuleName)
-        painter = UIPainter(context, pluginModule, desc.propGroup, desc.node, showAnimDecorators=False)
-        painter.renderWidgetsSection(layout, 'npanel')
+        drawNPanelParams(layout, context, obj)
 
 
 def getRegClasses():
     return (
         VRAY_PT_npanel,
+        VRAY_PT_add_object_params,
     )
 
 

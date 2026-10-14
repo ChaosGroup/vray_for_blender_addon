@@ -51,6 +51,7 @@ class ZmqExporter{
 	using ExporterCallback = std::function<void(void)>;
 	using RenderStoppedCallback = std::function<void(bool)>;
 	using AsyncOpCompleteCb = std::function<void(proto::RendererAsyncOp, bool, const std::string&)>;
+	using TextureSampledCb  = std::function<void(int, int, vray::AttrListFloat)>;
 	using ScatterResultCb = std::function<void(const proto::MsgScatterPreviewResult&)>;
 	using ScatterPresetResultCb = std::function<void(const proto::MsgScatterPresetResult&)>;
 
@@ -147,6 +148,14 @@ public:
 	void        requestRenderChannel(int channelType, const std::string& pluginInstanceName = "", int subIndex = 0);
 	std::string getMetadata(const std::string& key) const;
 
+	/// Request server-side sampling of a texture plugin over [0,1)^2 UV space. The result
+	/// arrives as MsgRendererOnTextureSampled and fires the texture-sampled callback.
+	void        sampleTexture(const std::string& pluginName, int width, int height);
+
+	/// Load a .vrscene into this renderer server-side (VRayRenderer::load). Fire and forget:
+	/// the server only logs failure. Used to set a thumbnail scene up once per warm renderer.
+	void        loadScene(const std::string& fileName);
+
 	/// Plugin parameters V-Ray filled in during the render, as of the last finished frame.
 	/// Like getMetadata(), the values only become available once the frame has completed;
 	/// the server sends them ahead of the frame's image so a caller which waited for the
@@ -181,6 +190,7 @@ public:
 	void		set_callback_on_vfb_layers_updated(UpdateMessageCb cb)  { std::scoped_lock l(m_callbacksMutex); callback_on_vfb_layers_updated = cb; }
 	void		set_callback_on_render_stopped(RenderStoppedCallback cb){ std::scoped_lock l(m_callbacksMutex); callback_on_render_stopped = cb; }
 	void		set_callback_on_async_op_complete(AsyncOpCompleteCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_async_op_complete = cb; }
+	void		set_callback_on_texture_sampled(TextureSampledCb cb)    { std::scoped_lock l(m_callbacksMutex); callback_on_texture_sampled = cb; }
 	void		set_callback_on_scatter_result(ScatterResultCb cb)      { std::scoped_lock l(m_callbacksMutex); callback_on_scatter_result = cb; }
 	void		set_callback_on_scatter_preset_result(ScatterPresetResultCb cb) { std::scoped_lock l(m_callbacksMutex); callback_on_scatter_preset_result = cb; }
 
@@ -199,6 +209,7 @@ private:
 	void processRendererOnProgress(const proto::MsgRendererOnProgress& message);
 	void processRendererOnElementReady(const proto::MsgRendererOnElementReady& message);
 	void processRendererOnPluginPropertyValues(const proto::MsgRendererOnPluginPropertyValues& message);
+	void processRendererOnTextureSampled(const proto::MsgRendererOnTextureSampled& message);
 
 	void fireStopEvent(bool isAborted);
 
@@ -213,6 +224,7 @@ private:
 	UpdateMessageCb       callback_on_vfb_layers_updated;
 	RenderStoppedCallback callback_on_render_stopped;
 	AsyncOpCompleteCb     callback_on_async_op_complete;
+	TextureSampledCb      callback_on_texture_sampled;
 	ScatterResultCb       callback_on_scatter_result;
 	ScatterPresetResultCb callback_on_scatter_preset_result;
 

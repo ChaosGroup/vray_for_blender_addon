@@ -178,7 +178,8 @@
                 [ "21", "Hue", "Hue" ],
                 [ "22", "Saturation", "Saturation" ],
                 [ "23", "Color", "Color" ],
-                [ "24", "Value", "Value" ]
+                [ "24", "Value", "Value" ],
+                [ "29", "Divide", "Divide" ]
             ],
             "type" : "ENUM",
             "ui" : {}

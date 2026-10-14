@@ -14,7 +14,7 @@
 
 import bpy
 import numpy as np
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 TARGET_MESH, TARGET_SPLINE = 0, 1
@@ -57,8 +57,9 @@ def isModelObject(obj) -> bool:
         properties._pollModelObject (which also offers EMPTY roots) both walk it, so the picker
         cannot offer an object the resolver then drops.
     """
+    from chaos_scatter.lifecycle import isGeneratedProxy
     from chaos_scatter.utils import isScatterObject
-    if isScatterObject(obj):
+    if isScatterObject(obj) or isGeneratedProxy(obj.name):
         # A carrier as its own model makes the exported chain recursive (Node -> GeomInstancer ->
         # GeomScatter -> Node) and overflows the render thread's stack in compileGeometry. Enforced
         # here rather than only in the picker's poll, which is a UI filter and so misses both a
@@ -67,6 +68,35 @@ def isModelObject(obj) -> bool:
     if obj.type == 'LIGHT':
         return isScatterableLight(obj)
     return obj.type in GEOMETRY_TYPES
+
+
+def modelSource(item):
+    return item.collection if item.source_type == 'COLLECTION' else item.object
+
+
+def modelObjects(item, childMap=None) -> list:
+    """ The objects a model item expands to: a collection's members, nested ones included, or an
+        object with its hierarchy.
+    """
+    if item.source_type == 'COLLECTION':
+        if item.collection is None:
+            return []
+        return [o for o in item.collection.original.all_objects if isModelObject(o)]
+    if item.object is None:
+        return []
+    return hierarchyObjects(item.object.original, childMap if childMap is not None else buildChildMap())
+
+
+def collectionSources(cs) -> tuple:
+    """ (item index, collection uid, pivot, member uids) per collection model item. """
+    state = []
+    for index, item in enumerate(cs.models):
+        if item.source_type == 'COLLECTION':
+            source = item.collection
+            members = tuple(o.session_uid for o in modelObjects(item))
+            state.append((index, source.session_uid if source else 0,
+                          tuple(source.instance_offset) if source else (), members))
+    return tuple(state)
 
 
 def selectedTargets(context) -> list:
@@ -101,8 +131,11 @@ class ResolvedTarget:
 
 
 class ResolvedModel:
-    """ One entry of the GeomScatter 'models' list, in emitted order. """
-    __slots__ = ('itemIndex', 'object', 'parentIndex', 'frequency', 'clusterGroupId')
+    """ One entry of the GeomScatter 'models' list, in emitted order. object is None for the root
+        of a collection item. members lists the objects a root entry stands for.
+    """
+    __slots__ = ('itemIndex', 'object', 'parentIndex', 'frequency', 'clusterGroupId',
+                 'collection', 'members')
 
     def __init__(self, itemIndex, obj, parentIndex, item):
         self.itemIndex = itemIndex
@@ -110,6 +143,33 @@ class ResolvedModel:
         self.parentIndex = parentIndex
         self.frequency = item.frequency
         self.clusterGroupId = item.cluster_group_id
+        self.collection = None
+        self.members = ()
+
+    @property
+    def matrix_world(self):
+        # instance_offset is the collection's pivot.
+        return Matrix.Translation(self.collection.instance_offset) if self.object is None \
+            else self.object.matrix_world
+
+    @property
+    def color(self):
+        return self.object.color if self.object is not None else (1.0, 1.0, 1.0, 1.0)
+
+
+def modelLocalBounds(entry, depsgraph):
+    """ Combined evaluated AABB of the entry's members in its root's local space. """
+    rootInv = entry.matrix_world.inverted_safe()
+    lo, hi = [float('inf')] * 3, [float('-inf')] * 3
+    for obj in entry.members:
+        corners = _lightLocalCorners(obj) if obj.type == 'LIGHT' else _localCorners(obj, depsgraph)
+        toRoot = rootInv @ obj.matrix_world
+        for corner in corners:
+            local = toRoot @ corner
+            for axis in range(3):
+                lo[axis] = min(lo[axis], local[axis])
+                hi[axis] = max(hi[axis], local[axis])
+    return (lo, hi) if entry.members else ([0.0] * 3, [0.0] * 3)
 
 
 def evaluatedMeshData(obj, depsgraph):
@@ -330,41 +390,6 @@ def hierarchyObjects(root, childMap: dict) -> list:
     return out
 
 
-def hierarchyLocalBounds(rootObj, depsgraph, childMap: dict | None = None):
-    """ Combined AABB of an object hierarchy in the ROOT's local space (children folded in via
-        root^-1 @ child), so the model's world transform is excluded.
-
-        The bounds come from the EVALUATED objects, i.e. with modifiers applied. That is what the
-        preview wants: the stand-in box it sends the scatter core is what the core uses for
-        collision spacing, and the render measures the real modified geometry. A light member has
-        no geometry to measure and contributes _lightLocalCorners instead.
-
-        Callers looping over several models should build one childMap and pass it in.
-    """
-    if childMap is None:
-        childMap = buildChildMap()
-
-    rootInv = rootObj.matrix_world.inverted_safe()
-    lo = [float('inf')] * 3
-    hi = [float('-inf')] * 3
-    for o in hierarchyObjects(rootObj, childMap):
-        if o.type == 'LIGHT':
-            corners = _lightLocalCorners(o)
-        elif o.type in GEOMETRY_TYPES:
-            corners = _localCorners(o, depsgraph)
-        else:
-            continue
-        toRoot = rootInv @ o.matrix_world
-        for corner in corners:
-            local = toRoot @ corner
-            for axis in range(3):
-                lo[axis] = min(lo[axis], local[axis])
-                hi[axis] = max(hi[axis], local[axis])
-    if lo[0] == float('inf'):
-        lo, hi = [0.0] * 3, [0.0] * 3
-    return lo, hi
-
-
 def resolveTargets(cs, depsgraph: bpy.types.Depsgraph) -> list[ResolvedTarget]:
     """ The GeomScatter 'targets' list, in emitted order.
 
@@ -412,7 +437,8 @@ def resolveModels(cs, expandHierarchy: bool, childMap: dict | None = None) -> li
 
         expandHierarchy is True for the render (each model item contributes its whole object
         hierarchy) and False for the preview (one stand-in box per item). The handle space is
-        the same either way - see modelHandles.
+        the same either way - see modelHandles. A collection item contributes a transform-only
+        root followed by its members.
 
         childMap is the caller's, when it has one; otherwise it is built on the first real model
         item and shared by the rest.
@@ -420,6 +446,21 @@ def resolveModels(cs, expandHierarchy: bool, childMap: dict | None = None) -> li
     resolved = []
 
     for itemIndex, item in enumerate(cs.models):
+        if item.source_type == 'COLLECTION':
+            members = modelObjects(item)
+            if not members:
+                continue
+            rootIndex = len(resolved)
+            entry = ResolvedModel(itemIndex, None, -1, item)
+            entry.collection = item.collection.original
+            entry.members = tuple(members)
+            resolved.append(entry)
+            if expandHierarchy:
+                for obj in members:
+                    child = ResolvedModel(itemIndex, obj, rootIndex, item)
+                    child.collection = entry.collection
+                    resolved.append(child)
+            continue
         # Must be the original. buildChildMap keys on bpy.data.objects.
         root = item.object.original if item.object is not None else None
         if root is None:
@@ -431,8 +472,11 @@ def resolveModels(cs, expandHierarchy: bool, childMap: dict | None = None) -> li
             # An Empty root with scatterable children is a valid model - the preview boxes the
             # whole hierarchy. It must contain SOMETHING scatterable though, or its handle would
             # exist here but not on the render side and clusters_layer_models would disagree.
-            if any(isModelObject(o) for o in hierarchyObjects(root, childMap)):
-                resolved.append(ResolvedModel(itemIndex, root, -1, item))
+            members = tuple(o for o in hierarchyObjects(root, childMap) if isModelObject(o))
+            if members:
+                entry = ResolvedModel(itemIndex, root, -1, item)
+                entry.members = members
+                resolved.append(entry)
             continue
 
         rootIndex = -1

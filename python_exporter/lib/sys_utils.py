@@ -13,6 +13,14 @@ from pathlib import PurePath
 import bpy
 from vray_blender import debug
 
+try:
+    from vray_blender.external import psutil
+except ImportError:
+    # external/psutil carries a prebuilt _psutil_windows.pyd built for x64, so it will not
+    # load into an ARM64 Blender. Both of its users - getCpuThreadCount() here and
+    # ZMQProcess._waitForProcessToExit() - cope without it, so it is optional.
+    psutil = None
+
 
 def activeRendererExists():
     """ Check if there is an active renderer """
@@ -32,6 +40,16 @@ def getUsername():
 
 def getHostname():
     return socket.gethostname()
+
+
+def getCpuThreadCount():
+    """ Number of CPU threads on this machine. """
+    # os.cpu_count() is the fallback and not the rule because on Windows it does not count
+    # past the process' own processor group. It is the rule on macOS though - the psutil we
+    # ship miscounts there, taking NUMA nodes into account.
+    if sys.platform == 'win32' and psutil is not None:
+        return psutil.cpu_count()
+    return os.cpu_count()
 
 
 def getPlatformName(executableBaseName: str):
@@ -217,6 +235,16 @@ def getDefaultTexturePath():
 
 def getUvGridTexturePath():
     return os.path.join(_getResourcesPath(), "uv_grid.png")
+
+def getThumbnailScenePath():
+    """ The node-thumbnail scene, loaded server-side into a warm preview renderer. """
+    return os.path.join(_getResourcesPath(), "thumbnail_scene.vrscene")
+
+def getPlacementPreviewTexturePath():
+    """ Reference image for previewing a transform. A UV gradient with U and V arrows, so a
+        translation, rotation, scale or flip applied to it is unambiguous.
+    """
+    return os.path.join(_getResourcesPath(), "placement_preview.png")
 
 def copyToClipboard(text):
     if 'WINDIR' in os.environ:

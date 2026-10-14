@@ -3,10 +3,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+import time
 
 from vray_blender.engine.zmq_process import ZMQ
 
 from vray_blender.bin import VRayBlenderLib as vray
+
+# Upper bound for the wait in waitForRenderStop(). Only ever reached if the server hangs with
+# the connection still open - a broken connection ends the render job immediately.
+RENDER_STOP_TIMEOUT = 5.0
 
 
 NODE_TRACKERS = (
@@ -69,6 +74,17 @@ def resetActiveIprRendering():
 
     for iprRenderer in (VRayRendererIprViewport, VRayRendererIprVfb):
         iprRenderer.reset()
+
+def waitForRenderStop(renderer) -> bool:
+    """ Wait for the render job of the main renderer to stop. Returns False on timeout. """
+    deadline = time.perf_counter() + RENDER_STOP_TIMEOUT
+    while vray.renderJobIsRunning(renderer):
+        if time.perf_counter() > deadline:
+            # The Stopped event may still come, so the next session must get a new renderer.
+            vray.discardMainRenderer(renderer)
+            return False
+        time.sleep(0.01)
+    return True
 
 def resetViewportIprRendering():
     from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport

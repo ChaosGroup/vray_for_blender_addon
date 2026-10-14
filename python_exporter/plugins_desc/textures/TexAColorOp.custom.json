@@ -6,43 +6,57 @@
         {
             "attr" : "mode",
             "default" : "0",
+            "desc" : "The operation feeding the node's Result output. A is Color A * Mult A, B is Color B * Mult B",
             "items" :
             [
-                [ "0", "Result A", "Value of A: A * Mult_A" ],
-                [ "1", "Result B", "Value of B: B * Mult_B" ],
+                [ "0", "Result A", "Value of A: Color A * Mult A" ],
+                [ "1", "Result B", "Value of B: Color B * Mult B" ],
                 [ "2", "Product", "Product: A * B" ],
                 [ "3", "Sum", "Sum: A + B" ],
                 [ "4", "Difference", "Difference: A - B" ],
-                [ "5", "Power", "Power: A ^ B" ],
+                [ "5", "Power", "Power: A raised to the scalar Mult B" ],
                 [ "6", "Division", "Division: A / B" ],
                 [ "7", "Min", "min(A, B)" ],
                 [ "8", "Max", "max(A, B)" ],
                 [ "9", "Absolute difference", "Absolute value of the difference: abs(A - B)" ],
                 [ "10", "Lower Intensity Color", "Value of the color with lower intensity" ],
                 [ "11", "Greater Intensity Color", "Value of the color with greater intensity" ],
-                [ "12", "Sin", "Sine: sin(A)" ],
-                [ "13", "Cos", "Cosine: cos(A)" ],
+                [ "12", "Sin", "Sine of the product: sin(A * B)" ],
+                [ "13", "Cos", "Cosine of the product: cos(A * B)" ],
                 [ "14", "Abs", "Absolute value: abs(A)" ],
-                [ "15", "Ceil", "Round up the larger of A and B: ceil(max(A,B))" ],
-                [ "16", "Exp", "Exponent: e^(A+B)" ],
-                [ "17", "Floor", "Round down the smaller of A and B: floor(min(A,B))" ],
+                [ "15", "Ceil", "Round up: ceil(A)" ],
+                [ "16", "Exp", "Exponent: e^A" ],
+                [ "17", "Floor", "Round down: floor(A)" ],
                 [ "18", "Log", "Natural logarithm: ln(A)" ],
                 [ "19", "Log10", "Log10: log(A)" ],
                 [ "20", "Sqrt", "Square Root of A" ],
                 [ "21", "Fmod", "Remainder of division: A % B" ],
-                [ "22", "Average", "Average: (A+B)/2" ],
+                [ "22", "Average", "Average: (A + B) / 2" ],
                 [ "23", "Tan", "Tangent: tan(A)" ],
-                [ "24", "Asin", "Arcsine: asin(A)" ],
-                [ "25", "Acos", "Arccosine: acos(A)" ],
-                [ "26", "Atan", "Arctangent: atan(A)" ],
-                [ "27", "Atan 2", "Arctangent 2 of A and B: atan2(A, B)" ],
-                [ "28", "Bias Schlick", "Bias Schlick" ],
-                [ "29", "Gain Schlick", "Gain Schlick" ],
-                [ "30", "Bias Perlin", "Bias Perlin" ],
-                [ "31", "Gain Perlin", "Gain Perlin" ]
+                [ "24", "Asin", "Arcsine of the product: asin(A * B)" ],
+                [ "25", "Acos", "Arccosine of the product: acos(A * B)" ],
+                [ "26", "Atan", "Arctangent of the product: atan(A * B)" ],
+                [ "27", "Atan 2", "Arctangent of B / A: atan2(B, A)" ],
+                [ "28", "Bias Schlick", "Bias(A, B) as defined by Christophe Schlick" ],
+                [ "29", "Gain Schlick", "Gain(A, B) as defined by Christophe Schlick" ],
+                [ "30", "Bias Perlin", "Bias(A, B) as defined by Kenneth Perlin" ],
+                [ "31", "Gain Perlin", "Gain(A, B) as defined by Kenneth Perlin" ]
             ],
             "type" : "ENUM",
+            "update": "onUpdateMode",
             "ui" : {}
+        },
+        {
+            "attr" : "color_a",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ]
+        },
+        {
+            "attr" : "color_b",
+            "default" : [ 1.0, 1.0, 1.0, 1.0 ]
+        },
+        {
+            "attr" : "result_alpha",
+            "default" : 1.0
         },
         {
             "attr": "result",
@@ -72,18 +86,18 @@
                 ["absolute_difference",   "Absolute Difference",   "abs(A - B)"],
                 ["product",               "Product",               "A * B"],
                 ["division",              "Division",              "A / B"],
-                ["power",                 "Power",                 "A ^ B"],
+                ["power",                 "Power",                 "A raised to the scalar Mult B"],
                 ["minimum",               "Minimum",               "min(A, B)"],
                 ["maximum",               "Maximum",               "max(A, B)"],
                 ["average",               "Average",               "(A + B) / 2"],
                 ["lower_intensity_color", "Lower Intensity Color", "Color with lower intensity"],
                 ["greater_intensity_color","Greater Intensity Color","Color with greater intensity"],
-                ["sin",                   "Sin",                   "sin(A)"],
-                ["cos",                   "Cos",                   "cos(A)"],
+                ["sin",                   "Sin",                   "sin(A * B)"],
+                ["cos",                   "Cos",                   "cos(A * B)"],
                 ["tan",                   "Tan",                   "tan(A)"],
-                ["asin",                  "Asin",                  "asin(A)"],
-                ["acos",                  "Acos",                  "acos(A)"],
-                ["atan",                  "Atan",                  "atan(A)"],
+                ["asin",                  "Asin",                  "asin(A * B)"],
+                ["acos",                  "Acos",                  "acos(A * B)"],
+                ["atan",                  "Atan",                  "atan(A * B)"],
                 ["atan2",                 "Atan2",                 "atan2(B, A)"],
                 ["abs",                   "Abs",                   "abs(A)"],
                 ["ceil",                  "Ceil",                  "ceil(A)"],
@@ -126,21 +140,21 @@
                     },
                     {
                         "name": "color_a",
-                        "active": {"cond": "::mode!=1"}
-                    },
-                    {
-                        "name": "color_b",
-                        "active": {"cond": "::mode!=0,::mode!=5,::mode!=14,::mode!=15,::mode!=16,::mode!=17,::mode!=18,::mode!=19,::mode!=20,::mode!=23"}
+                        "active": {"cond": "plugins.texture.TexAColorOp.isColorAActive"}
                     },
                     {
                         "name": "mult_a",
                         "label": "Multiplier A",
-                        "active": {"cond": "::mode!=1"}
+                        "active": {"cond": "plugins.texture.TexAColorOp.isMultAActive"}
+                    },
+                    {
+                        "name": "color_b",
+                        "active": {"cond": "plugins.texture.TexAColorOp.isColorBActive"}
                     },
                     {
                         "name": "mult_b",
                         "label": "Multiplier B",
-                        "active": {"cond": "::mode!=0,::mode!=5,::mode!=14,::mode!=15,::mode!=16,::mode!=17,::mode!=18,::mode!=19,::mode!=20,::mode!=23"}
+                        "active": {"cond": "plugins.texture.TexAColorOp.isMultBActive"}
                     }
                 ]
             }
@@ -158,10 +172,10 @@
             }
         ],
         "input_sockets": [
-            { "name": "color_a",      "visible": { "cond": "::mode!=1", "default": true  } },
-            { "name": "color_b",      "visible": { "cond": "::mode!=0", "default": false } },
-            { "name": "mult_a",       "visible": { "cond": "::mode!=1", "default": true  } },
-            { "name": "mult_b",       "visible": { "cond": "::mode!=0", "default": false } },
+            { "name": "color_a"      },
+            { "name": "mult_a"       },
+            { "name": "color_b"      },
+            { "name": "mult_b"       },
             { "name": "result_alpha" }
         ],
         "output_sockets":[

@@ -12,7 +12,7 @@ from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.lib.names import Names
 from vray_blender.nodes import color_ramp
 from vray_blender.nodes.sockets import addInput, addOutput, removeInputs, VRaySocket, VRaySocketAColor
-from vray_blender.nodes.utils import selectedObjectTagUpdate
+from vray_blender.nodes.utils import copyFakeTexture, fixCopiedTexturesLater, isInTemporaryTree, selectedObjectTagUpdate
 
 
 _TEX_SOCKET_PREFIX = 'Point '
@@ -81,15 +81,19 @@ def createColorRampNode(parentNode: bpy.types.Node, toSocket: bpy.types.NodeSock
 
     # When a scene is loaded, parentNode's location is always (0, 0) at this point.
     # This timer reevaluates parentNode's position and moves Ramp node.
+    parentPtr, rampPtr, sockId = parentNode.as_pointer(), rampNode.as_pointer(), toSocket.identifier
+
     def moveNode():
         """Callback for the timer. Can't use lambda as it needs to assign value.
         Moves the Ramp node relative to parentNode after parentNode location evaluation."""
-        if toSocket.identifier not in rampSockIndices:
+        nodes = {n.as_pointer(): n for n in nodeTree.nodes}
+        parent, ramp = nodes.get(parentPtr), nodes.get(rampPtr)
+        if parent is None or ramp is None or sockId not in rampSockIndices:
             return
-        locationX = parentNode.location.x - pixelOffset
-        locationY = parentNode.location.y - (
-            rampSockIndices[toSocket.identifier] * pixelOffset)
-        rampNode.location = (locationX, locationY)
+        locationX = parent.location.x - pixelOffset
+        locationY = parent.location.y - (
+            rampSockIndices[sockId] * pixelOffset)
+        ramp.location = (locationX, locationY)
 
     bpy.app.timers.register(moveNode)
 
@@ -147,14 +151,12 @@ class VRaySocketColorRampTexture(VRaySocketAColor):
 
     def draw_impl(self, context, layout, node, text):
         """Executed by the draw() function."""
+        split = layout.split(factor=0.6)
         if self.hasActiveFarLink():
-            split = layout.split(factor=0.4)
-            split.prop(self, 'value', text="")
             split.prop(self, 'multiplier', text=text)
         else:
-            split = layout.split(factor=0.4)
-            split.prop(self, 'value', text="")
             split.label(text=self._sockLabel())
+        split.prop(self, 'value', text="")
 
 
 class VRAY_OT_create_gradient_ramp_btn(VRayOperatorBase):
@@ -237,7 +239,7 @@ class VRayNodeColorRamp(VRayNodeBase):
             self: The newly created node.
             node: The original node that this one is copied from.
         """
-        if not hasattr(self.id_data, 'vray'):
+        if not hasattr(self.id_data, 'vray') or isInTemporaryTree(self):
             return
 
         srcTexture = node.texture
@@ -247,42 +249,29 @@ class VRayNodeColorRamp(VRayNodeBase):
             bpy.app.timers.register(self._create_fake_texture)
             return
 
-        # Snapshot ramp data synchronously. srcTexture is guaranteed alive here,
-        # but may be freed by the time the timer fires (e.g. Make Group deletes
-        # source nodes via bpy.data.textures.remove(), which ignores use_fake_user).
-        srcColorMode = srcTexture.color_ramp.color_mode
-        srcInterp    = srcTexture.color_ramp.interpolation
-        srcHueInterp = getattr(srcTexture.color_ramp, 'hue_interpolation', None)
-        srcElements  = [(e.position, tuple(e.color)) for e in srcTexture.color_ramp.elements]
-
         # Detect Blender's Ctrl+D shallow copy: before copy() is called Blender
         # copies all properties, so self.texture is the same data block as srcTexture.
         # In copyNodesBetweenTrees, init() runs first and creates an independent texture.
-        needsFreshTexture = self.texture is srcTexture
-
-        def assignTexture():
-            """Callback for the timer. Can't use lambda as it needs to assign value."""
-            if needsFreshTexture:
-                # Shared texture from Ctrl+D: make this node independent.
-                color_ramp.createRampTexture(self, "texture")
-
+        if self.texture == srcTexture:
+            if bpy.app.version >= (5, 1, 0):
+                copyFakeTexture(self, 'texture', srcTexture)
+        else:
+            srcRamp = srcTexture.color_ramp
             ramp = self.texture.color_ramp
-            ramp.color_mode    = srcColorMode
-            ramp.interpolation = srcInterp
-            if srcHueInterp is not None:
+            ramp.color_mode    = srcRamp.color_mode
+            ramp.interpolation = srcRamp.interpolation
+            if (srcHueInterp := getattr(srcRamp, 'hue_interpolation', None)) is not None:
                 try:
                     ramp.hue_interpolation = srcHueInterp
                 except AttributeError:
                     pass
-            while len(ramp.elements) < len(srcElements):
+            while len(ramp.elements) < len(srcRamp.elements):
                 ramp.elements.new(0.0)
-            for i, (pos, col) in enumerate(srcElements):
-                ramp.elements[i].position = pos
-                ramp.elements[i].color    = col
+            for elem, srcElem in zip(ramp.elements, srcRamp.elements):
+                elem.position = srcElem.position
+                elem.color    = srcElem.color
 
-            color_ramp.registerColorRamp(self, 'texture', self.texture)
-
-        bpy.app.timers.register(assignTexture)
+        fixCopiedTexturesLater()
 
     def free(self):
         """Clean up on removal."""
@@ -388,7 +377,7 @@ def syncColorRamps():
     Called from Update Depsgraph Pre event handler.
     Manages the node sockets according to the ramp points.
     """
-    for node, _, texture in color_ramp.COLOR_RAMPS.values():
+    for node, _, texture in color_ramp.iterValidColorRamps():
         # If the node has a vray_plugin that is not NONE, it's not using gradient_ramp.
         # SoftboxTex is such case.
         if hasattr(node, 'vray_plugin') and node.vray_plugin == "NONE":

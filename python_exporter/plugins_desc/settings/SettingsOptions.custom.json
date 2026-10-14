@@ -61,6 +61,10 @@
             "default": 0.001
         },
         {
+            "attr": "mtl_stochasticBump",
+            "default": true
+        },
+        {
             "attr": "external_max_mipmap_resolution",
             "default": 0,
             "desc": "External from SettingsTextureCache",
@@ -143,6 +147,13 @@
                     {
                         "name": "mtl_SSSEnabled",
                         "label": "SSS"
+                    },
+                    {
+                        "name": "mtl_stochasticBump",
+                        "label": "Stochastic Bump Sampling",
+                        "visible": {
+                            "cond": "::mtl_stochasticBump=0"
+                        }
                     },
                     {
                         "name": "mtl_limitDepth",

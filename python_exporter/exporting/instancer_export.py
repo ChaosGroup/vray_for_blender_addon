@@ -39,6 +39,14 @@ class InstancerData:
         self.indices   = indices   # np.ndarray int32 (N,) — per-instance mesh index
         self.userAttrs = userAttrs # list[tuple[str, KIND_*, np.ndarray (N,) or (N,3)]]
 
+    @staticmethod
+    def empty(name: str):
+        """ An instancer holding no instances. Exporting one clears the instance list of an
+            already exported 'GeomInstancer' plugin.
+        """
+        noIds = np.empty(0, dtype=np.int32)
+        return InstancerData(name, noIds, np.empty((0, 12), dtype=np.float32), [], noIds, [])
+
 
 # Temp collector for instance data, will be converted to InstanceData before
 # passing it to C++
@@ -52,11 +60,13 @@ class Instancer:
         self.instancer = inst.parent           # The object whose geometry determines the position and number of instances
         self.name      = name
 
-        cap = self._INITIAL_CAPACITY
-        # All three buffers grow together depending on _count.
-        self._tmsBuf     = np.empty((cap, 4, 4), dtype=np.float32)
-        self._idsBuf     = np.empty((cap, 8),    dtype=np.int32)
-        self._indicesBuf = np.empty((cap,),       dtype=np.int32)
+        # All three buffers grow together depending on _count, and are allocated by the first
+        # append() rather than here - an Instancer is also created empty, just to have export()
+        # rewrite an existing GeomInstancer with no instances (see _getInstancer()), and at
+        # _INITIAL_CAPACITY those buffers would be ~50KB of numpy nobody ever writes to.
+        self._tmsBuf     = None
+        self._idsBuf     = None
+        self._indicesBuf = None
         self._count      = 0
 
         # Rows staged flat and converted a chunk at a time; a row assignment per instance
@@ -93,6 +103,14 @@ class Instancer:
     def _grow(self):
         self._flushPending()
 
+        if self._tmsBuf is None:
+            # First append - allocate, nothing to carry over. See __init__.
+            cap              = self._INITIAL_CAPACITY
+            self._tmsBuf     = np.empty((cap, 4, 4), dtype=np.float32)
+            self._idsBuf     = np.empty((cap, 8),    dtype=np.int32)
+            self._indicesBuf = np.empty((cap,),      dtype=np.int32)
+            return
+
         n                = self._count
         cap              = len(self._tmsBuf) * 2
         newTms           = np.empty((cap, 4, 4), dtype=np.float32)
@@ -123,7 +141,7 @@ class Instancer:
 
 
     def append(self, persistentId, tm, nodePluginName, instAttrs=None):
-        if self._count >= len(self._tmsBuf):
+        if (self._tmsBuf is None) or (self._count >= len(self._tmsBuf)):
             self._grow()
 
         n = self._count
@@ -167,8 +185,7 @@ class Instancer:
 
         count = self._count
         if count == 0:
-            empty = np.empty(0, dtype=np.int32)
-            return InstancerData(self.name, empty, np.empty((0, 12), dtype=np.float32), [], empty, [])
+            return InstancerData.empty(self.name)
 
         ids = self._idsBuf[:count].copy()  # (N, 8)
 
@@ -224,6 +241,39 @@ class InstancerExporter(ExporterBase):
 
         return resolver.resolve(inst.persistent_id) if resolver else None
 
+    def _getInstancer(
+        self,
+        inst: bpy.types.DepsgraphObjectInstance,
+        instTrackIdOverride: int = None,
+        nameOverride: str = None,
+        parentTrackId: int = None
+    ) -> tuple:
+        """ Resolve (creating if necessary) the Instancer export item that instances of 'inst's parent
+            belong to, without adding anything to it.
+
+            When an instancer is being rebuilt during this pass but every one of its instances turns out
+            hidden, the Instancer irem still has to exist so export() visits it and rewrites its
+            GeomInstancer - otherwise it is never touched this pass and the previously exported,
+            now-stale instances linger in the V-Ray scene. Returns (instancer, parentTrackId).
+        """
+        if parentTrackId is None:
+            # inst.parent is the object whose vertices/faces are used for the instantiation
+            parentTrackId = getObjTrackId(inst.parent)
+        idInstancer = instTrackIdOverride or parentTrackId
+
+        if nameOverride is not None:
+            nameInstancer = nameOverride
+        elif (nameInstancer := self._instancerNames.get(parentTrackId)) is None:
+            nameInstancer = self._instancerNames[parentTrackId] = Names.instancer(inst)
+
+        # There could be multiple instancers with the same id, but different names.
+        instancersByName = self.instancers[idInstancer]
+        if (instancer := instancersByName.get(nameInstancer)) is None:
+            instancer = instancersByName[nameInstancer] = Instancer(inst, nameInstancer)
+
+        return instancer, parentTrackId
+
+
     def _addInstance(
         self,
         inst: bpy.types.DepsgraphObjectInstance,
@@ -240,20 +290,7 @@ class InstancerExporter(ExporterBase):
             # controller objects for instanced collections
             return
 
-        if parentTrackId is None:
-            # inst.parent is the object whose vertices/faces are used for the instantiation
-            parentTrackId = getObjTrackId(inst.parent)
-        idInstancer = instTrackIdOverride or parentTrackId
-
-        if nameOverride is not None:
-            nameInstancer = nameOverride
-        elif (nameInstancer := self._instancerNames.get(parentTrackId)) is None:
-            nameInstancer = self._instancerNames[parentTrackId] = Names.instancer(inst)
-
-        # There could be multiple instancers with the same id, but different names.
-        instancersByName = self.instancers[idInstancer]
-        if (instancer := instancersByName.get(nameInstancer)) is None:
-            instancer = instancersByName[nameInstancer] = Instancer(inst, nameInstancer)
+        instancer, parentTrackId = self._getInstancer(inst, instTrackIdOverride, nameOverride, parentTrackId)
 
         tm = tmOverride if tmOverride is not None else inst.matrix_world
         instancer.append(inst.persistent_id, tm, nodePluginName,
@@ -262,8 +299,8 @@ class InstancerExporter(ExporterBase):
 
     def export(self):
         # Export a GeomInstancer plugin together with a wrapping Node so that V-Ray adds
-        # it to the scene. Both geometry and light instancers need the `Node` wrapper -
-        # the only difference is what the `GeomInstancer.sources` list points at.
+        # it to the scene. Both geometry and light instancers need the 'Node' wrapper -
+        # the only difference is what the 'GeomInstancer.sources' list points at.
         for instancerId, instancers in self.instancers.items():
             for instancer in instancers.values():
                 plugin_utils.createPlugin(self, instancer.name, 'GeomInstancer')
@@ -332,133 +369,232 @@ class InstancerExporter(ExporterBase):
 
 
     def exportInstances(self):
-        """ Iterate the depsgraph instances and emit the per-instancer `GeomInstancer` plugins.
+        """ Iterate the depsgraph instances and emit the per-instancer 'GeomInstancer' plugins.
 
-            Geometry instances reuse the `GeometryExporter`'s `_exportObject` / `furExporter`
+            Geometry instances reuse the 'GeometryExporter''s '_exportObject' / 'furExporter'
             for their data export. Light instances skip mesh lights and lazily ensure their
-            source `LightXxx` plugin exists via `LightExporter._exportLight` before being
-            collected into the same per-parent `instancer@<parent>` `GeomInstancer` as
+            source 'LightXxx' plugin exists via 'LightExporter._exportLight' before being
+            collected into the same per-parent 'instancer@<parent>' 'GeomInstancer' as
             geometry from that parent.
 
-            Should be called after both geometries (`obj_export.run`) and lights
-            (`LightExporter.export`) have finished, since the instance pass references the
+            Should be called after both geometries ('obj_export.run') and lights
+            ('LightExporter.export') have finished, since the instance pass references the
             plugins they produce.
         """
+        # Caches for the change-detection predicates below, scoped to this one pass -
+        # InstancerExporter is constructed fresh per export (see module-level run()), so nothing
+        # here needs to survive across calls.
+        self._instanceChanges        = {}
+        self._instancerChanges       = {}
+        self._furVisibilityChanges   = {}
+        self._recreatedMaterialCache = {}
+        self._scatterCache           = {}
 
-        instanceChanges = {}
-        instancerChanges = {}
-        scatterCache = {}
-        # `self` is an `ExporterBase`, so it copy-inherits all ExporterContext fields
-        # (`activeInstancers`, `dgUpdates`, `dg`, ...). `self.ctx` is the *Blender* context,
+        # 'self' is an 'ExporterBase', so it copy-inherits all ExporterContext fields
+        # ('activeInstancers', 'dgUpdates', 'dg', ...). 'self.ctx' is the *Blender* context,
         # not the exporter context.
-        newInstancers = self.activeInstancers.difference(self.persistedState.activeInstancers)
-        mtlTopologyUpdates = getMtlTopologyUpdates()
+        self._newInstancers = self.activeInstancers.difference(self.persistedState.activeInstancers)
+        self._mtlTopologyUpdates = getMtlTopologyUpdates()
+        # Objects selected by fur objects that have been updated.
+        self._updatedFurGizmoObjTrackIdSet = set(p.gizmoObjTrackId for p in self.updatedFurInfo)
 
-        def hasInstanceChanged(objTrackId, instancerTrackId):
-            """ Returns True if the instance has to be exported because either the instanced object or the
-                instancer have changed.
-            """
-            if (result := instanceChanges.get((objTrackId, instancerTrackId), None)) is not None:
-                return result
+        if self._canSkipInstanceWalk():
+            return
 
-            # Blender does not create instanced objects when the scene is rendered for the first time if
-            # the instancer is invisible. This is why we need to check if the instancer has become visible
-            # since the last export and process the instances if this is so.
-            changed = self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
-                        or (objTrackId in self.dgUpdates['geometry']) \
-                        or (instancerTrackId in self.dgUpdates['geometry'])
+        instancersToRebuild, membership = self._collectInstancersToRebuild()
+        instancedByParent = self._walkAndExportInstances(instancersToRebuild)
 
-            instanceChanges[(objTrackId, instancerTrackId)] = changed
-            return changed
+        emptiedInstancers = self._clearVanishedInstancers(membership)
+        self._disableStaleDecals(instancersToRebuild)
 
-        def shouldExportGeometry(objTrackId, instancerTrackId):
-            return self.fullExport \
-                or self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
-                or (objTrackId in self.dgUpdates['geometry']) \
-                or (instancerTrackId in newInstancers)
+        # An instancer that was just emptied produced no instances, so the walk recorded nothing for
+        # it - and _canSkipInstanceWalk() derives every one of its per instancer signals from this
+        # map. Dropping it would leave the next pass unable to see it changing, and its instances
+        # would stay gone until something unrelated forced a walk. Carry the instanced objects over,
+        # not merely the key, because the predicates that notice a source being shown again key on
+        # INSTANCED object's track id, so an empty set would leave them nothing to test.
+        #
+        # Deliberately only the emptied ones. An instancer that went quiet because IT was hidden is
+        # pruneInstances()' business - its instance list is intact and showing it again is one
+        # 'visible' flag, which is far cheaper than the rebuild that keeping it here would provoke.
+        for instancerTrackId in emptiedInstancers:
+            if prevInstanced := self.persistedState.instancedObjectsByParent.get(instancerTrackId):
+                instancedByParent[instancerTrackId] = prevInstanced
 
-        def hasInstancerChanged(objTrackId, instancerTrackId):
-            if (result := instancerChanges.get((objTrackId, instancerTrackId), None)) is not None:
-                return result
+        self.persistedState.instancedObjectsByParent = dict(instancedByParent)
 
-            changed = self.fullExport \
-                        or self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
-                        or objTrackId in self.dgUpdates['transform'] \
-                        or instancerTrackId in self.dgUpdates['geometry'] \
-                        or instancerTrackId in self.dgUpdates['transform'] \
-                        or (instancerTrackId not in self.persistedState.activeInstancers) and (instancerTrackId in self.activeInstancers)
+        # Export the collected instancer data
+        self.export()
 
-            instancerChanges[(objTrackId, instancerTrackId)] = changed
-            return changed
+        # Only after a successful export - if it raises, the old snapshot has to survive so that
+        # the next pass still sees these instancers as changed. Replaced wholesale rather than
+        # updated, so that instancers which no longer exist drop out on their own.
+        self.persistedState.instancerMembership = membership
 
-        def canSkipInstanceWalk():
-            """ True when nothing this pass would export can have changed, so both
-                dg.object_instances walks - the rebuild prepass and the export loop - can be skipped.
 
-                A walk costs ~1 us per instance (~0.5 s for a 500k-instance scene) even when every
-                instance turns out to be unchanged, because the loop still has to resolve each
-                instance's object and parent before the predicates above can reject it. All the
-                predicate inputs are known up front except which objects are instanced under which
-                parent, and that is what persistedState.instancedObjectsByParent remembers from the
-                previous real walk.
+    def _canSkipInstanceWalk(self):
+        """ True when nothing this pass would export can have changed, so both
+            dg.object_instances walks - the rebuild prepass and the export loop - can be skipped.
 
-                Deliberately conservative: any signal that could feed a predicate in a way this
-                pre-check does not model forces the walk.
-            """
-            if self.fullExport or self.allObjectsChanged:
+            A walk costs ~1 us per instance (~0.5 s for a 500k-instance scene) even when every
+            instance turns out to be unchanged, because the loop still has to resolve each
+            instance's object and parent before the predicates above can reject it. All the
+            predicate inputs are known up front except which objects are instanced under which
+            parent, and that is what persistedState.instancedObjectsByParent remembers from the
+            previous real walk.
+
+            Deliberately conservative: any signal that could feed a predicate in a way this
+            pre-check does not model forces the walk.
+        """
+        if self.fullExport or self.allObjectsChanged:
+            return False
+
+        if self.collectionUpdate:
+            # The instancerMembership comparison in the prepass below is the only thing that
+            # notices an instanced collection gaining or losing a member, and it can only run if
+            # the walk runs. Blender reports such a change by tagging the collection alone, so
+            # neither the pair predicates nor allObjectsChanged see it - a member of a collection
+            # that is not itself linked to the view layer is not even in allObjects.
+            return False
+
+        if not (known := self.persistedState.instancedObjectsByParent):
+            # Nothing recorded yet - the first pass has to walk.
+            return False
+
+        if self._newInstancers or self._mtlTopologyUpdates or self._updatedFurGizmoObjTrackIdSet:
+            return False
+
+        if set(known) & set(self.objectsWithUpdatedVisibility):
+            # Fast path only, catching the instancer's OWN visibility flipping.
+            # hasInstanceChanged / hasInstancerChanged also key objectsWithUpdatedVisibility by
+            # each known instanced object's own track id, which this set
+            # intersection does not check - that case is still caught by the exhaustive loop
+            # at the end of this function, which iterates every known (objTrackId, parentId).
+            return False
+
+        if set(known) != self.activeInstancers & set(known):
+            # An instancer we recorded is no longer active.
+            return False
+
+        # An instanced object or its parent appearing ANYWHERE in dg.updates can change which
+        # instances exist, not merely where they are - and the pair predicates below only look at
+        # the geometry and transform sets. Measured case: hiding a member of a collection that is
+        # collection-instanced but not itself linked to the view layer removes its instance, while
+        # reporting only a flagless entry for that object. It reaches neither allObjects nor
+        # objectsWithUpdatedVisibility, so this is the only guard that catches it.
+        allUpdated = self.dgUpdates['all']
+        for parentTrackId, objTrackIds in known.items():
+            if (parentTrackId in allUpdated) or (objTrackIds & allUpdated):
                 return False
 
-            if self.collectionUpdate:
-                # The instancerMembership comparison in the prepass below is the only thing that
-                # notices an instanced collection gaining or losing a member, and it can only run if
-                # the walk runs. Blender reports such a change by tagging the collection alone, so
-                # neither the pair predicates nor allObjectsChanged see it - a member of a collection
-                # that is not itself linked to the view layer is not even in allObjects.
-                return False
+        # Same predicates the loop uses, so the two cannot drift.
+        return not any(
+            self._hasInstanceChanged(objTrackId, parentTrackId)
+            or self._hasInstancerChanged(objTrackId, parentTrackId)
+            or self._hasFurVisibilityChanged(objTrackId)
+            for parentTrackId, objTrackIds in known.items()
+            for objTrackId in objTrackIds
+        )
 
-            if not (known := self.persistedState.instancedObjectsByParent):
-                # Nothing recorded yet - the first pass has to walk.
-                return False
 
-            if newInstancers or mtlTopologyUpdates or updatedFurGizmoObjTrackIdSet:
-                return False
+    def _iterInstances(self):
+        """ Yield the instances this pass is interested in, along with their track ids.
 
-            if set(known) & set(self.objectsWithUpdatedVisibility):
-                # Both predicates consult objectsWithUpdatedVisibility, but only ever keyed by the
-                # *instancer's* track id - hiding an unrelated object cannot affect this pass.
-                return False
+            Shared by the rebuild prepass and the export loop, so that the two can never
+            disagree about which instances belong to an instancer.
+        """
+        for inst in self.dg.object_instances:
+            if not inst.is_instance or not inst.object:
+                continue
 
-            if set(known) != self.activeInstancers & set(known):
-                # An instancer we recorded is no longer active.
-                return False
+            obj = inst.object
 
-            # An instanced object or its parent appearing ANYWHERE in dg.updates can change which
-            # instances exist, not merely where they are - and the pair predicates below only look at
-            # the geometry and transform sets. Measured case: hiding a member of a collection that is
-            # collection-instanced but not itself linked to the view layer removes its instance, while
-            # reporting only a flagless entry for that object. It reaches neither allObjects nor
-            # objectsWithUpdatedVisibility, so this is the only guard that catches it.
-            allUpdated = self.dgUpdates['all']
-            for parentTrackId, objTrackIds in known.items():
-                if (parentTrackId in allUpdated) or (objTrackIds & allUpdated):
-                    return False
+            if obj.type in NonGeometryTypes and obj.type != 'LIGHT':
+                continue
 
-            # Same predicates the loop uses, so the two cannot drift.
-            return not any(
-                hasInstanceChanged(objTrackId, parentTrackId)
-                or hasInstancerChanged(objTrackId, parentTrackId)
-                for parentTrackId, objTrackIds in known.items()
-                for objTrackId in objTrackIds
-            )
+            if tools.isRedundantGeometryInstance(inst):
+                continue
 
-        recreatedMaterialCache = {}
-        def hasRecreatedMaterial(objTrackId: int, obj: bpy.types.Object):
-            if (result := recreatedMaterialCache.get(objTrackId)) is not None:
-                return result
-            result = any(getObjTrackId(s.material) in mtlTopologyUpdates for s in obj.material_slots if s.material is not None)
-            recreatedMaterialCache[objTrackId] = result
-            return result
+            if self.isProxyExport and (not tools.isProxyConvertibleGeometryType(inst.object)):
+                continue
 
+            instancer = inst.parent
+
+            # The answer depends only on the instancer object, which is the same for every
+            # instance it emits, so cache it instead of asking once per instance.
+            instancerKey = instancer.as_pointer()
+            isScatter = self._scatterCache.get(instancerKey)
+            if isScatter is None:
+                isScatter = tools.isObjectChaosScatter(instancer)
+                self._scatterCache[instancerKey] = isScatter
+
+            if isScatter:
+                # Chaos Scatter preview instances; the render-time placement comes from the
+                # GeomScatter plugin exported by scatter_export, not from baked transforms.
+                continue
+
+            if self.isProxyExport and self.proxyExportSettings.exportOnlySelected and not instancer.original.select_get():
+                continue
+
+            yield inst, obj, instancer, getObjTrackId(obj), getObjTrackId(instancer)
+
+
+    def _collectInstancersToRebuild(self):
+        """ Prepass: decide which instancers need their 'GeomInstancer' rebuilt this pass.
+
+            A 'GeomInstancer' is rebuilt from scratch out of the instances collected during this
+            pass, so it has to be rebuilt from *all* of them or not at all. Several of the change
+            predicates are per instanced object though - a changed transform, a recreated
+            material, fur visibility - so deciding per instance would drop every instance which
+            did not itself change. Decide once per instancer instead. The short circuit keeps
+            this to one predicate evaluation per instancer plus a set lookup per instance.
+
+            Returns (instancersToRebuild: set, membership: dict[int, tuple[int, int, int]]) -
+            membership is the per-instancer signature over instanced object track ids, see
+            PersistedState.instancerMembership.
+        """
+        instancersToRebuild = set()
+
+        # Accumulated for every instance, which is why the short circuit below only skips the
+        # predicate evaluation.
+        membership: dict[int, tuple[int, int, int]] = {}
+
+        for _, obj, _, objTrackId, instancerTrackId in self._iterInstances():
+            count, total, checksum = membership.get(instancerTrackId, (0, 0, 0))
+            membership[instancerTrackId] = (count + 1, total + objTrackId, checksum ^ objTrackId)
+
+            if instancerTrackId in instancersToRebuild:
+                continue
+
+            # 'updatedFurGizmoObjTrackIdSet' holds growth mesh objects, so it is matched against the
+            # instanced object. 'hasFurVisibilityChanged' is the companion signal for a fur OBJECT's
+            # own visibility rather than its growth mesh's or association. Folding both in here
+            # rather than gating the fur block on them separately keeps the fur instancers subject
+            # to the same all-or-nothing rule as the others - they are populated from this same
+            # loop, so a per object trigger would rebuild one out of a single instance.
+            if self._hasInstancerChanged(objTrackId, instancerTrackId) \
+                    or self._hasRecreatedMaterial(objTrackId, obj) \
+                    or objTrackId in self._updatedFurGizmoObjTrackIdSet \
+                    or self._hasFurVisibilityChanged(objTrackId):
+                instancersToRebuild.add(instancerTrackId)
+
+        # Moving an object in or out of an instanced collection changes what the instancer produces
+        # without anything reporting the instancer itself as changed, so compare the sets.
+        for instancerTrackId, signature in membership.items():
+            if self.persistedState.instancerMembership.get(instancerTrackId) != signature:
+                instancersToRebuild.add(instancerTrackId)
+
+        return instancersToRebuild, membership
+
+
+    def _walkAndExportInstances(self, instancersToRebuild: set):
+        """ Main export loop: emit per-instance geometry/light/fur/decal data and collect
+            instances into 'Instancer' items which will be exported to 'GeomInstancer'
+            plugins.
+
+            Returns instancedByParent: dict[int, set[int]] - the objects instanced under each
+            parent this pass, for the next pass's '_canSkipInstanceWalk()' check.
+        """
         # If object meshes are generated from a GN tree, they won't be assigned a unique vray IDs.
         # Track the first exported instance of each object, matching the rest of the instances by
         # the object's data pointer.
@@ -474,103 +610,22 @@ class InstancerExporter(ExporterBase):
         # Pair of nodePluginName, furTrackId, furName for fur objects that have been exported for each instance
         exportedGeomHairNodes : dict[int, list[tuple[str, int, str]]] = {}
 
-        updatedFurGizmoObjTrackIdSet = set(p.gizmoObjTrackId for p in self.updatedFurInfo) # Objects selected by fur objects that have been updated.
-
-        # Tracks source light objects whose `LightXxx` plugin we have ensured during this pass.
+        # Tracks source light objects whose 'LightXxx' plugin we have ensured during this pass.
         # In 'instanced' LightMix mode the entries are (objTrackId, instancerTrackId) tuples, since a
         # dedicated light plugin is exported per (instancer, light) pair; otherwise plain objTrackId.
         exportedLights = set()
 
-        if canSkipInstanceWalk():
-            return
-
         # Which objects are instanced under which parent, for the next pass's skip check. Recorded
         # only when the walk actually runs, so a skipped pass leaves the previous map in place.
         instancedByParent = defaultdict(set)
+        useViewportVisibility = self.interactive or self.isProxyExport
 
-        def iterInstances():
-            """ Yield the instances this pass is interested in, along with their track ids.
-
-                Shared by the rebuild prepass and the export loop below, so that the two can never
-                disagree about which instances belong to an instancer.
-            """
-            for inst in self.dg.object_instances:
-                if not inst.is_instance or not inst.object:
-                    continue
-
-                obj = inst.object
-
-                if obj.type in NonGeometryTypes and obj.type != 'LIGHT':
-                    continue
-
-                if tools.isRedundantGeometryInstance(inst):
-                    continue
-
-                if self.isProxyExport and (not tools.isProxyConvertibleGeometryType(inst.object)):
-                    continue
-
-                instancer = inst.parent
-
-                # The answer depends only on the instancer object, which is the same for every
-                # instance it emits, so cache it instead of asking once per instance.
-                instancerKey = instancer.as_pointer()
-                isScatter = scatterCache.get(instancerKey)
-                if isScatter is None:
-                    isScatter = tools.isObjectChaosScatter(instancer)
-                    scatterCache[instancerKey] = isScatter
-
-                if isScatter:
-                    # Chaos Scatter preview instances; the render-time placement comes from the
-                    # GeomScatter plugin exported by scatter_export, not from baked transforms.
-                    continue
-
-                if self.isProxyExport and self.proxyExportSettings.exportOnlySelected and not instancer.original.select_get():
-                    continue
-
-                yield inst, obj, instancer, getObjTrackId(obj), getObjTrackId(instancer)
-
-        # A `GeomInstancer` is rebuilt from scratch out of the instances collected during this pass,
-        # so it has to be rebuilt from *all* of them or not at all. Two of the change predicates are
-        # per instanced object though - a changed transform and a recreated material - so deciding
-        # per instance would drop every instance which did not itself change. 
-        # Decide once per instancer instead. The short circuit keeps this to one predicate
-        # evaluation per instancer plus a set lookup per instance.
-        instancersToRebuild = set()
-
-        # Signature of the instances each instancer produces, see PersistedState.instancerMembership.
-        # Accumulated for every instance, which is why the short circuit below only skips the
-        # predicate evaluation.
-        membership: dict[int, tuple[int, int, int]] = {}
-
-        for _, obj, _, objTrackId, instancerTrackId in iterInstances():
-            count, total, checksum = membership.get(instancerTrackId, (0, 0, 0))
-            membership[instancerTrackId] = (count + 1, total + objTrackId, checksum ^ objTrackId)
-
-            if instancerTrackId in instancersToRebuild:
-                continue
-
-            # 'updatedFurGizmoObjTrackIdSet' holds growth mesh objects, so it is matched against the
-            # instanced object. Folding it in here rather than gating the fur block on it separately
-            # keeps the fur instancers subject to the same all-or-nothing rule as the others - they
-            # are populated from this same loop, so a per object trigger would rebuild one out of a
-            # single instance.
-            if hasInstancerChanged(objTrackId, instancerTrackId) \
-                    or hasRecreatedMaterial(objTrackId, obj) \
-                    or objTrackId in updatedFurGizmoObjTrackIdSet:
-                instancersToRebuild.add(instancerTrackId)
-
-        # Moving an object in or out of an instanced collection changes what the instancer produces
-        # without anything reporting the instancer itself as changed, so compare the sets.
-        for instancerTrackId, signature in membership.items():
-            if self.persistedState.instancerMembership.get(instancerTrackId) != signature:
-                instancersToRebuild.add(instancerTrackId)
-
-        for inst, obj, instancer, objTrackId, instancerTrackId in iterInstances():
+        for inst, obj, instancer, objTrackId, instancerTrackId in self._iterInstances():
             dataID = id(obj.data)
 
             instancedByParent[instancerTrackId].add(objTrackId)
 
-            instanceChanged  = hasInstanceChanged(objTrackId, instancerTrackId)
+            instanceChanged  = self._hasInstanceChanged(objTrackId, instancerTrackId)
             instancerChanged = instancerTrackId in instancersToRebuild
 
             # Appending an instance is what commits its instancer to being rebuilt from scratch, so
@@ -587,14 +642,22 @@ class InstancerExporter(ExporterBase):
 
             if instanceChanged or instancerChanged:
                 if obj.type == 'LIGHT':
-                    self._exportLightInstance(inst, exportedLights, instancerChanged)
+                    isSourceVisible = tools.isInstanceSourceVisible(self, inst.object, useViewportVisibility)
+                    self._exportLightInstance(inst, exportedLights, instancerChanged, isSourceVisible)
                     continue
                 elif dataID not in exportedGeometry:
-                    geomNeedsExport = shouldExportGeometry(objTrackId, instancerTrackId)
+                    geomNeedsExport = self._shouldExportGeometry(objTrackId, instancerTrackId)
                     self._exportGeometryInstance(inst, obj, geomNeedsExport, exportedGeometry, exportedNodes)
 
-            if instancerChanged and (nodePluginName := exportedNodes.get(dataID)):
-                self._addInstance(inst, nodePluginName, parentTrackId=instancerTrackId)
+            if instancerChanged:
+                isSourceVisible = tools.isInstanceSourceVisible(self, inst.object, useViewportVisibility)
+                if isSourceVisible and (nodePluginName := exportedNodes.get(dataID)):
+                    self._addInstance(inst, nodePluginName, parentTrackId=instancerTrackId)
+                elif not isSourceVisible and not self.fullExport:
+                    # Every instance sharing this data under this instancer may turn out hidden this
+                    # pass; make sure the Instancer item still exists so export() rewrites its
+                    # GeomInstancer (possibly empty) instead of leaving a stale instance list in place.
+                    self._getInstancer(inst, parentTrackId=instancerTrackId)
 
             # An updated fur gizmo already marked this instancer for rebuild in the prepass.
             isFurInstanceChanged = instancerChanged
@@ -604,33 +667,162 @@ class InstancerExporter(ExporterBase):
                 exportedGeomHairNodes[dataID] = self.geomExporter.furExporter.exportFursOfObject(obj, inst)
                 exportedGeomHair[dataID] = inst.random_id
 
-            # Adding fur nodes to instancer.
+            # Adding fur nodes to instancer. Gated on isSourceVisible for the same reason as the
+            # geometry/light branches above, since fur of a hidden-source instance must not render
+            # either. ALSO gated per fur node on the fur OBJECT's own visibility (furTrackId in
+            # self.visibleObjects) - orthogonal to the growth mesh's visibility, matching how
+            # _exportGeomHairPlugin() treats the non-instanced case ("Visibility depends only on
+            # the fur object, not the growth mesh it selects"). Each fur node has its own
+            # GeomInstancer bucket (keyed by furTrackId, not instancerTrackId), so the hidden case
+            # needs its own _getInstancer()-alone fallback to keep that bucket from going stale
+            # when every instance under it turns hidden.
             if isFurInstanceChanged and (nodePluginNames := exportedGeomHairNodes.get(dataID)):
                 for nodePluginName, furTrackId, furName in nodePluginNames:
                     instancerName = f"instancer@{getGeomHairPluginName(furName, Names.object(instancer))}"
-                    self._addInstance(inst, nodePluginName, furTrackId, instancerName, parentTrackId=instancerTrackId)
+                    isFurVisible = isSourceVisible and (furTrackId in self.visibleObjects)
+                    if isFurVisible:
+                        self._addInstance(inst, nodePluginName, furTrackId, instancerName, parentTrackId=instancerTrackId)
+                    elif not self.fullExport:
+                        self._getInstancer(inst, furTrackId, instancerName, parentTrackId=instancerTrackId)
+
+        return instancedByParent
 
 
-        self._disableStaleDecals(instancersToRebuild)
+    def _hasInstanceChanged(self, objTrackId, instancerTrackId):
+        """ Returns True if the instance has to be exported because either the instanced object or the
+            instancer have changed.
+        """
+        if (result := self._instanceChanges.get((objTrackId, instancerTrackId), None)) is not None:
+            return result
 
-        self.persistedState.instancedObjectsByParent = dict(instancedByParent)
+        # Blender does not create instanced objects when the scene is rendered for the first time if
+        # the instancer is invisible. This is why we need to check if the instancer has become visible
+        # since the last export and process the instances if this is so.
+        #
+        # objTrackId in objectsWithUpdatedVisibility: the INSTANCED object's own
+        # hide_viewport / hide_render may have toggled. A presence check on purpose, not
+        # '.get(..., False)' like the instancer term above - a stored False (source just
+        # became hidden) must still count as changed, so the instancer gets rebuilt without it.
+        changed = self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
+                    or (objTrackId in self.objectsWithUpdatedVisibility) \
+                    or (objTrackId in self.dgUpdates['geometry']) \
+                    or (instancerTrackId in self.dgUpdates['geometry']) \
+                    or (objTrackId in self.dgUpdates['objTree'])
 
-        # Export the collected instancer data
-        self.export()
+        self._instanceChanges[(objTrackId, instancerTrackId)] = changed
+        return changed
 
-        # Only after a successful export - if it raises, the old snapshot has to survive so that
-        # the next pass still sees these instancers as changed. Replaced wholesale rather than
-        # updated, so that instancers which no longer exist drop out on their own.
-        self.persistedState.instancerMembership = membership
+
+    def _shouldExportGeometry(self, objTrackId, instancerTrackId):
+        return self.fullExport \
+            or self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
+            or (objTrackId in self.dgUpdates['geometry']) \
+            or (instancerTrackId in self._newInstancers)
+
+
+    def _hasInstancerChanged(self, objTrackId, instancerTrackId):
+        if (result := self._instancerChanges.get((objTrackId, instancerTrackId), None)) is not None:
+            return result
+
+        changed = self.fullExport \
+                    or self.objectsWithUpdatedVisibility.get(instancerTrackId, False) \
+                    or (objTrackId in self.objectsWithUpdatedVisibility) \
+                    or objTrackId in self.dgUpdates['transform'] \
+                    or instancerTrackId in self.dgUpdates['geometry'] \
+                    or instancerTrackId in self.dgUpdates['transform'] \
+                    or (instancerTrackId not in self.persistedState.activeInstancers) and (instancerTrackId in self.activeInstancers)
+
+        self._instancerChanges[(objTrackId, instancerTrackId)] = changed
+        return changed
+
+
+    def _hasFurVisibilityChanged(self, objTrackId):
+        """ True if the visibility of a fur object that selects 'objTrackId' as a growth mesh
+            changed since the last pass - e.g. hiding the "V-Ray Fur" object itself, as opposed
+            to hiding the growth mesh it grows on, a separate, orthogonal signal; see
+            isSourceVisible / self.visibleObjects at the fur-instance call site.
+        """
+        if (result := self._furVisibilityChanges.get(objTrackId)) is not None:
+            return result
+
+        result = any(furTrackId in self.objectsWithUpdatedVisibility
+                    for furTrackId in self.geomExporter.furExporter.furTrackIdsSelecting(objTrackId))
+
+        self._furVisibilityChanges[objTrackId] = result
+        return result
+
+
+    def _hasRecreatedMaterial(self, objTrackId: int, obj: bpy.types.Object):
+        if (result := self._recreatedMaterialCache.get(objTrackId)) is not None:
+            return result
+        result = any(getObjTrackId(s.material) in self._mtlTopologyUpdates for s in obj.material_slots if s.material is not None)
+        self._recreatedMaterialCache[objTrackId] = result
+        return result
+
+
+    def _clearVanishedInstancers(self, membership: dict):
+        """ Rewrite as empty the 'GeomInstancer' plugins of the instancers which produced
+            instances during the previous pass but none during this one, while remaining
+            visible themselves.
+
+            For some dupli types Blender drops the instances from the depsgraph altogether once
+            the instanced object is hidden, instead of yielding them for us to filter out -
+            measured on 5.0.1, legacy VERTS/FACES parenting does exactly that for the monitor
+            icon. Nothing is then collected for that instancer, so it never enters
+            self.instancers, export() never revisits it, and the instances it exported last
+            pass would keep rendering.
+
+            An instancer whose instances went away because IT was hidden is deliberately left
+            alone: pruneInstances() already hides its wrapping 'node@instancer@...' and shows it
+            again when the instancer comes back, and that path relies on the instance list still
+            being there. Emptying it here would leave nothing to show.
+
+            Fur is out of scope here: 'membership' is keyed by the instancer object's track id,
+            while a fur bucket is keyed by its fur object's ('instancer@VRayFur@...', see the fur
+            branch of _walkAndExportInstances), so a fur instancer never appears in 'vanished' and
+            is never emptied by this pass.
+
+            Returns the track ids actually emptied, for exportInstances() to keep under watch.
+        """
+        emptied = set()
+
+        if self.fullExport:
+            # Nothing pre-exists to clear.
+            return emptied
+
+        if not (vanished := set(self.persistedState.instancerMembership) - set(membership)):
+            return emptied
+
+        objectsByTrackId = {getObjTrackId(o): o for o in self.sceneObjects}
+
+        for instancerTrackId in vanished:
+            if (instancerObj := objectsByTrackId.get(instancerTrackId)) is None:
+                # No longer in the scene - pruneInstances() removes its plugins outright.
+                continue
+
+            # The same test pruneInstances() applies, so the two cannot disagree about which of
+            # them owns this instancer.
+            isInstancerShown = instancerObj.visible_get() if self.interactive else not instancerObj.hide_render
+            if not isInstancerShown:
+                continue
+
+            for pluginName in self.instTracker.getPlugins(instancerTrackId):
+                # The 'GeomInstancer' itself, not the 'node@instancer@...' wrapper around it.
+                if pluginName.startswith('instancer@'):
+                    plugin_utils.createPlugin(self, pluginName, 'GeomInstancer')
+                    vray.exportInstancer(self.renderer, InstancerData.empty(pluginName))
+                    emptied.add(instancerTrackId)
+
+        return emptied
 
 
     def _disableStaleDecals(self, instancersToRebuild: set):
         """ Disable the per-instance decals which this pass did not re-export.
 
-            Instanced geometry that goes out of date is harmless - the source `Node` plugins are
-            exported invisible and simply stop being referenced by the `GeomInstancer`. A decal has
+            Instanced geometry that goes out of date is harmless - the source 'Node' plugins are
+            exported invisible and simply stop being referenced by the 'GeomInstancer'. A decal has
             no such wrapper, it is a scene level plugin which keeps projecting until it is disabled.
-            Pointing `instance_collection` at another collection is the typical case: the decals of
+            Pointing 'instance_collection' at another collection is the typical case: the decals of
             the previous collection are left behind with no instance to match them.
 
             Only instancers which were rebuilt during this pass are considered, otherwise the still
@@ -645,9 +837,9 @@ class InstancerExporter(ExporterBase):
 
 
     def _exportDecalInstance(self, inst: bpy.types.DepsgraphObjectInstance, instancerTrackId: int):
-        """ Export a dedicated `VRayDecal` plugin for a single instance of a decal object.
+        """ Export a dedicated 'VRayDecal' plugin for a single instance of a decal object.
 
-            `GeomInstancer` does not instance `VRayDecal` correctly, so a decal cannot be collected
+            'GeomInstancer' does not instance 'VRayDecal' correctly, so a decal cannot be collected
             into the parent's instancer the way meshes and lights are. A decal also carries its own
             transform, so instead of one prototype driven by the instancer we export one decal per
             instance, placed at the instance's world transform.
@@ -673,12 +865,18 @@ class InstancerExporter(ExporterBase):
             and (self.activeLightMixNode.RenderChannelLightMix.mode == 'instanced') \
             and (self.production or self.iprVFB)
 
-    def _exportLightInstance(self, inst: bpy.types.DepsgraphObjectInstance, exportedLights: set, addToInstancer: bool):
-        """ Ensure the `LightXxx` plugin for an instanced light object, and optionally collect the
-            instance into the parent's `GeomInstancer`.
+    def _exportLightInstance(self, inst: bpy.types.DepsgraphObjectInstance, exportedLights: set,
+                              instancerChanged: bool, isSourceVisible: bool):
+        """ Ensure the 'LightXxx' plugin for an instanced light object, and optionally collect the
+            instance into the parent's 'GeomInstancer'.
 
-            'addToInstancer' must be False unless the instancer is being rebuilt this pass, see the
-            call site.
+            'instancerChanged' must be False unless the instancer is being rebuilt this pass, see
+            the call site. The instance is added to it only when 'isSourceVisible' is also True.
+
+            A hidden instance is simply not added - this function does NOT resolve an empty bucket
+            for it. A parent that instances geometry as well shares the same 'instancer@<parent>'
+            bucket, which the geometry branch of _walkAndExportInstances keeps alive; a parent that
+            instances only hidden lights is left to _clearVanishedInstancers().
         """
         obj = inst.instance_object
 
@@ -736,18 +934,21 @@ class InstancerExporter(ExporterBase):
 
             exportedLights.add(exportedLightKey)
 
-        if not addToInstancer:
+        if not instancerChanged:
+            return
+
+        if not isSourceVisible:
             return
 
         if obj.data.vray.light_type == 'MESH':
             for pluginName in pluginNames:
                 self._addInstance(inst, pluginName)
         else:
-            # The `LightXxx` plugin already carries the source light's world transform
-            # (set by `LightExporter._exportLightPlugin` from `obj.matrix_world`). V-Ray
+            # The 'LightXxx' plugin already carries the source light's world transform
+            # (set by 'LightExporter._exportLightPlugin' from 'obj.matrix_world'). V-Ray
             # composes the source's transform with the per-instance transform we pass to
-            # `GeomInstancer`. Feed in `inst.matrix_world @ source^-1` so the composition
-            # `relative @ source` yields `inst.matrix_world` and each instance ends up at
+            # 'GeomInstancer'. Feed in 'inst.matrix_world @ source^-1' so the composition
+            # 'relative @ source' yields 'inst.matrix_world' and each instance ends up at
             # its actual world position with its own scale (not the source's).
             sourceTm = obj.matrix_world
             relativeTm = inst.matrix_world @ sourceTm.inverted()
@@ -765,6 +966,15 @@ class InstancerExporter(ExporterBase):
         instTracker = exporterCtx.objTrackers['INSTANCER']
 
         def removeInstancer(instancerTrackId):
+            # NOTE: export() also registers these plugins in OBJ/LIGHT - the GeomInstancer under
+            # the INSTANCED object, the wrapping Node under the instancer object - and those
+            # registrations are deliberately left behind here. Each ObjTracker refcounts
+            # independently, so clearing them would mean scanning every tracked object in two
+            # trackers per removed plugin, and the only consequence of not doing it is that
+            # syncObjVisibility() keeps addressing a plugin name that no longer exists, which the
+            # server answers with a debug log and no state change. Not worth an O(objects) scan on
+            # the interactive prune path; obj_export.prunePlugins() clears them when the object
+            # itself goes away.
             for pluginName in instTracker.getOwnedPlugins(instancerTrackId):
                 vray.pluginRemove(exporterCtx.renderer, pluginName)
 
@@ -815,11 +1025,20 @@ class InstancerExporter(ExporterBase):
             # The instancer has been deleted, remove all plugins associated with it.
             removeInstancer(objTrackId)
 
+        # Drop the driving objects which are gone from the scene entirely. derivedInstancerNodes is
+        # only ever added to (see export()), so without this it keeps growing for the whole session
+        # and keeps naming plugins that were removed above - which also permanently excludes those
+        # names from showInstancer() through allDerivedNodes. Objects that are merely hidden or no
+        # longer instancers stay, because they are still in the scene with their nodes still live.
+        liveTrackIds = {getObjTrackId(o) for o in exporterCtx.sceneObjects}
+        for driverTrackId in [t for t in derivedInstancerNodes if t not in liveTrackIds]:
+            del derivedInstancerNodes[driverTrackId]
+
 
 def run(ctx: ExporterContext, geomExporter, lightExporter):
     """ Module-level entry point for the instance export pass.
 
-        Mirrors `obj_export.run` / `light_export.LightExporter(...).export()` so renderers
+        Mirrors 'obj_export.run' / 'light_export.LightExporter(...).export()' so renderers
         can hook the instancer export into their pipeline with a single call. Must be invoked
         after both geometries and lights have been exported.
     """

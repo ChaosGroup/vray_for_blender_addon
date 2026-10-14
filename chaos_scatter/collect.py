@@ -111,21 +111,19 @@ def buildScatterRequest(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph,
             request['targets'].append(packed)
             request['targetFactors'].append(entry.factor)
 
-    if childMap is None:
-        childMap = resolve.buildChildMap()
     for entry in resolvedModels:
         # Local bbox + the model's PRESERVED linear transform (only the rotation/scale the user
         # chose to preserve; never translation) - see params.preservedLinearMatrix.
-        bboxMin, bboxMax = resolve.hierarchyLocalBounds(entry.object, depsgraph, childMap)
+        bboxMin, bboxMax = resolve.modelLocalBounds(entry, depsgraph)
         request['models'].append({
             'bboxMin': bboxMin,
             'bboxMax': bboxMax,
-            'preservedLinear': _flatMatrix(scatter_params.preservedLinearMatrix(cs, entry.object)),
+            'preservedLinear': _flatMatrix(scatter_params.preservedLinearMatrix(cs, entry)),
             'frequency': entry.frequency,
             'clusterGroupId': entry.clusterGroupId,
             # The Color Map clustering MATCH KEY, not a tint - same source the render exports
             # from (scatter_export._fillModels).
-            'color': tuple(entry.object.color[:3]),
+            'color': tuple(entry.color[:3]),
         })
 
     request['areas'] = _collectAreas(cs, depsgraph)
@@ -236,7 +234,12 @@ def computeFingerprint(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph) ->
     for item in cs.targets:
         addObj(item.object)
     for item in cs.models:
-        addObj(item.object)
+        h.update(item.source_type.encode())
+        if item.source_type == 'COLLECTION' and item.collection is not None:
+            h.update(item.collection.name_full.encode())
+            h.update(np.asarray(item.collection.instance_offset, dtype=np.float32).tobytes())
+        for member in resolve.modelObjects(item, childMap):
+            hashOne(member)
     for item in cs.area_modifiers:
         addObj(item.object)
         h.update(f"{item.operation}:{item.falloff_near}:{item.falloff_far}"
@@ -367,7 +370,7 @@ def packCamera(camObj, scene) -> dict:
     fov, focalDistance = _clippingFrustum(cam, isOrtho, orthoWidth, aspect)
 
     return {
-        'tm': _flatMatrix(camObj.matrix_world),
+        'tm': _flatMatrix(camObj.matrix_world.normalized()),
         'fovRad': fov,
         'focalDistance': focalDistance,
         'aspect': aspect,

@@ -40,15 +40,21 @@
             {
                 "attrs": [
                     {
-                        "name": "distance"
+                        "name": "distance",
+                        "active": {
+                            "cond": "::inside_separate=0;::outside_separate=0;::inside_solid=0;::outside_solid=0"
+                        }
                     },
                     {
-                        "name": "far_tex"
+                        "name": "far_tex",
+                        "active": {
+                            "cond": "::inside_separate=0;::outside_separate=0;::inside_solid=0;::outside_solid=0"
+                        }
                     },
                     {
                         "name": "near_tex",
                         "active": {
-                            "cond": "::outside_separate=0"
+                            "cond": "::inside_separate=0;::outside_separate=0"
                         }
                     },
                     {
@@ -121,13 +127,22 @@
     "Node": {
         "input_sockets": [
             {
-                "name": "distance"
+                "name": "distance",
+                "active": {
+                    "cond": "::inside_separate=0;::outside_separate=0;::inside_solid=0;::outside_solid=0"
+                }
             },
             {
-                "name": "far_tex"
+                "name": "far_tex",
+                "active": {
+                    "cond": "::inside_separate=0;::outside_separate=0;::inside_solid=0;::outside_solid=0"
+                }
             },
             {
-                "name": "near_tex"
+                "name": "near_tex",
+                "active": {
+                    "cond": "::inside_separate=0;::outside_separate=0"
+                }
             },
             {
                 "name": "inside_tex"

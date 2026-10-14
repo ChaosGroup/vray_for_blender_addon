@@ -339,6 +339,10 @@ def updateValue(renderer, pluginName, attrName, val, subtype=None, animatable=Tr
     elif type(val) is mathutils.Vector:
         vray.pluginUpdateVector(renderer, pluginName, attrName, val.x, val.y, val.z, animatable)
 
+    elif type(val) is bpy.types.bpy_prop_array and len(val) == 3:
+        # VECTOR_TEXTURE properties have no vector subtype, so Blender returns a plain array.
+        vray.pluginUpdateVector(renderer, pluginName, attrName, val[0], val[1], val[2], animatable)
+
     elif type(val) is mathutils.Color:
         if subtype:
             vray.pluginUpdateAColor(renderer, pluginName, attrName, val.r,val.g,val.b, 1.0, animatable)

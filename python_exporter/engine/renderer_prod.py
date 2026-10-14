@@ -7,6 +7,7 @@ import time
 import bpy
 from typing import Optional
 
+from vray_blender.engine import waitForRenderStop
 from vray_blender.engine.renderer_prod_base import VRayRendererProdBase
 from vray_blender.exporting import view_export
 from vray_blender.exporting.update_tracker import UpdateTracker
@@ -283,6 +284,11 @@ class VRayRendererProd(VRayRendererProdBase):
                 __class__.testBreak(engine)
                 time.sleep(FRAME_EXPORT_SLEEP_TIME)
 
+            success, errMsg = vray.getExportJobResult(self.renderer)
+            if not success:
+                self._reportError(engine, f"Scene export failed: {errMsg}")
+                return
+
             self._reportInfo(engine, f"Exported scene: {exportSettings.filePath}")
 
             return exportSettings.filePath
@@ -390,20 +396,25 @@ class VRayRendererProd(VRayRendererProdBase):
 
     def _submitToCloud(self, engine):
         from vray_blender.exporting.cloud_job import VCloudJob
-        import os, tempfile
+        import os, shutil, tempfile
 
         # Create temporary vrscene file used only for cloud submissions.
-        # Cleanup of tempDir is owned by the background submit thread in VCloudJob,
-        # because submitToCloud() spawns a subprocess and returns immediately.
+        # Once submitToCloud() starts the submit, its background thread owns the cleanup of
+        # tempDir, because it spawns a subprocess and returns immediately. Until then, it is ours.
         tempDir = tempfile.mkdtemp(dir=getV4BTempDir())
-        baseScenePath = os.path.join(tempDir, "cloud_export.vrscene").replace("\\", "/")
-        scenePath = self._writeVrscene(bpy.context.scene, engine, baseScenePath, isCloudExport=True)
-        if not scenePath:
-            self._reportError(engine, "Failed to export .vrscene for cloud submission")
-            return
+        try:
+            baseScenePath = os.path.join(tempDir, "cloud_export.vrscene").replace("\\", "/")
+            scenePath = self._writeVrscene(bpy.context.scene, engine, baseScenePath, isCloudExport=True)
+            if not scenePath:
+                self._reportError(engine, "Failed to export .vrscene for cloud submission")
+                return
 
-        job = VCloudJob(bpy.context.scene, scenePath)
-        job.submitToCloud()
+            job = VCloudJob(bpy.context.scene, scenePath)
+            if job.submitToCloud():
+                tempDir = None
+        finally:
+            if tempDir:
+                shutil.rmtree(tempDir, ignore_errors=True)
 
     def _exportProxy(self, scene: bpy.types.Scene, engine: bpy.types.RenderEngine):
         from vray_blender.proxy import runProxyFileExport
@@ -597,6 +608,9 @@ class VRayRendererProd(VRayRendererProdBase):
 
         if self.aborted:
             self._reportInfo(engine, "Render job aborted. Check console log for details.")
+
+            if self.renderer:
+                waitForRenderStop(self.renderer)
 
         # Let Blender know that we are finished using the renderResult object
         with VRayRendererProd._instanceLock:

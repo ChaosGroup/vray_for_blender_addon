@@ -6,6 +6,7 @@
 import bpy
 from vray_blender.lib.defs import ExporterContext
 from vray_blender.lib import plugin_utils, blender_utils
+from vray_blender.lib.camera_utils import CAM_TYPE_ORTHOGONAL
 from vray_blender.lib.names import Names
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
@@ -15,11 +16,9 @@ def onUpdateCamType(propGroup, context: bpy.types.Context, attrName: str):
     if camera := propGroup.id_data:
         camType = getattr(propGroup, attrName)
 
-        STANDARD_CAMERA = '7'
-
-        if camera.type != "ORTHO" and camType == STANDARD_CAMERA:
+        if camera.type != "ORTHO" and camType == CAM_TYPE_ORTHOGONAL:
             camera.type = "ORTHO"
-        elif camera.type == "ORTHO" and camType != STANDARD_CAMERA:
+        elif camera.type == "ORTHO" and camType != CAM_TYPE_ORTHOGONAL:
             camera.type = "PERSP"
 
         # Changing the overriding camera type cannot be done reliably in IPR 

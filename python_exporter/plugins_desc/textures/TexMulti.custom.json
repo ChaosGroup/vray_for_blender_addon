@@ -3,6 +3,12 @@
     "Subtype": "UTILITY",
     "Parameters": [
         {
+            "attr": "id_gen_tex_round_mode",
+            "ui": {
+                "display_name": "ID Gen Tex Round Mode"
+            }
+        },
+        {
             "attr": "default_texture",
             "ui": {
                 "display_name": "Default"
@@ -17,7 +23,7 @@
                 [ "0", "Material Face ID", "Consider the material assignments of the object when selecting textures" ],
                 [ "1", "Object ID", "Consider the Object ID of the object when feeding the data (color or texture) to the material" ],
                 [ "12", "Random by Composite Kеy", "Randomize based on the option selected below" ],
-                [ "30", "Texture Switch", "Enables the Switch ID Texture parameter to determine which texture is used in the material" ]
+                [ "30", "Color ID", "Select a single texture based on the 'Switch ID Texture' or the manual 'Switch ID' parameter" ]
             ]
         },
         {
@@ -53,6 +59,21 @@
             },
             "options": {
                 "linked_only": true
+            }
+        },
+        {
+            "attr": "switch_id",
+            "desc": "Manually select the ID of the texture to use",
+            "type": "INT",
+            "default": 0,
+            "ui": {
+                "min": 0,
+                "soft_min": 0,
+                "spin_step": 1,
+                "display_name": "Switch ID"
+            },
+            "options": {
+                "derived": true
             }
         },
         {
@@ -171,6 +192,139 @@
                     },
                     {
                         "layout": "ROLLOUT",
+                        "name": "options",
+                        "label": "Options",
+                        "default_closed": false,
+                        "attrs": [
+                            {
+                                "layout": "SEPARATOR"
+                            },
+                            {
+                                "name": "mode"
+                            },
+                            {
+                                "layout": "COLUMN",
+                                "visible": {
+                                    "cond": "::mode=30"
+                                },
+                                "attrs": [
+                                    {
+                                        "name": "switch_id",
+                                        "active": {
+                                            "cond": "plugins.texture.TexMulti.switchIdActive"
+                                        }
+                                    },
+                                    {
+                                        "name": "id_gen_tex_round_mode",
+                                        "label": "Round Mode",
+                                        "expand": true,
+                                        "active": {
+                                            "cond": "plugins.texture.TexMulti.idGenTexParamsActive"
+                                        }
+                                    },
+                                    {
+                                        "name": "interpolate",
+                                        "active": {
+                                            "cond": "plugins.texture.TexMulti.idGenTexParamsActive"
+                                        }
+                                    }
+                                ]
+                            },
+                            {
+                                "name": "loop_textures",
+                                "label": "Loop Through Textures",
+                                "active": {
+                                    "cond": "::mode!=12"
+                                }
+                            },
+                            {
+                                "layout": "BOX",
+                                "label": "Randomize By",
+                                "visible": { "cond": "::mode=12" },
+                                "attrs": [
+                                    {
+                                        "name": "random_mode_node_handle",
+                                        "label": "Node Handle",
+                                        "visible": { "cond": "::random_mode_node_handle=1" }
+                                    },
+                                    {
+                                        "name": "random_mode_render_id",
+                                        "label": "Render ID",
+                                        "visible": { "cond": "::random_mode_render_id=1" }
+                                    },
+                                    {
+                                        "name": "random_mode_node_name",
+                                        "label": "Node Name"
+                                    },
+                                    {
+                                        "name": "random_mode_particle_id",
+                                        "label": "Particle ID",
+                                        "visible": { "cond": "::random_mode_particle_id=1" }
+                                    },
+                                    {
+                                        "name": "random_mode_instance_id",
+                                        "label": "Instance ID"
+                                    },
+                                    {
+                                        "name": "random_mode_polygon_selection",
+                                        "label": "Face Material ID"
+                                    },
+                                    {
+                                        "name": "random_mode_object_id",
+                                        "label": "Object ID"
+                                    },
+                                    {
+                                        "name": "random_mode_mesh_element",
+                                        "label": "Mesh Element"
+                                    },
+                                    {
+                                        "name": "random_mode_scene_name",
+                                        "label": "Scene Name"
+                                    },
+                                    {
+                                        "name": "random_mode_user_attribute",
+                                        "label": "User Attribute"
+                                    },
+                                    {
+                                        "layout": "COLUMN",
+                                        "active": {
+                                            "cond": "::random_mode_user_attribute=1"
+                                        },
+                                        "attrs": [
+                                            {
+                                                "name": "random_user_attr_name",
+                                                "label": "User Attribute Name"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "layout": "BOX",
+                                "label": "Ramdomization Options",
+                                "visible": { "cond": "::mode=12" },
+                                "attrs": [
+                                    {
+                                        "name": "seed"
+                                    },
+                                    {
+                                        "name": "hue_variation",
+                                        "label": "Hue"
+                                    },
+                                    {
+                                        "name": "saturation_variation",
+                                        "label": "Saturation"
+                                    },
+                                    {
+                                        "name": "gamma_variation",
+                                        "label": "Gamma"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "layout": "ROLLOUT",
                         "name": "textures",
                         "label": "Textures",
                         "default_closed": true,
@@ -182,128 +336,8 @@
                         ]
                     }
                 ]
-            },
-            {
-                "layout": "ROLLOUT",
-                "name": "options",
-                "label": "Options",
-                "default_closed": false,
-                "attrs": [
-                    {
-                        "layout": "SEPARATOR"
-                    },
-                    {
-                        "name": "mode"
-                    },
-                    {
-                        "layout": "COLUMN",
-                        "visible": {
-                            "cond": "::mode=30"
-                        },
-                        "attrs": [
-                            {
-                                "name": "id_gen_tex_round_mode",
-                                "label": "Round Mode",
-                                "expand": true
-                            },
-                            {
-                                "name": "interpolate"
-                            }
-                        ]
-                    },
-                    {
-                        "name": "loop_textures",
-                        "label": "Loop Through Textures",
-                        "active": {
-                            "cond": "::mode!=12"
-                        }
-                    },
-                    {
-                        "layout": "BOX",
-                        "label": "Randomize By",
-                        "visible": { "cond": "::mode=12" },
-                        "attrs": [
-                            {
-                                "name": "random_mode_node_handle",
-                                "label": "Node Handle",
-                                "visible": { "cond": "::random_mode_node_handle=1" }
-                            },
-                            {
-                                "name": "random_mode_render_id",
-                                "label": "Render ID",
-                                "visible": { "cond": "::random_mode_render_id=1" }
-                            },
-                            {
-                                "name": "random_mode_node_name",
-                                "label": "Node Name"
-                            },
-                            {
-                                "name": "random_mode_particle_id",
-                                "label": "Particle ID",
-                                "visible": { "cond": "::random_mode_particle_id=1" }
-                            },
-                            {
-                                "name": "random_mode_instance_id",
-                                "label": "Instance ID"
-                            },
-                            {
-                                "name": "random_mode_polygon_selection",
-                                "label": "Face Material ID"
-                            },
-                            {
-                                "name": "random_mode_object_id",
-                                "label": "Object ID"
-                            },
-                            {
-                                "name": "random_mode_mesh_element",
-                                "label": "Mesh Element"
-                            },
-                            {
-                                "name": "random_mode_scene_name",
-                                "label": "Scene Name"
-                            },
-                            {
-                                "name": "random_mode_user_attribute",
-                                "label": "User Attribute"
-                            },
-                            {
-                                "layout": "COLUMN",
-                                "active": {
-                                    "cond": "::random_mode_user_attribute=1"
-                                },
-                                "attrs": [
-                                    {
-                                        "name": "random_user_attr_name",
-                                        "label": "User Attribute Name"
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    {
-                        "layout": "BOX",
-                        "label": "Ramdomization Options",
-                        "visible": { "cond": "::mode=12" },
-                        "attrs": [
-                            {
-                                "name": "seed"
-                            },
-                            {
-                                "name": "hue_variation",
-                                "label": "Hue"
-                            },
-                            {
-                                "name": "saturation_variation",
-                                "label": "Saturation"
-                            },
-                            {
-                                "name": "gamma_variation",
-                                "label": "Gamma"
-                            }
-                        ]
-                    }
-                ]
             }
+           
         ]
     },
     "Node": {

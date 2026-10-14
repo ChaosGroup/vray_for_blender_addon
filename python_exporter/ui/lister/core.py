@@ -14,7 +14,10 @@ import re
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
+import blf
 import bpy
+
+from vray_blender.ui.lister import material_categories
 
 
 ############################################################
@@ -113,6 +116,13 @@ class ListerCategory:
             Defaults to the category-wide 'selectable'; override for categories that mix
             object groups with non-object groups (e.g. Displacement: objects + materials). """
         return self.selectable
+
+    def selectedEntities(self, context: bpy.types.Context, entities: list) -> list:
+        """ The entities the user has selected, for 'Selected Only' actions. Categories whose
+            rows are not scene objects keep all of them unless they override this. """
+        if not self.selectable:
+            return entities
+        return [e for e in entities if getattr(e, 'select_get', None) and e.select_get()]
 
     def visibilityObject(self, entity, key: str, context: bpy.types.Context):
         """ The scene object whose viewport/render visibility gates this row in the
@@ -288,7 +298,7 @@ def drawMaterialUsersCell(row: bpy.types.UILayout, mtl, propGroup: Any):
     """ Select-the-users button for material rows (materials are not scene objects):
         selects every object that uses this material. """
     op = row.operator("vray.lister_select_material_users", text="", icon='RESTRICT_SELECT_OFF')
-    op.material = mtl.name
+    op.material = materialKey(mtl)
 
 
 def drawVisibilityCell(row: bpy.types.UILayout, obj, propGroup: Any):
@@ -344,7 +354,7 @@ def makeStatusCell(kind: str, attr: str):
             row.label(text="", icon='BLANK1')
             return
 
-        if not isFileMissing(path):
+        if not isFileMissing(path, propGroup.id_data.library):
             if isCosmos:
                 row.label(text="", icon_value=icons.getIcon('COSMOS'))
             else:
@@ -989,17 +999,94 @@ def applyPinnedOrder(state, entities):
 # Material editor view (master-detail full draw)
 ############################################################
 
+def materialKey(mtl) -> str:
+    """ How the Material Manager names a material in its state, operators and solo set. name_full
+        adds the library ('Wood [lib.blend]'), so a local and a linked material of the same name
+        differ. All material names below are such keys. """
+    return mtl.name_full
+
+
+def materialFromKey(key: str):
+    """ The material with this materialKey(), or None. """
+    mtl = bpy.data.materials.get(key)
+    if mtl is not None and mtl.name_full == key:
+        return mtl
+    return next((m for m in bpy.data.materials if m.name_full == key), None)
+
+
 # Runtime-only "which material is open in the editor" (momentary view state). 'name' is what
 # was clicked, 'displayed' what the parameters pane actually drew (it falls back to the first
 # material when nothing was clicked). Write through setEditorMaterial().
 _editorMaterial = {'name': ''}
 
+# Runtime-only multi-selection of material names (Ctrl/Shift-click), for the list's bulk
+# actions. Holds the open material whenever it is non-empty.
+_selectedMaterials: set = set()
+
 
 def setEditorMaterial(name: str):
     """ Open a material in the editor. Drops 'displayed' too, so editorMaterialName() cannot
-        keep reporting the previously shown material until the parameters pane redraws. """
+        keep reporting the previously shown material until the parameters pane redraws.
+        Opening a material outside the selection makes it the only selected one. """
     _editorMaterial['name'] = name
     _editorMaterial.pop('displayed', None)
+    if name not in _selectedMaterials:
+        _selectedMaterials.clear()
+        if name:
+            _selectedMaterials.add(name)
+
+
+def selectOnlyMaterial(name: str):
+    _selectedMaterials.clear()
+    setEditorMaterial(name)
+
+
+def toggleMaterialSelection(name: str):
+    """ Ctrl/Shift-click, as in Blender's object selection: an unselected material is added and
+        made active, a selected one is made active, and the active one is deselected - the active
+        role then moves to another selected material, so the pane keeps showing a selected one.
+        Deselecting the last one leaves nothing selected; the pane keeps showing it as active.
+        The active material is the one open in the editor. """
+    if editorMaterialName() != name:
+        _selectedMaterials.add(name)
+        setEditorMaterial(name)
+    elif name in _selectedMaterials:
+        _selectedMaterials.discard(name)
+        if _selectedMaterials:
+            setEditorMaterial(next(iter(_selectedMaterials)))
+    else:
+        # The active material, after the last selected one was deselected
+        _selectedMaterials.add(name)
+
+
+def selectedMaterialNames() -> set:
+    """ The selected materials that still exist. """
+    return {n for n in _selectedMaterials if materialFromKey(n) is not None}
+
+
+def renameSelectedMaterial(oldName: str, newName: str):
+    """ Keep the selection and the open material on a material that was renamed. """
+    if oldName in _selectedMaterials:
+        _selectedMaterials.discard(oldName)
+        _selectedMaterials.add(newName)
+    if _editorMaterial.get('name') == oldName:
+        _editorMaterial['name'] = newName
+    if _editorMaterial.get('displayed') == oldName:
+        _editorMaterial['displayed'] = newName
+
+
+def editorTargetMaterials() -> list:
+    """ What a batch action (file under a category, ...) applies to: the selected materials,
+        less the ones linked from a library, which cannot be changed. """
+    selected = selectedMaterialNames()
+    return [m for m in bpy.data.materials if materialKey(m) in selected and m.is_editable]
+
+
+def selectMaterials(names: list):
+    """ Replace the selection with 'names'; the first one becomes the open material. """
+    _selectedMaterials.clear()
+    _selectedMaterials.update(names)
+    setEditorMaterial(names[0])
 
 
 def _drawNoShaderHint(layout, ntree):
@@ -1075,6 +1162,12 @@ def _drawMaterialParams(layout, context, category, mat):
     header.prop(mat, 'name', text="")
     header.prop(mat, 'use_fake_user', text="",
                 icon='FAKE_USER_ON' if mat.use_fake_user else 'FAKE_USER_OFF')
+
+    categories = material_categories.categoriesOf(mat)
+    if categories:
+        filed = layout.row()
+        filed.active = False  # a read-out; filing is in the tab bar's menu
+        filed.label(text=", ".join(categories), icon='OUTLINER_COLLECTION')
 
     # Collapsible: template_preview() is what starts the preview render job (ED_preview_draw),
     # so a closed rollout costs nothing.
@@ -1155,15 +1248,30 @@ def _editorMaterials(context, category):
     return materials
 
 
+def editorMaterialsByCategory(context, category):
+    """ (all, key, shown): everything the window's filters let through, the category tab in
+        front, and that narrowed down to the tab. The tab bar counts from the first, both
+        panes show the last - so the parameters pane never edits a material the list hides. """
+    allMaterials = _editorMaterials(context, category)
+    key = material_categories.activeKey(getListerView(context), allMaterials)
+    return allMaterials, key, material_categories.filterMaterials(allMaterials, key)
+
+
 def _editorSelectedMaterial(materials):
     """ The material open in the detail panel (selected one, or the first as a fallback). """
     selectedName = _editorMaterial.get('name', '')
-    mat = bpy.data.materials.get(selectedName) if selectedName else None
+    mat = materialFromKey(selectedName) if selectedName else None
     if mat is None or mat not in materials:
         mat = materials[0] if materials else None
+        # Nothing selected that still exists: the material the pane fell back to counts as opened
+        # and selected. Opened too, or deselecting it would just fall back to it again.
+        if mat is not None and not selectedMaterialNames():
+            _selectedMaterials.clear()
+            _selectedMaterials.add(materialKey(mat))
+            _editorMaterial['name'] = materialKey(mat)
     # Remember what the detail panel actually shows (may be the materials[0] fallback) so
     # editorMaterialName() reports it without re-enumerating materials itself
-    _editorMaterial['displayed'] = mat.name if mat is not None else ''
+    _editorMaterial['displayed'] = materialKey(mat) if mat is not None else ''
     return mat
 
 
@@ -1196,6 +1304,12 @@ def editorMaterialName() -> str:
     return _editorMaterial.get('displayed') or _editorMaterial.get('name', '')
 
 
+def activeMaterialName() -> str:
+    """ The material the editor's actions work on: the open one, or none once everything was
+        deselected (the editor still remembers it, to show it again when it is re-selected). """
+    return editorMaterialName() if selectedMaterialNames() else ''
+
+
 # Thumbnail grid geometry, in UI units. The cell adds the box border around the preview. Large
 # is Blender's own preview resolution; past it the same image is just drawn upscaled.
 _THUMBNAIL_SCALES = {'SMALL': 3.0, 'MEDIUM': 5.0, 'LARGE': 6.5}
@@ -1206,7 +1320,23 @@ def thumbnailScale(context) -> float:
     return _THUMBNAIL_SCALES[getListerPrefs(context).material_thumbnail_size]
 
 
-def _drawMaterialThumbCell(layout, mat, selectedName: str, scale: float):
+def _drawMaterialSelectButton(row, mat, selected: set, activeName: str, iconId: int = 0):
+    """ The clickable name. Selected rows are pressed; all but the active one are also dimmed,
+        so the active material - the one the parameters pane shows - stands out, like the
+        active object among selected ones. """
+    key = materialKey(mat)
+    isActive = key == activeName
+    host = row
+    if key in selected and not isActive:
+        host = row.row(align=True)
+        host.active = False
+    # The full name tells a linked material from a local one of the same name.
+    op = host.operator("vray.lister_editor_select_material", text=key, icon_value=iconId,
+                       depress=key in selected)
+    op.material = key
+
+
+def _drawMaterialThumbCell(layout, mat, selected: set, activeName: str, scale: float):
     """ One thumbnail cell: preview, then the solo toggle and name. """
     cell = layout.box().column(align=True)
     try:
@@ -1214,14 +1344,12 @@ def _drawMaterialThumbCell(layout, mat, selectedName: str, scale: float):
     except Exception:
         cell.label(text="", icon='MATERIAL')
     nameRow = cell.row(align=True)
-    _drawMaterialSolo(nameRow, mat.name)
-    op = nameRow.operator("vray.lister_editor_select_material", text=mat.name,
-                          depress=(mat.name == selectedName))
-    op.material = mat.name
+    _drawMaterialSolo(nameRow, materialKey(mat))
+    _drawMaterialSelectButton(nameRow, mat, selected, activeName)
     _drawUnassignedMark(nameRow, mat)
 
 
-def _drawMaterialThumbnailGrid(layout, materials, selectedName: str, listWidth: float):
+def _drawMaterialThumbnailGrid(layout, materials, selected: set, activeName: str, listWidth: float):
     """ Grid of preview thumbnails, packed from the left at a fixed cell size. Built from nested
         split() calls - row() and grid_flow() stretch a lone cell and ignore ui_units_x. """
     widgetUnit = 20.0 * bpy.context.preferences.system.ui_scale
@@ -1239,32 +1367,120 @@ def _drawMaterialThumbnailGrid(layout, materials, selectedName: str, listWidth: 
             remaining = avail
         # Keep the factor below 1.0 - the split needs a remainder for the next cell.
         cellSplit = container.split(factor=min(0.999, cellWidth / max(remaining, 1.0)), align=True)
-        _drawMaterialThumbCell(cellSplit.column(align=True), mat, selectedName, scale)
+        _drawMaterialThumbCell(cellSplit.column(align=True), mat, selected, activeName, scale)
         container = cellSplit.column(align=True)
         remaining -= cellWidth
 
 
-def _drawMaterialListInto(layout, materials, listWidth: float = 0.0):
-    """ The clickable material list, as text rows or a thumbnail grid per the List Display
-        preference. 'listWidth' is the pane's drawable width in pixels (0 = unknown). """
+############################################################
+# Material category tabs (see material_categories.py)
+############################################################
+
+# Tab geometry, in UI units. Each tab is its label's measured width plus the padding, up to the
+# cap - a longer name is clipped by Blender with an ellipsis.
+_TAB_MAX_UNITS = 14.0
+_TAB_PAD_UNITS = 1.0
+_TAB_MENU_UNITS = 0.8     # the trailing menu button - under square on purpose, see drawManage
+_TAB_WRAP_SLACK_UNITS = 0.5  # wrap this much early: the pane width is an estimate, and a
+                             # line packed to the last pixel squeezes the menu button
+
+
+def _tabWidth(text: str, widgetUnit: float) -> float:
+    """ A tab's width in pixels. Measured in the widget font at the UI scale, the way the button
+        will draw it. """
+    prefs = bpy.context.preferences
+    blf.size(0, prefs.ui_styles[0].widget.points * prefs.system.ui_scale)
+    return min(blf.dimensions(0, text)[0] + _TAB_PAD_UNITS * widgetUnit, _TAB_MAX_UNITS * widgetUnit)
+
+
+def _drawTabLine(layout, items, avail: float):
+    """ One line of tabs at fixed pixel widths. Same trick as the thumbnail grid: a row() hands
+        every child a share of the row, so split() is the only layout that holds a width - each
+        tab is carved off the left of what is left, and the remainder hosts the next one.
+
+        Each line is its own align group: the align=False wrapper stops the bar's group from
+        reaching in (ui_item_align only recurses into align=True layouts). Lines in one group
+        get stitched across, and stitching snaps edges to the line above (see drawManage). The
+        bar column stays align=True, so the lines still sit flush with no gap between them. """
+    container = layout.row(align=False).row(align=True)
+    remaining = avail
+    for width, drawFn in items:
+        cell = container.split(factor=min(0.999, width / max(remaining, 1.0)), align=True)
+        drawFn(cell.row(align=True))
+        container = cell.row(align=True)
+        remaining -= width
+
+
+def _drawCategoryTabs(layout, view, allMaterials, activeKey: str, listWidth: float):
+    """ The tab bar over the material list: All Materials, Cosmos, the user's categories,
+        Uncategorized while anything is unfiled, then the manage menu (New Category lives in
+        it). Counts are taken from 'allMaterials' - before the tab filter - so each tab says how
+        many it would show. """
+    widgetUnit = 20.0 * bpy.context.preferences.system.ui_scale
+    avail = max(listWidth, 6.0 * widgetUnit)
+
+    def tabItem(key):
+        text = f"{material_categories.label(key)} ({material_categories.countFor(allMaterials, key)})"
+
+        def draw(row):
+            row.operator("vray.lister_mat_category_tab", text=text,
+                         depress=(key == activeKey)).category = key
+
+        return (_tabWidth(text, widgetUnit), draw)
+
+    # Under one unit wide: Blender draws its own dropdown arrow on an icon-only menu button wider
+    # than it is tall, next to this one's arrow icon
+    def drawManage(row):
+        row.menu("VRAY_MT_lister_mat_category", text="", icon='DOWNARROW_HLT')
+
+    tabs = [tabItem(key) for key in material_categories.tabKeys(view, allMaterials)]
+    buttonWidth = _TAB_MENU_UNITS * widgetUnit
+
+    # Greedy wrap - a row() never wraps, so the tabs are packed into as many lines as they need.
+    # The menu button travels with the last tab: room is checked for the two together, so the
+    # button never starts a line on its own.
+    bar = layout.column(align=True)
+    line, used = [], 0.0
+    for i, (width, drawFn) in enumerate(tabs):
+        need = width + (buttonWidth if i == len(tabs) - 1 else 0.0)
+        if line and used + need > avail - _TAB_WRAP_SLACK_UNITS * widgetUnit:
+            _drawTabLine(bar, line, avail)
+            line, used = [], 0.0
+        line.append((width, drawFn))
+        used += width
+    line.append((buttonWidth, drawManage))
+    _drawTabLine(bar, line, avail)
+
+
+def _drawMaterialListInto(layout, allMaterials, activeKey: str, materials, listWidth: float):
+    """ The clickable material list under its category tab bar, as text rows or a thumbnail
+        grid per the List Display preference. 'materials' is what the tab in front shows,
+        'allMaterials' the wider list the tab counts come from. 'listWidth' is the pane's
+        drawable width in pixels. """
     col = layout.column(align=True)
-    col.label(text=f"Materials  ({len(materials)})", icon='MATERIAL')
-    # The name the parameters pane is showing, so the highlighted row matches it even when
-    # nothing was clicked and the pane fell back to the first material
-    selectedName = editorMaterialName()
+    _drawCategoryTabs(col, getListerView(bpy.context), allMaterials, activeKey, listWidth)
+    col.separator()
+
+    heading = "Materials" if activeKey == material_categories.ALL else material_categories.label(activeKey)
+    col.label(text=f"{heading}  ({len(materials)})", icon='MATERIAL')
+    # Resolved here too, not only by the parameters pane: the panes are separate regions, and
+    # the fallback seeds the selection
+    openMat = _editorSelectedMaterial(materials)
+    activeName = materialKey(openMat) if openMat is not None else ''
+    selected = selectedMaterialNames()
     if not materials:
         col.label(text="No materials.", icon='INFO')
         return
 
     thumbnails = getListerPrefs(bpy.context).material_editor_list_display == 'THUMBNAILS'
     if thumbnails:
-        _drawMaterialThumbnailGrid(col, materials, selectedName, listWidth)
+        _drawMaterialThumbnailGrid(col, materials, selected, activeName, listWidth)
         return
 
     listCol = col.column(align=True)
     for mat in materials:
         row = listCol.row(align=True)
-        _drawMaterialSolo(row, mat.name)
+        _drawMaterialSolo(row, materialKey(mat))
         # Each row shows the material's own swatch, like Blender's material slot list. Beyond
         # looking right, the icon render job notifies NC_WINDOW, which is what repaints this
         # Preferences-hosted area - template_preview's NC_MATERIAL notifier is dropped here
@@ -1273,9 +1489,7 @@ def _drawMaterialListInto(layout, materials, listWidth: float = 0.0):
             iconId = mat.preview_ensure().icon_id
         except Exception:
             iconId = 0
-        op = row.operator("vray.lister_editor_select_material", text=mat.name,
-                          icon_value=iconId, depress=(mat.name == selectedName))
-        op.material = mat.name
+        _drawMaterialSelectButton(row, mat, selected, activeName, iconId)
         _drawUnassignedMark(row, mat)
 
 
@@ -1295,9 +1509,9 @@ def drawMaterialListerParams(context, layout):
     category = getCategory('MATERIALS')
     if category is None:
         return
-    materials = _editorMaterials(context, category)
+    _, _, materials = editorMaterialsByCategory(context, category)
     mat = _editorSelectedMaterial(materials)
-    if mat is None:
+    if mat is None or not activeMaterialName():
         layout.label(text="Select a material to edit.", icon='INFO')
     else:
         _drawMaterialParams(layout, context, category, mat)
@@ -1311,7 +1525,7 @@ def drawMaterialListerMain(context, layout):
     # The pane owns its whole region, less the inset either side and the box padding.
     widgetUnit = 20.0 * context.preferences.system.ui_scale
     listWidth = max(context.region.width - (2.0 * _PANEL_INSET_UNITS + _LIST_BOX_PAD_UNITS) * widgetUnit, 1.0)
-    _drawMaterialListInto(layout, _editorMaterials(context, category), listWidth)
+    _drawMaterialListInto(layout, *editorMaterialsByCategory(context, category), listWidth)
 
 
 def resetRuntimeState():
@@ -1321,6 +1535,7 @@ def resetRuntimeState():
     soloState.clear()
     _editorMaterial.clear()
     _editorMaterial['name'] = ''
+    _selectedMaterials.clear()
 
 
 ############################################################

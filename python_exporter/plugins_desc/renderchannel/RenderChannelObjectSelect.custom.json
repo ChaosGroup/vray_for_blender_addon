@@ -18,6 +18,9 @@
         },
         {
             "attr": "id_selection_mode",
+            "ui": {
+                "display_name": "ID Selection Mode"
+            },
             "type": "ENUM",
             "desc": "The ID selection option",
             "default": "0",
@@ -67,7 +70,7 @@
                     },
                     {
                         "name": "use_mtl_id",
-                        "label": "Use Multimatte ID"
+                        "custom_draw": "widgetDrawIdSource"
                     },
                     {
                         "name": "affect_matte_objects"
@@ -120,6 +123,46 @@
                     }
                 ],
                 "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "use_mtl_id",
+                        "custom_draw": "widgetDrawIdSource"
+                    },
+                    {
+                        "name": "id_selection_mode"
+                    },
+                    {
+                        "name": "id",
+                        "label": "ID",
+                        "visible": { "cond": "::id_selection_mode=0" }
+                    },
+                    {
+                        "layout": "COLUMN",
+                        "visible": { "cond": "::id_selection_mode=1" },
+                        "attrs": [
+                            { "name": "id_min", "label": "Start ID" },
+                            { "name": "id_max", "label": "End ID" }
+                        ]
+                    },
+                    {
+                        "name": "light_object_ids_as_string",
+                        "label": "IDs",
+                        "visible": { "cond": "::id_selection_mode=2" }
+                    },
+                    {
+                        "name": "affect_matte_objects"
+                    },
+                    {
+                        "name": "invert_selection"
+                    }
+                ]
             }
         ]
     },

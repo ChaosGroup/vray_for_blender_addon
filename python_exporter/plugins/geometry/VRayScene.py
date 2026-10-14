@@ -45,7 +45,7 @@ def exportCustom(exporterCtx, pluginDesc: PluginDesc):
 
     vrayScene = pluginDesc.vrayPropGroup
     
-    pluginDesc.setAttribute('filepath', bpy.path.abspath(vrayScene.filepath))
+    pluginDesc.setAttribute('filepath', bpy.path.abspath(vrayScene.filepath, library=vrayScene.id_data.library))
     
 
     if (overrideMtl := bpy.data.materials.get(vrayScene.material_override)) and (overrideMtl.node_tree is not None):

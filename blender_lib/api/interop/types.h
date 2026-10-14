@@ -413,6 +413,21 @@ struct CosmosAssetSettings
 	// the user-driven override for assets that wouldn't otherwise be
 	// re-oriented.
 	PROPERTY(bool, forceNormalAlign, false)
+	// Non-empty only for the reply to vray.cosmosSwapVariant(), and the only marker of one: the
+	// addon then rewrites the mesh that asked instead of creating a new object.
+	PROPERTY(std::string, variantSwapToken, "")
+	// The variant catalogue, empty unless the asset has more than one variant. These four are per
+	// geometry variant, each of which is its own Cosmos package.
+	PROPERTY(nb::list, variantGeomNames, nb::list())
+	PROPERTY(nb::list, variantGeomPackageIds, nb::list())
+	PROPERTY(nb::list, variantGeomRevisions, nb::list())
+	PROPERTY(nb::list, variantMtlCounts, nb::list())
+	// Preview PNG per (geometry, material) cell, geometry-major: cell (g,m) is at
+	// sum(variantMtlCounts[:g]) + m. An entry may be empty or name a file that is gone.
+	PROPERTY(nb::list, variantPreviewPaths, nb::list())
+	// The cell this import produced. Authoritative on a swap reply.
+	PROPERTY(int, currentGeomVariant, 0)
+	PROPERTY(int, currentMtlVariant, 0)
 };
 
 /// Final status of a .vrscene import session, passed to the import finished callback.
@@ -425,8 +440,6 @@ struct VrsceneImportResult
 	PROPERTY(int, errorLine, 0)
 	PROPERTY(int, pluginCount, 0)
 	PROPERTY(int, paramCount, 0)
-	// Directory of the imported .vrscene, for client-side relative path resolution.
-	PROPERTY(std::string, sceneBaseDir, "")
 };
 
 } // VRayForBlender::Interop

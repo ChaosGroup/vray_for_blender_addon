@@ -33,9 +33,16 @@ def _dataKey(curveNs: str, kind: str) -> str:
     return f"cs.{curveNs}.{kind}"
 
 
-def _isGeneratedProxy(name: str) -> bool:
+def isGeneratedProxy(name: str) -> bool:
     """ A box/wire/full proxy object this module owns, by name. """
     return name.startswith("cs.") and ".obj." in name
+
+
+def isGeneratedCollection(name: str) -> bool:
+    """ The root collection or a cs.<ns>.<kind> collection under it, by name. """
+    parts = name.split('.')
+    return name == ROOT_COLLECTION_NAME or \
+        (parts[0] == 'cs' and parts[2:3] in (['protos'], ['boxes'], ['wires']))
 
 
 def _getRootCollection(create=False):
@@ -184,24 +191,17 @@ def rebuildProtoCollections(obj, previewModels=None, depsgraph=None, childMap=No
 
     # Before the proto loop below, which falls back to the wire proxy of a model that has no
     # geometry of its own.
-    refreshProxyMeshes(obj, previewModels, depsgraph, childMap)
-
-    # The render expands each model item into its whole geometry hierarchy; mirror that here so
-    # Full preview mode shows the same objects the render will scatter. Grouped by itemIndex, so
-    # the proto sub-collection order still matches the preview's model list (== proto_index).
-    membersByItem = {}
-    for m in resolve.resolveModels(cs, expandHierarchy=True, childMap=childMap):
-        membersByItem.setdefault(m.itemIndex, []).append(m.object)
+    refreshProxyMeshes(obj, previewModels, depsgraph)
 
     for i, entry in enumerate(previewModels):
         protoChild = protosColl.children[f"{_dataKey(ns, 'protos')}.{i:02d}"]
         # Proxies rather than the real objects, because a real object's world transform would
         # land on top of the scatter placement. Each proxy sits at the preserved rotation and
         # scale combined with its offset from the root, so the hierarchy keeps its layout.
-        rootInv = entry.object.matrix_world.inverted_safe()
-        preserved = params.preservedLinearMatrix(cs, entry.object)
+        rootInv = entry.matrix_world.inverted_safe()
+        preserved = params.preservedLinearMatrix(cs, entry)
         proxies = [_ensureFullProxy(ns, i, j, member, preserved @ (rootInv @ member.matrix_world))
-                   for j, member in enumerate(membersByItem[entry.itemIndex])
+                   for j, member in enumerate(entry.members)
                    if member.type != 'LIGHT']
         if not proxies:
             # A light-only model has nothing for Object Info to pull, so Full mode would draw
@@ -258,7 +258,7 @@ def _ensureFullProxy(ns: str, index: int, subIndex: int, sourceObj, matrix):
     return proxy
 
 
-def refreshProxyMeshes(obj, previewModels: list[resolve.ResolvedModel], depsgraph=None, childMap=None):
+def refreshProxyMeshes(obj, previewModels: list[resolve.ResolvedModel], depsgraph=None):
     """ Regenerate the box/wire proxy meshes from the models' LOCAL bounding boxes, and place the
         proxy objects at the model's rotation+scale (no translation) - matching the full-geometry
         proxies and the readScatterData source node, so Box/Wire modes preserve rotation/scale
@@ -280,12 +280,9 @@ def refreshProxyMeshes(obj, previewModels: list[resolve.ResolvedModel], depsgrap
     if depsgraph is None:
         depsgraph = bpy.context.evaluated_depsgraph_get()
 
-    if childMap is None:
-        childMap = resolve.buildChildMap()
     for i, entry in enumerate(previewModels):
-        modelObj = entry.object
-        bboxMin, bboxMax = resolve.hierarchyLocalBounds(modelObj, depsgraph, childMap)
-        preservedLinear = params.preservedLinearMatrix(cs, modelObj)
+        bboxMin, bboxMax = resolve.modelLocalBounds(entry, depsgraph)
+        preservedLinear = params.preservedLinearMatrix(cs, entry)
         _ensureBoxProxy(root, ns, "boxes", i, bboxMin, bboxMax, preservedLinear, wire=False)
         _ensureBoxProxy(root, ns, "wires", i, bboxMin, bboxMax, preservedLinear, wire=True)
 
@@ -359,7 +356,7 @@ def _syncLinkedObjects(coll, objects):
             coll.objects.unlink(existing)
             # Generated proxies belong to us; drop them rather than leaving 0-user orphans that
             # no cleanup path walks (they are not in any collection any more).
-            if _isGeneratedProxy(existing.name) and existing.users == 0:
+            if isGeneratedProxy(existing.name) and existing.users == 0:
                 bpy.data.objects.remove(existing)
     for o in objects:
         if o.name not in coll.objects:
@@ -383,7 +380,7 @@ def _removeCollectionTree(coll, ownerPrefix: str = None):
     for child in list(coll.children):
         _removeCollectionTree(child, ownerPrefix)
     for o in list(coll.objects):
-        if _isGeneratedProxy(o.name) and (ownerPrefix is None or o.name.startswith(ownerPrefix)):
+        if isGeneratedProxy(o.name) and (ownerPrefix is None or o.name.startswith(ownerPrefix)):
             # Box/wire proxies own the generated box mesh (free it); full-geometry proto proxies
             # (".protos.obj.") all share the one empty _PROXY_BASE_MESH, which must survive.
             ownsData = ".protos.obj." not in o.name

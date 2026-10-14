@@ -58,6 +58,10 @@
             }
         },
         {
+            "attr": "material_assignments_file",
+            "subtype": "FILE_PATH"
+        },
+        {
             "attr": "num_preview_faces",
             "desc": "The number of faces in the currently visible preview. Cannot be changed for .vrmesh files",
             "update": "onUpdatePreview"
@@ -114,6 +118,30 @@
             "default": [0, 1, 2, 3],
             "options": {
                "derived": true
+            }
+        },
+        {
+            "attr": "visibility_lists_type",
+            "type": "ENUM",
+            "default": "1",
+            "items":
+            [
+                [ "0", "Exclude", "Hide the marked objects, show all the others" ],
+                [ "1", "Include", "Show only the marked objects, hide all the others" ]
+            ]
+        },
+        {
+            "attr": "object_hierarchy",
+            "type": "TEMPLATE",
+            "desc": "The objects inside the proxy file: which of them are rendered, and with what material",
+            "options": {
+                "template": {
+                    "type": "templateProxyObjectHierarchy",
+                    "args": {
+                        "file_property": "file",
+                        "mode_bound_property": "visibility_lists_type"
+                    }
+                }
             }
         }
     ],
@@ -245,6 +273,16 @@
             },
             {
                 "layout": "ROLLOUT",
+                "name": "object_hierarchy",
+                "label": "Object Hierarchy",
+                "attrs": [
+                    {
+                        "name": "object_hierarchy"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
                 "name": "alembic",
                 "label": "Alembic",
                 "visible": {"cond": "::isAlembic!=0"},
@@ -360,8 +398,6 @@
             "reference_transform",
             "visibility_overrides_rules",
             "visibility_overrides_values",
-            "visibility_lists_type",
-            "visibility_list_names",
             "visibility_list_ids",
             "hair_visibility_lists_type",
             "hair_visibility_list_names",
@@ -370,7 +406,6 @@
             "particle_visibility_list_names",
             "particle_visibility_list_ids",
             "primary_visibility",
-            "use_face_sets",
             "sort_voxels",
             "velocity_color_set",
             "pixel_scale",
@@ -381,7 +416,6 @@
             "use_velocity",
             "merge_equal_vertices",
             "use_alembic_visibility",
-            "use_full_names",
             "anim_abc_time"
         ]
     }

@@ -12,7 +12,7 @@ from typing import NamedTuple
 
 from vray_blender import debug
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import getFarNodeLinkImpl, removeSocketLinks, getInputSocketByAttr
+from vray_blender.exporting.tools import getFarNodeLinkImpl, getFirstSocketLink, removeSocketLinks, getInputSocketByAttr
 from vray_blender.plugins import PLUGIN_MODULES, getPluginAttr, getInputSocketDesc, getPluginModule, findPluginModule
 from vray_blender.lib import attribute_types, attribute_utils
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
@@ -499,6 +499,24 @@ class VRaySocket(bpy.types.NodeSocket):
         default = ""
     )
 
+    # A group node socket created before its internal link. The group sync copies the inner
+    # node's value into it once linked.
+    needs_inner_value: bpy.props.BoolProperty(
+        name = "Needs Inner Value",
+        description = "Group node socket still waiting for the value of the node it feeds inside the group",
+        options = {'HIDDEN'},
+        default = False
+    )
+
+    # Identifier of the group interface socket that a group node socket mirrors. Unlike the
+    # name, it survives renames.
+    group_interface_id: bpy.props.StringProperty(
+        name = "Group Interface ID",
+        description = "Identifier of the group interface socket this group node socket mirrors",
+        options = {'HIDDEN'},
+        default = ""
+    )
+
     nest_level: bpy.props.IntProperty(
         name = "Nest level",
         description = "The nest level of the socket when part of a rollout",
@@ -579,8 +597,8 @@ class VRaySocket(bpy.types.NodeSocket):
         if self.is_output or not self.is_linked:
             return False
         current = self
-        while current.is_linked:
-            fromNode = current.links[0].from_node
+        while link := getFirstSocketLink(current):
+            fromNode = link.from_node
             if fromNode.bl_idname == 'NodeGroupInput':
                 return True
             if fromNode.bl_idname == 'NodeReroute':
@@ -628,11 +646,11 @@ class VRayValueSocket(VRaySocket):
         # property which exports one or more real attributes.
         pluginDesc.setAttribute(attrDesc['attr'], self.value, overwriteExisting=False)
 
-    def draw_property(self, context, layout, text, expand=False, slider=True):
+    def draw_property(self, context, layout, text, expand=False, slider=True, placeholder=''):
         """ Draw as property in a property page, not as a socket.
             This method is used to show socket values on property pages.
         """
-        layout.prop(self, 'value', text=text, expand=expand, slider=slider)
+        layout.prop(self, 'value', text=text, expand=expand, slider=slider, placeholder=placeholder)
 
     def copy(self, dest):
         dest.value = self.value
@@ -714,13 +732,13 @@ class VRaySocketMult(VRayValueSocket):
         if self.is_output:
             layout.label(text=text)
         elif self.hasActiveFarLink():
-            split = layout.split(factor=0.4)
-            split.prop(self, 'value', text="")
+            split = layout.split(factor=0.6)
             split.prop(self, 'multiplier', text=text)
-        elif type(self.value) is mathutils.Color:
-            split = layout.split(factor=0.4)
             split.prop(self, 'value', text="")
+        elif type(self.value) is mathutils.Color:
+            split = layout.split(factor=0.6)
             split.label(text=text)
+            split.prop(self, 'value', text="")
         else:
             layout.prop(self, 'value', text=text)
 
@@ -992,7 +1010,9 @@ class VRaySocketEnum(VRayValueSocket):
     @staticmethod
     def getPropertyRegistrationInfo(attrDesc):
         prop = bpy.props.EnumProperty(
-                name = "Value",
+                # Blender heads the open dropdown with the property's name. A node body draws
+                # no label, so this is the only place the parameter is named.
+                name = getAttrDisplayName(attrDesc),
                 description = attrDesc.get('desc', 'Value'),
                 items = tuple(tuple(sub) for sub in attrDesc['items']),
                 set = VRaySocketEnum.setItem,
@@ -1315,13 +1335,7 @@ class VRaySocketColorUse(VRaySocketMult):
         label        = getAttrDisplayName(targetAttr)
         use          = getattr(propGroup, useAttrName)
 
-        colColor = layout.split(factor=0.3)
-
-        colorPart = colColor.column()
-        colorPart.enabled = use
-        colorPart.prop(propGroup, targetAttrName, text="")
-
-        colLabel = colColor.split(factor=0.9)
+        colLabel = layout.split(factor=0.6)
 
         labelPart = colLabel.column()
         labelPart.enabled = use
@@ -1330,7 +1344,13 @@ class VRaySocketColorUse(VRaySocketMult):
         else:
             labelPart.label(text=label)
 
-        colUse = colLabel.column()
+        colColor = colLabel.split(factor=0.75)
+
+        colorPart = colColor.column()
+        colorPart.enabled = use
+        colorPart.prop(propGroup, targetAttrName, text="")
+
+        colUse = colColor.column()
         colUse.prop(propGroup, useAttrName, text="")
 
 
@@ -1649,7 +1669,10 @@ class VRaySocketRenderChannelBase(VRaySocketUse):
         labelPart = split.column()
         labelPart.enabled = self.use
         labelPart.label(text=text)
-        split.prop(self, 'use', text="")
+
+        layoutCheckbox = split.row()
+        layoutCheckbox.enabled = self.is_linked
+        layoutCheckbox.prop(self, 'use', text="")
 
     @classmethod
     def draw_color_simple(cls):
@@ -1729,7 +1752,10 @@ class VRaySocketEffect(VRaySocketUse):
         labelPart = split.column()
         labelPart.enabled = self.use
         labelPart.label(text=text)
-        split.prop(self, 'use', text="")
+
+        layoutCheckbox = split.row()
+        layoutCheckbox.enabled = self.is_linked
+        layoutCheckbox.prop(self, 'use', text="")
 
     @classmethod
     def draw_color_simple(cls):

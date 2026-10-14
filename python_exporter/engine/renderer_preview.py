@@ -18,8 +18,17 @@ from vray_blender.lib.names import Names, syncUniqueNamesForPreview
 from vray_blender.lib.plugin_utils import updateValue
 from vray_blender.lib.export_utils import exportPlugin
 from vray_blender.exporting import world_export
+from vray_blender.exporting.tools import hasToonBRDF
+from vray_blender.nodes.utils import getOutputNode
 
 from vray_blender.bin import VRayBlenderLib as vray
+
+
+# Upper bound for the wait below on a job that is still winding down.
+_JOB_SETTLE_TIMEOUT = 20.0
+
+# Deadline for the wait above. Set by scheduleStuckPreviewCheck().
+_jobSettleDeadline = 0.0
 
 
 def _retagStuckMaterialPreviews():
@@ -28,12 +37,15 @@ def _retagStuckMaterialPreviews():
         Blender kills all pending preview jobs when a production render starts or a RENDERED
         viewport session ends, and cancelled previews keep their 'rendering' flag forever -
         the UI shows a spinner and never reschedules them. Such previews are detectable by
-        their allocated but never written pixel buffers. Tag them so they re-render on the
-        next draw.
+        their allocated but never written pixel buffers. Ask Blender to render them again.
     """
     if bpy.app.is_job_running('RENDER') or bpy.app.is_job_running('RENDER_PREVIEW'):
-        # A live job may legitimately not have written its pixels yet.
-        return
+        # A live job may legitimately not have written its pixels yet. Give up once the job
+        # outlasts the transition we were called for - _onRenderJobEnded() schedules a fresh
+        # check when it finishes, so nothing is lost by not waiting it out here.
+        if time.perf_counter() >= _jobSettleDeadline:
+            return None  # one-shot timer
+        return 1.0  # try again in a second
 
     for mtl in bpy.data.materials:
         if ((preview := mtl.preview) is None) or preview.is_image_custom:
@@ -54,8 +66,25 @@ def scheduleStuckPreviewCheck():
     """ Run the stuck-preview check once, after the transition that may have killed the
         preview jobs has settled.
     """
+    global _jobSettleDeadline
+
+    # Refreshed even when the timer is already pending: a new transition just happened, so the
+    # settling wait starts over.
+    _jobSettleDeadline = time.perf_counter() + _JOB_SETTLE_TIMEOUT
+
     if not bpy.app.timers.is_registered(_retagStuckMaterialPreviews):
         bpy.app.timers.register(_retagStuckMaterialPreviews, first_interval=1.0)
+
+
+def _previewsToonBRDF(dg: bpy.types.Depsgraph) -> bool:
+    """ True if a material in the preview scene is shaded by a V-Ray Toon BRDF. """
+    for obj in dg.objects:
+        for slot in obj.material_slots:
+            if ((mtl := slot.material) is not None) and mtl.node_tree \
+                    and ((outputNode := getOutputNode(mtl.node_tree, 'MATERIAL')) is not None) \
+                    and hasToonBRDF(outputNode):
+                return True
+    return False
 
 
 class VRayRendererPreview(VRayRendererProdBase):
@@ -217,10 +246,26 @@ class VRayRendererPreview(VRayRendererProdBase):
         floorNodeName = Names.vrayNode(Names.object(floor))
         updateValue(exporterCtx.renderer, floorNodeName, "material", floorMtlPlugin)
 
+        squaredLight = dg.objects.get('SquaredLight')
+        circularLight = dg.objects.get('CircularLight')
+
+        if _previewsToonBRDF(dg):
+            # Same lighting as a Toon node thumbnail. One direct light from CircularLight's direction
+            # and no GI. thumbToonLight in resources/thumbnail_scene.vrscene explains why.
+            for light in (squaredLight, circularLight):
+                if light:
+                    updateValue(exporterCtx.renderer, Names.object(light), "enabled", False)
+            if circularLight:
+                toonLight = PluginDesc("previewToonLight", "LightDirect")
+                toonLight.setAttribute("transform", circularLight.matrix_world)
+                exportPlugin(exporterCtx, toonLight)
+            updateValue(exporterCtx.renderer, Names.singletonPlugin("SettingsGI"), "on", False)
+            return
+
         # The default intensity of the lights in the scene is too small and for that, it is increased
-        if squaredLight := dg.objects.get('SquaredLight'):
+        if squaredLight:
             updateValue(exporterCtx.renderer, Names.objectData(squaredLight), "intensity", 20)
-        if circularLight := dg.objects.get('CircularLight'):
+        if circularLight:
             updateValue(exporterCtx.renderer, Names.objectData(circularLight), "intensity", 100)
 
 

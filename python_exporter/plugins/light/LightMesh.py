@@ -103,5 +103,13 @@ def collectLightMeshInfo(exporterCtx: ExporterContext):
         exporterCtx, meshLightObjects, 'LightMesh', 'Geometry', 'data.node_tree', 'VRayNodeLightMesh')
 
 
+def getMeshLightGizmoChanges(exporterCtx: ExporterContext) -> tuple[set[int], set[int]]:
+    """ Track ids of the gizmos (connected, disconnected) to/from mesh lights since the
+        previous update.
+    """
+    prev, curr = exporterCtx.persistedState.activeMeshLightsInfo, exporterCtx.activeMeshLightsInfo
+    return {i.gizmoObjTrackId for i in curr - prev}, {i.gizmoObjTrackId for i in prev - curr}
+
+
 def getLightMeshPluginName(lightName: str, gizmoObjTrackId):
     return f"{lightName}_{gizmoObjTrackId}"

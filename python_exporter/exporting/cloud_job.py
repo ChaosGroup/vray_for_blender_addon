@@ -52,6 +52,7 @@ class VCloudJob:
     def submitToCloud(self):
         """
         Submits this job to Chaos Cloud. Tries to create a project before submitting.
+        Returns True if the submit started. Its thread then removes the scene file's folder.
         """
         VRayPreferences = bpy.context.preferences.addons['vray_blender'].preferences
         if VRayPreferences.detect_vray_cloud:
@@ -83,5 +84,6 @@ class VCloudJob:
                     shutil.rmtree(pathlib.Path(self.sceneFile).parent, ignore_errors=True)
 
             threading.Thread(target=runCloudSubmit, args=(process,), daemon=True).start()
+            return True
         else:
             debug.report("ERROR", "Chaos Cloud binary is not detected on the system, done nothing")

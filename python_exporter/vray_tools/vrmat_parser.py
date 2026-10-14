@@ -9,19 +9,10 @@ from xml.etree import ElementTree
 from vray_blender import debug
 
 
-def _convertToXML(filePath):
-    import shutil
-    import subprocess
-
-    vrmatconvert = os.path.join(os.path.dirname(__file__), "..", "bin", "vrmatconvert.exe")
-
-    bakFile = f"{filePath}.bak"
-
-    shutil.copyfile(filePath, bakFile)
-
-    subprocess.call([vrmatconvert, bakFile, filePath])
-
 def _parseTree(filePath):
+    if not os.path.exists(filePath):
+        return None
+
     tree = None
     try:
         tree = ElementTree.parse(filePath)
@@ -29,19 +20,8 @@ def _parseTree(filePath):
         pass
     return tree
 
-def _parserConvertTree(filePath):
-    if not os.path.exists(filePath):
-        return None
-
-    tree = _parseTree(filePath)
-    if tree is None:
-        _convertToXML(filePath)
-        tree = _parseTree(filePath)
-
-    return tree
-
 def getMaterialNamesFromVRMatFile(filePath):
-    tree = _parserConvertTree(filePath)
+    tree = _parseTree(filePath)
     if tree is None:
         debug.printError("Failed to parse VRmat file!")
         return []
@@ -105,7 +85,7 @@ def parseVrmat(filePath):
 
     sceneDesc = []
 
-    tree = _parserConvertTree(filePath)
+    tree = _parseTree(filePath)
     if tree is None:
         debug.printError(f"Failed to parse VRmat file: {filePath}")
         return {}
@@ -113,8 +93,6 @@ def parseVrmat(filePath):
     vrmat = tree.getroot()
 
     for asset in vrmat.iter('Asset'):
-        assetType = asset.attrib['type']
-
         vrayPluginName = asset.attrib['url']
 
         for vrayplugin in asset.iter('vrayplugin'):
@@ -126,8 +104,6 @@ def parseVrmat(filePath):
                 attrName  = parameter.attrib['name']
                 attrType  = parameter.attrib['type']
                 attrValue = None
-
-                # print("Found attribute: %s [%s]" % (attrName, attrType))
 
                 if (rawValue := parameter.find('value')) is None:
                     continue
@@ -205,12 +181,6 @@ def parseVrmat(filePath):
                 "Name"       : vrayPluginName,
                 "Attributes" : vrayPluginAttributes,
             })
-
-    sceneDesc.append({
-        "ID" : 'ImportSettings',
-        "Name" : "Import Settings",
-        "Dirpath" : os.path.dirname(filePath)
-    })
 
     return sceneDesc
 

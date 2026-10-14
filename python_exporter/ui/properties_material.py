@@ -142,15 +142,23 @@ class VRAY_PT_context_material(classes.VRayMaterialPanel):
         space = context.space_data
 
         if ob:
+            isSortable = len(ob.material_slots) > 1
+
             row = layout.row()
 
-            row.template_list("VRAY_UL_MaterialSlots", "", ob, "material_slots", ob, "active_material_index", rows=4)
+            row.template_list("VRAY_UL_MaterialSlots", "", ob, "material_slots", ob, "active_material_index", rows=5 if isSortable else 4)
 
             col = row.column(align=True)
             col.operator("object.material_slot_add", icon='ADD', text="")
             col.operator("object.material_slot_remove", icon='REMOVE', text="")
 
             col.menu("MATERIAL_MT_context_menu", icon='DOWNARROW_HLT', text="")
+
+            if isSortable:
+                col.separator()
+
+                col.operator("object.material_slot_move", icon='TRIA_UP', text="").direction = 'UP'
+                col.operator("object.material_slot_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
             if ob.mode == 'EDIT':
                 row = layout.row(align=True)

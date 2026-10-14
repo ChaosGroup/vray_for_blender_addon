@@ -12,11 +12,17 @@ from vray_blender.exporting import node_export as commonNodesExport
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel, exportDefaultUVWGenEnvironment
 from vray_blender.exporting.tools import getInputSocketByName, getFarNodeLink, getActiveOutputFarNodeLinks
 from vray_blender.lib.defs import AttrPlugin
+from vray_blender.nodes.utils import autoInitBitmapNode
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 # Magenta shown when the bitmap can't be loaded (missing file / non-existent sequence frame).
 _DEFAULT_MISSING_COLOR = Color((1.0, 0.0, 1.0))
+
+def nodeReset(node: bpy.types.Node):
+    # Restore the creation-time color space, so a reset bitmap matches a freshly added one.
+    autoInitBitmapNode(node)
+
 
 def exportTreeNode(nodeCtx: NodeContext):
     """ V-Ray Bitmap node translates to 3 VRay plugins: TexBitmap, BitmapBuffer and a UVW Gen plugin
@@ -38,7 +44,7 @@ def exportTreeNode(nodeCtx: NodeContext):
     allowRelativePaths = nodeCtx.exporterCtx.allowRelativePaths
 
     if node.BitmapBuffer.use_external_image:
-        bitmapBufferPluginDesc.setAttribute('file', _getExternalImagePath(node.BitmapBuffer.file, allowRelativePaths))
+        bitmapBufferPluginDesc.setAttribute('file', _getExternalImagePath(node.BitmapBuffer.file, allowRelativePaths, node.id_data.library))
     else:
         filePath = sys_utils.getDefaultTexturePath()
 
@@ -106,9 +112,13 @@ def _shouldExportEnvironmentUVW(node: bpy.types.Node, visited=None):
     return False
 
 
-def _getExternalImagePath(filePath: str, allowRelativePaths: bool):
+def _getExternalImagePath(filePath: str, allowRelativePaths: bool, library):
     if not filePath: # Return the default texture path if there is no file path set.
         return sys_utils.getDefaultTexturePath()
+
+    if library:
+        # A linked material's relative path is relative to its library file.
+        return path_utils.formatResourcePath(filePath, allowRelativePaths, library)
 
     formattedPath = ''
 

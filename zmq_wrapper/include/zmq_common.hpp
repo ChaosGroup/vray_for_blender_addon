@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <random>
 #include <string>
 
 
@@ -13,7 +14,7 @@
 
 namespace VrayZmqWrapper{
 
-static const int ZMQ_PROTOCOL_VERSION = 2049;
+static const int ZMQ_PROTOCOL_VERSION = 2052;
 
 static const int CONNECT_TIMEOUT		= 2000;	// ms
 static const int SOCKET_IO_TIMEOUT		= 100;  // ms
@@ -23,6 +24,22 @@ static const int HEARBEAT_TIMEOUT		= DEFAULT_PING_INTERVAL * 3;
 static const int HEARTBEAT_NO_TIMEOUT   = 0;    // special value
 
 using RoutingId = uint64_t;
+
+/// Ids at or below this are reserved for well-known singleton connections (the control
+/// connection is 1). Every other connection draws a random id above it.
+static const RoutingId RESERVED_ROUTING_IDS = 1000;
+
+/// A routing id for a new connection, outside the reserved range.
+inline RoutingId generateRoutingId() {
+	std::random_device device;
+	std::mt19937_64 generator(device());
+
+	RoutingId id = generator();
+	while (id <= RESERVED_ROUTING_IDS) {
+		id = generator();
+	}
+	return id;
+}
 
 inline int shorten(const RoutingId& id) {
 	return id % 1000;

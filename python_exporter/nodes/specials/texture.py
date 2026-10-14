@@ -7,7 +7,8 @@ import bpy
 from vray_blender.lib import class_utils
 from vray_blender.lib.mixin import VRayNodeBase, VRayOperatorBase
 from vray_blender.nodes.nodes import vrayNodeUpdate
-from vray_blender.nodes.sockets import addInput, addOutput, VRaySocket, removeInputs, getHiddenInput, moveExtendSocketToBottom
+from vray_blender.nodes.sockets import (addInput, addOutput, VRaySocket, VRaySocketColor, removeInputs,
+                                       getHiddenInput, moveExtendSocketToBottom)
 from vray_blender.nodes.utils import selectedObjectTagUpdate
 from vray_blender.plugins import PLUGINS, getPluginModule
 from vray_blender.ui import classes
@@ -21,6 +22,23 @@ from vray_blender.ui import classes
 ##    ## ##     ## ##    ## ##   ##  ##          ##    ##    ##
  ######   #######   ######  ##    ## ########    ##     ######
 
+class VRaySocketColorUnclamped(VRaySocketColor):
+    """ Color socket accepting values above 1. Create it with vray_socket_base_type 'VRaySocketColor'
+        so it is treated as a plain color socket everywhere else.
+    """
+    bl_idname = 'VRaySocketColorUnclamped'
+
+    value: bpy.props.FloatVectorProperty(
+        name = "Color",
+        description = "Color",
+        subtype = 'COLOR',
+        min = 0.0,
+        soft_min = 0.0,
+        soft_max = 1.0,
+        update = selectedObjectTagUpdate
+    )
+
+
 class VRaySocketTexLayeredBlendMode(VRaySocket):
     bl_idname = 'VRaySocketTexLayeredBlendMode'
     bl_label  = 'Blend Mode'
@@ -29,31 +47,32 @@ class VRaySocketTexLayeredBlendMode(VRaySocket):
         name = "Blend Mode",
         description = "Blend mode",
         items = (
-            ("0", "Normal", "Normal"),
-            ("1", "Average", "Average"),
-            ("2", "Add", "Add"),
-            ("3", "Subtract", "Subtract"),
-            ("4", "Darken", "Darken"),
-            ("5", "Multiply", "Multiply"),
-            ("6", "Color burn", "Color burn"),
-            ("7", "Linear burn", "Linear burn"),
-            ("8", "Lighten", "Lighten"),
-            ("9", "Screen", "Screen"),
-            ("10", "Color Dodge", "Color Dodge"),
-            ("11", "Linear Dodge", "Linear Dodge"),
-            ("12", "Spotlight", "Spotlight"),
-            ("13", "Spotlight blend", "Spotlight blend"),
-            ("14", "Overlay", "Overlay"),
-            ("15", "Softlight", "Softlight"),
-            ("16", "Hardlight", "Hardlight"),
-            ("17", "Pinlight", "Pinlight"),
-            ("18", "Hardmix", "Hardmix"),
-            ("19", "Difference", "Difference"),
-            ("20", "Exclusion", "Exclusion"),
-            ("21", "Hue", "Hue"),
-            ("22", "Saturation", "Saturation"),
-            ("23", "Color", "Color"),
-            ("24", "Value", "Value")
+            ("0", "Normal", "Normal", 0),
+            ("1", "Average", "Average", 1),
+            ("2", "Add", "Add", 2),
+            ("3", "Subtract", "Subtract", 3),
+            ("5", "Multiply", "Multiply", 5),
+            ("29", "Divide", "Divide", 29),
+            ("19", "Difference", "Difference", 19),
+            ("4", "Darken", "Darken", 4),
+            ("6", "Color burn", "Color burn", 6),
+            ("7", "Linear burn", "Linear burn", 7),
+            ("8", "Lighten", "Lighten", 8),
+            ("9", "Screen", "Screen", 9),
+            ("10", "Color Dodge", "Color Dodge", 10),
+            ("11", "Linear Dodge", "Linear Dodge", 11),
+            ("12", "Spotlight", "Spotlight", 12),
+            ("13", "Spotlight blend", "Spotlight blend", 13),
+            ("14", "Overlay", "Overlay", 14),
+            ("15", "Softlight", "Softlight", 15),
+            ("16", "Hardlight", "Hardlight", 16),
+            ("17", "Pinlight", "Pinlight", 17),
+            ("18", "Hardmix", "Hardmix", 18),
+            ("20", "Exclusion", "Exclusion", 20),
+            ("21", "Hue", "Hue", 21),
+            ("22", "Saturation", "Saturation", 22),
+            ("23", "Color", "Color", 23),
+            ("24", "Value", "Value", 24)
         ),
         default = '0',
         update = selectedObjectTagUpdate
@@ -179,9 +198,9 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
         addTexLayeredExtendSocket(self)
 
         addOutput(self, 'VRaySocketColor',      "Color")
-        addOutput(self, 'VRaySocketFloatColor', "Out Transparency", 'out_transparency')
-        addOutput(self, 'VRaySocketFloatColor', "Out Alpha",        'out_alpha')
-        addOutput(self, 'VRaySocketFloatColor', "Out Intensity",    'out_intensity')
+        addOutput(self, 'VRaySocketFloatColor', "Transparency", 'out_transparency')
+        addOutput(self, 'VRaySocketFloatColor', "Alpha",        'out_alpha')
+        addOutput(self, 'VRaySocketFloatColor', "Intensity",    'out_intensity')
 
 
     def draw_buttons(self, context, layout):
@@ -253,11 +272,19 @@ class VRayNodeTexLayeredMax(VRayNodeBase):
 
 
     @staticmethod
+    def addLayerColorInput(node, sockName):
+        """ Add a layer's Texture/Mask input. Layer colors may go above 1. """
+        sock = addInput(node, 'VRaySocketColorUnclamped', sockName)
+        sock.vray_socket_base_type = 'VRaySocketColor'
+        return sock
+
+
+    @staticmethod
     def addLayer(node, humanIndex):
         """ Add the inputs for a texture layer """
 
-        addInput(node, 'VRaySocketColor', f"Texture {humanIndex}").setValue((1.0, 1.0, 1.0))
-        addInput(node, 'VRaySocketColor', f"Mask {humanIndex}").setValue((1.0, 1.0, 1.0))
+        VRayNodeTexLayeredMax.addLayerColorInput(node, f"Texture {humanIndex}").setValue((1.0, 1.0, 1.0))
+        VRayNodeTexLayeredMax.addLayerColorInput(node, f"Mask {humanIndex}").setValue((1.0, 1.0, 1.0))
         addInput(node, "VRaySocketTexLayeredOpacity", f"Opacity {humanIndex}", visible = False)
         addInput(node, "VRaySocketTexLayeredBlendMode", f"Blend Mode {humanIndex}", visible = False)
 
@@ -316,6 +343,7 @@ class VRAY_OT_pack_image(VRayOperatorBase):
 
 def getRegClasses():
     return (
+        VRaySocketColorUnclamped,
         VRaySocketTexLayeredBlendMode,
         VRaySocketTexLayeredOpacity,
         VRAY_OT_node_texlayered_layer_add,

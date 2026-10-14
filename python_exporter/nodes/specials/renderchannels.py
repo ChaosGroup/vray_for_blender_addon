@@ -92,7 +92,11 @@ class VRayNodeRenderChannels(VRayNodeBase):
         addOutput(self, 'VRaySocketObjectList', "Channels")
 
     def draw_buttons(self, context, layout):
-        classes.drawPluginUI(context, layout, context.scene.vray.SettingsRenderChannels, plugins.getPluginModule('SettingsRenderChannels'), self)
+        # drawPluginUI() is the property-page path. It is property-split, which gave the node
+        # body a label column. Draw the same widgets in node layout instead.
+        pluginModule = plugins.getPluginModule('SettingsRenderChannels')
+        painter = draw_utils.UIPainter(context, pluginModule, context.scene.vray.SettingsRenderChannels, self)
+        painter.renderWidgets(layout, pluginModule.Widget['widgets'], True)
         layout.separator()
 
         split = layout.split()

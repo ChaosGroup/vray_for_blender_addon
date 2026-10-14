@@ -10,6 +10,7 @@ from bpy import path as bpyPath
 from pathlib import PurePath
 
 from vray_blender import debug
+from vray_blender.plugins import getPluginModule, getPluginAttr
 
 
 def _parseImageFormat(vrayScene, imgFormat: str):
@@ -20,11 +21,16 @@ def _parseImageFormat(vrayScene, imgFormat: str):
 
     settingsOutput = vrayScene.SettingsOutput
 
-    # Get a {'PNG': '0', 'JPG': 1 ...} dictionary
+    # Get a {'PNG': '0', 'JPEG': '1' ...} dictionary.
     # Note that the list of supported formats is different between V-Ray and Cycles
     # so Blender might print some error messages
-    supportedFormats = {item.name.upper(): item.identifier for item in settingsOutput.bl_rna.properties['img_format'].enum_items}
-    
+    attrDesc = getPluginAttr(getPluginModule('SettingsOutput'), 'img_format')
+    supportedFormats = {name.upper(): id for id, name, _ in attrDesc['items']}
+
+    # Short aliases matching the file extensions
+    for alias, name in (('EXR', 'OPENEXR'), ('VRST', 'VRAYIMAGE')):
+        supportedFormats[alias] = supportedFormats[name]
+
     if imgFormat not in supportedFormats:
         raise Exception(f"Unsupported output format: {imgFormat}")
     

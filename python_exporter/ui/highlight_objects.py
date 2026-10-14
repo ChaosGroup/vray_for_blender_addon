@@ -25,6 +25,7 @@
 
 import bpy
 
+from vray_blender.lib.blender_utils import findViewport, WindowScope
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.ui import gpu_overlay
 
@@ -92,14 +93,9 @@ def _findViewportWindow(context: bpy.types.Context):
     """ The window hosting a 3D viewport, preferring the one the button was clicked in. A modal
         handler is bound to one window, so bind it where the overlay is, not where the button was.
     """
-    windows = sorted(context.window_manager.windows,
-                     key=lambda w: 0 if w == context.window else 1)
-
-    for win in windows:
-        if any(area.type == 'VIEW_3D' for area in win.screen.areas):
-            return win
-
-    return context.window
+    # Falling back to the current window keeps the modal running (harmlessly) when no viewport
+    # is open, rather than failing to start it.
+    return viewport.window if (viewport := findViewport(context, WindowScope.ACTIVE_FIRST)) else context.window
 
 
 def _resolveObjects(context: bpy.types.Context, items: list[bpy.types.ID]):

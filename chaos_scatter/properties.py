@@ -74,6 +74,11 @@ def _pollModelObject(self, obj):
     return isModelObject(obj) or obj.type == 'EMPTY'
 
 
+def _pollModelCollection(self, collection):
+    from chaos_scatter.lifecycle import isGeneratedCollection
+    return not isGeneratedCollection(collection.name)
+
+
 class ChaosScatterTargetItem(bpy.types.PropertyGroup):
     object: PointerProperty(
         type = bpy.types.Object,
@@ -91,6 +96,16 @@ class ChaosScatterTargetItem(bpy.types.PropertyGroup):
 
 
 class ChaosScatterModelItem(bpy.types.PropertyGroup):
+    source_type: EnumProperty(
+        name = "Source", items = (('OBJECT', "Object", "Scatter an object hierarchy"),
+                                  ('COLLECTION', "Collection", "Scatter a collection as one model")),
+        default = 'OBJECT', update = onModelsChanged,
+    )
+    collection: PointerProperty(
+        type = bpy.types.Collection, name = "Collection",
+        description = "Collection to scatter as one model, including nested collections",
+        poll = _pollModelCollection, update = onModelsChanged,
+    )
     object: PointerProperty(
         type = bpy.types.Object,
         name = "Object",

@@ -27,12 +27,17 @@ def _drawOperation(row, obj, propGroup):
 
 
 def _drawClipperMaterial(row, obj, propGroup):
-    # The override material is ignored when the clipper keeps the object material.
-    if propGroup is None or 'selectedMaterial' not in propGroup.bl_rna.properties:
+    # The cut surfaces are shaded with the clipper object's first material, unless the
+    # clipper keeps the material of each clipped object or leaves the cuts open.
+    if propGroup is None:
         row.label(text="")
         return
-    row.enabled = not getattr(propGroup, 'use_obj_mtl', False)
-    row.prop(propGroup, 'selectedMaterial', text="")
+    row.enabled = propGroup.fill_cavities and not propGroup.use_obj_mtl
+    if obj.material_slots:
+        row.prop(obj.material_slots[0], 'material', text="")
+    else:
+        # Assigning the active material of an object without slots creates its first slot
+        row.prop(obj, 'active_material', text="")
 
 
 class ClippersCategory(ListerCategory):
@@ -66,6 +71,7 @@ class ClippersCategory(ListerCategory):
             ColumnSpec('only_camera_rays', "Camera Only", attr='only_camera_rays', width=1.1),
             ColumnSpec('use_obj_mesh', "Use Mesh", attr='use_obj_mesh', width=1.0),
             ColumnSpec('operation', "Operation", draw=_drawOperation, width=1.8),
+            ColumnSpec('fill_cavities', "Fill", attr='fill_cavities', width=0.8),
             ColumnSpec('use_obj_mtl', "Use Obj Mtl", attr='use_obj_mtl', width=1.1),
             ColumnSpec('material', "Material", draw=_drawClipperMaterial, width=1.8),
             ColumnSpec('exclusion_mode', "Exclude Mode", attr='exclusion_mode', width=1.6),

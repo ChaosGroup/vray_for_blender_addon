@@ -73,6 +73,9 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
         subscribeToBitmapImageUpdates(self)
 
     def copy(self, node):
+        if NodeUtils.isInTemporaryTree(self):
+            return
+
         # Try to capture the texture ID now (same-scene copies, including group operations
         # where the source node is removed synchronously before the timer fires).
         # This fails for cross-scene copies where the node isn't fully set up yet.
@@ -80,23 +83,26 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
             srcTexture = node.texture
         except Exception:
             srcTexture = None
+        srcTexturePtr = srcTexture.as_pointer() if srcTexture else 0
+        srcImage = getattr(srcTexture, 'image', None)
 
         def _createTexture():
             hasTexture = bool(self.texture)
-            NodeUtils.createBitmapTexture(self)
+            if not (srcTexturePtr and hasTexture and self.texture.as_pointer() != srcTexturePtr):
+                NodeUtils.createBitmapTexture(self)
 
             if hasTexture:
-                tex = srcTexture
-                if tex is None:
+                if srcTexture is not None:
+                    # The node is copied from the current scene. Link the texture to the original texture image.
+                    self.texture.image = srcImage
+                else:
                     # srcTexture wasn't captured (cross-scene copy); node is still alive here.
                     try:
                         tex = node.texture
                     except ReferenceError:
                         tex = None
-                if tex is not None and hasattr(tex, 'image'):
-                    # The node is copied from the current scene. Link the texture to the
-                    # original texture image.
-                    self.texture.image = tex.image
+                    if tex is not None and hasattr(tex, 'image'):
+                        self.texture.image = tex.image
                 # else: The node is copied from a different scene; texture image is not copied.
 
             syncObjectUniqueName(self, reset=True)
@@ -106,10 +112,18 @@ class VRayNodeMetaImageTexture(VRayNodeBase):
         # 5.1+: the timer fires after Blender's cross-instance paste has torn
         # down the source struct, causing a use-after-free — do the work
         # synchronously instead.
-        if bpy.app.version < (5, 1, 0):
-            bpy.app.timers.register(_createTexture)
-        else:
+        if bpy.app.version >= (5, 1, 0):
             _createTexture()
+        elif srcTexturePtr and self.texture and self.texture.as_pointer() == srcTexturePtr:
+            syncObjectUniqueName(self, reset=True)
+            NodeUtils.fixCopiedTexturesLater()
+        else:
+            bpy.app.timers.register(_createTexture)
+
+    def free(self):
+        if (tex := self.texture) and tex.users - tex.use_fake_user == 1:
+            tex.use_fake_user = False
+            bpy.data.textures.remove(tex)
 
 
     def draw_buttons(self, context, layout):

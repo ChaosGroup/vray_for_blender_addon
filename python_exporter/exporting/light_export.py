@@ -298,9 +298,11 @@ class LightExporter(ExporterBase):
 
         dgUpdates = self.dgUpdates['transform'].union(self.dgUpdates['geometry'])
 
+        # Editing a light's node tree tags only the tree, not the light.
         def lightIsUpdated(ob: bpy.types.Object):
             return (getObjTrackId(ob) in dgUpdates) or \
                     (getObjTrackId(ob.data) in dgUpdates) or \
+                    ((ob.data.node_tree is not None) and (getObjTrackId(ob.data.node_tree) in dgUpdates)) or \
                     (getObjTrackId(ob.data) in updatedTrackerLightSIDs) or \
                     (getObjTrackId(ob) not in self.persistedState.processedObjects)
 
@@ -592,6 +594,8 @@ class LightExporter(ExporterBase):
         activeLightIds = [getObjTrackId(l) for l in activeLights]
         # An instanced light is not necessarily in the scene - see instancedObjectTrackIds.
         activeObjectIds = {getObjTrackId(o) for o in activeObjects} | self.instancedObjectTrackIds
+        from vray_blender.exporting import scatter_export
+        activeObjectIds.update(scatter_export.referencedModelTrackIds(self))
 
         removedObjectIds = self.objTracker.diff(activeObjectIds)
         self._pruneObjectPlugins(removedObjectIds)

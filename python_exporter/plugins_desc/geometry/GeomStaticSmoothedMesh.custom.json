@@ -35,6 +35,24 @@
         {
             "attr": "preserve_map_borders",
             "default": "1"
+        },
+        {
+            "attr": "displacement_amount",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "displacement_shift",
+            "ui": {
+                "quantityType": "distance"
+            }
+        },
+        {
+            "attr": "water_level",
+            "ui": {
+                "quantityType": "distance"
+            }
         }
     ],
     "Node":{

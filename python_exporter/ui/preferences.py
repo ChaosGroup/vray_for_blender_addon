@@ -13,12 +13,6 @@ from vray_blender.plugins.system.compute_devices import ComputeDevices
 from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.ui.community_edition import drawCELimitedFeatureIcon
 
-if sys.platform == "win32":
-    # The psutil we ship is currently broken on macos. It takes into account numa nodes
-    # and is only used for the total thread count message we show the user, but we should
-    # be fine with os.cpu_count on most MacOS machines.
-    from vray_blender.external import psutil
-
 def getVRayCloudPath():
     """
     If Chaos Cloud is installed on the system returns the path to it, else - None.
@@ -399,6 +393,14 @@ class VRayListerPreferences(bpy.types.PropertyGroup):
     )
 
 
+def _onNodeThumbnailSettingChanged(self, context):
+    try:
+        from vray_blender.preview import thumbs
+        thumbs.onSettingChanged()
+    except (ImportError, AttributeError):
+        pass
+
+
 class VRayExporterPreferences(bpy.types.AddonPreferences):
     bl_idname = "vray_blender"
 
@@ -470,6 +472,54 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         name        = "Don't Use Local Machine",
         description = "Use distributed rendering excluding the local machine",
         default     = False
+    )
+
+    node_thumbnails: bpy.props.BoolProperty(
+        name        = "Node Thumbnails",
+        description = "Show a rendered thumbnail above each texture, material and BRDF node "
+                      "in the V-Ray node editor. Only nodes visible in the editor are computed",
+        default     = True,
+        update      = _onNodeThumbnailSettingChanged,
+    )
+
+    node_thumbnail_size: bpy.props.EnumProperty(
+        name        = "Thumbnail Size",
+        description = "On-screen size of a node thumbnail, as a fraction of the node's width",
+        items       = (
+            ('SMALL',  "Small",  "Half the node width"),
+            ('MEDIUM', "Medium", "Three quarters of the node width (default)"),
+            ('LARGE',  "Large",  "The full node width"),
+        ),
+        default     = 'MEDIUM',
+        update      = _onNodeThumbnailSettingChanged,
+    )
+
+    node_thumbnail_resolution: bpy.props.EnumProperty(
+        name        = "Thumbnail Resolution",
+        description = "Resolution at which node thumbnails are computed. Higher is sharper "
+                      "when zoomed in, and slower to produce",
+        items       = (
+            ('AUTO', "Match Drawn Size", "Match the size the thumbnail is drawn at, rounded up "
+                                         "to the next step. Re-renders as you zoom past a step, "
+                                         "so it costs more than a fixed size"),
+            ('64',  "64",  "Fastest, lowest quality"),
+            ('128', "128", "Balanced (default)"),
+            ('256', "256", "Sharper, slower"),
+            ('512', "512", "Sharpest, slowest"),
+        ),
+        default     = '128',
+        update      = _onNodeThumbnailSettingChanged,
+    )
+
+    node_thumbnail_workers: bpy.props.IntProperty(
+        name        = "Thumbnail Workers",
+        description = "How many node thumbnails may be rendered at the same time. Each worker is "
+                      "a V-Ray renderer kept warm with the thumbnail scene already loaded. "
+                      "0 picks a count from the number of CPU cores",
+        default     = 0,
+        min         = 0,
+        max         = 16,
+        update      = _onNodeThumbnailSettingChanged,
     )
 
     preferences_menu: bpy.props.EnumProperty(
@@ -802,6 +852,44 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
             subLayout.prop(self, 'mtl_use_roughness')
             subLayout.prop(self, 'shading_tree_style')
 
+    def _drawNodeThumbnailsPanel(self, layout):
+        from vray_blender import features
+        if not features.isEnabled(features.Feature.NODE_THUMBNAILS):
+            return
+
+        box = layout.box()
+        header, subLayout = box.panel(idname="node_thumbnails", default_closed=True)
+        header.label(text="Node Thumbnails")
+        if not subLayout:
+            return
+
+        split = subLayout.split(factor=0.05, align=True)
+        split.column()
+        panel = split.column(align=True)
+        panel.separator()
+
+        subLayout = panel.column()
+        subLayout.use_property_split = True
+        subLayout.use_property_decorate = False
+
+        subLayout.prop(self, 'node_thumbnails')
+        thumbCol = subLayout.column()
+        thumbCol.enabled = self.node_thumbnails
+        thumbCol.prop(self, 'node_thumbnail_size')
+        thumbCol.prop(self, 'node_thumbnail_resolution')
+        thumbCol.prop(self, 'node_thumbnail_workers')
+
+        try:
+            from vray_blender.preview import bake
+            bakeAvailable = bake.isAvailable()
+        except Exception:
+            bakeAvailable = True
+
+        if not bakeAvailable:
+            hintRow = thumbCol.row()
+            hintRow.enabled = False
+            hintRow.label(text="Texture thumbnails require a matching V-Ray server")
+
     def _drawPerformancePanel(self, layout, context):
         box = layout.box()
         header, subLayout = box.panel(idname="performance", default_closed=True)
@@ -821,7 +909,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         subLayout.use_property_decorate = False
 
         subLayout.prop(vrayExporter, 'use_custom_thread_count', text='Thread Mode')
-        threadCount = psutil.cpu_count() if sys.platform == "win32" else os.cpu_count()
+        threadCount = sys_utils.getCpuThreadCount()
         infoRow = subLayout.row()
         infoRow.alignment = 'RIGHT'
         infoRow.label(text=f"The system has {threadCount} CPU threads")
@@ -836,6 +924,7 @@ class VRayExporterPreferences(bpy.types.AddonPreferences):
         self._drawAboutPanel(layout)
         self._drawTelemetryPanel(layout)
         self._drawAdditionalSettingsPanel(layout)
+        self._drawNodeThumbnailsPanel(layout)
         self._drawPerformancePanel(layout, context)
 
     def _drawLoggingPanel(self, layout, context):

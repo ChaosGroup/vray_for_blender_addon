@@ -1,0 +1,11 @@
+{
+    "ID": "TexMultiFloat",
+    "Parameters": [
+        {
+            "attr": "id_gen_tex_round_mode",
+            "ui": {
+                "display_name": "ID Gen Tex Round Mode"
+            }
+        }
+    ]
+}

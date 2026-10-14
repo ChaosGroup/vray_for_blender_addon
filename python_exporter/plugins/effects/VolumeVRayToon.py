@@ -11,7 +11,11 @@ from vray_blender.lib.defs import NodeContext, PluginDesc
 from vray_blender.lib.names import Names
 from vray_blender.nodes.utils import getUpdateCallbackPropertyContext, getNodeOfPropGroup, getVrayPropGroup
 from vray_blender.exporting import node_export as commonNodesExport
-from vray_blender.nodes.curves_node import addCurvesUpdateCallback, copyCurvesData, createCurvesNode, getCurvesNode, hasCurvesNode, removeCurvesNode, exportLineWidthCurves
+from vray_blender.nodes.curves_node import (
+    addCurvesUpdateCallback, assignCurvesId, copyCurvesData, createCurvesNode, curvesCopy,
+    drawMissingCurvesNode, getCurvesNode, getCurvesNodeForDraw, hasCurvesNode, removeCurvesNode,
+    exportLineWidthCurves,
+)
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
@@ -33,11 +37,12 @@ def onUpdateInnerLine(updateSource, context: bpy.types.Context, attrName: str ):
 
 _CURVE_ATTRIBUTES = {'depth_curve': 'depth', 'angular_curve': 'angular'}
 _CURVE_TYPES = ('depth', 'angular')
+_CURVE_NAME_SUFFIXES = tuple(f'_{t}' for t in _CURVE_TYPES)
 _OLD_CURVE_NODES_TREE_NAME = ".volumeVRayToonTree"
 
 
 def nodeInit(node: bpy.types.Node):
-    node.assignStaticId() # The static id is needed for the name of the curves node
+    assignCurvesId(node, _CURVE_NAME_SUFFIXES)
 
     # In order to use Blender's template_curve_mapping template, we need a property of type 'CurveMapping'.
     # Unfortunately, The current "bpy" API does not allow direct creation of a CurveMapping object.
@@ -55,17 +60,16 @@ def nodeFree(node: bpy.types.Node):
 
 
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
-    copyNode.assignStaticId() # The static id is needed for the name of the curves node
-
-    for curveType in _CURVE_TYPES:
-        copyCurvesData(getCurvesNode(origNode, f'_{curveType}'), createCurvesNode(copyNode, f'_{curveType}'))
+    curvesCopy(copyNode, origNode, _CURVE_NAME_SUFFIXES)
 
 
 def drawCurveTemplate(context, layout, propGroup, widgetAttr):
     node = getNodeOfPropGroup(propGroup)
 
     curveType = _CURVE_ATTRIBUTES.get(widgetAttr['name'])
-    curvesNode = getCurvesNode(node, f'_{curveType}')
+    if (curvesNode := getCurvesNodeForDraw(node, f'_{curveType}')) is None:
+        drawMissingCurvesNode(layout)
+        return
     layout.template_curve_mapping(curvesNode, "mapping", type='NONE')
 
 

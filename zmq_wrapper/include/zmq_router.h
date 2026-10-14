@@ -4,8 +4,13 @@
 
 #pragma once
 
+#include <chrono>
 #include <list>
+#include <map>
 #include <mutex>
+#include <utility>
+
+#include <tsl/robin_map.h>
 
 
 #define ZMQ_HAVE_POLLER
@@ -44,6 +49,12 @@ public:
 	using ErrorCallback     = std::function<void(std::string msg)>;
 	using TraceCallback     = std::function<void(const std::string &msg)>;
 
+	/// Time without new occurrences after which a failed relay is removed from the backlog
+	static constexpr std::chrono::milliseconds RELAY_FAILURE_GRACE{5000};
+
+	/// Interval between purges of the failed relays backlog
+	static constexpr std::chrono::milliseconds RELAY_FAILURE_PURGE_INTERVAL{1000};
+
 public:
 	explicit ZmqRouter(zmq::context_t& ctx);
 	~ZmqRouter();
@@ -70,6 +81,13 @@ public:
 	void setTraceCallback(TraceCallback cb);
 
 private:
+	using Clock = std::chrono::steady_clock;
+
+	/// Time of the last occurrence of the failed relays of a single tunnel,
+	/// keyed by (toClient, hash of the error text)
+	using TunnelFailures = std::map<std::pair<bool, size_t>, Clock::time_point>;
+
+private:
 	zmq::socket_t bind (const std::string& serverEndpoint);
 
 	void processHandshake(zmq::socket_ref sock, const zmq::multipart_t& msg);
@@ -79,7 +97,9 @@ private:
 
 	// Reply with error to the peer of a failed socket
 	void replyWithError (zmq::socket_ref toSock, const RoutingId& routingId, const std::string& errMsg);
-	
+
+	// Remove the failed relays whose grace period has expired
+	void purgeRelayFailures();
 
 	// Poller thread procedure
 	void pollerLoop	(std::string clientAddr, std::string endpointServer);
@@ -103,7 +123,10 @@ private:
 	
 	zmq::socket_t sockClient;               ///< Socket listening for client requests
 	zmq::socket_t sockServer;               ///< Socket listening for server requests
-	
+
+	tsl::robin_map<RoutingId, TunnelFailures> relayFailures; ///< Backlog of failed relays, used for deduplication
+	Clock::time_point lastPurge;            ///< Last time the failed relays backlog was purged
+
 	NewWorkerCallback newWorkerCallback;    ///< Hands out a newly created worker in idle state upon new client connection.
 	StartedCallback startedCallback;        ///< Provides information about the client endpoint the router has opened.
 	ErrorCallback errorCallback;            ///< Error report callback

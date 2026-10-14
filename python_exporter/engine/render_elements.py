@@ -255,3 +255,29 @@ RE = {
     "DR Bucket":                      { "type": "color",  "channelType": 134 },
     "Extra Tex":                      { "type": "color",  "channelType": 6007 },  # EXTRA_TEX = USER + 5007
 }
+
+
+# Blender composites grease pencil over our render, depth-tested against this pass.
+GPENCIL_DEPTH_PASS_NAME = "Depth"
+
+# The RenderChannelZDepth 'name', and its VFB label.
+GPENCIL_DEPTH_CHANNEL_NAME = "DepthGreasePencil"
+
+GPENCIL_DEPTH_CHANNEL_TYPE = RE[GPENCIL_DEPTH_PASS_NAME]["channelType"]
+
+# REG_CHAN_VFB_USD_DEPTH, the RenderChannelUsdDepth alias. The AppSDK has no RenderElement::Type
+# for it, the server reads it by channel name.
+GPENCIL_USD_DEPTH_CHANNEL_TYPE = 300
+
+
+def greasePencilDepthChannelType(scene) -> int:
+    """ The channel _exportGreasePencilDepthChannel exports: RenderChannelUsdDepth, or Z-depth on GPU. """
+    from vray_blender.lib.sys_utils import isGPUEngine
+    return GPENCIL_DEPTH_CHANNEL_TYPE if isGPUEngine(scene) else GPENCIL_USD_DEPTH_CHANNEL_TYPE
+
+
+def needsGreasePencilDepthPass(scene) -> bool:
+    """ True when the Depth pass must be rendered. Registration and filling must agree. """
+    if not scene.vray.Exporter.image_to_blender:
+        return False
+    return any(ob.type == 'GREASEPENCIL' for ob in scene.objects)

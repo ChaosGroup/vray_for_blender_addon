@@ -4,16 +4,14 @@
 
 import math
 import os
-import bpy
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
-from vray_blender.nodes import importing as NodesImport
-from vray_blender.nodes import tools     as NodesTools
+import bpy
+
+from vray_blender.nodes import importing as NodesImport, tools as NodesTools
 from vray_blender.nodes.utils import getOutputNode, getLightOutputNode
 from vray_blender.nodes.tree_defaults import addMaterialNodeTree, addDecalNodeTree, createNodeTreeForLightObject, removeNonVRayNodes
-
 from vray_blender.vray_tools.vrmat_parser import parseVrmat
-
 from vray_blender import debug
 from vray_blender.vray_tools import vray_proxy
 from vray_blender.lib import blender_utils, path_utils
@@ -21,14 +19,18 @@ from vray_blender.lib.lib_utils import (cleanImportedPluginName, getCosmosAssetN
                                         sanitizeDatablockName, LightTypeToPlugin)
 from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.plugins.geometry.VRayDecal import createDecalObject, generateDecalPreviewMesh
+# Only the Cosmos importers below report through this; the shared import paths must not.
+from vray_blender.utils import cosmos_notify
 from vray_blender.bin.VRayBlenderLib import CosmosAssetSettings
 from vray_blender.vray_tools.import_common import (refName as _refName, sceneName as _sceneName,
                                                    MATERIAL_ROOT_TYPES, WRAPPER_BASE_ATTRS,
-                                                   getImportDir)
-from pathlib import Path
+                                                   getPluginsByType)
 
-def _createMaterial(mtlName):
+def _createMaterial(mtlName, ledger = None):
     mtl = bpy.data.materials.new(mtlName)
+    # Track before the tree is built, so a failure anywhere after this is still rolled back.
+    if ledger is not None:
+        ledger.track(mtl)
     addMaterialNodeTree(mtl, addDefaultTree=False)
 
     # removing default Blender nodes
@@ -56,7 +58,7 @@ def _peelMaterialWrappers(vrsceneDict, mtl, pluginDesc):
         seen.add(pluginDesc['Name'])
         pluginType = pluginDesc['ID']
         if propGroup := getattr(mtl.vray, pluginType, None):
-            NodesImport._pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType)
+            NodesImport.pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType)
             if hasattr(propGroup, 'use'):
                 propGroup.use = True
         baseRef = pluginDesc['Attributes'].get(WRAPPER_BASE_ATTRS[pluginType])
@@ -65,7 +67,7 @@ def _peelMaterialWrappers(vrsceneDict, mtl, pluginDesc):
 
 
 def _resolveMtlSingle(vrsceneDict, pluginDesc):
-    """ MtlSingleBRDF has no node of its own - it is represented by the material output node.
+    """ MtlSingleBRDF has no node of its own; the material output node represents it.
         Follow its 'brdf' chain to the actual shader plugin (BRDF/material wrapper) that does. """
     seen = set()
     while (pluginDesc is not None and pluginDesc['ID'] == 'MtlSingleBRDF'
@@ -78,39 +80,62 @@ def _assignMaterialsToSlots(multiMtlDesc, obj, mtlNameOverrides:dict[str, str]):
     assert obj is not None
     assert 'mtls_list' in multiMtlDesc['Attributes']
 
-    mtlsList =  multiMtlDesc['Attributes']['mtls_list']
-    idsList =  multiMtlDesc['Attributes']['ids_list']
+    mtlsList = multiMtlDesc['Attributes']['mtls_list']
+    idsList = multiMtlDesc['Attributes']['ids_list']
 
-    # There could be case where for example:
-    # ids_list=[1, 5, 3] and mtls_list=[mtl1, mtl5, mtl3]
-    # where we want mtl1 on slot 1, mtl5 on slot 5 and mtl3 on slot 3.
-    # For that the materials are first sorted based on their ids and then if there
-    # is gap between slots (in the example above between slot 1 and 3) None is appended
-    # to obj.data.materials, which adds empty slot between the used ones
+    # ids_list=[1, 5, 3] with mtls_list=[mtl1, mtl5, mtl3] means mtl1 on slot 1, mtl5 on slot 5
+    # and mtl3 on slot 3. Sort the materials by id, then append None to obj.data.materials for
+    # every gap between slots (here, between slot 1 and 3) to leave the slot empty.
 
     # A .vrscene reference may carry an output socket ('name::output'), which is not part of the
     # plugin name the override map is keyed on.
     mtlsWithIds = []
-    for id, ref in zip(idsList, mtlsList):
+    for mtlId, ref in zip(idsList, mtlsList):
         pluginName = _refName(ref)
-        mtlsWithIds.append((int(id), mtlNameOverrides.get(pluginName, pluginName)))
+        mtlsWithIds.append((int(mtlId), mtlNameOverrides.get(pluginName, pluginName)))
 
     mtlsWithIds.sort(key=lambda e: e[0])
 
     slotCounter = 0
-    for id, mtl in mtlsWithIds:
+    for mtlId, mtl in mtlsWithIds:
         if mtl not in bpy.data.materials:
             # The MtlMulti lists a material that was not imported, e.g. because another
             # material already consumed it.
-            debug.printWarning(f"Material {mtl} of the imported MtlMulti was not created, skipping slot {id}")
+            debug.printWarning(f"Material {mtl} of the imported MtlMulti was not created, skipping slot {mtlId}")
             continue
 
-        while slotCounter < id:
+        while slotCounter < mtlId:
             obj.data.materials.append(None)
             slotCounter += 1
         # A sub-material that failed to import leaves an empty (None) slot.
         obj.data.materials.append(bpy.data.materials.get(mtl))
         slotCounter += 1
+
+    _captureImportedProxySlots(obj)
+
+
+def _captureImportedProxySlots(obj: bpy.types.Object):
+    """ Record the materials the slots were created with, which is what the UI goes back to.
+
+        The Object Hierarchy rollout lists the slots of a proxy whose file defines no shader sets.
+        It labels each with the material it came with rather than the one it holds now, and its
+        Reset button puts that material back - see
+        TemplateProxyObjectHierarchy.captureImportedSlots(). Nothing in the file names them, so
+        here, where they are made, is the only place that knows.
+
+        Only for a proxy: _assignMaterialsToSlots() also runs for the ordinary meshes of a
+        '.vrscene' import, whose GeomMeshFile is never used, and the snapshot holds material
+        references that would keep those materials alive for nothing.
+    """
+    from vray_blender.exporting.tools import isObjectVrayProxy
+
+    if not isObjectVrayProxy(obj):
+        return
+
+    vrayData = getattr(getattr(obj, 'data', None), 'vray', None)
+
+    if geomMeshFile := getattr(vrayData, 'GeomMeshFile', None):
+        geomMeshFile.object_hierarchy.captureImportedSlots(obj)
 
 
 def _addMaterialSlotsForProxyShaders(obj: bpy.types.Object, shaders: list):
@@ -137,6 +162,8 @@ def _addMaterialSlotsForProxyShaders(obj: bpy.types.Object, shaders: list):
         # The shader's own slot: also empty (None) for now; materials are assigned later
         obj.data.materials.append(None)
         slotCounter += 1
+
+    _captureImportedProxySlots(obj)
 
 
 def _isTexturePlugin(pluginType: str) -> bool:
@@ -205,8 +232,9 @@ def _wrapTexturesInTriPlanar(vrsceneDict: list, rootPluginNames: list[str], size
 
     def wrapReference(value: str) -> str:
         # value is "pluginName" or "pluginName::output". Replace with a new TexTriPlanar that
-        # references the original texture and return the new reference string, preserving the
-        # caller's requested output socket (e.g. ::out_intensity for a float input).
+        # references the original texture, keeping the caller's output socket (e.g.
+        # ::out_intensity for a float input). Splits all three parts, not _refName: this is
+        # the only place that puts a reference back together.
         pluginName, sep, outSuffix = value.partition("::")
         refDesc = nameToDesc.get(pluginName)
         if refDesc is None:
@@ -248,21 +276,27 @@ def _wrapTexturesInTriPlanar(vrsceneDict: list, rootPluginNames: list[str], size
 
         attrs = pluginDesc.get('Attributes', {})
         for attrName, attrValue in list(attrs.items()):
-            if isinstance(attrValue, str) and attrValue and attrValue.partition("::")[0] in nameToDesc:
+            if isinstance(attrValue, str) and attrValue and _refName(attrValue) in nameToDesc:
                 attrs[attrName] = wrapReference(attrValue)
             elif isinstance(attrValue, list) and attrValue and all(
-                isinstance(item, str) and item.partition("::")[0] in nameToDesc for item in attrValue
+                isinstance(item, str) and _refName(item) in nameToDesc for item in attrValue
             ):
                 attrs[attrName] = [wrapReference(item) for item in attrValue]
 
 
 def importMaterials(filePath, objectForMatAssign: bpy.types.Object = None,
                    locationsMap: dict[str, str] = None, forceDefaultUVChannel: bool = False,
-                   cosmosAssetContext: CosmosAssetSettings | None = None):
-    """ Import V-Ray materials from a .vrmat/.vrscene file. """
+                   cosmosAssetContext: CosmosAssetSettings | None = None) -> dict[str, str]:
+    """ Import V-Ray materials from a .vrmat/.vrscene file.
+
+        @return {materialPluginName: bpy material name}. Empty when the file could not be
+                parsed or held no material, which is how a caller tells an import that
+                produced nothing from one that worked.
+    """
     debug.printInfo(f'Importing materials from "{filePath}"')
 
-    if filePath.endswith(".vrscene"):
+    isVrscene = filePath.endswith(".vrscene")
+    if isVrscene:
         # Read through the server importer (importVrsceneSync starts the ZMQ server if needed).
         from vray_blender.vray_tools.vrscene_import import importVrsceneSync
         vrsceneDict = importVrsceneSync(filePath)
@@ -275,20 +309,31 @@ def importMaterials(filePath, objectForMatAssign: bpy.types.Object = None,
     # Fix any plugin params that need special handling, e.g. version upgrades etc.
     NodesImport.fixPluginParams(vrsceneDict, forceDefaultUVChannel=forceDefaultUVChannel)
 
-    importMaterialsFromDict(vrsceneDict,
-                            objectForMatAssign=objectForMatAssign,
-                            locationsMap=locationsMap,
-                            cosmosAssetContext=cosmosAssetContext)
+    sourceMetersScale = None
+    if isVrscene:
+        # After fixPluginParams, the order SceneImporter._prepare uses. A .vrmat carries no
+        # SettingsUnitsInfo and is not normalized.
+        from vray_blender.vray_tools.vrscene_import import normalizeUnits
+        from vray_blender.vray_tools.import_common import metersScaleOf, getPluginByType
+        sourceMetersScale = metersScaleOf(getPluginByType(vrsceneDict, 'SettingsUnitsInfo'))
+        normalizeUnits(vrsceneDict, sourceMetersScale)
 
-    return {'FINISHED'}
+    return importMaterialsFromDict(vrsceneDict,
+                                   sceneBaseDir=os.path.dirname(filePath),
+                                   objectForMatAssign=objectForMatAssign,
+                                   locationsMap=locationsMap,
+                                   cosmosAssetContext=cosmosAssetContext,
+                                   sourceMetersScale=sourceMetersScale)
 
 
-def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
+def importMaterialsFromDict(vrsceneDict, *, sceneBaseDir: str = "",
+                            materialRoots: list[str] = None,
                             objectForMatAssign: bpy.types.Object = None,
                             locationsMap: dict[str, str] = None,
                             objectResolver = None,
                             cosmosAssetContext: CosmosAssetSettings | None = None,
-                            stats = None, ledger = None) -> dict[str, str]:
+                            stats = None, ledger = None, animTargets = None,
+                            sourceMetersScale: float = None) -> dict[str, str]:
     """ Import V-Ray materials from a parsed vrscene dict. fixPluginParams() is
         expected to have been run on the dict already.
 
@@ -296,13 +341,14 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
                None, the top-level materials are auto-detected (see below).
         @param objectResolver - optional callback(pluginName, linkType) -> bpy Object,
                used to resolve object-referencing texture attributes (e.g. TexDistance).
+        @param sourceMetersScale - the .vrscene's SettingsUnitsInfo.meters_scale; None for a .vrmat.
         @return {materialPluginName: bpy material name} for every imported material.
     """
 
     # Collect the names of all material-type plugins, then keep only the top-level ones.
     # A material plugin is "top-level" only if no other material plugin references it.
     # Only references made by plugins in MATERIAL_ROOT_TYPES count as "consuming" a material.
-    # Never add MtlMulti to that filter - each of its sub-materials stays top-level and is
+    # Never add MtlMulti to that filter. Each of its sub-materials stays top-level and is
     # imported separately.
     mtlNameOverrides = {}       # Map of renamed materials originalName -> newName.
                                 # Used to deal with duplicate material names in different assets
@@ -319,8 +365,8 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
             for attrValue in pluginDesc.get('Attributes', {}).values():
                 values = attrValue if isinstance(attrValue, list) else [attrValue]
                 for value in values:
-                    if isinstance(value, str) and value.partition("::")[0] in materialPluginNames:
-                        referencedMaterials.add(value.partition("::")[0])
+                    if isinstance(value, str) and (ref := _refName(value)) in materialPluginNames:
+                        referencedMaterials.add(ref)
 
         materialNames = [p['Name'] for p in vrsceneDict
                          if p['ID'] in MATERIAL_ROOT_TYPES and p['Name'] not in referencedMaterials]
@@ -348,8 +394,6 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
     assetName = getCosmosAssetName(cosmosAssetContext)
     mtlPluginNames = [cleanImportedPluginName(n) for n in materialNames]
 
-    sceneBaseDir = getImportDir(vrsceneDict)
-
     for i, pluginName in enumerate(materialNames):
         debug.printInfo(f"Importing material: {pluginName}")
 
@@ -364,7 +408,7 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
             else:
                 mtlName = _sceneName(pluginDesc.get('Attributes', {}), pluginName) if pluginDesc                           else pluginName
 
-            mtl = _createMaterial(mtlName)
+            mtl = _createMaterial(mtlName, ledger)
 
             # bpy.data.materials.new() makes the name unique; read back what it settled on.
             # Maps the plugin name to the created material name for slot assignment.
@@ -383,7 +427,9 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
                                                       texNameOwners = mtlPluginNames,
                                                       objectResolver = objectResolver,
                                                       sceneBaseDir = sceneBaseDir,
-                                                      stats = stats, ledger = ledger)
+                                                      stats = stats, ledger = ledger,
+                                                      animTargets = animTargets,
+                                                      sourceMetersScale = sourceMetersScale)
 
             # Peel MtlMaterialID / MtlRoundEdges option wrappers off the root onto the
             # material's option toggles; returns the innermost wrapped material.
@@ -397,7 +443,7 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
             toonOverrideDesc = None
 
             # MtlSingleBRDF has no node of its own (it maps onto the material output node);
-            # unwrap it to the shader plugin that does - a BRDF, a material wrapper
+            # unwrap it to the shader plugin that does: a BRDF, a material wrapper
             # (MtlDisplacement, ...) or a BRDFToonOverride.
             shaderDesc = _resolveMtlSingle(vrsceneDict, pluginDesc)
 
@@ -421,7 +467,7 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
             outputNode = ntree.nodes.new('VRayNodeOutputMaterial')
             # Material nodes expose a 'Material' output; a bare BRDF exposes 'BRDF'. The output
             # node's Material input accepts either. A BRDFToonOverride whose base_brdf is absent
-            # (or unsupported) has no material node - wire the outlines alone.
+            # (or unsupported) has no material node, so wire the outlines alone.
             matOutputKey = None if mtlNode is None else \
                            ('Material' if 'Material' in mtlNode.outputs
                             else 'BRDF' if 'BRDF' in mtlNode.outputs else None)
@@ -450,7 +496,8 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
 
     if objectForMatAssign:
         # Assign the imported materials to the object
-        if multiMtl := next((d for d in vrsceneDict if (d['ID'] == 'MtlMulti') and ('mtls_list' in d['Attributes'])), None):
+        if multiMtl := next((d for d in getPluginsByType(vrsceneDict, 'MtlMulti')
+                             if 'mtls_list' in d['Attributes']), None):
             _assignMaterialsToSlots(multiMtl, objectForMatAssign, mtlNameOverrides)
         elif importedMaterials:
             # The object has only one material, assign to the first material slot
@@ -462,9 +509,10 @@ def importMaterialsFromDict(vrsceneDict, *, materialRoots: list[str] = None,
     return importedMaterials
 
 
-def _importProxyChildLight(context: bpy.types.Context, parentObj, lightDict: list, plgDesc: dict,
+def _importProxyChildLight(context: bpy.types.Context, parentObj, lightDict: list, pluginDesc: dict,
                            pluginType: str, lightName: str, packageId: str, revisionId: int,
-                           locationsMap: dict[str, str], assetName: str, texNamePrefix: str):
+                           locationsMap: dict[str, str], assetName: str, texNamePrefix: str,
+                           sceneBaseDir: str):
     """ Create one light of a Cosmos composite asset as a child of the asset's proxy object.
 
         Shared by the asset's light sources and its Luminaire. Returns the light object and its
@@ -472,7 +520,7 @@ def _importProxyChildLight(context: bpy.types.Context, parentObj, lightDict: lis
     """
     from vray_blender.lib import attribute_utils
 
-    plgAttrs = plgDesc['Attributes']
+    plgAttrs = pluginDesc['Attributes']
 
     lightData = NodesImport.createLightFromPluginDesc(pluginType, plgAttrs, lightName)
     lightData.vray.cosmos_package_id = packageId
@@ -505,8 +553,9 @@ def _importProxyChildLight(context: bpy.types.Context, parentObj, lightDict: lis
     del plgAttrs['transform']
 
     importContext = NodesImport.ImportContext(lightNtree, lightDict, locationsMap = locationsMap,
+                                              sceneBaseDir = sceneBaseDir,
                                               texNamePrefix = texNamePrefix)
-    lightNode = NodesImport.createNode(importContext, plgDesc)
+    lightNode = NodesImport.createNode(importContext, pluginDesc)
 
     NodesTools.arrangeImportedTree(lightNtree, lightNode)
     NodesTools.selectOnlyNode(lightNtree, lightNode)
@@ -524,19 +573,20 @@ def _importLights(context: bpy.types.Context, parentObj, lightPath: str, package
     lightIndex = 0
     lightBaseName = sanitizeDatablockName(assetName)
 
-    for plgDesc in lightDict:
-        if (pluginType := plgDesc['ID']) in LightTypeToPlugin.values(): # Checking for light plugins
+    for pluginDesc in lightDict:
+        if (pluginType := pluginDesc['ID']) in LightTypeToPlugin.values(): # Checking for light plugins
             if pluginType == 'LightLuminaire':
                 # _importCosmosLuminaire owns the luminaire (older assets embed it here).
                 continue
 
-            plgName = plgDesc['Name']
+            plgName = pluginDesc['Name']
             if lightBaseName:
                 lightIndex += 1
                 plgName = f"{lightBaseName} lightsource_{lightIndex}"
 
-            _importProxyChildLight(context, parentObj, lightDict, plgDesc, pluginType, plgName,
-                                   packageId, revisionId, locationsMap, assetName, lightBaseName)
+            _importProxyChildLight(context, parentObj, lightDict, pluginDesc, pluginType, plgName,
+                                   packageId, revisionId, locationsMap, assetName, lightBaseName,
+                                   os.path.dirname(lightPath))
 
 
 def _findLuminaireCache(vrmatPath: str):
@@ -581,7 +631,7 @@ def _importCosmosLuminaire(context: bpy.types.Context, parentObj, luminairePath:
     """
     luminaireDict = parseVrmat(luminairePath)
 
-    if not (plgDesc := next((d for d in luminaireDict if d['ID'] == 'LightLuminaire'), None)):
+    if not (pluginDesc := next((d for d in luminaireDict if d['ID'] == 'LightLuminaire'), None)):
         debug.printError(f"No LightLuminaire plugin in the Cosmos luminaire file {luminairePath}")
         return None
 
@@ -590,34 +640,36 @@ def _importCosmosLuminaire(context: bpy.types.Context, parentObj, luminairePath:
     lightName = f"{luminaireBaseName} luminaire" if luminaireBaseName \
                 else f'VRayLuminaire@{Path(luminairePath).stem}'
 
-    lightObj, lightNode = _importProxyChildLight(context, parentObj, luminaireDict, plgDesc,
+    lightObj, lightNode = _importProxyChildLight(context, parentObj, luminaireDict, pluginDesc,
                                                  'LightLuminaire', lightName,
                                                  packageId, revisionId, locationsMap,
-                                                 assetName, luminaireBaseName)
+                                                 assetName, luminaireBaseName,
+                                                 os.path.dirname(luminairePath))
 
-    lightNode.LightLuminaire.scale = scaleUnit / context.scene.unit_settings.scale_length
+    lightNode.LightLuminaire.scale = scaleUnit / blender_utils.getSceneMetersPerUnit(context)
 
     return lightObj
 
 
 def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str, locationsMap: dict[str, str],
-               assetName: str = ""):
+               assetName: str = "") -> bool:
     # Takes two '.vrmat' files (one for HDR texture and one for dome)
     # and creates dome light object that projects HDR map
+    # Returns True when the dome light was created.
 
     domeDict = parseVrmat(lightPath)
     textureDict = parseVrmat(texturePath)
 
     try:
-        lightDesc = next((plgDesc for plgDesc in domeDict if plgDesc['ID'] == "LightDome"))
-        texDesc = next((plgDesc for plgDesc in textureDict if plgDesc['ID'] == "TexBitmap"))
-    except:
-        debug.printError("HDRI import: either no 'LightDome' description in light file or 'TexBitmap' in texture file")
-        return
+        lightDesc = next((pluginDesc for pluginDesc in domeDict if pluginDesc['ID'] == "LightDome"))
+        texDesc = next((pluginDesc for pluginDesc in textureDict if pluginDesc['ID'] == "TexBitmap"))
+    except StopIteration:
+        cosmos_notify.error("HDRI import: either no 'LightDome' description in light file or 'TexBitmap' in texture file")
+        return False
 
     domeBaseName = sanitizeDatablockName(assetName)
     name = domeBaseName or f'VRayDomeLight@{Path(lightPath).stem}'
-    domeData = bpy.data.lights.new(name=name , type='POINT')
+    domeData = bpy.data.lights.new(name=name, type='POINT')
     domeData.vray.light_type = 'DOME'
     domeData.vray.cosmos_package_id = packageId
     domeData.vray.cosmos_revision_id = revisionId
@@ -626,8 +678,10 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
     # Always build the light's node tree before linking the object into the scene.
     ntree = createNodeTreeForLightObject(domeData, isNewLight = True)
 
-    domeContext = NodesImport.ImportContext(ntree, domeDict, locationsMap=locationsMap)
+    domeContext = NodesImport.ImportContext(ntree, domeDict, locationsMap=locationsMap,
+                                            sceneBaseDir=os.path.dirname(lightPath))
     textureContext = NodesImport.ImportContext(ntree, textureDict, locationsMap=locationsMap,
+                                               sceneBaseDir=os.path.dirname(texturePath),
                                                texNamePrefix = domeBaseName,
                                                texNameOwners = [cleanImportedPluginName(texDesc['Name'])])
 
@@ -641,15 +695,17 @@ def importHDRI(texturePath: str, lightPath: str, packageId: str, revisionId: str
     domeObj = bpy.data.objects.new(name=name, object_data=domeData)
     bpy.context.collection.objects.link(domeObj)
     blender_utils.selectObject(domeObj)
+    return True
 
 
-def importDecal(settings):
+def importDecal(settings) -> bool:
+    """ Import a Cosmos Decal asset. Returns True when a decal object was created. """
     if not os.path.exists(settings.matFile):
-        debug.printError(f"VRmat file {settings.matFile} does not exist")
-        return
+        cosmos_notify.error(f"VRmat file {settings.matFile} does not exist")
+        return False
     if not os.path.exists(settings.objFile):
-        debug.printError(f"VRmat extras file {settings.objFile} does not exist")
-        return
+        cosmos_notify.error(f"VRmat extras file {settings.objFile} does not exist")
+        return False
 
 
     # Add both the 'extras' file (the one with the VRayDecal definition) and the material
@@ -657,11 +713,14 @@ def importDecal(settings):
     extrasSceneDesc = parseVrmat(settings.objFile)
     matSceneDesc = parseVrmat(settings.matFile)
 
-    # Leave just 1 'Import Settings' section. It is always the last list item in any scene description
-    # and is identical for all .vrmat files loaded from the same folder.
-    vrsceneDict = extrasSceneDesc[:-1] + matSceneDesc
+    # Both files come from the same Cosmos package folder, so one base dir covers both.
+    vrsceneDict = extrasSceneDesc + matSceneDesc
 
     assetName = getCosmosAssetName(settings)
+
+    # Bound here rather than in the loop: a package whose vrmat holds no VRayDecal would
+    # otherwise leave the name unset by the time it is tested below.
+    obj = None
 
     for decalDesc in [p for p in vrsceneDict if p['ID'] == 'VRayDecal']:
         purePath = PurePath(settings.matFile)
@@ -673,6 +732,7 @@ def importDecal(settings):
         # VRayDecal can hold textures of its own ('mask', 'displacement_tex_color'), which have
         # to be named like the ones of the decal's material below.
         importContext = NodesImport.ImportContext(objTree, vrsceneDict, locationsMap=settings.locationsMap,
+                                                 sceneBaseDir=os.path.dirname(settings.matFile),
                                                  texNamePrefix = assetName)
         decalOutputNode = NodesImport.createNode(importContext, decalDesc)
 
@@ -687,8 +747,12 @@ def importDecal(settings):
 
         importMaterials(settings.matFile, objectForMatAssign=obj, locationsMap=settings.locationsMap, cosmosAssetContext=settings)
 
-    if obj:
-        blender_utils.selectObject(obj)
+    if not obj:
+        cosmos_notify.error(f"VRmat extras file {settings.objFile} contains no decal to import")
+        return False
+
+    blender_utils.selectObject(obj)
+    return True
 
 
 def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0, outMetadata: dict = None,
@@ -718,10 +782,9 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0, ou
         else:
             debug.report('INFO', "Cannot import V-Ray Proxy with relative path, using absolute path instead.")
 
-    # Store the scale at which the model was imported. If its preview has to be regenerated, this value will be used to scale it.
-    # The scale will be reset to 1 if the path to the mesh file is changed by the user and the new model will always be imported
-    # with scale 1.0.
-    geomMeshFile['scale'] = scaleUnit / context.scene.unit_settings.scale_length
+    # Store the scale at which the model was imported; regenerating the preview reuses it.
+    # Changing the mesh file path resets the scale to 1, and the new model imports at scale 1.0.
+    geomMeshFile['scale'] = scaleUnit / blender_utils.getSceneMetersPerUnit(context)
 
     context.collection.objects.link(ob)
     vrayAsset = ob.vray.VRayAsset
@@ -737,6 +800,8 @@ def _importVRayProxy(context, filePath, useRelativePath=False, scaleUnit=1.0, ou
 
     blender_utils.setShadowAttr(geomMeshFile, 'file', geomMeshFile.file)
 
+    # No rebuildObjectHierarchy() here: loadVRayProxyPreviewMesh() above filled the rollout from
+    # the same dump it took the preview from.
     return ob, None
 
 
@@ -772,7 +837,7 @@ def importProxyFromMeshFile(context: bpy.types.Context, matPath: str, meshPath: 
     assert objProxy is not None
 
     # Create empty material slots from proxy shader metadata. Skipped when a material file
-    # exists or this is a Cosmos import - importMaterials creates and assigns the slots then.
+    # exists or this is a Cosmos import; importMaterials creates and assigns the slots then.
     isCosmos = cosmosAssetContext is not None
     hasMaterialFile = os.path.exists(matPath)
     if not isCosmos and not hasMaterialFile:
@@ -816,6 +881,15 @@ def importCosmosCompositeAsset(cosmosAssetContext: CosmosAssetSettings, scaleUni
     objProxy.data.vray.cosmos_revision_id = cosmosAssetContext.revisionId
     objProxy.data.vray.cosmos_asset_name = cosmosAssetContext.assetName
 
+    importCosmosAssetLights(cosmosAssetContext, objProxy, scaleUnit)
+
+    return objProxy, ""
+
+
+def importCosmosAssetLights(cosmosAssetContext: CosmosAssetSettings, objProxy: bpy.types.Object, scaleUnit=1.0):
+    """ Create the light children a Chaos Cosmos asset ships with, if any. Also called when
+        swapping a geometry variant, whose package can declare a different set of lights.
+    """
     if cosmosAssetContext.lightFile and os.path.exists(cosmosAssetContext.lightFile):
         _importLights(bpy.context, objProxy, cosmosAssetContext.lightFile, cosmosAssetContext.packageId,
                       cosmosAssetContext.revisionId, cosmosAssetContext.locationsMap,
@@ -832,16 +906,18 @@ def importCosmosCompositeAsset(cosmosAssetContext: CosmosAssetSettings, scaleUni
                                cosmosAssetContext.locationsMap, scaleUnit,
                                cosmosAssetContext.assetName)
 
-    return objProxy, ""
 
-
-def importParallaxInterior(cosmosAssetContext: CosmosAssetSettings):
+def importParallaxInterior(cosmosAssetContext: CosmosAssetSettings) -> bool:
     """ Import a Cosmos Parallax Interior asset as a native Blender plane.
 
     Parallax Interior assets ship with plane-dimension metadata; the plane is created here
     instead of loading the .vrmesh proxy. The parallax material (containing a TexParallax
     node) is imported from the accompanying .vrmat and assigned to the plane's first
     material slot.
+
+    @return True when the plane got its material. The plane itself is always created, so
+            False means the asset is in the scene but unshaded - a problem for the caller
+            to report, not a failed import.
     """
     from vray_blender.lib import attribute_utils
 
@@ -865,18 +941,24 @@ def importParallaxInterior(cosmosAssetContext: CosmosAssetSettings):
     planeObj.scale = (width, height, 1.0)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
 
+    # A .vrmat that could not be parsed yields no material, and importMaterials() then has
+    # nothing to put in the plane's slot - which is the only way this import comes out
+    # incomplete, the plane being built from metadata alone.
+    importedMtls = {}
     if os.path.exists(cosmosAssetContext.matFile):
-        importMaterials(cosmosAssetContext.matFile,
-                        objectForMatAssign=planeObj,
-                        locationsMap=cosmosAssetContext.locationsMap,
-                        forceDefaultUVChannel=True,
-                        cosmosAssetContext=cosmosAssetContext)
+        importedMtls = importMaterials(cosmosAssetContext.matFile,
+                                       objectForMatAssign=planeObj,
+                                       locationsMap=cosmosAssetContext.locationsMap,
+                                       forceDefaultUVChannel=True,
+                                       cosmosAssetContext=cosmosAssetContext)
 
     planeObj.data.vray.cosmos_package_id = cosmosAssetContext.packageId
     planeObj.data.vray.cosmos_revision_id = cosmosAssetContext.revisionId
     planeObj.data.vray.cosmos_asset_name = cosmosAssetContext.assetName
 
     blender_utils.selectObject(planeObj)
+
+    return bool(importedMtls)
 
 
 def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
@@ -892,7 +974,7 @@ def _checkNodeTree(ntree: bpy.types.NodeTree, locatorName: str):
 
     def getConnectedNodes(node: bpy.types.Node, nodes: set):
         # Walk the node tree and make sure that all nodes are connected. Recurse only
-        # into unvisited nodes - also breaks cyclic links (possible in imported trees).
+        # into unvisited nodes, which also breaks cyclic links (possible in imported trees).
         for s in node.inputs:
             for l in s.links:
                 if l.from_node not in nodes:

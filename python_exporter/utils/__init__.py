@@ -7,9 +7,12 @@ __all__ = []
 
 
 def getRegModules():
-    from vray_blender.utils import cosmos_handler, utils_bake, fur_preview, splat_preview, update_checker
+    from vray_blender.utils import cosmos_handler, cosmos_variants, utils_bake, fur_preview, splat_preview, update_checker
     return (
         cosmos_handler,
+        # Registers panels parented to VRAY_PT_VRayProxy and VRAY_PT_npanel. This package is
+        # registered after ui/, which is where those parents come from.
+        cosmos_variants,
         utils_bake,
         fur_preview,
         splat_preview,

@@ -48,30 +48,40 @@ class TemplateFileSelect(common.VRayUITemplate):
         match objType:
             case "shader_node":
                 node = getNodeOfPropGroup(propGroup)
-              
-                if context.light:
+
+                # context.light / .material / .world only exist in the Properties editor. The same
+                # widgets are also drawn in the 3D viewport - by the V-Ray N-panel and by the Add
+                # box - so read them defensively and fall back to the active object there.
+                ctxObject = getattr(context, 'object', None)
+                obj = getPinnedDataFromEditorContext(context, ctxObject)
+
+                if node and node.id_data.vray.tree_type == 'GROUP':
+                    # A grouped node lives in the group tree, not in the context data's tree.
+                    op.object_type = 'node_group'
+                    op.object_name = node.id_data.name
+                    op.selector_name = node.name
+
+                elif getattr(context, 'light', None) or (obj and obj.type == 'LIGHT'):
                     # Lights are special because they may have or not have nodes
                     selector = node.name if node else propGroup.name
-                    obj = getPinnedDataFromEditorContext(context, context.object)
-                    # Use the data-block name, not the object name — looked up in bpy.data.lights.
+                    # Use the data-block name, not the object name - looked up in bpy.data.lights.
                     op.object_name = obj.data.name
                     op.selector_name = selector
                     op.object_type = 'light'
 
-                elif context.material:
-                    obj = getPinnedDataFromEditorContext(context, context.object)
+                elif getattr(context, 'material', None):
                     op.object_name = obj.active_material.name
                     op.selector_name = node.name
                     op.object_type = 'material'
-                
-                elif context.world:
+
+                elif (world := getattr(context, 'world', None)):
                     op.object_type = 'world'
-                    op.object_name = context.world.name
+                    op.object_name = world.name
                     op.selector_name = node.name
 
-                elif context.object:
+                elif ctxObject:
                     op.object_type = 'object'
-                    op.object_name = context.object.name
+                    op.object_name = ctxObject.name
                     op.selector_name = node.name
 
             case "camera":
@@ -114,7 +124,11 @@ def onFileSelected(op: bpy.types.Operator, filepath: str):
         case "world":
             node = bpy.data.worlds[op.object_name].node_tree.nodes[op.selector_name]
             propGroup = getattr(node, op.plugin_type)
-        
+
+        case "node_group":
+            node = bpy.data.node_groups[op.object_name].nodes[op.selector_name]
+            propGroup = getattr(node, op.plugin_type)
+
         case "object":
             object = bpy.data.objects[op.object_name].vray.ntree.nodes[op.selector_name]
             propGroup = getattr(object, op.plugin_type)

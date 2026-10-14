@@ -542,39 +542,51 @@
                 "label": "Coat",
                 "attrs": [
                     {
-                        "name": "coat_color"
-                    },
-                    {
                         "name": "coat_amount"
                     },
                     {
-                        "name": "coat_darkening"
-                    },
-                    {
-                        "name": "coat_glossiness",
-                        "label": {
-                            "cond": {
-                                "Coat Glossiness": "::option_use_roughness=0",
-                                "Coat Roughness":  "::option_use_roughness!=0"
-                            }
-                        }
-                    },
-                    {
-                        "name": "coat_ior"
-                    },
-                    {
-                        "layout": "ROLLOUT",
-                        "name": "coat bump",
-                        "label": "Bump",
+                        "layout": "COLUMN",
+                        "active": {"cond": "::coat_amount!=0"},
                         "attrs": [
                             {
-                                "name": "coat_bump_lock"
+                                "name": "coat_color"
                             },
                             {
-                                "name": "coat_bump_amount"
+                                "name": "coat_darkening"
                             },
                             {
-                                "name": "coat_bump_type"
+                                "name": "coat_glossiness",
+                                "label": {
+                                    "cond": {
+                                        "Coat Glossiness": "::option_use_roughness=0",
+                                        "Coat Roughness":  "::option_use_roughness!=0"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "coat_ior"
+                            },
+                            {
+                                "name": "coat_anisotropy"
+                            },
+                            {
+                                "name": "coat_anisotropy_rotation"
+                            },
+                            {
+                                "layout": "ROLLOUT",
+                                "name": "coat bump",
+                                "label": "Bump",
+                                "attrs": [
+                                    {
+                                        "name": "coat_bump_lock"
+                                    },
+                                    {
+                                        "name": "coat_bump_amount"
+                                    },
+                                    {
+                                        "name": "coat_bump_type"
+                                    }
+                                ]
                             }
                         ]
                     }
@@ -850,10 +862,18 @@
                 "label": "Coat",
                 "type": "ROLLOUT"
             },
-            { "name": "coat_color" },
             { "name": "coat_amount" },
-            { "name": "coat_darkening" },
-            {   "name": "coat_glossiness",
+            { 
+                "name": "coat_color",
+                "active": {"cond": "::coat_amount!=0"}
+            },
+            { 
+                "name": "coat_darkening",
+                "active": {"cond": "::coat_amount!=0"}
+            },
+            {   
+                "name": "coat_glossiness",
+                "active": {"cond": "::coat_amount!=0"},
                 "label": {
                     "cond": {
                         "Coat Roughness":   "::option_use_roughness!=0",
@@ -861,11 +881,26 @@
                     }
                 }
             },
-            { "name": "coat_ior" },
-            { "name": "coat_anisotropy" },
-            { "name": "coat_anisotropy_rotation" },
-            { "name": "coat_bump_map" },
-            { "name": "coat_bump_amount" },
+            { 
+                "name": "coat_ior",
+                "active": {"cond": "::coat_amount!=0"}
+            },
+            { 
+                "name": "coat_anisotropy",
+                "active": {"cond": "::coat_amount!=0"}
+            },
+            { 
+                "name": "coat_anisotropy_rotation",
+                "active": {"cond": "::coat_amount!=0"}
+             },
+            { 
+                "name": "coat_bump_map",
+                "active": {"cond": "::coat_amount!=0"}
+            },
+            { 
+                "name": "coat_bump_amount",
+                "active": {"cond": "::coat_amount!=0"}
+            },
 
             {
                 "name": "panel_sheen",

@@ -181,7 +181,9 @@ def exportPluginParams(ctx: ExporterContext, pluginDesc: PluginDesc):
             subtype = spec.desc.get('subtype')
 
             if subtype in ('FILE_PATH', 'VRAY_FILE_PATH'):
-                value = path_utils.formatResourcePath(value, allowRelative=ctx.exportOnly)
+                # A propgroup outside any datablock (e.g. preferences) has no id_data.
+                library = getattr(getattr(vrayPropGroup, 'id_data', None), 'library', None)
+                value = path_utils.formatResourcePath(value, allowRelative=ctx.allowRelativePaths, library=library)
             elif subtype == 'DIR_PATH':
                 # Add a trailing slash to directory paths
                 value = os.path.normpath(value) + os.sep
@@ -291,7 +293,7 @@ def exportRenderMaskBitmap(ctx: ExporterContext, imageFileName: str, uvwgen: Att
     bufferName, texBitmapName = _getMaskTexturePluginNames(pluginBaseName)
     bitmapBufferDesc = PluginDesc(bufferName, 'BitmapBuffer')
     bitmapBufferDesc.setAttributes({
-        "file": path_utils.formatResourcePath(imageFileName, ctx.exportOnly),
+        "file": path_utils.formatResourcePath(imageFileName, ctx.allowRelativePaths),
         "gamma": 1,
         "allow_negative_colors": allowNegativeColors,
         "rgb_color_space": "raw",
@@ -553,8 +555,14 @@ def isObjectGeomUpdated(exporterCtx: ExporterContext, objTrackId: int):
             or (objTrackId not in exporterCtx.persistedState.processedObjects)
 
 def isObjectTreeUpdated(exporterCtx: ExporterContext, obj: bpy.types.Object):
-    """ Check if the object's "OBJECT" node tree has been updated. """
+    """ Check if the object's node tree (OBJECT, FUR or DECAL) has been updated.
+
+        Tree updates are mapped to the objects using the tree by ExporterContext._buildUpdateIndex().
+    """
     objTrackId = getObjTrackId(obj)
+    if objTrackId in exporterCtx.dgUpdates['objTree']:
+        return True
+
     return objTrackId in exporterCtx.dgUpdates['shading'] and \
             exporterCtx.ctx.scene.vray.ActiveNodeEditorType == "OBJECT"
 

@@ -84,7 +84,15 @@ class VRayDirtyState:
 
 class VRayNodeBase(VRayEntity, bpy.types.Node):
     """ Base class for all V-Ray nodes """
+
+    # Blender's nodes sit at 140-165. A V-Ray row needs more, because a linked input draws
+    # its label inside the multiplier widget and has to fit "<label> 100%" in one cell.
+    # At 160 that truncates to a bare "100%".
     bl_width_default = 230
+
+    @classmethod
+    def poll(cls, ntree):
+        return hasattr(ntree, 'vray')
 
     def insert_link(node: bpy.types.Node, link: bpy.types.NodeLink):
         from vray_blender.nodes.links import vrayNodeInsertLink

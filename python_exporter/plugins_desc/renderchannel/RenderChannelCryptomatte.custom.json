@@ -4,6 +4,12 @@
     "Subtype" : "MATTE",
     "Parameters": [
         {
+            "attr": "id_type",
+            "ui": {
+                "display_name": "ID Type"
+            }
+        },
+        {
             "attr" : "name",
             "default" : "Cryptomatte",
             "update": "plugins.channel.render_channel_common.onUpdateChannelName"
@@ -61,6 +67,30 @@
                     }
                 ],
                 "layout": "COLUMN"
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "id_type"
+                    },
+                    {
+                        "name": "user_attribute",
+                        "label": "Attribute",
+                        "visible": { "cond": "::id_type=3" }
+                    },
+                    {
+                        "name": "add_root_object_name",
+                        "visible": { "cond": "::id_type=6" }
+                    },
+                    {
+                        "name": "num_level"
+                    }
+                ]
             }
         ]
     },

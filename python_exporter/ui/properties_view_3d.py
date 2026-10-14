@@ -5,6 +5,7 @@
 import bpy
 from vray_blender.ui import classes
 from vray_blender.ui.icons import getIcon
+from vray_blender.ui.vray_status import getVRayStartupMsg
 from vray_blender import operators as ops
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_vantage import VRayRendererVantageLiveLink
@@ -18,7 +19,9 @@ def drawVRayInteractiveRenderMenu(self, context):
     if classes.pollEngine(context):
 
         iprRow = self.layout.row(align=True)
-        iprRow.enabled = vray.isInitialized()
+        # 'active', not 'enabled': a disabled row swallows the click, so the operator
+        # could not report that V-Ray has not started yet.
+        iprRow.active = vray.isInitialized()
         isVFBIpr = VRayRenderEngine.iprRenderer and not isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink)
         if not isVFBIpr:
             op = ops.VRAY_OT_render_interactive
@@ -30,7 +33,7 @@ def drawVRayInteractiveRenderMenu(self, context):
         iprRow.popover(panel="VRAY_PT_View_3D_Options", text="")
 
         if not vray.isInitialized():
-            message = "V-Ray initializing..." if vray.hasLicense() else "Obtaining V-Ray license..."
+            message = getVRayStartupMsg()
             self.layout.label(text=message, icon="INFO")
 
 

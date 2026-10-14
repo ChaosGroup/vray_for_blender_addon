@@ -88,6 +88,11 @@ _PRESETS_VRAYMTL = [
     ('Glass (Tinted)',              (0.0,0.0,0.0),          4, (0.914,0.914,0.914), 1.0,   True, True, True, 0.0, False,0.0, 8,  False, (0.977,0.977,0.977), 1.0, 1.517, (0.702,0.95,0.702),1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Glass (Architectural)',       (0.0,0.0,0.0),          4, (0.471,0.471,0.471), 0.975, True, True, True, 0.0, False,0.0, 25, True,  (1.0,1.0,1.0),     1.0, 1.6,     (0.980,1.0,0.992), 1.0,  25, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Water',                       (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 1.0,   True, True, True, 0.0, False,0.0, 8,  False, (1.0,1.0,1.0),     1.0, 1.33,    (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    # The Water variants are the water appearance presets of Chaos Vantage,
+    # ported from vrdx_scene_obj_water_surface.cpp.
+    ('Water (Turquoise)',           (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 1.0,   True, True, True, 0.0, False,0.0, 8,  False, (1.0,1.0,1.0),     1.0, 1.33,    (0.35,0.97,1.0),   100.0, 8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    ('Water (Deep Blue)',           (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 1.0,   True, True, True, 0.0, False,0.0, 8,  False, (1.0,1.0,1.0),     1.0, 1.33,    (0.15,0.3,0.3),    100.0, 8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    ('Water (Murky)',               (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 1.0,   True, True, True, 0.0, False,0.0, 8,  False, (0.4,0.4,0.4),     0.85, 1.33,   (1.0,0.95,0.85),   15.0,  8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Chocolate',                   (0.032,0.019,0.009),    4, (0.442,0.442,0.442), 0.68,  True, True, True, 0.0, False,0.0, 8,  False, (0.195,0.195,0.195), 0.6, 1.59,  (0.184,0.039,0.007), 2.0, 8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Ceramic',                     (0.7764,0.6941,0.6352), 4, (0.996,1.0,0.988),   0.99,  True, True, True, 0.0, False,0.0, 8,  False, (0.0,0.0,0.0),     0.6, 1.504,   (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Plastic',                     (0.745,0.545,0.0),      4, (0.471,0.471,0.471), 0.85,  True, True, True, 0.0, False,0.0, 8,  True,  (0.0,0.0,0.0),     1.0, 1.8,     (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
@@ -118,6 +123,11 @@ _PRESETS_OPENPBR = [
     ('Glass (Tinted)',              (0.0,0.0,0.0),          4, (0.914,0.914,0.914), 0.0,   True, True, True, 0.0, True, 0.0, 8,  False, (0.977,0.977,0.977), 0.0, 1.517, (0.702,0.95,0.702),1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Glass (Architectural)',       (0.0,0.0,0.0),          4, (0.471,0.471,0.471), 0.025, True, True, True, 0.0, True, 0.0, 25, True,  (1.0,1.0,1.0),     0.0, 1.6,     (0.980,1.0,0.992), 1.0,  25, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Water',                       (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 0.0,   True, True, True, 0.0, True, 0.0, 8,  False, (1.0,1.0,1.0),     0.0, 1.33,    (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    # The Water variants are the water appearance presets of Chaos Vantage,
+    # ported from vrdx_scene_obj_water_surface.cpp.
+    ('Water (Turquoise)',           (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 0.0,   True, True, True, 0.0, True, 0.0, 8,  False, (1.0,1.0,1.0),     0.0, 1.33,    (0.35,0.97,1.0),   100.0, 8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    ('Water (Deep Blue)',           (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 0.0,   True, True, True, 0.0, True, 0.0, 8,  False, (1.0,1.0,1.0),     0.0, 1.33,    (0.15,0.3,0.3),    100.0, 8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
+    ('Water (Murky)',               (0.0,0.0,0.0),          4, (0.784,0.784,0.784), 0.0,   True, True, True, 0.0, True, 0.0, 8,  False, (0.4,0.4,0.4),     0.15, 1.33,   (1.0,0.95,0.85),   15.0,  8, False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Chocolate',                   (0.032,0.019,0.009),    4, (0.442,0.442,0.442), 0.32,  True, True, True, 0.0, True, 0.0, 8,  False, (0.195,0.195,0.195), 0.4, 1.59,  (0.184,0.039,0.007), 2.0, 8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Ceramic',                     (0.7764,0.6941,0.6352), 4, (0.996,1.0,0.988),   0.01,  True, True, True, 0.0, True, 0.0, 8,  False, (0.0,0.0,0.0),     0.4, 1.504,   (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
     ('Plastic',                     (0.745,0.545,0.0),      4, (0.471,0.471,0.471), 0.15,  True, True, True, 0.0, True, 0.0, 8,  True,  (0.0,0.0,0.0),     0.0, 1.8,     (1.0,1.0,1.0),     1.0,  8,  False, 50.0, 2.0,   (0.0,0.0,0.0),     0.8,   False, False, 250.0, 400.0, 1.47, 0.0, 1.6,  0.0, 0.0, 0.0),
@@ -218,6 +228,44 @@ def _setSocketValue(socket, kind, value):
         return False
 
 
+def _applyPresetAttr(node, propGroup, attrName, kind, value):
+    """ Write one preset value to a BRDFVRayMtl node (socket and prop group). """
+    # Try the socket first. Colors and floats live behind input sockets
+    # and the socket's `value` is what the node draws + what the export
+    # picks up when nothing is plugged in. Some attrs (`fog_color`) are
+    # driven by a meta-socket whose vray_attr differs from the plugin
+    # attr, so consult the alias map before giving up.
+    socketAttr = _ATTR_SOCKET_ALIASES.get(attrName, attrName)
+    socket = getInputSocketByAttr(node, socketAttr)
+    if socket is not None:
+        _setSocketValue(socket, kind, value)
+
+    # Enums, some bools, and attrs with no socket live on the prop group.
+    # Also mirror successful socket writes onto the prop group so any
+    # read path that goes directly through the prop group stays in sync.
+    if hasattr(propGroup, attrName):
+        try:
+            if kind == 'rgb':
+                # Plugin COLOR props are size-3, TEXTURE-backed props are
+                # size-4. Probe the existing value so we send the right
+                # number of components.
+                existing = getattr(propGroup, attrName)
+                if hasattr(existing, '__len__') and len(existing) == 3:
+                    setattr(propGroup, attrName, (value[0], value[1], value[2]))
+                else:
+                    setattr(propGroup, attrName, (value[0], value[1], value[2], 1.0))
+            elif kind == 'enum':
+                setattr(propGroup, attrName, str(value))
+            elif kind == 'bool':
+                setattr(propGroup, attrName, bool(value))
+            else:
+                setattr(propGroup, attrName, value)
+        except (TypeError, ValueError, AttributeError):
+            # Stricter prop (ENUM with a limited set, range-clamped
+            # float) refuses the preset value. Skip rather than fail.
+            pass
+
+
 def _applyPreset(node, propGroup, row):
     """ Apply a preset tuple to a BRDFVRayMtl node.
         Color and float-like attrs are written to their input sockets
@@ -227,44 +275,7 @@ def _applyPreset(node, propGroup, row):
         export path stays coherent.
     """
     for colIdx, attrName, kind in _COLUMNS:
-        value = row[colIdx]
-        wroteSocket = False
-
-        # Try the socket first. Colors and floats live behind input sockets
-        # and the socket's `value` is what the node draws + what the export
-        # picks up when nothing is plugged in. Some attrs (`fog_color`) are
-        # driven by a meta-socket whose vray_attr differs from the plugin
-        # attr, so consult the alias map before giving up.
-        socketAttr = _ATTR_SOCKET_ALIASES.get(attrName, attrName)
-        socket = getInputSocketByAttr(node, socketAttr)
-        if socket is not None:
-            wroteSocket = _setSocketValue(socket, kind, value)
-
-        # Enums, some bools, and attrs with no socket live on the prop group.
-        # Also mirror successful socket writes onto the prop group so any
-        # read path that goes directly through the prop group stays in sync.
-        if hasattr(propGroup, attrName):
-            try:
-                if kind == 'rgb':
-                    # Plugin COLOR props are size-3, TEXTURE-backed props are
-                    # size-4. Probe the existing value so we send the right
-                    # number of components.
-                    existing = getattr(propGroup, attrName)
-                    if hasattr(existing, '__len__') and len(existing) == 3:
-                        setattr(propGroup, attrName, (value[0], value[1], value[2]))
-                    else:
-                        setattr(propGroup, attrName, (value[0], value[1], value[2], 1.0))
-                elif kind == 'enum':
-                    setattr(propGroup, attrName, str(value))
-                elif kind == 'bool':
-                    setattr(propGroup, attrName, bool(value))
-                else:
-                    setattr(propGroup, attrName, value)
-            except (TypeError, ValueError, AttributeError):
-                # Stricter prop (ENUM with a limited set, range-clamped
-                # float) refuses the preset value. Skip rather than fail.
-                if not wroteSocket:
-                    continue
+        _applyPresetAttr(node, propGroup, attrName, kind, row[colIdx])
 
     # Constants the 3ds Max implementation forces alongside the preset row.
     for attrName, value in _FORCED_ATTRS.items():
@@ -367,6 +378,174 @@ class VRAY_OT_WR_apply_preset(VRayOperatorBase):
         return {'FINISHED'}
 
 
+# ---------- Water Surface presets (material + ocean displacement) ----------
+#
+# The same seven presets as V-Ray for SketchUp's Water Surface assets in neui. Each one is a
+# BRDFVRayMtl wrapped in an MtlDisplacement that a Phoenix Ocean texture drives.
+#
+# The appearance is the 'Water' row above plus the fog and volumetric values of the matching
+# neui "05 WaterSurface" asset. neui's fog_mult of 0.0025 cm^-1 is the 400 cm 'Depth (cm)' used here.
+#
+# The waves are the Chaos Vantage displacement presets from vrdx_scene_obj_water_surface.cpp.
+# Lake is wind 2, velcoh 0.6, bell 0.72 and Sea is wind 10. Everything else is Vantage's default.
+# The ocean is physically scaled. Wind is in m/s, the waves come out in meters at any unit scale,
+# and the main wave length is about 0.8 * wind^2 m. A preset only looks right on a surface close
+# to its real-world size. Pool uses 0.8 m/s instead of Vantage's 0.3, whose 7 cm ripples render
+# as grain at typical resolutions.
+_OCEAN_WAVE_BASE = {
+    'usewind': True, 'lod': 7, 'sharpness': 0.4, 'velmult': 1.0,
+    'velcoh': 0.5, 'bell': 0.2, 'rgbmult': 1.0, 'rgboffset': 0.0,
+}
+_OCEAN_POOL = dict(_OCEAN_WAVE_BASE, wind=0.8)
+_OCEAN_LAKE = dict(_OCEAN_WAVE_BASE, wind=2.0, velcoh=0.6, bell=0.72)
+_OCEAN_SEA  = dict(_OCEAN_WAVE_BASE, wind=10.0)
+
+# (attr, kind, value) applied on top of the 'Water' row.
+_WATER_POOL = (
+    ('fog_color', 'rgb', (0.492, 0.946, 1.0)), ('fog_mult', 'float', 400.0),
+)
+_WATER_POOL_FOGGY = (
+    ('fog_color', 'rgb', (0.214, 0.214, 0.214)), ('fog_mult', 'float', 400.0),
+    ('translucency', 'enum', 5), ('translucency_color', 'rgb', (0.355, 0.756, 0.787)),
+    ('translucency_amount', 'float', 0.8),
+)
+_WATER_LAKE = (
+    ('fog_color', 'rgb', (0.367, 0.604, 0.496)), ('fog_mult', 'float', 400.0),
+)
+_WATER_LAKE_MURKY = (
+    ('diffuse', 'rgb', (0.113, 0.113, 0.113)), ('refract', 'rgb', (0.8, 0.8, 0.8)),
+    ('refract_glossiness', 'float', 0.95),
+    ('fog_color', 'rgb', (0.5, 0.5, 0.5)), ('fog_mult', 'float', 200.0),
+    ('translucency', 'enum', 5), ('translucency_color', 'rgb', (0.498, 0.6, 0.474)),
+    ('translucency_amount', 'float', 0.5),
+)
+_WATER_RIVER = (
+    ('fog_color', 'rgb', (0.238, 0.448, 0.39)), ('fog_mult', 'float', 400.0),
+)
+_WATER_OCEAN = (
+    ('refract_glossiness', 'float', 0.9),
+    ('fog_color', 'rgb', (0.157, 0.343, 0.329)), ('fog_mult', 'float', 400.0),
+)
+_WATER_OCEAN_DEEP = (
+    ('refract_glossiness', 'float', 0.98),
+    ('fog_color', 'rgb', (0.133, 0.133, 0.133)), ('fog_mult', 'float', 400.0),
+    ('translucency', 'enum', 5), ('translucency_color', 'rgb', (0.039, 0.342, 0.287)),
+)
+
+# (display name, appearance, ocean wave params, tooltip)
+_WATER_SURFACE_PRESETS = (
+    ('Ocean',        _WATER_OCEAN,      _OCEAN_SEA,  "Open sea swell, 10 m/s wind. Use on surfaces of 100 m or more"),
+    ('Ocean (Deep)', _WATER_OCEAN_DEEP, _OCEAN_SEA,  "Open sea swell over deep, volumetric water. Use on surfaces of 100 m or more"),
+    ('Lake',         _WATER_LAKE,       _OCEAN_LAKE, "Choppy lake waves, 2 m/s wind. Use on surfaces of 20 m or more"),
+    ('Lake (Murky)', _WATER_LAKE_MURKY, _OCEAN_LAKE, "Choppy lake waves over murky, volumetric water. Use on surfaces of 20 m or more"),
+    ('Pool',         _WATER_POOL,       _OCEAN_POOL, "Light ripples on clear pool water, 0.8 m/s wind. Use on surfaces of about 10 m"),
+    ('Pool (Foggy)', _WATER_POOL_FOGGY, _OCEAN_POOL, "Light ripples on foggy, volumetric pool water. Use on surfaces of about 10 m"),
+    ('River',        _WATER_RIVER,      _OCEAN_LAKE, "Choppy waves on green river water. Use on surfaces of 20 m or more"),
+)
+_WATER_SURFACE_BY_SLUG = {_slug(row[0]): row for row in _WATER_SURFACE_PRESETS}
+
+_WATER_SURFACE_ITEMS = tuple(
+    (_slug(name), name, tooltip)
+    for name, _, _, tooltip in _WATER_SURFACE_PRESETS
+)
+
+
+def _waterSurfaceItems(_self, _context):
+    return _WATER_SURFACE_ITEMS
+
+
+class VRAY_OT_WR_apply_water_surface(VRayOperatorBase):
+    """ Build a full water material: a BRDFVRayMtl water appearance wrapped in an
+        MtlDisplacement driven by a Phoenix Ocean texture, wired to the output. """
+    bl_idname = "vray.wr_apply_water_surface"
+    bl_label = "Apply Water Surface Preset"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    preset: bpy.props.EnumProperty(name="Preset", items=_waterSurfaceItems)
+
+    @classmethod
+    def poll(cls, context):
+        return isVrayEditor(context) and hasEditTree(context)
+
+    @classmethod
+    def description(cls, context, properties):
+        entry = _WATER_SURFACE_BY_SLUG.get(properties.preset)
+        return entry[3] if entry else cls.__doc__
+
+    def execute(self, context):
+        from vray_blender.nodes.utils import DisableAutoConnect
+        from vray_blender.nodes.tools import rearrangeTree
+        from vray_blender.nodes.operators.wrangler.quick_setup import _getOrCreateOutput
+        from vray_blender.nodes.slots import tryLink
+
+        ntree = context.space_data.edit_tree
+
+        entry = _WATER_SURFACE_BY_SLUG.get(self.preset)
+        if entry is None:
+            self.report({'WARNING'}, f"Unknown water preset: {self.preset!r}")
+            return {'CANCELLED'}
+        name, appearance, waveParams, _tooltip = entry
+
+        outNode = _getOrCreateOutput(ntree)
+
+        # The Phoenix Ocean node only exists when the PhxShaderOceanTex plugin is enabled in
+        # this build. Without it, remove the nodes created so far and cancel, so no lone base
+        # material is left behind.
+        created = []
+        try:
+            with DisableAutoConnect():
+                for nodeType in ('VRayNodeBRDFVRayMtl', 'VRayNodePhxShaderOceanTex', 'VRayNodeMtlDisplacement'):
+                    created.append(ntree.nodes.new(nodeType))
+        except RuntimeError as ex:
+            for node in created:
+                ntree.nodes.remove(node)
+            self.report({'ERROR'}, f"Water Surface presets need the Phoenix Ocean plugin "
+                                   f"(PhxShaderOceanTex), which is not available in this build: {ex}")
+            return {'CANCELLED'}
+        brdfNode, oceanNode, dispNode = created
+
+        # Water appearance on the base material. A new BRDFVRayMtl node always starts in the
+        # VRayMtl shading model, which is what the appearance values are tuned for.
+        brdfPg = brdfNode.BRDFVRayMtl
+        _applyPreset(brdfNode, brdfPg, _lookupPreset('Water', openPbr=False))
+        for attrName, kind, value in appearance:
+            _applyPresetAttr(brdfNode, brdfPg, attrName, kind, value)
+
+        # Ocean wave parameters.
+        if oceanPg := getattr(oceanNode, 'PhxShaderOceanTex', None):
+            for attr, value in waveParams.items():
+                setattr(oceanPg, attr, value)
+
+        # The ocean outputs true world-unit displacement, so drive it at full amount;
+        # the 0.01 height-map default would flatten the waves ~100x.
+        if dispPg := getattr(dispNode, 'MtlDisplacement', None):
+            dispPg.displacement_amount = 1.0
+
+        # Wire ocean -> displacement texture, base material -> displacement, displacement -> output.
+        brdfOut  = brdfNode.outputs.get('BRDF') or (brdfNode.outputs[0] if brdfNode.outputs else None)
+        oceanOut = oceanNode.outputs.get('Color') or (oceanNode.outputs[0] if oceanNode.outputs else None)
+        tryLink(ntree, brdfOut, getInputSocketByAttr(dispNode, 'base_material'))
+        tryLink(ntree, oceanOut, getInputSocketByAttr(dispNode, 'displacement_tex_color'))
+
+        # The preset replaces whatever fed the output, so the material renders as water right
+        # away. The previous nodes stay in the tree, disconnected.
+        dispOut = dispNode.outputs.get('Material') or (dispNode.outputs[0] if dispNode.outputs else None)
+        if outNode and (mtlSock := outNode.inputs.get('Material')):
+            tryLink(ntree, dispOut, mtlSock)
+            rearrangeTree(ntree, outNode, appendLeft=True)
+        else:
+            dispNode.location  = (-320.0, 0.0)
+            oceanNode.location = (-660.0, 130.0)
+            brdfNode.location  = (-660.0, -130.0)
+
+        deselectNodes(ntree)
+        dispNode.select = True
+        ntree.nodes.active = dispNode
+        ntree.update_tag()
+        self.report({'INFO'}, f"Added water surface: {name}")
+        return {'FINISHED'}
+
+
 class VRAY_MT_WR_presets(bpy.types.Menu):
     bl_idname = "VRAY_MT_WR_presets"
     bl_label = "V-Ray Material Presets"
@@ -379,7 +558,8 @@ class VRAY_MT_WR_presets(bpy.types.Menu):
                         'Chrome', 'Copper', 'Copper (Rough)', 'Gold', 'Gold (Rough)',
                         'Iron', 'Lead', 'Silver', 'Silver (Rough)')),
             ("Glass & Liquids", ('Diamond', 'Glass', 'Glass (Frosted)', 'Glass (Tinted)',
-                                 'Glass (Architectural)', 'Water', 'Soap Bubble')),
+                                 'Glass (Architectural)', 'Water', 'Water (Turquoise)',
+                                 'Water (Deep Blue)', 'Water (Murky)', 'Soap Bubble')),
             ("Organics", ('Chocolate', 'Ceramic', 'Plastic', 'Rubber',
                           'Red Velvet', 'White Satin', 'Pink Satin')),
         )
@@ -390,10 +570,17 @@ class VRAY_MT_WR_presets(bpy.types.Menu):
                 op.preset = _slug(name)
             layout.separator()
 
+        # Water Surface presets build the whole material, ocean displacement included.
+        layout.label(text="Water Surface")
+        for name, _appearance, _wave, _tooltip in _WATER_SURFACE_PRESETS:
+            op = layout.operator("vray.wr_apply_water_surface", text=name)
+            op.preset = _slug(name)
+
 
 def getRegClasses():
     return (
         VRAY_OT_WR_apply_preset,
+        VRAY_OT_WR_apply_water_surface,
         VRAY_MT_WR_presets,
     )
 

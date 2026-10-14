@@ -13,7 +13,7 @@ from vray_blender.lib import sys_utils, image_utils
 from vray_blender.lib.defs import UIRegionContext, ProdRenderMode
 from vray_blender.nodes.utils import tagRedrawViewport
 from vray_blender.lib.camera_utils import renderCamerasHaveSameType, sceneResolutionLimitedByCE
-from vray_blender.lib.blender_utils import getViewLayerUseFCurve, setFloatFrame, getVRayPreferences
+from vray_blender.lib.blender_utils import getViewLayerUseFCurve, setFloatFrame, getVRayPreferences, isViewportRenderMode
 
 from vray_blender import debug
 
@@ -37,6 +37,7 @@ class _Event:
     ExportProxy             = 18    # Export selected scene geometry to .vrmesh
     VFBRenderRegionChanged  = 19    # Mirror VFB render region changes to scene.render.border_*
     RenderProdRequest       = 20    # VFB requested a prod render; route through vray.render so the overwrite check runs
+    UndoPush                = 21    # Push an undo step for the scene changes made by a render job
 
 DrawHandlers = []
 
@@ -182,6 +183,10 @@ class _VfbEventHandler:
         self.stopViewportRender()
         self.stopInteractiveRender()
         self.addEvent(_Event.ExportProxy, uiRegionContext=None)
+
+    def pushUndoStep(self, message: str):
+        """ Push an undo step once the running render job has ended. Callable from the job thread. """
+        self.addEvent(_Event.UndoPush, message)
 
     def cloudSubmit(self, uiRegionContext: UIRegionContext):
         """ Submit scene to Chaos cloud """
@@ -382,6 +387,9 @@ class _VfbEventHandler:
 
                 case _Event.VFBRenderRegionChanged:
                     self._handleVfbRenderRegionChanged()
+
+                case _Event.UndoPush:
+                    processed = self._pushUndoStep(*event.args)
 
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::_handleQueuedEvent()")
@@ -614,6 +622,13 @@ class _VfbEventHandler:
         except Exception as ex:
             debug.printExceptionInfo(ex, "VfbEventHandler::_addRenderElementToScene()")
 
+    def _pushUndoStep(self, message: str):
+        # The step has to hold everything the job changed, so wait for the job to end.
+        if bpy.app.is_job_running('RENDER'):
+            return False
+        bpy.ops.ed.undo_push(message=message)
+        return True
+
     def _showMessagesWindow(self):
         """ Open the Blender system console. Only available on Windows. """
         import sys
@@ -726,7 +741,8 @@ class _VfbEventHandler:
 
         if VRayRendererProd.isActive() \
                 or VRayRendererIprVfb.isActive() \
-                or VRayRendererIprViewport.isActive():
+                or VRayRendererIprViewport.isActive() \
+                or isViewportRenderMode():
             return
 
         scene = getattr(bpy.context, 'scene', None)

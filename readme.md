@@ -1,18 +1,21 @@
 # VRay for Blender building instructions
 
 ## 1. Get Blender SDK repo
-1. Clone the repository: [Blender Libraries](https://projects.blender.org/blender/lib-windows_x64).
-2. Check out the branch **blender-v4.5-release** (or the respective branch for other supported versions).
+1. Clone the repository: 
+ - [Blender Libraries Windows](https://projects.blender.org/blender/lib-windows_x64)
+ - [Blender Libraries Linux](https://projects.blender.org/blender/lib-linix_x64)
+ - [Blender Libraries MacOS](https://projects.blender.org/blender/lib-macos_arm64)
+2. Check out the branch **blender-v5.2-release** (or the respective branch for other supported versions).
 
 
 ## 2. Get 3-rd party libraries
 ### 2.1 Boost
-Get boost v 1.82. It can be obtained from the **blender-v4.3-release** branch of [Windows Blender Libraries](https://projects.blender.org/blender/lib-windows_x64/src/branch/blender-v4.3-release) or [MacOS Blender Libraries](https://projects.blender.org/blender/lib-macos_arm64/src/branch/blender-v4.3-release)
+Get boost v 1.82. It can be obtained from the **blender-v4.3-release** branch of the Blender SDK repo.
 
 ### 2.2 Python SDK
 Nanobind and the `VRayBlenderLib` Python module are compiled against the CPython development files - the headers and, on Windows, the import library - so a Python SDK has to be in place before CMake is run.
 
-The Python version is the one the target Blender embeds: **3.11** for Blender 4.5 and 5.0, **3.13** for Blender 5.1 and 5.2.
+The Python version is the one the target Blender embeds: **3.11** for Blender 5.0, **3.13** for Blender 5.1 and 5.2.
 
 The build does not search for Python. It takes it from a fixed location under `BLENDER_SDK_ROOT`, named after that version, exactly as Blender's own build files expect it (`311`, `313`, ... on Windows; a single `python` root with version-tagged includes elsewhere):
 
@@ -51,7 +54,7 @@ Create the folder passed as the ADDON_PATH parameter to cmake in the next step.
 
 ## 4. Build 
 
-* The `BLENDER_VER` parameter specifies the Blender version (currently 4.5, 5.0 and 5.1, 5.2 are supported) for which this build is intended.
+* The `BLENDER_VER` parameter specifies the Blender version (currently 5.0 and 5.1, 5.2 are supported) for which this build is intended.
 * The path passed in 'ADDON_PATH' parameter must exist before the command is run
 * The path passed in `BLENDER_SDK_ROOT` must contain the Python SDK described in 2.2 - CMake fails while configuring `VRayBlenderLib` if the Python headers are not there
 * `NANOBIND_LIBDIR` is the root of the nanobind clone from 2.3, not an installed/built nanobind
@@ -96,7 +99,7 @@ cmake -S . \
     -DZMQ_INCLUDE_DIRS="path/to/zmq_includes" \
     -DZMQ_CPPZMQ_DIR="path/to/cppzmq_source_files" \
     -DNANOBIND_LIBDIR="path/to/nanobind" \
-    -DBLENDER_SDK_ROOT="path/to/lib-windows_x64" \
+    -DBLENDER_SDK_ROOT="path/to/lib-macos_arm64" \
     -DBLENDER_VER="5.2"
 
 ninja install
@@ -118,7 +121,7 @@ cmake -S . \
     -DZMQ_INCLUDE_DIRS="path/to/zmq_includes" \
     -DZMQ_CPPZMQ_DIR="path/to/cppzmq_source_files" \
     -DNANOBIND_LIBDIR="path/to/nanobind" \
-    -DBLENDER_SDK_ROOT="path/to/lib-windows_x64" \
+    -DBLENDER_SDK_ROOT="path/to/lib-linux_x64" \
     -DBLENDER_VER="5.2"
 	
 ninja install

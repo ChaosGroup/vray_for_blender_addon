@@ -244,11 +244,9 @@
                 "name": "nouvw_color"
             }
         ],
-        "Node": {
         "internal_links": {
             "*": ["Texture*"]
         }
-    }
     },
     "Options": {
         "excluded_parameters": [ "compatibility_with" ],

@@ -488,7 +488,7 @@ class VRAY_OT_batch_bake(VRayOperatorBase):
         self._items = []
 
         if batchBake.work_mode == 'SELECTION':
-             for ob in [ob for ob in context.selected_objects]:
+             for ob in [ob for ob in context.selected_objects if ob.type == 'MESH']:
                  self._items.append((ob, batchBake.default_item))
         elif batchBake.work_mode == 'LIST':
              for item in batchBake.list_items:

@@ -9,6 +9,7 @@
 import bpy
 
 from vray_blender.ui.lister.core import categoryEnumItems, tagListerRedraw
+from vray_blender.ui.lister.material_categories import ALL
 
 
 def _redraw(self, context):
@@ -114,4 +115,20 @@ class VRayListerState(bpy.types.PropertyGroup):
     lister_pinned: bpy.props.StringProperty(
         options = {'HIDDEN'},
         default = "",
+    )
+
+    # The Material Manager's user-defined categories, newline-separated (a name may contain
+    # spaces). The tags themselves live on the materials, as the
+    # 'vray_categories' custom property - see ui/lister/material_categories.py for why.
+    material_categories: bpy.props.StringProperty(
+        options = {'HIDDEN'},
+        default = "",
+    )
+
+    # The category tab in front: a category name, or one of the built-in tabs
+    # (material_categories.ALL / COSMOS / UNCATEGORIZED)
+    material_active_category: bpy.props.StringProperty(
+        options = {'HIDDEN'},
+        default = ALL,
+        update = _redraw,
     )

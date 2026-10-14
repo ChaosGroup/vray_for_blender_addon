@@ -8,6 +8,7 @@ import bpy
 import gpu
 import numpy as np
 
+from vray_blender.lib.blender_utils import findViewport, WindowScope
 from vray_blender.lib.path_utils import getV4BTempDir
 from vray_blender import debug
 
@@ -15,20 +16,6 @@ from vray_blender import debug
 # 3ds Max sends a JPEG viewport preview; we match the format.
 _MAX_DIMENSION = 2048
 _OUTPUT_NAME   = "veras_viewport.jpg"
-
-
-def _findView3D(context: bpy.types.Context):
-    """ Return (area, region, rv3d, space) for the 3D viewport to capture, or Nones. """
-    area = context.area if (context.area and context.area.type == 'VIEW_3D') else None
-    if area is None:
-        area = next((a for a in context.screen.areas if a.type == 'VIEW_3D'), None)
-    if area is None:
-        return None, None, None, None
-
-    region = next((r for r in area.regions if r.type == 'WINDOW'), None)
-    space  = area.spaces.active
-    rv3d   = space.region_3d if space else None
-    return area, region, rv3d, space
 
 
 def captureViewportToFile(context: bpy.types.Context):
@@ -39,9 +26,12 @@ def captureViewportToFile(context: bpy.types.Context):
         Returns the absolute file path on success, or None if the viewport could not be
         captured.
     """
-    area, region, rv3d, space = _findView3D(context)
-    if not (area and region and rv3d and space):
+    # The window the operator was invoked from, so the capture is the viewport the user is
+    # looking at rather than one on another screen.
+    if (viewport := findViewport(context, WindowScope.ACTIVE_ONLY)) is None:
         return None
+
+    region, rv3d, space = viewport.region, viewport.rv3d, viewport.space
 
     scale  = min(1.0, float(_MAX_DIMENSION) / max(region.width, region.height))
     width  = max(1, int(region.width * scale))

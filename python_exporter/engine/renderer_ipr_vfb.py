@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
-import time
 
 from vray_blender import debug
 from vray_blender.lib import blender_utils, path_utils
@@ -91,17 +90,14 @@ class VRayRendererIprVfb(VRayRendererIprBase):
 
     def stop(self, block = True):
         if self.renderer is not None:
-            vray.renderEnd(self.renderer)
+            try:
+                self._endRenderJob(block)
+            finally:
+                self.renderer = None
+                VRayRendererIprVfb._activeRenderer = None
 
-            if block:
-                while vray.renderJobIsRunning(self.renderer):
-                    time.sleep(0.01)
-
-            self.renderer = None
-            VRayRendererIprVfb._activeRenderer = None
-
-            blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, VRayRendererIprVfb._exportOnIprUpdatePost)
-            blender_utils.delEvent(bpy.app.handlers.frame_change_post, VRayRendererIprVfb._exportOnIprUpdatePost)
+                blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, VRayRendererIprVfb._exportOnIprUpdatePost)
+                blender_utils.delEvent(bpy.app.handlers.frame_change_post, VRayRendererIprVfb._exportOnIprUpdatePost)
 
 
     def exportScene(self, depsgraph=None):

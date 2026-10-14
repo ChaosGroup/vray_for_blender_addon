@@ -30,7 +30,7 @@ import numpy as np
 from gpu_extras.batch import batch_for_shader
 from mathutils import Matrix, Vector, kdtree
 
-from vray_blender.lib import blender_utils
+from vray_blender.lib import blender_utils, draw_utils
 from vray_blender.vray_tools import vray_splat
 
 
@@ -53,7 +53,8 @@ _PREVIEW_BBOX      = '1'
 _PREVIEW_LIMITED   = '2'
 _PREVIEW_UNLIMITED = '3'
 
-# filePath -> {'coords': (N,3) float32, 'colors': (N,4) float32, 'bbox': (Vector, Vector)} or None.
+# filePath -> {'coords': (N,3) float32, 'colors': (N,4) float32, 'bbox': (Vector, Vector),
+# 'primitives': int} or None.
 _previewData: dict[str, dict | None] = {}
 
 # (filePath, count) -> (GPU batch of subsampled points, inter-point spacing), (None, 0.0) if
@@ -367,6 +368,22 @@ def drawSplatPreview():
         gpu.matrix.pop()
         gpu.state.program_point_size_set(False)
         gpu.state.depth_test_set(prevDepthTest)
+
+
+def widgetDrawPrimitiveCount(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup, widgetAttr):
+    """ JSON 'custom_draw' for the model's primitive count. Taken from the preview cache, never
+        loaded here - a panel draw must not run vraytools.
+    """
+    if (data := _previewData.get(getSplatFile(propGroup.id_data))) is None:
+        return
+
+    if not (primitives := data['primitives']):
+        return
+
+    # No prop() in this row, so it gets no label column of its own.
+    valueRow = draw_utils.propertySplitRow(layout, "Primitives")
+    valueRow.alignment = 'RIGHT'
+    valueRow.label(text=f"{primitives:,}")
 
 
 def onSplatFileUpdate(propGroup, context, attrName):

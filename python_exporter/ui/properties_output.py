@@ -210,7 +210,7 @@ class VRAY_PT_VRayStereoscopicSettings(classes.VRayOutputPanel):
         vrayScene = context.scene.vray
         vrayStereoscopicSettings = vrayScene.VRayStereoscopicSettings
 
-        self.layout.active = vrayScene.Exporter.use_stereo
+        self.layout.enabled = vrayScene.Exporter.use_stereo
 
         split = layout.split()
         col   = split.column()
@@ -218,7 +218,7 @@ class VRAY_PT_VRayStereoscopicSettings(classes.VRayOutputPanel):
 
         sub = col.row(align=True)
         sub_f = sub.column()
-        sub_f.active = vrayStereoscopicSettings.specify_focus
+        sub_f.enabled = vrayStereoscopicSettings.specify_focus
         sub_f.prop(vrayStereoscopicSettings, 'focus_distance')
         sub.prop(vrayStereoscopicSettings, 'specify_focus', text="")
 

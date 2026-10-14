@@ -48,10 +48,16 @@ class ObjTracker:
         removed in reponse to changes to the Blender scene.
     """
     def __init__(self, type: str):
+        # NOTE: an objTrackId is an int (ID.session_uid, see getObjTrackId()), not a str.
+        #
+        # 'plugins' counts how many tracked objects IN THIS TRACKER claim each plugin. It is not a
+        # V-Ray side reference count, and says nothing about other plugins referencing this one.
+        # Each tracker in OBJ_TRACKERS refcounts independently over one shared V-Ray plugin
+        # namespace, so a plugin registered in two trackers reads as refcount 1 in both.
         self.type:      str                   = type  # Arbitrary description of the tracked objects' type
-        self.ids:       Dict[str, Set[str]]   = {}    # objTrackId: set(pluginId) - plugins per object
+        self.ids:       Dict[int, Set[str]]   = {}    # objTrackId: set(pluginId) - plugins per object
         self.plugins:   Dict[str, int]        = {}    # pluginId: refCount - flat plugins list with refcounts
-        self.instanced: Dict[str, bool]       = {}    # objTrackId: Bool - True if the object is instanced.
+        self.instanced: Dict[str, bool]       = {}    # pluginId: Bool - True if the plugin is instanced.
 
 
     def trackPlugin(self, objTrackId: str, pluginId: str, isInstanced=False):
@@ -88,17 +94,31 @@ class ObjTracker:
     
 
     def getOwnedPlugins(self, objTrackId: str):
-        """ Returns all object's plugins with reference count 1 ( i.e. that can be deleted ) """
+        """ Returns all object's plugins with reference count 1 ( i.e. that can be deleted ).
+
+            'Can be deleted' means no OTHER object tracked here also claims the plugin, so removing
+            it cannot pull the geometry out from under a still live object. It is not a statement
+            about other plugins referencing it, nor about the other trackers - see __init__.
+
+            A new list, so the caller may forget()/forgetPlugin() while iterating it.
+        """
         if objTrackId in self.ids:
             return [p for p in self.ids[objTrackId] if self.plugins[p] == 1]
         return []
-    
+
     def getTrackedObjects(self):
+        """ Returns a live view of the tracked object ids - copy it before any call that
+            forget()s, or the iteration will raise.
+        """
         return self.ids.keys()
-    
+
 
     def getPlugins(self, objTrackId):
-        """ Returns all tracked plugins for the object """
+        """ Returns all tracked plugins for the object, regardless of refcount.
+
+            Returns the tracker's own set by reference, so do not mutate it, and copy it before
+            any call that would.
+        """
         if objTrackId in self.ids:
             return self.ids[objTrackId]
         return set()
@@ -132,7 +152,10 @@ class ObjTracker:
         self.plugins[pluginId] -= 1
         if self.plugins[pluginId] == 0:
             del self.plugins[pluginId]
-            del self.instanced[pluginId]
+            # Written by trackPlugin() alongside the refcount, so the two keys are in step - but
+            # discard() rather than del, so a future second insertion path cannot turn a bookkeeping
+            # slip into a KeyError in the middle of a prune.
+            self.instanced.pop(pluginId, None)
 
 
     # Register plugin with object
@@ -196,7 +219,12 @@ class NodeTracker:
     
   
     def getNodePlugins(self, objTrackId: str, nodeTrackId: str):
-        """ Returns all object's plugins with reference count 1 ( i.e. that can be deleted ) """
+        """ Returns all plugins tracked for the node.
+
+            NOTE: unlike ObjTracker.getOwnedPlugins(), this filters nothing - NodeTracker keeps no
+            refcounts at all. A plugin reachable from two nodes is returned for both, and removing
+            it on behalf of either takes it away from the other.
+        """
         if self._isTrackedNode(objTrackId, nodeTrackId):
             return [p for p in self.nodes[objTrackId][nodeTrackId]]
         return []
@@ -306,10 +334,24 @@ class TrackObj:
          
 
 class ObjDataTracker:
-    """ This class matches a the name of the object data to its associated geometry plugin names. 
-        
+    """ This class matches the name of the object data to its associated geometry plugin names.
+
         Note: ObjTrackId(obj.data) can't be used instead of the name, because the object may point to data thats internally created by Blender,
         and in that case its session_uid will be different on every change to it.
+
+        Two separate mappings are kept because the two questions they answer have different scopes:
+
+          - 'dataToGeomPluginName' is keyed by Names.objectData() and holds the BASE geometry plugin
+            of a data block (GeomStaticMesh, GeomMeshFile, GeomParticleSystem, ...). A data block may
+            be shared by any number of objects, so this entry is common to all of them.
+
+          - 'objToGeomPluginName' is keyed by Names.object() and holds the geometry plugin produced by
+            the object's own OBJECT node tree - the GeomDisplacedMesh / GeomStaticSmoothedMesh wrapping
+            the base geometry. That plugin is named after the object (see Names.treeNode()) and belongs
+            to it alone, so it must never be recorded against the shared data block: doing so applied
+            one object's displacement to every other object sharing its mesh (VBLD-2880).
+
+        Use getEffectivePluginName() to obtain the plugin an object's Node should reference.
     """
 
     class GeomPluginData:
@@ -318,9 +360,10 @@ class ObjDataTracker:
             self.name = None # The base plugin name e.g. GeomStaticMesh, GeomFileMesh, GeomHair, etc.
             self.particlePluginNames = {} # A dictionary of particle system names to particle plugin names.
 
-    def __init__(self):        
-        """ Initialize the mapping from data names to geometry plugin names. """
+    def __init__(self):
+        """ Initialize the mappings from data/object names to geometry plugin names. """
         self.dataToGeomPluginName: dict[str, self.GeomPluginData] = defaultdict(self.GeomPluginData)
+        self.objToGeomPluginName: dict[str, str] = {}
 
     def dataExported(self, dataName: str):
         """ Return True if a base plugin name has been recorded for the given data.
@@ -378,6 +421,35 @@ class ObjDataTracker:
                 dataName (str): The name of the object data.
         """
         return self.dataToGeomPluginName.pop(dataName, None)
+
+    def trackPluginOfObject(self, objName: str, pluginName: str):
+        """ Track the geometry plugin produced by the object's own OBJECT node tree.
+
+            Parameters:
+                objName (str): The name of the object, as returned by Names.object().
+                pluginName (str): The geometry plugin name to associate with the object.
+        """
+        self.objToGeomPluginName[objName] = pluginName
+
+    def getObjectPluginName(self, objName: str):
+        """ Retrieve the plugin name tracked for the object by trackPluginOfObject(), or None """
+        return self.objToGeomPluginName.get(objName, None)
+
+    def popObject(self, objName: str):
+        """ Remove and return the object's own geometry plugin association.
+
+            Called when the object no longer has an OBJECT node tree, so that a wrapper plugin
+            exported before the tree was deleted is not referenced any more.
+        """
+        return self.objToGeomPluginName.pop(objName, None)
+
+    def getEffectivePluginName(self, objName: str, dataName: str):
+        """ Return the geometry plugin the object should currently reference.
+
+            This is the wrapper exported from the object's own OBJECT node tree, if there is one,
+            and otherwise the base geometry plugin of its data block.
+        """
+        return self.objToGeomPluginName.get(objName, None) or self.getPluginName(dataName)
 
 
 
@@ -444,3 +516,6 @@ class FakeObjTracker:
 
     def getPlugins(self, objTrackId):
         return set()
+
+    def getPluginInstanced(self, pluginId):
+        return False

@@ -1,0 +1,192 @@
+{
+    "ID": "PhxShaderOceanTex",
+    "Name": "V-Ray Phoenix Ocean",
+    "Parameters": [
+        {
+            "attr": "vector",
+            "default": false,
+            "desc": "Output 3D displacement vectors instead of height. Use with a V-Ray Displacement node set to a Vector mode",
+            "ui": {
+                "display_name": "Vector Displacement"
+            }
+        },
+        {
+            "attr": "usewind",
+            "desc": "Derive the wave size from the wind speed. When disabled, the waves have a fixed size"
+        },
+        {
+            "attr": "wind",
+            "desc": "Wind speed in meters per second. Stronger wind produces larger, longer waves: about 1 for a pool, 2 for a lake, 10 for the open sea",
+            "ui": {
+                "display_name": "Wind (m/s)"
+            }
+        },
+        {
+            "attr": "lod",
+            "desc": "Number of wave layers. Higher values add smaller ripples on top of the main waves"
+        },
+        {
+            "attr": "rgbmult",
+            "desc": "Multiplier for the wave height"
+        },
+        {
+            "attr": "rgboffset",
+            "desc": "Vertical offset added to the waves"
+        },
+        {
+            "attr": "sharpness",
+            "desc": "Sharpness of the wave crests"
+        },
+        {
+            "attr": "velcoh",
+            "desc": "How directional the wave movement is. Lower values produce more chaotic waves"
+        },
+        {
+            "attr": "bell",
+            "desc": "Width scale of the wave crests"
+        },
+        {
+            "attr": "seed",
+            "desc": "Random seed for the wave pattern"
+        },
+        {
+            "attr": "velmult",
+            "desc": "Playback speed multiplier for the wave animation"
+        },
+        {
+            "attr": "animmode",
+            "desc": "Animation mode. Loop repeats the animation over Loop Length frames; Direct Time samples the ocean at the Direct Time value"
+        },
+        {
+            "attr": "loopLength",
+            "desc": "Length of the animation loop in frames, when Animation Mode is Loop",
+            "ui": {
+                "display_name": "Loop Length"
+            }
+        },
+        {
+            "attr": "directTime",
+            "desc": "Time to sample the ocean at, when Animation Mode is Direct Time",
+            "ui": {
+                "display_name": "Direct Time"
+            }
+        },
+        {
+            "attr": "up_vector",
+            "default": "2"
+        },
+        {
+            "attr": "scaletex",
+            "ui": {
+                "display_name": "Displacement Scale"
+            }
+        }
+    ],
+    "Widget": {
+        "widgets": [
+            {
+                "layout": "ROLLOUT",
+                "name": "ocean",
+                "label": "Ocean",
+                "default_closed": false,
+                "attrs": [
+                    {
+                        "name": "vector"
+                    },
+                    {
+                        "name": "usewind"
+                    },
+                    {
+                        "name": "wind",
+                        "active": {"cond": "::usewind!=0"}
+                    },
+                    {
+                        "name": "lod"
+                    },
+                    {
+                        "name": "rgbmult"
+                    },
+                    {
+                        "name": "rgboffset"
+                    },
+                    {
+                        "name": "sharpness"
+                    },
+                    {
+                        "name": "velcoh"
+                    },
+                    {
+                        "name": "bell"
+                    },
+                    {
+                        "name": "seed"
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "time bend controls",
+                "label": "Time Bend Controls",
+                "default_closed": true,
+                "attrs": [
+                    {
+                        "name": "animmode"
+                    },
+                    {
+                        "name": "velmult",
+                        "active": {"cond": "::animmode!=1"}
+                    },
+                    {
+                        "name": "loopLength",
+                        "active": {"cond": "::animmode=2"}
+                    },
+                    {
+                        "name": "directTime",
+                        "active": {"cond": "::animmode=1"}
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "wind", "active": {"cond": "::usewind!=0"} }
+                ]
+            }
+        ],
+        "input_sockets": [
+            { "name": "scaletex" }
+        ]
+    },
+    "Options": {
+        "animatable": true,
+        "excluded_parameters": [
+            "compatibility_with",
+            "alpha_from_intensity",
+            "invert",
+            "invert_alpha",
+            "color_mult",
+            "color_offset",
+            "alpha_mult",
+            "alpha_offset",
+            "nouvw_color",
+            "placement_type",
+            "u",
+            "v",
+            "w",
+            "h",
+            "jitter",
+            "tile_u",
+            "tile_v",
+            "uv_noise_on",
+            "uv_noise_animate",
+            "uv_noise_amount",
+            "uv_noise_levels",
+            "uv_noise_size",
+            "un_noise_phase"
+        ]
+    }
+}

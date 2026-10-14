@@ -14,6 +14,11 @@ _LIST_GROUPS = (
     ('area_modifiers', "Areas", ""),
 )
 
+_MODEL_SOURCES = (
+    ('OBJECT', "Object", "Add an object model"),
+    ('COLLECTION', "Collection", "Add a collection as one model"),
+)
+
 def _activeScatterObject(context):
     obj = context.object
     return obj if utils.isScatterObject(obj) else None
@@ -54,6 +59,7 @@ class CSCATTER_OT_list_add(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     group: EnumProperty(items = _LIST_GROUPS)
+    model_source: EnumProperty(items = _MODEL_SOURCES)
 
     @classmethod
     def poll(cls, context):
@@ -63,10 +69,10 @@ class CSCATTER_OT_list_add(bpy.types.Operator):
         obj = _activeScatterObject(context)
         cs = obj.chaos_scatter
         collection = getattr(cs, self.group)
-        collection.add()
+        item = collection.add()
         setattr(cs, f'{self.group}_active_index', len(collection) - 1)
         if self.group == 'models':
-            lifecycle.rebuildProtoCollections(obj)
+            item.source_type = self.model_source
         recompute.markDirty(obj)
         return {'FINISHED'}
 

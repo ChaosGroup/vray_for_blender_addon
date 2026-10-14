@@ -1,0 +1,11 @@
+{
+    "ID": "OutputDeepWriter",
+    "Parameters": [
+        {
+            "attr": "exr_compression",
+            "ui": {
+                "display_name": "EXR Compression"
+            }
+        }
+    ]
+}

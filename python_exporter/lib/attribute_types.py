@@ -280,6 +280,7 @@ CompatibleNonVrayNodes = {
     'ShaderNodeMixShader', # full
     'ShaderNodeBsdfTranslucent', # full
     'ShaderNodeBsdfTransparent', # full
+    'ShaderNodeHoldout', # only straight to Material Output
     'ShaderNodeLightPath', # partial (the 'Is ... Ray' flags -> TexRaySwitch; no depths/length)
     'ShaderNodeBsdfHairPrincipled', # Chiang model -> BRDFHair4 (Hair Next)
     'ShaderNodeHairInfo', # -> TexHairSampler (per-strand: Intercept/Random/Length)

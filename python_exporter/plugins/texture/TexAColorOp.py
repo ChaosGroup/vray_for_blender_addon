@@ -4,7 +4,7 @@
 
 import bpy
 
-from vray_blender.exporting.tools import removeOutputSocketLinks, getOutputSocketByAttr
+from vray_blender.exporting.tools import removeOutputSocketLinks, getInputSocketByAttr, getOutputSocketByAttr
 from vray_blender.lib import plugin_utils
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.nodes.utils import getNodeOfPropGroup
@@ -21,6 +21,111 @@ def onUpdateSeparate(propGroup, context, attrName):
         if outSock := getOutputSocketByAttr(node, channel):
             outSock.hide    = False
             outSock.enabled = True
+
+    updateInputSockets(node)
+
+
+def onUpdateMode(propGroup, context, attrName):
+    """ Re-evaluate the input sockets after the operation has changed. """
+    if node := getNodeOfPropGroup(propGroup):
+        updateInputSockets(node)
+
+
+def nodeInit(node):
+    """ Hide the inputs the freshly created node's default operation does not read. """
+    updateInputSockets(node)
+
+
+####################################################################################################
+# Which inputs each output channel reads.
+#
+# Read off the plugin implementation (TexAColorOp in tex_sampler.cpp) rather than the parameter
+# descriptions, which are wrong for several channels. Throughout, A is color_a * mult_a and B is
+# color_b * mult_b.
+####################################################################################################
+
+_INPUTS_A    = frozenset(('color_a', 'mult_a'))
+_INPUTS_B    = frozenset(('color_b', 'mult_b'))
+_INPUTS_BOTH = _INPUTS_A | _INPUTS_B
+
+# Channels that read the A operand alone. sin/cos/asin/acos/atan are not among them; they take the
+# product of both operands.
+_A_ONLY_CHANNELS = frozenset((
+    'result_a', 'red', 'green', 'blue', 'alpha', 'intensity',
+    'abs', 'ceil', 'exp', 'floor', 'log', 'log10', 'sqrt', 'tan',
+))
+
+# The channel 'mode' routes to the node's Result output, indexed by the enum value.
+_MODE_CHANNELS = (
+    'result_a', 'result_b', 'product', 'sum', 'difference', 'power', 'division',
+    'minimum', 'maximum', 'absolute_difference', 'lower_intensity_color',
+    'greater_intensity_color', 'sin', 'cos', 'abs', 'ceil', 'exp', 'floor', 'log',
+    'log10', 'sqrt', 'fmod', 'average', 'tan', 'asin', 'acos', 'atan', 'atan2',
+    'bias_schlick', 'gain_schlick', 'bias_perlin', 'gain_perlin',
+)
+
+
+def _channelInputs(channel: str):
+    """ The inputs a single output channel reads. """
+    if channel in _A_ONLY_CHANNELS:
+        return _INPUTS_A
+    if channel == 'result_b':
+        return _INPUTS_B
+    if channel == 'power':
+        # The exponent is the scalar mult_b. color_b is not read at all.
+        return _INPUTS_A | {'mult_b'}
+
+    return _INPUTS_BOTH
+
+
+def _requiredInputs(node):
+    """ The inputs read by every channel the node currently produces: the one 'mode' routes to
+        the Result output, plus every output socket the user has added.
+    """
+    # The property page evaluates this once per row on every redraw, so walk the sockets once
+    # instead of looking each channel up by name. The Result output carries no vray_attr; 'mode'
+    # already accounts for it.
+    channels = [_MODE_CHANNELS[int(node.TexAColorOp.mode)]]
+    channels += [s.vray_attr for s in node.outputs if s.enabled and s.vray_attr]
+
+    return set().union(*(_channelInputs(c) for c in channels))
+
+
+def updateInputSockets(node):
+    """ Show the inputs the node's current channels read and hide the rest.
+
+        A linked socket is never hidden. The channel set changes on every mode switch and on every
+        output added or removed, and hiding a socket drops its link.
+    """
+    required = _requiredInputs(node)
+
+    # result_alpha is not in the loop and stays shown. 'mode' always routes a color channel to
+    # Result, and every color channel reads result_alpha.
+    for attrName in _INPUTS_BOTH:
+        sock = getInputSocketByAttr(node, attrName)
+        enabled = (attrName in required) or sock.is_linked
+
+        if sock.enabled != enabled:
+            sock.enabled = enabled
+            sock.hide    = not enabled
+
+
+# Conditions backing the property page rows. The condition compiler calls these with the plugin
+# property group and the node being drawn.
+def isColorAActive(propGroup, node):
+    return 'color_a' in _requiredInputs(node)
+
+
+def isColorBActive(propGroup, node):
+    return 'color_b' in _requiredInputs(node)
+
+
+def isMultAActive(propGroup, node):
+    return 'mult_a' in _requiredInputs(node)
+
+
+def isMultBActive(propGroup, node):
+    return 'mult_b' in _requiredInputs(node)
 
 
 # Number of columns to spread the (long) channel list over in the Add/Remove menus.
@@ -88,6 +193,7 @@ class VRAY_OT_node_texacolorop_add_output(VRayOperatorBase):
         outSock = getOutputSocketByAttr(context.node, self.channel)
         outSock.hide    = False
         outSock.enabled = True
+        updateInputSockets(context.node)
         return {'FINISHED'}
 
 
@@ -104,6 +210,7 @@ class VRAY_OT_node_texacolorop_remove_output(VRayOperatorBase):
         outSock.enabled = False
         outSock.hide    = True
         removeOutputSocketLinks(outSock)
+        updateInputSockets(context.node)
         return {'FINISHED'}
 
 

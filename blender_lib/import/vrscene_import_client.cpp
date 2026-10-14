@@ -30,18 +30,19 @@ namespace {
 	const char* CB_PROGRESS = "vrsceneImportProgress";
 	const char* CB_FINISHED = "vrsceneImportFinished";
 
-	RoutingId generateImportRoutingId() {
-		std::random_device rd;
-		std::mt19937_64 gen(rd());
-		// Routing id 1 is reserved for the control connection.
-		std::uniform_int_distribution<RoutingId> dist(2, std::numeric_limits<RoutingId>::max());
-		return dist(gen);
-	}
-
 	// Session registry
 	std::mutex g_sessionsLock;
 	tsl::robin_map<int, std::unique_ptr<VrsceneImportClient>> g_sessions;
 	int g_nextImportId = 1;
+
+	/// Get a session by id or throw.
+	VrsceneImportClient& getSession(int importId) {
+		const auto it = g_sessions.find(importId);
+		if (it == g_sessions.end()) {
+			throw std::runtime_error("Unknown vrscene import session id: " + std::to_string(importId));
+		}
+		return *it.value();
+	}
 
 } // anonymous namespace
 
@@ -62,7 +63,7 @@ VrsceneImportClient::~VrsceneImportClient() {
 
 void VrsceneImportClient::start() {
 
-	m_conn = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateImportRoutingId(),
+	m_conn = std::make_unique<ZmqAgent>(ZmqServer::get().context(), generateRoutingId(),
 	                                    ExporterType::SCENE_IMPORT, ZmqAgent::Client);
 
 	m_conn->setMsgCallback([this](zmq::message_t&& payload) {
@@ -159,7 +160,6 @@ void VrsceneImportClient::finish(const proto::MsgImportOnResult& result) {
 	pyResult.errorLine = result.errorLine;
 	pyResult.pluginCount = result.pluginCount;
 	pyResult.paramCount = result.paramCount;
-	pyResult.sceneBaseDir = result.sceneBaseDir;
 
 	invokePythonCallback(CB_FINISHED, ZmqServer::get().getPythonCallback(CB_FINISHED), m_importId, pyResult);
 }
@@ -185,25 +185,31 @@ nb::list VrsceneImportClient::getImportedScene(const nb::dict& largeAttrs) {
 		const std::set<std::string>* largeNames = (itLarge != largeByType.end()) ? &itLarge->second : nullptr;
 
 		nb::dict attrs;
-		nb::list animated;
+		nb::dict animatedKeys;
 
 		for (const auto& param : plugin.params) {
 			const bool preferNdarray = largeNames && (largeNames->count(param.name) != 0);
 			attrs[nb::cast(param.name)] = Interop::attrValueToPython(param.value, preferNdarray);
 
-			if (param.flags & ImportParamAnimated) {
-				animated.append(nb::cast(param.name));
+			if (param.flags & ImportParamKeyed) {
+				nb::list keys;
+				for (const auto& key : param.keys) {
+					// Keys are never lists (see isKeyableType), so never an ndarray.
+					keys.append(nb::make_tuple(key.time, Interop::attrValueToPython(key.value, false)));
+				}
+				animatedKeys[nb::cast(param.name)] = std::move(keys);
 			}
 		}
 
-		result.append(nb::make_tuple(plugin.pluginName, plugin.pluginType, attrs, animated));
+		result.append(nb::make_tuple(plugin.pluginName, plugin.pluginType, attrs, animatedKeys));
 	}
 
 	return result;
 }
 
 
-int startImport(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd, const std::string& typeFilter) {
+int startImport(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd,
+                const std::string& typeFilter, bool readKeyframes) {
 
 	if (!ZmqServer::get().isRunning()) {
 		throw std::runtime_error("Cannot import .vrscene: V-Ray server is not running");
@@ -211,7 +217,8 @@ int startImport(const std::string& filePath, bool skipDefaults, double frameStar
 
 	MsgImportVrsceneRequest request;
 	request.filePath = filePath;
-	request.flags = skipDefaults ? ImportRequestSkipDefaults : 0;
+	request.flags = (skipDefaults ? ImportRequestSkipDefaults : 0)
+	              | (readKeyframes ? ImportRequestReadKeyframes : 0);
 	request.frameStart = frameStart;
 	request.frameEnd = frameEnd;
 	request.typeFilter = typeFilter;
@@ -224,16 +231,6 @@ int startImport(const std::string& filePath, bool skipDefaults, double frameStar
 	g_sessions[importId] = std::move(client);
 
 	return importId;
-}
-
-
-/// Get a session by id or throw.
-static VrsceneImportClient& getSession(int importId) {
-	const auto it = g_sessions.find(importId);
-	if (it == g_sessions.end()) {
-		throw std::runtime_error("Unknown vrscene import session id: " + std::to_string(importId));
-	}
-	return *it.value();
 }
 
 

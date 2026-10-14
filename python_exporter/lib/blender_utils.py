@@ -17,6 +17,8 @@ import mathutils
 import re
 
 from contextlib import contextmanager
+from enum import Enum
+from typing import NamedTuple
 
 from vray_blender import debug
 from vray_blender.lib import lib_utils, path_utils
@@ -80,6 +82,14 @@ def getActiveMaterial(ob):
     if ob is None:
         return None
     return ob.vray.material if isNonGeometryExportedAsGeometry(ob) else ob.active_material
+
+
+def getObjectMaterials(ob) -> list:
+    """ The materials an object uses: those in its slots, or the material pointer of an
+        Empty-backed geometry. """
+    if isNonGeometryExportedAsGeometry(ob):
+        return [ob.vray.material] if ob.vray.material else []
+    return [slot.material for slot in ob.material_slots if slot.material]
 
 
 def geometryObjectIt(objects):
@@ -213,32 +223,19 @@ def getLensShift(ob: bpy.types.Object):
     return shift
 
 
-def getCmToSceneUnitsMultiplier(context):
-    """ Returns multiplier for conversion from centimeters to Blender Scene units"""
+def getSceneMetersPerUnit(context):
+    """ Meters in one Blender unit. Blender ignores scale_length when the unit system is 'NONE',
+        and so does the SettingsUnitsInfo export, which then writes meters_scale 1.
+    """
+    unitSettings = context.scene.unit_settings
+    return unitSettings.scale_length if unitSettings.system != 'NONE' else 1.0
 
-    lengthUnit = context.scene.unit_settings.length_unit
-    match lengthUnit:
-        case 'METERS' | 'ADAPTIVE':
-            return 1 / 100
-        case 'KILOMETERS':
-            return 1 / 100000
-        case 'MILLIMETERS':
-            return 10
-        case 'MICROMETERS':
-            return 10000
-        case 'MILES':
-            return 1 / 160900
-        case 'FEET':
-            return 1 / 30.48
-        case 'INCHES':
-            return 1 / 2.54
-        case 'THOU': # thousandth of an inch
-            return 393.7
-        case 'CENTIMETERS':
-            return 1
-        case _:
-            debug.printWarning(f"Unsupported Blender '{lengthUnit}' scaling unit")
-            return 1
+
+def getCmToSceneUnitsMultiplier(context):
+    """ Returns multiplier for conversion from centimeters to Blender Scene units.
+        length_unit only selects the display unit and does not change stored values.
+    """
+    return 0.01 / getSceneMetersPerUnit(context)
 
 def getMetersToSceneUnitsMultiplier(context):
     """ Returns multiplier for conversion from meters to Blender Scene units"""
@@ -271,17 +268,72 @@ def getSceneCamera(exporterCtx):
     return scene.camera
 
 
-def getFirstAvailableView3D():
-    """ Returns SpaceView3D of the first available VIEW_3D area in the currently active screen"""
-    if not (activeScreen := bpy.context.window.screen):
+class WindowScope(Enum):
+    """ Which windows findViewport() will look in, in order of preference. """
+    ACTIVE_ONLY  = 'ACTIVE_ONLY'    # The context's own window and no other
+    ACTIVE_FIRST = 'ACTIVE_FIRST'   # The context's window, then the rest
+    ACTIVE_LAST  = 'ACTIVE_LAST'    # Any other window first, the context's own as a last resort
+
+
+class Viewport(NamedTuple):
+    """ A 3D viewport, resolved down to everything needed to draw in it or to
+        context.temp_override() onto it.
+    """
+    window: bpy.types.Window
+    area:   bpy.types.Area
+    region: bpy.types.Region            # The area's 'WINDOW' region
+    rv3d:   bpy.types.RegionView3D
+    space:  bpy.types.SpaceView3D
+
+
+def _asViewport(window: bpy.types.Window, area: bpy.types.Area):
+    """ Pack an area into a Viewport, or None if it cannot be drawn into. """
+    # The currently active space is guaranteed to be the first one on the list
+    space = area.spaces.active
+    region = next((r for r in area.regions if r.type == 'WINDOW'), None)
+
+    if (region is None) or (space is None) or (getattr(space, 'region_3d', None) is None):
         return None
 
-    for area in (a for a in activeScreen.areas if a and a.type == 'VIEW_3D'):
-        # The currently active space is guaranteed to be the first one on the list
-        if view3d := next((space for space in area.spaces if space.type == 'VIEW_3D'), None):
-            return view3d
-        
+    return Viewport(window, area, region, space.region_3d, space)
+
+
+def findViewport(context: bpy.types.Context, scope: WindowScope) -> Viewport | None:
+    """ Find a 3D viewport that can be drawn into or temp_override()'d onto.
+
+        The context's own area wins when it is already a viewport, unless the caller asked for
+        ACTIVE_LAST - which means it wants a viewport somewhere other than where it was invoked
+        from (the Scene Lister's own window, for one). Returns None when no window holds a
+        usable viewport.
+    """
+    activeWindow = context.window
+
+    if activeWindow is not None and scope is not WindowScope.ACTIVE_LAST:
+        if (area := context.area) and (area.type == 'VIEW_3D') and (viewport := _asViewport(activeWindow, area)):
+            return viewport
+
+    if scope is WindowScope.ACTIVE_ONLY:
+        windows = [activeWindow] if activeWindow is not None else []
+    else:
+        # sorted() is stable, so within each group the window manager's own order is kept.
+        wanted = (scope is WindowScope.ACTIVE_FIRST)
+        windows = sorted(context.window_manager.windows,
+                         key=lambda w: 0 if ((w == activeWindow) == wanted) else 1)
+
+    for window in windows:
+        for area in (a for a in window.screen.areas if a and a.type == 'VIEW_3D'):
+            if viewport := _asViewport(window, area):
+                return viewport
+
     return None
+
+
+def getFirstAvailableView3D():
+    """ Returns SpaceView3D of the first available VIEW_3D area in the currently active screen"""
+    # Deliberately limited to the active window: the caller in VRayRendererIprBase pairs the
+    # returned space with bpy.context.window, so a space from another window would bind the
+    # IPR render to the wrong one.
+    return viewport.space if (viewport := findViewport(bpy.context, WindowScope.ACTIVE_ONLY)) else None
 
 
 def getSpaceView3D(context : bpy.types.Context):
@@ -293,7 +345,8 @@ def isViewportRenderMode():
     """ Return True if any of the currently visible View3D spaces is
         in interactive render mode.
     """
-    if not (activeScreen := bpy.context.window.screen):
+    # There is no window in background mode (blender -b)
+    if not (window := bpy.context.window) or not (activeScreen := window.screen):
         return False
 
     for area in (a for a in activeScreen.areas if a and a.type == 'VIEW_3D'):
@@ -548,11 +601,17 @@ def isDefaultScene():
     return not bpy.data.filepath
 
 
+_lastDeleteOperator = 0
+
 def deleteOperatorHasBeenCalled():
     """ Checks if the delete operator has been called since the last depsgraph update"""
+    global _lastDeleteOperator
 
     deleteOperators = ('OUTLINER_OT_delete', 'OBJECT_OT_delete')
-    return any(op.bl_idname in deleteOperators for op in bpy.context.window_manager.operators)
+    lastDelete = next((op.as_pointer() for op in reversed(bpy.context.window_manager.operators) if op.bl_idname in deleteOperators), 0)
+    called = lastDelete not in (0, _lastDeleteOperator)
+    _lastDeleteOperator = lastDelete
+    return called
 
 
 def getPropertyDefaultValue(propGroup, attrName:str):

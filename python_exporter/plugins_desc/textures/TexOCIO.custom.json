@@ -6,6 +6,14 @@
             "subtype": "VRAY_FILE_PATH"
         },
         {
+            "attr": "cdl_file",
+            "subtype": "FILE_PATH"
+        },
+        {
+            "attr": "filetr_file",
+            "subtype": "FILE_PATH"
+        },
+        {
             "attr": "config_file_selector",
             "type": "TEMPLATE",
             "options": {

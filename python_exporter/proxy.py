@@ -131,7 +131,35 @@ class VRAY_OT_vrayscene_generate_preview(VRayOperatorBase):
 
 
 
-def _buildMeshFromProxyData(meshData, meshName, scale, existingMaterials):
+def _buildProxyMaterialMap(proxyObj: bpy.types.Object):
+    """ The material each of the proxy's material IDs is shaded with, keyed by ID.
+
+        A face of the proxy carries the ID of the shader set V-Ray shades it with, which is also
+        the index of the material slot the import created for that set, so the slots are read
+        through by ID. The slots are read off the object and not off the mesh: that is what
+        resolves a slot linked to the object, which the mesh's own list does not hold.
+
+        The overrides set in the Object Hierarchy rollout come on top of them. They live on the
+        rows of the rollout and never touch the slots, but they are what the proxy renders with -
+        at export time they win over the slot material in both override modes, see
+        node_export._applyProxyMaterialOverrides() and _exportProxyMaterialOverrides() - so the
+        conversion has to prefer them too, or everything the user assigned in the rollout is lost.
+    """
+    materials = {index: slot.material for index, slot in enumerate(proxyObj.material_slots)}
+
+    vrayData = getattr(proxyObj.data, 'vray', None)
+
+    if geomMeshFile := getattr(vrayData, 'GeomMeshFile', None):
+        # Keyed by shader set ID, which is the face's material ID, and with the overrides a group
+        # row passes down to its branch already resolved. That covers both modes of the rollout -
+        # a file whose shader sets are its objects and one whose sets are face sets - since a row
+        # carrying an override is a shader set, or stands above ones, either way.
+        materials.update(geomMeshFile.object_hierarchy.getMaterialOverridesByShaderId())
+
+    return materials
+
+
+def _buildMeshFromProxyData(meshData, meshName, scale, materialsById):
     """ Create a Blender mesh from binary proxy mesh data.
         Uses foreach_set for fast bulk data transfer from numpy arrays.
         Returns the new bpy.data.meshes object, or None if the data is empty.
@@ -155,17 +183,28 @@ def _buildMeshFromProxyData(meshData, meshName, scale, existingMaterials):
         mesh.transform(Matrix.Scale(scale, 4))
 
     materialIDs = meshData.get('material_ids')
-   
-    # Create material slots. Build a mapping from material ID → sequential slot index.
+
+    # 'materialsById' is what the whole proxy is shaded with, keyed by material ID - see
+    # _buildProxyMaterialMap(). A face of this object carries the ID it is shaded with, so the new
+    # mesh gets a slot per ID its own faces use, in ascending ID order.
+    if materialIDs is not None:
+        usedMaterialIDs = sorted({int(matId) for matId in materialIDs})
+    elif materialsById:
+        # A file with no per-face IDs shades everything with the first slot. Without this the mesh
+        # would come out with no slots at all and the material would be lost by the conversion.
+        usedMaterialIDs = [0]
+    else:
+        usedMaterialIDs = []
+
+    # Build a mapping from material ID → sequential slot index.
     materialIdToSlotIndex = {}
-    # Make sure that there are no material slots that does not match a material ID.
-    distinctMaterialIDs = set(materialIDs) if materialIDs is not None else set() 
-    for slotIdx, matId in enumerate(distinctMaterialIDs):
+
+    for slotIdx, matId in enumerate(usedMaterialIDs):
         materialIdToSlotIndex[matId] = slotIdx
-        if matId < len(existingMaterials):
-            mesh.materials.append(existingMaterials[matId])
-        else: # If the material ID is not found in the existing materials, add a None slot
-            mesh.materials.append(None)
+        # An ID nothing is shaded with - no override on it and no slot of its own, because the
+        # slots were edited after the import or the file has more shader sets than the import
+        # created slots for - has nothing to carry over, and an empty slot is the honest answer.
+        mesh.materials.append(materialsById.get(matId))
 
     # Set per-face material indices
     if materialIDs is not None and len(materialIDs) == numFaces:
@@ -225,7 +264,7 @@ def _buildMeshFromProxyData(meshData, meshName, scale, existingMaterials):
     return mesh
 
 
-def _buildProxyHierarchy(items, proxyObj, baseName, scale, existingMaterials):
+def _buildProxyHierarchy(items, proxyObj, baseName, scale, materialsById):
     """Build a Blender object hierarchy from proxy mesh data.
 
     Mirrors the C4D importer: if an intermediate Empty already occupies a path when
@@ -272,7 +311,7 @@ def _buildProxyHierarchy(items, proxyObj, baseName, scale, existingMaterials):
         leafName = parts[-1]
         pathKey = '/'.join(parts)
         leafParent = getOrCreateNode(parts[:-1])
-        mesh = _buildMeshFromProxyData(meshData, leafName, scale, existingMaterials)
+        mesh = _buildMeshFromProxyData(meshData, leafName, scale, materialsById)
         if mesh is None:
             continue
         newObj = bpy.data.objects.new(leafName, mesh)
@@ -298,8 +337,9 @@ def _buildProxyHierarchy(items, proxyObj, baseName, scale, existingMaterials):
 class VRAY_OT_proxy_to_mesh(VRayOperatorBase):
     bl_idname      = "vray.proxy_to_mesh"
     bl_label       = "Convert Proxy to Mesh"
-    bl_description = "Convert V-Ray Proxy to a full Blender mesh with materials and UV channels"
-    bl_options     = {'UNDO'}
+    bl_description = "Convert V-Ray Proxy to a full Blender mesh with materials and UV channels. " \
+                     "Only the objects shown by the Object Hierarchy are converted"
+    bl_options     = {'REGISTER', 'UNDO'}
 
     # When set, convert this object instead of the active one (used by the Scene Lister).
     object_name: bpy.props.StringProperty(default="", options={'HIDDEN'})
@@ -327,7 +367,15 @@ class VRAY_OT_proxy_to_mesh(VRayOperatorBase):
         from vray_blender.lib import path_utils
         binFile = str(PurePath(path_utils.getV4BTempDir(), PurePath(absFilePath).stem).with_suffix('.vrbin'))
 
-        if err := _dumpMeshFile(absFilePath, binFile, _PREVIEW_TYPES['FullWithMetadata'], 0, int(geomMeshFile.flip_axis)):
+        # Leave out the objects the Object Hierarchy hides, so that what the conversion produces is
+        # what the user can see and what would have been rendered. 
+        hierarchy = getattr(geomMeshFile, 'object_hierarchy', None)
+        visibility = hierarchy.getVisibilityList() \
+                     if (hierarchy is not None) and (not hierarchy.needsRebuildFor(absFilePath)) \
+                     else None
+
+        if err := _dumpMeshFile(absFilePath, binFile, _PREVIEW_TYPES['FullWithMetadata'], 0,
+                                int(geomMeshFile.flip_axis), visibility):
             self.report({'ERROR'}, err)
             return {'CANCELLED'}
 
@@ -335,34 +383,51 @@ class VRAY_OT_proxy_to_mesh(VRayOperatorBase):
         os.unlink(binFile)
 
         if not objects:
-            self.report({'ERROR'}, "No geometry data in proxy file")
+            # With a list in play and rows to filter, an empty dump is the list having hidden
+            # everything rather than a file with nothing in it.
+            hidesEverything = (visibility is not None) and any(i.isObject for i in hierarchy.items)
+            self.report({'ERROR'}, "Every object of the proxy is hidden by the Object Hierarchy"
+                                   if hidesEverything else "No geometry data in proxy file")
             return {'CANCELLED'}
 
         scale = geomMeshFile.scale
-        existingMaterials = list(ob.data.materials)
+
+        # What the proxy is shaded with, by material ID: its material slots with the Object
+        # Hierarchy's overrides on top.
+        materialsById = _buildProxyMaterialMap(ob)
 
         proxyPrefix = "VRayProxy@"
         baseName = ob.name[len(proxyPrefix):] if ob.name.startswith(proxyPrefix) else ob.name
 
         items = list(objects.items())
-        if len(items) == 1:
+
+        # How many objects the file holds, which is what decides the shape of the result - not how
+        # many of them are visible. This is needed in order to keep the hierarchy even if only a 
+        # single object is visible.
+        fileObjectCount = sum(1 for i in hierarchy.items if i.isObject) \
+                          if (visibility is not None) else len(items)
+
+        if (len(items) == 1) and (fileObjectCount <= 1):
             # Single object: replace proxy mesh in-place to preserve Blender object identity.
             _, firstData = items[0]
-            mesh = _buildMeshFromProxyData(firstData, baseName, scale, existingMaterials)
+            mesh = _buildMeshFromProxyData(firstData, baseName, scale, materialsById)
             if mesh is None:
                 self.report({'ERROR'}, "Proxy file contains no geometry")
                 return {'CANCELLED'}
             oldMesh = ob.data
             ob.data = mesh
-            bpy.data.meshes.remove(oldMesh)
+            # Alt+D duplicates may still use the mesh, and removing it deletes them.
+            if not oldMesh.users:
+                bpy.data.meshes.remove(oldMesh)
             ob.vray.VRayAsset.assetType = '0'
             ob.name = baseName
             debug.report('INFO', f"Converted proxy '{ob.name}' to mesh")
         else:
-            created = _buildProxyHierarchy(items, ob, baseName, scale, existingMaterials)
+            created = _buildProxyHierarchy(items, ob, baseName, scale, materialsById)
             oldMesh = ob.data
             bpy.data.objects.remove(ob)
-            bpy.data.meshes.remove(oldMesh)
+            if not oldMesh.users:
+                bpy.data.meshes.remove(oldMesh)
             debug.report('INFO', f"Converted proxy to {len(created)} mesh objects")
 
         return {'FINISHED'}
@@ -587,6 +652,9 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
     # Indicate if all necessary plugin exports were successful.
     pluginExportSuccessful = False
 
+    # Set once objects are added to or removed from the scene.
+    sceneChanged = False
+
     try:
         proxySettings = _buildProxyExportSettings(preferences)
         exportFrames = _proxyExportFrames(preferences, scene.frame_current)
@@ -616,6 +684,7 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
 
         importedProxy = None
         if preferences.export_proxy_add_to_scene:
+            sceneChanged = True
             proxyPath = proxySettings.filePath
             matPath = str(PurePath(proxyPath).with_suffix('.vrmat'))
             importedProxy, importErr = importProxyFromMeshFile(context, matPath, proxyPath, useRelPath=False, scaleUnit=1.0, select=False)
@@ -626,6 +695,7 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
                 _assignImportedProxyMaterials(importedProxy, proxyMaterialSlots)
 
         if preferences.export_proxy_remove_exported_objects:
+            sceneChanged = True
             for ob in _objectsToRemoveAfterProxyExport(exporterCtx):
                 parent = ob.parent
                 bpy.data.objects.remove(ob, do_unlink=True)
@@ -651,6 +721,14 @@ def runProxyFileExport(scene: bpy.types.Scene, exporterCtx: ExporterContext, eng
 
         setFloatFrame(scene, originalFrame)
         scene.render.use_lock_interface = originalLockInterface
+
+        if sceneChanged:
+            # A render job pushes no undo step. Without one, undo to the step before the export
+            # keeps the scene's collections as they are now, because they look unchanged to it.
+            # They still list the imported proxy, which undo frees, and Blender crashes on it.
+            from vray_blender.engine.vfb_event_handler import VfbEventHandler
+            VfbEventHandler.pushUndoStep("Export V-Ray Proxy")
+
         if success:
             engine.report({'INFO'}, f"Exported proxy: {preferences.export_proxy_file_path}")
 

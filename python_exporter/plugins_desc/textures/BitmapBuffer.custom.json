@@ -30,6 +30,9 @@
         },
         {
             "attr" : "rgb_color_space",
+            "ui": {
+                "display_name": "RGB Color Space"
+            },
             "default" : "lin_srgb",
             "items" : 
             [

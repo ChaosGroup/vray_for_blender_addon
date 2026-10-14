@@ -25,6 +25,7 @@ class VRAY_MT_MaterialName(bpy.types.Menu):
     ma_list = []
     nodeName = ""
     mtlName = ""
+    groupName = ""
 
     def draw(self, context):
         row = self.layout.row()
@@ -37,6 +38,7 @@ class VRAY_MT_MaterialName(bpy.types.Menu):
             op.name     = maName
             op.nodeName = self.nodeName
             op.mtlName  = self.mtlName
+            op.groupName = self.groupName
 
 
 class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
@@ -48,9 +50,11 @@ class VRAY_OT_set_vrscene_material_name(VRayOperatorBase):
     name: bpy.props.StringProperty()
     nodeName: bpy.props.StringProperty()
     mtlName: bpy.props.StringProperty()
+    groupName: bpy.props.StringProperty()
 
     def execute(self, context):
-        node = bpy.data.materials[self.mtlName].node_tree.nodes[self.nodeName]
+        ntree = bpy.data.node_groups[self.groupName] if self.groupName else bpy.data.materials[self.mtlName].node_tree
+        node = ntree.nodes[self.nodeName]
         if not node:
             return {'CANCELLED'}
         if node.bl_idname != "VRayNodeMtlVRmat":
@@ -110,10 +114,12 @@ class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
 
     nodeName: bpy.props.StringProperty()
     mtlName: bpy.props.StringProperty()
+    groupName: bpy.props.StringProperty()
     mtlList: bpy.props.StringProperty()
 
     def execute(self, context):
-        node = bpy.data.materials[self.mtlName].node_tree.nodes[self.nodeName]
+        ntree = bpy.data.node_groups[self.groupName] if self.groupName else bpy.data.materials[self.mtlName].node_tree
+        node = ntree.nodes[self.nodeName]
 
         MtlVRmat = node.MtlVRmat
         if not MtlVRmat.filename:
@@ -127,6 +133,7 @@ class VRAY_OT_get_vrscene_material_name(VRayOperatorBase):
         VRAY_MT_MaterialName.ma_list = mtlList
         VRAY_MT_MaterialName.nodeName = self.nodeName
         VRAY_MT_MaterialName.mtlName = self.mtlName
+        VRAY_MT_MaterialName.groupName = self.groupName
         bpy.ops.wm.call_menu(name=VRAY_MT_MaterialName.bl_idname)
 
         return {'FINISHED'}
@@ -144,7 +151,7 @@ def onFileNameAttributeUpdate(src, context, attrName):
 
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup
-    pluginDesc.setAttribute("filename", os.path.normpath(bpy.path.abspath(propGroup.filename)))
+    pluginDesc.setAttribute("filename", os.path.normpath(bpy.path.abspath(propGroup.filename, library=propGroup.id_data.library)))
 
     return export_utils.exportPluginCommon(ctx, pluginDesc)
 
@@ -155,8 +162,13 @@ def widgetDrawMaterialName(context: bpy.types.Context, layout: bpy.types.UILayou
     assert contextObj, "No valid context object"
 
     op = row.operator("vray.get_vrscene_material_name", text = "", icon="DOWNARROW_HLT")
-    op.nodeName = getNodeOfPropGroup(propGroup).name
-    op.mtlName  = contextObj.active_material.name
+    node = getNodeOfPropGroup(propGroup)
+    op.nodeName = node.name
+    # A grouped node lives in the group tree, not in the material's tree.
+    if node.id_data.vray.tree_type == 'GROUP':
+        op.groupName = node.id_data.name
+    else:
+        op.mtlName  = contextObj.active_material.name
     op.mtlList = propGroup.materials_list
 
 

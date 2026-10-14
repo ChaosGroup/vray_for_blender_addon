@@ -91,6 +91,15 @@ void ZmqAgent::setTraceCallback(TraceCallback cb) {
 }
 
 
+void ZmqAgent::setIdleCallback(IdleCallback cb) {
+	vassert(cb && "Unsubscribing is not supported");
+	vassert(!idleCallback && "Multiple subscriptions for the same event are not supported");
+	vassert((state == State::Idle) && "Callbacks should be registered before running the agent");
+
+	idleCallback = cb;
+}
+
+
 const RoutingId& ZmqAgent::routingId() const {
 	return id;
 }
@@ -224,6 +233,7 @@ void ZmqAgent::pollerLoop(std::string endpoint) {
 	msgCallback   = nullptr;
 	errorCallback = nullptr;
 	traceCallback = nullptr;
+	idleCallback  = nullptr;
 
 	state = State::Stopped;
 }
@@ -305,6 +315,10 @@ void ZmqAgent::recvPending(zmq::poller_t<>& pollerRecv) {
 	const auto numMessages = pollerRecv.wait_all(events, pollTimeout);
 	if (numMessages == 0) {
 		processTick();
+
+		if (idleCallback) {
+			idleCallback();
+		}
 		return;
 	}
 

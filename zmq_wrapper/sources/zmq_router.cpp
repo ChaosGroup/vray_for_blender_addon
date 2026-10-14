@@ -5,6 +5,7 @@
 #include "zmq_router.h"
 #include "zmq_agent.h"
 
+#include <functional>
 #include <vector>
 
 #include <zmq.hpp>
@@ -23,10 +24,26 @@
 
 namespace VrayZmqWrapper{
 
+/// Send a multipart message without throwing
+/// @param sock - the socket to send the message to
+/// @param msg - the message to send, its parts are consumed
+/// @return 0 on success, otherwise the zmq error code
+static int sendNoThrow(zmq::socket_ref sock, zmq::multipart_t& msg) {
+	while (!msg.empty()) {
+		zmq::message_t part = msg.pop();
+		if (zmq_msg_send(part.handle(), sock.handle(), msg.empty() ? 0 : ZMQ_SNDMORE) < 0) {
+			return zmq_errno();
+		}
+	}
+	return 0;
+}
+
+
 /// Constructor
 /// @param ctx - initialized ZMQ context
 ZmqRouter::ZmqRouter(zmq::context_t& ctx) :
-	ctx(ctx)
+	ctx(ctx),
+	lastPurge(Clock::now())
 {
 }
 
@@ -150,6 +167,8 @@ void ZmqRouter::pollerLoop(std::string clientEndpoint, std::string workerEndopin
 						break;
 				}
 			}
+
+			purgeRelayFailures();
 		}
 	}
 	catch (const zmq::error_t& e) {
@@ -206,6 +225,10 @@ void ZmqRouter::processHandshake(zmq::socket_ref sock, const zmq::multipart_t& m
 		return;
 	}
 
+	// The routing ID of a tunnel may be reused (e.g. by the control connection). Failures
+	// of the previous tunnel with this ID should not suppress the ones of the new tunnel.
+	relayFailures.erase(routingId);
+
 	// Create a new worker and hand it out. The socket is created with the same ID as that
 	// of the requesting socket
 	try {
@@ -228,15 +251,52 @@ void ZmqRouter::relayMsg(zmq::socket_ref fromSock, zmq::multipart_t& msg) {
 	const auto routingId = *msg[0].data<RoutingId>();
 	const bool isFromSvr = (fromSock.handle() == sockServer.handle());
 
-	try {
-		msg.send(isFromSvr ? sockClient : sockServer);
-	}
-	catch (const std::exception& exc) {
+	// Relay failures are frequent when a tunnel breaks, so avoid the cost of exceptions
+	const int err = sendNoThrow(isFromSvr ? sockClient : sockServer, msg); 
+	
+	if(err != 0) {
 		// Something is wrong with the peer, but we can't do anything about it
-		const auto errMsg = Msg("Failed to relay message to", isFromSvr ? "client" : "server", shorten(routingId), ", exception:", exc.what());
-		trace(errMsg);
-		replyWithError(fromSock, routingId, errMsg);
+		const auto errMsg = Msg("Failed to relay message to", isFromSvr ? "client" : "server", shorten(routingId), ", error:", zmq_strerror(err));
+
+		// A broken tunnel fails for every message still in flight. Report each failure only once,
+		// the peer stops at the first error reply so the repeated ones would not be read anyway.
+		auto [it, isNew] = relayFailures[routingId].try_emplace({isFromSvr, std::hash<std::string>{}(errMsg)});
+		it->second = Clock::now();
+
+		if (isNew) {
+			trace(errMsg);
+			replyWithError(fromSock, routingId, errMsg);
+		}
 	}
+}
+
+
+/// Remove the failed relays which have not occurred again during the grace period
+/// @param now - the current time
+void ZmqRouter::purgeRelayFailures() {
+
+	const auto now = Clock::now();
+	
+	if (now - lastPurge < RELAY_FAILURE_PURGE_INTERVAL) {
+		return;
+	}
+
+	for (auto itTunnel = relayFailures.begin(); itTunnel != relayFailures.end();) {
+		auto& failures = itTunnel.value();
+
+		for (auto it = failures.begin(); it != failures.end();) {
+			if (now - it->second >= RELAY_FAILURE_GRACE) {
+				it = failures.erase(it);
+			}
+			else {
+				++it;
+			}
+		}
+
+		itTunnel = failures.empty() ? relayFailures.erase(itTunnel) : std::next(itTunnel);
+	}
+
+	lastPurge = now;
 }
 
 

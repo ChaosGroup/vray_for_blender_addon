@@ -10,6 +10,7 @@ from vray_blender.lib import draw_utils
 from vray_blender.ui import classes
 
 from vray_blender.lib.mixin import VRayNodeBase
+from vray_blender.lib.names import syncObjectUniqueName
 from vray_blender.nodes import utils as NodeUtils, sockets as SocketUtils, links as NodeLinks
 from vray_blender.nodes.nodes import vrayNodeUpdate
 
@@ -64,6 +65,10 @@ class VRayNodeUVWMapping(VRayNodeBase):
 
     vray_type  : bpy.props.StringProperty(default='UVWGEN')
     vray_plugin: bpy.props.StringProperty(default='UVWGenMayaPlace2dTexture')
+    # syncObjectUniqueName stamps parent_node_id on every listed propgroup, not just the active
+    # mode's - without it an inactive mode's edits are attributed to the wrong node.
+    vray_plugins_list = ["UVWGenMayaPlace2dTexture", "UVWGenProjection",
+                         "UVWGenObject", "UVWGenEnvironment"]
     mapping_node_type: bpy.props.EnumProperty(
         name = "Mapping",
         items = (
@@ -79,6 +84,9 @@ class VRayNodeUVWMapping(VRayNodeBase):
     def init(self, context):
         SocketUtils.addOutput(self, 'VRaySocketCoords', "Mapping", 'uvwgen')
         _addMappingInputSockets(self)
+        # This node has its own init instead of the generated vrayNodeInit, which is where a
+        # plain node gets this call.
+        syncObjectUniqueName(self, reset=True)
         NodeLinks.autoConnectSingleSocket(self)
 
 
@@ -119,11 +127,7 @@ class VRayNodeUVWMapping(VRayNodeBase):
 
     
 def register():
-    for pluginType in {
-                     'UVWGenMayaPlace2dTexture',
-                     'UVWGenObject',
-                     'UVWGenEnvironment',
-                     'UVWGenProjection'}:
+    for pluginType in VRayNodeUVWMapping.vray_plugins_list:
         pluginDesc = plugins.PLUGIN_MODULES[pluginType]
 
         plugins.addAttributes(pluginDesc, VRayNodeUVWMapping)

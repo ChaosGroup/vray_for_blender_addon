@@ -19,7 +19,7 @@
 
     Instancer2 and the legacy Instancer share one 'instances' row layout and one parser; they
     differ only in the default of use_time_instancing (1 and 0). The legacy plugin is what
-    3ds Max writes for every instancing source it has - particle flows, Forest Pack, RailClone.
+    3ds Max writes for every instancing source it has: particle flows, Forest Pack, RailClone.
 """
 
 from dataclasses import dataclass, field
@@ -31,6 +31,7 @@ import numpy as np
 from vray_blender import debug
 from vray_blender.lib import attribute_utils, transform_utils
 from vray_blender.nodes.tools import rearrangeTree
+from vray_blender.vray_tools import import_common
 from vray_blender.vray_tools.import_common import refName as _refName
 
 
@@ -40,9 +41,6 @@ _ATTR_PROTO_INDEX = "proto_index"
 _ATTR_MASK = "mask"
 _ATTR_SCALE = "scale"
 _ATTR_ORIENTATION = "orientation"
-
-# V-Ray user-attribute / BinUserAttribute type -> VRayUserAttributeItem.value_type enum.
-# (Same mapping the server uses when it emits decoded user attributes.)
 
 
 @dataclass
@@ -54,7 +52,7 @@ class ParsedInstancer:
     translation: np.ndarray                    # (N, 3) float32, source units * vertexScale
     quaternion: np.ndarray                     # (N, 4) float32, (w, x, y, z)
     scale: np.ndarray                          # (N, 3) float32
-    mask: np.ndarray                           # (N,) bool - False hides the instance
+    mask: np.ndarray                           # (N,) bool, False hides the instance
     ids: np.ndarray = None                     # (N,) int32 or None
     velocity: np.ndarray = None                # (N, 3) float32 or None
     customAttrs: dict = field(default_factory=dict)   # name -> (N,) or (N, k) numpy array
@@ -91,7 +89,10 @@ def buildInstancerObject(importer, parsed: ParsedInstancer, ownerTm) -> bpy.type
 
     protoCollection = _buildPrototypeCollections(importer, parsed)
     if protoCollection is None:
-        importer.stats.skipped[f"{parsed.name} (no prototypes resolved)"] += 1
+        # Keyed by the reason, not the plugin name, or most_common() degenerates into a
+        # list of one-offs. The name goes to the log.
+        debug.printWarning(f"Instancer '{parsed.name}': no prototypes resolved; not imported")
+        importer.stats.skipped['instancer (no prototypes resolved)'] += 1
         return None
 
     points = _createPointsCarrier(parsed.name, parsed.translation, n)
@@ -109,7 +110,7 @@ def buildInstancerObject(importer, parsed: ParsedInstancer, ownerTm) -> bpy.type
 
     obj = bpy.data.objects.new(parsed.name, points)
     importer.collection.objects.link(obj)
-    # Must happen before the modifier is added: object.convert applies modifiers, which would
+    # Must happen before the modifier is added, because object.convert applies modifiers, which
     # bake the instances into the points instead of converting the carrier.
     _convertMeshCarrierToPointCloud(obj)
     # Track the final data, and the object after it, so rollback removes the object first.
@@ -162,7 +163,7 @@ def _convertMeshCarrierToPointCloud(obj: bpy.types.Object):
 
         Only reached before Blender 5.1, where a PointCloud cannot be sized from Python.
         object.convert carries the point attributes across, but it acts on the selection and
-        on the active object, so the context is overridden to just this object - otherwise
+        on the active object, so the context is overridden to just this object; otherwise
         whatever the user had selected would be converted too. The emptied Mesh is left behind
         by the operator and is removed here rather than leaking a datablock per instancer.
     """
@@ -230,7 +231,7 @@ def _parseSources(sources, n: int):
     if (len(sources) == 2
             and _isSequence(sources[0]) and _isSequence(sources[1])
             and not _isSequence(sources[0][0] if len(sources[0]) else None)):
-        # Two-list form: palette + per-instance index.
+        # Two-list form, a palette plus a per-instance index.
         palette = [_refName(s) for s in sources[0]]
         idx = np.asarray(sources[1], dtype=np.int32)
     else:
@@ -264,24 +265,24 @@ def _parseGeomInstancerUserAttributes(userAttributes, n: int, out: dict):
         if not _isSequence(values) or len(values) != n:
             continue
         try:
-            arr = np.asarray(values)
+            array = np.asarray(values)
         except Exception:
             continue
-        if arr.dtype.kind in ('i', 'u', 'b'):
-            out[name] = arr.astype(np.int32)
-        elif arr.dtype.kind == 'f':
-            out[name] = arr.astype(np.float32)
+        if array.dtype.kind in ('i', 'u', 'b'):
+            out[name] = array.astype(np.int32)
+        elif array.dtype.kind == 'f':
+            out[name] = array.astype(np.float32)
 
 
 # --------------------------------------------------------------------------
 # Instancer2 / Instancer parsing (array-of-structs)
 # --------------------------------------------------------------------------
 
-# HierarchicalParameterizedNodeParameters::useUserAttributes - the only additional parameter
+# HierarchicalParameterizedNodeParameters::useUserAttributes, the only additional parameter
 # read here. The rest still have to be counted, which is what makes the trailing node
 # references findable at all.
 _FLAG_USER_ATTRIBUTES = 1 << 3
-# The bits V-Ray reads BEFORE the user-attribute string (useObjectID, usePrimaryVisibility),
+# The bits V-Ray reads before the user-attribute string (useObjectID, usePrimaryVisibility),
 # i.e. how far past the flags int the string sits. Read order per the Instancer plugin itself
 # (vraysl/vray_geom_instancer/vray_geom_instancer.cpp).
 _FLAGS_BEFORE_USER_ATTRIBUTES = (1 << 1) | (1 << 2)
@@ -299,7 +300,7 @@ def _parseInstancerRows(pluginDesc: dict, importer) -> ParsedInstancer | None:
 
         Every optional block is positional and its presence is declared by the plugin's own
         attributes, so the node references are located by walking forward past the blocks the
-        plugin says are there - not by guessing from the tail. Each bit set in the flags int
+        plugin says are there, not by guessing from the tail. Each bit set in the flags int
         adds exactly one additional parameter, and several of those (material, geometry, map
         channels, geometry trimming) are plugin references indistinguishable from a node one.
     """
@@ -394,13 +395,13 @@ def _parseParticleChannels(attrs: dict, n: int, out: dict):
         if _channelLen(attrs.get(name)) == n:
             out[name] = np.asarray(attrs[name], dtype=np.float32)
     for name in _PARTICLE_VECTOR_CHANNELS:
-        arr = _vectorListToArray(attrs.get(name), n)
-        if arr is not None:
-            out[name] = arr
+        array = _vectorListToArray(attrs.get(name), n)
+        if array is not None:
+            out[name] = array
     for name in _PARTICLE_COLOR_CHANNELS:
-        arr = _vectorListToArray(attrs.get(name), n)
-        if arr is not None:
-            out[name] = arr
+        array = _vectorListToArray(attrs.get(name), n)
+        if array is not None:
+            out[name] = array
 
 
 def _foldInstanceUserAttributes(instanceUserAttrs, n: int, out: dict):
@@ -425,20 +426,18 @@ def _foldInstanceUserAttributes(instanceUserAttrs, n: int, out: dict):
 
 def _foldStringUserAttributes(perInstance: list, n: int, out: dict):
     """ Fold the per-instance "name=value;..." additional parameter into point attributes. This
-        is how the legacy Instancer carries per-instance data - 3ds Max writes Forest Pack and
-        RailClone randomization through it - and it is the only user-attribute form that lives
-        in the row itself rather than in a binary blob the server decodes.
+        is how the legacy Instancer carries per-instance data (3ds Max writes Forest Pack and
+        RailClone randomization through it), and the only user-attribute form that lives in the
+        row itself rather than in a binary blob the server decodes.
 
         String values are skipped: a point attribute cannot hold one. A name typed as a colour
         on some instances and as a scalar on others has no single point type and is skipped too.
     """
-    from vray_blender.vray_tools.scene_import import _parseUserAttributeString
-
     collected = {}                             # name -> {instance index: (valueType, value)}
     for i, text in enumerate(perInstance):
         if not text:
             continue
-        for name, valueType, value in _parseUserAttributeString(text):
+        for name, valueType, value in import_common.parseUserAttributeString(text):
             if valueType != '3':
                 collected.setdefault(name, {})[i] = (valueType, value)
 
@@ -486,6 +485,11 @@ def _buildPrototypeCollections(importer, parsed: ParsedInstancer) -> bpy.types.C
             if obj is not None:
                 objects.append(obj)
             else:
+                debug.printWarning(f"Instancer source node '{nodeName}' was not imported; "
+                                   f"its instances are dropped")
+                # The name stays in the key. An unresolvable reference arrives as '', and
+                # inst_geominstancer_missing_source pins that as a tripwire for the day the
+                # parser starts preserving names.
                 importer.stats.skipped[f"instancer source '{nodeName}'"] += 1
         anyResolved = anyResolved or bool(objects)
         resolved.append((f"proto_{index:0{digits}d}", objects))
@@ -499,7 +503,7 @@ def _buildPrototypeCollections(importer, parsed: ParsedInstancer) -> bpy.types.C
     importer.ledger.track(parent)
 
     coordAdjustInv = importer.coordAdjust.inverted() if importer.coordAdjust is not None else None
-    moved = importer._instancerMovedSources
+    moved = importer.instancerMovedSources
 
     for collName, objects in resolved:
         protoColl = bpy.data.collections.new(collName)
@@ -515,7 +519,7 @@ def _buildPrototypeCollections(importer, parsed: ParsedInstancer) -> bpy.types.C
                 if coll is not protoColl:
                     coll.objects.unlink(obj)
             # Source template nodes are usually visible=0, so _importObjects hid them with the
-            # per-object flags - which drop them from the depsgraph and leave Collection Info
+            # per-object flags, which drop them from the depsgraph and leave Collection Info
             # with empty geometry (no instances). Clear the per-object hide and rely on the
             # prototypes collection's hide flags, which keep the objects evaluable.
             obj.hide_viewport = False
@@ -533,7 +537,7 @@ def _buildPrototypeCollections(importer, parsed: ParsedInstancer) -> bpy.types.C
 
 
 def _getOrCreatePrototypesRoot(importer) -> bpy.types.Collection:
-    if importer._instancerPrototypesRoot is None:
+    if importer.instancerPrototypesRoot is None:
         root = bpy.data.collections.new("prototypes")
         # Global (not view-layer) hide flags keep the objects in the depsgraph so Collection
         # Info can still read them, while hiding them from direct viewport/render.
@@ -541,8 +545,8 @@ def _getOrCreatePrototypesRoot(importer) -> bpy.types.Collection:
         root.hide_render = True
         importer.collection.children.link(root)
         importer.ledger.track(root)
-        importer._instancerPrototypesRoot = root
-    return importer._instancerPrototypesRoot
+        importer.instancerPrototypesRoot = root
+    return importer.instancerPrototypesRoot
 
 
 # --------------------------------------------------------------------------
@@ -550,18 +554,18 @@ def _getOrCreatePrototypesRoot(importer) -> bpy.types.Collection:
 # --------------------------------------------------------------------------
 
 def _getOrCreateNodeGroup(importer) -> bpy.types.NodeTree:
-    if importer._instancesNodeGroup is not None:
-        return importer._instancesNodeGroup
+    if importer.instancesNodeGroup is not None:
+        return importer.instancesNodeGroup
 
-    ng = bpy.data.node_groups.new(_NODE_GROUP_NAME, 'GeometryNodeTree')
-    importer.ledger.track(ng)
-    importer._instancesNodeGroup = ng
+    nodeGroup = bpy.data.node_groups.new(_NODE_GROUP_NAME, 'GeometryNodeTree')
+    importer.ledger.track(nodeGroup)
+    importer.instancesNodeGroup = nodeGroup
 
-    ng.interface.new_socket("Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
-    ng.interface.new_socket("Instance Collection", in_out='INPUT', socket_type='NodeSocketCollection')
-    ng.interface.new_socket("Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
+    nodeGroup.interface.new_socket("Geometry", in_out='INPUT', socket_type='NodeSocketGeometry')
+    nodeGroup.interface.new_socket("Instance Collection", in_out='INPUT', socket_type='NodeSocketCollection')
+    nodeGroup.interface.new_socket("Geometry", in_out='OUTPUT', socket_type='NodeSocketGeometry')
 
-    nodes, links = ng.nodes, ng.links
+    nodes, links = nodeGroup.nodes, nodeGroup.links
     groupIn = nodes.new("NodeGroupInput")
     groupOut = nodes.new("NodeGroupOutput")
     instanceOnPoints = nodes.new("GeometryNodeInstanceOnPoints")
@@ -593,9 +597,9 @@ def _getOrCreateNodeGroup(importer) -> bpy.types.NodeTree:
     links.new(instanceOnPoints.outputs["Instances"], groupOut.inputs["Geometry"])
 
     # Nodes are all created at (0, 0); lay them out so the group is readable if opened.
-    rearrangeTree(ng, groupOut)
+    rearrangeTree(nodeGroup, groupOut)
 
-    return ng
+    return nodeGroup
 
 
 def _collectionInputIdentifier(nodeGroup) -> str | None:
@@ -622,7 +626,7 @@ def _setModifierInput(mod: bpy.types.NodesModifier, identifier: str, value):
 # --------------------------------------------------------------------------
 
 def _decomposeTransforms(tms12: np.ndarray, vertexScale: float):
-    """ Decompose (N, 12) V-Ray transforms (v0, v1, v2, offset - column-major basis) into
+    """ Decompose (N, 12) V-Ray transforms (v0, v1, v2, offset; column-major basis) into
         Blender-space translation (N, 3), quaternion (N, 4, w x y z) and scale (N, 3).
         Only the translation is unit-scaled, mirroring SceneImporter.worldMatrix. """
     n = tms12.shape[0]
@@ -656,15 +660,15 @@ def _transformsVectorToArray(value) -> np.ndarray | None:
         offset) to an (N, 12) float32 array. """
     if value is None:
         return None
-    arr = np.asarray(value, dtype=np.float32).reshape(-1)
-    if arr.size == 0 or arr.size % 12 != 0:
+    array = np.asarray(value, dtype=np.float32).reshape(-1)
+    if array.size == 0 or array.size % 12 != 0:
         return None
-    return arr.reshape(-1, 12)
+    return array.reshape(-1, 12)
 
 
-def _transformTupleTo12(tm) -> tuple:
+def _transformTupleTo12(transform) -> tuple:
     """ ((v0), (v1), (v2)), (offset) -> flat 12-tuple. """
-    m, offs = tm[0], tm[1]
+    m, offs = transform[0], transform[1]
     return (m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2],
             m[2][0], m[2][1], m[2][2], offs[0], offs[1], offs[2])
 
@@ -681,10 +685,10 @@ def _vectorListToArray(value, n: int) -> np.ndarray | None:
     if value is None:
         return None
     try:
-        arr = np.asarray(value, dtype=np.float32).reshape(-1, 3)
+        array = np.asarray(value, dtype=np.float32).reshape(-1, 3)
     except Exception:
         return None
-    return arr if arr.shape[0] == n else None
+    return array if array.shape[0] == n else None
 
 
 # --------------------------------------------------------------------------
@@ -710,17 +714,17 @@ def _writePointAttr(points, name: str, blType: str, values: np.ndarray):
 def _writeCustomPointAttr(points, name: str, values: np.ndarray):
     """ Store an arbitrary per-instance channel as a point attribute, picking the Blender
         type from the array shape/dtype. """
-    arr = np.asarray(values)
-    if arr.ndim == 2 and arr.shape[1] in (3, 4):
-        colors = np.ones((arr.shape[0], 4), dtype=np.float32)
-        colors[:, :arr.shape[1]] = arr.astype(np.float32)
+    array = np.asarray(values)
+    if array.ndim == 2 and array.shape[1] in (3, 4):
+        colors = np.ones((array.shape[0], 4), dtype=np.float32)
+        colors[:, :array.shape[1]] = array.astype(np.float32)
         _writePointAttr(points, name, 'FLOAT_COLOR', colors)
-    elif arr.dtype.kind in ('i', 'u'):
-        _writePointAttr(points, name, 'INT', arr)
-    elif arr.dtype.kind == 'b':
-        _writePointAttr(points, name, 'BOOLEAN', arr)
+    elif array.dtype.kind in ('i', 'u'):
+        _writePointAttr(points, name, 'INT', array)
+    elif array.dtype.kind == 'b':
+        _writePointAttr(points, name, 'BOOLEAN', array)
     else:
-        _writePointAttr(points, name, 'FLOAT', arr)
+        _writePointAttr(points, name, 'FLOAT', array)
 
 
 # --------------------------------------------------------------------------

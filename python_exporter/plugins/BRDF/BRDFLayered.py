@@ -174,25 +174,26 @@ class VRAY_OT_node_del_brdf_layered_sockets(VRayOperatorBase):
         if layersCount == 0:
             return {'CANCELLED'}
 
-        for i in range(layersCount, -1, -1):
-            brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(i)
+        # Only the last layer. The export stops at the first missing layer number.
+        brdfSockName, weightSockName, opacitySockName = getLayerSocketNames(layersCount)
 
-            if not (brdfSockName in node.inputs and weightSockName in node.inputs):
-                continue
+        brdfSock   = node.inputs.get(brdfSockName)
+        weightSock = node.inputs.get(weightSockName)
+        opacitySock = getHiddenInput(node, opacitySockName)
 
-            brdfSock   = node.inputs[brdfSockName]
-            weightSock = node.inputs[weightSockName]
-            opacitySock = getHiddenInput(node, opacitySockName)
+        # Older files may already have a gap.
+        if not (brdfSock and weightSock):
+            return {'CANCELLED'}
 
-            if not brdfSock.hasActiveFarLink() and not weightSock.hasActiveFarLink():
-                node.inputs.remove(brdfSock)
-                node.inputs.remove(weightSock)
-                node.inputs.remove(opacitySock)
-                return {'FINISHED'}
+        if brdfSock.hasActiveFarLink() or weightSock.hasActiveFarLink():
+            # Nothing was removed, so return CANCELLED to avoid an empty undo step (VBLD-2686).
+            self.report({'WARNING'}, "Cannot remove a linked coat material. Unlink it and try again.")
+            return {'CANCELLED'}
 
-        # Nothing was removed, so return CANCELLED to avoid an empty undo step (VBLD-2686).
-        self.report({'WARNING'}, "Cannot remove linked coat materials. Unlink and try again.")
-        return {'CANCELLED'}
+        node.inputs.remove(brdfSock)
+        node.inputs.remove(weightSock)
+        node.inputs.remove(opacitySock)
+        return {'FINISHED'}
 
 
 def _getLayersCount(node: bpy.types.Node):

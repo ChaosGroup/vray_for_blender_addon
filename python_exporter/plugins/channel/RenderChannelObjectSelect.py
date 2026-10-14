@@ -32,6 +32,18 @@ def _generateIDRangeList(idMin, idMax):
     return [idMin]
 
 
+def widgetDrawIdSource(context, layout, propGroup, widgetAttr):
+    """ 'use_mtl_id' picks between two ID sources rather than switching an option on, so draw
+        it as a pair of tabs, as the other integrations do. Both buttons write the same boolean,
+        the left one inverted, so the stored data is unchanged.
+    """
+    # No label column. The buttons name themselves, and spending 40% of the row on a heading
+    # truncated them to "Obj..." in a default-width sidebar.
+    row = layout.row(align=True)
+    row.prop(propGroup, 'use_mtl_id', text="Object ID",  toggle=True, invert_checkbox=True)
+    row.prop(propGroup, 'use_mtl_id', text="Multimatte", toggle=True)
+
+
 def exportCustom(ctx: ExporterContext, pluginDesc: PluginDesc):
     propGroup = pluginDesc.vrayPropGroup
 

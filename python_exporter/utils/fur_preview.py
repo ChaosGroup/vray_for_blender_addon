@@ -12,7 +12,7 @@ from gpu_extras.batch import batch_for_shader
 from mathutils import Vector, Matrix
 from vray_blender.lib import blender_utils
 from vray_blender.nodes.utils import getNodeByType, getObjectsFromSelector
-from vray_blender.exporting.tools import getLinkedFromSocket
+from vray_blender.exporting.tools import getLinkedFromSocket, MESH_OBJECT_TYPES
 from vray_blender.lib.names import Names
 from vray_blender.exporting.plugin_tracker import getObjTrackId
 from collections import defaultdict
@@ -42,6 +42,12 @@ hairPosIndexes = [posIdx for posIdx in range(MAX_HAIRS) for segmentIdx in range(
 hairRootsBuffers = {}
 meshDataByObjId = defaultdict(set) # Matches meshdata name to the object id of its user or instance parent.
 furDataForDrawing: set[tuple[str, str, Matrix]] = set() # Data needed for drawing fur preview.
+_furDataValid = False
+_furTargets = None # (fur name, target names) for the fur objects with a visible preview. None means rescan.
+_furTargetUids = set()
+_furDeformingUids = set()
+_furHasInstancers = False
+_furFrame = None
 
 class HairRootsBuff:
     """ Class that stores in buffers the hair roots of fur """
@@ -233,23 +239,23 @@ def _genFurParamsBuffer(furObj: bpy.types.Object):
     return gpu.types.GPUUniformBuf(data=data)
 
 
-def _drawFurPreviewBatch(furObj: bpy.types.Object, matrix: Matrix, hairRoots: HairRootsBuff):
-    previewShader = PreviewShader.get()
-    previewShader.bind()
-    previewShader.uniform_float('transformMatrix', matrix)
-    previewShader.uniform_float('perspectiveMatrix', bpy.context.region_data.perspective_matrix)
-
-    previewShader.uniform_block('hairRootsPos', hairRoots.posBuf)
-    previewShader.uniform_block('hairRootsNormals', hairRoots.normalsBuf)
-
-    furParamsBuf = _genFurParamsBuffer(furObj)
-    previewShader.uniform_block('furParams', furParamsBuf)
-
+def _getFurDrawParams(furObj: bpy.types.Object, previewShader: gpu.types.GPUShader):
+    """ Return the params buffer and line batch shared by all preview draws of a fur object. """
     indexesCount = _getGeomHairPropGroup(furObj).preview_hair_count * HAIR_SEGMENTS* 2
 
     batch = batch_for_shader(previewShader, 'LINES', {
         'hairSegmentIndex': hairSegmentIndexes[:indexesCount], 'posIndex': hairPosIndexes[:indexesCount]
     })
+    return _genFurParamsBuffer(furObj), batch
+
+
+def _drawFurPreviewBatch(previewShader: gpu.types.GPUShader, matrix: Matrix, hairRoots: HairRootsBuff, furParamsBuf: gpu.types.GPUUniformBuf, batch: gpu.types.GPUBatch):
+    previewShader.uniform_float('transformMatrix', matrix)
+
+    previewShader.uniform_block('hairRootsPos', hairRoots.posBuf)
+    previewShader.uniform_block('hairRootsNormals', hairRoots.normalsBuf)
+    previewShader.uniform_block('furParams', furParamsBuf)
+
     batch.draw(previewShader)
 
 
@@ -273,11 +279,15 @@ def _getObjectsSelectedByFur(ctx: bpy.types.Context, furObj: bpy.types.Object):
 
 def drawFurPreview():
     """ Draws viewport preview hairs for fur objects """
+    global _furDataValid
 
     space3d = bpy.context.space_data
 
     # Ensure that this function is called only in a 3D viewport context.
     assert isinstance(space3d, bpy.types.SpaceView3D), "Space is not a 3D view"
+
+    if bpy.context.engine != 'VRAY_RENDER_RT':
+        return
 
     if space3d.shading.type != 'SOLID':
         return
@@ -289,87 +299,167 @@ def drawFurPreview():
     if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':
         return
 
-    if not furDataForDrawing:
+    if not _furDataValid:
         _generateHairRootsBuffers(bpy.context.scene, bpy.context.evaluated_depsgraph_get())
+        _furDataValid = True
 
     prevDepthTest = gpu.state.depth_test_get()
     gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.line_width_set(1.0)
 
+    previewShader = PreviewShader.get()
+    previewShader.bind()
+    previewShader.uniform_float('perspectiveMatrix', bpy.context.region_data.perspective_matrix)
+
+    furDrawParams = {}
     for furObjName, objDataName, matrix in furDataForDrawing:
-        if (buffers := hairRootsBuffers.get(objDataName)) and (furObj := bpy.data.objects.get(furObjName)):
-            if space3d.local_view and (not furObj.local_view_get(space3d)):
-                # Don't draw fur preview for objects that are not visible in local view
-                continue
-            _drawFurPreviewBatch(furObj, matrix, buffers)
+        if not (buffers := hairRootsBuffers.get(objDataName)):
+            continue
+        if furObjName not in furDrawParams:
+            furObj = bpy.data.objects.get(furObjName)
+            # Don't draw fur preview for objects that are not visible in local view
+            visible = furObj and not (space3d.local_view and (not furObj.local_view_get(space3d)))
+            furDrawParams[furObjName] = _getFurDrawParams(furObj, previewShader) if visible else None
+        if params := furDrawParams[furObjName]:
+            _drawFurPreviewBatch(previewShader, matrix, buffers, *params)
 
     gpu.state.depth_test_set(prevDepthTest)
 
 
 def _generateHairRootsBuffers(scene: bpy.types.Scene, depsgraph: bpy.types.Depsgraph):
     """ Generates the hair roots buffers for the scene """
-    objectsWithFur  = {}
-    for obj in scene.objects:
-        if obj.vray.isVRayFur and \
-            _getGeomHairPropGroup(obj).show_viewport_preview and \
-            obj.visible_get():
+    global _furTargets, _furHasInstancers
+    furDataForDrawing.clear()
 
-            objectsWithFur[obj] = [getObjTrackId(o) for o in _getObjectsSelectedByFur(bpy.context, obj)]
+    if _furTargets is None:
+        _furTargets = []
+        if bpy.data.hair_curves:
+            _furTargets = [(obj.name, [o.name for o in _getObjectsSelectedByFur(bpy.context, obj)]) for obj in scene.objects
+                          if obj.type == 'CURVES' and obj.vray.isVRayFur and _getGeomHairPropGroup(obj).show_viewport_preview and obj.visible_get()]
+        _furTargetUids.clear()
+        _furTargetUids.update(o.session_uid for _, names in _furTargets for n in names if (o := bpy.data.objects.get(n)))
 
-    iteratedInstGeom = {}
-    for inst in depsgraph.object_instances:
-        if inst.object.type in blender_utils.NonGeometryTypes:
+    furByTarget = defaultdict(list)
+    for furName, targetNames in _furTargets:
+        for targetName in targetNames:
+            furByTarget[targetName].append(furName)
+
+    _furDeformingUids.clear()
+    instancers = set()
+    for targetName, furNames in furByTarget.items():
+        if (target := bpy.data.objects.get(targetName)) is None:
             continue
+        # Blender exposes the evaluated mesh of these objects as a self instance,
+        # while evaluated_get() still returns their original non-mesh data.
+        if (target.is_instancer
+                or (target.type in MESH_OBJECT_TYPES and target.type != 'MESH')
+                or any(m.type == 'NODES' for m in target.modifiers)):
+            instancers.add(targetName)
+        if target.modifiers or getattr(target.data, 'shape_keys', None) or (target.data and target.data.animation_data):
+            _furDeformingUids.add(target.session_uid)
+        if target.visible_get():
+            _addFurDrawData(furNames, target.evaluated_get(depsgraph), None)
 
-        obj = inst.object
-        if not isinstance(obj.data, bpy.types.Mesh):
-            continue
+    _furHasInstancers = bool(instancers)
+    if instancers:
+        for inst in depsgraph.object_instances:
+            if inst.is_instance and (parentName := inst.parent.name) in instancers:
+                _addFurDrawData(furByTarget[parentName], inst.object, inst)
 
-        dataID = id(obj.data)
-        if dataID not in iteratedInstGeom:
-            iteratedInstGeom[dataID] = Names.objectData(obj, inst if inst.is_instance else None)
-        objDataName = iteratedInstGeom[dataID]
+    usedData = {objDataName for _, objDataName, _ in furDataForDrawing}
+    for objTrackId in [k for k, names in meshDataByObjId.items() if not (names & usedData)]:
+        for objDataName in meshDataByObjId.pop(objTrackId):
+            hairRootsBuffers.pop(objDataName, None)
 
-        for furObj, selectedObjects in objectsWithFur.items():
-            if ((not inst.is_instance) and (getObjTrackId(obj) in selectedObjects)) or \
-                (inst.is_instance and (getObjTrackId(inst.parent) in selectedObjects)):
 
-                if objDataName not in hairRootsBuffers:
-                    mesh = obj.data
-                    if len(mesh.loop_triangles) == 0:
-                        hairRootsBuffers[objDataName] = None # To indicate that the object has no valid geometry
-                    else:
-                        meshDataByObjId[getObjTrackId(obj)].add(objDataName)
-                        if inst.is_instance:
-                            meshDataByObjId[getObjTrackId(inst.parent)].add(objDataName)
-                        hairRootsBuffers[objDataName] = HairRootsBuff(mesh)
+def _addFurDrawData(furNames: list[str], obj: bpy.types.Object, inst: bpy.types.DepsgraphObjectInstance | None):
+    if not isinstance(obj.data, bpy.types.Mesh):
+        return
 
-                matrixCopy = inst.matrix_world.copy()
-                matrixCopy.freeze()
-                furDataForDrawing.add((furObj.name, objDataName, matrixCopy))
+    objDataName = Names.objectData(obj, inst)
+    if objDataName not in hairRootsBuffers:
+        mesh = obj.data
+        if len(mesh.loop_triangles) == 0:
+            hairRootsBuffers[objDataName] = None # To indicate that the object has no valid geometry
+        else:
+            meshDataByObjId[getObjTrackId(obj)].add(objDataName)
+            if inst:
+                meshDataByObjId[getObjTrackId(inst.parent)].add(objDataName)
+            hairRootsBuffers[objDataName] = HairRootsBuff(mesh)
+
+    matrixCopy = (inst.matrix_world if inst else obj.matrix_world).copy()
+    matrixCopy.freeze()
+    for furName in furNames:
+        furDataForDrawing.add((furName, objDataName, matrixCopy))
+
+
+def _syncFurCaches(scene: bpy.types.Scene, depsgraph: bpy.types.Depsgraph, structural: bool):
+    """ Drop the fur draw data and hair roots invalidated by the update. """
+    global _furDataValid, _furTargets, _furFrame
+
+    frameChanged = scene.frame_current != _furFrame
+    _furFrame = scene.frame_current
+
+    if scene.render.engine != 'VRAY_RENDER_RT':
+        resetHairRootsBuffers(None)
+        return
+
+    tracked = bool(_furTargetUids or meshDataByObjId)
+    if tracked and not (structural or _furHasInstancers):
+        for objTrackId in _furDeformingUids & meshDataByObjId.keys():
+            for objDataName in meshDataByObjId.pop(objTrackId):
+                hairRootsBuffers.pop(objDataName, None)
+        _furDataValid = False
+        return
+
+    structural = structural and bool(bpy.data.hair_curves)
+    if not (tracked or structural):
+        return
+
+    for u in depsgraph.updates:
+        idBlock = u.id
+        if isinstance(idBlock, bpy.types.Object):
+            if tracked:
+                objTrackId = getObjTrackId(idBlock)
+                if (objTrackId in meshDataByObjId) and u.is_updated_geometry:
+                    for objDataName in meshDataByObjId.pop(objTrackId):
+                        hairRootsBuffers.pop(objDataName, None)
+                    _furDataValid = False
+                if objTrackId in _furTargetUids:
+                    _furDataValid = False
+                    continue
+            if structural and (idBlock.type == 'CURVES') and idBlock.vray.isVRayFur:
+                _furTargets = None
+        elif structural and (isinstance(idBlock, (bpy.types.Collection, bpy.types.Curves)) or
+                             (isinstance(idBlock, bpy.types.Scene) and not frameChanged) or
+                             (isinstance(idBlock, bpy.types.NodeTree) and idBlock.bl_idname == 'VRayNodeTreeFur')):
+            _furTargets = None
+
+    if _furTargets is None:
+        _furDataValid = False
 
 
 @bpy.app.handlers.persistent
 def cleanObsoleteHairRoots(scene, depsgraph):
     """ Clear the hair roots buffers for the objects that have been updated. """
-    for u in depsgraph.updates:
-        if not isinstance(u.id, bpy.types.Object) or u.id.type in blender_utils.NonGeometryTypes or not u.is_updated_geometry:
-            continue
-        
-        objTrackId = getObjTrackId(u.id)
-        if objTrackId in meshDataByObjId:
-            for objDataName in meshDataByObjId[objTrackId]:
-                hairRootsBuffers.pop(objDataName, None)
-            meshDataByObjId[objTrackId].clear()
+    _syncFurCaches(scene, depsgraph, structural=False)
 
-    furDataForDrawing.clear() # Reset the fur data for as it may be invalidated by the update.
+
+@bpy.app.handlers.persistent
+def _onDepsgraphUpdatePost(scene, depsgraph):
+    _syncFurCaches(scene, depsgraph, structural=True)
 
 
 @bpy.app.handlers.persistent
 def resetHairRootsBuffers(e):
+    global _furDataValid, _furTargets
     hairRootsBuffers.clear()
     meshDataByObjId.clear()
     furDataForDrawing.clear()
+    _furTargets = None
+    _furTargetUids.clear()
+    _furDeformingUids.clear()
+    _furDataValid = False
 
 
 _drawHandler = None
@@ -379,8 +469,11 @@ def register():
 
     _drawHandler = bpy.types.SpaceView3D.draw_handler_add(drawFurPreview, (), 'WINDOW', 'POST_PIXEL')
 
-    blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, cleanObsoleteHairRoots)
+    blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, _onDepsgraphUpdatePost)
+    blender_utils.addEvent(bpy.app.handlers.frame_change_post, cleanObsoleteHairRoots)
     blender_utils.addEvent(bpy.app.handlers.load_pre, resetHairRootsBuffers)
+    blender_utils.addEvent(bpy.app.handlers.undo_post, resetHairRootsBuffers)
+    blender_utils.addEvent(bpy.app.handlers.redo_post, resetHairRootsBuffers)
 
 
 def unregister():
@@ -390,5 +483,8 @@ def unregister():
         bpy.types.SpaceView3D.draw_handler_remove(_drawHandler, 'WINDOW')
         _drawHandler = None
 
-    blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, cleanObsoleteHairRoots)
+    blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onDepsgraphUpdatePost)
+    blender_utils.delEvent(bpy.app.handlers.frame_change_post, cleanObsoleteHairRoots)
     blender_utils.delEvent(bpy.app.handlers.load_pre, resetHairRootsBuffers)
+    blender_utils.delEvent(bpy.app.handlers.undo_post, resetHairRootsBuffers)
+    blender_utils.delEvent(bpy.app.handlers.redo_post, resetHairRootsBuffers)

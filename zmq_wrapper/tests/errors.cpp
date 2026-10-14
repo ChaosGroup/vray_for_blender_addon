@@ -21,7 +21,6 @@ namespace {
 	auto timeouts      = ZmqTimeouts();
 	const RoutingId clientId = 1;
 	const ExporterType workerType = ExporterType::IPR_VFB;
-	const std::string clientEndpoint = "tcp://127.0.0.1:5557";
 	const std::string workerEndpoint = "inproc://test_router";
 	const bool WITH_TRACES_ON = false;
 }
@@ -73,11 +72,14 @@ TEST_CASE("Communication error conditions") {
 			FAIL("Client should have been disconnected");
 		});
 
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
-		client->run(clientEndpoint, timeouts);
+		client->run(endpoint, timeouts);
 
 		zmq::message_t payload(msg);
 		client->send(std::move(payload));
@@ -123,10 +125,14 @@ TEST_CASE("Communication error conditions") {
 			FAIL("Client should have been disconnected");
 		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
-		client->run(clientEndpoint, timeouts);
+		client->run(endpoint, timeouts);
 
 		std::this_thread::sleep_for(1s);
 		zmq::message_t payload(msg);
@@ -182,10 +188,14 @@ TEST_CASE("Heartbeat timeout error conditions") {
 			notifier.notify();
 		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
-		client->run(clientEndpoint, hbTimeouts);
+		client->run(endpoint, hbTimeouts);
 
 		const std::string msg = "A message";
 		zmq::message_t payload(msg);

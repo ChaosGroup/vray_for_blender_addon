@@ -57,6 +57,10 @@ def _samplesLimitToMaxSubdivs(samplesLimit: int):
 def _raysPerPixelToMinSubdivs(raysPerPixel: int):
     return int(math.sqrt(float(raysPerPixel) * 4.0))
 
+def _minSubdivsToRaysPerPixel(minSubdivs: int):
+    # Smallest value _raysPerPixelToMinSubdivs maps back to minSubdivs. 1 has none and becomes 2.
+    return max(1, math.ceil(minSubdivs * minSubdivs / 4.0))
+
 def _maxSubdivsCPUToSamplesLimit(maxSubdivs: int):
     return (maxSubdivs * 2 + 2)**2
 

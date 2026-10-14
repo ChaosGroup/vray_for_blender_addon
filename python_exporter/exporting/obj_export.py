@@ -24,6 +24,7 @@ from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.nodes.specials.selector import resolveSelectorNode
 from vray_blender.plugins.geometry.VRayDecal import isPluginVRayDecal, getVRayDecalPluginName
+from vray_blender.plugins.light.LightMesh import getMeshLightGizmoChanges
 
 from vray_blender.exporting.node_export import *
 from vray_blender.exporting.plugin_tracker import TrackObj
@@ -97,7 +98,7 @@ class GeometryExporter(ExporterBase):
         """
         # The list of updated light gizmos includes objects that have been updated and objects that were previously
         # used as gizmos but have been detached from the mesh lights
-        disconnectedMeshLightGizmos = {p.gizmoObjTrackId for p in self.persistedState.activeMeshLightsInfo.difference(self.activeMeshLightsInfo)}
+        _, disconnectedMeshLightGizmos = getMeshLightGizmoChanges(self)
         self.updatedMeshLightGizmos = {p.gizmoObjTrackId for p in self.updatedMeshLightsInfo}.union(disconnectedMeshLightGizmos)
 
         disconnectedFurGizmos = {p.gizmoObjTrackId for p in self.persistedState.activeFurInfo.difference(self.activeFurInfo)}
@@ -306,7 +307,9 @@ class GeometryExporter(ExporterBase):
             with TrackObj(self.nodeTracker, objTrackId):
 
                 geomPlugin = self._exportGeometrySockets(nodeCtx, nodeOutput, baseGeomPlugin, objTrackId)
-                self.persistedState.objDataTracker.trackPluginOfData(Names.objectData(obj, instance), geomPlugin.name)
+
+                # Track against the object, not against its data block. 
+                self.persistedState.objDataTracker.trackPluginOfObject(Names.object(obj, instance), geomPlugin.name)
 
                 nodePlugin = exportNodePlugin(self, obj, geomPlugin, Names.object(obj, instance), self.objTracker, instance=instance, visible=isVisible)
                 export_utils.exportObjProperties(obj, nodeCtx.exporterCtx, nodeCtx.renderer, self.objTracker, nodeOutput, [nodePlugin.name])
@@ -340,11 +343,16 @@ class GeometryExporter(ExporterBase):
             # Failed to export mesh. Nothing more we can do, skip exporting the Node plugin
             return False
 
+        objTrackId = getObjTrackId(evaluatedObj)
+
+        if baseGeomPlugin.name == meshDataName:
+            # Every object using the data block has to track its geometry plugin.
+            self.objTracker.trackPlugin(objTrackId, meshDataName, instance is not None)
+
         if isVisible:
             ####  Export modifiers  ###
             self._exportParticleSystems(evaluatedObj, exportMesh)
 
-        objTrackId = getObjTrackId(evaluatedObj)
         isMeshLightGizmo = objTrackId in {p.gizmoObjTrackId for p in self.activeMeshLightsInfo}
         isEnvFogGizmo = objTrackId in self.activeGizmos
         isGizmo = isMeshLightGizmo or isEnvFogGizmo
@@ -352,13 +360,23 @@ class GeometryExporter(ExporterBase):
         # Export node
         nodePlugin = None
 
+        objOutputNode = NodesUtils.getOutputNode(evaluatedObj.vray.ntree, 'OBJECT') if evaluatedObj.vray.ntree else None
+        objDataTracker = self.persistedState.objDataTracker
+
         if (not isGizmo) and (not self._isInstancerVisibilityDisabled(evaluatedObj)):
-            if evaluatedObj.vray.ntree and NodesUtils.getOutputNode(evaluatedObj.vray.ntree, 'OBJECT') and (self.fullExport or objTrackId in self.dgUpdates["shading"]):
+            if objOutputNode and (self.fullExport or objTrackId in self.dgUpdates["shading"]):
                 nodePlugin = self._exportObjNodeTree(evaluatedObj, baseGeomPlugin, isVisible, instance)
             else:
-                # There could be a GeomDisplacedMesh or GeomStaticSmoothedMesh wrapping the base geometry.
                 # Note: The plugin name could be None if the object geometry gets removed.
-                geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getPluginName(meshDataName) or '')
+                if objOutputNode:
+                    # The object has an OBJECT node tree but this update did not touch its shading,
+                    # so reuse the GeomDisplacedMesh / GeomStaticSmoothedMesh exported for it earlier.
+                    geomPlugin = AttrPlugin(objDataTracker.getEffectivePluginName(objectName, meshDataName) or '')
+                else:
+                    # No OBJECT node tree, so the base geometry is what the Node should reference.
+                    # Drop any wrapper this object owned before its node tree was deleted.
+                    objDataTracker.popObject(objectName)
+                    geomPlugin = AttrPlugin(objDataTracker.getPluginName(meshDataName) or '')
 
                 nodePlugin = exportNodePlugin(
                     self,
@@ -381,7 +399,6 @@ class GeometryExporter(ExporterBase):
                     objPropsPluginName = Names.pluginObject("VRayObjectProperties", Names.object(evaluatedObj))
                     wasExported = objPropsPluginName in self.objTracker.getPlugins(objTrackId)
                     if wasExported or _needsObjPropertiesExport(evaluatedObj, self.dg.view_layer_eval):
-                        objOutputNode = NodesUtils.getOutputNode(evaluatedObj.vray.ntree, 'OBJECT') if evaluatedObj.vray.ntree else None
                         export_utils.exportObjProperties(evaluatedObj, self, self.renderer, self.objTracker,
                                                          objOutputNode, [nodePlugin.name])
 
@@ -389,10 +406,12 @@ class GeometryExporter(ExporterBase):
                 plugin_utils.updateValue(self.renderer, nodePlugin.name, "objectID", evaluatedObj.vray.VRayObjectProperties.objectID)
 
         else:
-            # 'Node' plugin should not be exported for gizmos
+            # 'Node' plugin should not be exported for gizmos. Drop one exported before the object
+            # became a gizmo.
             nodePluginName = Names.vrayNode(Names.object(evaluatedObj))
-            vray.pluginRemove(self.renderer, nodePluginName)
-            self.objTracker.forgetPlugin(objTrackId, nodePluginName)
+            if nodePluginName in self.objTracker.getPlugins(objTrackId):
+                vray.pluginRemove(self.renderer, nodePluginName)
+                self.objTracker.forgetPlugin(objTrackId, nodePluginName)
 
         return True
 
@@ -423,12 +442,10 @@ class GeometryExporter(ExporterBase):
         # Fluid modifier may be exported as mesh or as particles. The mesh is exported below,
         # the particle mode is handles by SmokeExporter.
         fluidMod = next((m for m in evaluatedObj.modifiers if m.type == 'FLUID'), None)
-        fluidAsMesh = False
-        if fluidMod and (fluidMod.fluid_type == 'DOMAIN') and (fluidData := fluidMod.domain_settings):
-            fluidAsMesh = (fluidData.domain_type == 'LIQUID') and fluidData.use_mesh
-
-        if fluidMod and (not fluidAsMesh):
-            return AttrPlugin()
+        if fluidMod and (fluidMod.fluid_type == 'DOMAIN'):
+            fluidData = fluidMod.domain_settings
+            if (fluidData.domain_type != 'LIQUID') or (not fluidData.use_mesh):
+                return AttrPlugin()
 
         meshData = self._fillMeshData(evaluatedObj, mesh, meshDataName, isInstanced)
         self._applyMeshModifiers(evaluatedObj, meshData)
@@ -437,8 +454,9 @@ class GeometryExporter(ExporterBase):
 
         plugin_utils.createPlugin(self, meshDataName, "GeomStaticMesh")
         vray.exportGeometry(self.renderer, meshData, asyncExport)
-        self.objTracker.trackPlugin(getObjTrackId(evaluatedObj), meshDataName, isInstanced)
 
+        # NOTE: the plugin is registered with the object tracker by the caller for every object
+        # using this data block and not just for the one exporting it here.
         self.persistedState.objDataTracker.trackPluginOfData(meshDataName, meshDataName)
 
         return AttrPlugin(meshDataName)
@@ -476,6 +494,7 @@ class GeometryExporter(ExporterBase):
         pluginName = Names.pluginObject("vrayproxy", objectName)
         isInstanced = instance is not None
         dataName = Names.objectData(obj, instance)
+        trackedObjName = Names.object(obj, instance)
 
         # The proxy preview should always have vertices (at least the anchor vertices).
         # Having no vertices means the geometry tree is either instancing a proxy object or has no geometry connected to the output.
@@ -483,6 +502,8 @@ class GeometryExporter(ExporterBase):
             if self.persistedState.objDataTracker.popData(dataName):
                 # The object had exported geometry, but it has been disconnected.
                 pluginName = ""
+                # Drop the stale node tree wrapper.
+                self.persistedState.objDataTracker.popObject(trackedObjName)
             else:
                 return
 
@@ -494,13 +515,27 @@ class GeometryExporter(ExporterBase):
 
             export_utils.exportPlugin(self, pluginDesc)
             self.objTracker.trackPlugin(getObjTrackId(obj), pluginName, isInstanced=isInstanced)
+
+            # NOTE: unlike a mesh, a proxy's GeomMeshFile is named after the object and is therefore
+            # not shared by the objects using the same preview data block. 
             self.persistedState.objDataTracker.trackPluginOfData(dataName, pluginName)
 
         # Export node
-        if obj.vray.ntree and NodesUtils.getOutputNode(obj.vray.ntree, 'OBJECT') and (self.fullExport or getObjTrackId(obj) in self.dgUpdates["shading"]):
+        objOutputNode = NodesUtils.getOutputNode(obj.vray.ntree, 'OBJECT') if obj.vray.ntree else None
+
+        if objOutputNode and (self.fullExport or getObjTrackId(obj) in self.dgUpdates["shading"]):
             self._exportObjNodeTree(obj, AttrPlugin(pluginName), isVisible, instance)
         else:
-            geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getPluginName(dataName) or '')
+            if objOutputNode:
+                # The tree was not re-exported on this update, so reuse the wrapper it produced
+                # earlier. Falling back to 'pluginName' covers the first export of the object.
+                geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getObjectPluginName(trackedObjName) or pluginName)
+            else:
+                # No OBJECT node tree, so the proxy's own GeomMeshFile is the geometry. 
+                # Drop the stale node tree wrapper.
+                self.persistedState.objDataTracker.popObject(trackedObjName)
+                geomPlugin = AttrPlugin(pluginName)
+
             exportNodePlugin(self, obj, geomPlugin, Names.object(obj, instance),
                                self.objTracker, instance=instance, isInstancer=False, visible=isVisible)
 
@@ -510,10 +545,10 @@ class GeometryExporter(ExporterBase):
 
         geomName = Names.pluginObject("vraysplat", Names.object(obj))
         geomDesc = PluginDesc(geomName, "GeomGaussians")
-        gaussians = obj.original.vray.GeomGaussians
+        gaussians = obj.vray.GeomGaussians
         geomDesc.vrayPropGroup = gaussians
 
-        # Object-based clipping mask: generate a TexDistance from the chosen object and use it as
+        # An object-based clipping mask generates a TexDistance from the chosen object, used as
         # the clipping_mask. We only support object clipping for splats (no texture graphs).
         if clipObj := gaussians.clip_object.boundPropObj:
             geomDesc.setAttribute("clipping_mask", self._exportSplatClipMask(obj, clipObj, gaussians.clip_distance))
@@ -533,12 +568,24 @@ class GeometryExporter(ExporterBase):
 
         geomName = Names.pluginObject(pluginType.lower(), Names.object(obj))
         geomDesc = PluginDesc(geomName, pluginType)
-        geomDesc.vrayPropGroup = getattr(obj.original.vray, pluginType)
+        geomDesc.vrayPropGroup = getattr(obj.vray, pluginType)
         export_utils.exportPlugin(self, geomDesc)
 
         # Wrap the geometry in a Node so it picks up the object's transform and visibility.
-        exportNodePlugin(self, obj, AttrPlugin(geomName), Names.object(obj), self.objTracker, visible=isVisible)
-        self.objTracker.trackPlugin(getObjTrackId(obj), geomName)
+        nodePlugin = exportNodePlugin(self, obj, AttrPlugin(geomName), Names.object(obj), self.objTracker, visible=isVisible)
+        objTrackId = getObjTrackId(obj)
+        self.objTracker.trackPlugin(objTrackId, geomName)
+
+        # Matte, surface and visibility properties, as for meshes (see _exportMeshObject).
+        objOutputNode = NodesUtils.getOutputNode(obj.vray.ntree, 'OBJECT') if obj.vray.ntree else None
+        objPropsPluginName = Names.pluginObject("VRayObjectProperties", Names.object(obj))
+        wasExported = objPropsPluginName in self.objTracker.getPlugins(objTrackId)
+        if objOutputNode or wasExported or _needsObjPropertiesExport(obj, self.dg.view_layer_eval):
+            export_utils.exportObjProperties(obj, self, self.renderer, self.objTracker, objOutputNode, [nodePlugin.name])
+            if not wasExported and not self.fullExport:
+                # V-Ray reads the node's object properties only when compiling its geometry, so
+                # linking them to an already compiled node needs a recompile.
+                vray.pluginReCreateAttr(self.renderer, nodePlugin.name, "geometry")
 
     def _exportSplatClipMask(self, obj: bpy.types.Object, clipObj: bpy.types.Object, distance: float) -> AttrPlugin:
         """ Export a TexDistance plugin that measures the distance to clipObj, used as the
@@ -742,13 +789,13 @@ class GeometryExporter(ExporterBase):
 
             # Referenced (by a selector etc.) but hidden objects the pass above never yields; without
             # this their references resolve to empty plugins. The prepass already discovered them.
-            # Snapshot the dict: a forced export may re-register refs (a no-op) and must not mutate it
+            # Snapshot the dict, because a forced export may re-register refs (a no-op) and must not mutate it
             # mid-iteration. Lights are LightExporter._exportScene's to force-export, not this pass's.
             for refTrackId, refObj in list(self.referencedObjects.items()):
                 if (refTrackId not in dgObjectIds) and (refObj.type != 'LIGHT'):
                     yield refObj.evaluated_get(self.dg)
 
-        # Must precede the loop: resolving tessellates curve targets, and to_mesh() frees the
+        # Must precede the loop, because resolving tessellates curve targets and to_mesh() frees the
         # object's previous temp mesh on entry - mid-loop that would pull the rug out from under
         # an exportGeometry(asyncExport=True) still being read on a worker thread.
         from vray_blender.exporting import scatter_export
@@ -924,9 +971,21 @@ class GeometryExporter(ExporterBase):
         if vrayClipper.enabled:
             mtlPlugin = AttrPlugin()
 
-            if (not vrayClipper.use_obj_mtl) and vrayClipper.material:
-                mtlName = Names.object(bpy.data.materials[vrayClipper.material])
-                mtlPlugin = AttrPlugin(mtlName)
+            # As in the other V-Ray integrations, the cut surfaces are shaded with the clipper
+            # object's own material. A mesh clipper's cuts take it from the clip mesh Node and
+            # V-Ray ignores 'material' there. As in V-Ray for C4D, 'fill_cavities' also decides
+            # whether the cuts are capped at all.
+            # Read the slot of the original object: an evaluated one falls back to the mesh
+            # material when the slot is linked to the object and empty.
+            if vrayClipper.fill_cavities and not (vrayClipper.use_obj_mtl or vrayClipper.use_obj_mesh) \
+                    and clipperObj.original.material_slots:
+                mtl = clipperObj.original.material_slots[0].material
+                if mtl and mtl.use_nodes and (mtl.node_tree is not None):
+                    from vray_blender.exporting.mtl_export import MtlExporter
+                    # Export on demand. A plane clipper has no Node, so nothing else exports the
+                    # material before this reference is set.
+                    if (exportedMtl := MtlExporter(self).exportMtl(mtl)[0]) is not None:
+                        mtlPlugin = exportedMtl
 
             clipMeshPlugin = AttrPlugin()
             if vrayClipper.use_obj_mesh:
@@ -934,23 +993,22 @@ class GeometryExporter(ExporterBase):
                 plugin_utils.forwardDeclarePlugin(self, clipMeshNodeName, 'Node')
                 clipMeshPlugin = AttrPlugin(clipMeshNodeName)
 
-            excluded = []
-            if collExcluded := vrayClipper.exclusion_nodes_ptr:
-                excluded = [AttrPlugin(Names.vrayNode(Names.object(o))) for o in collExcluded.objects]
+                if not vrayClipper.fill_cavities:
+                    # V-Ray caps the cuts with the clip mesh's material whenever it has one.
+                    # The Node has just been exported, so this overrides its material.
+                    plugin_utils.updateValue(self.renderer, clipMeshNodeName, 'material', AttrPlugin())
 
-                for nodePlugin in excluded:
-                    plugin_utils.forwardDeclarePlugin(self, nodePlugin.name, 'Node')
-
-
+            # 'exclusion_nodes' is set by the exclusion_selector template
             plDesc.setAttributes({
                 "clip_mesh"         : clipMeshPlugin,
                 "transform"         : clipperObj.matrix_world,
                 "material"          : mtlPlugin,
-                "exclusion_nodes"   : excluded
             })
 
             export_utils.exportPlugin(self, plDesc)
             self.objTracker.trackPlugin(getObjTrackId(clipperObj), pluginName)
+            if not mtlPlugin.isEmpty():
+                self.objTracker.trackPlugin(getObjTrackId(clipperObj), mtlPlugin.name)
         elif self.interactive:
             # Plugins are only tracked  in interactive render mode
             objPluigns = self.objTracker.getPlugins(getObjTrackId(clipperObj))
@@ -973,6 +1031,8 @@ class GeometryExporter(ExporterBase):
     # Remove the plugins associated with deleted objects
     # Use only for the interactive viewport
     def prunePlugins(self):
+        from vray_blender.exporting import mtl_export
+
         assert(self.interactive)
 
         # LIGHT objects are tracked by the LightExporter
@@ -994,20 +1054,35 @@ class GeometryExporter(ExporterBase):
         from vray_blender.exporting import scatter_export
 
         # A live GeomScatter still lists the Nodes about to be pruned. See the TODO there.
-        scatter_export.tearDownScattersReferencing(self, diff)
+        diff.difference_update(scatter_export.referencedModelTrackIds(self))
+
+        # The same goes for the LightMesh plugins of disconnected mesh-light gizmos, which the
+        # light prune removes.
+        _, disconnectedGizmoIds = getMeshLightGizmoChanges(self)
+        scatter_export.tearDownScattersReferencing(self, diff | disconnectedGizmoIds)
+
+        # What the deleted objects took with them. A plugin removed here may still be referenced by
+        # something that outlived them - see mtl_export.dropMtlsFromExportCache().
+        removedPlugins = set()
 
         for objTrackId in diff:
+            self.persistedState.scatterModelsByCarrier.pop(objTrackId, None)
+            self.persistedState.scatterCollectionsByCarrier.pop(objTrackId, None)
             self._forgetObjNodes(objTrackId)
 
             for pluginName in self.objTracker.getOwnedPlugins(objTrackId):
                 vray.pluginRemove(self.renderer, pluginName)
+                removedPlugins.add(pluginName)
                 trackerLog(f"REMOVE: {objTrackId} => {pluginName}")
             self.objTracker.forget(objTrackId)
 
             for pluginName in self.instTracker.getOwnedPlugins(objTrackId):
                 vray.pluginRemove(self.renderer, pluginName)
+                removedPlugins.add(pluginName)
                 trackerLog(f"REMOVE: {objTrackId} => {pluginName}")
             self.instTracker.forget(objTrackId)
+
+        mtl_export.dropMtlsFromExportCache(self, removedPlugins)
 
         # Remove the material options plugins associated with the updated objects
         mtlOptionsUpdates = UpdateTracker.getUpdatesOfType(UpdateTarget.OBJECT_MTL_OPTIONS, UpdateFlags.TOPOLOGY)
@@ -1050,7 +1125,7 @@ class GeometryExporter(ExporterBase):
         # Both collections describe what changed during *this* sync, so they have to start empty.
         # In production renders the ExporterContext is created once per job and reused for every
         # animation frame (engine/renderer_prod.py), so without this reset they accumulate for the
-        # whole job: the first frame is a full export and fills them with every object in the scene,
+        # whole job. The first frame is a full export and fills them with every object in the scene,
         # after which the change guard in exportObject() never fires again and every object is
         # re-exported on every frame. In IPR the context is recreated per update cycle, so there
         # the reset is a no-op.
@@ -1060,7 +1135,7 @@ class GeometryExporter(ExporterBase):
         def isVisibleInLocalView(obj, view3d):
             if not view3d:
                 return True
-            if obj.type not in EXPORTED_OBJECT_TYPES:
+            if obj.type not in EXPORTED_OBJECT_TYPES and not isNonGeometryExportedAsGeometry(obj):
                 return True
 
             evalObj = obj.evaluated_get(self.dg)
@@ -1075,7 +1150,7 @@ class GeometryExporter(ExporterBase):
         # That is enough for structuralUpdate to force the full path below - which is what catches a
         # membership change, since the incremental path would see no updated object at all - but it
         # is byte-identical to a selection and says nothing about WHICH View3D is driving the export.
-        # Diffing a token of our own covers what the depsgraph cannot report: the export moving to a
+        # Diffing a token of our own covers what the depsgraph cannot report, the export moving to a
         # different viewport, which is not a depsgraph event.
         localViewToken = localView.as_pointer() if localView else None
         localViewChanged = localViewToken != self.persistedState.localViewToken
@@ -1084,7 +1159,7 @@ class GeometryExporter(ExporterBase):
             return isObjectVisible(self, obj) and isVisibleInLocalView(obj, localView)
 
         def needsSync(obj):
-            return obj.type in tools.EXPORTED_OBJECT_TYPES or obj.is_instancer or tools.isObjectVRayGaussian(obj)
+            return obj.type in tools.EXPORTED_OBJECT_TYPES or obj.is_instancer or isNonGeometryExportedAsGeometry(obj)
 
         def syncHoldout(obj, objTrackId):
             # Diff Holdout / Indirect Only here too, alongside visibility (see holdoutState).
@@ -1142,14 +1217,14 @@ class GeometryExporter(ExporterBase):
 
             # Committed only now that the rescan has actually run. Written before the loop, an
             # exception raised inside it would leave the token looking rescanned and the rescan
-            # would never be retried. Only this branch needs to write it: reaching the incremental
+            # would never be retried. Only this branch needs to write it, since reaching the incremental
             # path below means localViewChanged was False, i.e. the token is already current.
             self.persistedState.localViewToken = localViewToken
             return
 
-        # Incremental: only an object the depsgraph reported can have changed. The new states are
+        # Incrementally, only an object the depsgraph reported can have changed. The new states are
         # collected and applied after the loop rather than written straight into the persisted set,
-        # for the same reason the full path above swaps its set in only at the end: the set is the
+        # for the same reason the full path above swaps its set in only at the end. The set is the
         # previous cycle's snapshot and is still being read for wasShown while the loop runs, so an
         # object sharing a track id with one already visited would otherwise see the other one's
         # write instead of the snapshot.

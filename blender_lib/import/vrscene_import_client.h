@@ -53,16 +53,20 @@ private:
 	proto::MsgImportVrsceneRequest m_request;
 	std::unique_ptr<proto::ZmqAgent> m_conn;
 
-	std::mutex m_lock;   ///< Guards m_plugins (written on the poller thread, read from Python)
+	/// Guards m_plugins (written on the poller thread, read from Python). Never call into
+	/// Python while holding it - getImportedScene runs under GIL + m_lock, so a poller
+	/// thread taking m_lock and then waiting on the GIL would deadlock.
+	std::mutex m_lock;
 	std::vector<proto::ImportedPluginData> m_plugins;
 	std::atomic_bool m_completed{false};
 };
 
 
-// Module-level session registry, driving the Python API surface.
+// Module-level session registry backing the Python API.
 
 /// Start a new import session. Returns its importId.
-int startImport(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd, const std::string& typeFilter);
+int startImport(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd,
+                const std::string& typeFilter, bool readKeyframes);
 
 /// Ask the server to abort the given import session.
 void cancelImport(int importId);

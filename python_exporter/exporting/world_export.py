@@ -110,6 +110,39 @@ def _exportViewportDenoiser(nodeCtx: NodeContext):
     export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
 
 
+def _exportGreasePencilDepthChannel(nodeCtx: NodeContext):
+    """ The depth element Blender depth-tests grease pencil strokes against.
+
+        CPU uses RenderChannelUsdDepth, the camera-plane Z the Hydra delegate gives Solaris, which is
+        Blender's Depth convention. It has no GPU implementation, so GPU falls back to raw Z-depth.
+    """
+    from vray_blender.engine.render_elements import GPENCIL_DEPTH_CHANNEL_NAME
+    from vray_blender.lib.plugin_utils import createPlugin
+    from vray_blender.lib.sys_utils import isGPUEngine
+
+    exporterCtx = nodeCtx.exporterCtx
+    if not isGPUEngine(nodeCtx.scene):
+        # No plugin description in the add-on, so set its two parameters directly. Mode 0 is linear.
+        pluginName = Names.singletonPlugin("RenderChannelUsdDepth")
+        createPlugin(exporterCtx, pluginName, "RenderChannelUsdDepth")
+        updateValue(exporterCtx.renderer, pluginName, "name", GPENCIL_DEPTH_CHANNEL_NAME)
+        updateValue(exporterCtx.renderer, pluginName, "mode", 0)
+        return
+
+    pluginDesc = PluginDesc(Names.singletonPlugin("RenderChannelZDepth"), "RenderChannelZDepth")
+    pluginDesc.setAttribute("name", GPENCIL_DEPTH_CHANNEL_NAME)
+    pluginDesc.setAttribute("depth_raw", True)
+    pluginDesc.setAttribute("force_infinity_black", True)
+    pluginDesc.setAttribute("filtering", False)
+    pluginDesc.setAttribute("dont_filter_env", True)
+    # CPU ignores these with depth_raw. GPU does not see depth_raw and always remaps with them,
+    # so a 0..1 unclamped range makes it write the distance too.
+    pluginDesc.setAttribute("depth_black", 0.0)
+    pluginDesc.setAttribute("depth_white", 1.0)
+    pluginDesc.setAttribute("depth_clamp", False)
+    export_utils.exportPlugin(nodeCtx.exporterCtx, pluginDesc)
+
+
 # The BEAUTY channel variants are exactly the elements VFB2 sums to reconstruct the RGB image, so the subtype doubles as the Back to Beauty slot list.
 # Keep it 1:1 with BackToBeautyAliases in vutils/include/backtobeauty.hpp, minus the Gaussian splats slot which VFB2 only requires when the scene registers that channel.
 BACK_TO_BEAUTY_ALIASES = {c['params']['alias'] for c in customRenderChannelNodesDesc if c['Subtype'] == 'BEAUTY'}
@@ -281,6 +314,12 @@ class WorldExporter(ExporterBase):
             _exportViewportDenoiser(nodeCtx)
             _exportSettingsRenderChannels(nodeCtx)
 
+        from vray_blender.engine.render_elements import needsGreasePencilDepthPass
+        if (self.fullExport and not self.viewport and not self.preview
+                and needsGreasePencilDepthPass(self.ctx.scene)):
+            _exportGreasePencilDepthChannel(nodeCtx)
+            _exportSettingsRenderChannels(nodeCtx)
+
         if not worldValid:
             self._exportOutlinesWithoutWorld(nodeCtx)
 
@@ -320,7 +359,7 @@ class WorldExporter(ExporterBase):
                         tex = exportPluginWithStats(nodeCtx, multDesc)
                         tex.output = "result_a"
                 if not tex.isEmpty():
-                    color = mathutils.Color((1.0, 1.0, 1.0))   # fallback behind the texture
+                    color = mathutils.Color((0.0, 0.0, 0.0))
 
             pluginDesc = PluginDesc(Names.singletonPlugin("SettingsEnvironment"), "SettingsEnvironment")
             for colorAttr, texAttr, texMultAttr, useAttr in CONVERTED_ENVIRONMENT_SLOTS:

@@ -31,8 +31,9 @@ import bpy
 from mathutils import Vector
 
 from vray_blender import debug
-from vray_blender.lib.blender_utils import selectObject
+from vray_blender.lib.blender_utils import getSceneMetersPerUnit, selectObject
 from vray_blender.lib.lib_utils import sanitizeDatablockName
+from vray_blender.utils import cosmos_notify
 from vray_blender.bin import VRayBlenderLib as vray
 
 
@@ -50,9 +51,10 @@ class PresetSession:
     """Tracks one in-flight preset import until every referenced model is accounted for."""
 
     __slots__ = ('presetName', 'scatterUid', 'assetIds', 'frequencies', 'offsets', 'collection',
-                 'counted', 'placed', 'pending', 'lastActivity')
+                 'counted', 'placed', 'pending', 'lastActivity', 'problems')
 
-    def __init__(self, presetName, scatterUid, assetIds, frequencies, offsets, collection):
+    def __init__(self, presetName, scatterUid, assetIds, frequencies, offsets, collection,
+                 problems):
         self.presetName  = presetName
         # The scatter is held by session_uid, not by reference: the models take seconds to arrive
         # and an undo in between frees the object without invalidating our Python reference.
@@ -63,6 +65,10 @@ class PresetSession:
         self.frequencies = frequencies
         self.offsets     = offsets
         self.collection  = collection
+        # What went wrong along the way, collected here rather than reported as it is found:
+        # the import is only over once the models arrive, and the browser shows one message
+        # per import. See _report().
+        self.problems    = problems
         self.counted     = set()
         self.placed      = 0
         self.pending     = len(assetIds)
@@ -92,7 +98,7 @@ def startScatterPresetImport(settings):
         # A preset nested in an Asset Set would have to be placed at the transform the outer
         # manifest asks for, which a scatter carrier cannot represent - its transform moves the
         # whole scattered result. Neither Maya nor 3ds Max supports this either.
-        debug.reportError(
+        cosmos_notify.reportError(
             f"Chaos Scatter preset: '{settings.assetName}' arrived as a member of another asset. "
             f"Presets can only be imported on their own, and it was skipped."
         )
@@ -102,16 +108,16 @@ def startScatterPresetImport(settings):
 
     try:
         # The preset's distances are authored in metres; the propgroup holds scene units.
-        unitScale = bpy.context.scene.unit_settings.scale_length or 1.0
+        unitScale = getSceneMetersPerUnit(bpy.context)
         plugins, assetIds = backend.getBackend().readPreset(settings.settingsFile, 1.0 / unitScale)
     except Exception as e:
         debug.printExceptionInfo(e, "cosmos_scatter_preset: could not read the preset config")
-        debug.reportError(f"Chaos Scatter preset '{settings.assetName}' could not be read")
+        cosmos_notify.reportError(f"Chaos Scatter preset '{settings.assetName}' could not be read")
         return
 
     scatterAttrs, offsets = _splitRecords(plugins)
     if scatterAttrs is None:
-        debug.reportError(f"Chaos Scatter preset '{settings.assetName}' contains no scatter settings")
+        cosmos_notify.reportError(f"Chaos Scatter preset '{settings.assetName}' contains no scatter settings")
         return
 
     scatterObj = lifecycle.createScatterObject(bpy.context)
@@ -119,15 +125,29 @@ def startScatterPresetImport(settings):
     # NOT moved to the drop point: the carrier's transform is applied to the whole scattered
     # result, so an offset carrier would lift every instance off its target surface.
 
+    # Collected, not reported: the preset is only done with once its models have arrived,
+    # and it owes the browser exactly one message. _report() sends it.
+    problems = []
+
     cs = scatterObj.chaos_scatter
     applied, notes = preset.applyPresetParams(cs, scatterAttrs)
     for note in notes:
         debug.printWarning(f"Chaos Scatter preset '{settings.assetName}': {note}")
 
-    _assignTarget(cs, settings, presetName=settings.assetName)
+    # The notes are per-setting and there can be many; the browser gets their count.
+    if notes:
+        problems.append(f"{len(notes)} setting(s) could not be applied - see the log for "
+                       f"the reasons")
+
+    if not _assignTarget(cs, settings):
+        problems.append("it has no distribution target - pick one in the Chaos Scatter "
+                       "panel to see the instances")
 
     if not assetIds:
         debug.printInfo(f"Chaos Scatter preset '{settings.assetName}': {applied} setting(s), no models")
+        # No session is opened for a preset with no models, so this is the only chance to
+        # report it - it never reaches _finalize().
+        _report(settings.assetName, 0, problems)
         _selectAndFinish(scatterObj, settings.assetName)
         return
 
@@ -141,7 +161,7 @@ def startScatterPresetImport(settings):
     presetToken = uuid.uuid4().hex
     collection = _makeCollection(settings.assetName)
     _sessions[presetToken] = PresetSession(settings.assetName, scatterObj.session_uid, assetIds,
-                                           frequencies, offsets, collection)
+                                           frequencies, offsets, collection, problems)
 
     debug.printInfo(f"Chaos Scatter preset '{settings.assetName}': {applied} setting(s), "
                     f"importing {len(assetIds)} model(s)")
@@ -204,11 +224,13 @@ def tickSessions():
         if session.pending <= 0:
             _finalize(presetToken)
         elif now - session.lastActivity > _SESSION_TIMEOUT_SECONDS:
-            debug.reportError(
+            # Logged here, shown to the user by _finalize - which knows how many models
+            # made it, and would otherwise report a success right on top of this.
+            debug.printError(
                 f"Chaos Scatter preset '{session.presetName}': {session.pending} model(s) never "
                 f"arrived, finalizing without them"
             )
-            _finalize(presetToken)
+            _finalize(presetToken, timedOut=True)
 
 
 def _splitRecords(plugins):
@@ -242,8 +264,8 @@ def _modelFrequencies(scatterAttrs: dict, count: int) -> list[float]:
     return [float(f) for f in frequencies]
 
 
-def _assignTarget(cs, settings, presetName: str):
-    """Point the scatter at what the user dropped it on.
+def _assignTarget(cs, settings) -> bool:
+    """Point the scatter at what the user dropped it on. True when it has a target.
 
     The drop target wins over the selection: createScatterObject has already added the selected
     geometry objects, but a drag-and-drop onto a specific surface is the more explicit intent.
@@ -258,13 +280,9 @@ def _assignTarget(cs, settings, presetName: str):
         cs.targets.clear()
         item = cs.targets.add()
         item.object = dropTarget
-        return
+        return True
 
-    if len(cs.targets) == 0:
-        debug.printWarning(
-            f"Chaos Scatter preset '{presetName}' was imported without a distribution target. "
-            f"Pick one in the Chaos Scatter panel to see the instances."
-        )
+    return len(cs.targets) != 0
 
 
 def _makeCollection(presetName: str):
@@ -302,22 +320,50 @@ def _resolve(instanceToken: str):
     return session, int(index)
 
 
-def _finalize(presetToken: str):
-    """Recompute the preview and close the session."""
+def _report(presetName: str, total: int, problems: list[str]):
+    """The one message a preset import sends to the Cosmos Browser.
+
+    A success, or a warning naming everything that went wrong - never both. The problems are
+    found at different points of an import that spans several seconds, so they are collected
+    on the session and spent here.
+    """
+    if not problems:
+        cosmos_notify.success(f"Successfully imported asset: {presetName} ({total} model(s))")
+        return
+
+    cosmos_notify.warning(
+        f"Chaos Scatter preset '{presetName}' was imported, but " + "; ".join(problems))
+
+
+def _finalize(presetToken: str, timedOut: bool = False):
+    """Recompute the preview and close the session.
+
+    'timedOut' says the preset gave up waiting for its models, so the result is reported
+    as incomplete rather than as a success.
+    """
     session = _sessions.pop(presetToken, None)
     if session is None:
         return
 
-    debug.printInfo(f"Chaos Scatter preset '{session.presetName}': "
-                    f"{session.placed} of {len(session.assetIds)} model(s) placed")
+    total = len(session.assetIds)
 
     scatterObj = _liveObject(session.scatterUid)
     if scatterObj is None:
         # Undone or deleted mid-import. The models that did arrive are loose objects in the scene,
         # and their own undo steps were suppressed - push the one the scatter would have pushed.
+        # This supersedes the problems: there is no scatter left for them to be about.
+        cosmos_notify.warning(
+            f"Chaos Scatter preset '{session.presetName}' was removed while it was still "
+            f"importing, so its models were left loose in the scene")
         if session.placed:
             bpy.ops.ed.undo_push(message=f"Import Cosmos Scatter Preset {session.presetName}")
         return
+
+    # One message for the whole preset - its models are not announced individually, and
+    # it is only sent once the scatter it belongs to is known to still be there.
+    if timedOut or (session.placed < total):
+        session.problems.append(f"only {session.placed} of its {total} model(s) arrived")
+    _report(session.presetName, total, session.problems)
 
     _selectAndFinish(scatterObj, session.presetName)
 

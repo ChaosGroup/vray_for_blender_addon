@@ -411,6 +411,16 @@ void ZmqServer::runServer() {
 			m_zmqServerPID = 0;
 			m_zmqServerPort = 0;
 
+			// Reset unconditionally. A half-initialized state - e.g. a license acquired but a
+			// renderer that never came up - would otherwise leave stale flags behind.
+			const bool wasInitialized = vrayInitialized();
+			m_mainRendererCreated = false;
+			m_licenseAcquired = false;
+
+			if (wasInitialized) {
+				notifyVRayStatus();
+			}
+
 			if (!stopToken.stop_requested()) {
 				// The ZMQ Server process stopped unexpectedly.
 				int exitCode = zmqServer.exit_code();
@@ -614,6 +624,15 @@ void ZmqServer::processControlOnImportAsset(const MsgControlOnImportAsset& messa
 	cosmosSettings.normalZ = message.normalZ;
 	cosmosSettings.surfaceAttachment = message.surfaceAttachment;
 	cosmosSettings.forceNormalAlign = message.forceNormalAlign;
+	// Variant fields. All empty unless the asset has more than one variant.
+	cosmosSettings.variantSwapToken = message.variantSwapToken;
+	cosmosSettings.variantGeomNames = toPyList(message.variantGeomNames);
+	cosmosSettings.variantGeomPackageIds = toPyList(message.variantGeomPackageIds);
+	cosmosSettings.variantGeomRevisions = toPyList(message.variantGeomRevisions);
+	cosmosSettings.variantMtlCounts = toPyList(message.variantMtlCounts);
+	cosmosSettings.variantPreviewPaths = toPyList(message.variantPreviewPaths);
+	cosmosSettings.currentGeomVariant = message.currentGeomVariant;
+	cosmosSettings.currentMtlVariant = message.currentMtlVariant;
 
 	const AttrListString::DataArrayPtr assetData=message.assetNames.getData();
 	const AttrListString::DataArrayPtr assetLocationsData=message.assetLocations.getData();
@@ -661,6 +680,14 @@ void ZmqServer::processControlOnCosmosAssetsDownloaded(const MsgControlOnCosmosD
 }
 
 
+void ZmqServer::processControlOnCosmosVariantPreviews(const MsgControlOnCosmosVariantPreviewsReady& message) {
+	nb::gil_scoped_acquire gil;
+	invokePythonCallback("cosmosVariantPreviews", getPythonCallback("cosmosVariantPreviews"),
+		toPyList(message.packageIds), toPyList(message.revisions), toPyList(message.mtlIndices),
+		toPyList(message.previewPaths));
+}
+
+
 void ZmqServer::processControlOnScannedEncodedParameters(const MsgControlOnScannedEncodedParameters& message) {
 	if (message.licensed) {
 		nb::gil_scoped_acquire gil;
@@ -671,6 +698,8 @@ void ZmqServer::processControlOnScannedEncodedParameters(const MsgControlOnScann
 
 void ZmqServer::processControlOnRendererStatus(const MsgControlOnRendererStatus& message)
 {
+	const bool wasInitialized = vrayInitialized();
+
 	switch (message.status) {
 	case VRayStatusType::MainRendererAvailable:
 		m_mainRendererCreated = true;
@@ -685,6 +714,17 @@ void ZmqServer::processControlOnRendererStatus(const MsgControlOnRendererStatus&
 		m_licenseAcquired = false;
 		break;
 	}
+
+	// The server re-sends its full status on every (re)connect, so only forward actual changes.
+	if (vrayInitialized() != wasInitialized) {
+		notifyVRayStatus();
+	}
+}
+
+
+void ZmqServer::notifyVRayStatus()
+{
+	invokePythonCallback("vrayStatus", getPythonCallback("vrayStatus"), vrayInitialized());
 }
 
 
@@ -709,6 +749,17 @@ void ZmqServer::handleMsg(const zmq::message_t& msg)
 		case MsgType::ControlOnCosmosDownloadedAssets: {
 			const MsgControlOnCosmosDownloadedAssets& message = deserializeMessage<MsgControlOnCosmosDownloadedAssets>(stream);
 			processControlOnCosmosAssetsDownloaded(message);
+			break;
+		}
+		case MsgType::ControlOnCosmosVariantStatus: {
+			const MsgControlOnCosmosVariantStatus& message = deserializeMessage<MsgControlOnCosmosVariantStatus>(stream);
+			invokePythonCallback("cosmosVariantStatus", getPythonCallback("cosmosVariantStatus"),
+				message.variantSwapToken, int(message.status), message.message);
+			break;
+		}
+		case MsgType::ControlOnCosmosVariantPreviewsReady: {
+			const MsgControlOnCosmosVariantPreviewsReady& message = deserializeMessage<MsgControlOnCosmosVariantPreviewsReady>(stream);
+			processControlOnCosmosVariantPreviews(message);
 			break;
 		}
 		case MsgType::ControlOnScannedLicenseCheck: {

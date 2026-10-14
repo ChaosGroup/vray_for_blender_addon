@@ -5,6 +5,7 @@
 import bpy
 import functools
 import operator
+import time
 
 from vray_blender import debug
 from vray_blender.exporting.tools import (getInputSocketByName, getFarNodeLink,
@@ -12,10 +13,10 @@ from vray_blender.exporting.tools import (getInputSocketByName, getFarNodeLink,
 from vray_blender.exporting.update_tracker import UpdateTracker, UpdateFlags, UpdateTarget
 from vray_blender.lib import attribute_types, lib_utils, color_utils
 from vray_blender.lib.attribute_types import AllNodeInputTypes, NodeOutputTypes, getSocketType
-from vray_blender.lib.attribute_utils import getAttrDisplayName, formatAttributeName
+from vray_blender.lib.attribute_utils import getAttrDisplayName, formatAttributeName, stripOutputPrefix
 from vray_blender.lib.condition_processor import isCondition
 from vray_blender.lib.sys_utils import importFunction
-from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel
+from vray_blender.nodes.tools import isVrayNode, isVraySocket, getSocketPanel, OBJECT_TREE_TYPES
 from vray_blender.lib.blender_utils import isNonGeometryExportedAsGeometry, tagUsersForUpdate
 
 
@@ -157,8 +158,9 @@ def areNodesInterconnected(fromNode: bpy.types.Node, toNode: bpy.types.Node, vis
         for link in output.links:
             nextNode = link.to_node
 
+            # Skip an inactive link, but keep checking the others.
             if isVraySocket(link.to_socket) and not link.to_socket.hasActiveFarLink():
-                return False
+                continue
 
             if nextNode == toNode:
                 return True
@@ -208,6 +210,52 @@ def createBitmapTexture(self, attrName='texture'):
     setattr(self, f'{attrName}_name', texName)
 
     return tex
+
+
+def copyFakeTexture(node: bpy.types.Node, attrName: str, srcTexture: bpy.types.Texture):
+    """ Give the node its own copy of srcTexture. """
+    tex = srcTexture.copy()
+    tex.name = createFakeName()
+    tex.use_fake_user = True
+
+    setattr(node, attrName, tex)
+    setattr(node, f'{attrName}_name', tex.name)
+    return tex
+
+
+_OWN_TEXTURE_ATTRS = {
+    'VRayNodeColorRamp':        ('texture',),
+    'VRayNodeMetaImageTexture': ('texture',),
+    'VRayNodeTexSoftbox':       ('ramp_grad_vert', 'ramp_grad_horiz', 'ramp_grad_rad', 'ramp_frame'),
+}
+
+
+def unshareNodeTextures():
+    """ Give every node that uses the same texture as another node a copy of its own. """
+    used = set()
+    trees = [block.node_tree for coll in (bpy.data.materials, bpy.data.worlds, bpy.data.lights) for block in coll if block.node_tree]
+    for ntree in trees + list(bpy.data.node_groups):
+        for node in ntree.nodes:
+            for attrName in _OWN_TEXTURE_ATTRS.get(node.bl_idname, ()):
+                if not (tex := getattr(node, attrName, None)):
+                    continue
+                if tex.name in used:
+                    tex = copyFakeTexture(node, attrName, tex)
+                used.add(tex.name)
+
+
+def _fixCopiedTextures():
+    from vray_blender.lib.image_utils import registerBitmapImageNodes
+    from vray_blender.nodes.color_ramp import registerColorRamps
+    unshareNodeTextures()
+    registerColorRamps()
+    registerBitmapImageNodes()
+
+
+def fixCopiedTexturesLater():
+    """ On the next tick, unshare node textures and register the ramp and bitmap nodes again. """
+    if not bpy.app.timers.is_registered(_fixCopiedTextures):
+        bpy.app.timers.register(_fixCopiedTextures)
 
 
 # Cache for non-exportable plugin parameters
@@ -344,6 +392,11 @@ def addInputs(node: bpy.types.Node, pluginModule):
         sockName = sockInfo['name']
         addInput(node, sockInfo['type'], sockName, attrName, pluginModule.ID, visible=sockInfo['visible'])
 
+    # The 'active' state of the sockets is only re-evaluated when a property from its condition
+    # changes, so set the initial state here. The initial visibility is set by addInput().
+    if isVrayNode(node) and ((propGroup := getattr(node, pluginModule.ID, None)) is not None):
+        updateConditionalSockets(node, pluginModule, propGroup, updateVisibility=False)
+
 
 def _getInputSocketType(nodeType, attrDesc):
     """ Return the V-Ray socket type based on the plugin property type and any additional options.  """
@@ -432,7 +485,7 @@ def addOutputs(node: bpy.types.Node, pluginModule):
         attrName = attr['attr']
         attrType = attr['type']
         attrOptions = attr.get('options', {})
-        socketName = getAttrDisplayName(attr)
+        socketName = stripOutputPrefix(getAttrDisplayName(attr))
         description = socketName
         sockVisible = True
 
@@ -552,17 +605,12 @@ def tagGroupTreeUsers(groupTree):
                     world.update_tag()
                     break
 
-        _OBJECT_TREE_TYPES = {'OBJECT', 'FUR', 'DECAL'}
         for ng in bpy.data.node_groups:
-            if not hasattr(ng, 'vray') or ng.vray.tree_type not in _OBJECT_TREE_TYPES:
+            if not hasattr(ng, 'vray') or ng.vray.tree_type not in OBJECT_TREE_TYPES:
                 continue
             for node in ng.nodes:
                 if node.bl_idname == 'VRayNodeGroup' and node.node_tree == tree:
-                    ng.update_tag()
-                    # Tag objects that reference this object tree so
-                    # obj_export sees them in dgUpdates['shading']. Mirrors
-                    # the non-group path in selectedObjectTagUpdate (~line 598).
-                    tagUsersForUpdate(ng)
+                    tagObjectTree(ng)
                     break
 
     _propagate(groupTree)
@@ -614,9 +662,66 @@ def tagMaterialPreview(mtl: bpy.types.Material):
     if (mtl.users - (1 if mtl.use_fake_user else 0)) > 0:
         return
 
-    if mtl.preview is not None:
-        mtl.preview.reload()   # BKE_previewimg_clear - reschedules the icon on the next draw
+    schedulePreviewReload(mtl)
     loosePreviewToken['n'] += 1
+
+
+# Seconds without a new edit before a loose material's icon is reloaded, and the retry interval
+# while a preview job runs.
+_PREVIEW_RELOAD_QUIET = 0.5
+_PREVIEW_RELOAD_RETRY = 0.25
+
+# Materials waiting for _reloadPendingPreviews, and when the last edit makes them due.
+_pendingPreviewReloads = {'names': set(), 'due': 0.0}
+
+
+def schedulePreviewReload(mtl: bpy.types.Material):
+    """ Defer the icon reload of a material no object uses until its edits stop.
+
+        preview.reload() (BKE_previewimg_clear) frees the preview's pixel buffers, which a
+        running or just-queued icon job keeps writing to - so reloading on every update, as a
+        colour wheel drag does dozens of times a second, crashes Blender in the free. """
+    _pendingPreviewReloads['names'].add(mtl.name)
+    _pendingPreviewReloads['due'] = time.perf_counter() + _PREVIEW_RELOAD_QUIET
+    if not bpy.app.timers.is_registered(_reloadPendingPreviews):
+        bpy.app.timers.register(_reloadPendingPreviews, first_interval=_PREVIEW_RELOAD_QUIET)
+
+
+def _reloadPendingPreviews():
+    remaining = _pendingPreviewReloads['due'] - time.perf_counter()
+    if remaining > 0:
+        return remaining
+    if bpy.app.is_job_running('RENDER_PREVIEW'):
+        return _PREVIEW_RELOAD_RETRY
+
+    for name in _pendingPreviewReloads['names']:
+        mtl = bpy.data.materials.get(name)
+        if mtl is not None and mtl.preview is not None:
+            mtl.preview.reload()   # reschedules the icon on the next draw
+    _pendingPreviewReloads['names'].clear()
+
+    # That next draw has to happen: nothing else repaints the Material Manager's Preferences
+    # areas once the edits stop, so the icons would stay stale until hovered.
+    for window in bpy.context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == 'PREFERENCES':
+                area.tag_redraw()
+    return None
+
+
+def isInCopyBuffer(node: bpy.types.Node):
+    """ Since Blender 5.1, Ctrl+C calls Node.copy() for nodes copied into a temporary tree outside
+        bpy.data and frees the tree right after writing the copy buffer. copy() must not set anything
+        up there: a timer would run on a freed node and new datablocks would be orphaned. Pasting
+        calls copy() again for the node it adds. """
+    ntree = node.id_data
+    return not ntree.is_embedded_data and bpy.data.node_groups.get((ntree.name, ntree.library)) != ntree
+
+
+def isInTemporaryTree(node: bpy.types.Node):
+    """ True for nodes in the temporary trees Blender copies nodes into for Ctrl+C and EEVEE shader inlining. """
+    ntree = node.id_data
+    return ntree.is_runtime_data and not ntree.is_embedded_data
 
 
 def selectedObjectTagUpdate(self, context: bpy.types.Context):
@@ -636,6 +741,14 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
     else:
         changedNode = getNodeOfPropGroup(self)
 
+    # Invalidated before the early-out below. A thumbnail is per-node and is drawn for nodes that
+    # do not reach the tree output, which is normal while a graph is being built, so the
+    # render-oriented "cannot affect the result" shortcut does not apply. This is also the only
+    # signal available for a custom node tree, where Blender emits no depsgraph update at all.
+    if changedNode is not None:
+        from vray_blender.preview.thumbs import service as thumbService
+        thumbService.invalidateNode(changedNode)
+
     if (changedNode is not None) and not isNodeConnectedToTreeOutput(changedNode):
         return
 
@@ -645,6 +758,24 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
     if ntree and isinstance(ntree, bpy.types.NodeTree) and ntree.vray.tree_type == 'GROUP':
         ntree.update_tag()
         tagGroupTreeUsers(ntree)
+        tagRedrawPropertyEditor()
+        return
+
+    # A change in an object tree tags only the tree, regardless of the active object or node
+    # editor. The exporter maps tree updates to the objects using the tree.
+    # 'self' may be a node, a socket or a property group of a node.
+    if ntree and isinstance(ntree, bpy.types.NodeTree) and ntree.vray.tree_type in OBJECT_TREE_TYPES:
+        tagObjectTree(ntree)
+        tagRedrawPropertyEditor()
+        tagRedrawViewport()
+        return
+
+    # A change in a light's node tree updates that light, even when it is not the selected object
+    # (Light Lister, pinned properties). Blender then updates every object that uses the light.
+    if ntree and isinstance(ntree, bpy.types.NodeTree) and ntree.vray.tree_type == 'LIGHT':
+        if changedNode and (light := findDataObjFromNode(bpy.data.lights, changedNode)):
+            UpdateTracker.tagUpdate(light, UpdateTarget.LIGHT, UpdateFlags.DATA)
+            light.update_tag()
         tagRedrawPropertyEditor()
         return
 
@@ -661,13 +792,7 @@ def selectedObjectTagUpdate(self, context: bpy.types.Context):
     if isinstance(self, bpy.types.Node):
         # For manually defined nodes (e.g. V-Ray Transform), property updates have 'self' set to the node, not to the node tree.
         # Tag an update on the node tree.
-
-        # Nodes from object node trees are tagging for update the object otherwise the changes won't be exported.
-        if activeEditor == "OBJECT" and context.active_object:
-            context.active_object.update_tag()
-        else:
-            self.id_data.update_tag()
-
+        self.id_data.update_tag()
         return
 
     if hasattr(context, "active_object"):
@@ -754,20 +879,24 @@ def computeSocketVisibility(sock, sockDesc, node, pluginModule, propGroup):
 
 def activeAttributeUpdateCallback(propGroup, pluginModule, attrName: str):
     """ Callback for 'active' socket attributes' (i.e. attributes with conditions) """
+    if node := getNodeOfPropGroup(propGroup):
+        updateConditionalSockets(node, pluginModule, propGroup)
+
+
+def updateConditionalSockets(node: bpy.types.Node, pluginModule, propGroup, updateVisibility=True):
+    """ Evaluate the 'visible' and 'active' conditions of the node's input sockets.
+
+        @param updateVisibility - False to evaluate only the 'active' conditions
+    """
     from vray_blender.lib.condition_processor import evaluateCondition, isCondition
     from vray_blender.exporting.tools import removeSocketLinks, getInputSocketByAttr
 
-    inputSockets = pluginModule.Node.get('input_sockets', [])
-
-    node = getNodeOfPropGroup(propGroup)
-    if not node:
-        return
-
-    for sockDesc in inputSockets:
-        sock = getInputSocketByAttr(node, sockDesc['name'])
+    for sockDesc in pluginModule.Node.get('input_sockets', []):
+        if (sock := getInputSocketByAttr(node, sockDesc['name'])) is None:
+            continue
 
         # Handle visibility
-        if (visibleCond := sockDesc.get('visible', None)) and isCondition(visibleCond):
+        if updateVisibility and (visibleCond := sockDesc.get('visible', None)) and isCondition(visibleCond):
             hide, enabled = computeSocketVisibility(sock, sockDesc, node, pluginModule, propGroup)
 
             if (sock.hide != hide) or (sock.enabled != enabled):
@@ -809,15 +938,37 @@ def selectedObjectTagUpdateWrapper(propGroup, context: bpy.types.Context, plugin
     selectedObjectTagUpdate(propGroup, context)
 
 
-def findDataObjFromNode(coll, node: bpy.types.Node, isObjTreeNode=False):
+def findDataObjFromNode(coll, node: bpy.types.Node):
     """ Get the parent data object of a node in a nodetree """
     ntree = node.id_data
     assert isinstance(ntree, bpy.types.NodeTree), "Node should be attached to a nodetree"
 
-    if isObjTreeNode:
-        return next((o for o in coll if o.vray.ntree == ntree), None)
-
     return next((o for o in coll if o.node_tree == ntree), None)
+
+
+def tagObjectTree(ntree: bpy.types.NodeTree):
+    """ Tag an object tree (OBJECT, FUR or DECAL) for update. The exporter maps the tree update to
+        the objects using the tree.
+    """
+    ntree.update_tag()
+
+    viewLayer = getattr(bpy.context, 'view_layer', None)
+    if (viewLayer is None) or ((dg := viewLayer.depsgraph) is None):
+        return
+
+    # A tree assigned after the depsgraph was built is not part of it until the depsgraph
+    # relations are rebuilt, and its tags are not reported. Record the tree for the exporter
+    # instead, once per export. Its users are tagged only to trigger a depsgraph update, as
+    # transforms, so that their geometry is not re-exported.
+    if dg.id_eval_get(ntree).is_evaluated:
+        return
+
+    if UpdateTracker.getObjUpdate(UpdateTarget.OBJECT_TREE, ntree) != UpdateFlags.NONE:
+        return
+
+    UpdateTracker.tagUpdate(ntree, UpdateTarget.OBJECT_TREE, UpdateFlags.DATA)
+    for obj in [o for o in bpy.data.objects if o.vray.ntree == ntree]:
+        obj.update_tag(refresh={'OBJECT'})
 
 
 def tagObjectsForMaterial(mtl: bpy.types.Material):
@@ -999,7 +1150,7 @@ def autoInitBitmapNode(node: bpy.types.Node):
     if not _AutoConnectEnabled:
         return
 
-    if (ntree := node.id_data) and (ntree.vray.tree_type in {'OBJECT', 'FUR', 'DECAL'}):
+    if (ntree := node.id_data) and (ntree.vray.tree_type in OBJECT_TREE_TYPES):
         # V-Ray Bitmaps in Object and Fur node trees should be raw/linear by default, they
         # can only be used for masks's so there's no point using any other color space.
         if bitmapBuffer := getattr(node, 'BitmapBuffer', None):

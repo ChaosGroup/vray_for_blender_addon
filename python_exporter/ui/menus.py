@@ -12,12 +12,12 @@ from vray_blender import features
 from vray_blender.features import Feature
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.lib import blender_utils, lib_utils
-from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.nodes.operators.import_file import importProxyFromMeshFile
 from vray_blender.nodes import tree_defaults
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.operators import VRAY_OT_render, VRAY_OT_render_interactive
 from vray_blender.ui import classes, icons
+from vray_blender.ui.properties_npanel import VRayAddObjectMixin
 from vray_blender.menu import VRAY_OT_open_vfb
 from vray_blender.vray_tools import vray_proxy
 from vray_blender.exporting.tools import GEOMETRY_OBJECT_TYPES, MESH_OBJECT_TYPES
@@ -102,10 +102,10 @@ class VRAY_OT_camera_lock_unlock_view(VRayOperatorBase):
 ####### OPERATORS FOR LIGHT CREATION ##########
 ###############################################
 
-class VRAY_OT_add_object_vray_light(VRayOperatorBase):
+class VRAY_OT_add_object_vray_light(VRayAddObjectMixin, VRayOperatorBase):
     bl_idname = "vray.add_object_vray_light"
     bl_label = "Add V-Ray Light"
-    bl_options = { "UNDO" }
+    bl_options = { "REGISTER", "UNDO" }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -130,6 +130,7 @@ class VRAY_OT_add_object_vray_light(VRayOperatorBase):
 
         # Deselect all objects and select only the newly created as it is with the default blender objects
         blender_utils.selectObject(lightObject)
+        self.setAddedObject(lightObject)
 
         return {'FINISHED'}
 
@@ -204,6 +205,7 @@ class VRAY_OT_create_mesh_light(VRAY_OT_add_object_vray_light_mesh):
             lightObject.data.vray.LightMesh.object_selector.addListItem(context, obj)
 
         blender_utils.selectObject(lightObject)
+        self.setAddedObject(lightObject)
 
         return {'FINISHED'}
 
@@ -301,9 +303,13 @@ class VRAY_OT_add_object_vray_light_sun(VRAY_OT_add_object_vray_light_sun_base):
         self.lightName = "VRaySunLight"
 
     def execute(self, context):
-        targetObject, _ = self._createSunAndTarget("VRaySunLight")
+        targetObject, lightObject = self._createSunAndTarget("VRaySunLight")
         # Deselect all objects and select only the newly created as it is with the default blender objects
         blender_utils.selectObject(targetObject)
+
+        # The target is what gets selected, but it is the sun that carries the V-Ray parameters,
+        # so it is the sun that the redo panel should show.
+        self.setAddedObject(lightObject)
 
         return {'FINISHED'}
 
@@ -323,6 +329,7 @@ class VRAY_OT_add_object_vray_sun_sky(VRAY_OT_add_object_vray_light_sun_base):
         world = context.scene.world
         
         _, lightObject = self._createSunAndTarget("VRaySunSky")
+        self.setAddedObject(lightObject)
 
         if not world.vray.is_vray_class:
             tree_defaults.addWorldNodeTree(world)
@@ -404,7 +411,9 @@ def getLightAddOperators():
     )
 
 def addVRayLightsToMenu(self, context):
-    """ Callback to add all V-Ray lights to a menu. To be used with Menu.append() """
+    """ Callback to fill the Lights submenu of the V-Ray menu in the top bar. Not for a menu in
+        the 3D Viewport - the buttons it draws go through VRAY_OT_add_object_in_viewport.
+    """
 
     # List operators after which to draw a separator in the menu
     separatorsAfter  = [VRAY_OT_add_object_vray_sun_sky]
@@ -414,7 +423,7 @@ def addVRayLightsToMenu(self, context):
 
     if classes.pollEngine(context):
         for op in getLightAddOperators():
-            self.layout.operator(op.bl_idname, text=op.bl_label, icon_value=icons.getUIIcon(op))
+            drawAddOperator(self.layout, op)
             if op in separatorsAfter:
                 self.layout.separator()
 
@@ -694,11 +703,11 @@ def unregister_object_context_menu_draw():
 ####### OPERATORS FOR CAMERA CREATION #########
 ###############################################
 
-class VRAY_OT_add_physical_camera(VRayOperatorBase):
+class VRAY_OT_add_physical_camera(VRayAddObjectMixin, VRayOperatorBase):
     bl_idname = "vray.add_physical_camera"
     bl_label = "Add V-Ray Physical Camera"
     bl_description = "Add V-Ray Physical Camera"
-    bl_options = { "UNDO" }
+    bl_options = { "REGISTER", "UNDO" }
 
     def execute(self, context):
         import math
@@ -715,6 +724,7 @@ class VRAY_OT_add_physical_camera(VRayOperatorBase):
 
         # Deselect all objects and select only the newly created as it is with the default blender objects
         blender_utils.selectObject(cameraObj)
+        self.setAddedObject(cameraObj)
 
         return {'FINISHED'}
 
@@ -728,7 +738,7 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
     bl_idname = "vray.add_object_proxy"
     bl_label = "Add V-Ray Proxy"
     bl_description = "Import V-Ray Proxy object."
-    bl_options = { "UNDO" }
+    bl_options = { "REGISTER", "UNDO" }
 
     filter_glob: bpy.props.StringProperty(
         default=VRAY_PROXY_FILTER_GLOB,
@@ -772,13 +782,13 @@ class VRAY_OT_add_object_proxy(VRayOperatorBase):
 
         return {'FINISHED'}
 
-class VRAY_OT_add_object_fur(VRayOperatorBase):
+class VRAY_OT_add_object_fur(VRayAddObjectMixin, VRayOperatorBase):
     """Add a V-Ray Fur object (Empty with isVRayFur=True)"""
 
     bl_idname = "vray.add_object_fur"
     bl_label = "Add V-Ray Fur"
     bl_description = "Create an Empty object and set V-Ray Fur property"
-    bl_options = {'UNDO'}
+    bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         furData = bpy.data.hair_curves.new('V-Ray Fur')
@@ -793,18 +803,19 @@ class VRAY_OT_add_object_fur(VRayOperatorBase):
 
         # Deselect all, select only the new object
         blender_utils.selectObject(furObj)
+        self.setAddedObject(furObj)
 
         return {'FINISHED'}
 
 
 
-class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
+class VRAY_OT_add_object_vrayscene(VRayAddObjectMixin, VRayOperatorBase):
     """ Show FileSelect dialog for .vrscene files and import the selected file """
 
     bl_idname = "vray.add_object_vrayscene"
     bl_label = "Add V-Ray Scene"
     bl_description = "Import V-Ray Scene object. Only available in Solid viewport mode"
-    bl_options = { "UNDO" }
+    bl_options = { "REGISTER", "UNDO" }
 
     filter_glob: bpy.props.StringProperty(
         default=VRAY_SCENE_FILTER_GLOB,
@@ -832,62 +843,38 @@ class VRAY_OT_add_object_vrayscene(VRayOperatorBase):
            self.report({'ERROR'}, f"File format {fileExt} is not supported by V-Ray Scene")
            return {'CANCELLED'}
 
-        # Create a new mesh object to represent the scene
-        name = f"VRayScene@{PurePath(absFilePath).stem}"
-
-        mesh = bpy.data.meshes.new(name)
-        ob = bpy.data.objects.new(name, mesh)
-        ob.location = context.scene.cursor.location
-
-        context.scene.collection.objects.link(ob)
-
-        useRelPath = (not blender_utils.isDefaultScene()) and self.relpath
-        vrayScene = ob.data.vray.VRayScene
-
-        ob.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
-
-        if err := vray_proxy.loadVRayScenePreviewMesh(ob.data.vray.VRayScene, absFilePath):
+        obj, err = vray_proxy.createVRaySceneObject(context, absFilePath, self.relpath)
+        if err:
             debug.report('ERROR', err)
             return {'CANCELLED'}
 
-        # Set the filepath obtained from the FileSelect dialog using the format 
-        # corresponding to the 'relative' option.
-        filePath = absFilePath
-        
-        if useRelPath:
-            if relFilePath := tryGetRelativePath(absFilePath):
-                filePath = relFilePath
-            else:
-                debug.report('INFO', "Cannot import V-Ray Scene with relative path, using absolute path instead") 
-
-        vrayScene['filepath'] = filePath   
-        blender_utils.selectObject(ob)
-
+        self.setAddedObject(obj)
         return {'FINISHED'}
 
-class VRAY_OT_add_object_decal(VRayOperatorBase):
+class VRAY_OT_add_object_decal(VRayAddObjectMixin, VRayOperatorBase):
     """ Add a VRayDecal object to the scene. """
 
     bl_idname = "vray.add_object_decal"
     bl_label = "Add V-Ray Decal"
     bl_description = "Add V-Ray Decal object"
-    bl_options = { 'UNDO' }
+    bl_options = { 'REGISTER', 'UNDO' }
 
     def execute(self, context):
         obj = createDecalObject(context)
         generateDecalPreviewMesh(obj)
         blender_utils.selectObject(obj)
+        self.setAddedObject(obj)
 
         return {'FINISHED'}
 
 
-class VRAY_OT_add_object_splat(VRayOperatorBase):
+class VRAY_OT_add_object_splat(VRayAddObjectMixin, VRayOperatorBase):
     """ Add a V-Ray Gaussians object: an Empty that renders a Gaussian splat (.ply) file. """
 
     bl_idname = "vray.add_object_splat"
     bl_label = "Add V-Ray Gaussians"
     bl_description = "Import a Gaussian splat (.ply) file as a V-Ray Gaussians object"
-    bl_options = { 'UNDO' }
+    bl_options = { 'REGISTER', 'UNDO' }
 
     filter_glob: bpy.props.StringProperty(default="*.ply", options={'HIDDEN'})
     filepath: bpy.props.StringProperty(name="Filepath (*.ply)", subtype="FILE_PATH")
@@ -914,16 +901,17 @@ class VRAY_OT_add_object_splat(VRayOperatorBase):
             self.report({'WARNING'}, err)
 
         blender_utils.selectObject(obj)
+        self.setAddedObject(obj)
         return {'FINISHED'}
 
 
-class VRAY_OT_add_object_infinite_plane(VRayOperatorBase):
+class VRAY_OT_add_object_infinite_plane(VRayAddObjectMixin, VRayOperatorBase):
     """ Add a V-Ray Infinite Plane object: an Empty that renders as an infinite plane. """
 
     bl_idname = "vray.add_object_infinite_plane"
     bl_label = "Add V-Ray Infinite Plane"
     bl_description = "Add a V-Ray infinite plane object"
-    bl_options = { 'UNDO' }
+    bl_options = { 'REGISTER', 'UNDO' }
 
     def execute(self, context):
         obj = bpy.data.objects.new("V-Ray Infinite Plane", None)
@@ -937,16 +925,17 @@ class VRAY_OT_add_object_infinite_plane(VRayOperatorBase):
         context.collection.objects.link(obj)
 
         blender_utils.selectObject(obj)
+        self.setAddedObject(obj)
         return {'FINISHED'}
 
 
-class VRAY_OT_add_object_perfect_sphere(VRayOperatorBase):
+class VRAY_OT_add_object_perfect_sphere(VRayAddObjectMixin, VRayOperatorBase):
     """ Add a V-Ray Perfect Sphere object: an Empty that renders as an analytic sphere. """
 
     bl_idname = "vray.add_object_perfect_sphere"
     bl_label = "Add V-Ray Perfect Sphere"
     bl_description = "Add a V-Ray perfect sphere object"
-    bl_options = { 'UNDO' }
+    bl_options = { 'REGISTER', 'UNDO' }
 
     def execute(self, context):
         obj = bpy.data.objects.new("V-Ray Perfect Sphere", None)
@@ -957,7 +946,87 @@ class VRAY_OT_add_object_perfect_sphere(VRayOperatorBase):
         context.collection.objects.link(obj)
 
         blender_utils.selectObject(obj)
+        self.setAddedObject(obj)
         return {'FINISHED'}
+
+
+####### ADDING OBJECTS FROM OUTSIDE THE 3D VIEWPORT #######
+###########################################################
+
+class VRAY_OT_add_object_in_viewport(VRayOperatorBase):
+    """ Invokes an "Add V-Ray object" operator with a 3D viewport as the active area.
+
+        Blender hangs the "Adjust Last Operation" box off the area the operator finished in
+        (wm_operator_finished -> ED_area_type_hud_ensure), and only editors that have a HUD
+        region can host one. An add operator invoked straight from the V-Ray menu in the top bar
+        therefore gets no box, and with it none of the parameters VRAY_PT_add_object_params draws
+        inside it. Menus outside the 3D viewport go through this operator instead - see
+        drawAddOperator().
+
+        The indirection cannot be folded into the add operators themselves: Blender raises
+        wm->op_undo_depth for the whole of an OPTYPE_UNDO operator's invoke(), and an operator
+        invoked at a non-zero depth is neither registered nor undo-pushed
+        (wm_operator_register_check) - so a redirection made from there would lose both the box
+        and the undo step.
+
+        The add operators that open a file browser are an exception on which none of this has any
+        effect: Blender frees those once the browser is done with them without ever registering
+        them (wm_handler_fileselect_do), so they get no box from any menu - exactly as stock
+        Blender's own import operators do not. They are routed through here all the same, so that
+        every entry of the menu is built the same way.
+    """
+
+    bl_idname = "vray.add_object_in_viewport"
+    bl_label = "Add V-Ray Object"
+
+    # Deliberately neither REGISTER nor UNDO, which is what keeps wm->op_undo_depth at 0 for the
+    # nested call. The wrapped operator carries both flags, and it is the one that has to end up
+    # registered for the box to be drawn for it. INTERNAL keeps this one out of the F3 search,
+    # where it would be offered with no target to dispatch to.
+    bl_options = {'INTERNAL'}
+
+    target: bpy.props.StringProperty(options={'HIDDEN'})
+
+    @classmethod
+    def description(cls, context, properties):
+        # Without this every button would show this operator's own tooltip.
+        return _targetOperator(properties.target).get_rna_type().description if properties.target else None
+
+    def invoke(self, context, event):
+        addObject = _targetOperator(self.target)
+
+        if (viewport := blender_utils.findViewport(context, blender_utils.WindowScope.ACTIVE_FIRST)) is None:
+            # No viewport open, so there is nowhere to put the box - just add the object.
+            addObject('INVOKE_DEFAULT', True)
+            return {'FINISHED'}
+
+        with context.temp_override(window=viewport.window, area=viewport.area, region=viewport.region):
+            # The positional True is bpy.ops' 'undo' argument. Without it Blender takes the call
+            # for one operator invoking another and leaves the add operator both unregistered and
+            # without an undo step.
+            addObject('INVOKE_DEFAULT', True)
+
+        return {'FINISHED'}
+
+
+def _targetOperator(idname: str):
+    """ The bpy.ops function for a 'category.name' operator id. """
+    category, _, name = idname.partition('.')
+    return getattr(getattr(bpy.ops, category), name)
+
+
+def drawAddOperator(layout: bpy.types.UILayout, op, text: str = None):
+    """ Draw the menu button for an "Add V-Ray object" operator in a menu that does not belong to
+        the 3D Viewport - the V-Ray menu in the top bar.
+
+        The button is routed through VRAY_OT_add_object_in_viewport, without which the object
+        would be added with no "Adjust Last Operation" box. The Shift+A menu is drawn in the
+        viewport already, so it invokes the add operators directly.
+    """
+    props = layout.operator(VRAY_OT_add_object_in_viewport.bl_idname,
+                            text=text if text is not None else op.bl_label,
+                            icon_value=icons.getUIIcon(op))
+    props.target = op.bl_idname
 
 
 def getMenuLightAddOperators():
@@ -970,6 +1039,7 @@ def getMenuLightAddOperators():
         VRAY_OT_add_object_vray_light_ies,
         VRAY_OT_add_object_vray_light_sun,
         VRAY_OT_add_object_vray_sun_sky,
+        VRAY_OT_add_object_vray_light_luminaire,
     )
 
 
@@ -1094,7 +1164,7 @@ def topbar_render_draw(self, context):
     global original_topbar_render_draw
     if classes.pollEngine(context):
         layout = self.layout
-        layout.enabled = vray.isInitialized()
+        layout.active = vray.isInitialized()
         layout.operator(VRAY_OT_render.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render)).forceMode = 'FRAME'
         layout.operator(VRAY_OT_render.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render), text="Render Animation").forceMode = 'ANIMATION'
         layout.operator(VRAY_OT_render_interactive.bl_idname, icon_value=icons.getUIIcon(VRAY_OT_render_interactive))
@@ -1129,6 +1199,7 @@ def getRegClasses():
         VRAY_OT_camera_lock_unlock_view,
         VRAY_MT_add,
         VRAY_OT_add_physical_camera,
+        VRAY_OT_add_object_in_viewport,
         VRAY_OT_adjust_light_prop,
         VRAY_OT_create_mesh_light
     ) + getLightAddOperators()

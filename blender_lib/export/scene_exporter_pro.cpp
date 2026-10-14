@@ -253,7 +253,12 @@ void ProductionExporter::updateImage()
 
 	// The exporter's isRendering() method should be checked before accessing the render pass buffer,
 	// because there will not be a valid reference to the buffer if rendering has been aborted.
-	vassert(m_renderPass);
+	//
+	// A missing render pass is NOT an error here, so this does not assert on one. A render driven
+	// from Python, i.e. the node thumbnails, passes renderResultPtr=0 because it pulls its pixels
+	// with getImage(), and cb_on_rt_image_updated still fires for it on every progressive update.
+	// m_imageUpdateCallback is default-constructed rather than None in that case, so is_none()
+	// does not catch it; the null pass is what identifies it.
 	if (m_exporter->isRendering() && !m_imageUpdateCallback.is_none() && m_renderPass) {
 		const RenderImage& layerImg = m_exporter->getImage();
 		if (layerImg.channels != m_renderPass->channels){

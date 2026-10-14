@@ -6,13 +6,13 @@
 bl_info = {
     "name"        : "V-Ray For Blender",
     "author"      : "Chaos Software",
-    "blender"     : (4, 5, 0), # this should be the earliest version currently supported by the plugin
+    "blender"     : (5, 0), # this should be the earliest version currently supported by the plugin
     "location"    : "Info header, render engine menu",
     "description" : "V-Ray render engine integration",
     "doc_url"     : "https://documentation.chaos.com/space/VBLD",
     "tracker_url" : "https://support.chaos.com/hc/en-us/requests/new",
     "category"    : "Render",
-    "version"     : ("7", "40", "01")
+    "version"     : ("7", "40", "02")
 }
 
 # A monotonically increasing number used to identify points at which an upgrade to the scene data
@@ -21,7 +21,7 @@ bl_info = {
 # the current value with the value in a loaded scene and determine which upgrade scripts should
 # be run.
 # Numbers 0 and 1 are reserved for the scene versions before the upgrade number feature was introduced
-UPGRADE_NUMBER = 51
+UPGRADE_NUMBER = 60
 
 try:
     import numpy as np
@@ -181,7 +181,21 @@ def register():
     import os
     bpy.utils.register_preset_path(os.path.dirname(__file__))
 
+    # Node editor thumbnails: a draw handler, gated by its own feature flag
+    from vray_blender.preview import thumbs
+    thumbs.register()
+
     events.register()
+
+    # Enabling the add-on with a scene already open never runs the load handler, so the
+    # trees of that scene keep an empty vray.tree_type. Nodes that poll on it, e.g. the
+    # group node, then show up red and refuse to work until the file is reloaded.
+    # bpy.data is off limits inside register(), so do it on the next main loop tick.
+    def _upgradeOpenScene():
+        from vray_blender.nodes.tree import upgradeTrees
+        upgradeTrees()
+        return None  # one-shot timer
+    bpy.app.timers.register(_upgradeOpenScene)
 
     # NOTE: Register engine at the end,
     # to be sure all used data is registered.
@@ -230,6 +244,14 @@ def unregister():
 
     debug.unregister()
     events.unregister()
+
+    from vray_blender.preview import thumbs
+    thumbs.unregister()
+
+    # The listers must give their areas back while the V-Ray editor types (e.g. the node
+    # editor) are still registered, i.e. before the nodes module goes.
+    from vray_blender.ui import lister
+    lister.releaseEditors()
 
     for mod in reversed(_getModules()):
         mod.unregister()
