@@ -499,9 +499,9 @@ void fillFaceNormalsFromCorners(const MeshData& mesh, AttrListInt& faceNormals) 
 }
 
 
+// Same mapping as Blender's crease_to_sharpness() in subdiv_inline.hh
 static float creaseToSharpness(float crease) {
-	if (crease >= 1.0f) return 10.0f;
-	return crease / (1.0f - crease);
+	return crease * crease * 10.0f;
 }
 
 

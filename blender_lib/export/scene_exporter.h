@@ -119,10 +119,19 @@ public:
 	bool          isRenderReady(); // Indicates that the final rendered image has come
 	bool          imageWasUpdated(); // True when there is updated image for drawing
 	bool          vrsceneExportRunning();
+	std::pair<bool, std::string> getVrsceneExportResult() const; // Valid once vrsceneExportRunning() is false
 
 	ZmqExporter*  getPluginExporter() { return m_exporter.get(); };
 
 	void          setRenderStoppedCallback(nb::callable&& cbRenderStopped);
+	void          setImageReadyCallback(nb::callable&& cbImageReady);
+
+	/// Sample a texture plugin over [0,1)^2 UV space on the server. cbSampled receives a
+	/// float32 (height, width, 4) ndarray, or None on failure. Invoked on the ZMQ thread.
+	void          sampleTexture(const std::string& pluginName, int width, int height, nb::callable&& cbSampled);
+
+	/// Load a .vrscene into this renderer server-side. Asynchronous and unacknowledged.
+	void          loadScene(const std::string& fileName) { m_exporter->loadScene(fileName); }
 
 protected:
 	ExporterBasePtr          m_policy;
@@ -136,6 +145,14 @@ protected:
 
 	std::mutex               engineUpdateMsgMtx;
 	std::string              engineUpdateMessage;
+
+	/// Held here rather than captured in the callback installed on ZmqExporter, which renderEnd()
+	/// resets with the GIL released. Cleared under an explicit GIL acquire in free().
+	nb::callable             m_imageReadyCallback;
+
+	/// Held for the same reason. The ZMQ poller also COPIES the stored std::function before
+	/// invoking it, so capturing only 'this' keeps that copy free of refcount work.
+	nb::callable             m_textureSampledCallback;
 
 	// Python refs owned by asset data handed to async export tasks. A worker cannot release its
 	// ref without taking the GIL, and the main thread only yields the GIL every
@@ -154,6 +171,8 @@ protected:
 
 	std::atomic_bool         m_vrsceneExportInProgress = false; // Waiting for response to a requested .vrscene export operation
 	std::atomic_bool         m_proxyExportInProgress = false;   // Waiting for response to a requested .vrmesh export operation
+	bool                     m_lastVrsceneExportResult = false;
+	std::string              m_lastVrsceneExportMessage;
 
 	std::mutex               m_proxyExportWaitMtx;
 	std::condition_variable  m_proxyExportCv;

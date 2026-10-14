@@ -14,38 +14,43 @@ import bpy
 
 from vray_blender.lib.mixin import VRayOperatorBase
 from vray_blender.lib.attribute_types import StructuralSocketProps
-from vray_blender.lib.attribute_utils import copyPropGroupValues, getBlenderDefault, resetPropGroupToDefaults
+from vray_blender.lib.attribute_utils import (copyPropGroupValues, getBlenderDefault,
+                                              getPreservedRefAttrs, resetPropGroupToDefaults)
 from vray_blender.plugins import getPluginModule
-from vray_blender.nodes.utils import getPluginTypeOfNode, getPropGroupOfNode, isVrayNode
+from vray_blender.nodes.utils import (getPluginTypeOfNode, getPropGroupOfNode, getVRayPropGroupNames,
+                                      isVrayNode)
 from vray_blender.nodes.operators.wrangler.poll import isVrayEditor, hasEditTree
 
 
-def resetNode(node, pluginModule, skipAttrs=None):
-    """ Reset every JSON-defined parameter to its default.
+def _socketsByPlugin(node):
+    """ The node's value-bearing input sockets as {pluginType: {attr: socket}}.
 
-        Mirrors PropertyContext priority: if a param has an input socket with
-        a .value attribute (matched by vray_attr), reset that; otherwise reset
-        the PropGroup entry. TEMPLATE params are reset via the template's own
-        resetToDefaults() (handled inside resetPropGroupToDefaults).
-
-        Dynamically-created sockets (no vray_attr, e.g. VRaySocketTexMulti) are not backed by a JSON
-        param; their value-bearing properties are reset to registered defaults via property_unset.
-        Links are preserved.
-
-        @param skipAttrs - optional set of attr names to leave untouched (e.g. properties that
-            reference an external file or another object, which the reset should preserve).
+        Bucketed per plugin because a meta node carries the sockets of several plugins, and two
+        plugins may declare the same attr name.
     """
-    skipAttrs = skipAttrs or set()
-    propGroup = getPropGroupOfNode(node) if node.vray_plugin else None
-    sockByAttr = {getattr(s, 'vray_attr', ''): s for s in node.inputs
-                  if getattr(s, 'vray_attr', '') and hasattr(s, 'value')}
+    result = {}
 
-    # Reset PropGroup entries, skipping params whose value lives on an input socket or that the
-    # caller asked to preserve (the latter also covers preserved TEMPLATE params, e.g. object_selector).
-    if propGroup:
+    for sock in node.inputs:
+        attrName = getattr(sock, 'vray_attr', '')
+        if not (attrName and hasattr(sock, 'value')):
+            continue
+        fnPlugin = getattr(sock, 'getPluginName', None)
+        pluginType = fnPlugin() if fnPlugin else getattr(node, 'vray_plugin', 'NONE')
+        result.setdefault(pluginType, {})[attrName] = sock
+
+    return result
+
+
+def _resetPluginGroup(node, pluginType: str, pluginModule, sockByAttr: dict, skipAttrs: set):
+    """ Reset one of the node's plugin property groups and the sockets backing its params.
+
+        @param sockByAttr - {attr: socket} of this plugin only
+        @param skipAttrs - attr names to leave untouched
+    """
+    # Params whose value lives on an input socket are reset on the socket below.
+    if (propGroup := getattr(node, pluginType, None)) is not None:
         resetPropGroupToDefaults(propGroup, pluginModule, skipAttrs=set(sockByAttr.keys()) | skipAttrs)
 
-    # Reset the socket-backed params on their sockets.
     for param in pluginModule.Parameters:
         if param['type'] == 'TEMPLATE':
             continue
@@ -61,6 +66,34 @@ def resetNode(node, pluginModule, skipAttrs=None):
             sock.value = blDefault
         except (TypeError, ValueError, AttributeError):
             pass
+
+
+def resetNode(node, skipAttrs=None):
+    """ Reset every JSON-defined parameter to its default.
+
+        Mirrors PropertyContext priority: if a param has an input socket with
+        a .value attribute (matched by vray_attr), reset that; otherwise reset
+        the PropGroup entry. TEMPLATE params are reset via the template's own
+        resetToDefaults() (handled inside resetPropGroupToDefaults).
+
+        All of the node's plugin property groups are reset, not just the one named by
+        'vray_plugin': a meta node draws several plugins on the same property page.
+
+        Dynamically-created sockets (no vray_attr, e.g. VRaySocketTexMulti) are not backed by a JSON
+        param; their value-bearing properties are reset to registered defaults via property_unset.
+        Links are preserved.
+
+        @param skipAttrs - optional set of attr names to leave untouched, on top of each plugin's
+            own preserved references (see getPreservedRefAttrs).
+    """
+    skipAttrs = set(skipAttrs or ())
+    sockByPlugin = _socketsByPlugin(node)
+    pluginTypes = [p for p in getVRayPropGroupNames(node) if p]
+
+    for pluginType in pluginTypes:
+        if pluginModule := getPluginModule(pluginType):
+            _resetPluginGroup(node, pluginType, pluginModule, sockByPlugin.get(pluginType, {}),
+                              skipAttrs | getPreservedRefAttrs(pluginType))
 
     # Dynamically-added sockets carry no vray_attr (not backed by a JSON param), so the loops above
     # never touch them. Reset their value-bearing properties to registered defaults. Values only:
@@ -81,7 +114,8 @@ def resetNode(node, pluginModule, skipAttrs=None):
     # The generic pass above reset them to property defaults, so this runs last to overlay the correct
     # values onto the existing sockets (count preserved). Mirrors the nodeInit/nodeCopy/nodeFree hooks:
     # a module-level nodeReset for generic plugin nodes, else a method on special node classes.
-    if pluginModule is not None and (fnReset := getattr(pluginModule, 'nodeReset', None)):
+    mainPluginModule = getPluginModule(getattr(node, 'vray_plugin', ''))
+    if mainPluginModule is not None and (fnReset := getattr(mainPluginModule, 'nodeReset', None)):
         fnReset(node)
     elif fnReset := getattr(node, 'nodeReset', None):
         fnReset()
@@ -146,12 +180,10 @@ class VRAY_OT_WR_reset_nodes(VRayOperatorBase):
         for node in context.space_data.edit_tree.nodes:
             if not node.select or not isVrayNode(node):
                 continue
-            plugin = getPluginTypeOfNode(node)
-            if not plugin:
+            if not getPluginTypeOfNode(node):
                 continue
-            if pluginModule := getPluginModule(plugin):
-                resetNode(node, pluginModule)
-                count += 1
+            resetNode(node)
+            count += 1
 
         if count == 0:
             self.report({'INFO'}, "No V-Ray nodes selected to reset.")

@@ -47,6 +47,7 @@
 #                          right spot.
 
 import json
+import math
 import os
 
 import bpy
@@ -67,6 +68,16 @@ _CAMERA_FALLBACK_DISTANCE = 5.0
 # Consider the ray parallel to the ground plane when |dir.z| is below this
 # threshold, and skip the ground-plane intersection.
 _GROUND_PLANE_PARALLEL_EPS = 1e-4
+
+# Object types drawn around their origin, which scene.ray_cast cannot hit - it
+# only sees evaluated geometry. None of them can hold a material either.
+_ORIGIN_DRAWN_TYPES = {'EMPTY', 'LIGHT', 'LIGHT_PROBE', 'CAMERA', 'SPEAKER'}
+
+# How close to such an object's origin a drop has to land, in pixels at a UI
+# scale of 1. Deliberately tight rather than sized to the object's display: an
+# Asset Set root is an Empty sitting at the feet of its members, and a generous
+# radius would take material drops that were meant for them.
+_ORIGIN_PICK_RADIUS_PX = 12
 
 
 def _asRevision(value) -> int:
@@ -123,7 +134,9 @@ class DropHit:
     """Outcome of a viewport drop raycast.
 
     world_pos   Where the dropped asset should be placed.
-    obj_name    Name of the Blender object the ray hit (empty string on miss).
+    obj_name    Name of the Blender object the drop landed on (empty string on
+                miss): the one the ray hit, or an Empty / light / camera whose
+                origin is under the cursor in front of it.
                 This - not context.object - is the reliable drop target: a
                 user may have a selected object elsewhere, but what they
                 visually dropped on is whatever sits under the cursor.
@@ -162,6 +175,11 @@ def _worldPosFromDrop(context: bpy.types.Context, mouse_x: int, mouse_y: int) ->
          * ray_dir) when the ray is parallel to the ground or the ground
          intersection would be behind the camera (no obj / normal).
 
+    Whichever of these places the asset, an Empty, light, camera or speaker
+    whose origin is under the cursor and in front of it becomes the target
+    object instead (see _pickOriginDrawnObject). The ray cast cannot see
+    them, and a material dropped on one has to be told it has nowhere to go.
+
     Returns None if the viewport context is unusable (operator invoked
     outside a VIEW_3D area, or region/region_3d missing) - there is no
     placement to be had, and the caller cancels rather than dropping the
@@ -185,6 +203,53 @@ def _worldPosFromDrop(context: bpy.types.Context, mouse_x: int, mouse_y: int) ->
     ray_origin = view3d_utils.region_2d_to_origin_3d(region, rv3d, coord)
     ray_dir    = view3d_utils.region_2d_to_vector_3d(region, rv3d, coord)
 
+    drop = _raycastDrop(context, ray_origin, ray_dir)
+
+    # The ray cast only sees geometry, so an Empty or a light under the cursor is never the
+    # target on its own - the drop fell through to whatever was behind it, and a material
+    # dropped on one was quietly imported unassigned. Pick such an object in screen space
+    # and let it win when it is in front. Only the target changes: placement still follows
+    # the surface or ground point, so a model dropped there lands where it did before.
+    picked, pickedDepth = _pickOriginDrawnObject(context, region, rv3d, coord,
+                                                 ray_origin, ray_dir)
+    if picked is not None and (not drop.obj_name
+                               or pickedDepth < (drop.world_pos - ray_origin).length):
+        debug.printDebug(f"Cosmos drop: '{picked.name}' is under the cursor, in front of "
+                         f"{drop.obj_name or 'the ground'!r}; it is the drop target")
+        drop.obj_name = picked.name
+        drop.slot_index = -1
+    return drop
+
+
+def _pickOriginDrawnObject(context, region, rv3d, coord, ray_origin, ray_dir):
+    """The frontmost Empty, light, camera or speaker whose origin is under the cursor.
+
+    Returns (object, distance along the drop ray), or (None, inf). These are drawn around
+    their origin rather than as geometry, so the origin is what the user aims at.
+    """
+    radius = _ORIGIN_PICK_RADIUS_PX * context.preferences.view.ui_scale
+    mouse = Vector(coord)
+    best, bestDepth = None, math.inf
+    for obj in context.visible_objects:
+        if obj.type not in _ORIGIN_DRAWN_TYPES:
+            continue
+        # An instancing Empty shows real geometry, which the ray cast already sees.
+        if obj.instance_type != 'NONE':
+            continue
+        origin = obj.matrix_world.translation
+        depth = (origin - ray_origin).dot(ray_dir)
+        if depth <= 0.0 or depth >= bestDepth:
+            continue
+        screen = view3d_utils.location_3d_to_region_2d(region, rv3d, origin)
+        if screen is None or (screen - mouse).length > radius:
+            continue
+        best, bestDepth = obj, depth
+    return best, bestDepth
+
+
+def _raycastDrop(context, ray_origin: Vector, ray_dir: Vector) -> DropHit:
+    """Resolve the drop ray against scene geometry, then the ground plane, then a point
+    ahead of the camera. See _worldPosFromDrop for the order."""
     depsgraph = context.evaluated_depsgraph_get()
     hit, location, normal, hit_poly_index, obj, _matrix = context.scene.ray_cast(
         depsgraph, ray_origin, ray_dir)
@@ -269,7 +334,6 @@ def _resolveOutlinerSlotIndex(target_obj: bpy.types.Object) -> int:
     Returns -1 if the object has no slots; the addon's default policy
     then creates slot 0 from scratch.
     """
-    print("Resolve outpliner slot")
     slots = getattr(target_obj, 'material_slots', None)
     if not slots:
         return -1

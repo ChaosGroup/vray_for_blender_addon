@@ -14,7 +14,7 @@ from vray_blender.lib.draw_utils import UIPainter
 from vray_blender.lib.names import Names
 from vray_blender.lib.sys_utils import getAppSdkLibPath
 from vray_blender.nodes.tools import isVrayNodeTree
-from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, findDataObjFromNode, getOriginalNode
+from vray_blender.nodes.utils import getVrayPropGroup, getNodeOfPropGroup, getOriginalNode
 from vray_blender.vray_tools.vray_proxy import PreviewAction, runVRayTools
 
 import bpy, json, math, os, struct, queue
@@ -271,7 +271,6 @@ def onParameterUpdate(brdfScanned, context, attrName):
     if not brdfScanned.file_info:
         return
     node = getNodeOfPropGroup(brdfScanned)
-    mat = findDataObjFromNode(bpy.data.materials, node)
     pluginDesc = PluginDesc("dummy", "BRDFScanned")
     _fillScannedPluginDesc(pluginDesc, node, brdfScanned)
     for name in dir(brdfScanned):
@@ -282,7 +281,8 @@ def onParameterUpdate(brdfScanned, context, attrName):
 
     pluginDesc.setAttribute("plain", int(brdfScanned.plain))
     pluginDesc.setAttribute("UnfRefl", int(brdfScanned.UnfRefl))
-    vray.encodeScannedParameters(mat.session_uid, node.name, json.dumps(pluginDesc.attrs))
+    # Keyed on the node's own tree, which is the group tree for a grouped node.
+    vray.encodeScannedParameters(node.id_data.session_uid, node.name, json.dumps(pluginDesc.attrs))
 
 
 def exportTreeNode(nodeCtx: NodeContext):
@@ -367,10 +367,11 @@ def scannedParamBlockFunction():
 
     try:
         while not scannedQueue.empty():
-            (materialId, nodeName, paramBlock) = scannedQueue.get()
-            for material in bpy.data.materials:
-                if material.session_uid == materialId:
-                    for node in material.node_tree.nodes:
+            (treeId, nodeName, paramBlock) = scannedQueue.get()
+            trees = [m.node_tree for m in bpy.data.materials if m.node_tree] + list(bpy.data.node_groups)
+            for ntree in trees:
+                if ntree.session_uid == treeId:
+                    for node in ntree.nodes:
                         if node.name == nodeName:
                             node.BRDFScanned.param_block = ','.join(map(str, paramBlock))
     except Exception as e:

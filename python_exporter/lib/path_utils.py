@@ -365,7 +365,7 @@ def getOutputFileName(context, imgFile, imgFormat, viewLayerName=None, allowRela
                                    viewLayerName=viewLayerName, frame=frame)
 
 
-def formatResourcePath(path: str, allowRelative: bool):
+def formatResourcePath(path: str, allowRelative: bool, library=None):
     """ Format absolute or relative path suitable for usage as path property in a 
         .vrscene file.
 
@@ -374,14 +374,22 @@ def formatResourcePath(path: str, allowRelative: bool):
         allowRelative(bool) :   if True, relative Blender paths will be formatted as 
                                 relative V-Ray paths, otherwise they will be converted
                                 to absolute
+        library:                the library of the datablock that holds the path, if it is linked.
+                                Its relative paths are relative to the library file.
     """
 
     if allowRelative and isRelativePath(path):
-        # Path is relative to the currently open .blend file. Remove the leading '//'
-        # to change into the relative path format expected by V-Ray.
-        return path[2:]
+        if library:
+            # Rebase onto the open .blend file, like the paths of local data. A path on another
+            # drive cannot be relative to it, so it stays absolute.
+            absPath = bpy.path.abspath(path, library=library)
+            path = tryGetRelativePath(absPath) or absPath
+        if isRelativePath(path):
+            # Path is relative to the currently open .blend file. Remove the leading '//'
+            # to change into the relative path format expected by V-Ray.
+            return path[2:]
     
-    return bpy.path.abspath(path)
+    return bpy.path.abspath(path, library=library)
 
 
 def tryGetRelativePath(path: str):

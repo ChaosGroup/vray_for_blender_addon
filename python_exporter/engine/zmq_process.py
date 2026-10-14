@@ -101,8 +101,10 @@ class ZMQProcess:
             callback registry, so this must be re-run after every server (re)start.
         """
         from vray_blender.utils.cosmos_handler import cosmosHandler, CosmosDownloadStatus, CosmosRelinkStatus, assetImportCallback
+        from vray_blender.utils import cosmos_variants
         from vray_blender.engine.vfb_event_handler import VfbEventHandler
         from vray_blender.plugins.BRDF.BRDFScanned import scannedLicenseCallback, scannedParamBlockCallback
+        from vray_blender.ui.vray_status import onVRayStatusChanged
 
         if ZMQProcess._engineCallbacksAttached or not ZMQProcess._started:
             return
@@ -112,6 +114,10 @@ class ZMQProcess:
         # Cosmos Browser download notifications callback
         self.assetImportCallback = lambda assetSettings: assetImportCallback(assetSettings)
         vray.setCosmosImportCallback(self.assetImportCallback)
+        self.cosmosVariantStatus = lambda token, status, message: cosmos_variants.swapStatusCallback(token, status, message)
+        vray.setCosmosVariantStatusCallback(self.cosmosVariantStatus)
+        self.cosmosVariantPreviews = lambda packageIds, revisions, mtlIndices, paths: cosmos_variants.previewsCallback(packageIds, revisions, mtlIndices, paths)
+        vray.setCosmosVariantPreviewsCallback(self.cosmosVariantPreviews)
         self.cosmosDownloadSize = lambda relinkStatus, downloadSize: cosmosHandler._setCosmosRelinkState(CosmosRelinkStatus(relinkStatus), downloadSize)
         vray.setCosmosDownloadSize(self.cosmosDownloadSize)
         self.downloadedCosmosAssets = lambda downloadStatus, assets: cosmosHandler._setCosmosDownloadedAssets(CosmosDownloadStatus(downloadStatus), assets)
@@ -123,7 +129,7 @@ class ZMQProcess:
 
         # .vrscene import notifications. The callbacks only enqueue events for the
         # import operator's modal loop; bpy data is never touched on this thread.
-        from vray_blender.nodes.operators.import_vrscene import vrsceneImportProgressCallback, vrsceneImportFinishedCallback
+        from vray_blender.vray_tools.vrscene_import import vrsceneImportProgressCallback, vrsceneImportFinishedCallback
         self._vrsceneImportProgress = lambda importId, pluginsDone, pluginsTotal, stage: \
             vrsceneImportProgressCallback(importId, pluginsDone, pluginsTotal, stage)
         vray.setVrsceneImportProgressCallback(self._vrsceneImportProgress)
@@ -173,6 +179,16 @@ class ZMQProcess:
         self._switchLicenseToCommunity = _onSwitchLicenseToCommunity
         vray.setSwitchLicenseToCommunityCallback(self._switchLicenseToCommunity)
 
+        # V-Ray readiness notifications
+        self._vrayStatusChanged = lambda ready: onVRayStatusChanged(ready)
+        vray.setVRayStatusCallback(self._vrayStatusChanged)
+
+        # Replay the current state. The server sends its status as soon as the control
+        # connection is up, which happens during vray.start() - before this callback is
+        # registered - so the first notification is regularly dropped.
+        if vray.isInitialized():
+            onVRayStatusChanged(True, force=True)
+
 
     def stop(self):
         """ Stop VRayZmqServer process """
@@ -191,6 +207,12 @@ class ZMQProcess:
 
     def _startServerProcess(self):
         assert not ZMQProcess._started
+
+        if bpy.app.background and vray.isCommunityEdition():
+            # ZmqServer refuses to run headless in CE. Exit right away instead of
+            # waiting for the server start timeout with a misleading error.
+            debug.printError("Rendering in headless mode is not supported by V-Ray for Blender Community Edition")
+            sys.exit(-1)
 
         executablePath = sys_utils.getZmqServerPath()
 
@@ -269,15 +291,25 @@ class ZMQProcess:
                 debug.printAlways('ZmqServer failed to start. Terminating application.')
                 sys.exit(-1)
 
+            # The render job's handshake allows only 15 s for the renderer to be created, too little on slow farm nodes.
+            if not ZMQProcess._waitForVRayToInitialize():
+                debug.printAlways('V-Ray failed to initialize. Terminating application.')
+                sys.exit(-1)
+
         return True
 
     @staticmethod
     def _waitForProcessToExit(processName, seconds):
-        from vray_blender.external import psutil
         # Wait for existing VRayZmqServer process to exit. This is done here and
         # not in VRayBlenderLib because python has a convenient multiplatform interface
         # for listsing the running processes, which lacks in the C++ libraries that
         # VRayBlenderLib is using.
+        psutil = sys_utils.psutil
+        if psutil is None:
+            # No process listing to consult. Carry on and let the server report the port
+            # conflict itself, rather than refusing to start over a check we cannot make.
+            return True
+
         sleepInterval = 0.2 # seconds
         waitIntervals = int(float(seconds) / sleepInterval)
 
@@ -306,6 +338,23 @@ class ZMQProcess:
                 debug.printError(f"ZMQ Server failed to start in {elapsedSeconds} seconds")
                 return False
             zmqServerChecks -= 1
+            time.sleep(0.5)
+
+        return True
+
+
+    @staticmethod
+    def _waitForVRayToInitialize():
+        from datetime import datetime
+        vrayChecks = 240
+        startTime = datetime.now()
+
+        while not vray.isInitialized():
+            if vrayChecks == 0:
+                elapsedSeconds = (datetime.now() - startTime).total_seconds()
+                debug.printError(f"V-Ray failed to initialize in {elapsedSeconds} seconds")
+                return False
+            vrayChecks -= 1
             time.sleep(0.5)
 
         return True

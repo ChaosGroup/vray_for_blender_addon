@@ -33,8 +33,9 @@ import bpy
 from mathutils import Euler, Matrix, Vector
 
 from vray_blender import debug
-from vray_blender.lib.blender_utils import selectObject
+from vray_blender.lib.blender_utils import getSceneMetersPerUnit, selectObject
 from vray_blender.lib.lib_utils import sanitizeDatablockName
+from vray_blender.utils import cosmos_notify
 from vray_blender.bin import VRayBlenderLib as vray
 
 
@@ -73,7 +74,7 @@ class AssetSetSession:
     """Tracks one in-flight set import until every member has been accounted for."""
 
     __slots__ = ('setName', 'dropOffset', 'instances', 'indexByName', 'objects', 'counted',
-                 'pending', 'lastActivity')
+                 'pending', 'failed', 'lastActivity')
 
     def __init__(self, setName: str, dropOffset: Vector, instances: list[SetInstance]):
         self.setName    = setName
@@ -92,6 +93,11 @@ class AssetSetSession:
         # Instance indices already accounted for, so a member reported twice is counted once.
         self.counted    = set()
         self.pending    = len(instances)
+        # Members that were accounted for but never made it into the scene. 'pending' cannot
+        # answer that on its own - a failure is counted like any other reply, or the set
+        # would never complete - and 'objects' cannot either, because a material member
+        # legitimately produces no object.
+        self.failed     = 0
         self.lastActivity = time.monotonic()
 
 
@@ -140,27 +146,37 @@ def _readVector(entry: dict, key: str, default: float) -> list[float]:
         return [default] * 3
 
 
-def parseManifest(filePath: str) -> list[SetInstance]:
+def parseManifest(filePath: str) -> tuple[list[SetInstance] | None, int]:
     """Parse an Asset Set settings.json into a flat list of instances.
 
     The manifest is a JSON array: element 0 is the spec-version header, the rest are member
-    packages, each with one or more instances. Returns an empty list on any failure; the
-    reason is logged.
+    packages, each with one or more instances. Returns the instances and the number of
+    entries that had to be skipped. The instances are None when the manifest could not be
+    read at all, which is already reported here - the caller must not report it again, or
+    one broken file produces two notifications. An empty list means it was read and asked
+    for nothing. Skipped entries are counted rather than reported one by one: the
+    notification queue is capped and de-duplicated, so a notification per bad entry would
+    crowd out the errors that matter. Maya drops most such entries without a message at all.
     """
+    skipped = 0
+
     if not filePath or not os.path.isfile(filePath):
-        debug.printError(f"Chaos Cosmos Asset Set: settings.json not found: {filePath!r}")
-        return []
+        cosmos_notify.error(f"Chaos Cosmos Asset Set: settings.json not found: {filePath!r}")
+        return None, skipped
 
     try:
         with open(filePath, 'r', encoding='utf-8') as f:
             root = json.load(f)
     except Exception as e:
+        # The traceback belongs in the console; the browser gets the short version.
         debug.printExceptionInfo(e, f"Chaos Cosmos Asset Set: could not read {filePath!r}")
-        return []
+        cosmos_notify.post(cosmos_notify.CosmosLevel.Error,
+                           "Chaos Cosmos Asset Set: its settings.json could not be read")
+        return None, skipped
 
     if not isinstance(root, list) or not root:
-        debug.printError(f"Chaos Cosmos Asset Set: malformed settings.json: {filePath!r}")
-        return []
+        cosmos_notify.error(f"Chaos Cosmos Asset Set: malformed settings.json: {filePath!r}")
+        return None, skipped
 
     # Element 0 is the spec-version header, members start at index 1. Only skip it when it
     # really is the header - a manifest that omits it must not lose its first member.
@@ -186,6 +202,7 @@ def parseManifest(filePath: str) -> list[SetInstance]:
                 f"Chaos Cosmos Asset Set: member {member.get('package_name', '?')!r} has no "
                 f"'package_id' or no instance list, skipping it"
             )
+            skipped += 1
             continue
 
         for entry in memberInstances:
@@ -197,6 +214,7 @@ def parseManifest(filePath: str) -> list[SetInstance]:
                     f"Chaos Cosmos Asset Set: instance of package {packageId!r} has no "
                     f"'instance_name', skipping it"
                 )
+                skipped += 1
                 continue
 
             rotation = _readVector(entry, 'rotation', 0.0)
@@ -222,13 +240,13 @@ def parseManifest(filePath: str) -> list[SetInstance]:
                 scale        = scale,
             ))
 
-    return instances
+    return instances, skipped
 
 
 def instanceMatrix(instance: SetInstance, dropOffset: Vector, unitScale: float) -> Matrix:
     """World matrix for a set instance, in Blender units.
 
-    'unitScale' is scene.unit_settings.scale_length, passed in rather than read from the
+    'unitScale' is the scene's meters per Blender unit (getSceneMetersPerUnit), passed in rather than read from the
     context so the composition can be tested without a scene.
 
     Cosmos manifests are Z-up right-handed, the same as Blender, so there is no axis
@@ -259,17 +277,27 @@ def startAssetSetImport(settings):
         # Neither Maya nor 3ds Max supports this either. Importing it anyway would place the
         # inner set at the world origin instead of at the transform the outer manifest asks
         # for, which is worse than not importing it.
-        debug.reportError(
+        cosmos_notify.reportError(
             f"Chaos Cosmos Asset Set: member '{settings.assetName}' is itself a set. "
             f"Nested sets are not supported and it was skipped."
         )
         return
 
-    instances = parseManifest(settings.settingsFile)
+    instances, skipped = parseManifest(settings.settingsFile)
+    if instances is None:
+        # The manifest could not be read, and parseManifest() has already said so.
+        return
     if not instances:
-        debug.reportError(
+        cosmos_notify.reportError(
             f"Chaos Cosmos Asset Set '{settings.assetName}' contains no instances to import")
         return
+
+    if skipped:
+        # One message for all of them - see parseManifest().
+        cosmos_notify.warning(
+            f"Chaos Cosmos Asset Set '{settings.assetName}': {skipped} manifest "
+            f"entry(s) were skipped. See the log for the reasons."
+        )
 
     dropOffset = Vector((settings.worldX, settings.worldY, settings.worldZ)) \
         if getattr(settings, 'hasDropCoords', False) else Vector((0.0, 0.0, 0.0))
@@ -291,12 +319,16 @@ def startAssetSetImport(settings):
     )
 
 
-def noteSetInstance(settings, obj: bpy.types.Object | None) -> bool:
+def noteSetInstance(settings, obj: bpy.types.Object | None, imported: bool = True) -> bool:
     """Account for one imported set member, placing it when it produced an object.
 
     Called for every import that carries a setInstanceToken, whatever its asset type - a
     member that produces no object (a material) still has to be counted, or the set would
     never reach completion and never get parented.
+
+    'imported' is False for a member that never made it into the scene. It is counted all
+    the same, but separately, so that the set does not report a success over the failures
+    the user has just been shown.
 
     Returns False when the member's set is already gone, i.e. it arrived after the session
     timed out. The caller must then treat it as a plain import, because nothing will place
@@ -317,9 +349,12 @@ def noteSetInstance(settings, obj: bpy.types.Object | None) -> bool:
         session.counted.add(index)
 
     if instance is not None and obj is not None:
-        unitScale = bpy.context.scene.unit_settings.scale_length
+        unitScale = getSceneMetersPerUnit(bpy.context)
         obj.matrix_world = instanceMatrix(instance, session.dropOffset, unitScale)
         session.objects[index] = obj
+
+    if not imported:
+        session.failed += 1
 
     session.pending -= 1
     session.lastActivity = time.monotonic()
@@ -346,11 +381,13 @@ def tickSessions():
         if session.pending <= 0:
             _finalize(setToken)
         elif now - session.lastActivity > _SESSION_TIMEOUT_SECONDS:
-            debug.reportError(
+            # Logged here, shown to the user by _finalize - which knows whether anything
+            # arrived at all, and would otherwise report a success right on top of this.
+            debug.printError(
                 f"Chaos Cosmos Asset Set '{session.setName}': {session.pending} instance(s) "
                 f"never arrived, finalizing the set without them"
             )
-            _finalize(setToken)
+            _finalize(setToken, timedOut=True)
 
 
 def _resolve(instanceToken: str):
@@ -389,8 +426,12 @@ def _parentKeepTransform(child: bpy.types.Object, parent: bpy.types.Object):
     child.matrix_parent_inverse = parent.matrix_world.inverted()
 
 
-def _finalize(setToken: str):
-    """Rebuild the manifest hierarchy, add the set root, and close the session."""
+def _finalize(setToken: str, timedOut: bool = False):
+    """Rebuild the manifest hierarchy, add the set root, and close the session.
+
+    'timedOut' says the set gave up waiting, so the result is reported as incomplete
+    rather than as a success.
+    """
     session = _sessions.pop(setToken, None)
     if session is None:
         return
@@ -430,8 +471,24 @@ def _finalize(setToken: str):
         # arrive - an arbitrary one - would stay selected.
         selectObject(setRoot)
 
+    # One message for the whole set - its members are not announced individually. The
+    # count is of the instances the manifest asked for, NOT of session.objects, which
+    # holds only those that produced an object and so is short by every material member
+    # even when the set imported perfectly.
+    # A member that failed was counted like any other reply, so it has left 'pending' - it
+    # is missing from the scene all the same and must not be reported as a success.
+    total = len(session.instances)
+    absent = max(session.pending, 0) + session.failed
+    if timedOut or absent:
+        cosmos_notify.warning(
+            f"Chaos Cosmos Asset Set '{session.setName}' was imported without "
+            f"{absent} of its {total} instance(s)")
+    else:
+        cosmos_notify.success(
+            f"Successfully imported asset: {session.setName} ({total} instance(s))")
+
     debug.printInfo(
-        f"Chaos Cosmos Asset Set '{session.setName}': placed {len(session.objects)} instance(s)")
+        f"Chaos Cosmos Asset Set '{session.setName}': placed {len(session.objects)} object(s)")
 
     if session.objects:
         # One undo step for the whole set. The per-member pushes are suppressed while a set is

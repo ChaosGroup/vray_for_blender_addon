@@ -4,14 +4,20 @@
 
 """ Per-plugin node creators for the import engine; dispatched from engine.createNode. """
 
+import os
+
 import bpy
 
 from vray_blender.plugins.BRDF import BRDFScanned
-from vray_blender.lib import attribute_utils
-from vray_blender.lib import image_utils
-from vray_blender.nodes.curves_node import getCurvesNode, encodeMapping
+from vray_blender.plugins.BRDF.BRDFLayered import getLayerSocketNames
+from vray_blender.plugins.texture.TexBerconGrad import toGradRampInterpolation
+from vray_blender.lib import attribute_utils, image_utils
+from vray_blender.nodes.curves_node import getCurvesNode, storeCurvesData
 from vray_blender.nodes import utils as NodeUtils
 from vray_blender.nodes.sockets import addInput, getHiddenInput, moveExtendSocketToBottom
+from vray_blender.nodes.specials.gradient_ramp import _manageRampSockets, _texIndexToSockName
+from vray_blender.nodes.specials.material import getMaterialSockets
+from vray_blender.nodes.specials.texture import VRayNodeTexLayeredMax
 from vray_blender import debug
 from vray_blender.exporting.tools import getInputSocketByName, getInputSocketByAttr, getOutputSocketByAttr
 from vray_blender.vray_tools.import_common import getPluginByName
@@ -23,17 +29,18 @@ from vray_blender.nodes.importing.engine import (
     loadImage,
     _assignSocketValue,
     _collapseToValue,
-    _createGenericNode,
-    _createLinkedNode,
+    _createTypedNode,
+    createLinkedNode,
     _fillNodeProperties,
     _getInputSocket,
     _getPluginConnectedToInput,
-    _getPluginFromLink,
-    _isPluginLink,
-    _pluginAttrsToNodeProps,
-    _pluginAttrsToPropGroup,
+    getPluginFromLink,
+    isPluginLink,
+    pluginAttrsToNodeProps,
+    pluginAttrsToPropGroup,
 )
 
+import numpy as np
 from numpy import allclose
 from mathutils import Matrix, Color, Vector
 
@@ -45,20 +52,26 @@ def _getOptionalPluginConnectedToInput(importContext, inputAttrName, pluginDesc)
     return _getPluginConnectedToInput(importContext, inputAttrName, pluginDesc)
 
 
+def _linkOrAssignSocket(importContext: ImportContext, inputSocket, attrValue):
+    """ Link what 'attrValue' references into 'inputSocket', or assign it as a literal value. The PLUGIN_LISTs this
+        fills (TexLayered.textures, TexMulti.textures_list) hold either.
+
+        A dangling reference is dropped rather than assigned, since a BRDF socket's value is a string and would
+        end up holding the missing plugin's name. """
+    connectedPlugin, connectedOutput = getPluginFromLink(importContext, attrValue)
+
+    if connectedPlugin:
+        createLinkedNode(importContext, inputSocket, connectedOutput, connectedPlugin)
+    elif not isPluginLink(attrValue):
+        _assignSocketValue(inputSocket, attrValue)
+
+
 def _createNodeBRDFLayered(importContext: ImportContext, pluginDesc):
-    from vray_blender.plugins.BRDF.BRDFLayered import getLayerSocketNames
 
     def processSocket(inputSocket, attrValue):
         # Could happen with some broken files
-        if not attrValue:
-            return
-
-        connectedPlugin, connectedOutput = _getPluginFromLink(importContext, attrValue)
-
-        if connectedPlugin:
-            _createLinkedNode(importContext, inputSocket, connectedOutput, connectedPlugin)
-        else:
-             _assignSocketValue(inputSocket, attrValue)
+        if attrValue:
+            _linkOrAssignSocket(importContext, inputSocket, attrValue)
 
     brdfs     = pluginDesc['Attributes'].get('brdfs')
     weights   = pluginDesc['Attributes'].get('weights')
@@ -129,16 +142,16 @@ def _applyBitmapColorSpace(image: bpy.types.Image, bitmapBufferAttrs: dict):
     """ Set the Blender image's colorspace from the V-Ray BitmapBuffer color space, the
         inverse of exporting/cycles_export._exportCyclesImageNode. Leaves Blender's default
         for color spaces not representable by a fixed Blender name. """
-    cs = _RGB_COLOR_SPACE_ALIASES.get(str(bitmapBufferAttrs.get('rgb_color_space', '')).strip().lower())
-    if cs == 'raw':
+    colorSpace = _RGB_COLOR_SPACE_ALIASES.get(str(bitmapBufferAttrs.get('rgb_color_space', '')).strip().lower())
+    if colorSpace == 'raw':
         name, isData = 'Non-Color', True
-    elif cs == 'acescg':
+    elif colorSpace == 'acescg':
         name, isData = 'ACEScg', False
-    elif cs == 'lin_srgb':
-        tf = str(bitmapBufferAttrs.get('transfer_function', '3'))
-        name, isData = ('Linear Rec.709' if tf == '0' else 'sRGB'), False
+    elif colorSpace == 'lin_srgb':
+        transferFunction = str(bitmapBufferAttrs.get('transfer_function', '3'))
+        name, isData = ('Linear Rec.709' if transferFunction == '0' else 'sRGB'), False
     else:
-        return   # OCIO / unknown name: keep Blender's auto-assigned colorspace.
+        return   # An OCIO or unknown name keeps Blender's auto-assigned colorspace.
     try:
         image.colorspace_settings.name = name
         image.colorspace_settings.is_data = isData
@@ -149,15 +162,14 @@ def _applyBitmapColorSpace(image: bpy.types.Image, bitmapBufferAttrs: dict):
 def _imageFromRawBitmap(name: str, bufferAttrs: dict, ledger = None):
     """ Build a packed Blender image from a RawBitmapBuffer's embedded pixel data.
 
-        RawBitmapBuffer has no external file - the pixels live inline as an INT_LIST, with
+        RawBitmapBuffer has no external file. The pixels live inline as an INT_LIST, with
         'pixels_type' selecting the encoding (see the plugin descriptor). Decodes the RGBA
         float / 8-bit forms into a packed image; other encodings are skipped with a warning.
 
         Tracks a newly created image in 'ledger'; an image reused for a buffer already decoded
         is not tracked again. """
-    import numpy as np
 
-    # Several TexBitmaps commonly share one RawBitmapBuffer - decoding it per TexBitmap would
+    # Several TexBitmaps commonly share one RawBitmapBuffer. Decoding it per TexBitmap would
     # duplicate the image datablock and re-run the PNG encode in pack(). Reuse it untracked,
     # the way loadImage reuses an already loaded file.
     if (existing := bpy.data.images.get(name)) is not None:
@@ -170,19 +182,19 @@ def _imageFromRawBitmap(name: str, bufferAttrs: dict, ledger = None):
     if pixels is None or w <= 0 or h <= 0:
         return None
 
-    ints = np.ascontiguousarray(np.asarray(pixels, dtype=np.int32))
+    intPixels = np.ascontiguousarray(np.asarray(pixels, dtype=np.int32))
     if pixelType == 1:                                    # Float RGBA: ints are float32 bit patterns
-        if ints.size != w * h * 4:
+        if intPixels.size != w * h * 4:
             return None
-        rgba = ints.view(np.float32).reshape(h, w, 4)
+        rgba = intPixels.view(np.float32).reshape(h, w, 4)
         isFloat = True
     elif pixelType == 0:                                  # 8-bit RGBA
-        u = ints.view(np.uint32)
-        if u.size == w * h:                               # one packed 32-bit pixel per int
-            rgba = u.view(np.uint8).reshape(h, w, 4).astype(np.float32)
+        uintPixels = intPixels.view(np.uint32)
+        if uintPixels.size == w * h:                               # one packed 32-bit pixel per int
+            rgba = uintPixels.view(np.uint8).reshape(h, w, 4).astype(np.float32)
             rgba *= 1.0 / 255.0
-        elif u.size == w * h * 4:                     # one byte per int
-            rgba = ints.astype(np.float32).reshape(h, w, 4) / 255.0
+        elif uintPixels.size == w * h * 4:                     # one byte per int
+            rgba = intPixels.astype(np.float32).reshape(h, w, 4) / 255.0
         else:
             return None
         isFloat = False
@@ -213,9 +225,9 @@ def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
 
     # Normalize the color-space name to one the BitmapBuffer enum accepts (C4D/other hosts
     # write aliases like "sRGB" / "scene-linear Rec.709-sRGB").
-    if (rawCs := bitmapBufferAttrs.get('rgb_color_space')) is not None:
-        if (norm := _RGB_COLOR_SPACE_ALIASES.get(str(rawCs).strip().lower())) is not None:
-            bitmapBufferAttrs['rgb_color_space'] = norm
+    if (rawColorSpace := bitmapBufferAttrs.get('rgb_color_space')) is not None:
+        if (normalizedSpace := _RGB_COLOR_SPACE_ALIASES.get(str(rawColorSpace).strip().lower())) is not None:
+            bitmapBufferAttrs['rgb_color_space'] = normalizedSpace
     imageFilepath = importContext.resolvePath(bitmapBufferAttrs.get('file'))
     importDir = importContext.sceneBaseDir or None
 
@@ -226,14 +238,17 @@ def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
 
     if isRawBuffer:
         # RawBitmapBuffer holds embedded pixel data, no external file. The tracking belongs
-        # inside _imageFromRawBitmap: an image shared with another TexBitmap must not be
-        # tracked twice, or rollback would try to remove it twice.
+        # inside _imageFromRawBitmap, because an image shared with another TexBitmap must
+        # not be tracked twice, or rollback would try to remove it twice.
         if rawImg := _imageFromRawBitmap(bitmapBufferName, bitmapBufferAttrs,
                                          ledger=importContext.ledger):
             bitmapTexture.image = rawImg
             _applyBitmapColorSpace(rawImg, bitmapBufferAttrs)
     elif isIFL:
-        # An .ifl is a text file listing frames, not a Blender image.
+        # An .ifl is a text file listing frames, not a Blender image. resolvePath() already
+        # anchored it to the scene directory; a live re-export has no such directory of its
+        # own to fall back on, so the raw (possibly relative) source string must not survive.
+        bitmapBufferAttrs['file'] = imageFilepath
         imageTextureNode.BitmapBuffer.use_external_image = True
     else:
         loadPath = imageFilepath.replace('<UDIM>', '1001').replace('<UVTILE>', 'u1_v1') if isUDIM else imageFilepath
@@ -244,56 +259,63 @@ def _createNodeTexBitmap(importContext: ImportContext, pluginDescTexBitmap):
         if image := bitmapTexture.image:
             if isUDIM:
                 image.source = 'TILED'
-                image.filepath = imageFilepath
+                # A <UDIM>/<UVTILE> token never matches a real file, so resolvePath() left it
+                # relative. Anchor it here the way loadImage() anchors a plain path, or
+                # a live re-export (which has no scene directory to fall back on) loses it.
+                image.filepath = (imageFilepath if os.path.isabs(imageFilepath) or not importDir
+                                  else os.path.normpath(os.path.join(importDir, imageFilepath)))
             elif bitmapBufferAttrs.get('frame_sequence'):
                 image.source = 'SEQUENCE'
                 imageUser = bitmapTexture.image_user
                 if not image_utils.applyDetectedSequenceRange(imageUser, image):
-                    # Files not on disk - fall back to the offset stored in the .vrscene.
+                    # Files not on disk. Fall back to the offset stored in the .vrscene.
                     if (importedFrameOffset := bitmapBufferAttrs.get('frame_offset')) is not None:
                         imageUser.frame_offset = int(importedFrameOffset)
 
             _applyBitmapColorSpace(image, bitmapBufferAttrs)
 
-    # Filling the Mapping Socket of Texture
-    if "uvwgen" in pluginDescTexBitmap['Attributes']:
-        connectedPlugin, outputSocketName = _getPluginConnectedToInput(
-            importContext, "uvwgen", pluginDescTexBitmap)
-        if connectedPlugin:
-            connectedNode = createNode(importContext, connectedPlugin)
-            if connectedNode:
-                importContext.nodeTree.links.new(
-                    connectedNode.outputs[outputSocketName],
-                    imageTextureNode.inputs["Mapping"]
-                )
+    # Fill the mapping socket. UVWGenPlanarWorld has no 'Mapping' output, so resolve the named one.
+    if uvwgenRef := pluginDescTexBitmap['Attributes'].get('uvwgen'):
+        _linkOrAssignSocket(importContext, imageTextureNode.inputs["Mapping"], uvwgenRef)
 
-    _pluginAttrsToNodeProps(pluginDescTexBitmap, imageTextureNode)
+    pluginAttrsToNodeProps(pluginDescTexBitmap, imageTextureNode)
     if isRawBuffer:
         # RawBitmapBuffer has no property group of its own, but everything on it except the
-        # pixel payload - colour space, transfer function, gamma, filtering - is shared with
-        # BitmapBuffer, so it belongs on that group. _pluginAttrsToPropGroup skips the attrs
+        # pixel payload (colour space, transfer function, gamma, filtering) is shared with
+        # BitmapBuffer, so it belongs on that group. pluginAttrsToPropGroup skips the attrs
         # the group lacks, which is exactly pixels/alpha_pixels/pixels_type/width/height.
-        _pluginAttrsToPropGroup(pluginDescBitmapBuffer, imageTextureNode.BitmapBuffer,
+        pluginAttrsToPropGroup(pluginDescBitmapBuffer, imageTextureNode.BitmapBuffer,
                                 'BitmapBuffer')
     else:
-        _pluginAttrsToNodeProps(pluginDescBitmapBuffer, imageTextureNode)
+        pluginAttrsToNodeProps(pluginDescBitmapBuffer, imageTextureNode)
 
     return imageTextureNode
 
 
+def _rampInterpolation(value, default=1):
+    """ A ramp's interpolation enum. Some exporters send it as a 1-element list. """
+    if isinstance(value, (list, tuple)):
+        return value[0] if value else default
+    return value
+
+
+def _rampChildNode(node: bpy.types.Node):
+    """ The color ramp node a ramp texture's nodeInit attached to its ramp socket, or None. """
+    sock = next((s for s in node.inputs if s.bl_idname == 'VRaySocketColorRamp'), None)
+    return sock.links[0].from_node if sock is not None and sock.links else None
+
+
 def _fillRamp(importContext: ImportContext, rampNode: bpy.types.Node, colors, positions, interpolation):
-    from vray_blender.nodes.specials.gradient_ramp import _manageRampSockets, _texIndexToSockName
 
     ramp = rampNode.texture.color_ramp
 
-    if isinstance(interpolation, (list, tuple)):
-        interpolation = interpolation[0] if interpolation else 1
+    interpolation = _rampInterpolation(interpolation)
 
     # Resolve each stop to a flat color or a texture link into its "Point N" socket.
     stops = []
     for col, pos in zip(colors, positions):
         flat, tex = None, None
-        if _isPluginLink(col):
+        if isPluginLink(col):
             conPlugin = getPluginByName(importContext.vrsceneDict, col)
             if conPlugin is not None and conPlugin['ID'] in CollapsibleTypes:
                 flat = _collapseToValue(importContext, conPlugin)
@@ -302,7 +324,7 @@ def _fillRamp(importContext: ImportContext, rampNode: bpy.types.Node, colors, po
         else:
             flat = col
         stops.append({'color': flat, 'tex': tex,
-                      'position': pos if not _isPluginLink(pos) else None})
+                      'position': pos if not isPluginLink(pos) else None})
 
     # Blender's ColorRamp ships with 2 elements and must retain at least one.
     while len(ramp.elements) < len(stops):
@@ -315,10 +337,10 @@ def _fillRamp(importContext: ImportContext, rampNode: bpy.types.Node, colors, po
     elementStep = 1.0 / len(ramp.elements)
     for i, stop in enumerate(stops):
         col = stop['color'] if stop['color'] is not None else (1.0, 1.0, 1.0)
-        el = ramp.elements[i]
+        element = ramp.elements[i]
         # TODO: Alpha?
-        el.color = [col[0], col[1], col[2], 1.0]
-        el.position = stop['position'] if stop['position'] is not None else i * elementStep
+        element.color = [col[0], col[1], col[2], 1.0]
+        element.position = stop['position'] if stop['position'] is not None else i * elementStep
 
     _manageRampSockets(rampNode, ramp)
     for i, stop in enumerate(stops):
@@ -326,9 +348,9 @@ def _fillRamp(importContext: ImportContext, rampNode: bpy.types.Node, colors, po
             continue
         if (pointSock := rampNode.inputs.get(_texIndexToSockName(i))) is None:
             continue
-        connectedPlugin, output = _getPluginFromLink(importContext, stop['tex'])
+        connectedPlugin, output = getPluginFromLink(importContext, stop['tex'])
         if connectedPlugin is not None:
-            _createLinkedNode(importContext, pointSock, output, connectedPlugin)
+            createLinkedNode(importContext, pointSock, output, connectedPlugin)
 
 
 def _createNodeTexGradRamp(importContext: ImportContext, pluginDesc: dict):
@@ -339,12 +361,10 @@ def _createNodeTexGradRamp(importContext: ImportContext, pluginDesc: dict):
                         skippedAttrs={'colors', 'positions', 'interpolation'})
     attributes = pluginDesc['Attributes']
 
-    # TexGradRamp only has 1 input socket of this type.
-    rampSock = [sock for sock in texGradRamp.inputs if sock.bl_idname == 'VRaySocketColorRamp'][0]
-    rampNode = rampSock.links[0].from_node
+    rampNode = _rampChildNode(texGradRamp)
 
     # skipDefaults omits the ramp lists when the source ramp is left at its default.
-    if (colors := attributes.get('colors')) and (positions := attributes.get('positions')):
+    if rampNode is not None and (colors := attributes.get('colors')) and (positions := attributes.get('positions')):
         _fillRamp(importContext,
             rampNode,
             colors,
@@ -363,18 +383,13 @@ def _createNodeTexRamp(importContext: ImportContext, pluginDesc: dict):
     _fillNodeProperties(importContext, texRamp, pluginDesc, 'TexRamp')
     attributes = pluginDesc['Attributes']
 
-    rampSocks = [sock for sock in texRamp.inputs if sock.bl_idname == 'VRaySocketColorRamp']
-    if rampSocks and rampSocks[0].links and 'colors' in attributes and 'positions' in attributes:
-        rampNode = rampSocks[0].links[0].from_node
-        # V-Ray TexRamp has a single interpolation enum; some exporters send it as a 1-element list.
-        interpolation = attributes.get('interpolation', 1)
-        if isinstance(interpolation, (list, tuple)):
-            interpolation = interpolation[0] if interpolation else 1
+    rampNode = _rampChildNode(texRamp)
+    if rampNode is not None and 'colors' in attributes and 'positions' in attributes:
         _fillRamp(importContext,
             rampNode,
             attributes['colors'],
             attributes['positions'],
-            interpolation
+            attributes.get('interpolation', 1)
         )
 
     return texRamp
@@ -383,7 +398,6 @@ def _createNodeTexRamp(importContext: ImportContext, pluginDesc: dict):
 def _createNodeTexBerconGrad(importContext: ImportContext, pluginDesc: dict):
     """ Import-only Bercon gradient. Mirrors _createNodeTexRamp: the color ramp child node is
         created by TexBerconGrad's nodeInit; fill it from the plugin's colors/positions. """
-    from vray_blender.plugins.texture.TexBerconGrad import toGradRampInterpolation
 
     texBerconGrad = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexBerconGrad', pluginDesc['Name'])
 
@@ -391,14 +405,16 @@ def _createNodeTexBerconGrad(importContext: ImportContext, pluginDesc: dict):
                         skippedAttrs={'colors', 'positions', 'interpolation'})
     attributes = pluginDesc['Attributes']
 
-    rampSocks = [sock for sock in texBerconGrad.inputs if sock.bl_idname == 'VRaySocketColorRamp']
-    if rampSocks and rampSocks[0].links and \
+    rampNode = _rampChildNode(texBerconGrad)
+    if rampNode is not None and \
             (colors := attributes.get('colors')) and (positions := attributes.get('positions')):
+        # Unwrapped before the mapper, which does int(float(...)) and cannot take a list.
+        berconInterp = _rampInterpolation(attributes.get('interpolation', 0), default=0)
         _fillRamp(importContext,
-            rampSocks[0].links[0].from_node,
+            rampNode,
             colors,
             positions,
-            toGradRampInterpolation(attributes.get('interpolation', 0))
+            toGradRampInterpolation(berconInterp)
         )
 
     return texBerconGrad
@@ -412,13 +428,13 @@ def _createNodeMtlDisplacement(importContext: ImportContext, pluginDesc: dict):
     node = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeMtlDisplacement', pluginDesc['Name'])
     _fillNodeProperties(importContext, node, pluginDesc, 'MtlDisplacement',
                         skippedAttrs={'min_bound', 'max_bound'})
-    pg = node.MtlDisplacement
+    propGroup = node.MtlDisplacement
     if attrs.get('use_bounds') or 'min_bound' in attrs or 'max_bound' in attrs:
-        pg.use_bounds = True
-        if (mb := attrs.get('min_bound')) is not None:
-            pg.min_bound_float = mb[0] if isinstance(mb, (list, tuple)) else mb
-        if (xb := attrs.get('max_bound')) is not None:
-            pg.max_bound_float = xb[0] if isinstance(xb, (list, tuple)) else xb
+        propGroup.use_bounds = True
+        if (minBound := attrs.get('min_bound')) is not None:
+            propGroup.min_bound_float = minBound[0] if isinstance(minBound, (list, tuple)) else minBound
+        if (maxBound := attrs.get('max_bound')) is not None:
+            propGroup.max_bound_float = maxBound[0] if isinstance(maxBound, (list, tuple)) else maxBound
     # displacement_amount (distance-typed) is already scaled by _fillNodeProperties above.
     return node
 
@@ -436,7 +452,7 @@ def _collapseValueList(importContext: ImportContext, values):
     """ Collapse a list of FloatToTex/plugin-link values to plain floats for a spline. """
     out = []
     for v in values:
-        if _isPluginLink(v):
+        if isPluginLink(v):
             plugin = getPluginByName(importContext.vrsceneDict, v)
             v = _collapseToValue(importContext, plugin) if plugin is not None else 0.0
         out.append(v if v is not None else 0.0)
@@ -495,7 +511,7 @@ def _createNodeBRDFToonMtl(importContext: ImportContext, pluginDesc: dict):
         interps = attrs.get('highlight_interpolations') or [1] * len(positions)
         _importRemapSplineData(positions, _collapseValueList(importContext, values),
                                interps, curvesNode.mapping.curves[3])
-        node.BRDFToonMtl['curves_data'] = encodeMapping(curvesNode.mapping)
+    storeCurvesData(node)
     return node
 
 
@@ -518,6 +534,7 @@ def _createNodeVolumeVRayToon(importContext: ImportContext, pluginDesc: dict):
         curvesNode = getCurvesNode(node, f'_{curveType}')
         _importRemapSplineData(positions, _collapseValueList(importContext, values),
                                interps, curvesNode.mapping.curves[3])
+    storeCurvesData(node)
     return node
 
 
@@ -586,13 +603,13 @@ def _fillRemap(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
         _curve('saturation', 1)
         _curve('value', 2)
     elif _has('float_positions', 'float_values', 'float_types'):
-        # RemapValue (float -> float): a single combined curve.
+        # RemapValue (float -> float) has a single combined curve.
         texRemap.color_spline_type = "0"
         _curve('float', 3)
     elif any(k.endswith(('_positions', '_values')) for k in attributes):
         # Curve keys present but not in a recognized layout.
         debug.printWarning("TexRemap: no recognized remap curve data; leaving the default curve")
-    # else: no curve data at all -> the linear input_min/max -> output_min/max mode.
+    # With no curve data at all, the linear input_min/max -> output_min/max mode applies.
 
 
 def _fillRemapFromBezierCurve(texRemap, mapping: bpy.types.CurveMapping, attributes: dict):
@@ -667,12 +684,14 @@ def _createNodeTexRemap(importContext: ImportContext, pluginDesc: dict):
     typeKeys = {k for k in attributes if '_types' in k}
     _fillNodeProperties(importContext, texRemapNode, pluginDesc, 'TexRemap', skippedAttrs=typeKeys)
 
+    storeCurvesData(texRemapNode)
     return texRemapNode
 
 
-def _createNodeTexRemapFromBezierCurve(importContext: ImportContext, pluginDesc: dict, isColor: False):
+def _createNodeTexRemapFromBezierCurve(importContext: ImportContext, pluginDesc: dict):
     texRemapNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexRemap', pluginDesc['Name'])
 
+    isColor = pluginDesc['ID'] == 'TexBezierCurveColor'
     attributes = pluginDesc['Attributes']
     curvesNode = getCurvesNode(texRemapNode)
 
@@ -688,8 +707,9 @@ def _createNodeTexRemapFromBezierCurve(importContext: ImportContext, pluginDesc:
 
     if connectedPlugin:
         inputColorSocket = getInputSocketByAttr(texRemapNode, 'input_color')
-        _createLinkedNode(importContext, inputColorSocket, connectedOutput, connectedPlugin)
+        createLinkedNode(importContext, inputColorSocket, connectedOutput, connectedPlugin)
 
+    storeCurvesData(texRemapNode)
     return texRemapNode
 
 
@@ -699,21 +719,20 @@ def _createNodeTexVectorProduct(importContext: ImportContext, pluginDesc: dict):
     _fillNodeProperties(importContext, texVectorProductNode, pluginDesc, 'TexVectorProduct')
 
     attributes = pluginDesc['Attributes']
-    if (inp1 := attributes.get("input1")) and isinstance(inp1, Color):
+    if (input1Value := attributes.get("input1")) and isinstance(input1Value, Color):
         vectorNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeVector')
-        vectorNode.value = Vector(inp1[:])
+        vectorNode.value = Vector(input1Value[:])
         importContext.nodeTree.links.new(vectorNode.outputs[0], getInputSocketByAttr(texVectorProductNode, "input1"))
     return texVectorProductNode
 
 
 def _createNodeMtlMulti(importContext: ImportContext, pluginDesc: dict):
-    """ Import a MtlMulti used as a SWITCH material (it has an mtlid_gen* generator) into
+    """ Import a MtlMulti used as a switch material (it has an mtlid_gen* generator) into
         a VRayNodeMtlMulti ("V-Ray Switch Mtl") node: wire each sub-material into a
         'Material N' socket with its ID, and the generator into 'Switch Texture'.
 
-        A MtlMulti WITHOUT a generator is a per-face-ID multi-material and is handled as
+        A MtlMulti without a generator is a per-face-ID multi-material and is handled as
         object material slots by the scene importer, not through this node. """
-    from vray_blender.nodes.specials.material import getMaterialSockets
 
     attrs = pluginDesc['Attributes']
     mtls = attrs.get('mtls_list')
@@ -733,10 +752,11 @@ def _createNodeMtlMulti(importContext: ImportContext, pluginDesc: dict):
             sock.enabled = True
             if ids and i < len(ids):
                 sock.value = int(ids[i])
-            if _isPluginLink(mtl):
-                connectedPlugin, connectedOutput = _getPluginFromLink(importContext, mtl)
+            # No _linkOrAssignSocket here, because this socket carries the material ID set above.
+            if isPluginLink(mtl):
+                connectedPlugin, connectedOutput = getPluginFromLink(importContext, mtl)
                 if connectedPlugin:
-                    _createLinkedNode(importContext, sock, connectedOutput, connectedPlugin)
+                    createLinkedNode(importContext, sock, connectedOutput, connectedPlugin)
 
     return node
 
@@ -780,12 +800,7 @@ def _createNodeTexMulti(importContext: ImportContext, pluginDesc: dict):
             sock.use = True
             if ids and i < len(ids):
                 sock.id = int(ids[i])
-            if _isPluginLink(tex):
-                connectedPlugin, connectedOutput = _getPluginFromLink(importContext, tex)
-                if connectedPlugin:
-                    _createLinkedNode(importContext, sock, connectedOutput, connectedPlugin)
-            else:
-                _assignSocketValue(sock, tex)
+            _linkOrAssignSocket(importContext, sock, tex)
 
     # The exporter emits every socket with 'use' set, linked or not.
     for sock in texSockets[len(textures):]:
@@ -845,7 +860,6 @@ def _mapTexLayeredBlendModes(blendModes, pluginName: str) -> list[int]:
 def _createNodeTexLayered(importContext: ImportContext, pluginDesc: dict):
     """ Builds a TexLayeredMax node for both TexLayeredMax and its DCC-neutral sibling
         TexLayered, which is the same texture without per-layer masks and opacities. """
-    from vray_blender.nodes.specials.texture import VRayNodeTexLayeredMax
 
     textures = pluginDesc['Attributes'].get('textures')
     masks = pluginDesc['Attributes'].get('masks')
@@ -877,21 +891,10 @@ def _createNodeTexLayered(importContext: ImportContext, pluginDesc: dict):
             opacitySocket = getHiddenInput(texLayeredNode, f"Opacity {humanIndex}")
             blendModeSocket = getHiddenInput(texLayeredNode, f"Blend Mode {humanIndex}")
 
-            if _isPluginLink(texture):
-                connectedPlugin, connectedOutput = _getPluginFromLink(importContext, texture)
-                if connectedPlugin:
-                    _createLinkedNode(importContext, textureSocket, connectedOutput, connectedPlugin)
-            else:
-                textureSocket.value = texture
+            _linkOrAssignSocket(importContext, textureSocket, texture)
 
             if masks and i < len(masks):
-                mask = masks[i]
-                if _isPluginLink(mask):
-                    connectedPlugin, connectedOutput = _getPluginFromLink(importContext, mask)
-                    if connectedPlugin:
-                        _createLinkedNode(importContext, maskSocket, connectedOutput, connectedPlugin)
-                else:
-                    maskSocket.value = mask
+                _linkOrAssignSocket(importContext, maskSocket, masks[i])
 
             opacitySocket.value = float(opacities[i]) if opacities and i < len(opacities) else 1.0
             if blendModes and i < len(blendModes):
@@ -965,7 +968,7 @@ def _createNodeTexNormalMap(importContext: ImportContext, pluginDesc: dict):
         _fillNodeProperties(importContext, normalBumpNode, normalMap, "TexNormalBump", {'bump_tex_color'})
     if texmap:
         if bumpTexSocket := _getInputSocket(normalBumpNode, "bump_tex_color"):
-            _createLinkedNode(importContext, bumpTexSocket, outputName, texmap)
+            createLinkedNode(importContext, bumpTexSocket, outputName, texmap)
 
     return normalBumpNode
 
@@ -987,7 +990,7 @@ def _createNodeUVWGenChannel(importContext: ImportContext, pluginDesc: dict):
 
     if isIdentity and not hasChannelOverride:
         return None
-    return _createGenericNode(importContext, pluginDesc)
+    return _createTypedNode(importContext, pluginDesc)
 
 
 def _createNodeUVWGenSelect(importContext: ImportContext, pluginDesc: dict):
@@ -995,27 +998,28 @@ def _createNodeUVWGenSelect(importContext: ImportContext, pluginDesc: dict):
     # wrapping material's map. There is no Blender node for it; fixPluginParams populates the
     # 'uvwgen' fallback from the MtlUVWSelect wrapper (see _resolveUVWGenSelectFallbacks).
     fallbackRef = pluginDesc['Attributes'].get('uvwgen')
-    if _isPluginLink(fallbackRef):
-        if (fallbackPlugin := _getPluginFromLink(importContext, fallbackRef)[0]) is not None:
+    if isPluginLink(fallbackRef):
+        if (fallbackPlugin := getPluginFromLink(importContext, fallbackRef)[0]) is not None:
             return createNode(importContext, fallbackPlugin)
     return None
 
 
-def _createMappingNode(importContext: ImportContext, pluginDesc, pluginType):
+# The UVWGen plugins the single VRayNodeUVWMapping node stands in for, and the mode each
+# one selects on it. Doubles as the NODE_CREATORS registration list for _createMappingNode.
+_MAPPING_NODE_TYPES = {
+    'UVWGenMayaPlace2dTexture': 'UV',
+    'UVWGenProjection':         'PROJECTION',
+    'UVWGenObject':             'OBJECT',
+    'UVWGenEnvironment':        'ENVIRONMENT',
+}
+
+
+def _createMappingNode(importContext: ImportContext, pluginDesc):
+    pluginType = pluginDesc['ID']
     pluginName = pluginDesc['Name']
     mappingNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeUVWMapping', pluginName)
 
-    match pluginType:
-        case 'UVWGenMayaPlace2dTexture':
-            mappingNode.mapping_node_type = 'UV'
-        case 'UVWGenProjection':
-            mappingNode.mapping_node_type = 'PROJECTION'
-        case 'UVWGenObject':
-            mappingNode.mapping_node_type = 'OBJECT'
-        case 'UVWGenEnvironment':
-            mappingNode.mapping_node_type = 'ENVIRONMENT'
-        case _: # Just in case
-            return mappingNode
+    mappingNode.mapping_node_type = _MAPPING_NODE_TYPES[pluginType]
 
     _fillNodeProperties(importContext, mappingNode, pluginDesc, pluginType)
 
@@ -1046,31 +1050,6 @@ def _createNodeVRayDecal(importContext: ImportContext, pluginDesc: dict):
         outputNode.VRayDecal.height_offset = float(heightOffset) / 100.0
 
     return outputNode
-
-
-# Explicit per-type wrappers for the parameterized creators.
-def _createNodeUVWGenMayaPlace2dTexture(importContext: ImportContext, pluginDesc: dict):
-    return _createMappingNode(importContext, pluginDesc, 'UVWGenMayaPlace2dTexture')
-
-
-def _createNodeUVWGenProjection(importContext: ImportContext, pluginDesc: dict):
-    return _createMappingNode(importContext, pluginDesc, 'UVWGenProjection')
-
-
-def _createNodeUVWGenObject(importContext: ImportContext, pluginDesc: dict):
-    return _createMappingNode(importContext, pluginDesc, 'UVWGenObject')
-
-
-def _createNodeUVWGenEnvironment(importContext: ImportContext, pluginDesc: dict):
-    return _createMappingNode(importContext, pluginDesc, 'UVWGenEnvironment')
-
-
-def _createNodeTexBezierCurve(importContext: ImportContext, pluginDesc: dict):
-    return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=False)
-
-
-def _createNodeTexBezierCurveColor(importContext: ImportContext, pluginDesc: dict):
-    return _createNodeTexRemapFromBezierCurve(importContext, pluginDesc, isColor=True)
 
 
 def _createNodeTexAColorChannel(importContext: ImportContext, pluginDesc: dict):
@@ -1115,16 +1094,16 @@ def _createNodeTexVertexColorDirect(importContext: ImportContext, pluginDesc: di
 
 def _createNodeTexMaxHairInfo(importContext: ImportContext, pluginDesc: dict):
     """ TexMaxHairInfo returns one hair property chosen by its 'output'; TexHairSampler
-        exposes each as its own output socket. Modes with no counterpart (hair opacity,
-        transparency and incandescence - TexHairSampler excludes the latter two) keep the
-        source plugin's own node so they still render. """
+        exposes each as its own output socket. Modes with no counterpart (hair opacity, plus
+        the transparency and incandescence that TexHairSampler excludes) keep the source
+        plugin's own node so they still render. """
     attrs = pluginDesc['Attributes']
 
     if not getSelectedOutputAttr(pluginDesc):
         debug.printWarning(f"'{pluginDesc['Name']}' (TexMaxHairInfo) uses output mode "
                            f"{attrs.get('output')}, which the V-Ray Hair Sampler does not expose; "
                            f"importing it as a Max Hair Info node instead.")
-        return _createGenericNode(importContext, pluginDesc)
+        return _createTypedNode(importContext, pluginDesc)
 
     node = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTexHairSampler', pluginDesc['Name'])
     # max_distance is the only input the two share. seed_offset/color_a/color_b/bias drive the
@@ -1139,7 +1118,7 @@ def _createNodeTexMaxHairInfo(importContext: ImportContext, pluginDesc: dict):
 
 
 # Per-plugin node creators dispatched from engine.createNode. Plugin types not listed
-# here import through the generic path (engine._createGenericNode).
+# here import through the default path (engine._createTypedNode).
 NODE_CREATORS = {
     'TexAColorChannel':         _createNodeTexAColorChannel,
     'TexMaxHairInfo':           _createNodeTexMaxHairInfo,
@@ -1158,18 +1137,15 @@ NODE_CREATORS = {
     # Only switch-MtlMulti reaches here (as a material root or a nested link);
     # per-face MtlMulti is applied as object material slots by the scene importer.
     'MtlMulti':                 _createNodeMtlMulti,
-    'UVWGenMayaPlace2dTexture': _createNodeUVWGenMayaPlace2dTexture,
-    'UVWGenProjection':         _createNodeUVWGenProjection,
-    'UVWGenObject':             _createNodeUVWGenObject,
-    'UVWGenEnvironment':        _createNodeUVWGenEnvironment,
+    **{pluginType: _createMappingNode for pluginType in _MAPPING_NODE_TYPES},
     'UVWGenChannel':            _createNodeUVWGenChannel,
     'UVWGenSelect':             _createNodeUVWGenSelect,
     'LightIES':                 _createNodeLightIES,
     'LightLuminaire':           _createNodeLightLuminaire,
     'TexNormalMapFlip':         _createNodeTexNormalMap,
     'TexNormalBump':            _createNodeTexNormalMap,
-    'TexBezierCurve':           _createNodeTexBezierCurve,
-    'TexBezierCurveColor':      _createNodeTexBezierCurveColor,
+    'TexBezierCurve':           _createNodeTexRemapFromBezierCurve,
+    'TexBezierCurveColor':      _createNodeTexRemapFromBezierCurve,
     'VRayDecal':                _createNodeVRayDecal,
     'MtlDisplacement':          _createNodeMtlDisplacement,
     'BRDFToonMtl':              _createNodeBRDFToonMtl,

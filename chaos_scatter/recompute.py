@@ -42,6 +42,8 @@ _lastFingerprint = {}           # session_uid -> fingerprint at the last frame c
 _pendingLoadRefresh = set()     # session_uids stale at load, waiting for the server to come up
 _rendering = False              # a production render holds the main loop; bpy.app.timers are frozen
 _renderBaseline = {}            # session_uid -> fingerprint when the current render started
+_carriers = {}                  # scene session_uid -> carrier names, dropped when objects are added, removed or relinked
+_collectionState = {}           # carrier uid -> resolve.collectionSources() at the last update
 
 # The debounce timer is ~0.2s, so this is a couple of seconds of grace for a cold server start.
 _MAX_STARTUP_RETRIES = 10
@@ -155,13 +157,16 @@ def _dependencyObjects(cs, scene, childMap: dict | None = None):
     """ Without a childMap the model hierarchies are left out - expanding them is O(len(
         bpy.data.objects)) per model item, so the depsgraph path omits them and tests the
         hierarchy from the cheap side instead (see _onDepsgraphUpdate). Callers that need the
-        real descendants pass one from resolve.buildChildMap().
+        real descendants pass one from resolve.buildChildMap(). Collection members likewise.
     """
     for item in cs.targets:
         if item.object is not None:
             yield item.object
     for item in cs.models:
-        if item.object is not None:
+        if item.source_type == 'COLLECTION':
+            if childMap is not None:
+                yield from resolve.modelObjects(item)
+        elif item.object is not None:
             if childMap is None:
                 yield item.object
             else:
@@ -318,12 +323,30 @@ def _applyPending():
 def _sweepDuplicatesAndOrphans():
     lifecycle.handleDuplicates()
     lifecycle.cleanupOrphans()
+    live = {obj.session_uid for obj in utils.allScatterObjects()}
+    for uid in _collectionState.keys() - live:
+        del _collectionState[uid]
     return None
+
+
+def _sceneCarriers(scene):
+    """ Return the scatter carriers of the scene, rescanning when a cached carrier is gone. """
+    if (names := _carriers.get(scene.session_uid)) is not None:
+        carriers = [scene.objects.get(name) for name in names]
+        if None not in carriers:
+            return carriers
+
+    carriers = list(utils.sceneScatterObjects(scene))
+    _carriers[scene.session_uid] = [obj.name for obj in carriers]
+    return carriers
 
 
 @persistent
 def _onDepsgraphUpdate(scene, depsgraph):
     global _scatterCensus, _objectCount
+
+    if depsgraph.id_type_updated('COLLECTION'):
+        _carriers.clear()
 
     if _applyingResult:
         return
@@ -336,6 +359,7 @@ def _onDepsgraphUpdate(scene, depsgraph):
     objectCount = len(bpy.data.objects)
     if objectCount != _objectCount:
         _objectCount = objectCount
+        _carriers.clear()
         census = sum(1 for _ in utils.allScatterObjects())
         if census != _scatterCensus:
             _scatterCensus = census
@@ -345,13 +369,14 @@ def _onDepsgraphUpdate(scene, depsgraph):
             if not bpy.app.timers.is_registered(_sweepDuplicatesAndOrphans):
                 bpy.app.timers.register(_sweepDuplicatesAndOrphans)
 
-    scatterObjects = list(utils.sceneScatterObjects(scene))
+    scatterObjects = _sceneCarriers(scene)
     if not scatterObjects:
         return
 
     updatedUids = set()
     ancestorUids = set()    # every parent above an updated object, for the model-hierarchy test below
     shadedUids = set()      # shading-only updates; see the Color Map test below
+    collectionsChanged = depsgraph.id_type_updated('COLLECTION')
     for update in depsgraph.updates:
         idBlock = update.id.original if hasattr(update.id, 'original') else update.id
         if not isinstance(idBlock, bpy.types.Object):
@@ -369,7 +394,7 @@ def _onDepsgraphUpdate(scene, depsgraph):
         elif update.is_updated_shading:
             shadedUids.add(idBlock.session_uid)
 
-    if not updatedUids and not shadedUids:
+    if not updatedUids and not shadedUids and not collectionsChanged:
         return
 
     for obj in scatterObjects:
@@ -382,6 +407,9 @@ def _onDepsgraphUpdate(scene, depsgraph):
         # correct in every case (carrier-only move -> empty intersection -> no recompute).
         cs = obj.chaos_scatter
         deps = {dep.session_uid for dep in _dependencyObjects(cs, scene)}
+        state = resolve.collectionSources(cs)
+        for _index, _uid, _pivot, members in state:
+            deps.update(members)
 
         # A model's children are dependencies too, but expanding the hierarchy HERE would cost
         # O(len(bpy.data.objects)) per model item on every tick of every drag. "A descendant of
@@ -389,13 +417,18 @@ def _onDepsgraphUpdate(scene, depsgraph):
         # updated", and the parent walk above is O(depth). Only models get this test - the other
         # dependencies are not hierarchy-expanded, so matching them against ancestorUids would
         # fire spuriously whenever an unrelated child of a target or camera moved.
-        modelUids = {item.object.session_uid for item in cs.models if item.object is not None}
+        modelUids = {item.object.session_uid for item in cs.models
+                     if item.source_type == 'OBJECT' and item.object is not None}
         # A model's viewport display color is the Color Map clustering MATCH KEY, so in that mode
         # it decides WHERE each model lands. Blender reports a color edit as is_updated_shading
         # only, which the test above ignores by design - a blanket shading trigger would resubmit
         # every scatter in the file on any material tweak. Narrowed to models, in that mode only.
         colorKeyChanged = bool(modelUids & shadedUids) and params.colorMapClusteringActive(cs)
-        if (deps & updatedUids) or (modelUids & ancestorUids) or colorKeyChanged:
+        # The preview rebuild tags collections too.
+        previous = _collectionState.get(obj.session_uid)
+        _collectionState[obj.session_uid] = state
+        collectionChanged = collectionsChanged and bool(state) and state != previous
+        if (deps & updatedUids) or (modelUids & ancestorUids) or colorKeyChanged or collectionChanged:
             markDirty(obj)
 
 
@@ -419,8 +452,11 @@ def _onFrameChange(scene, depsgraph=None):
 
     _flushPendingLoadRefresh()
 
+    if not (carriers := _sceneCarriers(scene)):
+        return
+
     dg = depsgraph if depsgraph is not None else bpy.context.evaluated_depsgraph_get()
-    for obj in utils.sceneScatterObjects(scene):
+    for obj in carriers:
         current = collect.computeFingerprint(obj, dg)
         # First sight of a carrier establishes the baseline without recomputing - the points baked
         # into the file are trusted on load, exactly as _onLoadPost leaves them.
@@ -489,6 +525,8 @@ def _onRenderEnd(_scene):
 @persistent
 def _onLoadPost(_scene):
     global _scatterCensus, _objectCount
+    _carriers.clear()
+    _collectionState.clear()
     _dirty.clear()
     _inFlight.clear()
     _requestOwner.clear()
@@ -511,6 +549,7 @@ def _onLoadPost(_scene):
         lifecycle.syncModifierNodeGroup(obj)
         lifecycle.rebuildProtoCollections(obj)
         lifecycle.syncModifierInputs(obj)
+        _collectionState[obj.session_uid] = resolve.collectionSources(obj.chaos_scatter)
 
     # Baked points that disagree with the scene are recomputed rather than trusted, same test and
     # same reasoning as _onUndoRedo. Load used to trust the bake unconditionally, which left an
@@ -538,6 +577,7 @@ def _onLoadPost(_scene):
 
 @persistent
 def _onUndoRedo(_scene):
+    _carriers.clear()
     curves.resubscribeAll()
     _subscribeEngine()
     # evaluated_depsgraph_get() flushes the depsgraph; from undo_post that evaluates mid-ID-remap
@@ -572,6 +612,7 @@ def register():
 
 def unregister():
     global _rendering
+    _collectionState.clear()
 
     for handlerList, handler in (
             (bpy.app.handlers.depsgraph_update_post, _onDepsgraphUpdate),

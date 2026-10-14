@@ -20,20 +20,21 @@ bl_info = {
     "blender":     (4, 5, 0),  # pre-5.1 uses a Mesh carrier (no PointCloud.resize there)
     "location":    "Add menu, Object properties",
     "description": "Chaos Scatter object scattering",
-    "doc_url":     "https://documentation.chaos.com/space/VBLD",
+    "doc_url":     "https://documentation.chaos.com/space/VBLD/1220018245",
     "category":    "Object",
     "version":     (1, 0, 0),
 }
 
 
 def register():
-    from chaos_scatter import params, properties, operators, paint, ui, recompute
+    from chaos_scatter import docs, params, properties, operators, paint, ui, recompute
 
     # BEFORE anything is registered: checkContract only compares two plain dicts, and raising
     # after properties.register() would leave the propgroups registered with no unregister to
     # match, so every later enable would fail with a confusing "already registered" instead.
     params.checkContract()
 
+    docs.register()
     properties.register()
     operators.register()
     paint.register()   # cluster-paint operators (reference the propgroups; register after them)
@@ -42,9 +43,10 @@ def register():
 
 
 def unregister():
-    from chaos_scatter import properties, operators, paint, ui, recompute
+    from chaos_scatter import docs, properties, operators, paint, ui, recompute
     from chaos_scatter.backend import shutdownBackend
 
+    docs.unregister()
     recompute.unregister()
     # Release the compute session AFTER recompute handlers/timers are gone, so nothing resubmits.
     shutdownBackend()

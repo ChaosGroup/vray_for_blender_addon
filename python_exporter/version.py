@@ -66,7 +66,13 @@ def getSceneUpgradeNumber(scene: bpy.types.Scene = None):
 
 
 def setSceneUpgradeNumber(upgradeNum: int):
-    bpy.context.scene.vray.Exporter.vrayAddonUpgradeNumber = upgradeNum
+    # Stamp every scene, not only the active one. The upgrade scripts run over the whole file, and
+    # a scene left with its old number would run them again when the file is next opened on it.
+    # During an append only the appended scenes are in scope.
+    from vray_blender.utils.upgrade_scene import scoped
+    for scene in scoped(bpy.data.scenes):
+        if not scene.library:
+            scene.vray.Exporter.vrayAddonUpgradeNumber = upgradeNum
 
 
 def getDatablockUpgradeNumber(datablock, defaultWhenUnset: int) -> int:

@@ -238,8 +238,13 @@ def _saveTemporaryImage(image: bpy.types.Image):
         filePath = str(Path(os.path.join(getV4BTempDir(), image.name)).resolve())
 
     try:
-        image.save(filepath=filePath)
-    except RuntimeError as ex:
+        if image.source == 'FILE' and image.packed_file and not image.is_dirty:
+            # image.save() would slowly and lossily re-encode the packed file.
+            with open(filePath, 'wb') as f:
+                f.write(image.packed_file.data)
+        else:
+            image.save(filepath=filePath)
+    except (RuntimeError, OSError) as ex:
         # A single unsaveable image (e.g. a .tif whose Exif block OpenImageIO refuses to write)
         # must not abort the whole export/scene load. Skip it like the invalid-data case above.
         debug.printError(f"Image {image.name} could not be saved to a temporary file ({ex}); skipping.")

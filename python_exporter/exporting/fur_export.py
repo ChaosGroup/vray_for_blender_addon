@@ -125,6 +125,13 @@ class FurExporter(ExporterBase):
             if (nodePlugin := self._exportGeomHairPlugin(furTrackId, obj, instance))
         ]
 
+    def furTrackIdsSelecting(self, gizmoObjTrackId: int) -> list[int]:
+        """ Track ids of the fur objects that have the growth mesh 'gizmoObjTrackId' among their
+            selected objects (VBLD-2676: lets InstancerExporter tell whether a fur OBJECT's own
+            visibility - as opposed to the growth mesh's - changed since the last pass).
+        """
+        return [furTrackId for furTrackId, _ in self._furGizmoObjTrackIdMap[gizmoObjTrackId]]
+
     def syncVisibility(self, object: bpy.types.Object, isShown: bool):
         objTrackId = getObjTrackId(object)
         for furTrackId, _ in self._furGizmoObjTrackIdMap[objTrackId]:
@@ -178,7 +185,11 @@ class FurExporter(ExporterBase):
             # In that case export empty plugin for its mesh attribute in order to hide the fur corresponding to this object.
             return None
         
-        geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getPluginName(dataName) or "")
+        # The growth geometry is the one the object itself renders: the GeomDisplacedMesh /
+        # GeomStaticSmoothedMesh from its own OBJECT node tree when it has one, so that the fur
+        # follows the displacement, and the base mesh otherwise. Resolving this through the data
+        # block alone let the fur pick up the displacement of a different object sharing the mesh.
+        geomPlugin = AttrPlugin(self.persistedState.objDataTracker.getEffectivePluginName(objName, dataName) or "")
 
         furPluginDesc.setAttribute('mesh', geomPlugin)
         furPluginAttr = exportPluginCommon(self, furPluginDesc)

@@ -199,11 +199,7 @@ AttrValue exportParticleHair(const HairData& hair, ZmqExporter& exporter) {
 		const int maxSteps = std::min(maxSegments + 1, maxStepsCap);
 		for (step = 0; step < maxSteps; step++) {
 			const float* const pt = (cache + step)->co;
-			// Sometimes blender just starts returning points at (0, 0, 0)...
 			const float x = pt[0], y = pt[1], z = pt[2];
-			const float lenSq = sq(x) + sq(y) + sq(z);
-			if (lenSq < 1e-5f)
-				break;
 
 			prev = last;
 			last.x = x * imat[0][0] + y * imat[1][0] + z * imat[2][0] + imat[3][0];

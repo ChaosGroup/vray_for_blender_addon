@@ -48,13 +48,17 @@ class CSCATTER_UL_targets(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_property, index):
         row = layout.row(align=True)
         row.prop(item, "object", text="")
-        row.prop(item, "factor", text="Factor")
+        # A 1D distribution walks each spline on its own and never weighs the targets against
+        # each other, so the factor is ignored. Greyed out there, as in the other integrations.
+        sub = row.row(align=True)
+        sub.enabled = data.scatter_type != '0'
+        sub.prop(item, "factor", text="Factor")
 
 
 class CSCATTER_UL_models(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_property, index):
         row = layout.row(align=True)
-        row.prop(item, "object", text="")
+        row.prop(item, "collection" if item.source_type == 'COLLECTION' else "object", text="")
         row.prop(item, "frequency", text="Freq")
         # The cluster group only feeds the clustered distribution, so it is meaningless while
         # clustering is off. Same gate as V-Ray for SketchUp.
@@ -86,8 +90,9 @@ class CSCATTER_UL_layer_models(bpy.types.UIList):
         row = layout.row(align=True)
         row.prop(item, "model_index", text="#")
         name = "<invalid>"
-        if 0 <= item.model_index < len(cs.models) and cs.models[item.model_index].object:
-            name = cs.models[item.model_index].object.name
+        if 0 <= item.model_index < len(cs.models):
+            if source := resolve.modelSource(cs.models[item.model_index]):
+                name = source.name
         row.label(text=name)
 
 
@@ -113,7 +118,8 @@ def _drawListPanel(layout, cs, group, listClass, indexProp):
     row = layout.row()
     row.template_list(listClass, "", cs, group, cs, indexProp, rows=3)
     col = row.column(align=True)
-    col.operator("chaos_scatter.list_add", icon='ADD', text="").group = group
+    if group != 'models':
+        col.operator("chaos_scatter.list_add", icon='ADD', text="").group = group
     col.operator("chaos_scatter.list_remove", icon='REMOVE', text="").group = group
     col.separator()
     up = col.operator("chaos_scatter.list_move", icon='TRIA_UP', text="")
@@ -122,6 +128,14 @@ def _drawListPanel(layout, cs, group, listClass, indexProp):
     down = col.operator("chaos_scatter.list_move", icon='TRIA_DOWN', text="")
     down.group = group
     down.direction = 1
+
+    if group == 'models':
+        row = layout.row(align=True)
+        for source, label, icon in (('OBJECT', "Add Object", 'OBJECT_DATA'),
+                                    ('COLLECTION', "Add Collection", 'OUTLINER_COLLECTION')):
+            op = row.operator("chaos_scatter.list_add", text=label, icon=icon)
+            op.group = 'models'
+            op.model_source = source
 
 
 # --------------------------------------------------------------------------
@@ -163,8 +177,8 @@ class _MainDraw:
 
         if not any(item.object for item in cs.targets):
             layout.label(text="Add a surface in Distribution Targets", icon='INFO')
-        if not any(item.object for item in cs.models):
-            layout.label(text="Add objects to scatter in Scattered Models", icon='INFO')
+        if not any(resolve.modelSource(item) for item in cs.models):
+            layout.label(text="Add sources in Scattered Models", icon='INFO')
 
         layout.operator("chaos_scatter.refresh", icon='FILE_REFRESH')
 
@@ -206,7 +220,7 @@ class _TargetsDraw:
 class _ModelsDraw:
     def draw(self, context):
         cs = _activeScatter(context).chaos_scatter
-        self.layout.label(text="Objects to be scattered (instanced):")
+        self.layout.label(text="Objects or collections to be scattered:")
         _drawListPanel(self.layout, cs, 'models', "CSCATTER_UL_models", 'models_active_index')
 
 

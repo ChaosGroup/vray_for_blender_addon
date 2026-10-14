@@ -30,6 +30,7 @@ from vray_blender import debug
 from vray_blender.exporting.node_export import exportNodePlugin
 from vray_blender.exporting import tools
 from vray_blender.exporting.plugin_tracker import getObjTrackId
+from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTarget, UpdateTracker
 from vray_blender.lib import export_utils, image_utils, lib_utils, path_utils
 from vray_blender.lib.defs import AttrListValue, AttrPlugin, ExporterContext, PluginDesc
 from vray_blender.lib.names import Names
@@ -72,6 +73,30 @@ def prepassResolveTargets(geomExporter) -> tuple[dict, dict]:
     return targetCache, polylineCache
 
 
+def referencedModelTrackIds(exporterCtx) -> set:
+    """ Track ids of the current members of every collection model item, linked to the scene or not. """
+    try:
+        from chaos_scatter import resolve
+    except ImportError:
+        return set()
+    ids = set()
+    for carrier in exporterCtx.allObjects:
+        if tools.isObjectChaosScatter(carrier):
+            for item in carrier.chaos_scatter.models:
+                if item.source_type == 'COLLECTION':
+                    ids.update(getObjTrackId(obj) for obj in resolve.modelObjects(item))
+    return ids
+
+
+def _pruneCollectionRoots(geomExporter, objTrackId, keep=()):
+    """ Delete obsolete transform helpers after their GeomScatter references are detached. """
+    keep = set(keep)
+    for name in set(geomExporter.objTracker.getPlugins(objTrackId)):
+        if name.startswith('collectionroot') and name not in keep:
+            vray.pluginRemove(geomExporter.renderer, name)
+            geomExporter.objTracker.forgetPlugin(objTrackId, name)
+
+
 def tearDownScattersReferencing(geomExporter, prunedTrackIds: set) -> None:
     """ Drop the GeomScatter chain of every carrier referencing an object about to be pruned.
 
@@ -106,6 +131,7 @@ def tearDownScattersReferencing(geomExporter, prunedTrackIds: set) -> None:
             referenced = {getObjTrackId(item.object)
                           for item in cs.models if item.object is not None}
 
+        referenced.update(geomExporter.persistedState.scatterModelsByCarrier.get(getObjTrackId(carrier), ()))
         if not (referenced & prunedTrackIds):
             continue
 
@@ -118,6 +144,7 @@ def tearDownScattersReferencing(geomExporter, prunedTrackIds: set) -> None:
         for pluginName in (Names.vrayNode(objName), instancerName, scatterName):
             vray.pluginRemove(geomExporter.renderer, pluginName)
             geomExporter.objTracker.forgetPlugin(objTrackId, pluginName)
+        _pruneCollectionRoots(geomExporter, objTrackId)
 
 
 def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, force=False):
@@ -152,7 +179,7 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
     verts, counts, targets, factors = [], [], [], []
 
     if cs.scatter_type == '0':
-        # 1D spline scattering: geometry travels as polylines, not as target Nodes. Vertices are
+        # In 1D spline scattering the geometry travels as polylines, not target Nodes. Vertices are
         # pre-transformed to world space so spline_transforms can stay at its identity default
         # (the generic list wire has no transform element type).
         verts, counts = _collectSplinePolylines(geomExporter, (i.object for i in cs.targets))
@@ -173,7 +200,8 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
     # emitting it would re-create a bare Node whose geometry obj_export just removed. parentIndex
     # values are positions in this list, so survivors must be renumbered, not just filtered.
     sceneObjects = geomExporter.dg.scene.objects
-    kept = [i for i, m in enumerate(resolvedModels) if sceneObjects.get(m.object.name) is not None]
+    kept = [i for i, m in enumerate(resolvedModels)
+            if m.collection is not None or sceneObjects.get(m.object.name) is not None]
     if len(kept) != len(resolvedModels):
         remap = {old: new for new, old in enumerate(kept)}
         survivors = []
@@ -184,7 +212,12 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
             survivors.append(model)
         resolvedModels = survivors
 
-    # Degenerate: hand the core nothing rather than an empty GeomScatter, which it reads
+    geomExporter.persistedState.scatterModelsByCarrier[objTrackId] = {
+        getObjTrackId(m.object) for m in resolvedModels if m.object is not None}
+    geomExporter.persistedState.scatterCollectionsByCarrier[objTrackId] = \
+        scatterResolve.collectionSources(obj.original.chaos_scatter)
+
+    # Degenerate, so hand the core nothing rather than an empty GeomScatter, which it reads
     # unconditionally. Mirrors the preview's refusal in recompute._submit.
     if (not counts and not targets) or not resolvedModels:
         debug.printDebug(f"Chaos Scatter '{obj.name}' has no targets or no models; skipping export")
@@ -193,6 +226,7 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
         for pluginName in (Names.vrayNode(objName), instancerName, scatterName):
             vray.pluginRemove(geomExporter.renderer, pluginName)
             geomExporter.objTracker.forgetPlugin(objTrackId, pluginName)
+        _pruneCollectionRoots(geomExporter, objTrackId)
         return
 
     scatterDesc.setAttribute("spline_vertices", _vectorListValue(verts) if verts else [])
@@ -200,7 +234,7 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
     scatterDesc.setAttribute("targets", targets)
     scatterDesc.setAttribute("target_factors", factors)
 
-    _fillModels(geomExporter, resolvedModels, scatterDesc)
+    _fillModels(geomExporter, resolvedModels, scatterDesc, objTrackId)
     _fillFalloffCurves(cs, scatterDesc)
     _fillLookAt(geomExporter, cs, scatterDesc, objName, objTrackId)
     _fillDensityMap(geomExporter, cs, scatterDesc, objName, objTrackId)
@@ -213,6 +247,9 @@ def exportChaosScatter(geomExporter, obj: bpy.types.Object, isVisible: bool, for
 
     export_utils.exportPlugin(geomExporter, scatterDesc)
     geomExporter.objTracker.trackPlugin(objTrackId, scatterName)
+    _pruneCollectionRoots(geomExporter, objTrackId,
+                          (Names.pluginObject(f"collectionroot{m.itemIndex}", scatterName)
+                           for m in resolvedModels if m.object is None))
 
     instancerDesc = PluginDesc(instancerName, "GeomInstancer")
     instancerDesc.setAttribute("instances_generator", AttrPlugin(scatterName))
@@ -248,6 +285,7 @@ def scatterNeedsUpdate(exporterCtx: ExporterContext, obj: bpy.types.Object) -> b
         return False
 
     updates = exporterCtx.dgUpdates['all']
+    from chaos_scatter import resolve
 
     def changed(o):
         return (o is not None) and (getObjTrackId(o) in updates)
@@ -255,10 +293,16 @@ def scatterNeedsUpdate(exporterCtx: ExporterContext, obj: bpy.types.Object) -> b
     for item in cs.targets:
         if changed(item.object):
             return True
+    persisted = exporterCtx.persistedState
+    objTrackId = getObjTrackId(obj)
+    if persisted.scatterModelsByCarrier.get(objTrackId, set()) & updates:
+        return True
+    if exporterCtx.collectionUpdate and \
+            resolve.collectionSources(cs) != persisted.scatterCollectionsByCarrier.get(objTrackId, ()):
+        return True
+    relinkedGizmos = _relinkedMeshLightGizmos(exporterCtx)
     for item in cs.models:
-        if changed(item.object):
-            return True
-        if item.object is not None and any(changed(c) for c in item.object.children_recursive):
+        if any(changed(o) or (getObjTrackId(o) in relinkedGizmos) for o in resolve.modelObjects(item)):
             return True
     for item in cs.area_modifiers:
         if changed(item.object):
@@ -272,6 +316,28 @@ def scatterNeedsUpdate(exporterCtx: ExporterContext, obj: bpy.types.Object) -> b
 
     return changed(cs.look_at.look_at_target) \
         or changed(scatterParams.clippingCameraObject(cs, exporterCtx.dg.scene))
+
+
+def _relinkedMeshLightGizmos(exporterCtx: ExporterContext) -> set[int]:
+    """ Gizmos which became or stopped being the gizmo of a mesh light, or whose LightMesh plugin
+        the light prune re-creates on a node tree topology change. A model then switches between
+        its Node and the LightMesh plugin, or loses the reference, and neither change is reported
+        for the model object itself. Other mesh light updates go to the LightMesh in place.
+    """
+    from vray_blender.plugins.light.LightMesh import getMeshLightGizmoChanges
+
+    connected, disconnected = getMeshLightGizmoChanges(exporterCtx)
+    relinked = connected | disconnected
+
+    # The pair itself is not necessarily reported as updated on a topology change, so go by the
+    # same flags the light prune uses.
+    if topologyIds := {u[0] for u in UpdateTracker.getUpdatesOfType(UpdateTarget.LIGHT, UpdateFlags.TOPOLOGY)}:
+        for info in exporterCtx.persistedState.activeMeshLightsInfo:
+            lightObj = bpy.data.objects.get(info.parentBlObjName)
+            if (lightObj is not None) and (getObjTrackId(lightObj.data) in topologyIds):
+                relinked.add(info.gizmoObjTrackId)
+
+    return relinked
 
 
 def _collectTargets(geomExporter, resolvedTargets: list["ResolvedTarget"], objTrackId: int):
@@ -309,10 +375,12 @@ def _collectTargets(geomExporter, resolvedTargets: list["ResolvedTarget"], objTr
     return targets, factors
 
 
-def _fillModels(geomExporter, resolvedModels: list["ResolvedModel"], scatterDesc: PluginDesc):
+def _fillModels(geomExporter, resolvedModels: list["ResolvedModel"], scatterDesc: PluginDesc,
+                objTrackId):
     """ Fill models + parallel per-model arrays. Each model item contributes its whole object
-        hierarchy; children reference the index of their hierarchy root in model_parents
-        (-1 for the roots themselves), mirroring the C4D exporter.
+        hierarchy, or a transform-only root followed by its members for a collection; children
+        reference the index of their hierarchy root in model_parents (-1 for the roots
+        themselves), mirroring the C4D exporter.
 
         The models reference the objects' own scene Node plugins (pre-created so the references are
         valid regardless of export order; reference_collector force-exports hidden ones). These are
@@ -324,20 +392,39 @@ def _fillModels(geomExporter, resolvedModels: list["ResolvedModel"], scatterDesc
         A light model references the light plugin itself - a light has no Node wrapper, and
         GeomInstancer clones the light per instance, force-enabling the clones so the source light
         can stay hidden. Same as the C4D exporter (exporter_geometry.cpp isAllowedScatterModel).
+
+        The gizmo mesh of an active mesh light has no Node of its own (obj_export removes it), so
+        it references the LightMesh plugin exported for it instead.
     """
+    from vray_blender.plugins.light.LightMesh import getLightMeshPluginName
+
+    meshLightOfGizmo = _meshLightsByGizmo(geomExporter.activeMeshLightsInfo)
+
     models, colors = [], []
     for entry in resolvedModels:
-        if entry.object.type == 'LIGHT':
+        if entry.object is None:
+            rootName = Names.pluginObject(f"collectionroot{entry.itemIndex}", scatterDesc.name)
+            rootDesc = PluginDesc(rootName, 'Node')
+            rootDesc.setAttribute('transform', entry.matrix_world)
+            rootDesc.setAttribute('visible', False)
+            export_utils.exportPlugin(geomExporter, rootDesc)
+            geomExporter.objTracker.trackPlugin(objTrackId, rootName)
+            models.append(AttrPlugin(rootName))
+        elif entry.object.type == 'LIGHT':
             lightName = Names.object(entry.object)
-            # Pre-created with the type LightExporter will use: the light pass runs after this one.
+            # Pre-created with the type LightExporter will use, as the light pass runs after this one.
             vray.pluginCreate(geomExporter.renderer, lightName,
                               lib_utils.getLightPluginType(entry.object.data))
+            models.append(AttrPlugin(lightName))
+        elif info := meshLightOfGizmo.get(getObjTrackId(entry.object)):
+            lightName = getLightMeshPluginName(info.parentName, info.gizmoObjTrackId)
+            vray.pluginCreate(geomExporter.renderer, lightName, 'LightMesh')
             models.append(AttrPlugin(lightName))
         else:
             nodeName = Names.vrayNode(Names.object(entry.object))
             vray.pluginCreate(geomExporter.renderer, nodeName, 'Node')
             models.append(AttrPlugin(nodeName))
-        colors.append(Color(entry.object.color[:3]))
+        colors.append(Color(entry.color[:3]))
 
     scatterDesc.setAttribute("models", models)
     scatterDesc.setAttribute("model_parents", [m.parentIndex for m in resolvedModels])
@@ -345,6 +432,16 @@ def _fillModels(geomExporter, resolvedModels: list["ResolvedModel"], scatterDesc
     scatterDesc.setAttribute("model_cluster_group_ids", [m.clusterGroupId for m in resolvedModels])
     scatterDesc.setAttribute("model_instance_colors",
                              _colorListValue(colors) if colors else [])
+
+
+def _meshLightsByGizmo(activeMeshLightsInfo) -> dict:
+    """ {gizmoObjTrackId: ActiveConnectedMeshInfo}. A model takes a single entry in the models
+        list, so a gizmo shared by several mesh lights maps to the one with the lowest track id.
+    """
+    result = {}
+    for info in sorted(activeMeshLightsInfo, key=lambda i: i.parentObjTrackId, reverse=True):
+        result[info.gizmoObjTrackId] = info
+    return result
 
 
 def _vectorListValue(points) -> AttrListValue:
@@ -418,7 +515,7 @@ def _fillDensityMap(geomExporter, cs, scatterDesc: PluginDesc, objName: str, obj
     bufDesc = PluginDesc(bufName, "BitmapBuffer")
     bufDesc.setAttributes({
         "file": path_utils.formatResourcePath(image_utils.getTrackedImagePath(image),
-                                              geomExporter.exportOnly),
+                                              geomExporter.allowRelativePaths),
         "gamma": 1,
         "rgb_color_space": "raw",
         "transfer_function": 0,  # linear
@@ -427,7 +524,7 @@ def _fillDensityMap(geomExporter, cs, scatterDesc: PluginDesc, objName: str, obj
     geomExporter.objTracker.trackPlugin(objTrackId, bufName)
 
     # A TexBitmap with no uvwgen returns nouvw_color (0.5) - a constant, which made the whole
-    # pattern inert. uvw_channel -1 leaves the channel choice with GeomScatter: the core only
+    # pattern inert. uvw_channel -1 leaves the channel choice with GeomScatter, whose core only
     # consults the texture's own channel when compatibility_single_channel_limitation is off
     # (we pin it on), and a negative channel falls back to the UVW it derives from map_channel /
     # map_channel_name either way. Same plugin and value the C4D integration attaches.
@@ -471,7 +568,7 @@ def _fillColorTextureMap(geomExporter, scatterDesc: PluginDesc, objName: str, ob
     bufName = Names.pluginObject(f"scatter{tag}buf", objName)
     bufDesc = PluginDesc(bufName, "BitmapBuffer")
     bufDesc.setAttribute("file", path_utils.formatResourcePath(
-        image_utils.getTrackedImagePath(image), geomExporter.exportOnly))
+        image_utils.getTrackedImagePath(image), geomExporter.allowRelativePaths))
     export_utils.exportPlugin(geomExporter, bufDesc)
     geomExporter.objTracker.trackPlugin(objTrackId, bufName)
 
@@ -541,7 +638,7 @@ def _fillClippingCamera(geomExporter, cs, scatterDesc: PluginDesc, objName: str,
         scatterDesc.setAttribute("camera_clipping_selected_cam", [])
         return
 
-    # No aspect correction here, unlike the preview (vray_backend._aspectFix): the core takes the
+    # No aspect correction here, unlike the preview (vray_backend._aspectFix). The core takes the
     # frustum's vertical extent from imgWidth/imgHeight on the frame data, which for a real render
     # already IS the render aspect packCamera computed the fov against.
     camera = scatterCollect.packCamera(camObj, geomExporter.dg.scene)
@@ -556,7 +653,7 @@ def _fillClippingCamera(geomExporter, cs, scatterDesc: PluginDesc, objName: str,
     viewName = Names.pluginObject("scatterclipview", objName)
     viewDesc = PluginDesc(viewName, "RenderView")
     viewDesc.setAttributes({
-        "transform": camObj.matrix_world,
+        "transform": camObj.matrix_world.normalized(),
         "fov": camera['fovRad'],
         "focalDistance": camera['focalDistance'],
         "orthographic": camera['isOrtho'],

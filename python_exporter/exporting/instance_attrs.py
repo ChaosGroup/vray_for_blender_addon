@@ -91,7 +91,7 @@ class _GeoLevel:
             self.refKinds = []
             return
 
-        # ids/refIndices are plain Python lists: the traversal indexes them once per
+        # ids/refIndices are plain Python lists, because the traversal indexes them once per
         # instance and numpy scalar extraction is much slower than list access.
         n = self.count
         refIndices = np.zeros(n, dtype=np.int32)
@@ -112,7 +112,7 @@ class _GeoLevel:
             idAttr.data.foreach_get('value', ids)
             _, firstIdx = np.unique(ids, return_index=True)
             if len(firstIdx) != n:
-                # Mark instances whose id collided: their real unique id is random.
+                # Mark instances whose id collided, since their real unique id is random.
                 collided = np.ones(n, dtype=bool)
                 collided[firstIdx] = False
                 ids[collided] = _COLLIDED_ID
@@ -163,7 +163,7 @@ class InstanceAttrResolver:
 
         self._instancerEval = instancerEval
         self._built = False
-        # Visit the unique references only: enough for hasAttributes() without paying
+        # Visit the unique references only, which is enough for hasAttributes() without paying
         # the per-instance walk for instancers that carry no attributes at all.
         self._discoverLevels(instancerEval)
 
@@ -287,7 +287,7 @@ class InstanceAttrResolver:
                 if level.count or any(obj.type not in obTypes for obTypes in level.realized):
                     return ('gs', gs)
 
-        # Legacy generators: only collection instancing can lead to nested GN attribute
+        # Among the legacy generators only collection instancing leads to nested GN attribute
         # levels; particles/verts/faces subtrees carry no instance attributes.
         if obj.instance_type == 'COLLECTION' and obj.instance_collection is not None:
             return ('coll',)

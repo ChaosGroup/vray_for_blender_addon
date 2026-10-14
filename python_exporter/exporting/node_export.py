@@ -9,7 +9,7 @@ import numpy as np
 from vray_blender.lib import export_utils, lib_utils
 from vray_blender.lib.attribute_types import CompatibleNonVrayNodes
 from vray_blender.lib.names import Names
-from vray_blender.lib.sys_utils import getUvGridTexturePath
+from vray_blender.lib.sys_utils import getPlacementPreviewTexturePath, getUvGridTexturePath
 from vray_blender.plugins import PLUGIN_MODULES, getPluginModule, getPluginAttr
 from vray_blender.exporting.plugin_tracker import TrackNode, getNodeTrackId, getObjTrackId
 from vray_blender.exporting.node_exporters.material_node_export import exportVRayNodeBRDFBump, exportVRayNodeShaderScript
@@ -316,8 +316,7 @@ def _getGroupInputOverrideSocket(sock):
         Returns None if sock is not connected through a GroupInput.
     """
     current = sock
-    while current.is_linked:
-        link = current.links[0]
+    while link := getFirstSocketLink(current):
         fromNode = link.from_node
         if fromNode.bl_idname == 'NodeReroute':
             current = fromNode.inputs[0]
@@ -387,6 +386,9 @@ def exportNodeTree(nodeCtx: NodeContext, plDesc: PluginDesc, skippedSockets=()):
         if link := getFarNodeLink(sock):
             if sockValue := exportSocketLink(nodeCtx, link):
                 sock.exportLinked(plDesc, pluginParam, sockValue)
+        elif pluginParam.get('options', {}).get('linked_only', False):
+            # A socket saved before its parameter became linked-only still holds a value, which must not be exported.
+            plDesc.resetAttribute(attrName)
         elif (groupSock := _resolveGroupInputSocket(sock)) is not None:
             # The socket is connected through a GroupInput to an unlinked
             # group node input. Export the value from the group node's socket.
@@ -410,7 +412,8 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object, ins
         objMtls = [emptyGeomMtl if emptyGeomMtl.use_nodes and emptyGeomMtl.node_tree else None]
 
     # Handle V-Ray Proxy material override by geometry node.
-    if (slot := _getProxyCollapsedMaterialSlot(obj)) is not None:
+    collapsedToOneSlot = (slot := _getProxyCollapsedMaterialSlot(obj)) is not None
+    if collapsedToOneSlot:
         objMtls = [objMtls[slot]]
 
     viewLayer = exporterCtx.dg.view_layer
@@ -440,19 +443,34 @@ def _exportObjMaterials(exporterCtx: ExporterContext, obj: bpy.types.Object, ins
 
         mtlWrapped = _exportMtlOptions(exporterCtx, obj, mtl, mtlSingleBRDF)
 
-        # Force the update in order to re-establish the link to the wrapping plugin.
-        # If the mtlOptions have changed, it was broken because the whole mtl options chain
-        # is recreated on each update.
+        # Force the update in order to re-establish the link to the wrapper plugin in Node::material.
+        # The wrapper plugin's name (which is hashed by the servers change tracker) might not have 
+        # changed but the underlying plugin has, hence the need to force update it.
         mtlWrapped.forceUpdate = True
 
         exportedMtls.append(mtlWrapped)
 
+    # A V-Ray Proxy carries the per-shader-set material overrides set in its Object Hierarchy
+    # rollout. How they reach V-Ray depends on what the file's shader sets are - see the two
+    # functions below. Not when a geometry node has collapsed the object to a single slot: the
+    # index space is then no longer the shader sets'.
+    objectHierarchy = None if collapsedToOneSlot else _getProxyObjectHierarchy(obj)
+    perObject       = (objectHierarchy is not None) and objectHierarchy.perObjectMaterials()
+
+    if (objectHierarchy is not None) and not perObject:
+        exportedMtls = _applyProxyMaterialOverrides(exporterCtx, obj, exportedMtls, mtlExporter,
+                                                    objectHierarchy)
+
     if len(exportedMtls) > 1:
-        # For objects with mutliple materials in different slots, export MtlMulti plugin which 
+        # For objects with mutliple materials in different slots, export MtlMulti plugin which
         # holds references to all object's materials
         mtlPlugin = _exportMtlMulti(exporterCtx, obj, exportedMtls, instance)
     else:
         mtlPlugin = exportedMtls[0]
+
+    if perObject:
+        return _exportProxyMaterialOverrides(exporterCtx, obj, mtlPlugin, mtlExporter,
+                                             objectHierarchy, instance)
 
     return mtlPlugin
 
@@ -506,6 +524,158 @@ def _exportMtlOption(exporterCtx: ExporterContext,
         return mtlPlugin
 
 
+def _getProxyObjectHierarchy(obj: bpy.types.Object):
+    """ The Object Hierarchy rollout of a V-Ray Proxy, or None when the object is not one. """
+    if not isObjectVrayProxy(obj):
+        return None
+
+    # The asset type alone does not guarantee a mesh datablock, and this runs for every object
+    vrayData = getattr(obj.original.data, 'vray', None)
+    if (geomMeshFile := getattr(vrayData, 'GeomMeshFile', None)) is None:
+        return None
+
+    return geomMeshFile.object_hierarchy
+
+
+def _applyProxyMaterialOverrides(exporterCtx: ExporterContext,
+                                 obj: bpy.types.Object,
+                                 exportedMtls: list[AttrPlugin],
+                                 mtlExporter,
+                                 objectHierarchy):
+    """ Apply the Object Hierarchy's overrides when the proxy's shader sets are its face sets.
+
+        Their names cannot be used as patterns: the tool reads them as V-Ray builds them at
+        'use_face_sets' 1, while at 2 a '/' is inserted and a literal pattern would miss. The
+        shader set ID is the same either way, and it is also the material ID of the faces V-Ray
+        shades with that set - and so the index of the material slot the import created for it.
+        The override therefore just replaces that slot's material, and the whole thing reaches
+        V-Ray as the usual 'ids_list' MtlMulti.
+
+        @return the material list with the overrides applied, unchanged when there are none.
+    """
+    from vray_blender.exporting.mtl_export import MtlExporter
+
+    if not (overrides := objectHierarchy.getMaterialOverridesByShaderId()):
+        return exportedMtls
+
+    result = list(exportedMtls)
+
+    for shaderId, material in sorted(overrides.items()):
+        mtlSingleBRDF, _ = mtlExporter.exportMtl(material)
+
+        if mtlSingleBRDF is None:
+            debug.printWarning(f"Proxy '{obj.name}': material '{material.name}' could not be "
+                               f"exported, the override of shader set {shaderId} is skipped")
+            continue
+
+        # A shader set with no slot of its own - the slots were edited after the import, or the
+        # file gained a set. Pad with the proxy's own material, which is what the sets no override
+        # covers keep as well.
+        while len(result) <= shaderId:
+            result.append(result[0] if result else MtlExporter.exportDefaultMaterial(exporterCtx))
+
+        mtlWrapped = _exportMtlOptions(exporterCtx, obj, material, mtlSingleBRDF)
+
+        # Same reason as in the slot loop: the material options chain is recreated on each update,
+        # so the link from the Node to the wrapping plugin has to be re-established. 
+        mtlWrapped.forceUpdate = True
+
+        result[shaderId] = mtlWrapped
+
+    return result
+
+
+def _exportProxyMaterialOverrides(exporterCtx: ExporterContext,
+                                  obj: bpy.types.Object,
+                                  baseMtl: AttrPlugin,
+                                  mtlExporter,
+                                  objectHierarchy,
+                                  instance: bpy.types.DepsgraphObjectInstance = None):
+    """ Wrap a V-Ray Proxy's material in an MtlMulti carrying the per-object overrides set in the
+        Object Hierarchy rollout.
+
+        Only for a file whose shader sets are its objects - AlembicMeshFile::initMeshSetsData()
+        names the shader set of an object without face sets after the object itself. V-Ray then
+        matches the entries of 'shader_sets_list' against those names, so an object path addresses
+        exactly one object. The first matching rule wins, so the patterns are ordered from the most
+        to the least specific, with a trailing '*' falling back to the proxy's own material.
+
+        NOTE: A non-empty 'shader_sets_list' makes MtlMulti ignore 'ids_list' completely, which is
+        why this wraps the slot-based material instead of replacing it.
+
+        @return the wrapping plugin, or baseMtl unchanged when there is nothing to override.
+    """
+    if not (overrides := objectHierarchy.getMaterialOverrides()):
+        return baseMtl
+
+    rules: list[tuple[int, str, bpy.types.Material]] = []
+
+    for fullPath, depth, isShaderSet, material in overrides:
+        # The bare path addresses the row's own shader set, so it is emitted for every row that
+        # has one - including a row that is both an object and a parent, whose set is named after
+        # it exactly and which '/*' alone would leave falling through to the proxy's material. A
+        # row that is only a level of the hierarchy has no set of its own to name. The '/*'
+        # pattern is what makes a rule cover the whole branch below the row, and matches nothing
+        # on a leaf.
+        if isShaderSet:
+            rules.append((depth, fullPath, material))
+        rules.append((depth, f"{fullPath}/*", material))
+
+    # The first matching rule wins, so the most specific pattern has to come first. That is the
+    # deepest row and not the longest pattern: a group's '/a/*' and its child's '/a/b' are the
+    # same length, so sorting by length alone lets the group outrank its own child whenever a
+    # path segment is a single character. A descendant is always strictly deeper than its
+    # ancestor. Length still orders the patterns of rows at the same depth, which are unrelated.
+    rules.sort(key=lambda rule: (rule[0], len(rule[1])), reverse=True)
+
+    mtlPlugins = []
+    shaderSets = []
+
+    for _depth, pattern, material in rules:
+        mtlSingleBRDF, _ = mtlExporter.exportMtl(material)
+
+        if mtlSingleBRDF is None:
+            debug.printWarning(f"Proxy '{obj.name}': material '{material.name}' could not be "
+                               f"exported, the override for '{pattern}' is skipped")
+            continue
+
+        # No forceUpdate here, unlike the slot loop: every one of these goes into the 'mtls_list'
+        # below. It's type is PluginList which is not tracked by server's change tracker and
+        # is always updated.
+        wrapperMtl = _exportMtlOptions(exporterCtx, obj, material, mtlSingleBRDF)
+        mtlPlugins.append(wrapperMtl)
+        shaderSets.append(pattern)
+
+    if not mtlPlugins:
+        return baseMtl
+
+    # Everything that matches no rule keeps the material assigned to the proxy itself
+    mtlPlugins.append(baseMtl)
+    shaderSets.append('*')
+
+    pluginName = Names.pluginObject("proxy_mtl_overrides", Names.object(obj, instance))
+
+    pluginDesc = PluginDesc(pluginName, "MtlMulti")
+    pluginDesc.setAttribute("mtls_list", mtlPlugins)
+    pluginDesc.setAttribute("shader_sets_list", shaderSets)
+    pluginDesc.setAttribute("use_shader_set_patterns", True)
+
+    # Those attributes should be in default (not set) state
+    pluginDesc.resetAttribute("mtlid_gen")
+    pluginDesc.resetAttribute("mtlid_gen_float")
+
+    pluginDesc.attrs['scene_name'] = [pluginName]
+
+    # fillNodePluginDesc() tracks the plugin this returns, and from here on that is the wrapper.
+    # The plugin being wrapped is then in no tracker of its own, and the sweep over the deleted
+    # objects would leave it behind in the renderer during IPR. Track it against the same object,
+    # in the same tracker the node exporter would have put it in.
+    if not baseMtl.isEmpty():
+        exporterCtx.objTrackers['OBJ'].trackPlugin(getObjTrackId(obj), baseMtl.name)
+
+    return export_utils.exportPlugin(exporterCtx, pluginDesc)
+
+
 def _exportMtlMulti(exporterCtx: ExporterContext, obj: bpy.types.Object, mtlPlugins: list[AttrPlugin], instance: bpy.types.DepsgraphObjectInstance=None):
     matPluginName = Names.pluginObject("multi_mtl", Names.object(obj, instance))
 
@@ -532,8 +702,8 @@ def fillNodePluginDesc(exporterCtx: ExporterContext,
                        instance: bpy.types.DepsgraphObjectInstance = None):
 
     if not hasValidGeometry or exporterCtx.isProxyExport:
-        # No valid geometry: no materials (avoids MtlDisplacement on empty geometry).
-        # Proxy export: geometry-only; materials are not written to the .vrmesh path.
+        # Invalid geometry gets no materials, avoiding MtlDisplacement on empty geometry.
+        # A proxy export is geometry-only, so materials never reach the .vrmesh path.
         matPlugin = AttrPlugin()
     else:
         # Export empty material plugin(s) for the node. They will be filled in later by the
@@ -854,10 +1024,10 @@ def _exportBrdfLightConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
 
     return exportPluginWithStats(nodeCtx, plDesc)
 
-def _exportUVWGenToBrdfConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
-    """UVWGen → BRDF: build a TexBitmap on a built-in UV-grid image driven by
-       the source UVWGen, then wrap it in a BRDFLight so the grid lights up
-       visibly in solo mode.
+def exportUVGridBitmap(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+    """ Build a TexBitmap on the built-in UV-grid image driven by a UVWGen plugin.
+        A UVWGen has no color output of its own, so this is how it is made visible -
+        both in solo mode and in node thumbnails.
     """
     bufName = Names.nextVirtualNode(nodeCtx, "BitmapBuffer")
     bufDesc = PluginDesc(bufName, "BitmapBuffer")
@@ -870,7 +1040,55 @@ def _exportUVWGenToBrdfConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
     bmpDesc = PluginDesc(bmpName, "TexBitmap")
     bmpDesc.attrs['uvwgen'] = fromPlugin
     bmpDesc.attrs['bitmap'] = bufPlugin
-    bmpPlugin = exportPluginWithStats(nodeCtx, bmpDesc)
+    return exportPluginWithStats(nodeCtx, bmpDesc)
+
+
+def exportPlacementPreviewBitmap(nodeCtx: NodeContext, vnode: bpy.types.Node):
+    """ Build a TexBitmap on the built-in placement-preview image, mapped through the matrix a
+        V-Ray Transform or V-Ray Matrix node produces.
+
+        Those nodes are not V-Ray plugins - they hand a matrix straight to whatever socket they
+        feed - so this is the only way to make one visible on its own, the same idea as showing
+        a UVWGen through the UV grid.
+    """
+    # An Object input is resolved by getValue() itself - it returns the selected object's
+    # inverted world matrix - so a gizmo-driven transform previews with the real scene
+    # transform. A Select Object node with no object picked raises out of getSelected(), which
+    # must not take the thumbnail down with it; fall back to identity.
+    try:
+        try:
+            matrix = vnode.getValue(bpy.context)
+        except TypeError:
+            # VRayNodeMatrix.getValue takes no context and returns a 3x3
+            matrix = vnode.getValue()
+    except Exception:
+        matrix = mathutils.Matrix.Identity(4)
+    if len(matrix.col) == 3:
+        matrix = matrix.to_4x4()
+
+    uvwDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "UVWGenChannel"), "UVWGenChannel")
+    uvwDesc.setAttribute('uvw_channel', -1)
+    uvwDesc.setAttribute('uvw_transform', matrix)
+    uvwPlugin = exportPluginWithStats(nodeCtx, uvwDesc)
+
+    bufDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "BitmapBuffer"), "BitmapBuffer")
+    bufDesc.attrs['file'] = getPlacementPreviewTexturePath()
+    bufDesc.attrs['transfer_function'] = "2"  # sRGB
+    bufDesc.attrs['rgb_color_space'] = "lin_srgb"
+    bufPlugin = exportPluginWithStats(nodeCtx, bufDesc)
+
+    bmpDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexBitmap"), "TexBitmap")
+    bmpDesc.attrs['uvwgen'] = uvwPlugin
+    bmpDesc.attrs['bitmap'] = bufPlugin
+    return exportPluginWithStats(nodeCtx, bmpDesc)
+
+
+def _exportUVWGenToBrdfConverter(nodeCtx: NodeContext, fromPlugin: AttrPlugin):
+    """UVWGen → BRDF: build a TexBitmap on a built-in UV-grid image driven by
+       the source UVWGen, then wrap it in a BRDFLight so the grid lights up
+       visibly in solo mode.
+    """
+    bmpPlugin = exportUVGridBitmap(nodeCtx, fromPlugin)
 
     lightName = Names.nextVirtualNode(nodeCtx, "BRDFLight")
     lightDesc = PluginDesc(lightName, "BRDFLight")

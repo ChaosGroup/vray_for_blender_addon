@@ -21,12 +21,14 @@ _DRAWABLE_LIGHT_TYPES= {'SPHERE', 'DIRECT', 'DOME', 'IES', 'AMBIENT'}# TODO: Add
 
 # Cached list of (light_type, tm, selected, radius_or_None) for V-Ray lights to gizmo-draw.
 # `radius` is set only for SPHERE lights (LightSphere.radius); other types use a
-# hardcoded radius inside the drawer and store None.
+# hardcoded radius in meters inside the drawer and store None.
 # `selected` is computed at cache-build time from the source light's selection state.
 # Rebuilt lazily by _rebuildLightDrawCache() the first time vrayDrawLightShape
 # runs after a depsgraph update; cleared by _onDepsgraphUpdatePost / _onLoadPre.
 _lightDrawCache: list[tuple[str, Matrix, bool, float | None]] = []
 _lightDrawCacheValid = False
+_lightDrawFrame = None
+_lightInstancers = set()
 
 
 # Circle in the horizontal plane
@@ -229,12 +231,16 @@ def _rebuildLightDrawCache():
         so a single loop covers source lights and instanced lights.
     """
     _lightDrawCache.clear()
+    _lightInstancers.clear()
 
     depsgraph = bpy.context.evaluated_depsgraph_get()
     for inst in depsgraph.object_instances:
         ob = inst.object
         if ob is None or ob.type != 'LIGHT':
             continue
+
+        if inst.is_instance:
+            _lightInstancers.add(inst.parent.name)
 
         light = ob.data
         lightType = light.vray.light_type
@@ -265,9 +271,30 @@ def _rebuildLightDrawCache():
         _lightDrawCache.append((lightType, tm, selected, radius))
 
 
+def _affectsLightDraw(update: bpy.types.DepsgraphUpdate, frameChanged: bool):
+    idBlock = update.id
+    if isinstance(idBlock, bpy.types.Object):
+        if idBlock.type == 'LIGHT' or idBlock.name in _lightInstancers:
+            return True
+        return update.is_updated_geometry and (idBlock.is_instancer or any(m.type == 'NODES' for m in idBlock.modifiers))
+    if isinstance(idBlock, bpy.types.Scene):
+        return not frameChanged
+    if isinstance(idBlock, bpy.types.NodeTree):
+        return any(light.node_tree == idBlock.original for light in bpy.data.lights)
+    return isinstance(idBlock, (bpy.types.Light, bpy.types.Collection))
+
+
 @bpy.app.handlers.persistent
 def _onDepsgraphUpdatePost(scene, depsgraph):
-    global _lightDrawCacheValid
+    global _lightDrawCacheValid, _lightDrawFrame
+
+    frameChanged = scene.frame_current != _lightDrawFrame
+    _lightDrawFrame = scene.frame_current
+
+    if _lightDrawCacheValid and scene.render.engine == 'VRAY_RENDER_RT':
+        if not any(_affectsLightDraw(u, frameChanged) for u in depsgraph.updates):
+            return
+
     _lightDrawCacheValid = False
 
 
@@ -283,6 +310,9 @@ def vrayDrawLightShape():
 
     space3D = getSpaceView3D(bpy.context)
     assert space3D is not None
+
+    if bpy.context.engine != 'VRAY_RENDER_RT':
+        return
 
     if not space3D.overlay.show_overlays or not space3D.overlay.show_extras:
         return
@@ -301,14 +331,18 @@ def vrayDrawLightShape():
     colorActive   = uiTheme.view_3d.object_active[:] + (1.0,)  # RGB, add alpha
     colorInactive = uiTheme.view_3d.light
 
+    # The fixed-size gizmos are sized in meters, so they keep their size under any unit scale.
+    meterScale = Matrix.Scale(1.0 / blender_utils.getSceneMetersPerUnit(bpy.context), 4)
+
     for lightType, tm, selected, radius in _lightDrawCache:
         color = colorActive if selected else colorInactive
+        symbolTm = tm @ meterScale
         match lightType:
             case 'SPHERE':  vrayDrawLightSphere(color, tm, radius)
-            case 'DIRECT':  vrayDrawLightDirect(color, tm)
-            case 'DOME':    vrayDrawLightDome(color, tm)
-            case 'IES':     vrayDrawLightIES(color, tm)
-            case 'AMBIENT': vrayDrawLightAmbient(color, tm)
+            case 'DIRECT':  vrayDrawLightDirect(color, symbolTm)
+            case 'DOME':    vrayDrawLightDome(color, symbolTm)
+            case 'IES':     vrayDrawLightIES(color, symbolTm)
+            case 'AMBIENT': vrayDrawLightAmbient(color, symbolTm)
             # TODO: Need to figure out how to disable the built-in Blender gizmo for Area light
             #       if we want to show our own rect gizmo
             #case 'RECT':    vrayDrawLightRect(color, tm)
@@ -332,6 +366,8 @@ def register():
 
     blender_utils.addEvent(bpy.app.handlers.depsgraph_update_post, _onDepsgraphUpdatePost)
     blender_utils.addEvent(bpy.app.handlers.load_pre, _onLoadPre)
+    blender_utils.addEvent(bpy.app.handlers.undo_post, _onLoadPre)
+    blender_utils.addEvent(bpy.app.handlers.redo_post, _onLoadPre)
 
 
 def unregister():
@@ -339,6 +375,8 @@ def unregister():
 
     blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onDepsgraphUpdatePost)
     blender_utils.delEvent(bpy.app.handlers.load_pre, _onLoadPre)
+    blender_utils.delEvent(bpy.app.handlers.undo_post, _onLoadPre)
+    blender_utils.delEvent(bpy.app.handlers.redo_post, _onLoadPre)
 
     for regClass in RegClasses:
         bpy.utils.unregister_class(regClass)

@@ -37,6 +37,7 @@ _PREVIEW_TYPES = {
     'Preview': 1,
     'Boxes' :  2,
     'FullWithMetadata': 3,
+    'ObjectList': 4,
 }
 
 
@@ -55,7 +56,8 @@ def runVRayTools(cmd: list[str]):
     return run(cmd, cwd=cwd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
 
 
-def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int):
+def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: int, flipAxis: int,
+                  visibility: tuple[list[str], int] = None):
     """ Run vraytools utility to dump the requested data from a mesh file (.vrmesh, .abc etc) into a simplified
         binary format which can that be easily loaded by the Python code.
 
@@ -66,6 +68,9 @@ def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: i
         previewFaces(int): upper limit for the number of faces in the preview. Only valid
                             if isPreview is True.
         flipAxis    (int): one of the GeomMeshFile.flip_axis values
+        visibility  (tuple[list[str], int], optional): the full paths in the Object Hierarchy's
+                            visibility list and the list type (0 Exclude, 1 Include). The dump then
+                            holds only the visible objects. None dumps them all.
     Returns:
         str | None: Error message on failure, None on success
     """
@@ -81,17 +86,41 @@ def _dumpMeshFile(meshFile: str, binFile: str, previewType: int, previewFaces: i
     cmd.extend(['-previewFaces', str(previewFaces)])
     cmd.extend(['-flipAxis', str(flipAxis)])
 
-    result = runVRayTools(cmd)
+    # The paths go in a file rather than on the command line: a proxy can hold thousands of objects
+    # and their full paths are long, which would run into the command-line length limit.
+    visibilityFile = None
 
-    debug.printInfo(f"Running mesh preview tool: {' '.join(cmd)}")
+    if visibility is not None:
+        names, listType = visibility
+        visibilityFile = str(PurePath(binFile).with_suffix('.vislist'))
 
-    if result.returncode != 0:
-        debug.printError(result.stdout)
-        debug.printError(result.stderr)
-        return f"Error generating bin file: {result.returncode}"
+        try:
+            with open(visibilityFile, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(names))
+        except OSError as ex:
+            # Not fatal - an unfiltered preview is a better outcome than no preview at all.
+            debug.printError(f"Could not write the proxy visibility list: {ex}")
+            visibilityFile = None
 
-    if not os.path.isfile(binFile):
-       return "Error generating bin file: file is missing"
+        if visibilityFile:
+            cmd.extend(['-visibilityList', visibilityFile])
+            cmd.extend(['-visibilityType', str(listType)])
+
+    try:
+        result = runVRayTools(cmd)
+
+        debug.printInfo(f"Running mesh preview tool: {' '.join(cmd)}")
+
+        if result.returncode != 0:
+            debug.printError(result.stdout)
+            debug.printError(result.stderr)
+            return f"Error generating bin file: {result.returncode}"
+
+        if not os.path.isfile(binFile):
+            return "Error generating bin file: file is missing"
+    finally:
+        if visibilityFile and os.path.isfile(visibilityFile):
+            os.unlink(visibilityFile)
 
     return None
 
@@ -154,7 +183,37 @@ def _generateScenePreview(filePath: str, previewType: str, previewFaces: int, fl
     return meshData, ""
 
 
-def _generateProxyPreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int):
+def _getObjectNames(objects: dict):
+    """ The proxy object names out of a .vrbin, or None when it carries no object info at all.
+
+        Matched by content rather than by name: the geometry entry is called 'object' and the one
+        holding the object infos 'objects', which is too easy to mix up. An empty list is a valid
+        answer - a file with no object info channel - and is not the same as None.
+    """
+    for meshData in objects.values():
+        if (objectInfos := meshData.get('object_infos')) is not None:
+            return [o['name'] for o in objectInfos]
+
+    return None
+
+
+def _getShaders(objects: dict):
+    """ The shader sets out of a .vrbin, or None when it carries no shader info at all.
+
+        Matched by content, like _getObjectNames(): the geometry entry has always carried them, and
+        the object-infos entry does too, so that the dumps which write no geometry ('Boxes',
+        'ObjectList') can report them as well. An empty list is a valid answer - a file with no
+        shader sets at all - and is not the same as None.
+    """
+    for meshData in objects.values():
+        if (shaders := meshData.get('shaders')) is not None:
+            return shaders
+
+    return None
+
+
+def _generateProxyPreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int,
+                          outExtras: dict = None, visibility: tuple[list[str], int] = None):
     """ Get mesh data from a .vrmesh or .abc file, or a file compatible with VRayScene.
 
     Args:
@@ -164,6 +223,14 @@ def _generateProxyPreview(filePath: str, previewType: str, previewFaces: int, fl
         previewFaces(int): upper limit for the number of faces in the preview. Only valid
                             if isPreview is True.
         flipAxis    (int): one of the GeomMeshFile.flip_axis values
+        outExtras   (dict, optional): filled with whatever else the same dump produced -
+                            'boxes' (the bounding box mesh), 'bounds' (the single box covering the
+                            whole file), 'objectNames' and 'shaders'. One read of the file yields
+                            them all, so asking for them here is what spares the caller a second and
+                            a third run of the tool. Any of them may be missing: an older
+                            'vraytools' writes only the geometry.
+        visibility  (tuple[list[str], int], optional): see _dumpMeshFile(). When given, the objects
+                            the list hides are left out of the dumped geometry.
     Returns:
         tuple(dict[str,list], str) | tuple(None, str):
             tuple of mesh data (vertices, faces) and empty string on success, or None and an error message on failure.
@@ -171,24 +238,70 @@ def _generateProxyPreview(filePath: str, previewType: str, previewFaces: int, fl
     """
     binMeshFile = str(PurePath(path_utils.getV4BTempDir(), PurePath(filePath).stem).with_suffix('.vrbin'))
 
-    if err := _dumpMeshFile(filePath, binMeshFile, _PREVIEW_TYPES[previewType], previewFaces, flipAxis):
+    if err := _dumpMeshFile(filePath, binMeshFile, _PREVIEW_TYPES[previewType], previewFaces, flipAxis,
+                            visibility):
         return None, err
 
     objects = vray_proxy.readBinMeshFile(binMeshFile)
 
     os.unlink(binMeshFile)
 
-    assert len(objects) == 1
-    meshData = list(objects.values())[0]
+    # 'Boxes' has no separate geometry - the boxes are the preview.
+    meshData = objects.get('object') or objects.get('boxes')
 
     assert meshData is not None
+    if outExtras is not None:
+        if (boxes := objects.get('boxes')) is not None:
+            outExtras['boxes'] = boxes
+        if (bounds := objects.get('bounds')) is not None:
+            outExtras['bounds'] = bounds
+        if (objectNames := _getObjectNames(objects)) is not None:
+            outExtras['objectNames'] = objectNames
+        if (shaders := _getShaders(objects)) is not None:
+            outExtras['shaders'] = shaders
+
     return meshData, ""
 
 
-def _generatePreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int, isProxy: bool):
+def readProxyObjectNames(filePath: str, outShaders: list = None):
+    """ Read the names of the objects contained in a .vrmesh or .abc file.
+
+        The names are full '/'-separated paths, so the caller can reconstruct the object hierarchy.
+        NOTE: This spawns the 'vraytools' process, do not call it from a draw() procedure.
+
+    Args:
+        filePath (str): path to a file in format compatible with VRayProxy. Must be an absolute path.
+        outShaders (list, optional): filled with the shader sets of the file, which the same dump
+            returns. Left untouched by an older 'vraytools', which reports only the names.
+
+    Returns:
+        tuple(list[str], str): the object names in file order and an empty string on success,
+            or an empty list and an error message on failure.
+    """
+    binMeshFile = str(PurePath(path_utils.getV4BTempDir(), PurePath(filePath).stem).with_suffix('.vrbin'))
+
+    if err := _dumpMeshFile(filePath, binMeshFile, _PREVIEW_TYPES['ObjectList'], 0, 0):
+        return [], err
+
+    objects = vray_proxy.readBinMeshFile(binMeshFile)
+
+    os.unlink(binMeshFile)
+
+    if outShaders is not None and (shaders := _getShaders(objects)) is not None:
+        outShaders[:] = shaders
+
+    # A file without an object info channel in its preview voxel yields an empty list, which is
+    # not an error.
+    return _getObjectNames(objects) or [], ""
+
+
+def _generatePreview(filePath: str, previewType: str, previewFaces: int, flipAxis: int, isProxy: bool,
+                     outExtras: dict = None, visibility: tuple[list[str], int] = None):
     if isProxy:
-        return _generateProxyPreview(filePath, previewType, previewFaces, flipAxis)
+        return _generateProxyPreview(filePath, previewType, previewFaces, flipAxis, outExtras, visibility)
     else:
+        # A VRayScene dump carries the geometry alone - its bounding boxes come from a separate
+        # ScenePreview built with usePreview=false, so they cannot ride along.
         return _generateScenePreview(filePath, previewType, previewFaces, flipAxis)
 
 
@@ -217,7 +330,56 @@ def _flipAxisMatrix(flipAxis: str) -> Matrix:
             return Matrix.Identity(4)
 
 
-def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray):
+def _sanitizeBBox(bbox: np.ndarray, vertices: np.ndarray):
+    """ Return a bounding box that could plausibly be the box of this geometry.
+
+        The box comes from the voxel info table of the proxy file, and the preview voxel of a
+        '.vrmesh' is not guaranteed to carry a meaningful one - several test assets report
+        uninitialised values there, from a near-zero box up to 7.9e34. Using such a box is not
+        harmless: mathutils works in single precision, so squaring a coordinate of 7.9e34 in
+        Vector.length overflows to inf, the anchor points come out NaN, and every transform derived
+        from them - including the one on the exported Node, which then renders nothing - follows.
+
+        The test is deliberately loose. A box may legitimately be bigger than the preview geometry,
+        or slightly smaller than it, since the preview is a decimation of the whole file; it only
+        has to be separated from one that is wrong by orders of magnitude.
+
+        'vraytools' runs the same check over the box it writes, but only for the proxy dumps. This
+        one is what covers the rest of the callers: the VRayScene preview, whose box comes from a
+        different dump entirely (ScenePreview, '-action 2'), and the frozen upgrade scripts, which
+        call _constructPreview() directly.
+    """
+    if (bbox is None) or (len(bbox) < 8) or (vertices is None) or (len(vertices) == 0):
+        return bbox
+
+    box = np.asarray(bbox[:8], dtype=np.float64)
+    verts = np.asarray(vertices, dtype=np.float64)
+    lo, hi = verts.min(axis=0), verts.max(axis=0)
+    geomExtent = float((hi - lo).max())
+
+    if np.all(np.isfinite(box)):
+        boxLo, boxHi = box.min(axis=0), box.max(axis=0)
+        boxExtent = float((boxHi - boxLo).max())
+
+        # Nothing to measure against, or an order of magnitude either way in size and no more than
+        # one extent away in position - all plausible
+        if (geomExtent <= 0.0) or (
+                (geomExtent * 0.125 <= boxExtent <= geomExtent * 8.0)
+                and float(np.abs((boxLo + boxHi) - (lo + hi)).max()) * 0.5 <= geomExtent):
+            return bbox
+
+    debug.printWarning("V-Ray Proxy: the bounding box in the file does not match its geometry, "
+                       "using the geometry's own box instead")
+
+    # The same 8 corners in the same order as the tool writes them, so the callers that index into
+    # the box - the basis anchors, the 'Boxes' preview - keep working unchanged.
+    return np.array((
+        (lo[0], lo[1], lo[2]), (lo[0], lo[1], hi[2]), (hi[0], lo[1], hi[2]), (hi[0], lo[1], lo[2]),
+        (lo[0], hi[1], lo[2]), (lo[0], hi[1], hi[2]), (hi[0], hi[1], hi[2]), (hi[0], hi[1], lo[2]),
+    ), dtype=np.float32)
+
+
+def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray, sanitizeBBox=True):
 
     """
     Constructs a basis matrix from 4 non-coplanar vertices that are added to the initial array.
@@ -227,11 +389,16 @@ def _computeBasisMatrix(vertices: np.ndarray, bbox: np.ndarray):
     Parameters:
         vertices: [N,3]array
         bbox: [N,3]array [8] the bounding box of the object
+        sanitizeBBox: False when the box has already been validated and covers more than the
+            geometry given here on purpose - a preview filtered by the visibility list is a subset
+            of the file the box bounds, and measuring one against the other would reject it.
     Returns:
         - The basis matrix of the coordinate system defined by the 4 points
         - The indices of the points in the vertices list
         - The vertex list with the new vertices added to the initial list
     """
+    if sanitizeBBox:
+        bbox = _sanitizeBBox(bbox, vertices)
 
     # Tetrahedron centered at 0,0,0
     h = abs((Vector(bbox[0]) - Vector(bbox[4])).length)
@@ -312,19 +479,52 @@ def _constructCube(size: float, center=(0, 0, 0)):
     return vertices, faces
 
 
-def _constructPointPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool):
-    """ Fill mesh data for a point preview """
-    proxyPropGroup['num_preview_faces'] = 0
+def _anchorBox(bboxData: dict, extras: dict, outInfo: dict = None):
+    """ The 8 corners the preview object's anchor points are placed on.
 
-    bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy)
+        The 'bounds' entry when the dump carries one, and it is the only correct answer once the
+        boxes can be filtered: 'boxes' then holds one box per *visible* object, so its first box is
+        the first surviving object's, and anchoring to that would move the proxy in the viewport
+        every time something was hidden. 'bounds' always covers the whole file.
 
-    if not bboxData:
-        return None, None, err
+        Falling back to the first box keeps a VRayScene dump and an older 'vraytools' working, and
+        for those the box is the whole-file one anyway.
+
+        outInfo, when given, records whether the box needs no further validation. 'vraytools' has
+        already run the same check over the box it writes, and re-running it here against filtered
+        geometry would reject a perfectly good box for being larger than what is left of the mesh.
+    """
+    if (bounds := extras.get('bounds')) is not None and len(bounds['vertices']) >= 8:
+        if outInfo is not None:
+            outInfo['boxTrusted'] = True
+        return bounds['vertices'][:8]
 
     # There may be more then 1 bounding boxes, get the first one. We only need it in order
     # to position the added vertices for the basis, so this should be fine.
     assert len(bboxData['vertices']) >= 8
-    boxVertices = bboxData['vertices'][:8]
+    return bboxData['vertices'][:8]
+
+
+def _constructPointPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool, outObjectNames: list = None,
+                           outShaders: list = None, visibility: tuple[list[str], int] = None,
+                           outInfo: dict = None):
+    """ Fill mesh data for a point preview """
+    proxyPropGroup['num_preview_faces'] = 0
+
+    extras = {}
+    bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy, extras,
+                                     visibility)
+
+    if not bboxData:
+        return None, None, err
+
+    if outObjectNames is not None and 'objectNames' in extras:
+        outObjectNames[:] = extras['objectNames']
+
+    if outShaders is not None and 'shaders' in extras:
+        outShaders[:] = extras['shaders']
+
+    boxVertices = _anchorBox(bboxData, extras, outInfo)
 
     # In Point mode we need to have at least 4 vertices in order to be able to compute
     # the applied transforms on the preview object. We select them from the bounding box points
@@ -332,38 +532,85 @@ def _constructPointPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: boo
     # If the mesh has any faces however, Blender will outline them and not outline the
     # free vertices. Construct a very small cube with proper faces to 'capture'
     # the selection and look as a point.
-    geometryCenter = Vector(np.mean(boxVertices, axis=0))
-    smallBoxVertices, smallBoxFaces = _constructCube(0.00001, geometryCenter)
+    #
+    # One cube per box, so a file whose objects the dump reported separately gets a point at each of
+    # them rather than a single point for the whole proxy - and the hidden ones are already absent
+    # from the boxes.
+    #
+    # Only when the dump wrote a 'bounds' entry, which is what says its 'boxes' are per-object. A
+    # VRayScene dump and an older 'vraytools' report one box for everything, and that one has always
+    # produced the single point this used to draw.
+    boxCorners = bboxData['vertices'] if ('bounds' in extras) else bboxData['vertices'][:8]
+    cubeVertexArrays = []
+    cubeFaceArrays = []
 
-    bboxData['vertices'] = np.concatenate((smallBoxVertices, boxVertices), axis=0)
-    bboxData['faces'] = smallBoxFaces
+    for first in range(0, (len(boxCorners) // 8) * 8, 8):
+        center = Vector(np.mean(boxCorners[first:first + 8], axis=0))
+        cubeVertices, cubeFaces = _constructCube(0.00001, center)
+
+        # Rebase this cube's faces onto the vertices already collected.
+        cubeFaceArrays.append(np.asarray(cubeFaces) + sum(len(v) for v in cubeVertexArrays))
+        cubeVertexArrays.append(np.asarray(cubeVertices))
+
+    if cubeVertexArrays:
+        allCubeVertices = np.concatenate(cubeVertexArrays, axis=0)
+        allCubeFaces = np.concatenate(cubeFaceArrays, axis=0)
+    else:
+        # Everything is hidden. The anchor points below are all that is left, and they are what
+        # keeps the proxy object where it was.
+        allCubeVertices = np.zeros((0, 3), dtype=np.float32)
+        allCubeFaces = np.zeros((0, 3), dtype=np.int32)
+
+    bboxData['vertices'] = np.concatenate((allCubeVertices, boxVertices), axis=0)
+    bboxData['faces'] = allCubeFaces
 
     return bboxData, boxVertices, None
 
 
-def _constructPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool, resetNumFaces=False):
+def _constructPreview(proxyPropGroup: dict, meshFilePath: str, isProxy: bool, resetNumFaces=False,
+                      outObjectNames: list = None, outShaders: list = None,
+                      visibility: tuple[list[str], int] = None, outInfo: dict = None):
     """ Fill mesh data for a non-point preview """
 
     numFaces = proxyPropGroup.num_preview_faces if not resetNumFaces else getPropertyDefaultValue(proxyPropGroup, 'num_preview_faces')
 
-    meshData, err = _generatePreview(meshFilePath, proxyPropGroup.previewType, numFaces, int(proxyPropGroup.flip_axis), isProxy)
+    extras = {}
+    meshData, err = _generatePreview(meshFilePath, proxyPropGroup.previewType, numFaces,
+                                     int(proxyPropGroup.flip_axis), isProxy, extras, visibility)
     if err:
         return None, None, err
 
-    if len(meshData['faces']) == 0:
+    if len(meshData['faces']) == 0 and visibility is None:
+        # With a visibility list in play an empty mesh is a legitimate answer - everything in the
+        # file is hidden - and the preview becomes the anchor points alone.
         return None, None, 'V-RayProxy import failed - mesh has no faces'
+
+    if outObjectNames is not None and 'objectNames' in extras:
+        outObjectNames[:] = extras['objectNames']
+
+    if outShaders is not None and 'shaders' in extras:
+        outShaders[:] = extras['shaders']
 
     if proxyPropGroup.previewType == 'Boxes':
         bboxData = meshData
-    else:
-        bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy)
+    elif 'bounds' in extras:
+        # The dump already carried the only box the anchor needs, so there is nothing more to read.
+        # This is what keeps 'Full' to a single read of the file: its dump writes no per-object
+        # boxes, and asking for them would now mean a second *full* read.
+        bboxData = extras['bounds']
+    elif (bboxData := extras.get('boxes')) is None:
+        # The dump did not carry the boxes: a VRayScene, or an older 'vraytools' that writes only
+        # the geometry. Read them separately, as this always used to.
+        bboxExtras = {}
+        bboxData, err = _generatePreview(meshFilePath, 'Boxes', 0, int(proxyPropGroup.flip_axis), isProxy,
+                                         bboxExtras, visibility)
         if err:
             return None, None, err
 
-    # There may be more then 1 bounding boxes, get the first one. We only need it in order
-    # to position the added vertices for the basis, so this should be fine.
-    assert len(bboxData['vertices']) >= 8
-    return meshData, bboxData['vertices'][:8], None
+        if (bounds := bboxExtras.get('bounds')) is not None:
+            extras['bounds'] = bounds
+
+    return meshData, _anchorBox(bboxData, extras, outInfo), None
 
 
 
@@ -396,14 +643,11 @@ def _replaceObjMesh(mesh: bpy.types.Mesh, meshData):
     if shaders and materialIDs is not None and len(materialIDs) == numFaces:
         numSlots = len(mesh.materials)
         if numSlots > 0:
-            sortedShaders = sorted(shaders, key=lambda s: s['id'])
-            shaderIdToSlotIndex = {s['id']: i for i, s in enumerate(sortedShaders)}
-            maxID = int(max(shaderIdToSlotIndex))
-            lut = np.zeros(maxID + 1, dtype=np.int32)
-            for sid, idx in shaderIdToSlotIndex.items():
-                lut[sid] = idx
-            matArray = lut[np.clip(materialIDs, 0, maxID)]
-            np.clip(matArray, 0, numSlots - 1, out=matArray)
+            # The slot index is the shader ID itself, not the shader's position in the list:
+            # _addMaterialSlotsForProxyShaders() fills the gaps with empty slots, and the exporter
+            # numbers the MtlMulti 'ids_list' by slot index. Compacting the IDs here instead would
+            # show a face with a different material than it renders with, whenever they have gaps.
+            matArray = np.clip(materialIDs, 0, numSlots - 1)
             attr = mesh.attributes.get("material_index") or \
                    mesh.attributes.new("material_index", 'INT', 'FACE')
             attr.data.foreach_set("value", matArray)
@@ -423,18 +667,51 @@ def loadVRayProxyPreviewMesh(geomMeshFile, filePath: str, animFrame = 0, outMeta
     if ( fileExt:= PurePath(absFilePath).suffix) not in ('.vrmesh', '.abc'):
         return f"File format {fileExt} is not supported by V-Ray Proxy"
 
-    meshData, boxVertices, err = _constructPointPreview(geomMeshFile, absFilePath, isProxy=True) if geomMeshFile.previewType == 'Point' \
-                                    else _constructPreview(geomMeshFile, absFilePath, isProxy=True, resetNumFaces=isNewMesh)
+    # The same dump that produces the preview also carries the names of the objects in the file and
+    # its shader sets, so the object hierarchy can be filled from it instead of running the tool a
+    # second time.
+    objectNames = []
+    shaders = []
+
+    # Leave out the objects the Object Hierarchy hides. Only once the rows belong to the file being
+    # loaded: on a new file they have not been read yet, and filtering with the previous file's list
+    # would hide objects by a name collision. setObjectNames() below is what fills them in, after
+    # which every later reload of this file is filtered.
+    visibility = None
+    hierarchy = getattr(geomMeshFile, 'object_hierarchy', None)
+    if (hierarchy is not None) and (not hierarchy.needsRebuildFor(absFilePath)):
+        visibility = hierarchy.getVisibilityList()
+
+    previewInfo = {}
+
+    meshData, boxVertices, err = _constructPointPreview(geomMeshFile, absFilePath, isProxy=True,
+                                                        outObjectNames=objectNames, outShaders=shaders,
+                                                        visibility=visibility, outInfo=previewInfo) \
+                                    if geomMeshFile.previewType == 'Point' \
+                                    else _constructPreview(geomMeshFile, absFilePath, isProxy=True,
+                                                           resetNumFaces=isNewMesh,
+                                                           outObjectNames=objectNames, outShaders=shaders,
+                                                           visibility=visibility, outInfo=previewInfo)
 
     if err:
         return err
 
-    if len(meshData['vertices']) == 0:
+    if len(meshData['vertices']) == 0 and visibility is None:
+        # An empty preview is expected when the visibility list hides everything in the file. Only
+        # an unfiltered one that comes back empty says something is wrong with the file.
         return f"V-Ray Proxy object has no vertices. Loaded from {absFilePath}"
+
+    # Done here as well as inside _computeBasisMatrix(), because the geometry's centre is taken
+    # from the same box a few lines below. Skipped for a box the tool has already vouched for -
+    # see _anchorBox().
+    trustBox = previewInfo.get('boxTrusted', False)
+    if not trustBox:
+        boxVertices = _sanitizeBBox(boxVertices, meshData['vertices'])
 
     # The new preview object's anchor points may not be the same as the old ones.
     # Bring them to the coordinate system of the original object
-    baseMatrix, pointIndices, newVertices = _computeBasisMatrix(meshData['vertices'] , boxVertices)
+    baseMatrix, pointIndices, newVertices = _computeBasisMatrix(meshData['vertices'], boxVertices,
+                                                                sanitizeBBox=not trustBox)
     meshData['vertices'] = newVertices
     geomMeshFileScale = Matrix.Scale(geomMeshFile.scale, 4)
     meshData['vertices'] = _applyTransformToVertexArray(meshData['vertices'], geomMeshFileScale)
@@ -472,6 +749,17 @@ def loadVRayProxyPreviewMesh(geomMeshFile, filePath: str, animFrame = 0, outMeta
 
     if outMetadata is not None:
         outMetadata['shaders'] = meshData.get('shaders')
+
+    # Fill the Object Hierarchy from the names this dump already returned. An older 'vraytools'
+    # does not write them, in which case the list is left alone and read on demand, as before.
+    #
+    # Only when the list has not been read from this file yet. This runs on every preview reload -
+    # a preview type or face count change, not just a new file - and setObjectNames() rebuilds the
+    # rows from scratch, so doing it unconditionally would throw away the check state and the
+    # per-object material overrides the user has set. Asked with the path being loaded rather than
+    # the one on the property, since the import operators load the preview before assigning it.
+    if objectNames and geomMeshFile.object_hierarchy.needsRebuildFor(absFilePath):
+        geomMeshFile.object_hierarchy.setObjectNames(objectNames, shaders, absFilePath)
 
     if geomMeshFile.previewType == 'Preview':
         # The preview-generation procedure uses the requested number of preview faces as a guideline only.
@@ -586,6 +874,39 @@ def loadVRayScenePreviewMesh(vrayScene, absFilePath: str):
     updateShadowAttr(vrayScene, 'filepath')
 
 
+def createVRaySceneObject(context, absFilePath: str, useRelPath: bool):
+    """ Create a V-Ray Scene object referencing absFilePath.
+
+        Returns (object, None) on success, (None, error message) on failure.
+    """
+    name = f"VRayScene@{PurePath(absFilePath).stem}"
+
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = context.scene.cursor.location
+    context.scene.collection.objects.link(obj)
+    obj.vray.VRayAsset.assetType = blender_utils.VRAY_ASSET_TYPE["Scene"]
+
+    vrayScene = obj.data.vray.VRayScene
+
+    if err := loadVRayScenePreviewMesh(vrayScene, absFilePath):
+        bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.meshes.remove(mesh)
+        return None, err
+
+    filePath = absFilePath
+
+    if useRelPath and not blender_utils.isDefaultScene():
+        if relFilePath := path_utils.tryGetRelativePath(absFilePath):
+            filePath = relFilePath
+        else:
+            debug.report('INFO', "Cannot import V-Ray Scene with relative path, using absolute path instead")
+
+    vrayScene['filepath'] = filePath
+    blender_utils.selectObject(obj)
+    return obj, None
+
+
 def isAlembicFile(filePath: str):
     # Cannot use functions from pathlib here because the path may be in Blender relative format.
     return filePath.endswith('.abc')
@@ -642,6 +963,8 @@ def readBinMeshFile(filePath: str):
 def _parseShaderInfoBlock(rawData: bytes):
     """ Parse the 's' channel byte block into a list of shader descriptors.
 
+        Each entry is [id][name length][name]
+
     Returns:
         list[dict]: Each entry has 'name' (str) and 'id' (int).
     """
@@ -651,15 +974,40 @@ def _parseShaderInfoBlock(rawData: bytes):
     offset += 4
 
     for _ in range(count):
+        objectId = struct.unpack_from('i', rawData, offset)[0]
+        offset += 4
         nameLen = struct.unpack_from('I', rawData, offset)[0]
         offset += 4
         name = rawData[offset:offset + nameLen].decode('utf-8')
         offset += nameLen
-        shaderId = struct.unpack_from('i', rawData, offset)[0]
-        offset += 4
-        shaders.append({'name': name, 'id': shaderId})
+        shaders.append({'name': name, 'id': objectId})
 
     return shaders
+
+
+def _parseObjectInfoBlock(rawData: bytes):
+    """ Parse the 'o' channel byte block into a list of object descriptors.
+
+    Each entry is [id][name length][name]
+
+    Returns:
+        list[dict]: Each entry has 'name' (str, the full '/'-separated path) and 'id' (int).
+    """
+    objectInfos = []
+    offset = 0
+    count = struct.unpack_from('I', rawData, offset)[0]
+    offset += 4
+
+    for _ in range(count):
+        objectId = struct.unpack_from('i', rawData, offset)[0]
+        offset += 4
+        nameLen = struct.unpack_from('I', rawData, offset)[0]
+        offset += 4
+        name = rawData[offset:offset + nameLen].decode('utf-8')
+        offset += nameLen
+        objectInfos.append({'name': name, 'id': objectId})
+
+    return objectInfos
 
 
 def _parseUVChannelDataBlock(rawData: bytes):
@@ -733,6 +1081,7 @@ def _readObjectFromBinFile(file: BufferedReader):
     shaders = None
     uvChannelIndices = None
     uvChannels = None
+    objectInfos = None
 
     for itemType, offset, itemCount in chunks:
         match itemType:
@@ -754,6 +1103,9 @@ def _readObjectFromBinFile(file: BufferedReader):
             case 'c':
                 rawData = file.read(itemCount)
                 uvChannels = _parseUVChannelDataBlock(rawData)
+            case 'o':
+                rawData = file.read(itemCount)
+                objectInfos = _parseObjectInfoBlock(rawData)
             case _:
                 raise Exception(f"Unsupported channel type '{itemType}'")
 
@@ -767,6 +1119,7 @@ def _readObjectFromBinFile(file: BufferedReader):
         'shaders'           : shaders,
         'uv_channel_indices': uvChannelIndices,
         'uv_channels'       : uvChannels,
+        'object_infos'      : objectInfos,
     }
 
 

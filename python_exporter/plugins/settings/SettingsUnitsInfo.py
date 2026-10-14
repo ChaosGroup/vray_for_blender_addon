@@ -18,8 +18,9 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     if unit_settings.system != 'NONE':
         pluginDesc.setAttribute('meters_scale', unit_settings.scale_length)
-        photometricScale = pluginDesc.vrayPropGroup.photometric_scale * unit_settings.scale_length ** 2
-        pluginDesc.setAttribute('photometric_scale', photometricScale)
+        # Not scaled by meters_scale^2: V-Ray already divides flux-unit lights by it, so the
+        # same physical scene renders the same at any scale_length (see upgrade_0058.py).
+        pluginDesc.setAttribute('photometric_scale', pluginDesc.vrayPropGroup.photometric_scale)
 
 
     sceneFps = bpy.context.scene.render.fps / bpy.context.scene.render.fps_base

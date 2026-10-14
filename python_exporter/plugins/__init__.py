@@ -338,31 +338,6 @@ for key in {'all', 'camera', 'gi', 'reflect', 'refract', 'shadows'}:
 ##     ## ##     ## ##    ## ##       ##    ##    ##
  #######  ########   ######  ########  ######     ##
 
-# Getter for VRayAsset.filePath
-def getFilePathValue(propGroup):
-    if "filePath" not in propGroup:
-        return ""
-
-    if propGroup.useRelativePath:
-        # Converting relative paths to absolute paths, so they could be exported.
-        # Replacing "\\" with "//" helps avoid errors caused by
-        # Windows remote paths being confused with Blender's relative paths.
-        return bpy.path.abspath(propGroup["filePath"].replace("\\\\", "//"))
-
-    return propGroup["filePath"]
-
-# Setter for VRayAsset.filePath.
-# This is necessary because, without a setter, the property becomes read-only if only a getter is defined.
-def setFilePathValue(propGroup, path):
-    # If bpy.path.abspath("//") returns an empty string, the scene is new and unsaved.
-    # In this case, an absolute path is assigned to ensure the path is valid
-    # and can be properly converted to a relative path when the scene is saved.
-    if propGroup.useRelativePath and bpy.path.abspath("//"):
-        propGroup["filePath"] = bpy.path.relpath(path)
-    else:
-        propGroup["filePath"] = path
-
-
 class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
     assetType: bpy.props.EnumProperty(
         name        = "Type",
@@ -377,6 +352,49 @@ class VRayAsset(VRayEntity, bpy.types.PropertyGroup):
 
 class VRayCyclesNode(VRayEntity, bpy.types.PropertyGroup):
     pass
+
+
+class VRayCosmosVariant(bpy.types.PropertyGroup):
+    """ One cell of a Chaos Cosmos asset's variant grid, i.e. one (geometry, material) pair """
+
+    package_id: bpy.props.StringProperty(
+        name = "Package ID",
+        description = "Package id of the geometry variant this cell belongs to. Each geometry "
+                      "variant is a separate Cosmos package",
+        default = ""
+    )
+
+    revision_id: bpy.props.IntProperty(
+        name = "Revision ID",
+        description = "Revision of the geometry variant's package",
+        default = 0
+    )
+
+    geom_index: bpy.props.IntProperty(
+        name = "Geometry Variant",
+        description = "Index of the geometry variant this cell belongs to",
+        default = 0
+    )
+
+    geom_name: bpy.props.StringProperty(
+        name = "Geometry Variant Name",
+        description = "Name of the geometry variant as shown in Chaos Cosmos",
+        default = ""
+    )
+
+    mtl_index: bpy.props.IntProperty(
+        name = "Material Variant",
+        description = "Which material of the geometry variant's package this cell selects. "
+                      "0 is the package's own material",
+        default = 0
+    )
+
+    preview: bpy.props.StringProperty(
+        name = "Preview",
+        description = "Absolute path to this cell's preview image. May no longer exist on disk",
+        default = "",
+        subtype = 'FILE_PATH'
+    )
 
 
 class VRayCosmosAsset(VRayEntity, bpy.types.PropertyGroup):
@@ -487,6 +505,19 @@ class VRayObject(VRayEntity, bpy.types.PropertyGroup):
 
 class VRayMesh(VRayCosmosAsset, bpy.types.PropertyGroup):
     __annotations__ = {}
+
+    # The asset's Chaos Cosmos variant grid, flattened geometry-major. Empty for anything without
+    # variants, which is also what an asset imported before this feature existed looks like.
+    cosmos_variants: bpy.props.CollectionProperty(
+        name = "Cosmos Variants",
+        type = VRayCosmosVariant
+    )
+
+    cosmos_variant_index: bpy.props.IntProperty(
+        name = "Applied Cosmos Variant",
+        description = "Index into cosmos_variants of the variant currently applied",
+        default = 0
+    )
 
 class VRayViewLayer(bpy.types.PropertyGroup):
     material_override_mode: bpy.props.EnumProperty(
@@ -927,6 +958,8 @@ def _getRegClasses():
         VRayAsset,
         VRayCyclesNode,
         VRayCamera,
+        # Before VRayMesh, whose CollectionProperty points at it.
+        VRayCosmosVariant,
         VRayCosmosAsset,
         VRayFur,
         VRayLight,
@@ -1250,13 +1283,22 @@ def unregister():
     light_tools.unregister()
 
     del bpy.types.Camera.vray
+    del bpy.types.Collection.vray
+    del bpy.types.Curve.vray
+    del bpy.types.Curves.vray
     del bpy.types.Light.vray
     del bpy.types.Material.vray
     del bpy.types.Mesh.vray
     del bpy.types.MetaBall.vray
+    del bpy.types.Node.vray
     del bpy.types.Object.vray
+    del bpy.types.ParticleSettings.vray
+    del bpy.types.PointCloud.vray
     del bpy.types.Scene.vray
+    del bpy.types.ShaderNodeTree.vray
     del bpy.types.Texture.vray
+    del bpy.types.ViewLayer.vray
+    del bpy.types.WindowManager.vray
     del bpy.types.World.vray
 
     for plugDir in PLUGINS_DIRS:
@@ -1268,6 +1310,8 @@ def unregister():
         del plug
 
     plugin_utils.PLUGINS_DESC.clear()
+
+    class_utils.unregisterPluginPropertyGroups()
 
     from vray_blender.plugins import templates
     templates.unregister()

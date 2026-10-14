@@ -36,7 +36,7 @@ class SmokeExporter(ExporterBase):
         assert obj.is_evaluated, f"Evaluated object expected: {obj.name}"
 
         data = SmokeData(Names.object(obj))
-        data.cacheDir = bpy.path.abspath(obj.data.filepath)
+        data.cacheDir = bpy.path.abspath(obj.data.filepath, library=obj.data.library)
         data.transform = tools.mat4x4ToTuple(obj.matrix_world)
         data.domainRes = domainRes
 
@@ -55,7 +55,7 @@ class SmokeExporter(ExporterBase):
 
         curFrame = bpy.context.scene.frame_current
         currentCacheFileName = "fluid_data_" + '0'*(4-len(str(curFrame))) + str(curFrame) + ".vdb"
-        data.cacheDir = bpy.path.abspath(os.path.join(fluidModif.domain_settings.cache_directory, "data", currentCacheFileName))
+        data.cacheDir = bpy.path.abspath(os.path.join(fluidModif.domain_settings.cache_directory, "data", currentCacheFileName), library=obj.library)
         transf = copy.deepcopy(obj.matrix_world)
 
         # TODO: currently the smoke has an offset and this transformation serves to correct it

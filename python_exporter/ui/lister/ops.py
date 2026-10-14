@@ -8,7 +8,8 @@
 
 import bpy
 
-from vray_blender.ui.lister import core, window
+from vray_blender.lib.blender_utils import isNonGeometryExportedAsGeometry
+from vray_blender.ui.lister import core, material_categories, window
 from vray_blender.ui.lister.window import ListerOperatorBase
 
 
@@ -191,6 +192,11 @@ def selectMaterialUsers(context, mtl) -> bool:
         before anything is deselected, so a material nothing uses cannot clear the selection. """
     users = []
     for obj in context.view_layer.objects:
+        if isNonGeometryExportedAsGeometry(obj):
+            # Empty-backed geometry has no slots, only the vray.material pointer.
+            if obj.vray.material == mtl:
+                users.append((obj, None))
+            continue
         slotIndex = next((i for i, slot in enumerate(obj.material_slots) if slot.material == mtl), -1)
         if slotIndex != -1:
             users.append((obj, slotIndex))
@@ -206,7 +212,8 @@ def selectMaterialUsers(context, mtl) -> bool:
     # active material slot (nodes/tree.py::_getVRayShaderTreeData), not the selection - VBLD-2627.
     obj, slotIndex = users[0]
     context.view_layer.objects.active = obj
-    obj.active_material_index = slotIndex
+    if slotIndex is not None:
+        obj.active_material_index = slotIndex
 
     # Redraw all areas so the selection shows in viewport/outliner too
     core.tagAllRedraw(context)
@@ -222,7 +229,7 @@ class VRAY_OT_lister_select_material_users(ListerOperatorBase):
     material: bpy.props.StringProperty(options={'HIDDEN'})
 
     def execute(self, context):
-        mtl = bpy.data.materials.get(self.material)
+        mtl = core.materialFromKey(self.material)
         if mtl is None:
             return {'CANCELLED'}
         if not selectMaterialUsers(context, mtl):
@@ -266,12 +273,12 @@ class VRAY_OT_lister_show_asset(ListerOperatorBase):
         return "Show this texture in the Assets tab"
 
     def execute(self, context):
-        from vray_blender.ui.lister import relink, window
+        from vray_blender.ui.lister import relink
         view = core.getListerView(context)
         if view is not None:
             view.active_category = 'ASSETS'
         # The Assets tab lives in the Scene Lister.
-        if not any(w.screen.get(window.VRAY_LISTER_FLAG, False) for w in context.window_manager.windows):
+        if not window.isListerOpen(context, 'LISTER'):
             bpy.ops.vray.lister_open()
         relink.selectOnlyAsset(self.locator)
         core.tagListerRedraw(context)
@@ -488,7 +495,7 @@ class VRAY_OT_lister_batch_rename(ListerOperatorBase):
     bl_idname = "vray.lister_batch_rename"
     bl_label = "Batch Rename"
     bl_description = "Rename the rows: find/replace, add a prefix/suffix and an optional running number"
-    bl_options = {'UNDO'}
+    bl_options = {'REGISTER', 'UNDO'}
 
     _listerKinds = ('LISTER', 'MATERIALS')
 
@@ -527,15 +534,15 @@ class VRAY_OT_lister_batch_rename(ListerOperatorBase):
             return {'CANCELLED'}
 
         entities = category.enumerate(context)
-        if self.selected_only and category.selectable:
-            entities = [e for e in entities if getattr(e, 'select_get', None) and e.select_get()]
+        if self.selected_only:
+            entities = category.selectedEntities(context, entities)
 
         number = self.start
         renamed = 0
         for entity in entities:
             if not hasattr(entity, 'name'):
                 continue
-            name = entity.name
+            name = oldName = entity.name
             if self.find:
                 name = name.replace(self.find, self.replace)
             name = f"{self.prefix}{name}{self.suffix}"
@@ -546,7 +553,10 @@ class VRAY_OT_lister_batch_rename(ListerOperatorBase):
                 entity.name = name
                 renamed += 1
             except Exception:
-                pass
+                continue
+            if category.id == 'MATERIALS':
+                # entity.name, not name: Blender may have added a .001 suffix
+                core.renameSelectedMaterial(oldName, entity.name)
         self.report({'INFO'}, f"Renamed {renamed} row(s)")
         core.tagAllRedraw(context)
         return {'FINISHED'} if renamed else {'CANCELLED'}
@@ -594,21 +604,32 @@ class VRAY_OT_lister_toggle_pinned(ListerOperatorBase):
 class VRAY_OT_lister_editor_select_material(ListerOperatorBase):
     bl_idname = "vray.lister_editor_select_material"
     bl_label = "Open Material"
-    bl_description = "Show this material's preview and parameters in the editor panel"
+    bl_description = ("Show this material's preview and parameters in the editor panel. "
+                      "Shift/Ctrl-click to add it to the selection and make it active; "
+                      "Shift/Ctrl-click the active material to deselect it")
     bl_options = {'UNDO'}  # with Sync Selection on, this moves the scene selection
 
     _listerKinds = ('MATERIALS',)
 
     material: bpy.props.StringProperty(options={'HIDDEN'})
+    # Shift/Ctrl held: toggle this material in the selection instead of replacing it
+    extend: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        self.extend = event.shift or event.ctrl
+        return self.execute(context)
 
     def execute(self, context):
-        core.setEditorMaterial(self.material)
+        if self.extend:
+            core.toggleMaterialSelection(self.material)
+        else:
+            core.selectOnlyMaterial(self.material)
 
         # Sync Selection: bring the rest of Blender along, so the Properties editor's Material
         # tab and the node editor show what the Material Manager is showing.
         prefs = core.getListerPrefs(context)
-        mtl = bpy.data.materials.get(self.material)
-        if prefs.material_sync_selection and mtl is not None:
+        mtl = core.materialFromKey(self.material)
+        if prefs.material_sync_selection and mtl is not None and core.editorMaterialName() == self.material:
             selectMaterialUsers(context, mtl)
 
         core.tagListerRedraw(context)
@@ -626,11 +647,12 @@ class VRAY_OT_lister_refresh_previews(ListerOperatorBase):
         from vray_blender.nodes import utils as NodesUtils
 
         # Clearing the image reschedules the render on the next draw, without going through the
-        # depsgraph - so this costs no re-export, and reaches materials no object uses.
+        # depsgraph - so this costs no re-export, and reaches materials no object uses. Deferred,
+        # not cleared here: clearing while a preview job writes into the image crashes Blender.
         count = 0
         for mtl in bpy.data.materials:
             if mtl.preview is not None:
-                mtl.preview.reload()
+                NodesUtils.schedulePreviewReload(mtl)
                 count += 1
 
         # Also invalidate the parameters pane's own preview widget.
@@ -659,11 +681,22 @@ class VRAY_OT_lister_new_material(ListerOperatorBase):
         from vray_blender.nodes import tree_defaults
 
         mtl = bpy.data.materials.new(name="Material")
+        # Nothing uses the new material, so without a fake user it is not saved.
+        mtl.use_fake_user = True
         tree_defaults.addMaterialNodeTree(mtl)
         # Drop Blender's own Principled + Output, as nodes/operators/add_tree.py does.
         tree_defaults.removeNonVRayNodes(mtl.node_tree)
 
-        core.setEditorMaterial(mtl.name)
+        # Created with a category tab in front: file it there, or the tab would hide it at once.
+        # Nothing can be filed under Cosmos, so that tab gives way to All Materials.
+        view = core.getListerView(context)
+        activeTab = material_categories.activeKey(view, bpy.data.materials)
+        if not material_categories.isBuiltin(activeTab):
+            material_categories.fileMaterials([mtl], activeTab, add=True)
+        elif activeTab == material_categories.COSMOS:
+            view.material_active_category = material_categories.ALL
+
+        core.setEditorMaterial(core.materialKey(mtl))
         core.tagListerRedraw(context)
         if _hiddenByFilter(context):
             self.report({'WARNING'}, f"Created '{mtl.name}' - turn off Selected Only to see it")
@@ -681,7 +714,8 @@ class VRAY_OT_lister_duplicate_material(ListerOperatorBase):
     _listerKinds = ('MATERIALS',)
 
     def execute(self, context):
-        mtl = bpy.data.materials.get(core.editorMaterialName())
+        name = core.activeMaterialName()
+        mtl = core.materialFromKey(name) if name else None
         if mtl is None:
             self.report({'WARNING'}, "No material to duplicate")
             return {'CANCELLED'}
@@ -689,16 +723,287 @@ class VRAY_OT_lister_duplicate_material(ListerOperatorBase):
         from vray_blender.nodes import utils as NodesUtils
 
         copy = mtl.copy()
+        # Nothing uses the copy, so without a fake user it is not saved.
+        copy.use_fake_user = True
         # The copy's sockets all report is_linked False until Blender revalidates the tree.
         NodesUtils.revalidateTreeLinks(copy.node_tree)
 
-        core.setEditorMaterial(copy.name)
+        core.setEditorMaterial(core.materialKey(copy))
         core.tagListerRedraw(context)
         if _hiddenByFilter(context):
             self.report({'WARNING'}, "Duplicated - turn off Selected Only to see the copy")
         else:
             self.report({'INFO'}, f"Duplicated '{mtl.name}' as '{copy.name}'")
         return {'FINISHED'}
+
+
+############################################################
+# Material categories (the Material Manager's tab bar, see material_categories.py)
+############################################################
+
+def _categoryView(context):
+    """ The scene state holding the tab set, with any category that arrived on an appended
+        material folded in first - from here on the scene's list is the authority, so that tab
+        can be renamed and deleted like the ones defined here. """
+    view = core.getListerView(context)
+    if view is not None:
+        material_categories.adoptTags(view)
+    return view
+
+
+def _includeLabel(materials) -> str:
+    """ The New Category dialog's checkbox: which materials go into the new category. """
+    if not materials:
+        return "Include Selected Materials"
+    if len(materials) == 1:
+        return f"Include '{materials[0].name}'"
+    return f"Include {len(materials)} selected materials"
+
+
+def _targetsLabel(materials) -> str:
+    return f"'{materials[0].name}'" if len(materials) == 1 else f"{len(materials)} materials"
+
+
+class VRAY_OT_lister_mat_category_tab(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_category_tab"
+    bl_label = "Show Category"
+    bl_description = "Show only the materials in this category"
+
+    _listerKinds = ('MATERIALS',)
+
+    category: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def execute(self, context):
+        view = core.getListerView(context)
+        if view is None:
+            return {'CANCELLED'}
+        view.material_active_category = self.category
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_new_category(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_new_category"
+    bl_label = "New Category"
+    bl_description = "Define a material category, shown as a tab above the material list"
+    bl_options = {'UNDO'}
+
+    _listerKinds = ('MATERIALS',)
+
+    # SKIP_SAVE: start from the default every time, not from the last name typed
+    name: bpy.props.StringProperty(name="Name", default="Category", options={'SKIP_SAVE'})
+    include_selected: bpy.props.BoolProperty(name="Include Selected Materials", default=True,
+                                             options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(self, 'name')
+        targets = core.editorTargetMaterials()
+        row = layout.row()
+        row.enabled = bool(targets)
+        row.prop(self, 'include_selected', text=_includeLabel(targets))
+
+    def execute(self, context):
+        view = _categoryView(context)
+        if view is None:
+            return {'CANCELLED'}
+
+        name = material_categories.defineCategory(view, self.name)
+        targets = core.editorTargetMaterials() if self.include_selected else []
+        if targets:
+            material_categories.fileMaterials(targets, name, add=True)
+
+        view.material_active_category = name
+        self.report({'INFO'}, f"Category '{name}'" + (f": {_targetsLabel(targets)}" if targets else ""))
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_toggle_category(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_toggle_category"
+    bl_label = "Toggle Category"
+    bl_description = ("Add the selected materials to this category, or take them out of it. "
+                      "A material can be in any number of categories")
+    bl_options = {'UNDO'}
+
+    _listerKinds = ('MATERIALS',)
+
+    category: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def execute(self, context):
+        view = _categoryView(context)
+        targets = core.editorTargetMaterials()
+        if view is None or not targets or not self.category:
+            return {'CANCELLED'}
+
+        filed = material_categories.toggleMaterials(targets, self.category)
+        if filed:
+            self.report({'INFO'}, f"Added {_targetsLabel(targets)} to '{self.category}'")
+        else:
+            self.report({'INFO'}, f"Removed {_targetsLabel(targets)} from '{self.category}'")
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_unfile(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_unfile"
+    bl_label = "Remove From All Categories"
+    bl_description = "Take the selected materials out of every category"
+    bl_options = {'UNDO'}
+
+    _listerKinds = ('MATERIALS',)
+
+    def execute(self, context):
+        targets = [m for m in core.editorTargetMaterials() if material_categories.categoriesOf(m)]
+        if not targets:
+            return {'CANCELLED'}
+        material_categories.unfileMaterials(targets)
+        self.report({'INFO'}, f"Removed {_targetsLabel(targets)} from every category")
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_rename_category(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_rename_category"
+    bl_label = "Rename Category"
+    bl_description = "Rename this category, on its tab and on every material in it"
+    bl_options = {'UNDO'}
+
+    _listerKinds = ('MATERIALS',)
+
+    category: bpy.props.StringProperty(options={'HIDDEN'})
+    name: bpy.props.StringProperty(name="Name", options={'SKIP_SAVE'})
+
+    def invoke(self, context, event):
+        self.name = self.category
+        return context.window_manager.invoke_props_dialog(self)
+
+    def draw(self, context):
+        self.layout.prop(self, 'name')
+
+    def execute(self, context):
+        view = _categoryView(context)
+        if view is None or not self.category or not self.name.strip():
+            return {'CANCELLED'}
+        name = material_categories.renameCategory(view, self.category, self.name)
+        self.report({'INFO'}, f"Renamed '{self.category}' to '{name}'")
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_delete_category(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_delete_category"
+    bl_label = "Delete Category"
+    bl_description = ("Remove this category: the tab goes and its materials are taken out of it. "
+                      "The materials themselves are kept")
+    bl_options = {'UNDO'}
+
+    _listerKinds = ('MATERIALS',)
+
+    category: bpy.props.StringProperty(options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(self, event)
+
+    def execute(self, context):
+        view = _categoryView(context)
+        if view is None or not self.category:
+            return {'CANCELLED'}
+        count = material_categories.countFor(bpy.data.materials, self.category)
+        material_categories.deleteCategory(view, self.category)
+        self.report({'INFO'}, f"Deleted category '{self.category}' ({count} material(s) unfiled)")
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_OT_lister_mat_select_category(ListerOperatorBase):
+    bl_idname = "vray.lister_mat_select_category"
+    bl_label = "Select All in Category"
+    bl_description = "Select every material this tab shows, so the next action applies to all of them"
+
+    _listerKinds = ('MATERIALS',)
+
+    def execute(self, context):
+        category = core.getCategory('MATERIALS')
+        if category is None:
+            return {'CANCELLED'}
+        _, _, materials = core.editorMaterialsByCategory(context, category)
+        if not materials:
+            return {'CANCELLED'}
+
+        names = [core.materialKey(m) for m in materials]
+        core.selectMaterials(names)
+        self.report({'INFO'}, f"Selected {len(names)} material(s)")
+        core.tagListerRedraw(context)
+        return {'FINISHED'}
+
+
+class VRAY_MT_lister_mat_file(bpy.types.Menu):
+    """ Which categories the selection is in, a click to add or remove one. A submenu of the
+        tab bar's manage menu. """
+    bl_idname = "VRAY_MT_lister_mat_file"
+    bl_label = "Categories"
+
+    def draw(self, context):
+        layout = self.layout
+        # Menus may run their items exec-only, skipping invoke() - and with it the New Category
+        # name dialog. Force the invoke path.
+        layout.operator_context = 'INVOKE_DEFAULT'
+        view = core.getListerView(context)
+        targets = core.editorTargetMaterials()
+
+        layout.label(text=f"Categories of {_targetsLabel(targets)}" if targets else "No editable material selected")
+        layout.separator()
+
+        names = material_categories.userCategories(view, bpy.data.materials)
+        if not names:
+            layout.label(text="No categories yet", icon='INFO')
+        for name in names:
+            # Checked only when every selected material is in it. A mixed selection reads as
+            # unchecked, and one click files them all (material_categories.toggleMaterials).
+            checked = bool(targets) and all(material_categories.hasCategory(m, name) for m in targets)
+            row = layout.row()
+            row.enabled = bool(targets)
+            row.operator("vray.lister_mat_toggle_category", text=name,
+                         icon='CHECKBOX_HLT' if checked else 'CHECKBOX_DEHLT').category = name
+
+        layout.separator()
+        layout.operator("vray.lister_mat_new_category", text="New Category...", icon='ADD')
+        unfile = layout.row()
+        unfile.enabled = any(material_categories.categoriesOf(m) for m in targets)
+        unfile.operator("vray.lister_mat_unfile", icon='X')
+
+
+class VRAY_MT_lister_mat_category(bpy.types.Menu):
+    """ The manage menu at the end of the tab bar. Rename and Delete act on the tab in front. """
+    bl_idname = "VRAY_MT_lister_mat_category"
+    bl_label = "Categories"
+
+    def draw(self, context):
+        layout = self.layout
+        # Invoke, not exec: New / Rename open their name dialog there, Delete its confirmation
+        layout.operator_context = 'INVOKE_DEFAULT'
+        view = core.getListerView(context)
+        active = material_categories.activeKey(view, bpy.data.materials)
+        names = material_categories.userCategories(view, bpy.data.materials)
+
+        layout.menu("VRAY_MT_lister_mat_file", text="Add Selected to Category",
+                    icon='OUTLINER_COLLECTION')
+        layout.operator("vray.lister_mat_select_category", icon='RESTRICT_SELECT_OFF')
+        layout.separator()
+
+        col = layout.column()
+        col.enabled = active in names
+        col.operator("vray.lister_mat_rename_category", text="Rename Category...",
+                     icon='SORTALPHA').category = active
+        col.operator("vray.lister_mat_delete_category", text="Delete Category",
+                     icon='TRASH').category = active
+
+        layout.separator()
+        layout.operator("vray.lister_mat_new_category", text="New Category...", icon='ADD')
 
 
 def getRegClasses():
@@ -725,4 +1030,13 @@ def getRegClasses():
         VRAY_OT_lister_editor_select_material,
         VRAY_OT_lister_new_material,
         VRAY_OT_lister_duplicate_material,
+        VRAY_OT_lister_mat_category_tab,
+        VRAY_OT_lister_mat_new_category,
+        VRAY_OT_lister_mat_toggle_category,
+        VRAY_OT_lister_mat_unfile,
+        VRAY_OT_lister_mat_rename_category,
+        VRAY_OT_lister_mat_delete_category,
+        VRAY_OT_lister_mat_select_category,
+        VRAY_MT_lister_mat_file,
+        VRAY_MT_lister_mat_category,
     )

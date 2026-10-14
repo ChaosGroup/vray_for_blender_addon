@@ -9,8 +9,12 @@
 # markers draw the matching lister; others fall through to the original draw.
 # Everything is restored on close and on unregister.
 #
-# Both are singular. The Material Lister uses two Preferences areas: the material list on the
-# left, the selected material's parameters on the right, navbars hidden in both.
+# Both are singular, but they can share a window: the kind is tracked per area, not per screen.
+# A lister opens in a floating window and can be docked into any editor area. Undocking gives
+# the area its editor back and moves the lister to a floating window again; closing a docked
+# lister closes its area.
+# The Material Lister uses two Preferences areas: the material list on the left, the selected
+# material's parameters on the right, navbars hidden in both.
 
 import bpy
 import gpu
@@ -22,7 +26,7 @@ from vray_blender.ui import gpu_overlay
 from vray_blender.ui.lister import core, relink
 
 
-# Screen properties marking a window as one of our lister windows
+# Screen properties marking a screen as hosting one of our listers. One screen can carry both.
 VRAY_LISTER_FLAG = "vray_is_lister_window"
 VRAY_MATERIAL_LISTER_FLAG = "vray_is_material_lister_window"
 
@@ -31,12 +35,24 @@ _WINDOW_FLAGS = {'LISTER': VRAY_LISTER_FLAG, 'MATERIALS': VRAY_MATERIAL_LISTER_F
 # Per-file "this lister kind was open" flag on the scene state, for the reopen on file load
 _OPEN_PROPS = {'LISTER': 'lister_open', 'MATERIALS': 'material_lister_open'}
 
-# Marks a lister window adopted from the user. Closing it restores the window, never closes it.
-VRAY_DOCKED_FLAG = "vray_lister_docked"
+_KIND_LABELS = {'LISTER': "V-Ray Object Lister", 'MATERIALS': "V-Ray Material Manager"}
+
+# The screen properties below are per kind, as both kinds can be docked in the same screen.
+
+# Marks a lister adopted into the user's window. Closing it restores its areas, never closes the window.
+_DOCKED_FLAGS = {'LISTER': "vray_object_lister_docked", 'MATERIALS': "vray_material_lister_docked"}
 
 # ui_type of the area a dock converted. Kept on the screen so undocking still works after
 # the file has been saved and loaded again.
-VRAY_PREV_UI_TYPE = "vray_lister_prev_ui_type"
+_PREV_UI_TYPES = {'LISTER': "vray_object_lister_prev_ui_type", 'MATERIALS': "vray_material_lister_prev_ui_type"}
+
+# Indices in screen.areas of the lister's panes. Area references do not survive a file load,
+# their order in the screen does.
+_AREA_INDICES = {'LISTER': "vray_object_lister_areas", 'MATERIALS': "vray_material_lister_areas"}
+
+# Kind-less docked flag and converted ui_type of files saved when a screen could host one kind only
+_LEGACY_DOCKED_FLAG = "vray_lister_docked"
+_LEGACY_PREV_UI_TYPE = "vray_lister_prev_ui_type"
 
 # Fraction of the Material Lister window taken by the list pane; the rest is the parameters pane
 _MATERIAL_LISTER_SPLIT = 0.62
@@ -47,30 +63,39 @@ _prevDraw: dict[str, object] = {}
 _prevAreaUiTypes: dict[bpy.types.Area, str] = {}
 # Areas we created by splitting. Undocking closes them again.
 _createdAreas: set = set()
-# Screen name -> the Preferences areas the lister draws in. A Preferences editor the user
-# opens in the same screen is not one of them, and keeps drawing the real preferences.
-_listerAreas: dict[str, set] = {}
+# Screen name -> kind -> the Preferences areas that lister draws in. A Preferences editor the
+# user opens in the same screen is in none of them, and keeps drawing the real preferences.
+_listerAreas: dict[str, dict[str, set]] = {}
+# Window pointer -> kind, for the lister windows we opened (not docked ones)
+_listerWindows: dict[int, str] = {}
 # The user's Preferences section, saved on the first hijack. The hijack forces 'ADDONS' so that
 # exactly one content panel polls true (else every polled panel would draw the lister again),
 # which also moves the user's real Preferences window - so put it back on restore.
 _prevActiveSection: list = []
 
 
-def _windowKind(window: bpy.types.Window):
-    """ 'LISTER' / 'MATERIALS' for our hijacked windows, None for ordinary ones. """
-    if not window:
-        return None
-    for kind, flag in _WINDOW_FLAGS.items():
-        if window.screen.get(flag, False):
-            return kind
-    return None
+def _screenKinds(screen: bpy.types.Screen) -> list[str]:
+    """ The lister kinds ('LISTER' / 'MATERIALS') marked on this screen. """
+    return [kind for kind, flag in _WINDOW_FLAGS.items() if screen.get(flag, False)]
+
+
+def _isDocked(screen: bpy.types.Screen, kind: str = None) -> bool:
+    """ Whether this lister kind, or with no kind any of them, is docked in the screen. """
+    kinds = (kind,) if kind else _WINDOW_FLAGS
+    return any(screen.get(_DOCKED_FLAGS[k], False) for k in kinds)
+
+
+def _delScreenProps(screen: bpy.types.Screen, *keys: str):
+    for key in keys:
+        if key in screen:
+            del screen[key]
 
 
 def isListerOpen(context: bpy.types.Context, *kinds: str) -> bool:
-    """ Whether a lister window of one of these kinds ('LISTER' / 'MATERIALS') is open.
+    """ Whether a lister of one of these kinds ('LISTER' / 'MATERIALS') is open in a window.
         Used to poll() operators that only make sense with their lister window open -
         without it they would otherwise still show (and do nothing) in the F3 search. """
-    openKinds = {_windowKind(w) for w in context.window_manager.windows}
+    openKinds = {k for w in context.window_manager.windows for k in _screenKinds(w.screen)}
     return bool(openKinds.intersection(kinds))
 
 
@@ -89,36 +114,131 @@ class ListerOperatorBase(VRayOperatorBase):
 # Draw overrides
 ############################################################
 
-def _registerListerAreas(screen: bpy.types.Screen):
-    """ Take the screen's Preferences areas as the lister's own. Call it once the layout is
-        final, so the Material Lister's second pane is in there too. """
+def _registerListerAreas(screen: bpy.types.Screen, kind: str, areas):
+    """ Take these areas as this lister kind's panes, and save their places on the screen for
+        the next file load. Call it once the layout is final, so the Material Lister's second
+        pane is in there too. """
     # Entries for screens that are gone hold dead Area references, and a recycled address
     # would later pass as one of ours.
     for screenName in [name for name in _listerAreas if name not in bpy.data.screens]:
         del _listerAreas[screenName]
 
-    _listerAreas[screen.name] = {a for a in screen.areas if a.type == 'PREFERENCES'}
+    _listerAreas.setdefault(screen.name, {})[kind] = set(areas)
+    _saveAreaIndices(screen, kind)
 
 
-def _listerPaneAreas(screen: bpy.types.Screen) -> list:
-    """ The screen's Preferences areas that belong to the lister. With nothing registered
-        for the screen, every one of them counts, which is what the lister did before. """
-    ours = _listerAreas.get(screen.name)
-    return [a for a in screen.areas if a.type == 'PREFERENCES' and (not ours or a in ours)]
+def _saveAreaIndices(screen: bpy.types.Screen, kind: str):
+    """ Write where this kind's registered panes are in screen.areas onto the screen. """
+    ours = _listerAreas.get(screen.name, {}).get(kind, set())
+    indices = [i for i, a in enumerate(screen.areas) if a in ours]
+    if indices:
+        screen[_AREA_INDICES[kind]] = indices
+    else:
+        _delScreenProps(screen, _AREA_INDICES[kind])
 
 
-def _isListerArea(context) -> bool:
-    """ Whether this draw is in one of the lister's own areas. """
-    ours = _listerAreas.get(context.window.screen.name)
-    return not ours or context.area is None or context.area in ours
+def _forgetKind(screen: bpy.types.Screen, kind: str):
+    """ Drop this kind's markers, saved panes and registered areas from the screen. """
+    _delScreenProps(screen, _WINDOW_FLAGS[kind], _DOCKED_FLAGS[kind], _AREA_INDICES[kind], _PREV_UI_TYPES[kind])
+    registered = _listerAreas.get(screen.name)
+    if registered is not None:
+        registered.pop(kind, None)
+        if not registered:
+            del _listerAreas[screen.name]
+
+
+def _listerPaneAreas(screen: bpy.types.Screen, kind: str) -> list:
+    """ This lister kind's Preferences areas in the screen. With nothing registered for the
+        screen and only this kind marked on it, every Preferences area counts, which is what
+        the lister did before it tracked its areas. """
+    registered = _listerAreas.get(screen.name)
+    if not registered:
+        if _screenKinds(screen) != [kind]:
+            return []
+        return [a for a in screen.areas if a.type == 'PREFERENCES']
+    ours = registered.get(kind, ())
+    return [a for a in screen.areas if a.type == 'PREFERENCES' and a in ours]
+
+
+def _sortedPanes(screen: bpy.types.Screen, kind: str) -> list:
+    """ This lister kind's Preferences areas in the screen, left pane first. """
+    return sorted(_listerPaneAreas(screen, kind), key=lambda a: a.x)
+
+
+def _hostWindow(context: bpy.types.Context, screen: bpy.types.Screen):
+    """ The window showing this screen, None if no window does. """
+    return next((w for w in context.window_manager.windows if w.screen == screen), None)
+
+
+def _areaKind(screen: bpy.types.Screen, area):
+    """ The lister kind drawing in this area of the screen, None for an ordinary area. With no
+        area to go on, the screen's kind if it hosts only one. """
+    kinds = _screenKinds(screen)
+    if area is None:
+        return kinds[0] if len(kinds) == 1 else None
+    return next((k for k in kinds if area in _listerPaneAreas(screen, k)), None)
+
+
+def _contextKind(context: bpy.types.Context):
+    """ The lister kind of the area being drawn or operated in, None outside of a lister. """
+    return _areaKind(context.window.screen, context.area) if context.window else None
+
+
+def _wrongScreenKind(window: bpy.types.Window):
+    """ The kind of our lister window whose screen a workspace switch left unmarked or wrongly marked. """
+    kind = _listerWindows.get(window.as_pointer())
+    screen = window.screen
+    if kind is None or kind in _screenKinds(screen):
+        return None
+    if screen.is_temporary or _isDocked(screen) or any(a.type != 'PREFERENCES' for a in screen.areas):
+        return None
+    return kind
+
+
+def _fixListerScreens():
+    """ Put the right marker and panes on the screens found by _wrongScreenKind. """
+    context = bpy.context
+    windows = {w.as_pointer(): w for w in context.window_manager.windows}
+    for ptr in [p for p in _listerWindows if p not in windows]:
+        del _listerWindows[ptr]  # closed by its title bar
+
+    for window in windows.values():
+        kind = _wrongScreenKind(window)
+        if kind is None:
+            continue
+        screen = window.screen
+        for staleKind in _WINDOW_FLAGS:
+            _forgetKind(screen, staleKind)
+        screen[_WINDOW_FLAGS[kind]] = True
+
+        panes = sorted((a for a in screen.areas if a.type == 'PREFERENCES'), key=lambda a: a.x)
+        if kind == 'MATERIALS':
+            if len(panes) == 1:
+                _setupMaterialListerLayout(context, window, panes[0])
+                continue
+        else:
+            for area in panes[1:]:
+                with context.temp_override(window=window, area=area):
+                    bpy.ops.screen.area_close()
+            navbar = _navbarRegion(panes[0])
+            if navbar is not None and navbar.width <= 1:
+                with context.temp_override(window=window, area=panes[0]):
+                    bpy.ops.screen.region_toggle(region_type=navbar.type)
+        _registerListerAreas(screen, kind, [a for a in screen.areas if a.type == 'PREFERENCES'])
+
+    core.tagListerRedraw(context)
+    return None
 
 
 def _overrideProxy(self, context, drawByKind):
-    """ Route to the draw of this window's lister kind; otherwise call the original. """
+    """ Route to the draw of this area's lister kind; otherwise call the original. """
     typeName = type(self).__name__
-    kind = _windowKind(context.window)
-    if kind is not None and not _isListerArea(context):
-        kind = None  # a Preferences editor the user opened in the lister's screen
+    # None in a Preferences editor the user opened next to a lister, too
+    kind = _contextKind(context)
+    if context.window and (wrongKind := _wrongScreenKind(context.window)) is not None:
+        kind = wrongKind
+        if not bpy.app.timers.is_registered(_fixListerScreens):
+            bpy.app.timers.register(_fixListerScreens)
     drawImpl = drawByKind.get(kind) if kind is not None else None
     if drawImpl is None:
         original = _prevDraw.get(typeName)
@@ -142,7 +262,7 @@ def _drawMaterialActions(row, context):
     buttons = group.row(align=True)
     buttons.operator("vray.lister_new_material", text="", icon='ADD')
     # Both act on the material the parameters pane is showing.
-    selectedName = core.editorMaterialName()
+    selectedName = core.activeMaterialName()
     onSelected = buttons.row(align=True)
     onSelected.enabled = bool(selectedName)
     onSelected.operator("vray.lister_duplicate_material", text="", icon='DUPLICATE')
@@ -159,11 +279,11 @@ def _drawMaterialActions(row, context):
     # and the node editor do. Disabling instead would leave a near-invisible icon: a custom
     # preview icon drawn at a disabled widget's alpha all but vanishes on the header.
     vrayGroup = group.row(align=True)
-    mtlName = core.editorMaterialName()
-    mtl = bpy.data.materials.get(mtlName)
+    mtlName = core.activeMaterialName()
+    mtl = core.materialFromKey(mtlName) if mtlName else None
     if mtl is not None and mtl.use_nodes and not mtl.vray.is_vray_class:
         vrayGroup.operator("vray.convert_nodetree_material", text="",
-                           icon_value=icons.getIcon('CONVERT_MATERIALS')).material = mtlName
+                           icon_value=icons.getIcon('CONVERT_MATERIALS')).material = mtl.name
     if view is not None:
         vrayGroup.prop(view, 'show_vray_materials_only', text="",
                        icon_value=icons.getIcon('VRAY_LOGO'))
@@ -173,6 +293,14 @@ def _drawMaterialActions(row, context):
     prefs = core.getListerPrefs(context)
     tabs.prop_enum(prefs, 'material_editor_list_display', 'LIST', text="", icon='LONGDISPLAY')
     tabs.prop_enum(prefs, 'material_editor_list_display', 'THUMBNAILS', text="", icon='IMGDISPLAY')
+
+
+def _drawDockButton(row, context, kind: str):
+    """ Dock picker in a floating window, Undock in a docked lister - one button, one place. """
+    if _isDocked(context.window.screen, kind):
+        row.operator("vray.lister_undock", text="", icon='MENU_PANEL').kind = kind
+    else:
+        row.operator("vray.lister_dock_pick", text="", icon='MENU_PANEL').kind = kind
 
 
 def _drawHeader(self, context):
@@ -196,14 +324,14 @@ def _drawHeader(self, context):
             filters.prop(view, 'show_missing_assets_only', text="", icon='ERROR')
     row.popover(panel="VRAY_PT_lister_options", text="", icon='PREFERENCES')
     row.separator()
-    row.operator("vray.lister_dock_pick", text="", icon='MENU_PANEL')
+    _drawDockButton(row, context, 'LISTER')
     row.separator()
     row.operator("vray.lister_close", text="", icon='PANEL_CLOSE').kind = 'LISTER'
 
 
 def _materialListerPaneAreas(window):
     """ The Material Lister's Preferences areas, left pane first. """
-    return sorted(_listerPaneAreas(window.screen), key=lambda a: a.x)
+    return _sortedPanes(window.screen, 'MATERIALS')
 
 
 # The panes keep each other alive while a preview renders. A region's own tag_redraw() during
@@ -252,7 +380,7 @@ def _repaintWhileRendering(context):
     from vray_blender.nodes import utils as NodesUtils
 
     seen = (core.editorMaterialName(), NodesUtils.loosePreviewToken['n'])
-    mat = bpy.data.materials.get(seen[0])
+    mat = core.materialFromKey(seen[0])
     coast = _PREVIEW_IDLE_DRAWS if (mat is not None and core.isUnassigned(mat)) else 1
 
     if (_lastPreviewed['name'], _lastPreviewed['token']) != seen \
@@ -296,7 +424,7 @@ def _drawMaterialListerHeader(self, context):
         searchRow.prop(view, 'material_search', text="", icon='VIEWZOOM')
         row.row(align=True).prop(view, 'show_selected_only', text="", icon='RESTRICT_SELECT_OFF')
     row.operator("vray.lister_toggle_params", text="", icon='MATERIAL_DATA')
-    row.operator("vray.lister_dock_pick", text="", icon='MENU_PANEL')
+    _drawDockButton(row, context, 'MATERIALS')
     row.popover(panel="VRAY_PT_lister_options", text="", icon='PREFERENCES')
     row.separator()
     row.operator("vray.lister_close", text="", icon='PANEL_CLOSE').kind = 'MATERIALS'
@@ -412,13 +540,14 @@ def restorePreferences(context: bpy.types.Context):
     _prevDraw.clear()
 
     aliveAreas = {a for w in context.window_manager.windows for a in w.screen.areas}
-    for area, prevUiType in _prevAreaUiTypes.items():
-        if area in aliveAreas:
-            area.ui_type = prevUiType
+    # An area that cannot take its editor back must not stop the rest of the restore
+    for area in [a for a in _prevAreaUiTypes if a in aliveAreas]:
+        _restorePaneUiType(area, None)
     _prevAreaUiTypes.clear()
     # Leave split panes alone on unregister, but drop the references.
     _createdAreas.clear()
     _listerAreas.clear()
+    _listerWindows.clear()
 
     if _prevActiveSection:
         context.preferences.active_section = _prevActiveSection.pop()
@@ -426,10 +555,22 @@ def restorePreferences(context: bpy.types.Context):
     core.tagListerRedraw(context)
 
 
-# Screen name -> window kind, captured on file load for the reopen timer.
-_savedScreenKinds: dict[str, str] = {}
-# Which of those screens were hosting a docked lister
-_savedDockedScreens: set[str] = set()
+# Screen name -> the lister kinds marked on it, captured on file load for the reopen timer.
+_savedScreenKinds: dict[str, set[str]] = {}
+# Screen name -> the kinds docked in it
+_savedDockedScreens: dict[str, set[str]] = {}
+
+
+def _migrateLegacyKeys(screen: bpy.types.Screen):
+    """ Files saved when a screen could host one lister kind only keep its docked flag and
+        converted ui_type under kind-less keys. Hand them to the kind marked on the screen. """
+    kinds = _screenKinds(screen)
+    for legacyKey, keysByKind in ((_LEGACY_DOCKED_FLAG, _DOCKED_FLAGS), (_LEGACY_PREV_UI_TYPE, _PREV_UI_TYPES)):
+        if legacyKey not in screen:
+            continue
+        if len(kinds) == 1:
+            screen[keysByKind[kinds[0]]] = screen[legacyKey]
+        del screen[legacyKey]
 
 
 @bpy.app.handlers.persistent
@@ -446,14 +587,15 @@ def _onLoadClearListerFlags(_e):
     _createdAreas.clear()
     _prevAreaUiTypes.clear()
     _listerAreas.clear()
+    _listerWindows.clear()
     for screen in bpy.data.screens:
-        for kind, flag in _WINDOW_FLAGS.items():
-            if flag in screen:
-                _savedScreenKinds[screen.name] = kind
-                del screen[flag]
-        if VRAY_DOCKED_FLAG in screen:
-            _savedDockedScreens.add(screen.name)
-            del screen[VRAY_DOCKED_FLAG]
+        _migrateLegacyKeys(screen)
+        if kinds := _screenKinds(screen):
+            _savedScreenKinds[screen.name] = set(kinds)
+        if docked := {kind for kind in kinds if _isDocked(screen, kind)}:
+            _savedDockedScreens[screen.name] = docked
+        # The saved pane indices and converted ui_types stay, for the reopen to find.
+        _delScreenProps(screen, *_WINDOW_FLAGS.values(), *_DOCKED_FLAGS.values())
 
     # New file references different files; drop cached file-existence results
     relink.refreshAssetCache()
@@ -470,38 +612,88 @@ def _claimPreferencesWindow(context: bpy.types.Context, kind: str):
     """ A Preferences-editor window to reuse for this lister kind: prefer the one whose
         screen carried this kind's saved marker, then one no kind has claimed, or None. """
     candidates = [w for w in context.window_manager.windows
-                  if _windowKind(w) is None
+                  if not _screenKinds(w.screen)
                   and all(a.ui_type == 'PREFERENCES' or a.type == 'PREFERENCES' for a in w.screen.areas)]
     if kind == 'LISTER':
         # The Scene Lister needs a single-area screen.
         candidates = [w for w in candidates if len([a for a in w.screen.areas if a.type == 'PREFERENCES']) == 1]
     for window in candidates:
-        if _savedScreenKinds.get(window.screen.name) == kind:
+        if kind in _savedScreenKinds.get(window.screen.name, ()):
             return window
     # Don't steal a window the other lister kind saved for itself
     unsaved = [w for w in candidates if w.screen.name not in _savedScreenKinds]
     return unsaved[0] if unsaved else (candidates[0] if candidates else None)
 
 
-def _restoreListerMarkers(screen: bpy.types.Screen, kind: str):
-    """ Put back the markers the load stripped off a screen that hosted this kind. Without
-        the docked one, closing the lister leaves the area as a bare Preferences editor
-        instead of handing it back. """
+def _savedPaneAreas(screen: bpy.types.Screen, kind: str) -> list:
+    """ This kind's panes as saved on the screen. Without a record that still fits the layout,
+        as in a file saved before the panes were recorded, every Preferences area no other
+        kind holds. """
+    areas = list(screen.areas)
+    indices = list(screen.get(_AREA_INDICES[kind], ()))
+    if indices and all(0 <= i < len(areas) and areas[i].type == 'PREFERENCES' for i in indices):
+        return [areas[i] for i in indices]
+
+    taken = set()
+    for otherKind, otherAreas in _listerAreas.get(screen.name, {}).items():
+        if otherKind != kind:
+            taken |= otherAreas
+    return [a for a in areas if a.type == 'PREFERENCES' and a not in taken]
+
+
+def _reclaimScreen(context: bpy.types.Context, screen: bpy.types.Screen, kind: str, window=None) -> bool:
+    """ Put this kind back on a screen that hosted it: the markers the load stripped, and its
+        panes. Without the docked marker, closing the lister would leave the area as a bare
+        Preferences editor instead of handing it back. Pass the window showing the screen,
+        if any. False, with the screen left alone, if none of the kind's panes is left. """
+    panes = _savedPaneAreas(screen, kind)
+    if not panes:
+        return False
+
     screen[_WINDOW_FLAGS[kind]] = True
-    if screen.name in _savedDockedScreens:
-        screen[VRAY_DOCKED_FLAG] = True
+    if kind in _savedDockedScreens.get(screen.name, ()):
+        screen[_DOCKED_FLAGS[kind]] = True
+    if window is not None and kind == 'MATERIALS' and len(panes) == 1:
+        _setupMaterialListerLayout(context, window, panes[0])
+    else:
+        _registerListerAreas(screen, kind, panes)
+
+    if window is not None and not _isDocked(screen, kind) and all(a.type == 'PREFERENCES' for a in screen.areas):
+        _listerWindows[window.as_pointer()] = kind
+    return True
+
+
+def _savedListerWindow(context: bpy.types.Context, kind: str):
+    """ A window showing a screen this kind was marked on when the file was saved. """
+    return next((w for w in context.window_manager.windows
+                 if kind in _savedScreenKinds.get(w.screen.name, ())), None)
 
 
 def _savedDockedScreen(kind: str):
     """ The screen this kind was docked in, when no window is showing it. A docked lister
         sits in one workspace, and another one can be active when the file is saved. """
-    for screenName in _savedDockedScreens:
-        if _savedScreenKinds.get(screenName) != kind:
+    for screenName, kinds in _savedDockedScreens.items():
+        if kind not in kinds:
             continue
         screen = bpy.data.screens.get(screenName)
         if screen is not None and any(a.type == 'PREFERENCES' for a in screen.areas):
             return screen
     return None
+
+
+def _reclaimKind(context: bpy.types.Context, kind: str) -> bool:
+    """ Put this kind back where the loaded file had it, or into a Preferences window it can
+        reuse. False if it needs a new window. """
+    savedWindow = _savedListerWindow(context, kind)
+    if savedWindow is not None and _reclaimScreen(context, savedWindow.screen, kind, savedWindow):
+        return True
+    prefsWindow = _claimPreferencesWindow(context, kind)
+    if prefsWindow is not None and _reclaimScreen(context, prefsWindow.screen, kind, prefsWindow):
+        return True
+    # Docked in a workspace that is not the active one. Mark it in place rather than open a
+    # window over it. It draws as the lister again when the user switches back to that workspace.
+    dockedScreen = _savedDockedScreen(kind)
+    return dockedScreen is not None and _reclaimScreen(context, dockedScreen, kind)
 
 
 def _reopenListerIfFlagged():
@@ -517,21 +709,9 @@ def _reopenListerIfFlagged():
         for kind in _WINDOW_FLAGS:
             if not getattr(view, _OPEN_PROPS[kind]):
                 continue
-            if any(_windowKind(w) == kind for w in context.window_manager.windows):
-                continue  # a window of this kind already exists
-            prefsWindow = _claimPreferencesWindow(context, kind)
-            if prefsWindow is not None:
-                _restoreListerMarkers(prefsWindow.screen, kind)
-                if kind == 'MATERIALS':
-                    _setupMaterialListerLayout(context, prefsWindow)
-                _registerListerAreas(prefsWindow.screen)
-                reclaimed = True
-            elif (dockedScreen := _savedDockedScreen(kind)) is not None:
-                # Docked in a workspace that is not the active one. Mark it in place rather
-                # than open a window over it. It draws as the lister again when the user
-                # switches back to that workspace.
-                _restoreListerMarkers(dockedScreen, kind)
-                _registerListerAreas(dockedScreen)
+            if isListerOpen(context, kind):
+                continue  # a window already shows this kind
+            if _reclaimKind(context, kind):
                 reclaimed = True
             else:
                 openOps[kind]()
@@ -551,10 +731,8 @@ def _flipListerHeaderTop():
         the bottom (the header is already un-hidden by the open operator). """
     try:
         for window in bpy.context.window_manager.windows:
-            if _windowKind(window) is None:
-                continue
-            areas = [a for a in window.screen.areas if a.type == 'PREFERENCES'] or list(window.screen.areas)
-            for area in areas:
+            screen = window.screen
+            for area in [a for kind in _screenKinds(screen) for a in _listerPaneAreas(screen, kind)]:
                 header = next((r for r in area.regions if r.type == 'HEADER'), None)
                 if header is not None and getattr(header, 'alignment', '') == 'BOTTOM':
                     with bpy.context.temp_override(window=window, area=area, region=header):
@@ -580,7 +758,7 @@ class VRAY_PT_lister_options(bpy.types.Panel):
         prefs = core.getListerPrefs(context)
         view = core.getListerView(context)
 
-        if _windowKind(context.window) == 'MATERIALS':
+        if _contextKind(context) == 'MATERIALS':
             # The material list has no columns and no width of ours to set.
             _drawMaterialOptions(layout, prefs)
             core.drawOptions(layout, prefs)
@@ -725,27 +903,46 @@ def _openListerWindow(context: bpy.types.Context):
     return window
 
 
-def _setupMaterialListerLayout(context: bpy.types.Context, window: bpy.types.Window):
-    """ Split the window's Preferences area into the list and parameters panes, navbars hidden. """
-    areas = [a for a in window.screen.areas if a.type == 'PREFERENCES']
-    if len(areas) != 1:
-        return
+def _navbarRegion(area):
+    """ The Preferences sidebar region of the area, None if it has none.
+
+        Blender 5.0 moved the Preferences sections to a regular sidebar region ('UI'); before
+        that they lived in 'NAVIGATION_BAR'. region_toggle reports FINISHED for a region type
+        the area does not have, so ask the area which one it is instead of guessing. """
+    return next((r for r in area.regions if r.type in {'UI', 'NAVIGATION_BAR'}), None)
+
+
+def _showNavbar(area):
+    """ Un-hide the sidebar the Object Lister draws its sections in. An area that hosted the
+        Material Lister before goes back to the Preferences space it hid that sidebar in.
+        Done through the space, as the region of an area that just switched editors has no
+        size yet to tell whether it is showing. """
+    navbar = _navbarRegion(area)
+    space = area.spaces.active
+    prop = {'UI': 'show_region_ui', 'NAVIGATION_BAR': 'show_region_nav_bar'}.get(navbar.type) if navbar else None
+    if prop is not None and hasattr(space, prop):
+        setattr(space, prop, True)
+
+
+def _setupMaterialListerLayout(context: bpy.types.Context, window: bpy.types.Window, listPane):
+    """ Split the Material Lister's pane into the list and parameters panes, navbars hidden, and
+        take both as its own. The rest of the window is left alone: the Object Lister or the
+        user's editors may be in it. """
+    panes = [listPane]
     before = set(window.screen.areas)
     try:
-        with context.temp_override(window=window, area=areas[0]):
+        with context.temp_override(window=window, area=listPane):
             bpy.ops.screen.area_split(direction='VERTICAL', factor=_MATERIAL_LISTER_SPLIT)
     except RuntimeError as ex:
         debug.printError(f"V-Ray Material Lister: could not split the editor area: {ex}")
-        return
-    # Remember the pane the split added.
-    _createdAreas.update(set(window.screen.areas) - before)
-    for area in window.screen.areas:
-        if area.type != 'PREFERENCES':
-            continue
-        # Blender 5.0 moved the Preferences sections to a regular sidebar region ('UI'); before
-        # that they lived in 'NAVIGATION_BAR'. region_toggle reports FINISHED for a region type
-        # the area does not have, so ask the area which one it is instead of guessing.
-        navbar = next((r for r in area.regions if r.type in {'UI', 'NAVIGATION_BAR'}), None)
+    else:
+        # Remember the pane the split added.
+        created = set(window.screen.areas) - before
+        _createdAreas.update(created)
+        panes.extend(created)
+
+    for area in panes:
+        navbar = _navbarRegion(area)
         if navbar is None:
             continue
         # region_toggle toggles, so it must only be called on a navbar that is actually showing.
@@ -759,48 +956,111 @@ def _setupMaterialListerLayout(context: bpy.types.Context, window: bpy.types.Win
         except RuntimeError:
             pass  # navbar already hidden
 
+    _registerListerAreas(window.screen, 'MATERIALS', panes)
+
+
+def _areaCenter(area) -> tuple[int, int]:
+    return (area.x + area.width // 2, area.y + area.height // 2)
+
+
+def _closePane(context: bpy.types.Context, window: bpy.types.Window, pane, into=None) -> bool:
+    """ Close a pane we split off. With `into`, join the pane back into that area: area_close
+        grows whichever neighbour lines up best, which next to a docked lister may be the
+        other lister or one of the user's editors. area_join keeps its source area. """
+    _createdAreas.discard(pane)
+    _prevAreaUiTypes.pop(pane, None)
+    if into is not None:
+        try:
+            with context.temp_override(window=window, area=into):
+                result = bpy.ops.screen.area_join(source_xy=_areaCenter(into), target_xy=_areaCenter(pane))
+            if 'FINISHED' in result:
+                return True
+        except (RuntimeError, TypeError) as ex:
+            debug.printError(f"V-Ray lister: could not join the added pane back: {ex}")
+    try:
+        with context.temp_override(window=window, area=pane):
+            bpy.ops.screen.area_close()
+        return True
+    except RuntimeError as ex:
+        debug.printError(f"V-Ray lister: could not close the added pane: {ex}")
+        return False
+
 
 ############################################################
 # Operators
 ############################################################
 
-def _undockScreen(context: bpy.types.Context, screen: bpy.types.Screen):
-    """ Give a docked host window back: close the panes we added, then put back the ui_type
-        of the area we converted. """
-    window = next((w for w in context.window_manager.windows if w.screen == screen), None)
-
-    for area in [a for a in screen.areas if a in _createdAreas]:
-        _createdAreas.discard(area)
-        _prevAreaUiTypes.pop(area, None)
+def _undockScreen(context: bpy.types.Context, screen: bpy.types.Screen, kind: str):
+    """ Give this lister kind's areas of a host window back: close the panes we added, then put
+        back the ui_type of the area we converted. Areas of the other kind are left alone. """
+    window = _hostWindow(context, screen)
+    panes = _sortedPanes(screen, kind)
+    keep = next((a for a in panes if a not in _createdAreas), None)
+    added = [a for a in panes if a in _createdAreas]
+    if not added and kind == 'MATERIALS':
+        # _createdAreas does not outlive a file load. The parameters pane is the split right
+        # of the list pane, the area the dock took over.
+        added = panes[1:2]
+    for area in added:
         if window is None:
-            continue  # no window to override with; leave the area alone
-        try:
-            with context.temp_override(window=window, area=area):
-                bpy.ops.screen.area_close()
-        except RuntimeError as ex:
-            debug.printError(f"V-Ray lister: could not close the added pane: {ex}")
+            # No window to override with; leave the area alone
+            _createdAreas.discard(area)
+            _prevAreaUiTypes.pop(area, None)
+            continue
+        _closePane(context, window, area, into=keep)
 
     # All that is left to go on when the dock happened before a file load.
-    savedUiType = screen.get(VRAY_PREV_UI_TYPE)
+    savedUiType = screen.get(_PREV_UI_TYPES[kind])
+
+    alive = list(screen.areas)
+    for area in [a for a in panes if a in alive]:
+        _restorePaneUiType(area, savedUiType)
+
+
+def _restorePaneUiType(area, fallbackUiType):
+    """ Put back the editor a lister pane was before the lister took it. `fallbackUiType` is for
+        a pane with none kept in memory: the one kept on the screen, for a dock from before a
+        file load. """
+    prevUiType = _prevAreaUiTypes.pop(area, None)
+    if prevUiType is None and area.type == 'PREFERENCES':
+        prevUiType = fallbackUiType
+    if prevUiType is not None:
+        try:
+            area.ui_type = prevUiType
+        except (TypeError, AttributeError) as ex:
+            debug.printError(f"V-Ray lister: could not restore the docked area: {ex}")
+
+
+def _closeKindPanes(context: bpy.types.Context, screen: bpy.types.Screen, kind: str):
+    """ Close this lister kind's areas in the user's window, both of the Material Lister's:
+        the lister goes and its editor area with it, the neighbours grow over it. The only
+        area of a window cannot close, so that one gets its editor back instead. """
+    window = _hostWindow(context, screen)
+    panes = _sortedPanes(screen, kind)
+    if window is None or not panes:
+        _undockScreen(context, screen, kind)
+        return
+
+    first = panes[0]
+    for pane in panes[1:]:
+        _closePane(context, window, pane, into=first)
+
+    # Drop the bookkeeping while the area is still alive, as _closeListerKind does
+    _createdAreas.discard(first)
+    prevUiType = _prevAreaUiTypes.pop(first, None) or screen.get(_PREV_UI_TYPES[kind])
     try:
-        del screen[VRAY_PREV_UI_TYPE]
-    except KeyError:
-        pass
-
-    for area in screen.areas:
-        prevUiType = _prevAreaUiTypes.pop(area, None)
-        if prevUiType is None and area.type == 'PREFERENCES':
-            prevUiType = savedUiType
-        if prevUiType is not None:
-            try:
-                area.ui_type = prevUiType
-            except (TypeError, AttributeError) as ex:
-                debug.printError(f"V-Ray lister: could not restore the docked area: {ex}")
+        with context.temp_override(window=window, area=first):
+            bpy.ops.screen.area_close()
+    except RuntimeError:
+        _restorePaneUiType(first, prevUiType)  # nothing to join it with
 
 
-def _closeListerKind(context: bpy.types.Context, kind: str):
-    """ Take this lister kind down: hand a docked window back to the user, close one we
-        opened ourselves. """
+def _closeListerKind(context: bpy.types.Context, kind: str, keepArea=None, giveBack=False):
+    """ Take this lister kind down. A window we opened for it closes. In any other window its
+        areas close too, or with `giveBack` turn back into the editors they were before the
+        lister took them, as undocking or moving the lister does. The other lister kind stays,
+        even in the same window. `keepArea` is an area that must survive, so its window is
+        never closed. """
     flag = _WINDOW_FLAGS[kind]
     _setListerOpen(context, kind, False)
 
@@ -808,45 +1068,77 @@ def _closeListerKind(context: bpy.types.Context, kind: str):
         screen = window.screen
         if not screen.get(flag, False):
             continue
-        # Anything but Preferences panes means the user's own window - hand it back, never close it.
-        docked = bool(screen.get(VRAY_DOCKED_FLAG, False)) or any(a.type != 'PREFERENCES' for a in screen.areas)
-        _listerAreas.pop(screen.name, None)
-        for key in (flag, VRAY_DOCKED_FLAG):
-            try:
-                del screen[key]
-            except KeyError:
-                pass
-        if docked:
-            _undockScreen(context, screen)
-        else:
+        # Close only a window that is nothing but this lister. Anything else in it - an editor
+        # of the user's, the other lister, the area a dock moves to - makes it the user's
+        # window: hand it back, never close it.
+        areas = list(screen.areas)
+        ownsWindow = (not _isDocked(screen, kind) and _screenKinds(screen) == [kind]
+                      and all(a.type == 'PREFERENCES' for a in areas)
+                      and keepArea not in areas)
+        if _listerWindows.get(window.as_pointer()) == kind:
+            del _listerWindows[window.as_pointer()]
+        if ownsWindow:
             # The window (and every area in it) is about to be freed. Drop the bookkeeping
             # first, or the dicts keep dangling Area keys that a later restore would match
             # against a recycled address.
-            for area in screen.areas:
+            _forgetKind(screen, kind)
+            for area in areas:
                 _prevAreaUiTypes.pop(area, None)
                 _createdAreas.discard(area)
             with context.temp_override(window=window):
                 bpy.ops.wm.window_close()
+        else:
+            if giveBack:
+                _undockScreen(context, screen, kind)
+            else:
+                _closeKindPanes(context, screen, kind)
+            _forgetKind(screen, kind)
 
-    # Keep the draw hijack while a window of the other lister kind is still open
-    if not any(_windowKind(w) for w in context.window_manager.windows):
+    # Keep the draw hijack while the other lister kind is still open
+    if not isListerOpen(context, *_WINDOW_FLAGS):
         restorePreferences(context)
     else:
         core.tagListerRedraw(context)
 
 
-def _dockListerKind(op, context, kind: str, window: bpy.types.Window, area):
-    """ Move this lister into `area` of `window`. Releases the current host first. """
-    hostKind = _windowKind(window)
-    if hostKind is not None and hostKind != kind:
-        # One screen can host one kind only.
-        op.report({'WARNING'}, "That window already hosts the other V-Ray lister")
-        return {'CANCELLED'}
+def _takeOverPane(context: bpy.types.Context, window: bpy.types.Window, area, kind: str):
+    """ Close this lister kind so the other one can take over `area`, one of its panes. Its other
+        panes join into `area`, and nothing is given back, as the area stays a lister. Returns
+        what carries over to the new lister: the editor the area was before this kind took it,
+        or None, and whether this kind owned the window. """
+    screen = window.screen
+    ownsWindow = (not _isDocked(screen, kind) and _screenKinds(screen) == [kind]
+                  and all(a.type == 'PREFERENCES' for a in screen.areas))
+    panes = _sortedPanes(screen, kind)
 
+    # Only the pane the lister took over has an entry. The split-off one never had.
+    prevUiType = None
+    for pane in panes:
+        prevUiType = _prevAreaUiTypes.pop(pane, None) or prevUiType
+    prevUiType = prevUiType or screen.get(_PREV_UI_TYPES[kind])
+
+    for pane in panes:
+        if pane != area:
+            _closePane(context, window, pane, into=area)
+    # Joined with the rest of the panes, the area is the whole of what the lister took over,
+    # even if it was the pane split off, so undocking must not close it.
+    _createdAreas.discard(area)
+
+    if _listerWindows.get(window.as_pointer()) == kind:
+        del _listerWindows[window.as_pointer()]
+    _setListerOpen(context, kind, False)
+    _forgetKind(screen, kind)
+    return prevUiType, ownsWindow
+
+
+def _dockListerKind(op, context, kind: str, window: bpy.types.Window, area):
+    """ Move this lister into `area` of `window`, which may hold the other lister kind too.
+        Releases the current host first. An `area` of the other lister closes that one, and
+        this one takes its place. """
     # Releasing the host reshuffles its areas. Re-find the target by pointer, do not hold the reference.
     areaPtr = area.as_pointer()
     screenPtr = window.screen.as_pointer()
-    _closeListerKind(context, kind)
+    _closeListerKind(context, kind, keepArea=area, giveBack=True)
 
     window = next((w for w in context.window_manager.windows if w.screen.as_pointer() == screenPtr), None)
     area = next((a for a in window.screen.areas if a.as_pointer() == areaPtr), None) if window is not None else None
@@ -854,19 +1146,39 @@ def _dockListerKind(op, context, kind: str, window: bpy.types.Window, area):
         op.report({'WARNING'}, "That editor is gone")
         return {'CANCELLED'}
 
-    if area.type != 'PREFERENCES':
+    screen = window.screen
+    ownsWindow = False
+    otherKind = _areaKind(screen, area)
+    if otherKind is not None:
+        prevUiType, ownsWindow = _takeOverPane(context, window, area, otherKind)
+        # Closing the other lister's panes reshuffles the screen too
+        area = next((a for a in screen.areas if a.as_pointer() == areaPtr), None)
+        if area is None:
+            op.report({'WARNING'}, "That editor is gone")
+            return {'CANCELLED'}
+        if prevUiType is not None:
+            _prevAreaUiTypes[area] = prevUiType
+            if not ownsWindow:
+                screen[_PREV_UI_TYPES[kind]] = prevUiType
+    elif area.type != 'PREFERENCES':
         _prevAreaUiTypes[area] = area.ui_type
         # _prevAreaUiTypes is in-memory only. Keep it on the screen too, which the file
         # saves, or a dock that outlives a load can never give the area back.
-        window.screen[VRAY_PREV_UI_TYPE] = area.ui_type
+        screen[_PREV_UI_TYPES[kind]] = area.ui_type
         area.ui_type = 'PREFERENCES'
 
-    window.screen[_WINDOW_FLAGS[kind]] = True
-    window.screen[VRAY_DOCKED_FLAG] = True
+    screen[_WINDOW_FLAGS[kind]] = True
+    if ownsWindow:
+        # The window was the other lister's own. It is this one's now, so closing it closes the window.
+        _listerWindows[window.as_pointer()] = kind
+    else:
+        screen[_DOCKED_FLAGS[kind]] = True
     _setListerOpen(context, kind, True)
     if kind == 'MATERIALS':
-        _setupMaterialListerLayout(context, window)
-    _registerListerAreas(window.screen)
+        _setupMaterialListerLayout(context, window, area)
+    else:
+        _showNavbar(area)
+        _registerListerAreas(screen, kind, [area])
     _hijackPreferences(context)
     return {'FINISHED'}
 
@@ -881,29 +1193,30 @@ def _openListerKind(op, context, kind: str):
     # under us, and the marker lives on the screen, so without this the window still counts as
     # open while holding one pane, or none at all in a docked lister, and the lister could never
     # be opened again.
-    for window in [w for w in context.window_manager.windows if _windowKind(w) == kind]:
-        panes = _listerPaneAreas(window.screen)
+    for window in [w for w in context.window_manager.windows if kind in _screenKinds(w.screen)]:
+        panes = _listerPaneAreas(window.screen, kind)
         if not panes:
-            try:
-                del window.screen[flag]  # nothing of the lister is left in it
-            except KeyError:
-                pass
+            _forgetKind(window.screen, kind)  # nothing of the lister is left in it
             continue
         if kind == 'MATERIALS' and len(panes) < 2:
-            _setupMaterialListerLayout(context, window)
-        _registerListerAreas(window.screen)
+            _setupMaterialListerLayout(context, window, panes[0])
+        else:
+            _registerListerAreas(window.screen, kind, panes)
         _hijackPreferences(context)
         return {'FINISHED'}
 
     window = _openListerWindow(context)
     if window is None:
-        op.report({'ERROR'}, f"Could not open the {op.bl_label} window")
+        op.report({'ERROR'}, f"Could not open the {_KIND_LABELS[kind]} window")
         return {'CANCELLED'}
 
     window.screen[flag] = True
+    _listerWindows[window.as_pointer()] = kind
+    pane = window.screen.areas[0]
     if kind == 'MATERIALS':
-        _setupMaterialListerLayout(context, window)
-    _registerListerAreas(window.screen)
+        _setupMaterialListerLayout(context, window, pane)
+    else:
+        _registerListerAreas(window.screen, kind, [pane])
     _hijackPreferences(context)
     return {'FINISHED'}
 
@@ -934,34 +1247,50 @@ class VRAY_OT_lister_toggle_params(ListerOperatorBase):
     _listerKinds = ('MATERIALS',)
 
     def execute(self, context):
-        window = next((w for w in context.window_manager.windows
-                       if _windowKind(w) == 'MATERIALS'), None)
+        # The button's own window first, but F3 can run this from any window.
+        windows = [context.window, *context.window_manager.windows]
+        window = next((w for w in windows if w is not None and 'MATERIALS' in _screenKinds(w.screen)), None)
         if window is None:
             return {'CANCELLED'}
 
         # The pane is an editor area, and an area edge stops at AREAMINX - so hiding it means
         # closing it, and showing it means splitting the list again at _MATERIAL_LISTER_SPLIT.
         panes = _materialListerPaneAreas(window)
+        if not panes:
+            return {'CANCELLED'}
         if len(panes) < 2:
-            _setupMaterialListerLayout(context, window)
+            _setupMaterialListerLayout(context, window, panes[0])
             return {'FINISHED'}
 
-        params = panes[-1]
-        _createdAreas.discard(params)
-        _prevAreaUiTypes.pop(params, None)
-        try:
-            with context.temp_override(window=window, area=params):
-                bpy.ops.screen.area_close()
-        except RuntimeError as ex:
-            debug.printError(f"V-Ray Material Lister: could not hide the parameters pane: {ex}")
+        listPane, params = panes[0], panes[-1]
+        if not _closePane(context, window, params, into=listPane):
             return {'CANCELLED'}
+        _registerListerAreas(window.screen, 'MATERIALS', [listPane])
         return {'FINISHED'}
+
+
+class VRAY_OT_lister_undock(ListerOperatorBase):
+    bl_idname = "vray.lister_undock"
+    bl_label = "Undock"
+    bl_description = "Undock: give this editor back and move the lister to its own window"
+    bl_options = {'INTERNAL'}
+
+    _listerKinds = ('LISTER', 'MATERIALS')
+
+    kind: bpy.props.StringProperty(options={'HIDDEN'}, default='')  # 'LISTER' or 'MATERIALS'
+
+    def execute(self, context):
+        kind = self.kind or _contextKind(context)
+        if kind not in _WINDOW_FLAGS:
+            return {'CANCELLED'}
+        _closeListerKind(context, kind, giveBack=True)
+        return _openListerKind(self, context, kind)
 
 
 class VRAY_OT_lister_close(ListerOperatorBase):
     bl_idname = "vray.lister_close"
-    bl_label = "Close Lister Window"
-    bl_description = "Close this V-Ray lister window. A docked window is handed back instead"
+    bl_label = "Close Lister"
+    bl_description = "Close this V-Ray lister. A docked lister closes its editor area too"
 
     _listerKinds = ('LISTER', 'MATERIALS')
 
@@ -1048,20 +1377,22 @@ def _redrawAllAreas(context: bpy.types.Context):
             area.tag_redraw()
 
 
-def _isListerPane(window: bpy.types.Window, area) -> bool:
-    """ Whether `area` is one of a lister's own panes. Only those are barred as dock targets. """
-    return _windowKind(window) is not None and area.type == 'PREFERENCES'
+def _isDockTarget(window: bpy.types.Window, area, kind: str) -> bool:
+    """ Whether the dock picker may move this lister kind into this area. Not one of its own
+        panes - a pane of the other kind is fine, that lister closes - and not in one of
+        Blender's temporary windows - Preferences, File browser, the render view. """
+    return not window.screen.is_temporary and _areaKind(window.screen, area) != kind
 
 
-def _areaUnderMouse(window: bpy.types.Window, event):
-    """ The area of `window` the pointer is in, or None if there is none or it is a lister's
-        own pane. """
+def _areaUnderMouse(window: bpy.types.Window, event, kind: str):
+    """ The area of `window` the pointer is in, or None if there is none or it is not a dock
+        target for this lister kind. """
     if window is None:
         return None
     x, y = event.mouse_x, event.mouse_y
     for area in window.screen.areas:
         if area.x <= x <= area.x + area.width and area.y <= y <= area.y + area.height:
-            return None if _isListerPane(window, area) else area
+            return area if _isDockTarget(window, area, kind) else None
     return None
 
 
@@ -1084,10 +1415,11 @@ class VRAY_OT_lister_dock_pick(VRayOperatorBase):
         isPrimary = not cls._instances
 
         if isPrimary:
-            kind = self.kind or _windowKind(context.window)
+            # The kind whose header the button was clicked in
+            kind = self.kind or _contextKind(context)
             if kind not in _WINDOW_FLAGS:
                 return {'CANCELLED'}
-            if not any(not _isListerPane(w, a) for w in context.window_manager.windows for a in w.screen.areas):
+            if not any(_isDockTarget(w, a, kind) for w in context.window_manager.windows for a in w.screen.areas):
                 self.report({'WARNING'}, "No editor available to dock into")
                 return {'CANCELLED'}
             cls._kind = kind
@@ -1098,7 +1430,8 @@ class VRAY_OT_lister_dock_pick(VRayOperatorBase):
         self._win = context.window
         self._cursorSet = False
         try:
-            self._win.cursor_modal_set('PICK_AREA')
+            # No docking into a temporary window. Its instance still swallows the clicks.
+            self._win.cursor_modal_set('STOP' if self._win.screen.is_temporary else 'PICK_AREA')
             self._cursorSet = True
         except (RuntimeError, TypeError):
             pass
@@ -1124,7 +1457,7 @@ class VRAY_OT_lister_dock_pick(VRayOperatorBase):
             _endPick(context)
             return {'CANCELLED'}
 
-        area = _areaUnderMouse(self._win, event)
+        area = _areaUnderMouse(self._win, event, cls._kind)
 
         if event.type == 'MOUSEMOVE':
             areaPtr = area.as_pointer() if area is not None else 0
@@ -1187,23 +1520,30 @@ def _onSaveSyncListerFlags(_e):
         is written. Closing a lister window by its title bar never runs vray.lister_close,
         and the flag left set behind it pops the window open on every later load.
 
-        A marker counts on a screen a window is showing, and on a docked host, whose
-        workspace need not be the active one at save time. Nowhere else. Closing a Material
-        Lister window leaves its split screen in bpy.data.screens with the marker still on
-        it, which must not read as open.
+        A marker counts on a screen a window is showing, and on a host the kind is docked in,
+        whose workspace need not be the active one at save time. Nowhere else. Closing a
+        Material Lister window leaves its split screen in bpy.data.screens with the marker
+        still on it, which must not read as open.
+
+        Also brings the saved pane indices up to date: splitting or closing an area since
+        the lister registered its panes moves them in screen.areas.
     """
     windowScreens = {window.screen.name for window in bpy.context.window_manager.windows}
 
     openKinds = set()
     for screen in bpy.data.screens:
-        if screen.name not in windowScreens and not screen.get(VRAY_DOCKED_FLAG, False):
-            continue
-        for kind, flag in _WINDOW_FLAGS.items():
-            if screen.get(flag, False):
+        for kind in _screenKinds(screen):
+            if screen.name in windowScreens or _isDocked(screen, kind):
                 openKinds.add(kind)
 
     for kind in _OPEN_PROPS:
         _setListerOpen(bpy.context, kind, kind in openKinds)
+
+    for screenName, byKind in _listerAreas.items():
+        screen = bpy.data.screens.get(screenName)
+        if screen is not None:
+            for kind in byKind:
+                _saveAreaIndices(screen, kind)
 
 
 def getRegClasses():
@@ -1212,6 +1552,7 @@ def getRegClasses():
         VRAY_OT_lister_open,
         VRAY_OT_material_lister_open,
         VRAY_OT_lister_close,
+        VRAY_OT_lister_undock,
         VRAY_OT_lister_toggle_params,
         VRAY_OT_lister_dock_pick,
     )

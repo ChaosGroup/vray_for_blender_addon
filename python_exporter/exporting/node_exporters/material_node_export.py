@@ -73,7 +73,7 @@ def exportVRayNodeShaderScript(nodeCtx: NodeContext):
     if node.mode == "INTERNAL":
         scriptPath = saveShaderScript(node.script)
     else:
-        scriptPath = bpy.path.abspath(node.filepath)
+        scriptPath = bpy.path.abspath(node.filepath, library=node.id_data.library)
 
     pluginDesc.setAttribute("input_parameters", _buildShaderScriptArgumentList(nodeCtx, scriptPath))
     pluginDesc.setAttribute("shader_file", scriptPath)

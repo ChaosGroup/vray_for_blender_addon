@@ -26,6 +26,13 @@ DEFAULT_LENS_FOCAL_LENGTH = 35.0
 # Biggest region dimension allowed for rendering with Community Edition
 MAX_CE_REGION_DIMENSION = 2560
 
+# SettingsCamera.type values
+CAM_TYPE_STANDARD = '0'
+CAM_TYPE_CYLINDRICAL_ORTHO = '3'
+CAM_TYPE_ORTHOGONAL = '7'
+CAM_TYPE_SPHERICAL_PANORAMA = '9'
+CAM_TYPE_CYLINDRICAL_VERTICAL_FOV = '11'
+
 class Rect:
     """ Floating-size rectangle """
     def __init__(self, xmin = 0.0, xmax = 0.0, ymin = 0.0, ymax = 0.0):
@@ -459,7 +466,7 @@ def isDomeCamera(obj):
 
 def isOrthographicCamera(camera: bpy.types.Camera):
     settingsCamera = camera.vray.SettingsCamera
-    return (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == '7' )
+    return (camera.type == 'ORTHO') or (settingsCamera.override_camera_settings and settingsCamera.type == CAM_TYPE_ORTHOGONAL )
 
 
 def isSameCamera(camera1: bpy.types.Object, camera2: bpy.types.Object):
@@ -540,7 +547,14 @@ def getRegionHeight(region: bpy.types.Region) -> int:
 def getCameraDofDistance(cameraObj: bpy.types.Object):
     camera: bpy.types.Camera = cameraObj.data
     dofObject = camera.dof.focus_object
-    return blender_utils.getDistanceObOb(cameraObj, dofObject) if dofObject else camera.dof.focus_distance
+    if not dofObject:
+        return camera.dof.focus_distance
+
+    focusTm = dofObject.matrix_world
+    if dofObject.pose and (bone := dofObject.pose.bones.get(camera.dof.focus_subtarget)):
+        focusTm = focusTm @ bone.matrix
+    viewDir = cameraObj.matrix_world.col[2].xyz.normalized()
+    return max(abs(viewDir.dot(cameraObj.matrix_world.translation - focusTm.translation)), 1e-5)
 
 
 def hasRenderSizeChanged(prev: ViewParams, curr: ViewParams):
@@ -593,11 +607,11 @@ def fixOverrideCameraType():
             # Set to Orthogonal, but check if the type will change, otherwise we might
             # get stuck in a infinite loop updating camera stuff and will also be refreshing
             # IPR with every mouse click when ortho camera is used.
-            if camera.data.vray.SettingsCamera.type != '7':
-                camera.data.vray.SettingsCamera.type = '7'
-        elif camera.data.vray.SettingsCamera.type == '7':
+            if camera.data.vray.SettingsCamera.type != CAM_TYPE_ORTHOGONAL:
+                camera.data.vray.SettingsCamera.type = CAM_TYPE_ORTHOGONAL
+        elif camera.data.vray.SettingsCamera.type == CAM_TYPE_ORTHOGONAL:
             # Set to Standard
-            camera.data.vray.SettingsCamera.type = '0'
+            camera.data.vray.SettingsCamera.type = CAM_TYPE_STANDARD
 
 
 def camObjUsesMotionBlur(cameraObj: bpy.types.Object, settingsMotionBlur):

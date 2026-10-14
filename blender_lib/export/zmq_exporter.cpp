@@ -26,22 +26,6 @@ using namespace VRayBaseTypes;
 
 namespace
 {
-	RoutingId generateRoutingId() {
-		// Reserve some ids for well-known singleton services, e.g. heartbeat connection
-		static const uint64_t RESERVED_RANGE = 1000;
-
-		std::random_device device;
-		std::mt19937_64 generator(device());
-
-		uint64_t id = generator();
-
-		while (id <= RESERVED_RANGE){
-			id = generator();
-		}
-
-		return id;
-	}
-
 	std::string formatTime() {
 		using namespace std::chrono;
 
@@ -287,6 +271,11 @@ void ZmqExporter::handleMsg(const zmq::message_t& msg) {
 		processRendererOnPluginPropertyValues(message);
 		break;
 	}
+	case MsgType::RendererOnTextureSampled: {
+		const auto& message = deserializeMessage<MsgRendererOnTextureSampled>(stream);
+		processRendererOnTextureSampled(message);
+		break;
+	}
 
 	case MsgType::ScatterPreviewResult: {
 		const auto message = deserializeMessage<MsgScatterPreviewResult>(stream);
@@ -435,9 +424,17 @@ void ZmqExporter::processRendererOnImage(const proto::MsgRendererOnImage& messag
 
 	const bool ready = message.imageSet.sourceType == VRayBaseTypes::ImageSourceType::ImageReady;
 	if (ready) {
-		std::scoped_lock lockCallbacks(m_callbacksMutex);
-		if (this->callback_on_image_ready) {
-			this->callback_on_image_ready();
+		// Copied out of the lock before it is invoked. This callback acquires the GIL, while
+		// setImageReadyCallback runs the other way round: called from Python with the GIL held, it
+		// takes m_callbacksMutex. Holding the mutex across a GIL acquire here would complete the
+		// inversion and hang Blender. Copying is safe, as the callback captures only 'this'.
+		ExporterCallback cbImageReady;
+		{
+			std::scoped_lock lockCallbacks(m_callbacksMutex);
+			cbImageReady = callback_on_image_ready;
+		}
+		if (cbImageReady) {
+			cbImageReady();
 		}
 	}
 }
@@ -595,6 +592,21 @@ std::vector<PluginPropertyValueData> ZmqExporter::getPluginPropertyValues() cons
 }
 
 
+void ZmqExporter::processRendererOnTextureSampled(const proto::MsgRendererOnTextureSampled& message) {
+	// Copied out of the lock. It acquires the GIL, and holding m_callbacksMutex across that
+	// inverts the lock order.
+	TextureSampledCb cb;
+	{
+		std::scoped_lock l(m_callbacksMutex);
+		cb = callback_on_texture_sampled;
+	}
+
+	if (cb) {
+		cb(message.width, message.height, message.pixels);
+	}
+}
+
+
 /// Read an image published by ZmqServer from one of the two double-buffered shared memory regions.
 /// @param imgID       Generation counter from the server - changes on every viewport resize.
 /// @param bufferIndex Which half of the double-buffer the server just finished writing (0 or 1).
@@ -691,6 +703,16 @@ RenderImage ZmqExporter::getPass(const std::string& name)
 
 void ZmqExporter::requestRenderChannel(int channelType, const std::string& pluginInstanceName, int subIndex) {
 	m_client->send(serializeMessage(MsgRendererGetImage{channelType, pluginInstanceName, subIndex}));
+}
+
+
+void ZmqExporter::sampleTexture(const std::string& pluginName, int width, int height) {
+	m_client->send(serializeMessage(MsgRendererSampleTexture{pluginName, width, height}));
+}
+
+
+void ZmqExporter::loadScene(const std::string& fileName) {
+	m_client->send(serializeMessage(MsgRendererLoadScene{fileName}));
 }
 
 
@@ -970,6 +992,7 @@ void ZmqExporter::detach() {
 	set_callback_on_vfb_layers_updated(nullptr);
 	set_callback_on_render_stopped(nullptr);
 	set_callback_on_async_op_complete(nullptr);
+	set_callback_on_texture_sampled(nullptr);
 }
 
 

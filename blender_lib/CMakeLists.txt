@@ -31,6 +31,8 @@ if(PROJECT_IS_TOP_LEVEL)
     set(INSTALL_PREFIX   ""  CACHE PATH    "Path to the installation folder")
 endif()
 
+set(STABLE_ABI_PYTHON_ROOT "" CACHE PATH "Python root for the stable-ABI module. Empty means the AppsdkPython312 xpak.")
+
 if (NOT BINTOOLS_PATH)
     set(BOOST_LIBDIR    "./boost"               CACHE PATH    "Path to Boost libs")
     set(BLENDER_SDK_ROOT "./blender_sdk"        CACHE PATH    "Path to libs shipped with Blender")
@@ -46,6 +48,62 @@ message(STATUS "   -------------")
 message(STATUS "   Blener SDK root: \"${BLENDER_SDK_ROOT}\"")
 message(STATUS "   Boost root: \"${BOOST_LIBDIR}\"")
 message(STATUS "   Nanobind root: \"${NANOBIND_LIBDIR}\"")
+
+####################################################
+# libjpeg
+#
+# The full build takes libjpeg from the 'libjpeg' libpak in the xsdk submodule - the static
+# turbo library from the libpak build, the headers from the sources it was built from. The
+# open-source build has no libpak tooling and takes both from BLENDER_SDK_ROOT instead.
+#
+# Headers and library have to come from the same place either way. jpeglib.h is byte-identical
+# between the two, but their jconfig.h disagree on JPEG_LIB_VERSION - 62 for the libpak, 80 for
+# the Blender SDK - and that switches struct fields on and off inside jpeglib.h. Mixing the two
+# compiles cleanly and then reads the wrong offsets.
+
+if (FULL_BUILD)
+    set(JPEG_LIBPAK "libjpeg")
+    install_libpak(PAK ${JPEG_LIBPAK})
+
+    if (WIN32)
+        set(_jpeg_incdir_suffix win)
+    elseif (APPLE)
+        set(_jpeg_incdir_suffix mac)
+    else()
+        set(_jpeg_incdir_suffix linux)
+    endif()
+
+    # include_<platform> holds the generated jconfig.h; the sources beside it hold the rest.
+    set(_jpeg_includes
+        "${CMAKE_SOURCE_DIR}/xsdk/libjpeg/turbo/include_${_jpeg_incdir_suffix}"
+        "${CMAKE_SOURCE_DIR}/xsdk/libjpeg/turbo"
+    )
+
+    # jpeg_s is the turbo static library. jpeg_classic_s beside it is the classic build, which
+    # nothing here uses. Located rather than spelled out - the artifacts path moves with the
+    # libpak version.
+    unset(_jpeg_lib CACHE)
+    find_library(_jpeg_lib NAMES jpeg_s PATHS "${${JPEG_LIBPAK}_ROOT}" NO_DEFAULT_PATH)
+    if (NOT _jpeg_lib)
+        message(FATAL_ERROR "Static libjpeg not found in the libjpeg libpak artifacts (${${JPEG_LIBPAK}_ROOT})")
+    endif()
+else()
+    set(_jpeg_includes "${BLENDER_SDK_ROOT}/jpeg/include")
+
+    unset(_jpeg_lib CACHE)
+    find_library(_jpeg_lib NAMES libjpeg jpeg PATHS "${BLENDER_SDK_ROOT}/jpeg/lib" NO_DEFAULT_PATH)
+    if (NOT _jpeg_lib)
+        message(FATAL_ERROR "libjpeg not found in \"${BLENDER_SDK_ROOT}/jpeg/lib\"")
+    endif()
+endif()
+
+message(STATUS "   libjpeg: ${_jpeg_lib}")
+
+add_library(jpeg::jpeg INTERFACE IMPORTED)
+set_target_properties(jpeg::jpeg PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${_jpeg_includes}"
+    INTERFACE_LINK_LIBRARIES      "${_jpeg_lib}"
+)
 
 # Organize the source files by folder in the IDE
 GroupSources(api .)
@@ -102,13 +160,6 @@ if (INSTALL_LOCAL)
                 "${BLENDER_SDK_ROOT}/osl/bin/oslquery.dll"
             )
         endif()
-
-        if(FULL_BUILD)
-            set(COPY_TOOLS
-                ${SDK_ROOT}/tools/vrmatconvert.exe
-            )
-        endif()
-
     else()
         set(DLL_EXT "")
         if (APPLE)
@@ -141,7 +192,6 @@ if (INSTALL_LOCAL)
     message(STATUS "   Install to: ${INSTALL_PREFIX}")
 
     install(FILES ${COPY_LIBS} DESTINATION ${INSTALL_PREFIX})
-    install(FILES ${COPY_TOOLS} DESTINATION ${INSTALL_PREFIX})
     install(FILES "${CMAKE_CURRENT_LIST_DIR}/VRayBlenderLib.pyi" DESTINATION ${INSTALL_PREFIX})
 endif()
 
@@ -159,7 +209,7 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
         target_compile_options(${BLENDER_LIB_TARGET} PRIVATE -Werror -g)
     endif()
 
-    target_link_libraries(${BLENDER_LIB_TARGET} PRIVATE VRayZmqWrapper zmq::zmq)
+    target_link_libraries(${BLENDER_LIB_TARGET} PRIVATE VRayZmqWrapper zmq::zmq jpeg::jpeg)
 
     if (WITH_OSL)
         target_compile_definitions(${BLENDER_LIB_TARGET} PRIVATE WITH_OSL)
@@ -167,7 +217,6 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
 
 
     target_link_directories(${BLENDER_LIB_TARGET} PRIVATE
-        "${BLENDER_SDK_ROOT}/jpeg/lib"
         "${VRAY_ZMQ_WRAPPER_LIBS}"
     )
     if (WITH_OSL)
@@ -183,7 +232,6 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
         ${VRAY_ZMQ_WRAPPER_ROOT}/include/
         ${VRAY_ZMQ_WRAPPER_ROOT}/utils/
         ${BOOST_LIBDIR}/include
-        ${BLENDER_SDK_ROOT}/jpeg/include/
     )
 
     if (WITH_OSL)
@@ -208,8 +256,6 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
             list(APPEND LIB_WIN32 "OpenImageIO_Util.lib")
             list(APPEND LIB_WIN32 "oslquery.lib" "oslcomp.lib")
         endif()
-
-        list(APPEND LIB_WIN32 "libjpeg.lib")
 
         target_link_libraries(${BLENDER_LIB_TARGET} PRIVATE ${LIB_WIN32})
 
@@ -236,8 +282,6 @@ function (setup_blender_lib_target BLENDER_LIB_TARGET)
         endif()
 
     else()
-        list(APPEND LIB_UNIX jpeg)
-
         if (APPLE)
             if (WITH_OSL)
                 target_link_directories(${BLENDER_LIB_TARGET} PRIVATE "${BLENDER_SDK_ROOT}/openimageio/lib")
@@ -308,22 +352,23 @@ function(setup_nanobind_target PYTHON_VERSION STABLE_ABI)
 
     set_target_properties(${NANOBIND_TARGET} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 
-    string(REPLACE "." "" PYTHON_VERSION_NO_DOT "${PYTHON_VERSION}")
-
     set(PYTHON_VERSION_INCLUDES "")
     if (STABLE_ABI)
-        # nanobind supports stable abi from python3.12, so we just use an appsdk python
-        install_xpak(PAK "AppsdkPython312" VERSION "3.12.4.1000")
-        set(PYTHON_PATH ${X_PAK}/AppsdkPython312)
+        # nanobind supports stable abi from python3.12, so we just use an appsdk python.
+        # STABLE_ABI_PYTHON_ROOT overrides that pack, for targets it was never built for.
+        if (STABLE_ABI_PYTHON_ROOT)
+            set(PYTHON_PATH ${STABLE_ABI_PYTHON_ROOT})
+        else()
+            install_xpak(PAK "AppsdkPython312" VERSION "3.12.4.1000")
+            set(PYTHON_PATH ${X_PAK}/AppsdkPython312)
+        endif()
 	if (UNIX)
 		set(PYTHON_VERSION_INCLUDES python3.12)
 	endif()
     else()
-        # The Blender SDK names its python by version, following Blender's own build files:
-        # 'python/311', 'python/313', ... on Windows, and a single 'python' root with
-        # version-tagged includes ('include/python3.13') everywhere else.
         if (WIN32)
-            set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python/${PYTHON_VERSION_NO_DOT})
+            string(REPLACE "." "" VERSION_NO_DOT "${PYTHON_VERSION}")
+            set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python/${VERSION_NO_DOT})
         else()
             set(PYTHON_VERSION_INCLUDES python${PYTHON_VERSION})
             set(PYTHON_PATH ${BLENDER_SDK_ROOT}/python)
@@ -351,19 +396,23 @@ function(setup_nanobind_target PYTHON_VERSION STABLE_ABI)
         if (STABLE_ABI)
             target_link_libraries(${NANOBIND_TARGET} PUBLIC python3)
         else()
-            target_link_libraries(${NANOBIND_TARGET} PUBLIC python${PYTHON_VERSION_NO_DOT})
+            string(REPLACE "." "" VERSION_NO_DOT "${PYTHON_VERSION}")
+            target_link_libraries(${NANOBIND_TARGET} PUBLIC python${VERSION_NO_DOT})
         endif()
     endif()
 
     target_link_libraries(${NANOBIND_TARGET} PUBLIC tsl::robin_map)
 endfunction()
 
-# Determines the suffix to name the module with, e.g. '.cp311-win_amd64.pyd'. It encodes both
-# the interpreter version and the platform tag, so it is queried from the very python the module
-# is built against - PYTHON_PATH is the one setup_nanobind_target() resolved.
 function(set_lib_suffix VERSION STABLE_ABI PYTHON_PATH)
     if (STABLE_ABI)
-        # A stable-ABI module carries no version tag, so there is nothing to query.
+        set(PYTHON_EXECUTABLE ${X_PAK}/AppsdkPython312/python)
+    elseif(WIN32)
+        set(PYTHON_EXECUTABLE ${PYTHON_PATH}/bin/python)
+    else()
+	set(PYTHON_EXECUTABLE ${PYTHON_PATH}/bin/python${VERSION})
+    endif()
+    if (STABLE_ABI)
         if (WIN32)
             set(EXT_SUFFIX ".pyd")
         else()
@@ -371,35 +420,19 @@ function(set_lib_suffix VERSION STABLE_ABI PYTHON_PATH)
             # be .cpython3.11.so -> abi3.so -> .so, but add it just in case.
             set(EXT_SUFFIX ".abi3.so")
         endif()
-
-        set(EXT_SUFFIX ${EXT_SUFFIX} PARENT_SCOPE)
-        return()
-    endif()
-
-    if (WIN32)
-        set(PYTHON_EXECUTABLE "${PYTHON_PATH}/bin/python.exe")
-        set(FALLBACK_EXT_SUFFIX ".pyd")
     else()
-        set(PYTHON_EXECUTABLE "${PYTHON_PATH}/bin/python${VERSION}")
-        set(FALLBACK_EXT_SUFFIX ".so")
-    endif()
+        execute_process(
+            COMMAND "${PYTHON_EXECUTABLE}" "-I" "-c" "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))"
+            RESULT_VARIABLE SUFFIX_CMD_RET
+            OUTPUT_VARIABLE EXT_SUFFIX
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
 
-    execute_process(
-        COMMAND "${PYTHON_EXECUTABLE}" "-c" "import sysconfig; print(sysconfig.get_config_var('EXT_SUFFIX'))"
-        RESULT_VARIABLE SUFFIX_CMD_RET
-        OUTPUT_VARIABLE EXT_SUFFIX
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-    )
-
-    # The interpreter is not always usable - the python in our Blender SDK MacOS xpak fails to
-    # run. Fall back to the platform's generic suffix, which every interpreter accepts as an
-    # extension suffix, just without the version and platform tags. Not '.so' on Windows, which
-    # is what the previous fallback produced there and Blender cannot import.
-    if (NOT "${SUFFIX_CMD_RET}" STREQUAL "0" OR "${EXT_SUFFIX}" STREQUAL "")
-        message(WARNING "Python sysconfig query for 'EXT_SUFFIX' failed (${PYTHON_EXECUTABLE}) - "
-                        "naming the module '${FALLBACK_EXT_SUFFIX}'")
-        set(EXT_SUFFIX "${FALLBACK_EXT_SUFFIX}")
+        if(SUFFIX_CMD_RET AND NOT SUFFIX_CMD_RET EQUAL 0)
+		    # message(FATAL_ERROR "Python sysconfig query to find 'EXT_SUFFIX' property failed ${PYTHON_EXECUTABLE}!")
+            # Temporary workaround because of a problematic python in our Blender SDK MacOS xpak.
+            set(EXT_SUFFIX ".so")
+        endif()
     endif()
 
     set(EXT_SUFFIX ${EXT_SUFFIX} PARENT_SCOPE)

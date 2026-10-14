@@ -78,14 +78,14 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
 
 
     def _drawCPU(self, context, layout, node, text):
-        row = layout.split(factor=0.3)
-        colorCol = row.column()
-        colorCol.enabled = self.use
-        colorCol.prop(self, 'value', text="")
-        col = row.split(factor=0.9)
-        multCol = col.column()
+        row = layout.split(factor=0.6)
+        multCol = row.column()
         multCol.enabled = self.use
         multCol.prop(self, 'multiplier', text=text)
+        col = row.split(factor=0.75)
+        colorCol = col.column()
+        colorCol.enabled = self.use
+        colorCol.prop(self, 'value', text="")
         colUse = col.column()
         colUse.prop(self, 'use', text="")
     
@@ -100,14 +100,14 @@ class VRaySocketEnvironmentOverride(VRayValueSocket):
             multCol.enabled = self.use
             multCol.prop(self, 'multiplier', text=text)
         else:
-            row = layout.split(factor=0.3, align=True)
-            valueCol = row.column()
-            valueCol.enabled = self.use
-            valueCol.prop(self, 'value', text="")
-            row = row.split(factor=0.9)
+            row = layout.split(factor=0.6, align=True)
             multCol = row.column()
             multCol.enabled = self.use
             multCol.prop(self, 'multiplier', text=text)
+            row = row.split(factor=0.75)
+            valueCol = row.column()
+            valueCol.enabled = self.use
+            valueCol.prop(self, 'value', text="")
 
         colUse = row.column()
         colUse.alignment = 'RIGHT'

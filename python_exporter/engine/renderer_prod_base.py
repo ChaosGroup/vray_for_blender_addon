@@ -163,6 +163,8 @@ class VRayRendererProdBase:
             enumerateCryptomatteNodes, cryptomattePassName,
             enumerateObjectSelectNodes, objectSelectPassName,
             enumerateGenericChannelNodes, enumerateSpecialPasses,
+            GPENCIL_DEPTH_PASS_NAME, GPENCIL_DEPTH_CHANNEL_NAME, greasePencilDepthChannelType,
+            needsGreasePencilDepthPass,
         )
         layer = self.renderResult.layers[viewLayerName]
         combinedPass = layer.passes["Combined"]
@@ -202,6 +204,9 @@ class VRayRendererProdBase:
         for passName, channelType, instanceName in enumerateSpecialPasses(scene.world):
             assign(passName, channelType, instanceName, 0)
 
+        if needsGreasePencilDepthPass(scene):
+            assign(GPENCIL_DEPTH_PASS_NAME, greasePencilDepthChannelType(scene), GPENCIL_DEPTH_CHANNEL_NAME, 0)
+
         # Request once per (type, instance); the server enumerates internal layers itself.
         requestedInstances: set[tuple[int, str]] = set()
         for channelType, instanceName, _subIdx in passMap.values():
@@ -239,6 +244,32 @@ class VRayRendererProdBase:
         if not self.renderResult:
             return
         self._setCryptomatteMetadata(engine)
+        self._fixUpGreasePencilDepthPass()
+
+
+    def _fixUpGreasePencilDepthPass(self):
+        """ Rewrite the Depth pass's empty pixels to Blender's 'infinitely far' value. """
+        from vray_blender.engine.render_elements import GPENCIL_DEPTH_PASS_NAME
+
+        layer = next(iter(self.renderResult.layers), None)
+        if (layer is None) or (GPENCIL_DEPTH_PASS_NAME not in layer.passes):
+            return
+
+        import numpy as np
+        depthPass = layer.passes[GPENCIL_DEPTH_PASS_NAME]
+        combinedPass = layer.passes["Combined"]
+
+        numPixels = len(depthPass.rect)
+        if numPixels != len(combinedPass.rect):
+            return
+
+        depth = np.empty(numPixels, dtype=np.float32)
+        depthPass.rect.foreach_get(depth)
+        combined = np.empty(numPixels * 4, dtype=np.float32)
+        combinedPass.rect.foreach_get(combined)
+
+        depth[combined[3::4] <= 0.0] = 1.0e10
+        depthPass.rect.foreach_set(depth)
 
 
     def _setCryptomatteMetadata(self, engine: bpy.types.RenderEngine):

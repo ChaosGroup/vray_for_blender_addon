@@ -6,8 +6,37 @@
             "default": false
         },
         {
-            "attr": "exclusion_nodes",
-            "type": "PLUGIN"
+            "attr": "exclusion_selector",
+            "type": "TEMPLATE",
+            "desc": "Objects and collections to include in or exclude from clipping",
+            "options": {
+                "template": {
+                    "type": "templateMultiObjectSelect",
+                    "args": {
+                        "filter_function": "filters.filterGeometries",
+                        "bound_property": "exclusion_nodes"
+                    }
+                }
+            }
+        },
+        {
+            "attr": "fill_cavities",
+            "default": true,
+            "desc": "Cap the cut surfaces. When off, the clipped objects are left open: a plane clipper gets no material, a mesh clipper's own material is not used for the cuts. Also makes V-Ray fill holes in geometry inside other geometry"
+        },
+        {
+            "attr": "set_material_id",
+            "desc": "Shade the cut surfaces with one material slot of each clipped object, instead of the slot of the face that is cut",
+            "ui": {
+                "display_name": "Set Material ID"
+            }
+        },
+        {
+            "attr": "material_id",
+            "desc": "The material slot of the clipped objects that shades the cut surfaces, 0 is the first slot. Objects with a single material are not affected. This also sets the MaterialID render element",
+            "ui": {
+                "display_name": "Material ID"
+            }
         },
         {
             "attr": "invert_inside",
@@ -42,7 +71,41 @@
         }
     ],
     "Widget": {
-        "widgets": []
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    { "name": "affect_light" },
+                    { "name": "clip_lights" },
+                    { "name": "only_camera_rays" },
+                    { "name": "fill_cavities" },
+                    { "layout": "SEPARATOR" },
+                    { "name": "use_obj_mtl" },
+                    {
+                        "name": "material_id",
+                        "custom_draw": "drawMaterialID",
+                        "active": { "cond": "::use_obj_mtl=1" },
+                        "value_active": { "cond": "::set_material_id=1" }
+                    },
+                    { "layout": "SEPARATOR" },
+                    { "name": "use_obj_mesh", "label": "Mesh Mode" },
+                    {
+                        "name": "invert_inside",
+                        "active": { "cond": "::use_obj_mesh=1" }
+                    }
+                ]
+            },
+            {
+                "layout": "ROLLOUT",
+                "name": "objects",
+                "label": "Objects",
+                "default_closed": false,
+                "attrs": [
+                    { "name": "exclusion_mode", "custom_draw": "drawExclusionMode" },
+                    { "name": "exclusion_selector", "list_label": "Objects List" }
+                ]
+            }
+        ]
     },
     "Type": "OBJECT",
     "Options": {

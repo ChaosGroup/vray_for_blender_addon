@@ -19,6 +19,12 @@ def _getDocsMapping():
     def _registerExporter(paramName: str, id: str):
         chaosDocsMapping.append((f'bpy.types.vrayexporter.{paramName.lower()}', id),)
 
+    def _registerType(paramName: str, id: str):
+        chaosDocsMapping.append((f'bpy.types.{paramName.lower()}', id),)
+
+    def _registerOperator(paramName: str, id: str):
+        chaosDocsMapping.append((f'bpy.ops.vray.{paramName.lower()}', id),)
+
     # Materials
     _registerNode('BRDFVRayMtl', '117638527')
     _registerNode('BRDFAlSurface', '117637493')
@@ -194,6 +200,7 @@ def _getDocsMapping():
     _registerNode('RenderChannelTotalLight', '117637779')
     _registerNode('RenderChannelVelocity', '117637899')
     _registerNode('RenderChannelZDepth', '117637760')
+    _registerNode('RenderChannelLightingAnalysis', '1109852182')
 
     _registerSettings('ImageSampler*', '117637484')
 
@@ -212,7 +219,19 @@ def _getDocsMapping():
     _registerSettings('TextureCache*', '117639033')
     _registerSettings('UnitsInfo*', '117638326')
     _registerSettings('RTEngine*', '117638327#GPU-Texture-Options')
+    _registerSettings('Output.resumable*', '910819616')
+    _registerSettings('Output.*', '733249591')
+    _registerSettings('JPEG*', '733249591')
+    _registerSettings('PNG*', '733249591')
+    _registerSettings('TIFF*', '733249591')
+    _registerSettings('TGA*', '733249591')
+    _registerSettings('SGI*', '733249591')
+    _registerSettings('EXR*', '733249591')
+    _registerSettings('VRST*', '733249591')
+    _registerSettings('RegionsGenerator.*', '117637484/Sampler+tab#Bucket-Optionss')
 
+    _registerExporter('auto_save_render', '733249591')
+    _registerExporter('use_stereo', '734626580')
     _registerExporter('device_type', '117638321')
     _registerExporter('gpu_device_type', '117638321')
 
@@ -221,11 +240,58 @@ def _getDocsMapping():
     _registerExporter('lower_thread_priority', '117639386')
 
     _registerExporter('display_vfb_on_top', '117639384')
+    _registerExporter('animation_mode', '908658082')
+    _registerExporter('use_frame_range', '908658082')
 
-    chaosDocsMapping.append(('bpy.types.vrayfilter*', '117637484'),)
-    chaosDocsMapping.append(('bpy.types.vraywindowmanager*', '117638327'),)
-    chaosDocsMapping.append(('bpy.types.vraypluginlistholder', '117638258'),)
-    chaosDocsMapping.append(('bpy.ops.vray.render', '117638327#Render-Engine'),)
+    _registerType('VRayFilter*', '117637484')
+    _registerType('VRayWindowManager*', '117638327')
+    _registerType('VRayPluginListHolder', '117638258')
+    _registerType('VRayScene.quick*', '909148886')
+    _registerType('VRayWorld.quick*', '909148886')
+    _registerType('VRayRenderchanneldenoiser.*', '909148886')
+    _registerType('VRayVRayDecal.*', '540672075/V-Ray+Decal#Properties')
+    _registerType('VRayVRayStereoscopicSettings.*', '734626580')
+    _registerType('VRayGeomGaussians.*', '1233223793/V-Ray+Gaussians#Properties')
+    _registerType('VRayGeomPlane.*', '1231880205/V-Ray+Infinite+Plane#Properties-Locations')
+    _registerType('VRayDR.*', '381288513')
+    _registerType('VRayPropGroupMultiBake.*', '908755503')
+    _registerType('VRayBatchBakeItem.*', '908755503')
+    _registerType('VRayVRayObjectProperties.*', '908722331')
+    _registerType('VRayVRayClipper.*', '909050923')
+    _registerType('VRayUserAttributeItem.*', '117639357')
+    _registerType('VRayCamera.use_dome', '117638123')
+    _registerType('VRayCameraDome.*', '117638123')
+    _registerType('VRayCamera.use_physical', '117638119')
+    _registerType('VRayCameraPhysical.*', '117638119')
+    _registerType('VRaySettingsCamera.*', '117639394')
+    _registerOperator('open_vfb', '117637715')
+    _registerOperator('render_interactive', '376307957')
+    _registerOperator('veras*', '1017675788')
+    _registerOperator('add_object_decal*', '540672075')
+    _registerOperator('add_object_splat*', '1233223793')
+    _registerOperator('add_object_infinite_plane*', '1231880205')
+    _registerOperator('cloud_submit*', '117639229')
+    _registerOperator('open_collaboration*', '117639367')
+    _registerOperator('open_cosmos_browser', '117637925')
+    _registerOperator('relink_cosmos_assets', '117639361')
+    _registerOperator('open_cosmos_ai_generator', '380698787')
+    _registerOperator('vantage_live_link', '1129087008')
+    _registerOperator('jump_to_setting', '909148886')
+    _registerOperator('render', '117638327#Render-Engine')
+    _registerOperator('batch_bake', '908755503')
+    _registerOperator('open_preferences', '117638197/Preferences#V-Ray-for-Blender')
+    _registerOperator('user_attribute_add', '117639357')
+    _registerOperator('show_account_status', '117638207')
+    _registerOperator('add_physical_camera', '117638119')
+    _registerOperator('lister_open', '1232896285')
+    _registerOperator('material_lister_open', '1232830471')
+    _registerOperator('relink_assets', '1233190941')
+    _registerOperator('convert_materials', '117640052')
+    _registerOperator('convert_lights', '1017315330')
+    _registerOperator('convert_worlds', '1233813543')
+    _registerOperator('make_shadow_catcher', '1017380870')
+
+    _registerOperator('*', '')
 
     return chaosDocsUrl, chaosDocsMapping
 

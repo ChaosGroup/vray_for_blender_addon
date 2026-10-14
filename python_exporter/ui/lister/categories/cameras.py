@@ -224,7 +224,7 @@ class CamerasCategory(ListerCategory):
             ColumnSpec('shutter_speed', "Shutter", attr='shutter_speed', width=1.3),
             ColumnSpec('white_balance', "White Bal.", attr='white_balance', width=1.2, defaultHidden=True),
             ColumnSpec('use_dof', "DoF", attr='use_dof', width=0.7),
-            ColumnSpec('use_moblur', "Mo. Blur", attr='use_moblur', width=0.8, defaultHidden=True),
+            ColumnSpec('use_moblur', "Mo. Blur", attr='use_moblur', width=0.8),
             ColumnSpec('focus_object', "Focus Obj", draw=_drawFocusObject, width=1.6, defaultHidden=True),
             ColumnSpec('focus_dist', "Focus Dist.", draw=_drawFocusDistance, width=1.5),
             ColumnSpec('exposure', "Exposure", attr='exposure', width=1.2, defaultHidden=True),

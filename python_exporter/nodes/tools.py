@@ -840,10 +840,14 @@ def isVrayNodeTree(ntree: bpy.types.NodeTree, treeType: str):
     return hasattr(ntree, 'vray') and (ntree.vray.tree_type == treeType)
 
 
+# Object-level tree types, assigned to objects through obj.vray.ntree. Such a tree may be
+# shared by several objects (e.g. duplicates).
+OBJECT_TREE_TYPES = frozenset({'OBJECT', 'FUR', 'DECAL'})
+
 # Tree types stored in bpy.data.node_groups: the object-level trees (displacement, fur,
 # decal) and the V-Ray node groups the user creates inside any tree. A group's contents are
 # ordinary V-Ray nodes, so a whole-file scan has to reach them too.
-_STANDALONE_TREE_TYPES = {'OBJECT', 'FUR', 'DECAL', 'GROUP'}
+_STANDALONE_TREE_TYPES = OBJECT_TREE_TYPES | {'GROUP'}
 
 
 def iterVRayNodeTreesWithOwners():

@@ -57,6 +57,7 @@ public:
 	using MessageCallback = std::function<void(zmq::message_t&& payload)>;
 	using ErrorCallback   = std::function<void(const std::string& msg)>;
 	using TraceCallback   = std::function<void(const std::string& msg)>;
+	using IdleCallback    = std::function<void()>;
 
 public:
 	/// @param ctx - an initialized ZMQ context
@@ -90,6 +91,9 @@ public:
 
 	/// Subscribe for debug trace notifications
 	void setTraceCallback (TraceCallback cb);
+
+	/// Subscribe for poll cycles in which no message was received. Called on the poller thread.
+	void setIdleCallback (IdleCallback cb);
 
 	/// Returns the routing ID of the ZMQ connection
 	const RoutingId& routingId() const;
@@ -145,6 +149,7 @@ private:
 	MessageCallback msgCallback;    ///< Callback for the message processing function
 	ErrorCallback errorCallback;    ///< Callback for asynchronous errors
 	TraceCallback traceCallback;    ///< Callback for debug traces
+	IdleCallback idleCallback;      ///< Callback for idle poll cycles
 };
 
 };  // end VrayZmqWrapper namespace

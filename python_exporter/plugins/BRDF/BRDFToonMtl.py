@@ -29,6 +29,7 @@ _PLUGIN_TYPE = 'BRDFToonMtl'
 # nodes, separate from the unsuffixed highlight-shape curve node used above.
 _LINE_WIDTH_CURVE_ATTRIBUTES = {'depth_curve': 'depth', 'angular_curve': 'angular'}
 _LINE_WIDTH_CURVE_TYPES = ('depth', 'angular')
+_CURVE_NAME_SUFFIXES = ('',) + tuple(f'_{t}' for t in _LINE_WIDTH_CURVE_TYPES)
 
 
 def _initLineWidthCurveDefaults(curvesNode: bpy.types.Node):
@@ -110,8 +111,7 @@ def nodeInit(node: bpy.types.Node):
 
     node.id_data.nodes.active = node
 
-    # The static id is needed for the name of the curves node.
-    node.assignStaticId()
+    cn.assignCurvesId(node, _CURVE_NAME_SUFFIXES)
 
     # The current "bpy" API does not allow direct creation of a CurveMapping
     # widget. To work around this, we create a ShaderNodeRGBCurve in a hidden
@@ -136,27 +136,9 @@ def nodeFree(node: bpy.types.Node):
             cn.removeCurvesNode(node, f'_{curveType}')
 
 
-def nodeUpdate(node: bpy.types.Node):
-    """Executes upon node topology changes.
-    Currently only used for Remap widget changes."""
-    if not cn.hasCurvesNode(node):
-        return
-
-    # Encode the curves data as a string so that it could be saved in the
-    # BRDFToonMtl node, and not just be available from the auxiliary
-    # ShaderNodeRGBCurve node. This will allow us to restore the curves state
-    # if the node is imported into another scene.
-    curvesNode = cn.getCurvesNode(node)
-    node.BRDFToonMtl['curves_data'] = cn.encodeMapping(curvesNode.mapping)
-
-
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
     """Handles the logic for copying the node."""
-    cn.curvesCopy(copyNode, origNode)
-
-    for curveType in _LINE_WIDTH_CURVE_TYPES:
-        cn.copyCurvesData(cn.getCurvesNode(origNode, f'_{curveType}'),
-                          cn.createCurvesNode(copyNode, f'_{curveType}'))
+    cn.curvesCopy(copyNode, origNode, _CURVE_NAME_SUFFIXES)
 
 
 def _ensureLineWidthCurves(node: bpy.types.Node):
@@ -170,7 +152,7 @@ def _ensureLineWidthCurves(node: bpy.types.Node):
 def registerNodeCurves(node: bpy.types.Node):
     """Register update callbacks for all curve nodes of a BRDFToonMtl node:
     the highlight-shape curve and the depth/angular line-width curves."""
-    cn.addCurvesUpdateCallback(node)
+    cn.addCurvesUpdateCallback(node, cn.ensureCurvesNode(node))
     _ensureLineWidthCurves(node)
     for curveType in _LINE_WIDTH_CURVE_TYPES:
         cn.addCurvesUpdateCallback(node, cn.getCurvesNode(node, f'_{curveType}'))
@@ -331,6 +313,7 @@ def updateRemapWidget(propGroup: bpy.types.Node, context: bpy.types.Context, att
 
     # Update the widget to match the points.
     curveMapping.update()
+    cn.storeCurvesData(node)
 
 
 def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, propGroup, widgetAttr):
@@ -342,7 +325,9 @@ def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, pr
     layout.separator()
 
     node = getNodeOfPropGroup(propGroup)
-    curvesNode = cn.getCurvesNode(node)
+    if (curvesNode := cn.getCurvesNodeForDraw(node)) is None:
+        cn.drawMissingCurvesNode(layout)
+        return
     layout.template_curve_mapping(curvesNode, "mapping", type="COLOR")
 
 
@@ -350,5 +335,7 @@ def drawLineWidthCurveTemplate(context: bpy.types.Context, layout: bpy.types.UIL
     """A "custom_draw" function for the depth/angular line-width CurveMapping widgets."""
     node = getNodeOfPropGroup(propGroup)
     curveType = _LINE_WIDTH_CURVE_ATTRIBUTES.get(widgetAttr['name'])
-    curvesNode = cn.getCurvesNode(node, f'_{curveType}')
+    if (curvesNode := cn.getCurvesNodeForDraw(node, f'_{curveType}')) is None:
+        cn.drawMissingCurvesNode(layout)
+        return
     layout.template_curve_mapping(curvesNode, "mapping", type='NONE')

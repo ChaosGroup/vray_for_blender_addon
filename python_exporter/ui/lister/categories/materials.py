@@ -11,7 +11,9 @@
 
 import bpy
 
+from vray_blender.lib.blender_utils import getObjectMaterials, isNonGeometryExportedAsGeometry
 from vray_blender.nodes.navigation import getTreeRootNode
+from vray_blender.ui.lister import core
 from vray_blender.ui.lister.core import ListerCategory
 
 
@@ -58,8 +60,8 @@ class MaterialsCategory(ListerCategory):
         # used by the selected objects, otherwise every material in the file.
         if state is not None and state.show_selected_only:
             # dict.fromkeys de-duplicates while keeping the slot order stable
-            materials = list(dict.fromkeys(slot.material for obj in context.selected_objects
-                                           for slot in obj.material_slots if slot.material is not None))
+            materials = list(dict.fromkeys(mtl for obj in context.selected_objects
+                                           for mtl in getObjectMaterials(obj)))
         else:
             # Unused materials are listed too - a just-created one has no users yet.
             materials = list(bpy.data.materials)
@@ -69,6 +71,11 @@ class MaterialsCategory(ListerCategory):
         if state is not None and state.show_vray_materials_only:
             materials = [m for m in materials if self.groupKey(m) != 'STANDARD']
         return materials
+
+    def selectedEntities(self, context, entities):
+        # The Material Lister's own selection, not the scene's
+        selected = core.selectedMaterialNames()
+        return [m for m in entities if core.materialKey(m) in selected]
 
     def groupKey(self, mtl):
         node = _mainShaderNode(mtl)
@@ -91,16 +98,16 @@ class MaterialsCategory(ListerCategory):
     def soloScope(self, context):
         # A material can be used by any geometry object, so scope the whole view layer - but
         # only mesh-like objects that can carry a material. Lights, cameras, empties etc. are
-        # left visible so lighting and framing are unaffected by a material solo. Gaussian
-        # splats (Empties) and hair / V-Ray fur (Curves objects) don't carry a material slot
-        # the usual way, so include them explicitly - a material solo hides them too.
-        from vray_blender.exporting import tools
+        # left visible so lighting and framing are unaffected by a material solo. Empty-backed
+        # geometry (Gaussian splats, infinite planes, perfect spheres) and hair / V-Ray fur
+        # (Curves objects) don't carry a material slot the usual way, so include them
+        # explicitly - a material solo hides them too.
         return [o for o in context.view_layer.objects
-                if hasattr(o.data, 'materials') or o.type == 'CURVES' or tools.isObjectVRayGaussian(o)]
+                if hasattr(o.data, 'materials') or o.type == 'CURVES' or isNonGeometryExportedAsGeometry(o)]
 
     def soloMatches(self, obj, targetName):
         # Same predicate as VRAY_OT_lister_select_material_users
-        return any(slot.material == bpy.data.materials.get(targetName) for slot in obj.material_slots)
+        return core.materialFromKey(targetName) in getObjectMaterials(obj)
 
 
 category = MaterialsCategory()

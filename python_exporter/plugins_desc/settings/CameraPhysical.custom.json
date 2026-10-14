@@ -55,10 +55,15 @@
         },
         {
             "attr": "blades_rotation",
-            "subtype": "ANGLE",
             "desc": "Blade rotation",
             "precision": 3,
             "ui": {
+                "quantityType": "angle",
+                "units": "degrees",
+                "min": null,
+                "max": null,
+                "soft_min": 0,
+                "soft_max": 360,
                 "spin_step": 1
             }
         },

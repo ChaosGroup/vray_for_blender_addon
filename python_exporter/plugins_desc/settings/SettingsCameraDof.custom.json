@@ -25,15 +25,20 @@
         },
         {
             "attr": "aperture",
+            "default": 0.05,
+            "precision": 4,
             "ui": {
-                "soft_max": 20.0,
-                "spin_step": 0.1
+                "quantityType": "distance",
+                "soft_max": 0.2,
+                "spin_step": 0.01
             }
         },
         {
             "attr": "rotation",
             "ui": {
-                "soft_max": 360.0,
+                "quantityType": "angle",
+                "units": "radians",
+                "soft_max": 6.283185307,
                 "spin_step": 1.0
             }
         }

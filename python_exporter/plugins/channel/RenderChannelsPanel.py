@@ -155,6 +155,11 @@ def _setRenderChannelEnabled(self, useRenderChannel: bool):
             else:
                 _removeRenderChannel(channelsOutputNode, self.nodeName)
 
+        # Keep Cycles' Depth pass checkbox in step, so switching engines keeps the pass.
+        if self.nodeName == 'VRayNodeRenderChannelZDepth':
+            for viewLayer in bpy.context.scene.view_layers:
+                viewLayer.use_pass_z = useRenderChannel
+
         # Invalidate now so the toggled checkbox is right on the next repaint (don't wait for
         # the depsgraph handler); also covers a channels container nested in a VRayGroup.
         invalidateConnectedChannelsCache()

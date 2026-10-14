@@ -185,7 +185,7 @@ def collectReferencedAttrNames(exporterCtx: ExporterContext) -> dict:
     for ntree in iterVRayNodeTrees():
         _collectFromNodeTree(ntree, names, pluginsPerOwnerType)
 
-    # allObjects, not sceneObjects: an object living only in a linked collection is not in the
+    # allObjects, not sceneObjects, because an object living only in a linked collection is not in
     # scene's depsgraph, and collection instancing is what gets scattered.
     for obj in exporterCtx.allObjects:
         _collectFromObject(obj, names, pluginsPerOwnerType)
@@ -284,7 +284,7 @@ def _objectsReferencedByPropGroup(propGroup, pluginType: str):
         if template is None:
             continue
 
-        # Read selectedItems directly, not getSelectedItems(): the latter is not uniform across
+        # Read selectedItems directly, not getSelectedItems(), which is not uniform across
         # template types (include/exclude returns the complement), which over-registers every object.
         if hasattr(template, 'selectedItems'):
             for item in template.selectedItems:
@@ -359,11 +359,10 @@ def _collectChaosScatterReferences(ctx: ExporterContext):
         for item in cs.targets:
             if item.object is not None:
                 ctx.registerReferencedObject(item.object)
-        for item in cs.models:
-            if item.object is not None:
-                ctx.registerReferencedObject(item.object)
-                for child in item.object.children_recursive:
-                    ctx.registerReferencedObject(child)
+        from chaos_scatter import resolve
+        for model in resolve.resolveModels(cs, expandHierarchy=True):
+            if model.object is not None:
+                ctx.registerReferencedObject(model.object)
 
 
 def collectReferencedObjects(ctx: ExporterContext):

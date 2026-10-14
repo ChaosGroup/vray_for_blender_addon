@@ -230,7 +230,7 @@ class UIPainter:
             layout.prop(self.propGroup, attrName, text=label)
 
 
-    def _drawAttrWidget(self, layout: bpy.types.UILayout, widgetAttr):
+    def _drawAttrWidget(self, layout: bpy.types.UILayout, widgetAttr, nodeWidget=False):
         """ Draw a single attribute from the property group """
         attrName = widgetAttr['name']
 
@@ -239,22 +239,43 @@ class UIPainter:
             # Use a custom draw function for the attribute
             fnDraw(self.context, layout, self.propGroup, widgetAttr)
         else:
-            expand = widgetAttr.get('expand', False)
-            slider = widgetAttr.get('slider', False)
             label  = self._getAttrLabel(widgetAttr)
+            attrDesc = getPluginAttr(self.pluginModule, attrName)
 
             if (searchType := widgetAttr.get('search_bar_for')):
+                # prop_search() takes no 'placeholder', so this one keeps its label
                 layout.prop_search(self.propGroup, attrName, bpy.data, searchType, text=label)
-            elif (getPluginAttr(self.pluginModule, attrName).get('options', {}).get('template')):
+                return
+
+            drawArgs = {
+                'expand': widgetAttr.get('expand', False),
+                'slider': widgetAttr.get('slider', False)
+            }
+
+            # A node body is not property-split, so every other widget renders its label
+            # inside its own field. See renderWidget.
+            if nodeWidget:
+                match attrDesc.get('type'):
+                    case 'ENUM':
+                        # A dropdown shows the selected item, so a label repeats it.
+                        # Blender's own nodes drop it too.
+                        label = ""
+                    case 'STRING':
+                        # A text field shows its label as placeholder text instead, the way
+                        # Blender's Attribute node labels its Name field.
+                        drawArgs['placeholder'] = label
+                        label = ""
+
+            if (attrDesc.get('options', {}).get('template')):
                 self.drawTemplate(layout, widgetAttr)
             elif self.node and hasattr(self.node, "inputs") and (socket := getInputSocketByAttr(self.node, attrName)):
                 # If there is a socket for the attribute, draw it instead of the value from the property
                 # group. In this way what is shown in self.node and in the property pages will always stay in sync.
                 label = label if (label is not None) else socket.name
-                self._drawSocketRow(layout, socket, label, {'expand': expand, 'slider': slider})
+                self._drawSocketRow(layout, socket, label, drawArgs)
             else:
                 # Call Blender to draw the default widget for the attribute's data type
-                layout.prop(self.propGroup, attrName, slider=slider, expand=expand, text=label)
+                layout.prop(self.propGroup, attrName, text=label, **drawArgs)
 
 
     def _drawCustomAttr(self, layout, attrName, widgetAttr):
@@ -315,7 +336,7 @@ class UIPainter:
             layout.enabled = isActive
 
 
-    def _renderItem(self, layout: bpy.types.UILayout, widgetAttr: dict):
+    def _renderItem(self, layout: bpy.types.UILayout, widgetAttr: dict, nodeWidget=False):
         """ Render a single plugin parameter and set its enabled state. If the parameter
             has an associated input self.node socket, render the socket, else render the parameter itself.
         """
@@ -343,7 +364,7 @@ class UIPainter:
         if self._drawCustomAttr(container, attrName, widgetAttr):
             return
 
-        self._drawAttrWidget(container, widgetAttr)
+        self._drawAttrWidget(container, widgetAttr, nodeWidget)
 
 
     def _getPanelPropData(self, widget):
@@ -429,19 +450,36 @@ class UIPainter:
             return True
         return attribute_utils.getAttrGpuSupport(attrDesc) != "none"
 
-    def renderWidgetAttributes(self, widget, container):
+    def _hasAnimatableAttrs(self, widget):
+        """ True if any parameter drawn directly in the widget can be keyframed. Blender reserves
+            the decorator column per container, so a widget of non-animatable parameters would
+            otherwise keep an empty column. Widgets of only nested widgets report True - each
+            nested one decides for itself.
+        """
+        directAttrs = [a for a in widget.get('attrs', []) if ('layout' not in a) and ('name' in a)]
+
+        return (not directAttrs) or any(attribute_utils.isAnimatableAttribute(self.pluginModule, attrDesc)
+                                        for a in directAttrs
+                                        if (attrDesc := getPluginAttr(self.pluginModule, a['name'])))
+
+
+    def renderWidgetAttributes(self, widget, container, nodeWidget=False):
         # Render widget attributes
         widgetAttributes = widget.get('attrs', {})
 
         for widgetAttr in widgetAttributes:
-            if "layout" in widgetAttr:
+            if widgetAttr.get('layout') == 'CUSTOM':
+                # Drawing not tied to a parameter, e.g. a computed label.
+                self.getCustomDrawFunction(widgetAttr)(self.context, container, self.propGroup, widgetAttr)
+
+            elif "layout" in widgetAttr:
                 # Widgets can be nested. A widget is recognized by the presence of the 'layout' field.
                 # Render the nested widget in its parent widget's container.
                 # Note: container flags are inherited. The subcontainer is created for the purpose of
                 # resetting parent container flags which should not be active in the child container.
                 subContainer = container.column()
                 subContainer.use_property_split = False
-                self.renderWidget(subContainer, widgetAttr)
+                self.renderWidget(subContainer, widgetAttr, nodeWidget)
 
             else: # Render a simple (non-widget) attribute
 
@@ -450,7 +488,7 @@ class UIPainter:
                     continue
 
                 if evaluateCondition(self.propGroup, self.node, widgetAttr.get('visible', True)):
-                    self._renderItem(container, widgetAttr)
+                    self._renderItem(container, widgetAttr, nodeWidget)
 
 
     def renderWidget(self, layout: bpy.types.UILayout, widget: dict, nodeWidget=False):
@@ -467,15 +505,18 @@ class UIPainter:
             # Do not render its attributes.
             return None
 
-        container.use_property_split = widget.get('use_property_split', True)
+        # A node body has no label column. Each widget draws its label inside its own field,
+        # as Blender's nodes do. Only the property pages are property-split.
+        container.use_property_split = (not nodeWidget) and widget.get('use_property_split', True)
 
         # Show animation dots for animatable properties (the ones which have the 'ANIMATABLE' option set).
         animatable = self.pluginModule.Options.get('animatable', True)
         if not animatable:
             animatable = self.pluginModule.Options.get('use_animation_layout', False)
+        animatable = animatable and self._hasAnimatableAttrs(widget)
         container.use_property_decorate = (not nodeWidget) and animatable and self.showAnimDecorators
 
-        self.renderWidgetAttributes(widget, container)
+        self.renderWidgetAttributes(widget, container, nodeWidget)
 
         if widget.get('layout', '') == 'ROLLOUT':
             # Add some space at the end of the rollout because it is

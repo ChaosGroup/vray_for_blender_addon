@@ -6,6 +6,8 @@
 
 #include <functional>
 
+#include <nanobind/ndarray.h>
+
 #include <base_types.h>
 #include <zmq_message.hpp>
 
@@ -16,6 +18,7 @@
 #include "plugin_desc.hpp"
 #include "vassert.h"
 #include "utils/timers.h"
+#include "zmq_server.h"
 
 
 using namespace VRayForBlender;
@@ -65,6 +68,9 @@ void SceneExporter::init(ExporterBase* policy, const ExporterSettings& settings)
 	m_exporter->set_callback_on_async_op_complete([this](proto::RendererAsyncOp op, bool success, const std::string& message){
 			switch (op) {
 			case proto::RendererAsyncOp::ExportVrscene:
+				// Store the result before clearing the flag. Python reads it once the flag is clear.
+				m_lastVrsceneExportResult = success;
+				m_lastVrsceneExportMessage = success ? std::string{} : message;
 				m_vrsceneExportInProgress = false;
 				break;
 			case proto::RendererAsyncOp::ExportVrmesh: {
@@ -119,6 +125,21 @@ bool SceneExporter::vrsceneExportRunning()
 	return m_vrsceneExportInProgress;
 }
 
+std::pair<bool, std::string> SceneExporter::getVrsceneExportResult() const
+{
+	return { m_lastVrsceneExportResult, m_lastVrsceneExportMessage };
+}
+
+/// Notify Python when a rendered frame is complete. A finished frame arrives as
+/// RendererState::Done, which does not fire the render-stopped event.
+void SceneExporter::setImageReadyCallback(nb::callable&& cbImageReady)
+{
+	m_imageReadyCallback = std::move(cbImageReady);
+	m_exporter->set_callback_on_image_ready([this]() {
+		invokePythonCallback("imageReadyCallback", m_imageReadyCallback);
+	});
+}
+
 void SceneExporter::setRenderStoppedCallback(nb::callable&& cbRenderStopped)
 {
 	m_exporter->set_callback_on_render_stopped([renderStoppedCallback = std::move(cbRenderStopped)](bool isAborted) {
@@ -127,11 +148,54 @@ void SceneExporter::setRenderStoppedCallback(nb::callable&& cbRenderStopped)
 
 }
 
+
+void SceneExporter::sampleTexture(const std::string& pluginName, int width, int height, nb::callable&& cbSampled)
+{
+	// A member, with the lambda capturing only 'this'. Capturing the callable by value would let
+	// the ZMQ poller incref and decref a Python object off-GIL.
+	m_textureSampledCallback = std::move(cbSampled);
+
+	m_exporter->set_callback_on_texture_sampled([this](int w, int h, AttrListFloat pixels) {
+		nb::gil_scoped_acquire gil;
+
+		nb::object result = nb::none();
+
+		if ((w > 0) && (h > 0) && (pixels.getCount() == w * h * 4)) {
+			const size_t shape[3] = { (size_t)h, (size_t)w, 4 };
+
+			// The capsule shares ownership of the pixel buffer with the ndarray.
+			auto* owner = new AttrListFloat(pixels);
+			nb::capsule capsule(owner, [](void* p) noexcept {
+				delete static_cast<AttrListFloat*>(p);
+			});
+
+			result = nb::ndarray<nb::numpy, const float, nb::c_contig>(
+				**owner,
+				3,
+				shape,
+				capsule
+			).cast();
+		}
+
+		invokePythonCallback("textureSampledCallback", m_textureSampledCallback, result);
+	});
+
+	m_exporter->sampleTexture(pluginName, width, height);
+}
+
 void SceneExporter::free()
 {
 	// Stop all activity on ZmqExportet before deleting it or the policy which uses it
 	m_exporter->stop();
 	m_exporter->detach();
+
+	// Cleared under an explicit GIL acquire. deletePreviewRenderer destroys this object with the
+	// GIL RELEASED, and an nb::callable's destructor decrefs a Python object.
+	{
+		nb::gil_scoped_acquire gil;
+		m_imageReadyCallback = nb::callable();
+		m_textureSampledCallback = nb::callable();
+	}
 
 	m_policy.reset();
 	m_exporter.reset();
@@ -408,6 +472,10 @@ std::pair<bool, std::string> SceneExporter::exportProxy(const ProxyExportSetting
 		return {false, "A proxy export is already in progress."};
 	}
 
+	// Only the server's reply ends the wait below. If the server dies first, no reply comes,
+	// so the wait also checks that the server is still the same process.
+	const int serverPID = ZmqServer::get().getProcessID();
+
 	const int result = m_exporter->exportProxy(proxySettings);
 	if (!result) {
 		m_proxyExportInProgress.store(false);
@@ -415,7 +483,12 @@ std::pair<bool, std::string> SceneExporter::exportProxy(const ProxyExportSetting
 	}
 
 	std::unique_lock<std::mutex> lock(m_proxyExportWaitMtx);
-	m_proxyExportCv.wait(lock, [this] { return !m_proxyExportInProgress.load(); });
+	while (!m_proxyExportCv.wait_for(lock, std::chrono::milliseconds(100), [this] { return !m_proxyExportInProgress.load(); })) {
+		if (!serverPID || ZmqServer::get().getProcessID() != serverPID || m_exporter->isStopped()) {
+			m_proxyExportInProgress = false;
+			return {false, "The V-Ray server stopped before the proxy export finished."};
+		}
+	}
 
 	return { m_lastProxyExportResult, m_lastProxyExportMessage };
 }

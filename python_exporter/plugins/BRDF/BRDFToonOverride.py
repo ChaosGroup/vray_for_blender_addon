@@ -14,13 +14,17 @@ import bpy
 
 from vray_blender.lib import plugin_utils
 from vray_blender.nodes.utils import getNodeOfPropGroup
-from vray_blender.nodes.curves_node import addCurvesUpdateCallback, copyCurvesData, createCurvesNode, getCurvesNode, hasCurvesNode, removeCurvesNode
+from vray_blender.nodes.curves_node import (
+    addCurvesUpdateCallback, assignCurvesId, createCurvesNode, curvesCopy, drawMissingCurvesNode,
+    getCurvesNode, getCurvesNodeForDraw, hasCurvesNode, removeCurvesNode,
+)
 
 plugin_utils.loadPluginOnModule(globals(), __name__)
 
 
 _CURVE_ATTRIBUTES = {'depth_curve': 'depth', 'angular_curve': 'angular'}
 _CURVE_TYPES = ('depth', 'angular')
+_CURVE_NAME_SUFFIXES = tuple(f'_{t}' for t in _CURVE_TYPES)
 
 
 def _initCurveDefaults(curvesNode: bpy.types.Node):
@@ -31,7 +35,7 @@ def _initCurveDefaults(curvesNode: bpy.types.Node):
 
 
 def nodeInit(node: bpy.types.Node):
-    node.assignStaticId() # The static id is needed for the name of the curves node
+    assignCurvesId(node, _CURVE_NAME_SUFFIXES)
 
     for curveType in _CURVE_TYPES:
         _initCurveDefaults(createCurvesNode(node, f'_{curveType}'))
@@ -44,10 +48,7 @@ def nodeFree(node: bpy.types.Node):
 
 
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
-    copyNode.assignStaticId() # The static id is needed for the name of the curves node
-
-    for curveType in _CURVE_TYPES:
-        copyCurvesData(getCurvesNode(origNode, f'_{curveType}'), createCurvesNode(copyNode, f'_{curveType}'))
+    curvesCopy(copyNode, origNode, _CURVE_NAME_SUFFIXES)
 
 
 def _ensureCurvesNodes(node: bpy.types.Node):
@@ -69,5 +70,7 @@ def drawLineWidthCurveTemplate(context, layout, propGroup, widgetAttr):
     node = getNodeOfPropGroup(propGroup)
 
     curveType = _CURVE_ATTRIBUTES.get(widgetAttr['name'])
-    curvesNode = getCurvesNode(node, f'_{curveType}')
+    if (curvesNode := getCurvesNodeForDraw(node, f'_{curveType}')) is None:
+        drawMissingCurvesNode(layout)
+        return
     layout.template_curve_mapping(curvesNode, "mapping", type='NONE')

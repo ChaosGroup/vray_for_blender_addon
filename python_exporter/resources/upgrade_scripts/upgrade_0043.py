@@ -10,12 +10,12 @@
 # clobber.
 
 import bpy
-from vray_blender.utils.upgrade_scene import scoped
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 UPGRADE_INFO = {'nodes': {}}
 
 def run():
-    for scene in scoped(bpy.data.scenes):
+    for scene in scopedForUpgrade(bpy.data.scenes):
         scene.vray.Exporter.image_to_blender = True
 
 def check():

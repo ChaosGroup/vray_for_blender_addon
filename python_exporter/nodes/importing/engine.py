@@ -3,44 +3,29 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import os
-import binascii
 import math
-import struct
+from enum import Enum, auto
 
 import bpy
+from mathutils import Matrix, Color
+from numpy import allclose
 
-from vray_blender.plugins.BRDF import BRDFScanned
-from vray_blender.nodes.tools import calculateTreeBounds, deselectNodes, rearrangeTree, rearrangeTreeRecursive
-from vray_blender.lib import attribute_utils, attribute_types
-from vray_blender.lib import path_utils, image_utils
+from vray_blender.lib import attribute_utils, attribute_types, blender_utils, path_utils
+from vray_blender.lib.defs import LinkInfo
 from vray_blender.plugins import getPluginModule, findPluginModule, getPluginAttr
 from vray_blender.plugins.skipped_plugins import SKIPPED_PLUGINS, THIRD_PARTY_INTEGRATION_PLUGINS
-from vray_blender.nodes.curves_node import getCurvesNode, encodeMapping
 from vray_blender.nodes.importing import generic_node
 from vray_blender.nodes import utils as NodeUtils
-from vray_blender.nodes.sockets import addInput, getHiddenInput, moveExtendSocketToBottom
 from vray_blender import debug
-from vray_blender.exporting.tools import isColorSocket, getVRayBaseSockType, getInputSocketByName, getInputSocketByAttr, getOutputSocketByAttr
+from vray_blender.exporting.tools import getInputSocketByAttr, getOutputSocketByAttr
 from vray_blender.exporting.node_exporters.uvw_node_export import UVWGenRandomizerModes
-from vray_blender.lib.names import syncObjectUniqueName
-from vray_blender.lib.lib_utils import cleanCosmosTextureName
+from vray_blender.lib.lib_utils import cleanCosmosTextureName, LightTypeToPlugin, LightVrayTypeToBlender
 from vray_blender.vray_tools import import_common
-# Re-exported for the existing NodesImport.* call sites (import_file, scene_import, ...).
-from vray_blender.vray_tools.import_common import (IndexedVrsceneDict, getPluginByName,
-                                                   getPluginByType)
-
-from numpy import allclose
-from mathutils import Matrix, Color, Vector
+from vray_blender.vray_tools.import_common import getPluginByName, getPluginByType, refName
 
 
 # Output socket renames for plugins imported as a different plugin type.
 _REMAPPED_OUTPUT_SOCKETS = {
-    'TexBezierCurve': {
-        'Color' : 'Out Color'
-    },
-    'TexBezierCurveColor': {
-        'Color' : 'Out Color'
-    },
     # TexLayered imports as a TexLayeredMax node; None is its unnamed default output.
     'TexLayered': {
         None : 'Color'
@@ -87,10 +72,10 @@ _UNSUPPORTED_PLUGINS = set(SKIPPED_PLUGINS).difference({
 })
 
 
-# Shader-graph plugins that must never fall back to a generic node: they are consumed before a
+# Shader-graph plugins that must never fall back to a generic node. They are consumed before a
 # node is created, a node of their own is built for them by other code, or V-Ray does not mean
-# them to be authored at all (the 'not meant to be used' group of SKIPPED_PLUGINS - importing
-# those would put a node in the tree for something that is an implementation detail).
+# them to be authored at all (the 'not meant to be used' group of SKIPPED_PLUGINS, which are
+# implementation details).
 _NO_GENERIC_NODE = {
     'MtlSingleBRDF',        # unwrapped by _processNonNodePlugins
     'TexBitmap',            # imported as the meta image texture node
@@ -110,10 +95,22 @@ def _importsAsGenericNode(pluginType: str):
 
 
 class ImportContext:
-    def __init__(self, nodeTree: bpy.types.NodeTree, vrsceneDict: dict, isConversion = False, locationsMap = None,
+    def __init__(self, nodeTree: bpy.types.NodeTree, vrsceneDict: list[dict], isConversion = False, locationsMap = None,
                  texNamePrefix = "", texNameOwners = None, objectResolver = None,
-                 sceneBaseDir = "", stats = None, ledger = None):
+                 sceneBaseDir = "", stats = None, ledger = None, animTargets = None,
+                 sourceMetersScale: float = None):
         self.isConversion = isConversion
+        # Source length unit -> Blender units (SceneImporter.vertexScale), for the lengths in TRANSFORM
+        # values (see _createTransformNode). sourceMetersScale is the .vrscene's SettingsUnitsInfo.meters_scale;
+        # None (.vrmat, Cosmos) keeps the centimeter convention. A conversion is already in Blender units.
+        self.sourceMetersScale = sourceMetersScale
+        if isConversion:
+            self.vertexScale = 1.0
+        else:
+            sourceMeters = sourceMetersScale if sourceMetersScale is not None else 0.01
+            self.vertexScale = sourceMeters / blender_utils.getSceneMetersPerUnit(bpy.context)
+        # AnimTargets of a scene import with animation on; None everywhere else.
+        self.animTargets = animTargets
         # SceneImportStats of the running scene import; None for the cosmos/material-only paths.
         self.stats = stats
         # Rollback ledger of the running scene import; None for the cosmos/material-only paths.
@@ -132,11 +129,12 @@ class ImportContext:
         self.creatingPlugins: set[str] = set()
         # Plugin name -> the node created for it.
         self.nodeByPlugin: dict[str, bpy.types.Node] = {}
-        # Node -> the group instance path (tuple of (instanceName, groupDefName)) it belongs to.
-        self.groupPathByNode = {}
+        # Node -> its group instance path, (instanceName, groupDefName) per level. Only the Cycles conversion
+        # sets 'GroupPath', so a .vrscene import leaves this empty. Read by cycles_convert._regroupConvertedTree.
+        self.groupPathByNode: dict[bpy.types.Node, tuple] = {}
 
         # Source scene directory for resolving asset paths (IES, scanned materials, ...).
-        self.sceneBaseDir = sceneBaseDir or import_common.getImportDir(vrsceneDict)
+        self.sceneBaseDir = sceneBaseDir
 
         # Memoized resolvePath results.
         self._assetPathCache: dict[str, str] = {}
@@ -226,7 +224,84 @@ def _aliasMaxLight(pluginDesc: dict, aliasType: str):
     pluginDesc['ID'] = aliasType
 
 
-def fixPluginParams(vrsceneDict: dict, forceDefaultUVChannel: bool):
+def _fixBRDFVRayMtl(attrs: dict):
+    if (value := attrs.get('gtr_energy_compensation', None)) is not None:
+        if type(value) is bool:
+            # Upgrade from the older version, set to the new default
+            attrs['gtr_energy_compensation'] = '2'
+
+    if (opacity := attrs.get('opacity', None)) is not None:
+        # The node exposes only 'opacity_color'; opacity_source 0 means 'opacity' is
+        # the active source, 1 means 'opacity_color' is.
+        if int(attrs.get('opacity_source', 0)) == 0:
+            if type(opacity) is str:
+                attrs['opacity_color'] = opacity
+            elif isinstance(opacity, (int, float)):
+                attrs['opacity_color'] = Color((opacity, opacity, opacity))
+            attrs['opacity_source'] = 1 # opacity_color is the single source
+        del attrs['opacity']
+
+    if fogMult := attrs.get("fog_mult", None):
+        # Mirrors the exporter's fog_mult inversion.
+        fogDepthValue = 1.0/fogMult if fogMult > 1e-6 else 0.0
+        attrs['fog_mult'] = fogDepthValue
+
+
+def _fixBRDFBump(attrs: dict):
+    if attrs.get('bump_tex', None) is not None:
+        attrs['bump_tex_color'] = attrs['bump_tex']
+        del attrs['bump_tex']
+
+    if attrs.get('bump_tex_mult', None) is not None:
+        attrs['bump_tex_mult_tex'] = attrs['bump_tex_mult']
+        del attrs['bump_tex_mult']
+
+    if 'bump_object_space' not in attrs:
+        attrs['bump_object_space'] = False
+
+
+def _fixBRDFLight(pluginDesc: dict, attrs: dict, vrsceneDict: list[dict], addedPlugins: list):
+    """ Appends to addedPlugins when the source links the opacity map directly. """
+    # The node shows the 'transparency' attribute as 'Opacity'. The exporter writes
+    # 1-opacity and wraps a linked opacity in a TexInvert; both are reversed here.
+    transp = attrs.get('transparency', (0.0, 0.0, 0.0, 0.0))
+    if isPluginLink(transp):
+        invDesc = getPluginByName(vrsceneDict, _parsePluginLink(transp)[0])
+        if invDesc is not None and invDesc['ID'] == 'TexInvert':
+            attrs['transparency'] = invDesc['Attributes'].get('texture', transp)
+        else:
+            # A foreign source links the map itself, so opacity is that map inverted.
+            # Give it the TexInvert the branch above unwraps, rather than V-Ray's own
+            # transparency_invert. The .vrscene loader honours that flag but the live
+            # AppSDK render ignores it, which would leave the viewport disagreeing
+            # with the exported scene.
+            invertName = f"{pluginDesc['Name']}@opacityInvert"
+            addedPlugins.append({'ID': 'TexInvert', 'Name': invertName,
+                                 'Attributes': {'texture': transp}})
+            attrs['transparency'] = invertName
+    elif hasattr(transp, '__len__'):
+        attrs['transparency'] = [1.0 - c for c in transp]
+    elif isinstance(transp, (int, float)):
+        attrs['transparency'] = 1.0 - transp
+
+
+def _fixBitmapBuffer(attrs: dict):
+    # Restore V-Ray's own defaults for the attributes the node defaults differently.
+    colorSpace = attrs.get('rgb_color_space')
+    if not colorSpace:
+        attrs['rgb_color_space'] = 'raw'    # V-Ray's default for an empty space
+    elif isinstance(colorSpace, str):
+        # The dropdown models only raw/sRGB/ACEScg.
+        csDesc = attribute_utils.getAttrDesc(getPluginModule('BitmapBuffer'), 'rgb_color_space')
+        if csDesc and not attribute_utils.valueInEnumItems(csDesc, colorSpace):
+            attrs['rgb_color_space'] = 'lin_srgb'
+
+    # '0' (Linear) is a valid source value.
+    if attrs.get('transfer_function') is None:
+        attrs['transfer_function'] = '1'    # gamma corrected
+
+
+def fixPluginParams(vrsceneDict: list[dict], forceDefaultUVChannel: bool):
     """ Fix any plugin parameters that need special handling.
 
     forceDefaultUVChannel(bool) : True if the uvw_channel indices should be overwritten to -1.
@@ -237,7 +312,7 @@ def fixPluginParams(vrsceneDict: dict, forceDefaultUVChannel: bool):
         pluginType = pluginDesc['ID']
         attrs = pluginDesc.get('Attributes')
         if attrs is None:
-            # Non-plugin entries (the synthetic 'ImportSettings' record) carry no attributes.
+            # A descriptor with no attributes has nothing to fix.
             continue
 
         # Keep before the branches below and anything else keyed on the plugin type.
@@ -248,78 +323,14 @@ def fixPluginParams(vrsceneDict: dict, forceDefaultUVChannel: bool):
         if forceDefaultUVChannel and pluginType == 'UVWGenChannel':
             # -1 is the default-channel sentinel.
             attrs['uvw_channel'] = -1
-
         elif pluginType == 'BRDFVRayMtl':
-            if (value := attrs.get('gtr_energy_compensation', None)) is not None:
-                if type(value) is bool:
-                    # Upgrade from the older version, set to the new default
-                    attrs['gtr_energy_compensation'] = '2'
-
-            if (opacity := attrs.get('opacity', None)) is not None:
-                # The node exposes only 'opacity_color'; opacity_source 0 means 'opacity' is
-                # the active source, 1 means 'opacity_color' is.
-                if int(attrs.get('opacity_source', 0)) == 0:
-                    if type(opacity) is str:
-                        attrs['opacity_color'] = opacity
-                    elif isinstance(opacity, (int, float)):
-                        attrs['opacity_color'] = Color((opacity, opacity, opacity))
-                    attrs['opacity_source'] = 1 # opacity_color is the single source
-                del attrs['opacity']
-
-            if fogMult := attrs.get("fog_mult", None):
-                # Mirrors the exporter's fog_mult inversion.
-                fogDepthValue = 1.0/fogMult if fogMult > 1e-6 else 0.0
-                attrs['fog_mult'] = fogDepthValue
-
+            _fixBRDFVRayMtl(attrs)
         elif pluginType == 'BRDFBump':
-            if (value := attrs.get('bump_tex', None)) is not None:
-                attrs['bump_tex_color'] = attrs['bump_tex']
-                del attrs['bump_tex']
-
-            if (value := attrs.get('bump_tex_mult', None)) is not None:
-                attrs['bump_tex_mult_tex'] = attrs['bump_tex_mult']
-                del attrs['bump_tex_mult']
-
-            if 'bump_object_space' not in attrs:
-                attrs['bump_object_space'] = False
-
+            _fixBRDFBump(attrs)
         elif pluginType == 'BRDFLight':
-            # The node shows the 'transparency' attribute as 'Opacity'. The exporter writes
-            # 1-opacity and wraps a linked opacity in a TexInvert; both are reversed here.
-            transp = attrs.get('transparency', (0.0, 0.0, 0.0, 0.0))
-            if _isPluginLink(transp):
-                invDesc = getPluginByName(vrsceneDict, _parsePluginLink(transp)[0])
-                if invDesc is not None and invDesc['ID'] == 'TexInvert':
-                    attrs['transparency'] = invDesc['Attributes'].get('texture', transp)
-                else:
-                    # A foreign source links the map itself, so opacity is that map inverted.
-                    # Give it the TexInvert the branch above unwraps, rather than V-Ray's own
-                    # transparency_invert - the .vrscene loader honours that flag but the live
-                    # AppSDK render ignores it, which would leave the viewport disagreeing
-                    # with the exported scene.
-                    invertName = f"{pluginDesc['Name']}@opacityInvert"
-                    addedPlugins.append({'ID': 'TexInvert', 'Name': invertName,
-                                         'Attributes': {'texture': transp}})
-                    attrs['transparency'] = invertName
-            elif hasattr(transp, '__len__'):
-                attrs['transparency'] = [1.0 - c for c in transp]
-            elif isinstance(transp, (int, float)):
-                attrs['transparency'] = 1.0 - transp
-
+            _fixBRDFLight(pluginDesc, attrs, vrsceneDict, addedPlugins)
         elif pluginType == 'BitmapBuffer':
-            # Restore V-Ray's own defaults for the attributes the node defaults differently.
-            colorSpace = attrs.get('rgb_color_space')
-            if not colorSpace:
-                attrs['rgb_color_space'] = 'raw'    # V-Ray's default for an empty space
-            elif isinstance(colorSpace, str):
-                # The dropdown models only raw/sRGB/ACEScg.
-                csDesc = attribute_utils.getAttrDesc(getPluginModule('BitmapBuffer'), 'rgb_color_space')
-                if csDesc and not attribute_utils.valueInEnumItems(csDesc, colorSpace):
-                    attrs['rgb_color_space'] = 'lin_srgb'
-
-            # '0' (Linear) is a valid source value.
-            if attrs.get('transfer_function') is None:
-                attrs['transfer_function'] = '1'    # gamma corrected
+            _fixBitmapBuffer(attrs)
 
     for addedDesc in addedPlugins:
         # append(), not extend(): IndexedVrsceneDict updates its indexes only there.
@@ -328,6 +339,7 @@ def fixPluginParams(vrsceneDict: dict, forceDefaultUVChannel: bool):
     _normalizeMapSlots(vrsceneDict)
     _resolveUVWGenSelectFallbacks(vrsceneDict)
     _scaleBerconWorldSizes(vrsceneDict)
+    _scaleWorldEdgeLengths(vrsceneDict)
 
 
 # UVWGenBercon.map modes whose coordinates are in scene units. '0' (Explicit Map Channel 2D)
@@ -342,26 +354,26 @@ _BERCON_SIZE_ATTRS = {
     'TexBerconWood':  ('wood_size',),
 }
 
-# UVWGenBercon's own translation. 'size_x/y/z' are NOT in this list: they are dimensionless
+# UVWGenBercon's own translation. 'size_x/y/z' are not in this list, being dimensionless
 # scale multipliers, and scaling them shifts the mapping (verified by A/B render against
 # the std_tests plugin_textures references).
 _BERCON_UVWGEN_ATTRS = ('offset_x', 'offset_y', 'offset_z',
                         'offset_x2', 'offset_y2', 'offset_z2')
 
 
-def _scaleBerconWorldSizes(vrsceneDict: dict):
+def _scaleBerconWorldSizes(vrsceneDict: list[dict]):
     """ Convert the Bercon feature sizes and UVWGenBercon offsets from source scene units to
         Blender scene units.
 
         They are plain FLOATs in the plugin descriptions, so neither normalizeUnits nor
-        _scaleAttrValue touches them - and they cannot simply be marked ui.quantityType,
+        _scaleAttrValue touches them, and they cannot be marked ui.quantityType either,
         because whether they are a length at all depends on the paired UVWGenBercon: only its
         metric 'map' modes put them in scene units, the UV and screen modes leave them
         dimensionless. Without this, a centimetre-unit source scene imports with the noise
         100x too coarse (it reads as a flat gradient, or a single giant tile).
     """
     unitsInfo = getPluginByType(vrsceneDict, 'SettingsUnitsInfo')
-    metersScale = float(unitsInfo['Attributes'].get('meters_scale', 1.0)) if unitsInfo else 1.0
+    metersScale = import_common.metersScaleOf(unitsInfo)
 
     def scaled(value):
         return attribute_utils.scaleToSceneLengthUnit(value * metersScale, 'meters')
@@ -379,7 +391,7 @@ def _scaleBerconWorldSizes(vrsceneDict: dict):
 
         if (sizeAttrs := _BERCON_SIZE_ATTRS.get(pluginDesc['ID'])) is not None:
             gen = attrs.get('uvwgen')
-            if not (_isPluginLink(gen) and isSpatial(_parsePluginLink(gen)[0])):
+            if not (isPluginLink(gen) and isSpatial(_parsePluginLink(gen)[0])):
                 continue
         elif pluginDesc['ID'] == 'UVWGenBercon':
             sizeAttrs = _BERCON_UVWGEN_ATTRS
@@ -394,7 +406,30 @@ def _scaleBerconWorldSizes(vrsceneDict: dict):
                 attrs[attrName] = scaled(value)
 
 
-def _resolveUVWGenSelectFallbacks(vrsceneDict: dict):
+# The tessellation wrappers whose 'edge_length' is in pixels when view-dependent and in scene
+# units otherwise.
+_EDGE_LENGTH_PLUGINS = ('GeomDisplacedMesh', 'GeomStaticSmoothedMesh')
+
+
+def _scaleWorldEdgeLengths(vrsceneDict: list[dict]):
+    """ Convert a world-space 'edge_length' (use_globals and view_dep off) from source scene units
+        to Blender scene units. Untagged in the plugin descriptions, as it is a length only then. """
+    metersScale = import_common.metersScaleOf(getPluginByType(vrsceneDict, 'SettingsUnitsInfo'))
+
+    for pluginDesc in vrsceneDict:
+        attrs = pluginDesc.get('Attributes')
+        if attrs is None or pluginDesc['ID'] not in _EDGE_LENGTH_PLUGINS:
+            continue
+        # An omitted flag is at V-Ray's default, which is on for both.
+        if bool(attrs.get('use_globals', True)) or bool(attrs.get('view_dep', True)):
+            continue
+
+        value = attrs.get('edge_length')
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            attrs['edge_length'] = attribute_utils.scaleToSceneLengthUnit(value * metersScale, 'meters')
+
+
+def _resolveUVWGenSelectFallbacks(vrsceneDict: list[dict]):
     """ Write each UVWGenSelect's 'uvwgen' fallback from the (uvwgen_id, face_material_id) ->
         UVWGen mapping the MtlUVWSelect wrappers carry. """
     # (alias, faceId) -> UVWGen link, plus a face-0/first fallback per alias.
@@ -404,17 +439,17 @@ def _resolveUVWGenSelectFallbacks(vrsceneDict: dict):
         if pluginDesc['ID'] != 'MtlUVWSelect':
             continue
         attrs = pluginDesc.get('Attributes', {})
-        ids, gens = attrs.get('uvwgen_ids'), attrs.get('uvwgens')
-        if not isinstance(ids, list) or not isinstance(gens, list):
+        ids, uvwGens = attrs.get('uvwgen_ids'), attrs.get('uvwgens')
+        if not isinstance(ids, list) or not isinstance(uvwGens, list):
             continue
         faceIds = attrs.get('face_material_ids')
         for i, alias in enumerate(ids):
-            if i >= len(gens) or not alias or not _isPluginLink(gens[i]):
+            if i >= len(uvwGens) or not alias or not isPluginLink(uvwGens[i]):
                 continue
             faceId = int(faceIds[i]) if isinstance(faceIds, list) and i < len(faceIds) else 0
-            byAliasFace[(alias, faceId)] = gens[i]
+            byAliasFace[(alias, faceId)] = uvwGens[i]
             if alias not in aliasToGen or faceId == 0:
-                aliasToGen[alias] = gens[i]
+                aliasToGen[alias] = uvwGens[i]
 
     if not byAliasFace:
         return
@@ -422,7 +457,7 @@ def _resolveUVWGenSelectFallbacks(vrsceneDict: dict):
     # Trace which face ID each UVWGenSelect resolves under, via the MtlMulti sub-material
     # that owns it. A sub-material listed for both the unselected id 0 and a real selection
     # id takes the selection.
-    index = {pd['Name']: pd for pd in vrsceneDict if 'Name' in pd}
+    index = {desc['Name']: desc for desc in vrsceneDict if 'Name' in desc}
 
     def collectSelects(rootName: str) -> set[str]:
         found, stack, seen = set(), [rootName], set()
@@ -431,15 +466,15 @@ def _resolveUVWGenSelectFallbacks(vrsceneDict: dict):
             if name in seen:
                 continue
             seen.add(name)
-            pd = index.get(name)
-            if pd is None:
+            pluginDesc = index.get(name)
+            if pluginDesc is None:
                 continue
-            if pd['ID'] == 'UVWGenSelect':
+            if pluginDesc['ID'] == 'UVWGenSelect':
                 found.add(name)
-            for value in pd.get('Attributes', {}).values():
+            for value in pluginDesc.get('Attributes', {}).values():
                 for item in (value if isinstance(value, list) else (value,)):
-                    if _isPluginLink(item):
-                        stack.append(item.partition("::")[0])
+                    if isPluginLink(item):
+                        stack.append(refName(item))
         return found
 
     ownerFace: dict[str, int] = {}
@@ -447,16 +482,16 @@ def _resolveUVWGenSelectFallbacks(vrsceneDict: dict):
         if pluginDesc['ID'] != 'MtlUVWSelect':
             continue
         baseRef = pluginDesc['Attributes'].get('base_mtl')
-        base = index.get(baseRef.partition("::")[0]) if _isPluginLink(baseRef) else None
+        base = index.get(refName(baseRef)) if isPluginLink(baseRef) else None
         if base is None or base['ID'] != 'MtlMulti':
             continue
         mtls = base['Attributes'].get('mtls_list', [])
         idList = base['Attributes'].get('ids_list', [])
         for i, subRef in enumerate(mtls):
-            if not _isPluginLink(subRef):
+            if not isPluginLink(subRef):
                 continue
             faceId = int(idList[i]) if i < len(idList) else 0
-            for usName in collectSelects(subRef.partition("::")[0]):
+            for usName in collectSelects(refName(subRef)):
                 prev = ownerFace.get(usName)
                 if prev is None or (prev == 0 and faceId != 0):
                     ownerFace[usName] = faceId
@@ -478,8 +513,8 @@ def _getDefaultOutputSocketName(pluginType: str):
     pluginModule = findPluginModule(pluginType)
     if pluginModule is None:
         # V-Ray ships no description for this plugin. It still imports, as a generic node whose
-        # output is named for its category - and the name is needed here, because callers assert
-        # on it (_processNonNodePlugins) and would otherwise drop the whole attribute.
+        # output is named for its category. The name is needed here because callers assert on
+        # it (_processNonNodePlugins) and would otherwise drop the whole attribute.
         return generic_node.defaultOutputName(pluginType)
 
     # Get the Blender name of sockets redefined in Node.output_sockets section of the plugin module description
@@ -488,7 +523,7 @@ def _getDefaultOutputSocketName(pluginType: str):
         if len(outputSockets) == 1 and outputSockets[0]['name'] != '_default_':
             outSockDesc = outputSockets[0]
             outSockAttrDesc = getPluginAttr(pluginModule, outSockDesc['name'])
-            return outSockDesc.get('label', attribute_utils.getAttrDisplayName(outSockAttrDesc))
+            return outSockDesc.get('label', attribute_utils.stripOutputPrefix(attribute_utils.getAttrDisplayName(outSockAttrDesc)))
         
         # Deal with plugins for which the default output has been renamed
         if defaultOutput := next((o for o in outputSockets if o['name'] == '_default_'), None):
@@ -532,12 +567,12 @@ def _getOutputSocketNameByAttr(pluginType: str, outputAttrName: str):
             if label := outputSocketDesc.get('label'):
                 return label
             else:
-                return attribute_utils.formatAttributeName(outputSocketDesc['name'])
+                return attribute_utils.stripOutputPrefix(attribute_utils.formatAttributeName(outputSocketDesc['name']))
 
     else:
         pluginOutputParams = [a for a in pluginModule.Parameters if a['type'] in attribute_types.NodeOutputTypes]
         if outputSocketDesc := next((o for o in pluginOutputParams if o['attr'] == outputAttrName), None):
-            return attribute_utils.formatAttributeName(outputSocketDesc['attr'])
+            return attribute_utils.stripOutputPrefix(attribute_utils.formatAttributeName(outputSocketDesc['attr']))
 
     debug.printWarning(f"Plugin {pluginType} does not have output attribute {outputAttrName}; using the default output")
     return _getDefaultOutputSocketName(pluginType)
@@ -585,7 +620,6 @@ def createLightFromPluginDesc(pluginType: str, attrs: dict, name: str) -> bpy.ty
     """ Create a Blender light datablock for a V-Ray light plugin, with the addon light_type,
         the matching Blender light type, and the area gizmo size from u_size/v_size (in cm,
         doubled to Blender's full-size convention). """
-    from vray_blender.lib.lib_utils import LightTypeToPlugin, LightVrayTypeToBlender
 
     vrayType = next((k for k, v in LightTypeToPlugin.items() if v == pluginType), 'OMNI')
     blType = LightVrayTypeToBlender.get(vrayType, 'POINT')
@@ -603,12 +637,20 @@ def createLightFromPluginDesc(pluginType: str, attrs: dict, name: str) -> bpy.ty
 
 
 def scaleDistanceValue(attrDesc, attrValue):
-    """ Convert a distance-typed attr value from the descriptor unit (cm, as left by
-        normalizeUnits) to Blender scene units. Attrs marked options.skipUnitScale and
-        non-distance attrs pass through unchanged. """
-    if import_common.isScaledDistanceAttr(attrDesc):
-        return attribute_utils.scaleToSceneLengthUnit(attrValue, attrDesc['ui'].get('units', 'centimeters'))
-    return attrValue
+    """ Convert a distance-typed attr value to its stored Blender value.
+
+        A scene-unit distance (no ui.units) is in cm, as left by normalizeUnits, and becomes
+        Blender units. One with an explicit ui.units is a fixed length the exporter writes
+        without the scene scale, so it only converts to meters. Attrs marked
+        options.skipUnitScale and non-distance attrs pass through unchanged. """
+    if not import_common.isScaledDistanceAttr(attrDesc):
+        return attrValue
+    if units := attrDesc['ui'].get('units'):
+        if (factor := attribute_utils.EXPLICIT_LENGTH_UNIT_FACTORS.get(units)) is None:
+            debug.printWarning(f"Unsupported V-Ray Plugin attribute '{units}' scaling unit")
+            return attrValue
+        return attribute_utils.scaleNumeric(attrValue, factor)
+    return attribute_utils.scaleToSceneLengthUnit(attrValue, 'centimeters')
 
 
 def radiansIfDegrees(attrDesc, attrValue):
@@ -623,17 +665,20 @@ def radiansIfDegrees(attrDesc, attrValue):
     return math.radians(attrValue) if units == "degrees" else attrValue
 
 
-def _scaleAttrValue(attrDesc, attrValue, isConversion: bool):
-    """ Unit transforms applied when importing an attr value onto a node: distance
-        cm -> scene units, angle degrees -> radians, PERCENTAGE fraction -> percent.
-        Skipped for Cycles conversion. """
-    if isConversion or "ui" not in attrDesc:
+def applyUnits(attrDesc, attrValue, scaleDistance: bool):
+    """ Unit transforms for an imported attr value: distance cm -> scene units (only when
+        scaleDistance), angle degrees -> radians, PERCENTAGE fraction -> percent.
+
+        Not convertVRayValueToUI: that one runs at registration time with no scene, so it
+        converts cm by a fixed 0.01, takes scalars only and ignores options.skipUnitScale. """
+    if not attrDesc or "ui" not in attrDesc:
         return attrValue
 
     # Only real scalars get the angle/percentage transform (distance handles both).
     isScalar = isinstance(attrValue, (int, float)) and not isinstance(attrValue, bool)
     if attrDesc["ui"].get("quantityType") == "distance":
-        attrValue = scaleDistanceValue(attrDesc, attrValue)
+        if scaleDistance:
+            attrValue = scaleDistanceValue(attrDesc, attrValue)
     else:
         attrValue = radiansIfDegrees(attrDesc, attrValue)
 
@@ -643,11 +688,18 @@ def _scaleAttrValue(attrDesc, attrValue, isConversion: bool):
     return attrValue
 
 
-def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False, imageName="", ledger=None):
+def _scaleAttrValue(attrDesc, attrValue, isConversion: bool):
+    """ applyUnits for the node path, whose distances are always post-normalizeUnits. """
+    return attrValue if isConversion else applyUnits(attrDesc, attrValue, scaleDistance=True)
+
+
+def loadImage(imageFilepath, importDir, bitmapTexture, imageName="", ledger=None):
     if imageFilepath is not None:
         originalFilepath = imageFilepath
 
-        if not os.path.exists(imageFilepath):
+        # A relative reference belongs to the source scene, not to Blender's working
+        # directory, where a file of the same name would bind the wrong texture.
+        if not os.path.isabs(imageFilepath) or not os.path.exists(imageFilepath):
             debug.printInfo("Couldn't find file: %s" % imageFilepath)
             debug.printInfo("Trying to search under import directory...")
 
@@ -657,6 +709,10 @@ def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False, image
 
             # The same resolution policy ImportContext.resolvePath applies.
             imageFilepath = import_common.resolveAssetPath(imageFilepath, importDir)
+
+            if importDir and not os.path.isabs(imageFilepath):
+                # Nothing matched. Anchor to the scene folder, never the working directory.
+                imageFilepath = os.path.normpath(os.path.join(importDir, imageFilepath))
 
         imageBlockName = imageName or bpy.path.display_name_from_filepath(imageFilepath)
 
@@ -682,12 +738,10 @@ def loadImage(imageFilepath, importDir, bitmapTexture, makeRelative=False, image
         else:
             debug.printError(f"Unable to find file: {imageFilepath}")
 
-        if makeRelative and bitmapTexture.image is not None:
-            bitmapTexture.image.filepath = bpy.path.relpath(bitmapTexture.image.filepath)
 
-
-def _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None, scaleDistance: bool = False,
-                            restoreVRayDefaults: bool = False, stats = None):
+def pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None, scaleDistance: bool = False,
+                            restoreVRayDefaults: bool = False, stats = None,
+                            animTargets = None, source: dict = None, node: bpy.types.Node = None):
     """ Apply a plugin description's Attributes directly to a property group.
 
         Works for both a node's plugin property group (e.g. node.LightOmni) and a datablock's
@@ -699,6 +753,9 @@ def _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None, scale
         restoreVRayDefaults: fill the attributes the source omitted with V-Ray's own default
         instead of the addon's authoring one (see _vrayDefaultsFor). Pass it only for .vrscene
         sources.
+
+        animTargets: record animated attributes into it. `source` is the unfiltered plugin description
+        that carries Name and AnimatedKeys. Pass `node` when propGroup is a node's property group.
     """
     pluginType = pluginType or pluginDesc['ID']
     pluginModule = getPluginModule(pluginType)
@@ -711,6 +768,9 @@ def _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None, scale
                         for k, v in restored.items()}
         attrs = {**restored, **attrs}
 
+    animatedKeys = (source or {}).get('AnimatedKeys') or {}
+    sourceName = (source or {}).get('Name')
+
     for attrName in attrs:
         if not hasattr(propGroup, attrName):
             continue
@@ -718,36 +778,43 @@ def _pluginAttrsToPropGroup(pluginDesc, propGroup, pluginType: str = None, scale
         attrDesc  = attribute_utils.getAttrDesc(pluginModule, attrName)
         attrValue = attrs[attrName]
 
-        if scaleDistance:
-            attrValue = scaleDistanceValue(attrDesc, attrValue)
-        attrValue = radiansIfDegrees(attrDesc, attrValue)
+        attrValue = applyUnits(attrDesc, attrValue, scaleDistance)
 
-        if attrDesc and (attrDesc['type'] == 'ENUM') \
-                and not attribute_utils.valueInEnumItems(attrDesc, str(attrValue)):
-            # A V-Ray enum value the addon does not model.
-            debug.printWarning(f"Unsupported ENUM value '{str(attrValue)}' for attribute: {pluginType}.{attrName}")
-            continue
+        if attrDesc and attrDesc['type'] == 'ENUM':
+            if (attrValue := _enumValueFor(attrDesc, attrName, attrValue, pluginType)) is None:
+                continue
 
         # A single incompatible attribute must not abort the whole plugin/material import.
         try:
             currentValue = getattr(propGroup, attrName)
             if hasattr(currentValue, '__len__') and not isinstance(currentValue, str):
-                # Color/vector array property: assign a sequence of matching length.
+                # A color/vector array property takes a sequence of matching length.
                 setattr(propGroup, attrName, attrValue[:len(currentValue)])
             else:
                 setattr(propGroup, attrName, type(currentValue)(attrValue))
+
+            if animTargets is not None and attrName in animatedKeys and attrDesc is not None \
+                    and attrDesc['type'] not in ('STRING', 'ENUM'):
+                animTargets.record(
+                    propGroup, attrName, sourceName, attrName,
+                    written=getattr(propGroup, attrName),
+                    interp='CONSTANT' if attrDesc['type'] == 'BOOL' else 'LINEAR',
+                    convert=lambda value, d=attrDesc: applyUnits(d, value, scaleDistance),
+                    dataPath=_propGroupDataPath(node, pluginType, attrName) if node else None)
         except Exception as ex:
             debug.printError(f"Import: could not set {pluginType}.{attrName} = {attrValue!r}: {ex}")
 
 
-def _pluginAttrsToNodeProps(pluginDesc, node):
+def pluginAttrsToNodeProps(pluginDesc, node):
     pluginType = pluginDesc['ID']
     if not hasattr(node, pluginType):
         debug.printWarning(f"Import: node '{node.bl_idname}' has no '{pluginType}' property group; skipping its attributes")
         return
-    _pluginAttrsToPropGroup(pluginDesc, getattr(node, pluginType), pluginType)
+    pluginAttrsToPropGroup(pluginDesc, getattr(node, pluginType), pluginType)
 
 
+# Wrappers around a constant, folded to a literal by _collapseToValue and assigned straight
+# to the socket. Constant folding, not the see-through of _PASSTHROUGH_WRAPPERS.
 CollapsibleTypes = {
     'TexAColor': 'texture',
     'TexFloat': 'input',            # constant float wrapper
@@ -767,7 +834,7 @@ def _collapseTexCombine(pluginDesc: dict):
         add them), inverts, and only then applies result_multiplier. An absent 'texture' means
         no texture at all rather than a black one. """
     attrs = pluginDesc['Attributes']
-    if _isPluginLink(attrs.get('texture')):
+    if isPluginLink(attrs.get('texture')):
         return None
     tex = attrs.get('texture')
     texConst = tex if isinstance(tex, (list, tuple)) else None
@@ -797,7 +864,7 @@ def _collapseTexCombine(pluginDesc: dict):
 
 
 # TexAColorOp outputs documented as "<x> of Color A * Mult A", so 'mode' cannot affect them.
-# 'alpha' is excluded on purpose: it comes from result_alpha, not color_a.
+# 'alpha' is excluded on purpose, because it comes from result_alpha, not color_a.
 _ACOLOROP_A_OUTPUTS = {'result_a': 'color', 'red': 0, 'green': 1, 'blue': 2,
                        'intensity': 'intensity'}
 
@@ -813,14 +880,14 @@ def _collapseAColorOp(pluginDesc: dict, outputName: str | None):
     channel = _ACOLOROP_A_OUTPUTS.get(key)
     if channel is None:
         return None
-    if 'color_a' not in attrs or _isPluginLink(attrs['color_a']) or _isPluginLink(attrs.get('mult_a')):
+    if 'color_a' not in attrs or isPluginLink(attrs['color_a']) or isPluginLink(attrs.get('mult_a')):
         return None
     # result_alpha is carried by the full-colour output, so it must be at its default there.
     if channel == 'color' and float(attrs.get('result_alpha', 0.0)) != 0.0:
         return None
 
-    mult = float(attrs.get('mult_a', 1.0))
-    color = [float(c) * mult for c in attrs['color_a']]
+    multiplier = float(attrs.get('mult_a', 1.0))
+    color = [float(c) * multiplier for c in attrs['color_a']]
 
     if channel == 'color':
         return Color(color[:3])
@@ -830,10 +897,63 @@ def _collapseAColorOp(pluginDesc: dict, outputName: str | None):
     return color[channel] if channel < len(color) else 0.0
 
 
+def hasAnimatedKeys(importContext: ImportContext, pluginDesc: dict) -> bool:
+    """ Whether this plugin has keyframes and the import writes animation. """
+    return importContext.animTargets is not None and bool(pluginDesc.get('AnimatedKeys'))
+
+
+def _linkAnimatedConstant(importContext: ImportContext, pluginDesc: dict, inputSocket) -> bool:
+    """ Link an animated collapsible plugin (TexAColor, TexFloat...) as one shared ShaderNodeRGB or
+        ShaderNodeValue node instead of folding it into the consumer socket.
+
+        Returns True when the link was made and the caller must not collapse.
+    """
+    if not hasAnimatedKeys(importContext, pluginDesc):
+        return False
+
+    attrName = CollapsibleTypes.get(pluginDesc['ID'])
+    if attrName is None or attrName not in (pluginDesc.get('AnimatedKeys') or {}):
+        if importContext.stats is not None:
+            importContext.stats.skipped['animated collapsed texture (no passthrough attr)'] += 1
+        return False
+
+    # ShaderNodeRGB/ShaderNodeValue can only be added to a ShaderNodeTree.
+    if importContext.nodeTree.bl_idname != 'ShaderNodeTree':
+        if importContext.stats is not None:
+            importContext.stats.skipped['animated collapsed texture (not a shader tree)'] += 1
+        return False
+
+    pluginName = pluginDesc['Name']
+    node = importContext.nodeByPlugin.get(pluginName)
+    if node is None:
+        keys = pluginDesc['AnimatedKeys'][attrName]
+        firstValue = keys[0][1] if keys else 0.0
+        isColor = hasattr(firstValue, '__len__') and not isinstance(firstValue, str)
+
+        node = importContext.nodeTree.nodes.new('ShaderNodeRGB' if isColor else 'ShaderNodeValue')
+        node.label = pluginName
+        importContext.nodeByPlugin[pluginName] = node
+
+        output = node.outputs[0]
+        # Seed with key 0. Keep it: the animation phase drops keys whose key 0 differs from this value.
+        if isColor:
+            rgba = [float(c) for c in firstValue[:4]]
+            output.default_value = rgba + [1.0] * (4 - len(rgba))
+        else:
+            output.default_value = float(firstValue)
+
+        current = output.default_value
+        importContext.animTargets.record(
+            output, 'default_value', pluginName, attrName,
+            list(current) if hasattr(current, '__len__') else current)
+
+    importContext.nodeTree.links.new(node.outputs[0], inputSocket)
+    return True
+
+
 def _collapseToValue(importContext: ImportContext, pluginDesc: dict, seen: set = None,
                      outputName: str = None):
     """ Transforms plugin from 'CollapsibleTypes' to a simple value (either float or list of floats). """
-
     # A cyclic collapsible chain (TexInvert -> TexInvert) would recurse forever.
     if seen is None:
         seen = set()
@@ -860,8 +980,8 @@ def _collapseToValue(importContext: ImportContext, pluginDesc: dict, seen: set =
         return None
     pluginValue = pluginDesc['Attributes'][valueAttr]
 
-    if _isPluginLink(pluginValue):
-        linkedPlugin, _ = _getPluginFromLink(importContext, pluginValue)
+    if isPluginLink(pluginValue):
+        linkedPlugin, _ = getPluginFromLink(importContext, pluginValue)
         if not linkedPlugin:
             debug.printWarning(f"Invalid plugin link: {pluginValue}")
             return None
@@ -885,15 +1005,75 @@ def _collapseToValue(importContext: ImportContext, pluginDesc: dict, seen: set =
     return value
 
 
-def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName: str, node: bpy.types.Node, groupPath: tuple = ()):
-    m = attrValue if isinstance(attrValue, Matrix) else attribute_utils.attrValueToMatrix(attrValue, True)
+# TRANSFORM inputs that act on UVW coordinates. Nothing in them is a length.
+_UVW_SPACE_TRANSFORMS = {
+    ('UVWGenChannel', 'uvw_transform'),
+    ('UVWGenSelect', 'uvw_transform'),
+    ('UVWGenEnvironment', 'uvw_transform'),
+    ('UVWGenObjectBBox', 'uvw_transform'),
+    ('BRDFScanned', 'uvtrans'),
+}
+
+# TRANSFORM inputs that map a scene-space point to UVW coordinates. The 3x3 is in 1/length, the
+# offset is in UVW.
+_SPACE_TO_UVW_TRANSFORMS = {
+    ('UVWGenProjection', 'uvw_transform'),
+    ('UVWGenObject', 'uvw_transform'),
+    ('UVWGenPlanarWorld', 'uvw_transform'),
+}
+
+
+# UVWGenProjection.type 'Perspective', which projects through a camera in Blender units.
+_PROJECTION_PERSPECTIVE = 8
+
+
+class _TransformSpace(Enum):
+    UVW = auto()            # unitless
+    SPACE_TO_UVW = auto()   # the 3x3 scales by 1/length
+    PLACEMENT = auto()      # the offset is a length
+
+
+def _isSpaceToUvw(importContext: ImportContext, pluginType: str, pluginAttrs: dict, attrName: str) -> bool:
+    if (pluginType, attrName) not in _SPACE_TO_UVW_TRANSFORMS:
+        return False
+    # Only a .vrscene states its units. A .vrmat (Cosmos) keeps the placement handling, which
+    # import_file._applyRealWorldScaleToUVWGens is tuned against.
+    if importContext.sourceMetersScale is None:
+        return False
+    # A perspective projection maps the point through the camera, so it has to stay in scene units.
+    return not (pluginType == 'UVWGenProjection'
+                and int(float(pluginAttrs.get('type', 1))) == _PROJECTION_PERSPECTIVE)
+
+
+def _transformSpace(importContext: ImportContext, pluginType: str, pluginAttrs: dict, attrName: str) -> _TransformSpace:
+    # tex_transform acts on UVW coordinates on every UVWGen that has it.
+    if attrName == 'tex_transform' or (pluginType, attrName) in _UVW_SPACE_TRANSFORMS:
+        return _TransformSpace.UVW
+    if _isSpaceToUvw(importContext, pluginType, pluginAttrs, attrName):
+        return _TransformSpace.SPACE_TO_UVW
+    return _TransformSpace.PLACEMENT
+
+
+def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName: str, node: bpy.types.Node,
+                         groupPath: tuple = (), space: _TransformSpace = _TransformSpace.PLACEMENT):
+    if isinstance(attrValue, Matrix):
+        m = attrValue
+    else:
+        m = attribute_utils.attrValueToMatrix(attrValue, applyScale=False)
+        vertexScale = importContext.vertexScale
+        if space == _TransformSpace.SPACE_TO_UVW:
+            # Imported points are vertexScale times their source coordinates; keep their UVW.
+            m = m @ Matrix.Diagonal((1.0 / vertexScale, 1.0 / vertexScale, 1.0 / vertexScale, 1.0))
+        elif space == _TransformSpace.PLACEMENT:
+            m.translation = m.translation * vertexScale
 
     if allclose(m, Matrix.Identity(4)):
         # If the transformation is identity, do not create a separate V-Ray Transform node for it
         return
 
     offset, rotate, scale = m.decompose()
-    rotate = rotate.to_euler('XYZ')
+    # Must match VRayNodeTransform.getValue, which composes Rx @ Ry @ Rz.
+    rotate = rotate.to_euler('ZYX')
 
     tmNode = NodeUtils.createNode(importContext.nodeTree, 'VRayNodeTransform')
     tmNode.inputs['Offset'].value   = (offset[0],
@@ -903,13 +1083,19 @@ def _createTransformNode(importContext: ImportContext, attrValue, attrSocketName
     tmNode.inputs['Scale'].value    = (scale[0],  scale[1],  scale[2])
 
     importContext.nodeTree.links.new(tmNode.outputs['Transform'], node.inputs[attrSocketName])
-    importContext.groupPathByNode[tmNode] = groupPath
+    if groupPath:
+        # The helper joins the group of the node it feeds.
+        importContext.groupPathByNode[tmNode] = groupPath
+
 
 def _setMatrixSocketValue(node: bpy.types.Node, attrSocketName: str, attrValue):
     """ Set a VRaySocketTransform (16-float MATRIX socket) from a parsed matrix, which the
         importer delivers as three column vectors ((v0),(v1),(v2)). A TRANSFORM value
         ((3x3), offset) contributes only its 3x3 part. Leaves identity on an unexpected
-        shape rather than raising. """
+        shape rather than raising.
+
+        Not attrValueToMatrix: that reads value[1] as the offset, so a bare MATRIX raises
+        there, and a matrix socket carries no translation to scale anyway. """
     rows = attrValue
     if isinstance(attrValue, (list, tuple)) and len(attrValue) == 2 \
             and isinstance(attrValue[0], (list, tuple)) and len(attrValue[0]) == 3 \
@@ -918,10 +1104,7 @@ def _setMatrixSocketValue(node: bpy.types.Node, attrSocketName: str, attrValue):
 
     m = Matrix()   # 4x4 identity
     try:
-        # Transpose column-major V-Ray storage into Blender's row-major matrix.
-        for c in range(3):
-            for r in range(3):
-                m[c][r] = float(rows[r][c])
+        attribute_utils.fill3x3Transposed(m, rows)
     except (TypeError, ValueError, IndexError):
         debug.printWarning(f"Import: unexpected MATRIX value shape for {node.name}.{attrSocketName}; left at identity")
         m = Matrix()
@@ -930,61 +1113,29 @@ def _setMatrixSocketValue(node: bpy.types.Node, attrSocketName: str, attrValue):
     node.inputs[attrSocketName].value = [b for a in m for b in a]
 
 
-# UNUSED at the moment
-def _createMatrixNode(ntree: bpy.types.NodeTree, attrValue, attrSocketName: str, node: bpy.types.Node):
-    m = Matrix()
-
-    if type(attrValue) in {list, tuple}:
-        # Transpose the matrix, Blender's format is row-first
-        for c in range(3):
-            for r in range(3):
-                m[c][r] = attrValue[r][c]
-
-    else:
-        tmArray = struct.unpack("fffffffff", binascii.unhexlify(bytes(attrValue, 'ascii')))
-        i = 0
-        for c in range(3):
-            for r in range(3):
-                m[c][r] = tmArray[i]
-                i += 1
-
-    if allclose(m, Matrix.Identity(3)):
-        # If the transformation is identity, do not create a separate V-Ray Transform node for it
-        return
-
-    _, rotate, scale = m.decompose()
-    rotate = rotate.to_euler('XYZ')
-
-    mNode = NodeUtils.createNode(ntree, 'VRayNodeMatrix')
-    mNode.rotate = (rotate[0], rotate[1], rotate[2])
-    mNode.scale  = (scale[0],  scale[1],  scale[2])
-
-    ntree.links.new( mNode.outputs['Matrix'],  node.inputs[attrSocketName])
-
-
-def _isPluginLink(value):
+def isPluginLink(value):
+    """ Whether a value has the shape of a reference. A STRING attribute looks the same, so this never decides
+        alone: _applyAttr reaches it only for a type in NodeInputTypes, which excludes STRING, and every other
+        caller passes a reference by construction. getPluginFromLink resolves the name. """
     return type(value) is str
 
 
 def _parsePluginLink(pluginLink: str):
-    """ Parse a plugin name set as attribute value into plugin name and output socket attribute name. """
-    if pluginLink.find("::") != -1:
-        pluginName, outSocketName = pluginLink.split("::")
-        assert pluginName != "" and outSocketName != ""
-        return pluginName, outSocketName
-    else:
+    """ Split a reference into (plugin name, output socket attribute), the two-part sibling of
+        import_common.refName. The output is None when the reference carries no '::' selector. """
+    pluginName, sep, outSocketName = pluginLink.partition("::")
+    if not sep:
         return pluginLink, None
+    assert pluginName != "" and outSocketName != ""
+    return pluginName, outSocketName
 
 
-def _getPluginFromLink(importContext: ImportContext, pluginLink: str):
+def getPluginFromLink(importContext: ImportContext, pluginLink: str):
     """ Returns the plugin and output socket name given a fully qualified plugin link (plugnName::output) """
-    if (not pluginLink) or (not _isPluginLink(pluginLink)):
+    if (not pluginLink) or (not isPluginLink(pluginLink)):
         return None, None
 
     pluginName, outputSocketAttr = _parsePluginLink(pluginLink)
-
-    if not pluginName:
-        raise Exception(f"Plugin refereced by {pluginLink} not found in .vrmat")
 
     plugin = getPluginByName(importContext.vrsceneDict, pluginName)
 
@@ -1007,8 +1158,8 @@ def _getPluginConnectedToInput(importContext, inputAttrName, pluginDesc):
     """ Returns the plugin and output referenced by attribute named "inputAttrName" """
 
     inputValue = pluginDesc['Attributes'][inputAttrName]
-    if _isPluginLink(inputValue):
-        return _getPluginFromLink(importContext, inputValue)
+    if isPluginLink(inputValue):
+        return getPluginFromLink(importContext, inputValue)
 
     return None, None
 
@@ -1020,18 +1171,21 @@ _ENUM_VALUE_REMAP = {
 }
 
 
-def _setNodeEnumProperty(attrDesc: dict, attrName: str, attrValue, pluginType: str, propGroup):
-    """ Set value of Enum property of node """
-
-    # Attribute is not mappable, so simply set it's value
+def _enumValueFor(attrDesc: dict, attrName: str, attrValue, pluginType: str):
+    """ The enum value to store, or None when the addon does not model it. """
     attrValue = str(attrValue)
     attrValue = _ENUM_VALUE_REMAP.get((pluginType, attrName), {}).get(attrValue, attrValue)
     if not attribute_utils.valueInEnumItems(attrDesc, attrValue):
         # A V-Ray enum value the addon does not model.
         debug.printWarning(f"Unsupported ENUM value '{attrValue}' for attribute: {pluginType}.{attrName}")
-        return
+        return None
+    return attrValue
 
-    setattr(propGroup, attrName, attrValue)
+
+def _setNodeEnumProperty(attrDesc: dict, attrName: str, attrValue, pluginType: str, propGroup):
+    """ Set value of Enum property of node """
+    if (attrValue := _enumValueFor(attrDesc, attrName, attrValue, pluginType)) is not None:
+        setattr(propGroup, attrName, attrValue)
 
 
 def _setNodePrimitiveProperty(attrName: str, attrValue, pluginType: str, propGroup):
@@ -1083,15 +1237,9 @@ def _getInputSocket(node, attrName):
     return sock
 
 
-def _processNonNodePlugins(importContext: ImportContext, inPluginOutput: str, connectedPlugin: dict, inputSocket: bpy.types.NodeSocket):
-    """ Find the first plugin in the chain starting from 'inputSocket' for which a node should be created.
-        Apply any TexCombineColor properties to the input socket.
-
-        Returns:
-            The plugin description and the name of the output socket of the next plugin in the chain
-            for which a node should be created.
-    """
-    assert inputSocket is not None
+def _processNonNodePlugins(importContext: ImportContext, inPluginOutput: str, connectedPlugin: dict):
+    """ Walk from 'connectedPlugin' to the first plugin that gets a node of its own, and return it with its output
+        socket name. Consumes _PRE_WALKED_WRAPPERS and MtlSingleBRDF; createNode sees through the rest. """
     assert connectedPlugin is not None
 
     seen = set()
@@ -1106,21 +1254,14 @@ def _processNonNodePlugins(importContext: ImportContext, inPluginOutput: str, co
         connectedThroughAttr = ""
 
         # Export-only wrapper plugins (MtlSingleBRDF, TexCombineColor, ...) have no UI node.
-        match connectedPluginType:
-            case "TexCombineColor" | "TexCombineFloat" | "TexCombineColorLightMtl":
-                if not _passthroughIsNoOp(connectedPlugin):
-                    break
-                connectedThroughAttr = "texture"
-            case "TexFloatToColor":
-                if not _passthroughIsNoOp(connectedPlugin):
-                    break
-                connectedThroughAttr = "input"
-            case "TexColorToFloat":
-                connectedThroughAttr = "input"
-            case "MtlSingleBRDF":
-                connectedThroughAttr = "brdf"
-            case _:
+        if connectedPluginType == 'MtlSingleBRDF':
+            connectedThroughAttr = 'brdf'
+        elif connectedPluginType in _PRE_WALKED_WRAPPERS:
+            if not _passthroughIsNoOp(connectedPlugin):
                 break
+            connectedThroughAttr = _PASSTHROUGH_WRAPPERS[connectedPluginType]
+        else:
+            break
 
         # Multiplier or converter is not connected
         if connectedThroughAttr not in connectedPlugin["Attributes"]:
@@ -1139,7 +1280,7 @@ def _processNonNodePlugins(importContext: ImportContext, inPluginOutput: str, co
     return connectedPlugin, inPluginOutput
 
 
-def _createLinkedNode(
+def createLinkedNode(
     importContext: ImportContext,
     inputSocket: bpy.types.NodeSocket,
     connectedPluginOutput: str,
@@ -1156,8 +1297,12 @@ def _createLinkedNode(
     assert connectedPlugin is not None
 
     connectedPlugin, connectedPluginOutput = _processNonNodePlugins(
-        importContext, connectedPluginOutput, connectedPlugin, inputSocket)
+        importContext, connectedPluginOutput, connectedPlugin)
     assert connectedPlugin is not None
+
+    # An animated constant gets a real node rather than being folded into this socket.
+    if _linkAnimatedConstant(importContext, connectedPlugin, inputSocket):
+        return
 
     if (collapsedValue := _collapseToValue(importContext, connectedPlugin,
                                            outputName=connectedPluginOutput)) is not None:
@@ -1255,7 +1400,6 @@ def _fillObjectSelectorFromRefs(importContext: ImportContext, node, pluginType: 
 
         Returns True if the attribute was handled (whether or not any object resolved).
     """
-    from vray_blender.lib.defs import LinkInfo
 
     attrDesc = attribute_utils.getAttrDesc(pluginModule, attrName)
     linkDesc = attrDesc.get('options', {}).get('link_info') if attrDesc else None
@@ -1278,7 +1422,7 @@ def _fillObjectSelectorFromRefs(importContext: ImportContext, node, pluginType: 
     isMulti = hasattr(selector, 'selectedItems')
 
     for ref in refs:
-        if not _isPluginLink(ref):
+        if not isPluginLink(ref):
             continue
         refName = _parsePluginLink(ref)[0]
         obj = importContext.objectResolver(refName, linkType)
@@ -1331,12 +1475,39 @@ def _remapColorTextureAttr(attrDesc: dict, attrName: str, colorPropMap: dict, te
     return attrName
 
 
+def _propGroupDataPath(node: bpy.types.Node, pluginType: str, attrName: str) -> str:
+    """ The RNA path of a node's property-group member, relative to the node tree. path_from_id cannot
+        build it. """
+    return f'nodes["{bpy.utils.escape_identifier(node.name)}"].{pluginType}.{attrName}'
+
+
+def _recordAnim(importContext: ImportContext, pluginDesc: dict, attrName: str,
+                owner, prop: str, written, interp: str = 'LINEAR', dataPath: str = None,
+                attrDesc: dict = None):
+    """ Record where an animated attribute landed. Does nothing unless this attribute has keys. """
+    animTargets = importContext.animTargets
+    if animTargets is None:
+        return
+    animatedKeys = pluginDesc.get('AnimatedKeys')
+    if not animatedKeys or attrName not in animatedKeys:
+        return
+
+    # The static value went through _scaleAttrValue in _fillNodeProperties. The keys take the same route.
+    convert = None
+    if attrDesc is not None:
+        isConversion = importContext.isConversion
+        convert = lambda value: _scaleAttrValue(attrDesc, value, isConversion)
+
+    animTargets.record(owner, prop, pluginDesc.get('Name'), attrName, written, interp,
+                       convert=convert, dataPath=dataPath)
+
+
 def _applyAttr(importContext: ImportContext, node: bpy.types.Node, propGroup, pluginType: str,
                pluginDesc: dict, attrName: str, origAttrName: str, attrDesc: dict, attrValue,
                attrSocketName: str, isVisibleSocket: bool):
     """ Apply a single plugin attribute onto the node: set the matching property group
         member / socket value, or create and link the node the attribute references. """
-    # Attribute is a output type - nothing to do
+    # Attribute is an output type, nothing to do
     if attrDesc['type'] in attribute_types.NodeOutputTypes:
         return
 
@@ -1344,34 +1515,53 @@ def _applyAttr(importContext: ImportContext, node: bpy.types.Node, propGroup, pl
         if not isVisibleSocket:
             return
         _setMatrixSocketValue(node, attrSocketName, attrValue)
+        if (matrixSock := node.inputs.get(attrSocketName)) is not None:
+            _recordAnim(importContext, pluginDesc, origAttrName, matrixSock, 'value',
+                        list(matrixSock.value), attrDesc=attrDesc)
 
     elif attrDesc['type'] == 'TRANSFORM':
         if not isVisibleSocket:
             return
         # The Transform helper joins the group of the node it feeds.
         _createTransformNode(importContext, attrValue, attrSocketName, node,
-                             tuple(pluginDesc.get('GroupPath', ())))
+                             tuple(pluginDesc.get('GroupPath', ())),
+                             space=_transformSpace(importContext, pluginType, pluginDesc['Attributes'], origAttrName))
 
     elif attrDesc['type'] == 'ENUM':
         _setNodeEnumProperty(attrDesc, attrName, attrValue, pluginType, propGroup)
+        # Not recorded. Blender keys an EnumProperty by its item index, not by the V-Ray value.
+        if importContext.animTargets is not None and importContext.stats is not None:
+            animatedKeys = pluginDesc.get('AnimatedKeys')
+            if animatedKeys and origAttrName in animatedKeys:
+                importContext.stats.skipped['animated enum (unsupported)'] += 1
 
     elif attrDesc['type'] not in attribute_types.NodeInputTypes:
         # Blender's bool setter rejects ints other than 0/1.
         if attrDesc['type'] == 'BOOL' and not isinstance(attrValue, bool):
             attrValue = bool(attrValue)
         _setNodePrimitiveProperty(attrName, attrValue, pluginType, propGroup)
+        if attrDesc['type'] != 'STRING':
+            _recordAnim(importContext, pluginDesc, origAttrName, propGroup, attrName,
+                        getattr(propGroup, attrName, None),
+                        'CONSTANT' if attrDesc['type'] == 'BOOL' else 'LINEAR',
+                        dataPath=_propGroupDataPath(node, pluginType, attrName),
+                        attrDesc=attrDesc)
 
-    elif _isPluginLink(attrValue):
+    elif isPluginLink(attrValue):
         # Resolve the target socket by vray_attr, not by the derived display name.
         inputSock = _getInputSocket(node, origAttrName)
         if inputSock is None:
             return
-        connectedPlugin, outputName = _getPluginFromLink(importContext, attrValue)
+        connectedPlugin, outputName = getPluginFromLink(importContext, attrValue)
         if connectedPlugin is not None:
-            _createLinkedNode(importContext, inputSock, outputName, connectedPlugin)
+            createLinkedNode(importContext, inputSock, outputName, connectedPlugin)
 
     elif  attrSocket := _getInputSocket(node, attrName):
         _assignSocketValue(attrSocket, attrValue)
+        current = getattr(attrSocket, 'value', None)
+        _recordAnim(importContext, pluginDesc, origAttrName, attrSocket, 'value',
+                    list(current) if hasattr(current, '__len__') else current,
+                    attrDesc=attrDesc)
 
 
 # Addon defaults that encode a Blender-space correction, not an authoring preference.
@@ -1379,7 +1569,7 @@ _NO_VRAY_DEFAULT = {
     'GeomHair.gravity_vector',          # Blender is Z-down
     'RenderChannelDenoiser.name',       # channel identity
     'GeomDisplacedMesh.water_level',    # -1e30 is V-Ray's disabled sentinel
-    # A colour map slot folded into a COLOR_TEXTURE meta: the meta socket takes the tex value
+    # A colour map slot folded into a COLOR_TEXTURE meta. The meta socket takes the tex value
     # when there is one, so V-Ray's 0 arrives as a black transparency and the fog goes opaque.
     'EnvironmentFog.transparency_tex',
 }
@@ -1425,7 +1615,7 @@ def _mapSlotPairs(pluginType: str, pluginModule):
     return pairs
 
 
-def _normalizeMapSlots(vrsceneDict: dict):
+def _normalizeMapSlots(vrsceneDict: list[dict]):
     """ Drop the map slots a source wrote out as NULL, then move a source '<name>' onto
         '<name>_tex' for the '<name>' the addon excludes and has no property for.
     """
@@ -1471,7 +1661,7 @@ def _vrayDefaultsFor(pluginType: str, pluginModule, presentAttrs, stats = None) 
 
         if attrDesc['type'] == 'BOOL' and isinstance(vrayDefault, str):
             # The addon narrows a few enums to a checkbox (VolumeVRayToon.toonMaterialOnly),
-            # so V-Ray's default arrives as the enum's string index - and bool('0') is True.
+            # so V-Ray's default arrives as the enum's string index, and bool('0') is True.
             vrayDefault = vrayDefault not in ('0', '')
 
         restored[attrName] = vrayDefault
@@ -1488,7 +1678,22 @@ def _withVRayDefaults(importContext: ImportContext, pluginType: str, pluginModul
     return {**restored, **pluginAttrs} if restored else pluginAttrs
 
 
-def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, pluginDesc: dict, pluginType: str, skippedAttrs = {}):
+_IDENTITY_TRANSFORM = (((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)), (0.0, 0.0, 0.0))
+
+
+def _withSpaceToUvwTransforms(importContext: ImportContext, pluginType: str, pluginAttrs: dict, skippedAttrs):
+    """ 'pluginAttrs' plus an identity for every space -> UVW transform the source omitted (as a
+        default). An identity in source units still needs the length scale. """
+    if importContext.vertexScale == 1.0:
+        return pluginAttrs
+
+    missing = {attrName: _IDENTITY_TRANSFORM for plgType, attrName in _SPACE_TO_UVW_TRANSFORMS
+               if plgType == pluginType and attrName not in pluginAttrs and attrName not in skippedAttrs
+               and _isSpaceToUvw(importContext, pluginType, pluginAttrs, attrName)}
+    return {**pluginAttrs, **missing} if missing else pluginAttrs
+
+
+def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, pluginDesc: dict, pluginType: str, skippedAttrs = frozenset()):
     """ Create Node without specific parameters"""
 
     pluginAttrs = pluginDesc['Attributes']
@@ -1506,6 +1711,7 @@ def _fillNodeProperties(importContext: ImportContext, node: bpy.types.Node, plug
 
     # Attributes the source omitted keep V-Ray's default rather than the addon's authoring one.
     attrsToApply = _withVRayDefaults(importContext, pluginType, pluginModule, pluginAttrs, skippedAttrs)
+    attrsToApply = _withSpaceToUvwTransforms(importContext, pluginType, attrsToApply, skippedAttrs)
 
     # Now go through all plugin attributes and check
     # if we should create other nodes or simply set the value
@@ -1574,7 +1780,7 @@ def _assignSocketValue(socket: bpy.types.NodeSocket, value):
             socket.value = value
 
 
-def _createGenericNode(importContext: ImportContext, pluginDesc: dict):
+def _createTypedNode(importContext: ImportContext, pluginDesc: dict):
     pluginType  = pluginDesc['ID']
     pluginName  = pluginDesc['Name']
 
@@ -1584,7 +1790,7 @@ def _createGenericNode(importContext: ImportContext, pluginDesc: dict):
         # A V-Ray plugin the addon has no node class for. Textures, mapping generators and
         # materials still import, as a generic node built from the parameters the scene set.
         if _importsAsGenericNode(pluginType):
-            return generic_node.createGenericNode(importContext, pluginDesc)
+            return generic_node.createGenericPluginNode(importContext, pluginDesc)
         debug.printWarning(f"The asset being imported contains a plugin of type {pluginType}, which is not recognized by V-Ray for Blender.")
         return None
 
@@ -1594,6 +1800,7 @@ def _createGenericNode(importContext: ImportContext, pluginDesc: dict):
 
 
 # Wrapper plugins with no node of their own -> the attr holding the wrapped texture.
+# createNode sees through these, linking the consumer to the wrapped plugin's node.
 _PASSTHROUGH_WRAPPERS = {
     'TexCombineColor': 'texture',
     'TexCombineColorLightMtl': 'texture',
@@ -1605,12 +1812,18 @@ _PASSTHROUGH_WRAPPERS = {
     'TexAColor': 'texture',
     'TexIntToFloat': 'input',  # int->float converter
     'FloatToTex': 'input',     # float->texture adapter; its only param is 'input'
-    # UVWGen read as a texture. Link the UVWGen straight to the consumer: on export
+    # UVWGen read as a texture. Link the UVWGen straight to the consumer, because on export
     # _needUVWGenToColorConversion re-inserts the equivalent wrapper (a TexUVW) itself.
     'TexUVWGenToTexture': 'input',
     # Same adapter, under the name the exporter emits. Its uvwgen socket cannot be linked.
     'TexUVW': 'uvwgen',
 }
+
+# The subset createLinkedNode walks past first, so its collapse and output lookup see the plugin that really
+# gets a node. The rest reach createNode, where the socket stays resolved against the wrapper and
+# namedOutputCannotApply covers it. Follow attrs come from _PASSTHROUGH_WRAPPERS.
+_PRE_WALKED_WRAPPERS = ('TexCombineColor', 'TexCombineFloat', 'TexCombineColorLightMtl',
+                        'TexFloatToColor', 'TexColorToFloat')
 
 # Non-passthrough params, and their plugin defaults, that make a wrapper do real work.
 # A wrapper listed here is a no-op only while every one of them is at its default; one
@@ -1634,7 +1847,7 @@ def _passthroughIsNoOp(pluginDesc: dict) -> bool:
 
     if pluginType == 'TexMaxGamma':
         # color_space enum: 0 Linear, 1 Inverse gamma, 2 sRGB.
-        if _isPluginLink(attrs.get('multiplier')) or _isPluginLink(attrs.get('gamma')):
+        if isPluginLink(attrs.get('multiplier')) or isPluginLink(attrs.get('gamma')):
             return False
         if abs(float(attrs.get('multiplier', 1.0)) - 1.0) > 1e-4:
             return False
@@ -1650,7 +1863,7 @@ def _passthroughIsNoOp(pluginDesc: dict) -> bool:
         if attr not in attrs:
             continue
         value = attrs[attr]
-        if _isPluginLink(value):
+        if isPluginLink(value):
             return False    # a texture drives this param
         if isinstance(default, bool):
             if bool(value) != default:
@@ -1666,7 +1879,7 @@ def _passthroughIsNoOp(pluginDesc: dict) -> bool:
 def createNode(importContext: ImportContext, pluginDesc: dict):
     pluginName = pluginDesc['Name']
 
-    # A cyclic plugin reference would recurse forever through _createLinkedNode.
+    # A cyclic plugin reference would recurse forever through createLinkedNode.
     if pluginName in importContext.creatingPlugins:
         debug.printWarning(f"Cyclic plugin reference at '{pluginName}'; breaking the link")
         return None
@@ -1695,8 +1908,8 @@ def _createNodeImpl(importContext: ImportContext, pluginDesc: dict):
     # See through a wrapper only when it is a no-op.
     if _passthroughIsNoOp(pluginDesc) and (innerAttr := _PASSTHROUGH_WRAPPERS.get(pluginType)) is not None:
         innerRef = pluginDesc['Attributes'].get(innerAttr)
-        if _isPluginLink(innerRef):
-            if (innerPlugin := _getPluginFromLink(importContext, innerRef)[0]) is not None:
+        if isPluginLink(innerRef):
+            if (innerPlugin := getPluginFromLink(importContext, innerRef)[0]) is not None:
                 return createNode(importContext, innerPlugin)
         return None
 
@@ -1709,10 +1922,11 @@ def _createNodeImpl(importContext: ImportContext, pluginDesc: dict):
     if (existing := importContext.nodeByPlugin.get(pluginName)) is not None:
         return existing
 
-    creator = creators.NODE_CREATORS.get(pluginType, _createGenericNode)
+    creator = creators.NODE_CREATORS.get(pluginType, _createTypedNode)
     node = creator(importContext, pluginDesc)
 
     if node is not None:
         importContext.nodeByPlugin[pluginName] = node
-        importContext.groupPathByNode[node] = tuple(pluginDesc.get('GroupPath', ()))
+        if groupPath := tuple(pluginDesc.get('GroupPath', ())):
+            importContext.groupPathByNode[node] = groupPath
     return node

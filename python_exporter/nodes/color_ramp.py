@@ -55,11 +55,14 @@ def createRampTexture(node: bpy.types.Node, attrName: str = 'texture'):
     tex.color_ramp.elements[0].color = (0.0, 0.0, 0.0, 1.0)
     tex.color_ramp.elements[1].color = (1.0, 1.0, 1.0, 1.0)
 
-    _subscribeToRampUpdates(node, tex)
+    _subscribeToRampUpdates(tex, attrName)
     return tex
 
 
 def _onRampUpdate(node: bpy.types.Node):
+    from vray_blender.preview.thumbs import service as thumbService
+    thumbService.invalidateNode(node)
+
     # If the node does not reach the tree's output node, its ramp does not affect the render
     # result, so there is nothing to re-export.
     if not NodeUtils.isNodeConnectedToTreeOutput(node):
@@ -69,12 +72,24 @@ def _onRampUpdate(node: bpy.types.Node):
     tagUsersForUpdate(node.id_data)
 
 
+def _onRampTextureUpdate(tex: bpy.types.Texture, attrName: str):
+    """ msgbus notify for a ramp texture. Finds the node by its texture because a node kept in the
+        subscription args goes stale (see iterValidColorRamps).
+    """
+    from vray_blender.nodes.tools import iterVRayNodeTrees
+    for ntree in iterVRayNodeTrees():
+        for node in ntree.nodes:
+            if getattr(node, attrName, None) == tex:
+                _onRampUpdate(node)
+                return
+
+
 def _onAnyElementPositionChanged():
-    for node, _attrName, _tex in list(COLOR_RAMPS.values()):
+    for node, _attrName, _tex in iterValidColorRamps():
         _onRampUpdate(node)
 
 
-def _subscribeToRampUpdates(node: bpy.types.Node, tex: bpy.types.Texture):
+def _subscribeToRampUpdates(tex: bpy.types.Texture, attrName: str):
     """Subscribes the message bus for changes to the texture."""
 
     # Knot drag: COLORBAND widget publishes at (Texture, color_ramp_prop) level.
@@ -82,8 +97,8 @@ def _subscribeToRampUpdates(node: bpy.types.Node, tex: bpy.types.Texture):
     bpy.msgbus.subscribe_rna(
         key=tex,
         owner=tex,
-        args=(node,),
-        notify=_onRampUpdate
+        args=(tex, attrName),
+        notify=_onRampTextureUpdate
     )
 
     # Interpolation, color_mode: published at (ColorRamp, prop) level.
@@ -92,8 +107,8 @@ def _subscribeToRampUpdates(node: bpy.types.Node, tex: bpy.types.Texture):
     bpy.msgbus.subscribe_rna(
         key=tex.color_ramp,
         owner=tex,
-        args=(node,),
-        notify=_onRampUpdate
+        args=(tex, attrName),
+        notify=_onRampTextureUpdate
     )
 
 
@@ -105,7 +120,7 @@ def registerColorRamp(node: bpy.types.Node, rampAttrTexName: str, rampTexture: b
     # Clear any existing subscription before adding a new one to avoid duplicate
     # subscriptions when both createRampTexture and registerColorRamp are called together.
     bpy.msgbus.clear_by_owner(rampTexture)
-    _subscribeToRampUpdates(node, rampTexture)
+    _subscribeToRampUpdates(rampTexture, rampAttrTexName)
 
 
 def unregisterColorRamp(node: bpy.types.Node, rampAttrTexName: str, rampTexture: bpy.types.Texture):
@@ -160,9 +175,22 @@ def pruneColorRamps():
                 del COLOR_RAMPS[ramp]
 
 
+def iterValidColorRamps():
+    """ Yield (node, texAttrName, texture) for each registered ramp, looked up by the
+        (nodePath, textureName) key. Do not read the node and texture stored in COLOR_RAMPS.
+        They go stale after undo/redo, file reload, scene upgrade or addon re-enable, and
+        touching a stale one crashes Blender.
+    """
+    for (nodePath, textureName), (_node, texAttrName, _tex) in list(COLOR_RAMPS.items()):
+        node = resolveNodeFromPath(nodePath)
+        texture = bpy.data.textures.get(textureName)
+        if (node is not None) and (texture is not None):
+            yield node, texAttrName, texture
+
+
 def getColorRampsForPlugin(pluginType: str):
-    """ Get all (node,texture) tuples registered for this plugin type. """
-    return [r for r in COLOR_RAMPS.values() if r[0].vray_plugin == pluginType]
+    """ Get all (node, texAttrName, texture) tuples registered for this plugin type. """
+    return [r for r in iterValidColorRamps() if r[0].vray_plugin == pluginType]
 
 
 def exportRampAttributes(

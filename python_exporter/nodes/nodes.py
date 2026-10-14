@@ -7,7 +7,7 @@ import bpy
 from vray_blender import debug
 from vray_blender.nodes.customRenderChannelNodes import customRenderChannelNodesDesc
 from vray_blender.nodes import utils as NodeUtils, links as NodeLinks, specials
-from vray_blender.nodes.tools import isVrayNode
+from vray_blender.nodes.tools import isVrayNode, OBJECT_TREE_TYPES
 from vray_blender.plugins import PLUGINS, getPluginModule, findPluginModule
 from vray_blender.exporting.tools import resolveInternalLink
 from vray_blender.exporting.update_tracker import UpdateFlags, UpdateTracker, UpdateTarget
@@ -510,6 +510,12 @@ class NODE_MT_vray_add_texture_utilities(bpy.types.Menu):
                 s.name  = 'TexFalloff.type'
                 s.value = repr('2')  # Fresnel
 
+                # 'Switch Texture' -> MultiSubTex preset in Color ID mode.
+                props = _nodeOperator(layout, 'VRayNodeTexMulti', label='V-Ray MultiSubTex (Switch Texture)', searchWeight=-1.0)
+                s = props.settings.add()
+                s.name  = 'TexMulti.mode'
+                s.value = repr('30')  # Color ID
+
     def draw(self, context):
         self.drawMenu(self.layout, context)
 
@@ -901,6 +907,9 @@ def vrayNodeCopy(self: bpy.types.Node, node: bpy.types.Node):
     # The reference from the socket to the node has not yet been set and any custom
     # setter/getter function will cause an access violation.
 
+    if NodeUtils.isInTemporaryTree(self):
+        return
+
     # Create a new unique ID for the node and set the link to it in the property group
     syncObjectUniqueName(self, reset=True)
 
@@ -972,9 +981,8 @@ def vrayNodeUpdate(self: VRayNodeBase):
                     # tree), so the preview never re-renders until the user hovers over it.
                     NodeUtils.tagRedrawPropertyEditor()
                     NodeUtils.tagMaterialPreview(mtl)
-            case 'OBJECT':
-                if obj := NodeUtils.findDataObjFromNode(bpy.data.objects, self, isObjTreeNode=True):
-                    obj.update_tag()
+            case treeType if treeType in OBJECT_TREE_TYPES:
+                NodeUtils.tagObjectTree(parentNodeTree)
             case 'LIGHT':
                 if light := NodeUtils.findDataObjFromNode(bpy.data.lights, self):
                     UpdateTracker.tagUpdate(light, UpdateTarget.LIGHT, UpdateFlags.TOPOLOGY)

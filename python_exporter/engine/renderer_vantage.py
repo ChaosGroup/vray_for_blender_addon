@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import blf, bpy, gpu, gpu_extras, json, os, requests, subprocess, sys, time
+import blf, bpy, gpu, gpu_extras, json, os, requests, subprocess, sys, threading, time
 
 import gpu_extras.presets
 
@@ -14,7 +14,6 @@ from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_ipr_vfb  import VRayRendererIprVfb
 from vray_blender.engine.vfb_event_handler import VfbEventHandler
 from vray_blender.lib.defs import ExporterType, RendererMode
-from vray_blender.lib.blender_utils import getVRayPreferences
 from vray_blender.lib.path_utils import getIconsDir
 
 COMMAND_SERVER_PORT = 20702
@@ -196,9 +195,10 @@ def getVantageExecutableFile():
 
 class VRayRendererVantageLiveLink(VRayRendererIprVfb):
     @staticmethod
-    def checkAndReportVantageState(context):
-        preferences = getVRayPreferences(context)
-        vantageHost = preferences.vantage_host
+    def checkAndReportVantageState(vantageHost: str):
+        """ Start Vantage if it is not running and wait for it, which can take minutes. Runs on a
+            worker thread, so it must not touch bpy.
+        """
         tryStartVantage = sys.platform == "win32" and (vantageHost.startswith("127.") or vantageHost == "::1" or vantageHost.lower() == "localhost")
         # The Vantage command server isn't accessible from other machines so we skip the checks below if
         # it's running and directly rely on DR2 to connect and report any potential errors.
@@ -285,12 +285,47 @@ class VRayRendererVantageLiveLink(VRayRendererIprVfb):
 
         VRayRendererIprVfb._activeRenderer = self.renderer
 
+_vantageCheck: threading.Thread = None
+_vantageCheckStatus: list = []
+_vantageCheckStart = 0.0
+
+def startVantageCheck(vantageHost: str) -> bool:
+    """ Run checkAndReportVantageState() on a worker thread, because starting Vantage can take
+        minutes. Returns False if a check is still running, so that a second click does not
+        launch Vantage again. Poll getVantageCheckStatus() for the result.
+    """
+    global _vantageCheck, _vantageCheckStart
+    if _vantageCheck is not None and _vantageCheck.is_alive():
+        return False
+
+    _vantageCheckStatus.clear()
+    _vantageCheck = threading.Thread(target=lambda: _vantageCheckStatus.append(
+        VRayRendererVantageLiveLink.checkAndReportVantageState(vantageHost)), daemon=True)
+    _vantageCheckStart = time.monotonic()
+    _vantageCheck.start()
+    return True
+
+def getVantageStartingSeconds():
+    """ Whole seconds since the running startVantageCheck() began, or None if no check runs. """
+    if _vantageCheck is None or not _vantageCheck.is_alive():
+        return None
+    return int(time.monotonic() - _vantageCheckStart)
+
+def getVantageCheckStatus():
+    """ The VantageInitStatus of the check started by startVantageCheck(), or None while it runs. """
+    if _vantageCheck.is_alive():
+        return None
+    # A check that raised has no status. The thread has printed the error.
+    return _vantageCheckStatus[0] if _vantageCheckStatus else VantageInitStatus.VantageFailedToStart
+
 def drawCallbackVantage():
-    if not VRayRendererVantageLiveLink.isActive() or not isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink):
-        return
-    # For now use the draw callback to stop the render in case it was aborted.
-    if not VRayRendererVantageLiveLink._activeRenderer or not vray.renderJobIsRunning(VRayRendererVantageLiveLink._activeRenderer):
-        return
+    startingSeconds = getVantageStartingSeconds()
+    if startingSeconds is None:
+        if not VRayRendererVantageLiveLink.isActive() or not isinstance(VRayRenderEngine.iprRenderer, VRayRendererVantageLiveLink):
+            return
+        # For now use the draw callback to stop the render in case it was aborted.
+        if not VRayRendererVantageLiveLink._activeRenderer or not vray.renderJobIsRunning(VRayRendererVantageLiveLink._activeRenderer):
+            return
 
     ICON_PX_SIZE = 64
 
@@ -305,3 +340,16 @@ def drawCallbackVantage():
         blf.position(0, x, y, 0)
         blf.size(0, ICON_PX_SIZE)
         blf.draw(0, "⏳")
+
+    if startingSeconds is not None:
+        # Live Link waits for Vantage to start, which can take minutes.
+        text = f"Starting Vantage... {startingSeconds} s"
+        blf.size(0, 14 * bpy.context.preferences.view.ui_scale)
+        width, height = blf.dimensions(0, text)
+        blf.color(0, 1.0, 1.0, 1.0, 1.0)
+        blf.enable(0, blf.SHADOW)
+        blf.shadow(0, 3, 0.0, 0.0, 0.0, 0.8)
+        blf.shadow_offset(0, 1, -1)
+        blf.position(0, x - width - 10, y + (ICON_PX_SIZE - height) / 2, 0)
+        blf.draw(0, text)
+        blf.disable(0, blf.SHADOW)

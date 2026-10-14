@@ -85,6 +85,14 @@ def formatAttributeName(nameOrLabel):
         debug.printExceptionInfo(ex, f"Failed to format attribute label '{nameOrLabel}'")
         return nameOrLabel
 
+def stripOutputPrefix(displayName):
+    """ Drop the "Out " an 'out_*' attribute name yields - the socket is on the output side already.
+
+        Every derivation of an output socket name goes through here. The importer derives the name a second time
+        to find the socket to link to, so drifting from the node builder makes it look for a socket that isn't there.
+    """
+    return displayName.removeprefix("Out ")
+
 def getAttrDesc(pluginModule, attrName):
     # Use the O(1) index built at plugin load time when present.
     if (byAttr := getattr(pluginModule, 'ParametersByAttr', None)) is not None:
@@ -116,6 +124,15 @@ def isOutputAttribute(pluginModule, attrName):
     return any((o for o in pluginModule.Outputs if o['attr'] == attrName))
 
 
+# A length in an explicit ui.units unit -> its stored Blender value, in meters. These lengths
+# do not depend on the scene unit scale; convertUIValueToVRay is the inverse.
+EXPLICIT_LENGTH_UNIT_FACTORS = {
+    'meters': 1.0,
+    'centimeters': 0.01,
+    'millimeters': 0.001,
+}
+
+
 def convertVRayValueToUI(attrDesc, value, doUnitsConversion=True):
     """ Convert property value from its V-Ray represenattion to its UI representation
         in Blender by applying a custom multiplier. This is necessary because for some
@@ -131,12 +148,10 @@ def convertVRayValueToUI(attrDesc, value, doUnitsConversion=True):
 
     if doUnitsConversion and (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE'):
         assert type(value) in (int, float)
-        if units == 'centimeters':
-            return value * 0.01
-        elif units == 'millimeters':
-            return value * 0.001
-        elif units == 'degrees':
+        if units == 'degrees':
             return math.radians(value)
+        elif (factor := EXPLICIT_LENGTH_UNIT_FACTORS.get(units)) is not None:
+            return value * factor
 
     return value
 
@@ -157,12 +172,10 @@ def convertUIValueToVRay(attrDesc, value):
 
     if (units := attrDesc.get('ui', {}).get('units')) and attrDesc['type'] in ('FLOAT', 'FLOAT_TEXTURE') \
             and type(value) in (int, float):
-        if units == 'centimeters':
-            return value * 100
-        elif units == 'millimeters':
-            return value * 1000
-        elif units == 'degrees':
+        if units == 'degrees':
             return math.degrees(value)
+        elif (factor := EXPLICIT_LENGTH_UNIT_FACTORS.get(units)) is not None:
+            return value / factor
 
     # TRANSFORM and MATRIX types are stored in a FloatVectorProp property of length 16
     if (type(value) is bpy.types.bpy_prop_array) and (attrDesc['type'] in ('TRANSFORM', 'MATRIX', 'MATRIX_TEXTURE')):
@@ -187,8 +200,17 @@ def toAColor(value):
 
     assert False, f"Invalid color vector size {len(value)}, should be 3 or 4."
 
+def fill3x3Transposed(m: mathutils.Matrix, columns):
+    """ Write V-Ray's three basis vectors into the 3x3 part of 'm'. They are columns and Blender indexes rows
+        first, so the assignment transposes. """
+    for c in range(3):
+        for r in range(3):
+            m[c][r] = float(columns[r][c])
+
+
 def attrValueToMatrix(value, applyScale: bool):
-    """ Convert TRANSFORM or MATRIX value from plugin description to mathutils.Matrix"""
+    """ Convert a TRANSFORM value from a plugin description to a mathutils.Matrix. A bare MATRIX (three columns, no
+        offset) belongs in engine._setMatrixSocketValue instead. """
 
     m = mathutils.Matrix()
 
@@ -196,23 +218,15 @@ def attrValueToMatrix(value, applyScale: bool):
         tmM    = value[0]
         tmOffs = value[1]
 
+        fill3x3Transposed(m, tmM)
         for c in range(3):
-            # Transpose 3x3 matrix, Blender's format is row-first
-            for r in range(3):
-                m[c][r] = tmM[r][c]
             # Add the translation value for the current axis
             m[c][3] = scaleToSceneLengthUnit(tmOffs[c], "centimeters") if applyScale else tmOffs[c]
 
     else:
-        import struct, binascii
+        # Both callers (the AppSDK .vrscene import and the .vrmat reader) pass decoded transforms.
+        assert False, f"attrValueToMatrix expects a (basis, offset) pair, got {type(value).__name__}"
 
-        tmArray = struct.unpack("fffffffffddd", binascii.unhexlify(bytes(value, 'ascii')))
-
-        i = 0
-        for c in range(3):
-            for r in range(3):
-                m[c][r] = tmArray[i]
-                i += 1
     return m
 
 
@@ -222,16 +236,24 @@ UNIT_MULTIPLIER_FUNC = {
     "meters" : getMetersToSceneUnitsMultiplier
 }
 
+def isNumber(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def scaleNumeric(value, factor):
+    """ Multiply a scalar or a flat numeric list/tuple by 'factor'. Anything else (non-numeric,
+        nested) is returned unchanged rather than raising. """
+    if isNumber(value):
+        return value * factor
+    if isinstance(value, (list, tuple)) and all(isNumber(v) for v in value):
+        return [v * factor for v in value]
+    return value
+
+
 def scaleToSceneLengthUnit(attrValue, lengthUnit):
     """ Scales 'attrValue' (scalar or vector/list) to scene length unit """
     if lengthUnit in  UNIT_MULTIPLIER_FUNC:
-        multiplier = UNIT_MULTIPLIER_FUNC[lengthUnit](bpy.context)
-        if isinstance(attrValue, (int, float)) and not isinstance(attrValue, bool):
-            return attrValue * multiplier
-        if isinstance(attrValue, (list, tuple)) and \
-                all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in attrValue):
-            return [v * multiplier for v in attrValue]
-        return attrValue  # non-numeric / nested: leave unchanged rather than crash
+        return scaleNumeric(attrValue, UNIT_MULTIPLIER_FUNC[lengthUnit](bpy.context))
     else:
         debug.printWarning(f"Unsupported V-Ray Plugin attribute '{lengthUnit}' scaling unit")
     return attrValue
@@ -276,7 +298,7 @@ def generateAttribute(ctx: AttributeContext, attrDesc):
         # Add a 'shadow' for the current attribute
         _addShadowAttrToClassMembers(attrArgs, attrDesc, ctx.classMembers, ctx.pluginModule.ID)
 
-    if attrName in {'render_mask_objects', 'exclusion_nodes'}:
+    if attrName == 'render_mask_objects':
         # Attribute has a collection prop search UI - add an additional pointer property
         # which updates the original property with the object name when changed.
         origAttr = attrName
@@ -300,6 +322,7 @@ TypeToUISubtype = {
 
 def _generateTemplate(classMembers, pluginModule, attrDesc):
     from vray_blender.plugins import templates
+    from vray_blender.lib import class_utils
 
     attrName = attrDesc['attr']
     template = attrDesc['options']['template']
@@ -332,6 +355,7 @@ def _generateTemplate(classMembers, pluginModule, attrDesc):
     )
 
     bpy.utils.register_class(templatePropGroup)
+    class_utils.REGISTERED_CLASSES.append(templatePropGroup)
 
     # Add the template as a field of the plugin's property group
     classMembers[attrName] = bpy.props.PointerProperty(
@@ -492,6 +516,26 @@ def getBlenderDefault(param):
     return val
 
 
+# V-Ray plugin attributes that reference an external file or another scene object. The
+# 'Reset to Defaults' button preserves these so the user does not lose the asset link / object
+# reference on reset (re-picking a file or object would be tedious). Keyed by V-Ray plugin type.
+# Add an entry here to preserve the reference of another plugin.
+_PRESERVED_REF_ATTRS = {
+    'BitmapBuffer':  {'file', 'use_external_image'},  # external image path + the toggle selecting it
+    'LightIES':      {'ies_file'},                 # path to the .ies profile
+    'GeomGaussians': {'file'},                     # path to the .ply Gaussian splat file
+    'GeomMeshFile':  {'file'},                     # path to the .vrmesh / .abc proxy file
+    'VRayScene':     {'filepath'},                 # path to the .vrscene file
+    'GeomHair':      {'mesh', 'object_selector'},  # base object(s) the fur grows on
+    'LightMesh':     {'geometry', 'object_selector'},  # referenced geometry object(s)
+}
+
+
+def getPreservedRefAttrs(pluginType: str) -> set:
+    """ The attrs of a plugin that a reset to defaults must leave untouched. """
+    return set(_PRESERVED_REF_ATTRS.get(pluginType, ()))
+
+
 def _resetTemplateToDefaults(template):
     """ Reset a UI template's own state to defaults by delegating to its resetToDefaults()
         method (templates that hold no state of their own are no-ops). """
@@ -547,17 +591,16 @@ def setAttrLimits(attrArgs, attrDesc):
         attrArgs['soft_min'] = 0.0
         attrArgs['soft_max'] = 1.0
     elif attrType in {'INT', 'INT_TEXTURE', 'FLOAT', 'FLOAT_TEXTURE'}:
-        if 'ui' not in attrDesc:
-            attrDesc['ui'] = defUi
+        ui = attrDesc.get('ui', defUi)
 
-        minValue = attrDesc['ui'].get('min', defUi['min'])
-        maxValue = attrDesc['ui'].get('max', defUi['max'])
+        minValue = ui.get('min', defUi['min'])
+        maxValue = ui.get('max', defUi['max'])
         # A bound explicitly set to null means "no limit". Soft bounds default to the hard
         # bound when not specified, except when the hard bound is null - then they fall back
         # to the generic soft default instead, so an unbounded hard max doesn't silently make
         # the slider's drag range unbounded too (unless soft_min/soft_max opt out as well).
-        softMinValue = attrDesc['ui'].get('soft_min', minValue if minValue is not None else defUi['soft_min'])
-        softMaxValue = attrDesc['ui'].get('soft_max', maxValue if maxValue is not None else defUi['soft_max'])
+        softMinValue = ui.get('soft_min', minValue if minValue is not None else defUi['soft_min'])
+        softMaxValue = ui.get('soft_max', maxValue if maxValue is not None else defUi['soft_max'])
 
         # Skip a bound that resolved to null - Blender's own property default
         # (e.g. FLT_MAX for FLOAT) applies instead of clamping.
@@ -570,8 +613,8 @@ def setAttrLimits(attrArgs, attrDesc):
         if softMaxValue is not None:
             attrArgs['soft_max'] = convertVRayValueToUI(attrDesc, softMaxValue)
 
-        if 'spin_step' in attrDesc['ui']:
-            stepValue = attrDesc['ui']['spin_step']
+        if 'spin_step' in ui:
+            stepValue = ui['spin_step']
             if attrType in {'FLOAT', 'FLOAT_TEXTURE'}:
                 # Step for float values is set in 100ths of the actual step value
                 stepValue *= 100.0

@@ -62,6 +62,7 @@ TEST_CASE("Actor creation / destruction")
 
 	SECTION("Router run/stop") {
 		auto router = std::make_unique<ZmqRouter>(ctx);
+		router->setNewWorkerCallback([](auto) {});
 		router->run(clientEndpoint, workerEndpoint, timeouts);
 
 		REQUIRE_NOTHROW(router.reset());
@@ -84,10 +85,16 @@ TEST_CASE("Basic communication") {
 			connected = true;
 			notifier.notify();
 		});
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+		client->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Client error callback: ") + errMsg);
+		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
-		client->run(clientEndpoint, timeouts);
-		notifier.wait(1s);
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
+		client->run(endpoint, timeouts);
+		notifier.wait(3s);
 		REQUIRE(connected);
 	}
 
@@ -117,7 +124,11 @@ TEST_CASE("Basic communication") {
 			});
 		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
 		// Set the inactivity timeout to less than the time it takes to strat the worker
@@ -126,7 +137,7 @@ TEST_CASE("Basic communication") {
 		tmouts.inactivity = 1000;
 		tmouts.handshake = 7000;
 
-		client->run(clientEndpoint, tmouts);
+		client->run(endpoint, tmouts);
 		
 		// The message will be sent after the handshake is complete
 		zmq::message_t payload(msg);
@@ -167,14 +178,18 @@ TEST_CASE("Basic communication") {
 			FAIL(std::string("Client error callback: " + errMsg));
 		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
-		client->run(clientEndpoint, timeouts);
-		
+		client->run(endpoint, timeouts);
+
 		zmq::message_t payload(msg);
 		client->send(std::move(payload));
-		
+
 		notifier.wait(5s);
 		REQUIRE(msgReceived);
 	}
@@ -213,11 +228,15 @@ TEST_CASE("Basic communication") {
 			notifier.notify();
 		});
 
-		router->run(clientEndpoint, workerEndpoint, timeouts);
+		router->setErrorCallback([](std::string errMsg) {
+			FAIL(std::string("Router error callback: ") + errMsg);
+		});
+
+		const std::string endpoint = runRouterEphemeral(router, workerEndpoint, timeouts);
 		std::this_thread::sleep_for(500ms);
 
-		client->run(clientEndpoint, timeouts);
-		
+		client->run(endpoint, timeouts);
+
 		zmq::message_t payload(msg);
 		client->send(std::move(payload));
 

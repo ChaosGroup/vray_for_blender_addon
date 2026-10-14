@@ -7,6 +7,7 @@ import os
 
 from vray_blender.ui import classes
 from vray_blender.lib import lib_utils, draw_utils, plugin_utils
+from vray_blender.plugins.skipped_plugins import HIDDEN_PLUGINS
 
 
 class VRAY_OT_update_lighting_analysis(bpy.types.Operator):
@@ -78,6 +79,8 @@ class VRAY_PT_RenderChannels(classes.VRayRenderLayersPanel):
                 for t in VRayNodeTypes["RENDERCHANNEL"]:
                     if getattr(t, "vray_menu_subtype","") == menuType:
                         elemType = t.bl_rna.identifier
+                        if elemType.removeprefix("VRayNode") in HIDDEN_PLUGINS:
+                            continue
                         chanProps = getattr(vrayRenderChannels, elemType)
                         if elemType == "VRayNodeRenderChannelLightingAnalysis":
                             # Lighting Analysis params are a post-process over the rendered data;

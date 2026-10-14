@@ -5,13 +5,14 @@
 
 import bpy
 
-from vray_blender.exporting.tools import getActiveInputFarNodeLinks, getActiveOutputFarNodeLinks
+from vray_blender.exporting.tools import getActiveInputFarNodeLinks, getActiveOutputFarNodeLinks, getFirstSocketLink
 from vray_blender.lib.blender_utils import isCollection
 from vray_blender.lib.mixin import VRayNodeBase
 from vray_blender.nodes import links as NodeLinks
 from vray_blender.nodes.nodes import updateNodeMutedState
 from vray_blender.nodes.sockets import addInput, addOutput
 from vray_blender.nodes.tools import getLinkInfo, isVrayNode, isCompatibleNode
+from vray_blender.nodes.utils import getOriginalNode
 from vray_blender.plugins.templates import common
 
     
@@ -218,8 +219,10 @@ class VRayNodeSelectObject(VRayNodeBase):
     def getSelected(self, context: bpy.types.Context):
         if (not self.objectName) or self.mute:
             return None
-        
-        return self.objectPtr.original if self.objectPtr.original in context.scene.objects.values() else None
+
+        # Exporters walk evaluated node trees; the pointer is only safe to read on the original node.
+        objectPtr = getOriginalNode(self).objectPtr
+        return objectPtr if objectPtr in context.scene.objects.values() else None
 
 
 def resolveSelectorNode(toSock: bpy.types.NodeSocket):
@@ -227,10 +230,10 @@ def resolveSelectorNode(toSock: bpy.types.NodeSocket):
         This is specific to Selectors because they implement their own resolution
         and we only need to find the first of the subtree of connected selectors.
     """
-    if not toSock.is_linked:
+    if not (link := getFirstSocketLink(toSock)):
         return None
-    
-    fromNode = toSock.links[0].from_node
+
+    fromNode = link.from_node
     if fromNode.bl_idname == 'NodeReroute':
         return resolveSelectorNode(fromNode.inputs[0])
     elif fromNode.bl_idname in ('VRayNodeMultiSelect', 'VRayNodeSelectObject'):

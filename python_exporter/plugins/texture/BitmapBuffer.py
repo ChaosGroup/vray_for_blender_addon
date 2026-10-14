@@ -6,7 +6,7 @@ import bpy
 
 from vray_blender.lib import plugin_utils, image_utils
 from vray_blender.lib.draw_utils import UIPainter
-from vray_blender.nodes.utils import getNodeOfPropGroup, createBitmapTexture, autoInitBitmapNode
+from vray_blender.nodes.utils import getNodeOfPropGroup, createBitmapTexture
 from vray_blender.plugins import getPluginModule
 
 
@@ -31,10 +31,10 @@ def nodeDraw(context, layout, node):
         layout.template_ID_preview(node.texture, "image")
         # Match the property layout used by the rest of the V-Ray node widgets.
         col = layout.column()
-        col.use_property_split = True
         col.use_property_decorate = False
         # 'image_source' is a virtual enum backed by image.source, so it stays in sync.
-        col.prop(node, "image_source", text="Source")
+        # No label, the dropdown shows the selected source.
+        col.prop(node, "image_source", text="")
         _drawImageSourceOptions(context, col, node, image)
     else:
         layout.template_ID(node.texture, 'image', open='image.open')
@@ -69,11 +69,10 @@ def _drawIFL(layout, bitmapBuffer):
     """ Draw the Image File List options when the external file path points at a .ifl. """
     if bitmapBuffer.file.lower().endswith('.ifl'):
         col = layout.column(align=True)
-        col.use_property_split = True
         col.use_property_decorate = False
         col.prop(bitmapBuffer, "ifl_start_frame", text="IFL Start Frame")
         col.prop(bitmapBuffer, "ifl_playback_rate", text="IFL Playback Rate")
-        col.prop(bitmapBuffer, "ifl_end_condition", text="IFL End Condition")
+        col.prop(bitmapBuffer, "ifl_end_condition", text="")
 
 
 def widgetDrawFile(context, layout, propGroup, widgetAttr):

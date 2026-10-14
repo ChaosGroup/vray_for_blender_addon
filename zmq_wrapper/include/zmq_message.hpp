@@ -113,6 +113,7 @@ enum class MsgType : char {
 	RendererContinueSequence,
 	RendererSetResumableRendering,
 	RendererElementDone,            ///< Client -> server: element SHM buffer consumed; safe to overwrite.
+	RendererSampleTexture,          ///< Client -> server: sample a texture plugin over [0,1)^2 UV space.
 	LastRendererMessage,
 
 	// Renderer events
@@ -124,6 +125,7 @@ enum class MsgType : char {
 	RendererOnProgress,
 	RendererOnElementReady,
 	RendererOnPluginPropertyValues, ///< Server -> client: values V-Ray wrote into in/out plugin parameters.
+	RendererOnTextureSampled,       ///< Server -> client: sampled texture pixels; empty payload = failure.
 	LastRendererEvent,
 
 	// Control messages
@@ -140,6 +142,9 @@ enum class MsgType : char {
 	ControlOnUpdateScenePath,
 	ControlOnCosmosImportById,      ///< Client -> server: import a Cosmos package by asset name or package id.
 	ControlOnCosmosDropImport,
+	ControlOnCosmosNotify,          ///< Client -> server: send a message to the Cosmos notifications.
+	ControlOnCosmosVariantSwap,     ///< Client -> server: apply a Cosmos variant to an already-imported object.
+	ControlOnCosmosVariantPreviews, ///< Client -> server: download a Cosmos package's variant previews.
 
 	// Scanned materials
 	ControlOnScannedLicenseCheck,
@@ -186,6 +191,8 @@ enum class MsgType : char {
 	ControlOnVFBRenderRegionChanged,
 	ControlOnSwitchLicenseToCommunity,
 	ControlOnRenderStage,           ///< Server -> client: current render stage and its progress.
+	ControlOnCosmosVariantStatus,   ///< Server -> client: progress or failure for one in-flight Cosmos variant swap.
+	ControlOnCosmosVariantPreviewsReady, ///< Server -> client: where a package's variant previews are on disk.
 	LastControlEvent,
 
 	// Scene import messages (dedicated SCENE_IMPORT connection), see zmq_import_message.hpp
@@ -609,6 +616,37 @@ PROTO_MESSAGE(RendererElementDone,
 
 SERIALIZE_MESSAGE(RendererElementDone,
 	PARAM(subIndex)
+);
+
+
+/// MsgRendererSampleTexture - client -> server: sample the named texture plugin over
+/// [0,1)^2 UV space with the AppSDK UVTextureSampler, no render job. The result is
+/// delivered as MsgRendererOnTextureSampled.
+PROTO_MESSAGE(RendererSampleTexture,
+	std::string pluginName;
+	int width  = 0;
+	int height = 0;
+);
+
+SERIALIZE_MESSAGE(RendererSampleTexture,
+	PARAM(pluginName)
+	PARAM(width)
+	PARAM(height)
+);
+
+
+/// MsgRendererOnTextureSampled - server -> client: reply to MsgRendererSampleTexture.
+/// pixels holds width*height RGBA float quadruplets; empty on failure.
+PROTO_MESSAGE(RendererOnTextureSampled,
+	int width  = 0;
+	int height = 0;
+	vray::AttrListFloat pixels;
+);
+
+SERIALIZE_MESSAGE(RendererOnTextureSampled,
+	PARAM(width)
+	PARAM(height)
+	PARAM(pixels)
 );
 
 
@@ -1153,6 +1191,21 @@ PROTO_MESSAGE(ControlOnCosmosDropImport,
 	bool forceNormalAlign;
 );
 
+/// MsgControlOnCosmosNotify
+/// Sent from the Blender addon to the server when it wants a message shown in the
+/// Cosmos Browser. The server adds it to the same queue its own Cosmos messages go
+/// to and posts the batch through GalaxyClient::flushLogQueue(). The addon-side part
+/// of the import runs in Blender, so the failures the user actually sees are only
+/// known here - the server has already sent MsgControlOnImportAsset by then.
+PROTO_MESSAGE(ControlOnCosmosNotify,
+	// Cosmos log level: 0 critical, 1 error, 2 warning, 3 success, 4 info, 5 debug.
+	// A different enum from the one MsgControlSetLogLevel uses. Critical, error, warning
+	// and success are shown to the user; info and debug are only written to the Cosmos
+	// service log. Anything outside the range is dropped by the server.
+	int logLevel;
+	std::string message;
+);
+
 SERIALIZE_MESSAGE(ControlOnCosmosImportById,
 	PARAM(assetIdsOrNames)
 	PARAM(applyTriplanarMapping)
@@ -1175,6 +1228,87 @@ SERIALIZE_MESSAGE(ControlOnCosmosDropImport,
 	PARAM(applyTriplanarMapping)
 	PARAM(applyRealWorldScale)
 	PARAM(forceNormalAlign)
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosNotify,
+	PARAM(logLevel)
+	PARAM(message)
+);
+
+/// MsgControlOnCosmosVariantSwap
+/// Apply a Cosmos variant to an already-imported asset. The reply is a MsgControlOnImportAsset
+/// carrying the same token, or a MsgControlOnCosmosVariantStatus(Failed) - never neither.
+PROTO_MESSAGE(ControlOnCosmosVariantSwap,
+	// The TARGET geometry variant's own package - each geometry variant is a separate package.
+	std::string packageId;
+	uint32_t revisionId;
+	// 0 = the package's primary material, k>0 = representation.materials()[k-1]. Clamped by the
+	// addon, which is the only side that knows the per-variant material counts.
+	int32_t mtlVariantIndex;
+	// Opaque per-click handle, echoed back. Identifies the mesh datablock that asked; an object
+	// name could not, since one mesh can back several objects.
+	std::string variantSwapToken;
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosVariantSwap,
+	PARAM(packageId)
+	PARAM(revisionId)
+	PARAM(mtlVariantIndex)
+	PARAM(variantSwapToken)
+);
+
+/// Keep in sync with CosmosVariantStatus in python_exporter/utils/cosmos_variants.py.
+/// No "Done" on purpose - success is the MsgControlOnImportAsset reply.
+enum class CosmosVariantStatus {
+	Downloading = 0, ///< Fetching the variant's files. Advisory; a cached variant sends nothing.
+	Stalled = 1,     ///< No download progress for several minutes. Still waiting.
+	Failed = 2,      ///< No import reply is coming. Clear the spinner, keep the current variant.
+};
+
+/// MsgControlOnCosmosVariantStatus
+PROTO_MESSAGE(ControlOnCosmosVariantStatus,
+	std::string variantSwapToken;
+	CosmosVariantStatus status;
+	std::string message; ///< Reason for Failed, for the log. Empty otherwise.
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosVariantStatus,
+	PARAM(variantSwapToken)
+	PARAM(status)
+	PARAM(message)
+);
+
+/// MsgControlOnCosmosVariantPreviews
+/// Download a Cosmos package's variant preview images into the local preview cache. The previews
+/// are cached per user and outside the .blend, so a scene opened on another machine - or one whose
+/// cache was cleaned - has none of them. The reply is a MsgControlOnCosmosVariantPreviewsReady.
+/// The two lists are parallel, one entry per package.
+PROTO_MESSAGE(ControlOnCosmosVariantPreviews,
+	vray::AttrListString packageIds;
+	vray::AttrListInt revisions;
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosVariantPreviews,
+	PARAM(packageIds)
+	PARAM(revisions)
+);
+
+/// MsgControlOnCosmosVariantPreviewsReady
+/// The previews a MsgControlOnCosmosVariantPreviews request could produce. The four lists are
+/// parallel, one entry per preview IMAGE rather than per package: a requested package contributes
+/// one entry per material variant it has, or none at all when it could not be resolved.
+PROTO_MESSAGE(ControlOnCosmosVariantPreviewsReady,
+	vray::AttrListString packageIds;
+	vray::AttrListInt revisions;
+	vray::AttrListInt mtlIndices;
+	vray::AttrListString previewPaths;
+);
+
+SERIALIZE_MESSAGE(ControlOnCosmosVariantPreviewsReady,
+	PARAM(packageIds)
+	PARAM(revisions)
+	PARAM(mtlIndices)
+	PARAM(previewPaths)
 );
 
 /// MsgControlOnImportAsset
@@ -1242,6 +1376,23 @@ PROTO_MESSAGE(ControlOnImportAsset,
 	// to hit normal" override for assets that wouldn't otherwise be
 	// re-oriented. See MsgControlOnCosmosDropImport.
 	bool forceNormalAlign;
+	// Echo of MsgControlOnCosmosVariantSwap::variantSwapToken, and the only marker of a swap
+	// reply: the addon then rewrites the datablock that asked instead of creating an object.
+	std::string variantSwapToken;
+	// The variant catalogue, empty unless the package has more than one variant. These four are
+	// per GEOMETRY variant, each of which is its own package.
+	vray::AttrListString variantGeomNames;
+	vray::AttrListString variantGeomPackageIds;
+	vray::AttrListInt variantGeomRevisions;
+	vray::AttrListInt variantMtlCounts;
+	// Preview PNG per (geometry, material) cell, geometry-major: cell (g,m) is at
+	// sum(variantMtlCounts[:g]) + m. Counts rather than a stride, because they can differ.
+	// An entry may be empty or name a file that is gone.
+	vray::AttrListString variantPreviewPaths;
+	// The cell this import produced. Recomputed by Cosmos on every import, so authoritative on a
+	// swap reply. Re-key currentGeomVariant through variantGeomPackageIds, do not trust position.
+	int32_t currentGeomVariant;
+	int32_t currentMtlVariant;
 );
 
 SERIALIZE_MESSAGE(ControlOnImportAsset,
@@ -1275,6 +1426,14 @@ SERIALIZE_MESSAGE(ControlOnImportAsset,
 	PARAM(normalZ)
 	PARAM(surfaceAttachment)
 	PARAM(forceNormalAlign)
+	PARAM(variantSwapToken)
+	PARAM(variantGeomNames)
+	PARAM(variantGeomPackageIds)
+	PARAM(variantGeomRevisions)
+	PARAM(variantMtlCounts)
+	PARAM(variantPreviewPaths)
+	PARAM(currentGeomVariant)
+	PARAM(currentMtlVariant)
 );
 
 /// MsgControlOnScannedLicenseCheck

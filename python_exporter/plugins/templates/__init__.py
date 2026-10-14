@@ -10,7 +10,8 @@ def getRegModules():
         multi_select,
         include_exclude,
         file_select,
-        color_temperature
+        color_temperature,
+        proxy_object_hierarchy
     )
 
     return (
@@ -19,7 +20,8 @@ def getRegModules():
         multi_select,
         include_exclude,
         file_select,
-        color_temperature
+        color_temperature,
+        proxy_object_hierarchy
     )
 
 
@@ -53,3 +55,7 @@ def templateFileSelect():
 def templateColorTemperature():
     from vray_blender.plugins.templates import color_temperature
     return color_temperature.TemplateColorTemperature
+
+def templateProxyObjectHierarchy():
+    from vray_blender.plugins.templates import proxy_object_hierarchy
+    return proxy_object_hierarchy.TemplateProxyObjectHierarchy

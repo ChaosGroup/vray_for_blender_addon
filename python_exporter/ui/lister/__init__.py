@@ -81,6 +81,19 @@ def register():
     blender_utils.addEvent(bpy.app.handlers.save_pre, window._onSaveSyncListerFlags)
 
 
+def releaseEditors():
+    """ Give the areas the listers took back their editors. Call it before the add-on's editor
+        types (e.g. the V-Ray node editor) are unregistered, or an area that was one of them
+        cannot be turned back. """
+    from vray_blender import features
+    from vray_blender.features import Feature
+
+    if not features.isEnabled(Feature.OBJECT_LISTER):
+        return
+
+    window.onUnregister()
+
+
 def unregister():
     from vray_blender import features
     from vray_blender.features import Feature
@@ -92,8 +105,6 @@ def unregister():
     blender_utils.delEvent(bpy.app.handlers.depsgraph_update_post, _onDepsgraphRedraw)
     blender_utils.delEvent(bpy.app.handlers.load_post, window._onLoadClearListerFlags)
     blender_utils.delEvent(bpy.app.handlers.save_pre, window._onSaveSyncListerFlags)
-
-    window.onUnregister()
 
     if hasattr(bpy.types.Scene, 'vray_lister'):
         del bpy.types.Scene.vray_lister

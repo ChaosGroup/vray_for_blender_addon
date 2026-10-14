@@ -19,6 +19,9 @@
         },
         {
             "attr": "id_source",
+            "ui": {
+                "display_name": "ID Source"
+            },
             "type": "ENUM",
             "desc": "Switch between Object and Material ID",
             "default": "0",

@@ -9,9 +9,6 @@
                 "label": "Common",
                 "attrs": [
                     {
-                        "name": "compatibility_with"
-                    },
-                    {
                         "name": "alpha_from_intensity"
                     },
                     {

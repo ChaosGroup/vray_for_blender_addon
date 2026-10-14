@@ -12,26 +12,12 @@ import time
 
 from vray_blender.lib import lib_utils
 from vray_blender.lib.mixin import VRayOperatorBase
-from vray_blender.lib.attribute_utils import resetPropGroupToDefaults
+from vray_blender.lib.attribute_utils import getPreservedRefAttrs, resetPropGroupToDefaults
 from vray_blender.nodes import navigation as NodesNav
 from vray_blender.nodes.group.utils import VRAY_EDITOR_TREE_TYPES
 from vray_blender.nodes.operators.wrangler.settings import resetNode
 from vray_blender.nodes.utils import getLightOutputNode, getPluginTypeOfNode, treeHasNodes
 from vray_blender.plugins import PLUGINS, getPluginModule
-
-
-# V-Ray plugin attributes that reference an external file or another scene object. The
-# 'Reset to Defaults' button preserves these so the user does not lose the asset link / object
-# reference on reset (re-picking a file or object would be tedious). Keyed by V-Ray plugin type.
-# Add an entry here to preserve the reference of another plugin.
-_RESET_PRESERVED_REFS = {
-    'LightIES':      {'ies_file'},                 # path to the .ies profile
-    'GeomGaussians': {'file'},                     # path to the .ply Gaussian splat file
-    'GeomMeshFile':  {'file'},                     # path to the .vrmesh / .abc proxy file
-    'VRayScene':     {'filepath'},                 # path to the .vrscene file
-    'GeomHair':      {'mesh', 'object_selector'},  # base object(s) the fur grows on
-    'LightMesh':     {'geometry', 'object_selector'},  # referenced geometry object(s)
-}
 
 
 def _vrayNodeEditorOpen(context):
@@ -126,10 +112,10 @@ class VRAY_OT_reset_property_page(VRayOperatorBase):
             return {'CANCELLED'}
 
         node = NodesNav.getPanelNode(NodesNav.getEditedTree(context, mtl), 'MATERIAL')
-        if not (node and (plugin := getPluginTypeOfNode(node)) and (module := getPluginModule(plugin))):
+        if not (node and getPluginTypeOfNode(node)):
             return {'CANCELLED'}
 
-        resetNode(node, module)
+        resetNode(node)
         mtl.node_tree.update_tag()
         self.report({'INFO'}, f"Reset {mtl.name} parameters to defaults.")
         return {'FINISHED'}
@@ -147,13 +133,11 @@ class VRAY_OT_reset_property_page(VRayOperatorBase):
         lightPluginType = lib_utils.getLightPluginType(light)
 
         if treeHasNodes(light.node_tree) and (outputNode := getLightOutputNode(light.node_tree)):
-            pluginType = getPluginTypeOfNode(outputNode)
-            if module := getPluginModule(pluginType):
-                resetNode(outputNode, module, skipAttrs=_RESET_PRESERVED_REFS.get(pluginType))
-                light.node_tree.update_tag()
+            resetNode(outputNode)
+            light.node_tree.update_tag()
         else:
             resetPropGroupToDefaults(getattr(light.vray, lightPluginType), PLUGINS['LIGHT'][lightPluginType],
-                                     skipAttrs=_RESET_PRESERVED_REFS.get(lightPluginType))
+                                     skipAttrs=getPreservedRefAttrs(lightPluginType))
 
         # The Include/Exclude list is stored on the VRayLight propGroup, not the light plugin, so
         # reset it explicitly.
@@ -175,13 +159,11 @@ class VRAY_OT_reset_property_page(VRayOperatorBase):
             return {'CANCELLED'}
 
         if desc.node is not None:
-            pluginType = getPluginTypeOfNode(desc.node)
-            if module := getPluginModule(pluginType):
-                resetNode(desc.node, module, skipAttrs=_RESET_PRESERVED_REFS.get(pluginType))
-                if obj.vray.ntree:
-                    obj.vray.ntree.update_tag()
+            resetNode(desc.node)
+            if obj.vray.ntree:
+                obj.vray.ntree.update_tag()
         else:
-            skipAttrs = set(_RESET_PRESERVED_REFS.get(desc.pluginModuleName, ()))
+            skipAttrs = getPreservedRefAttrs(desc.pluginModuleName)
             # For a camera, skip 'use' so the reset does not desync the physical-camera toggle
             # (it mirrors VRayCamera.use_physical, which lives on a different prop group).
             if obj.type == 'CAMERA':

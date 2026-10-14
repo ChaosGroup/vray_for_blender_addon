@@ -244,7 +244,7 @@ class HairExporter(ExporterBase):
                         np.fromiter(chain(sampled), np.float32, 3 * count)
             return
 
-        # No children: one strand per parent particle, and here 'particle' is really read.
+        # With no children there is one strand per parent particle, and here 'particle' is read.
         iu = 0
         ic = 0
         for pindex, particle in enumerate(psys.particles):

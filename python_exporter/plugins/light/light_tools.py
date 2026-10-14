@@ -7,7 +7,7 @@ import math
 import bpy
 
 from vray_blender.exporting.tools import getInputSocketByAttr
-from vray_blender.lib.blender_utils import getShadowAttr, updateShadowAttr
+from vray_blender.lib.blender_utils import getSceneMetersPerUnit, getShadowAttr, updateShadowAttr
 from vray_blender.nodes.utils import getLightOutputNode, isAutoConnectEnabled
 
 # Luminous efficacy of radiation at peak photopic sensitivity (lm/W at 555 nm).
@@ -121,12 +121,8 @@ def convertIntensityForUnitChange(propGroup, pluginType, context):
         return
 
     # Mirror SettingsUnitsInfo.exportCustom so the coefficients match what the renderer uses.
-    unitSettings = context.scene.unit_settings
     photometricScale = context.scene.vray.SettingsUnitsInfo.photometric_scale
-    meterScale = 1.0
-    if unitSettings.system != 'NONE':
-        meterScale = unitSettings.scale_length
-        photometricScale *= meterScale ** 2
+    meterScale = getSceneMetersPerUnit(context)
 
     # Resolve the light - and an object using it, for the world-space transform scale - from
     # the update source rather than context.active_object (which is wrong for pinned panels,

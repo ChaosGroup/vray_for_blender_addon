@@ -6,13 +6,14 @@ from vray_blender.bin import VRayBlenderLib as vray
 from vray_blender.exporting.mtl_export import MtlExporter
 from vray_blender.exporting.node_export import exportLinkedSocket
 from vray_blender.exporting.node_exporters.uvw_node_export import exportDefaultUVWGenChannel
-from vray_blender.exporting.tools import FarNodeLink, getFarNodeLink, resolveNodeSocket, _getActiveNearLinks, socketHasActiveNearLinks
+from vray_blender.exporting.tools import FarNodeLink, getFarNodeLink, getFirstSocketLink, resolveNodeSocket, _getActiveNearLinks, socketHasActiveNearLinks
 from vray_blender.lib.attribute_utils import toColor
 from vray_blender.lib.defs import AColor, AttrPlugin, NodeContext, PluginDesc
 from vray_blender.lib.export_utils import wrapAsTexture
 from vray_blender.lib.names import Names
 from vray_blender.lib.plugin_utils import updateValue, createPlugin
 from vray_blender.lib import image_utils
+from vray_blender.lib.blender_utils import getSceneMetersPerUnit
 from vray_blender.nodes.curves_node import fillSplineData
 from mathutils import Color, Euler, Matrix, Vector
 
@@ -229,7 +230,7 @@ def _cyclesSpecularFresnelIORTex(nodeCtx: NodeContext, ior: float, level: AttrPl
     return floatOp(1, num, den) if ior >= 1.0 else floatOp(1, den, num)
 
 def _exportCyclesSpecular(nodeCtx: NodeContext, mtlDesc: PluginDesc):
-    # Cycles treats "Specular IOR Level" 0.5 as neutral: it scales the dielectric F0 by 2*level and
+    # Cycles treats "Specular IOR Level" 0.5 as neutral, scaling the dielectric F0 by 2*level and
     # re-derives the Fresnel IOR from the result, so reflect = tint * level would render at half the
     # reflectance. With a constant IOR and level, reproduce the adjustment on fresnel_ior exactly as
     # Cycles does - that matches the whole Fresnel curve and does not saturate above level 0.5.
@@ -386,6 +387,10 @@ def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
             return _exportCyclesTranslucentBsdf(nodeCtx)
         case "ShaderNodeBsdfTransparent":
             return _exportCyclesTransparentBsdf(nodeCtx)
+        case "ShaderNodeHoldout":
+            NodeContext.registerError("Holdout is only supported when connected directly to the "
+                                      "Material Output's Surface socket")
+            return AttrPlugin()
         case "ShaderNodeLightPath":
             return _exportCyclesLightPathNode(nodeCtx, nodeLink)
         case "ShaderNodeAddShader":
@@ -502,17 +507,12 @@ def exportCyclesNode(nodeCtx: NodeContext, nodeLink: bpy.types.NodeLink):
 _SSS_MFP_SCALE = 0.0796  # ~0.25/pi; empirically tuned
 
 
-def _sceneMetersScale() -> float:
-    us = bpy.context.scene.unit_settings
-    return us.scale_length if us.system != 'NONE' else 1.0
-
-
 def _exportSSSScatterParams(nodeCtx: NodeContext, mtlDesc: PluginDesc):
     """ Configure translucency=6 (random-walk SSS) scatter distance from Cycles'
         Subsurface Radius/Scale so the effective mean free path matches Cycles. """
     radiusSock = nodeCtx.node.inputs["Subsurface Radius"]
     scaleSock  = nodeCtx.node.inputs["Subsurface Scale"]
-    metersScale = _sceneMetersScale()
+    metersScale = getSceneMetersPerUnit(bpy.context)
 
     # Pin scatterRadius_const = 1 (fog_unit_scale_on multiplies fog_mult by metersScale*100)
     mtlDesc.setAttribute("fog_mult", 1.0 / (100.0 * max(1e-6, metersScale)))
@@ -524,7 +524,7 @@ def _exportSSSScatterParams(nodeCtx: NodeContext, mtlDesc: PluginDesc):
         mtlDesc.setAttribute("fog_color_tex", Color((r[0] / maxR, r[1] / maxR, r[2] / maxR)))
         mtlDesc.setAttribute("fog_depth", maxR * scale * _SSS_MFP_SCALE)
     else:
-        # textured radius/scale: pass the ratio through, scale the magnitude by the factor
+        # For a textured radius/scale, pass the ratio through and scale the magnitude by the factor
         _exportCyclesColorAttribute(nodeCtx, mtlDesc, "Subsurface Radius", "fog_color_tex")
         depth = PluginDesc(Names.nextVirtualNode(nodeCtx, "TexFloatOp"), "TexFloatOp")
         _exportCyclesFloatAttribute(nodeCtx, depth, "Subsurface Scale", "float_a")
@@ -542,8 +542,8 @@ def _exportSSSScatterParams(nodeCtx: NodeContext, mtlDesc: PluginDesc):
 
 def _constantSource(socket):
     """ The RGB / Value node feeding 'socket' through any reroutes, or None if it is textured. """
-    while socket.is_linked:
-        node = socket.links[0].from_node
+    while link := getFirstSocketLink(socket):
+        node = link.from_node
         if node.bl_idname == 'NodeReroute':
             socket = node.inputs[0]
             continue
@@ -948,7 +948,7 @@ def _exportCyclesHairAbsorption(nodeCtx: NodeContext, mtlDesc: PluginDesc, azimu
             mtlDesc.setAttribute("dye_color", _hairDyeColorForSigma(sigma))
             return
 
-        # Textured pigment: fall back to BRDFHair4's melanin model. Different constants and
+        # A textured pigment falls back to BRDFHair4's melanin model. Different constants and
         # concentration curve, so this branch only matches approximately.
         _exportCyclesFloatAttribute(nodeCtx, mtlDesc, melaninSocket, "melanin")
         _exportCyclesFloatAttribute(nodeCtx, mtlDesc, rednessSocket, "pheomelanin")
@@ -1484,7 +1484,15 @@ def _exportCyclesNormalMap(nodeCtx: NodeContext):
 
     colorValue = _exportCyclesWrappedAttribute(nodeCtx, "Color")
     texDesc.setAttribute("bump_tex_color", colorValue)
-    # texDesc.setAttribute("normal_uvwgen_auto", True)
+    # Cycles takes the tangents from node.uv_map, not from the image's own (possibly transformed)
+    # coordinates. Without normal_uvwgen V-Ray falls back to the first mapping channel, which is
+    # also what an empty uv_map maps to elsewhere in this exporter.
+    if node.space == 'TANGENT' and node.uv_map:
+        uvwgenDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "UVWGenMayaPlace2dTexture"), "UVWGenMayaPlace2dTexture")
+        uvwgenDesc.setAttribute("uv_set_name", node.uv_map)
+        texDesc.setAttribute("normal_uvwgen", _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc))
+    else:
+        texDesc.setAttribute("normal_uvwgen", AttrPlugin())
     texDesc.setAttribute("blue2Z_mapping_method", 1)
 
     # TODO: need to wrap this so it works on GPU?
@@ -1857,7 +1865,7 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
     uvwMatrix = _computeImageMappingTransform(node.texture_mapping)
     nodeCtx.pushUVWTransform(uvwMatrix)
 
-    # TODO: projection, repeat/mirror
+    # TODO: projection
     if isEnvironment:
         uvwgenName = Names.nextVirtualNode(nodeCtx, "UVWGenEnvironment")
         uvwgenDesc = PluginDesc(uvwgenName, "UVWGenEnvironment")
@@ -1878,8 +1886,21 @@ def _exportCyclesImageNode(nodeCtx: NodeContext, nodeLink: FarNodeLink, isEnviro
             NodeContext.registerError("V-Ray only supports Flat projection when a Vector input is connected")
     nodeCtx.popUVWTransform()
 
-    if not isEnvironment and node.extension != "REPEAT":
-        NodeContext.registerError("V-Ray only supports Repeat image extension")
+    if not isEnvironment:
+        # As in V-Ray's own MaterialX image node: an untiled bitmap returns (0, 0, 0, 0) outside
+        # [0, 1], which is Clip. Extend and Mirror fold the coordinates the image already has
+        # through a 2D placement. Its wrap must stay on - off, it flags the UVs invalid and the
+        # bitmap returns default_color instead.
+        if node.extension in ('EXTEND', 'MIRROR'):
+            place2dDesc = PluginDesc(Names.nextVirtualNode(nodeCtx, "UVWGenMayaPlace2dTexture"), "UVWGenMayaPlace2dTexture")
+            place2dDesc.setAttribute("uvwgen", texBitmapDesc.getAttribute("uvwgen"))
+            isExtend = node.extension == 'EXTEND'
+            place2dDesc.setAttribute("clamp_u", isExtend)
+            place2dDesc.setAttribute("clamp_v", isExtend)
+            place2dDesc.setAttribute("mirror_u", not isExtend)
+            place2dDesc.setAttribute("mirror_v", not isExtend)
+            texBitmapDesc.setAttribute("uvwgen", _exportCyclesPluginWithStats(nodeCtx, place2dDesc))
+        texBitmapDesc.setAttribute("tile", 1 if node.extension in ('REPEAT', 'MIRROR') else 0) # tile in UV / no tiling
 
     import copy
     bitmapPlugin = _exportCyclesPluginWithStats(nodeCtx, texBitmapDesc)
@@ -1957,6 +1978,19 @@ def _exportCyclesCombineVectorNode(nodeCtx: NodeContext):
 _RAMP_RESAMPLE_STOPS = 12
 
 
+def _exportConstUVWGen(nodeCtx: NodeContext):
+    """ Return a shared UVWGenExplicit pinned to (0,0,0). """
+    DEFAULT_PLUGIN_TYPE = 'UVWGenExplicit_CONST'
+    if not (plugin := nodeCtx.exporterCtx.defaultPlugins.get(DEFAULT_PLUGIN_TYPE)):
+        uvwgenDesc = PluginDesc('defaultUVWGenExplicitConst', 'UVWGenExplicit')
+        uvwgenDesc.setAttribute('uvw', AColor((0.0, 0.0, 0.0, 1.0)))
+        uvwgenDesc.setAttribute('useSeparateParams', 1) # uvw
+        plugin = _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc)
+        nodeCtx.exporterCtx.defaultPlugins[DEFAULT_PLUGIN_TYPE] = plugin
+
+    return plugin
+
+
 def _exportCyclesRampNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeValToRGB = nodeCtx.node
     pluginName = Names.treeNode(nodeCtx)
@@ -2000,6 +2034,9 @@ def _exportCyclesRampNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     texDesc.setAttribute("positions", positions)
     texDesc.setAttribute("colors", colors) # TODO: check if I need wrapper for colors?
     texDesc.setAttribute("gradient_type", 5) # mapped
+
+    # 'mapped' reads its position from texture_map, but still needs a uvwgen to shade at all.
+    texDesc.setAttribute("uvwgen", _exportConstUVWGen(nodeCtx))
 
     #TODO: what is hsl/hsv ramp???
     rampPlugin = _exportCyclesPluginWithStats(nodeCtx, texDesc)
@@ -2088,10 +2125,17 @@ def _exportCyclesGeneratedCoordsUVWGen(nodeCtx, fromMappingNode=True, pluginName
 def _exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: FarNodeLink):
     node: bpy.types.ShaderNodeTexCoord = nodeCtx.node
     fromSocket = nodeLink.from_socket
+
+    # A background has no object and sd->P is the ray direction, so 'Object' without a target
+    # is the same as 'Generated' there (svm/tex_coord.h). A targeted one still needs the transform.
+    inWorld = isinstance(nodeCtx.rootObj, bpy.types.World)
+    worldViewDir = inWorld and (fromSocket.name == "Generated"
+                                or (fromSocket.name == "Object" and node.object is None))
+
     # Each branch builds a different UVWGen type.
-    if fromSocket.name == "Generated":
+    if (fromSocket.name == "Generated") and not worldViewDir:
         return _exportCyclesGeneratedCoordsUVWGen(nodeCtx, pluginName=_outputScopedName(nodeCtx, fromSocket.name))
-    elif fromSocket.name in ["Normal", "Reflection", "Camera"]:
+    elif worldViewDir or fromSocket.name in ["Normal", "Reflection", "Camera"]:
         uvwgenName = _outputScopedName(nodeCtx, fromSocket.name)
         uvwgneDesc = PluginDesc(uvwgenName, "UVWGenExplicit")
         uvwgneDesc.setAttribute("useSeparateParams", 1) # uvw
@@ -2099,7 +2143,9 @@ def _exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: FarNodeL
         samplerPluginName = Names.nextVirtualNode(nodeCtx, "TexSampler")
         samplerDesc = PluginDesc(samplerPluginName, "TexSampler")
         samplerPlugin = _exportCyclesPluginWithStats(nodeCtx, samplerDesc)
-        if fromSocket.name == "Normal":
+        if worldViewDir:
+            samplerPlugin.output = "view_dir"
+        elif fromSocket.name == "Normal":
             samplerPlugin.output = "gnormal" # normal/gnormal?
         elif fromSocket.name == "Reflection":
             samplerPlugin.output = "reflection"
@@ -2126,6 +2172,12 @@ def _exportCyclesTextureCoordinatesNode(nodeCtx: NodeContext, nodeLink: FarNodeL
         uvwgenDesc = PluginDesc(uvwgenName, "UVWGenChannel")
         uvwgenDesc.setAttribute("uvw_transform", nodeCtx.getUVWTransform())
         uvwgenDesc.setAttribute("uvw_channel", -1)
+        return _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc, True)
+    elif inWorld and (fromSocket.name == "Window"):
+        uvwgenName = _outputScopedName(nodeCtx, fromSocket.name)
+        uvwgenDesc = PluginDesc(uvwgenName, "UVWGenEnvironment")
+        uvwgenDesc.setAttribute("mapping_type", "screen")
+        uvwgenDesc.setAttribute("uvw_transform", nodeCtx.getUVWTransform())
         return _exportCyclesPluginWithStats(nodeCtx, uvwgenDesc, True)
     elif fromSocket.name in [ "Object", "Window" ]:
         uvwgenName = _outputScopedName(nodeCtx, fromSocket.name)
@@ -2682,7 +2734,7 @@ CYCLES_SKY_MODELS = {
     'NISHITA': 5,   # Blender 4.x
 }
 
-# The two renderers' skies differ in brightness by a per-model factor: the geometric mean of the
+# The two renderers' skies differ in brightness by a per-model factor, the geometric mean of the
 # V-Ray/Cycles ratio measured over the sky region at 15/45/75 degrees of sun elevation. The elevation
 # drift (~+/-20%) is left over; turbidity does not affect the ratio. Same approach as
 # light_convert.py. The two scattering models land on the same V-Ray model but are a factor of two
@@ -2758,7 +2810,7 @@ def _exportCyclesSkyTexture(nodeCtx: NodeContext):
         # Below the horizon PRG Clear Sky paints 'ground_albedo' * dome illuminance, which the
         # scattering skies have no counterpart for - they fade to black there. At the 0.2 default the
         # band came out 20-50x too bright, so zero it. Blender's own hardcoded 0.3
-        # (sky_multiple_scattering.cpp:41) is a different quantity: it sits inside the multiple
+        # (sky_multiple_scattering.cpp:41) is a different quantity, sitting inside the multiple
         # scattering integral, and using it here overshot by another 5x.
         skyDesc.setAttribute("ground_albedo", BLACK_COLOR)
 
@@ -2917,8 +2969,11 @@ def _exportCyclesVectorDot(nodeCtx: NodeContext, vectorA, vectorB, name: str, al
 # Blender op -> TexAColorOp mode.
 _VECTOR_MATH_BINARY_MODES = {'ADD': 3, 'SUBTRACT': 4, 'MULTIPLY': 2, 'DIVIDE': 6, 'MINIMUM': 7, 'MAXIMUM': 8,
                              'MODULO': 21}
-_VECTOR_MATH_UNARY_MODES  = {'ABSOLUTE': 14, 'FLOOR': 17, 'CEIL': 15, 'SINE': 12, 'COSINE': 13, 'TANGENT': 23,
+# ABSOLUTE uses 'absolute difference' (mode 9) against black rather than the unary 'abs'
+# (mode 14): on V-Ray 7.4 mode 14 measured as a pass-through of color_a. Same operation either way.
+_VECTOR_MATH_UNARY_MODES  = {'ABSOLUTE': 9, 'FLOOR': 17, 'CEIL': 15, 'SINE': 12, 'COSINE': 13, 'TANGENT': 23,
                              'SQRT': 20}
+_VECTOR_MATH_BLACK_B = {'ABSOLUTE'}
 # sin and cos are f(color_a * color_b) against Cycles' single operand, and an unset color_b reads
 # as black on both devices.
 _VECTOR_MATH_WHITE_B = {'SINE', 'COSINE'}
@@ -2943,6 +2998,8 @@ def _exportCyclesVectorMathNode(nodeCtx: NodeContext):
         texDesc.setAttribute("color_a", _exportCyclesVectorInput(nodeCtx, vectorA))
         if op in _VECTOR_MATH_WHITE_B:
             texDesc.setAttribute("color_b", WHITE_COLOR)
+        elif op in _VECTOR_MATH_BLACK_B:
+            texDesc.setAttribute("color_b", BLACK_COLOR)
         return _exportCyclesPluginWithStats(nodeCtx, texDesc, True)
 
     match op:
@@ -3130,8 +3187,9 @@ def _exportCyclesColorMixNode(nodeCtx: NodeContext, isColorMix: bool, isLegacy=F
             case 'SATURATION': mode = 22
             case 'COLOR': mode = 23
             case 'VALUE': mode = 24
+            case 'DIVIDE': mode = 29
             case _:
-                # Currently divide only
+                # Modes added in newer Blender versions
                 NodeContext.registerError(f"Mix mode {node.blend_type} not supported by V-Ray")
 
     blendModes = [

@@ -30,6 +30,12 @@
             "desc": "An intensity multiplier applied over the radiance stored in the luminaire cache"
         },
         {
+            "attr": "intensity_tex",
+            "options": {
+                "linked_only": true
+            }
+        },
+        {
             "attr": "file",
             "subtype": "VRAY_FILE_PATH"
         },

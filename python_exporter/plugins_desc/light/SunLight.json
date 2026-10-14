@@ -1086,7 +1086,9 @@
             "ui" : 
             {
                 "max" : 360.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1105,8 +1107,10 @@
             "type" : "FLOAT",
             "ui" : 
             {
-                "max" : 360.0,
-                "min" : 0.0
+                "max" : 90.0,
+                "min" : -90.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1126,7 +1130,9 @@
             "ui" : 
             {
                 "max" : 360.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1146,7 +1152,9 @@
             "ui" : 
             {
                 "max" : 360.0,
-                "min" : 0.0
+                "min" : 0.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1225,7 +1233,9 @@
             "ui" : 
             {
                 "max" : 90.0,
-                "min" : -90.0
+                "min" : -90.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1237,7 +1247,9 @@
             "ui" : 
             {
                 "max" : 180.0,
-                "min" : -180.0
+                "min" : -180.0,
+                "quantityType" : "angle",
+                "units" : "degrees"
             }
         },
         
@@ -1315,13 +1327,13 @@
         
         {
             "attr" : "stars_time_zone",
-            "default" : 0,
+            "default" : 0.0,
             "desc" : "Time zone applied to the time used to position the stars",
-            "type" : "INT",
+            "type" : "FLOAT",
             "ui" : 
             {
-                "max" : 12,
-                "min" : -12
+                "max" : 14.0,
+                "min" : -12.0
             }
         },
         

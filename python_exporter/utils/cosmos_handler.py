@@ -4,12 +4,13 @@
 
 from contextlib import contextmanager
 from enum import Enum
-import bpy, math, os, time, queue
+import bpy, math, os, queue
 
 from mathutils import Quaternion, Vector
 
 from vray_blender import debug
-from vray_blender.utils import cosmos_asset_set, cosmos_scatter_preset, cosmos_drop_batch
+from vray_blender.utils import cosmos_asset_set, cosmos_scatter_preset, cosmos_drop_batch, cosmos_notify
+from vray_blender.utils import cosmos_variants
 from vray_blender.exporting.tools import isObjectVrayProxy, isObjectVRayDecal
 from vray_blender.lib.lib_utils import getCosmosAssetName, getLightPropGroup
 from vray_blender.lib.blender_utils import selectObject
@@ -36,6 +37,10 @@ class CosmosRelinkStatus(Enum):
     RelinkOnly = 2 # Only relinking i.e. changing paths on some assets.
     DownloadAndRelink = 3 # Download the missing assets and then relink them.
     Aborted = 4 # Only used if something goes wrong with the zmq server.
+
+# Hard timeout (seconds) for the integrity check, in case something goes wrong with the zmq server.
+# The check should not take longer than 2-3 s.
+INTEGRITY_CHECK_TIMEOUT = 30
 
 # Cosmos download states, keep in sync with the enum in zmq_messages.hpp.
 class CosmosDownloadStatus(Enum):
@@ -144,7 +149,9 @@ class CosmosHandler:
         self.downloadStatus = CosmosDownloadStatus.Aborted
         self.missingAssetsStatus = CosmosRelinkStatus.Aborted
 
-    def checkMissingAssets(self, operator: bpy.types.Operator, context: bpy.types.Context, event: bpy.types.Event):
+    def checkMissingAssets(self) -> bool:
+        """ Start the asset integrity check. Returns False if there is nothing to check. The result
+            arrives in missingAssetsStatus; confirmRelink() then asks the user. """
         self.unresolvedCallbacks = []
         self.missingAssetsStatus = CosmosRelinkStatus.CheckingIntegrity
 
@@ -204,21 +211,15 @@ class CosmosHandler:
                 checkNodeTreeAssets(light, light.node_tree)
 
         if len(unresolvedPackageIds) == 0:
-            return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message='There are no Cosmos assets that require relinking.',
+            bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message='There are no Cosmos assets that require relinking.',
                 messageRow2='Only assets imported after hotfix 7.00.24 can be relinked.')
+            return False
 
         vray.calculateDownloadSize(unresolvedPackageIds, unresolvedRevisionIds, unresolvedPaths)
+        return True
 
-        timeout = 0
-        MAX_DOWNLOAD_SIZE_TIMEOUT = 30 # Hard timeout in case something goes wrong with the zmq server.
-        # Block and wait until the total asset size is calculated... Should not be slower than a 2-3s
-        while self.missingAssetsStatus == CosmosRelinkStatus.CheckingIntegrity:
-            time.sleep(0.1)
-            timeout += 0.1
-
-            if timeout > MAX_DOWNLOAD_SIZE_TIMEOUT:
-                return bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT', message='Cosmos asset integrity check has timed out')
-
+    def confirmRelink(self, operator: bpy.types.Operator, context: bpy.types.Context, event: bpy.types.Event):
+        """ Report the integrity check result and ask whether to relink / download. """
         self.relinked = False
         # The user is not logged in or the cosmos service is not running.
         if self.missingAssetsStatus == CosmosRelinkStatus.NotLoggedIn:
@@ -335,6 +336,10 @@ COSMOS_SCALE_UNIT = 0.01 # centimeters
 _MAX_IMPORTS_PER_TICK = 4
 _BUSY_TICK_INTERVAL = 0.1
 _IDLE_TICK_INTERVAL = 1.0
+# A pending variant swap only needs to keep its spinner moving, which is far less than the import
+# backlog needs. A download can run for minutes, so redrawing at the busy rate all that time is
+# a lot of wasted repainting.
+_SWAP_TICK_INTERVAL = 0.25
 
 
 @contextmanager
@@ -397,8 +402,19 @@ def _isCosmosAssetObject(obj):
     return bool(getattr(vrayData, 'cosmos_package_id', ''))
 
 
-def _importDroppedMaterial(settings):
+def _assetLabel(settings) -> str:
+    """What to call an asset in a message shown to the user.  """
+    return settings.assetName
+    
+
+def _importDroppedMaterial(settings) -> tuple[bool, str]:
     """Import a Cosmos material and give it to the object it was dropped on, if any.
+
+    Returns (imported, problem): whether the material datablock was created and, when it
+    was, why it could not be put in a slot. Nothing is reported from here - the caller
+    turns the pair into the single message the Cosmos Browser shows for this import. A
+    material that is in the scene but not in a slot is one warning, not an error next to
+    a success.
 
     Which slot it lands in follows Blender's own material drop
     (OBJECT_OT_drop_named_material): the slot under the cursor is replaced, an
@@ -423,6 +439,9 @@ def _importDroppedMaterial(settings):
     importMaterials() is called WITHOUT an objectForMatAssign so the new datablock can be
     slotted in manually afterwards; left to itself it would append a slot of its own. The
     freshly-created material is located by diffing bpy.data.materials around the call.
+    That diff is also what says whether anything was imported at all, so it runs before
+    the no-target return - an Import-button import has no target either, and used to be
+    called a success whatever the .vrmat turned out to hold.
 
     forceDefaultUVChannel is True when the target mesh is NOT a Cosmos asset (so the
     Cosmos-style channel indices in the dropped material would otherwise sample at (0,0)
@@ -441,8 +460,33 @@ def _importDroppedMaterial(settings):
                     forceDefaultUVChannel=forceDefaultUV,
                     cosmosAssetContext=settings)
 
+    # Find the material(s) created by this call. The vrmat usually contains one top-level
+    # material, which is named after the asset; prefer that one so the pick does not depend
+    # on how the names happen to sort. Alphabetical order is the fallback.
+    newNames = sorted(set(bpy.data.materials.keys()) - matsBefore)
+    if not newNames:
+        # Nothing was imported at all, as opposed to the assignment failures below - there
+        # is no material to assign at this point.
+        return False, ''
+
+    problem = _assignDroppedMaterial(settings, targetObj, newNames)
+
+    # Blender does not save a material with no users. Keep the ones the drop left unassigned.
+    for name in newNames:
+        if (mtl := bpy.data.materials.get(name)) and (mtl.users == 0):
+            mtl.use_fake_user = True
+
+    return True, problem
+
+
+def _assignDroppedMaterial(settings, targetObj, newNames: list[str]) -> str:
+    """Put the material imported by _importDroppedMaterial() in a slot of targetObj.
+
+    Returns why the material could not be assigned, or '' if it was assigned or there was
+    nothing to assign it to.
+    """
     if targetObj is None:
-        return
+        return ''
 
     if cosmos_drop_batch.isMultiAssetDrop(settings):
         # Several assets were dropped together and they all name the same target and the
@@ -459,46 +503,33 @@ def _importDroppedMaterial(settings):
                 # Blender's status line from this point
                 bpy.ops.vray.cosmos_info_popup('INVOKE_DEFAULT',
                                                message=row1, messageRow2=row2)
-        return
-
-    # Find the material(s) created by this call. The vrmat usually contains one top-level
-    # material, which is named after the asset; prefer that one so the pick does not depend
-    # on how the names happen to sort. Alphabetical order is the fallback.
-    newNames = sorted(set(bpy.data.materials.keys()) - matsBefore)
-    if not newNames:
-        debug.printError(
-            f"Cosmos drop: importMaterials produced no new material datablock "
-            f"for package {settings.packageId!r}"
-        )
-        return
+        return ''
 
     assetName = getCosmosAssetName(settings)
     newMat = bpy.data.materials[assetName if assetName in newNames else newNames[0]]
 
+    # An Empty, a camera, a light - object types Blender gives no material list at all, so
+    # material_slots is empty and there is nowhere to put the material. It is in the scene
+    # either way, which is why the caller reports one warning instead of the success.
     slots = getattr(targetObj, 'material_slots', None)
-    if slots is None:
-        debug.printError(
-            f"Cosmos drop: target {targetObj.name!r} has no material_slots; "
-            f"cannot assign {newMat.name!r}"
+    materials = getattr(getattr(targetObj, 'data', None), 'materials', None)
+    if (slots is None) or (materials is None):
+        debug.printDebug(
+            f"Cosmos drop: target {targetObj.name!r} takes no material, "
+            f"{newMat.name!r} was left unassigned"
         )
-        return
+        return (f"Material '{_assetLabel(settings)}' was imported, but "
+                f"'{targetObj.name}' cannot hold materials")
 
     if not len(slots):
         # Nothing to replace - create the slot the material goes into. Appending to the
         # mesh links the material to the object data, Blender's default for a new slot.
-        materials = getattr(getattr(targetObj, 'data', None), 'materials', None)
-        if materials is None:
-            debug.printError(
-                f"Cosmos drop: target {targetObj.name!r} has no material list; "
-                f"cannot assign {newMat.name!r}"
-            )
-            return
         materials.append(newMat)
         debug.printDebug(
             f"Cosmos drop: created slot 0 on {targetObj.name!r} "
             f"for material {newMat.name!r}"
         )
-        return
+        return ''
 
     # An index that is not a slot of this object falls back to the first slot - the same
     # clamp Blender applies to its own material drop with max_ii(mat_slot, 1). The drop
@@ -521,6 +552,7 @@ def _importDroppedMaterial(settings):
         f"Cosmos drop: assigned material {newMat.name!r} to "
         f"slot {slotIndex} of {targetObj.name!r}"
     )
+    return ''
 
 
 def _dropHitNormal(settings):
@@ -602,11 +634,14 @@ def _orientDecalToNormal(decalObj: bpy.types.Object, hitNormal: Vector):
 
 
 def assetImportTimerFunction():
+    # Name of the asset being imported, so that the catch-all below can say which one failed.
+    currentAsset = ''
     try:
         imported = 0
         while (imported < _MAX_IMPORTS_PER_TICK) and not assetImportQueue.empty():
             imported += 1
             settings = assetImportQueue.get()
+            currentAsset = settings.assetName
             # True when this asset is one of the models a Chaos Scatter preset references. Such a
             # model is parked where the preset asks and added to the scatter's model list, and is
             # counted towards the preset's completion. See utils/cosmos_scatter_preset.py.
@@ -619,18 +654,52 @@ def assetImportTimerFunction():
             # Set to True once the member has been counted towards its set / preset. Stays False
             # for a plain import, and for a member whose owner has already been finalized.
             setHandled = False
+            # Set by the cases that build something, so that the Cosmos Browser is only told
+            # of a success for an asset that has actually made it into the scene.
+            assetImported = False
+            # Why the asset arrived incomplete, when it did. Replaces the success rather than
+            # joining it - the browser shows one message per import.
+            assetWarning = ''
             with DisableAutoConnect(), _dropPlacement(settings):
+                # A variant swap rewrites an object that is already in the scene, so it skips the
+                # dispatch below along with the set accounting and the per-import undo push.
+                if settings.variantSwapToken:
+                    cosmos_variants.applySwap(settings, COSMOS_SCALE_UNIT)
+                    continue
+
                 match(settings.assetType):
                     case "Material":
                         if not os.path.exists(settings.matFile):
-                            debug.printError(f"VRmat file {settings.matFile} does not exist")
+                            cosmos_notify.error(f"VRmat file {settings.matFile} does not exist")
                         else:
-                            _importDroppedMaterial(settings)
+                            assetImported, assetWarning = _importDroppedMaterial(settings)
+                            if not assetImported:
+                                # A .vrmat that could not be parsed leaves no material behind.
+                                # The reason is in the console; the browser gets the asset.
+                                message = (f"No material was imported from asset "
+                                           f"'{_assetLabel(settings)}'")
+                                if isSetMember or isPresetModel:
+                                    # Not shown on its own - the set or preset reports once
+                                    # and counts this, the same as the VRMesh case below.
+                                    debug.printError(message)
+                                else:
+                                    cosmos_notify.error(message)
 
                     case "VRMesh":
                         ob, err = importCosmosCompositeAsset(cosmosAssetContext=settings, scaleUnit=COSMOS_SCALE_UNIT)
+                        assetImported = not err
                         if err:
-                            debug.printError(err)
+                            message = f"Error while importing asset '{_assetLabel(settings)}': {err}"
+                            if isSetMember or isPresetModel:
+                                # Not shown on its own, for the same reason the success below
+                                # is not: the set or preset reports once and counts this.
+                                debug.printError(message)
+                            else:
+                                cosmos_notify.error(message)
+
+                        # The import is the only moment Cosmos reports the variant catalogue.
+                        if ob is not None:
+                            cosmos_variants.setVariants(ob.data, settings)
 
                         # Re-orient the imported asset to the drop surface when
                         # we have a hit normal AND either:
@@ -682,13 +751,14 @@ def assetImportTimerFunction():
                         # Counted last, so the object is completely built before the set
                         # or the preset is allowed to reach completion.
                         if isSetMember:
-                            setHandled = cosmos_asset_set.noteSetInstance(settings, ob)
+                            setHandled = cosmos_asset_set.noteSetInstance(settings, ob, assetImported)
                         elif isPresetModel:
                             setHandled = cosmos_scatter_preset.notePresetModel(settings, ob)
 
                     case "HDRI":
-                        importHDRI(settings.matFile, settings.lightFile, settings.packageId, settings.revisionId,
-                                   locationsMap=settings.locationsMap, assetName=settings.assetName)
+                        assetImported = importHDRI(
+                            settings.matFile, settings.lightFile, settings.packageId, settings.revisionId,
+                            locationsMap=settings.locationsMap, assetName=settings.assetName)
 
                     case "Extras":
                         # importDecal() creates VRayDecal objects at the 3D
@@ -705,7 +775,7 @@ def assetImportTimerFunction():
                         # whole import as failed - the decal is already in
                         # the scene at that point.
                         _objsBefore = set(bpy.data.objects.keys())
-                        importDecal(settings)
+                        assetImported = importDecal(settings)
 
                         hitNormal = _dropHitNormal(settings)
                         if hitNormal is not None:
@@ -725,9 +795,15 @@ def assetImportTimerFunction():
 
                     case "ParallaxInterior":
                         if not os.path.exists(settings.matFile):
-                            debug.printError(f"VRmat file {settings.matFile} does not exist")
+                            cosmos_notify.error(f"VRmat file {settings.matFile} does not exist")
                         else:
-                            importParallaxInterior(settings)
+                            # The plane is built whatever the .vrmat holds, so the asset does
+                            # reach the scene - but an unreadable one leaves it unshaded, and
+                            # a plain success would not say so.
+                            assetImported = True
+                            if not importParallaxInterior(settings):
+                                assetWarning = (f"Imported '{_assetLabel(settings)}', but no "
+                                                f"material could be read from its VRmat file")
 
                     case "AssetSet":
                         # A set carries no geometry of its own - only a settings.json
@@ -738,6 +814,15 @@ def assetImportTimerFunction():
                         # A preset carries no geometry either - only a .mbc config with the
                         # scatter settings and the ids of the models to scatter.
                         cosmos_scatter_preset.startScatterPresetImport(settings)
+
+                # A set member or a preset model is not announced on its own - its set reports
+                # once, when it finalizes, so that a set of hundreds does not produce hundreds
+                # of notifications.
+                if assetImported and not (isSetMember or isPresetModel):
+                    if assetWarning:
+                        cosmos_notify.warning(assetWarning)
+                    else:
+                        cosmos_notify.success(f"Successfully imported asset: {_assetLabel(settings)}")
 
                 # Every member of a set has to be accounted for, including the ones that
                 # produce no object of their own (a material) and the ones whose import
@@ -752,11 +837,14 @@ def assetImportTimerFunction():
                             f"skipped. See the log above for the reason."
                         )
                     elif settings.assetType != "AssetSet":
-                        debug.printWarning(
+                        # Not reported by the server, which does not know how the addon
+                        # places the members. Logged rather than shown: it is per member,
+                        # and the member did arrive - the set reports the outcome once.
+                        cosmos_notify.info(
                             f"Chaos Cosmos Asset Set: member '{settings.assetName}' is of type "
                             f"'{settings.assetType}', which is not placed from the manifest"
                         )
-                    setHandled = cosmos_asset_set.noteSetInstance(settings, None)
+                    setHandled = cosmos_asset_set.noteSetInstance(settings, None, assetImported)
 
                 # Same for a preset's models: a failure report arrives with no asset type at all,
                 # and it still has to be counted or the preset waits out its whole idle timeout.
@@ -767,7 +855,8 @@ def assetImportTimerFunction():
                             f"skipped. See the log above for the reason."
                         )
                     else:
-                        debug.printWarning(
+                        # Per model, so logged rather than shown - see the set member above.
+                        cosmos_notify.info(
                             f"Chaos Scatter preset: model '{settings.assetName}' is of type "
                             f"'{settings.assetType}', which cannot be scattered"
                         )
@@ -788,19 +877,36 @@ def assetImportTimerFunction():
             # them have been reported, and only then may it stop claiming the assets
             # that arrive at its drop point.
             cosmos_drop_batch.noteArrival(settings)
+            # This asset is done with. Anything that throws from here on belongs to no
+            # particular asset and must not be reported against the last one imported.
+            currentAsset = ''
 
         cosmos_asset_set.tickSessions()
         cosmos_scatter_preset.tickSessions()
+        swapsPending = cosmos_variants.tickSwaps()
     except Exception as e:
         debug.printExceptionInfo(e, "cosmos_handler.assetImportTimerFunction")
-        debug.reportError("Import of Cosmos asset failed")
+        failed = f" '{currentAsset}'" if currentAsset else ""
+        cosmos_notify.reportError(f"Import of Cosmos asset{failed} failed")
+        swapsPending = False
 
     # Come back promptly while there is a backlog to drain - a large Asset Set delivers
     # hundreds of members and importing them all in one tick would freeze the UI.
-    return _BUSY_TICK_INTERVAL if not assetImportQueue.empty() else _IDLE_TICK_INTERVAL
+    if not assetImportQueue.empty():
+        return _BUSY_TICK_INTERVAL
+    # A pending swap only needs its spinner kept alive, at a much calmer rate.
+    return _SWAP_TICK_INTERVAL if swapsPending else _IDLE_TICK_INTERVAL
 
 def assetImportCallback(assetSettings):
     assetImportQueue.put(assetSettings)
+
+def clearImportQueue():
+    """ Drop the queued imports before a .blend is replaced. Their sets and presets go away with
+        the old file, so they would land loose in the new one.
+    """
+    # Only the main thread takes from the queue, so get_nowait() never finds it empty.
+    while not assetImportQueue.empty():
+        assetImportQueue.get_nowait()
 
 def registerAssetImportTimerFunction():
     if not bpy.app.timers.is_registered(assetImportTimerFunction):
@@ -825,6 +931,9 @@ def unregister():
 
     if bpy.app.timers.is_registered(assetImportTimerFunction):
         bpy.app.timers.unregister(assetImportTimerFunction)
+
+    # A pending swap names an object and nothing will apply it once the timer is gone.
+    cosmos_variants.clearSwaps()
 
     # Nothing will drain them once the timer is gone, and they hold object references.
     cosmos_asset_set.clearSessions()

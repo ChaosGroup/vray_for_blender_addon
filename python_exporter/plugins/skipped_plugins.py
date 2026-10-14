@@ -227,7 +227,6 @@ SKIPPED_PLUGINS = (
 
     # Could be used in future
     "TexCondition",
-    "PhxShaderOceanTex",
     "PhxShaderTex",
     "PhxShaderTexAlpha",
     "ParticleTex",

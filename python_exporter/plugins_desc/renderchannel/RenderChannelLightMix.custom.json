@@ -71,7 +71,8 @@
                         "label": "Group By"
                     },
                     {
-                        "name": "separate_emissive_material"
+                        "name": "separate_emissive_material",
+                        "label": "Separate Materials"
                     },
                     {
                         "name": "create_rest_channel",
@@ -79,6 +80,26 @@
                     },
                     {
                         "name": "denoise"
+                    }
+                ]
+            }
+        ]
+    },
+    "Node": {
+        "widgets": [
+            {
+                "layout": "COLUMN",
+                "attrs": [
+                    {
+                        "name": "mode"
+                    },
+                    {
+                        "name": "separate_emissive_material",
+                        "label": "Separate Materials"
+                    },
+                    {
+                        "name": "create_rest_channel",
+                        "label": "Save \"Rest\" Channel"
                     }
                 ]
             }

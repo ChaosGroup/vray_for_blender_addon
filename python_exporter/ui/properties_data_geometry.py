@@ -100,9 +100,9 @@ def getRegClasses():
     )
 
 
-# Hide default Blender data panels for V-Ray special object types (Proxy, Scene, Decal).
-# These objects have their own dedicated panels and don't need the default mesh data
-# panels (UV Maps, Vertex Colors, Shape Keys, etc.).
+# Hide default Blender data panels for V-Ray special object types (Proxy, Scene, Decal, Fur).
+# These objects have their own dedicated panels and don't need the default geometry data
+# panels (UV Maps, Attributes, Surface, etc.).
 _originalPolls = {}
 _vrayDataPanels = set()  # Our own panels that should not be hidden
 
@@ -136,7 +136,7 @@ def _hidePanels():
                 def vrayPoll(cls, context):
                     obj = context.object
                     if obj and hasattr(obj, 'vray'):
-                        if obj.vray.isVRayDecal:
+                        if obj.vray.isVRayDecal or obj.vray.isVRayFur:
                             return False
                         if blender_utils.isNonGeometryExportedAsGeometry(obj):
                             # Empty-backed V-Ray geometry (Gaussian splats, infinite plane,

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
+import os
 from dataclasses import dataclass
 from vray_blender.lib import blender_utils
 from vray_blender.nodes.sockets import VRaySocketUse, VRaySocketMult
@@ -89,8 +90,14 @@ def scopedForUpgrade(collection):
         upgrade script applied. Upgrade scripts iterate this instead of
         `bpy.data.<collection>` directly. Datablocks without a V-Ray version field
         (e.g. geometry node trees in bpy.data.node_groups) are skipped. """
-    from vray_blender.version import getDatablockUpgradeNumber
+    from vray_blender.version import getDatablockUpgradeNumber, getSceneUpgradeNumber
     for db in scoped(collection):
+        # A scene keeps its number on the Exporter.
+        if isinstance(db, bpy.types.Scene):
+            if int(getSceneUpgradeNumber(db)) < _currentScriptNum:
+                yield db
+            continue
+
         vrayProps = getattr(db, 'vray', None)
         if vrayProps is None or not hasattr(vrayProps, 'upgradeNumber'):
             continue
@@ -101,13 +108,15 @@ def scopedForUpgrade(collection):
 def stampScopedDatablocks(toNum: int):
     """ Mark every in-scope V-Ray datablock as upgraded through `toNum`. Called once
         at the end of an append/link upgrade so imported data carries its version. """
-    from vray_blender.version import setDatablockUpgradeNumber
+    from vray_blender.version import setDatablockUpgradeNumber, setSceneUpgradeNumber
     for collection in (bpy.data.materials, bpy.data.objects, bpy.data.lights,
                        bpy.data.worlds, bpy.data.cameras, bpy.data.node_groups):
         for db in scoped(collection):
             vrayProps = getattr(db, 'vray', None)
             if vrayProps is not None and hasattr(vrayProps, 'upgradeNumber'):
                 setDatablockUpgradeNumber(db, toNum)
+
+    setSceneUpgradeNumber(toNum)
 
 
 @dataclass
@@ -362,7 +371,7 @@ def _createNodeLinks(ctx: UpgradeContext, nodeLinks: list[bpy.types.NodeLink]):
                                                                 (s.name.lower() == link.toSockName.lower())), None)
 
                 if len(fromNode.outputs) > 1:
-                    fromSocket = next((s for s in fromNode.outputs if (isVraySocket(s) and (s.vray_attr) and (s.vray_attr == link.toSockAttr)) or 
+                    fromSocket = next((s for s in fromNode.outputs if (isVraySocket(s) and (s.vray_attr) and (s.vray_attr == link.fromSockAttr)) or
                                                                 (s.name.lower() == link.fromSockName.lower())), None)
                 else:
                     # For nodes with just a default output, do not try to match the socket by name
@@ -480,3 +489,185 @@ def sceneNeedsUpgrade(upgradeInfo: dict):
         if hasattr(group, 'vray') and _hasUpgradeableNodes(group, upgradeInfo):
             return True
     return False
+
+
+# True while a source .blend is read (_readSourceBaselineVersion, readSourceCurvesData). Reading
+# it links data and re-fires blend_import_post; this guards the reentry.
+_readingSourceFile = False
+
+
+def isReadingSourceFile() -> bool:
+    return _readingSourceFile
+
+
+def _importedUpgradeNumber(uids: set) -> int | None:
+    """ The upgrade number the datablocks 'uids' are upgraded from, the lowest one stamped on their
+        V-Ray datablocks and scenes. None if a datablock has no number of its own; the version of
+        the file it came from is needed then.
+    """
+    from vray_blender import UPGRADE_NUMBER
+    from vray_blender.version import getSceneUpgradeNumber
+
+    nums = [int(getSceneUpgradeNumber(s)) for s in bpy.data.scenes if s.session_uid in uids]
+    for collection in (bpy.data.materials, bpy.data.objects, bpy.data.lights,
+                       bpy.data.worlds, bpy.data.cameras, bpy.data.node_groups):
+        for db in collection:
+            if db.session_uid not in uids:
+                continue
+            vrayProps = getattr(db, 'vray', None)
+            if vrayProps is None or not hasattr(vrayProps, 'upgradeNumber'):
+                continue
+            if not vrayProps.is_property_set('upgradeNumber'):
+                return None
+            nums.append(vrayProps.upgradeNumber)
+    return min(nums, default=UPGRADE_NUMBER)
+
+
+def upgradeFromSource(sourcePath: str, uids: set):
+    """ Upgrade the datablocks 'uids' that came from 'sourcePath' from the version they were saved
+        with, the same way a loaded file is upgraded from its scene's number.
+    """
+    from vray_blender import version
+
+    fromNum = _importedUpgradeNumber(uids)
+    if fromNum is None:
+        fromNum = _readSourceBaselineVersion(sourcePath)
+
+    if fromNum < int(version.getAddonUpgradeNumber()):
+        version.upgradeImportedData(uids, fromNum)
+
+
+def upgradeLinkedData():
+    """ Linked datablocks are read from their library on every load, in the format the library was
+        saved with, and are never written back. Upgrade them in memory, as linking them did.
+    """
+    uidsByLib = {}
+    for item in _iterLinkedIds():
+        uidsByLib.setdefault(item.library, set()).add(item.session_uid)
+
+    for lib, uids in uidsByLib.items():
+        # The path of an indirectly linked library is relative to the library that links it.
+        upgradeFromSource(bpy.path.abspath(lib.filepath, library=lib.parent), uids)
+
+
+def _iterLibraryIds(lib: bpy.types.Library):
+    """ Yield every datablock that belongs to 'lib'. """
+    for prop in bpy.data.bl_rna.properties:
+        if prop.type != 'COLLECTION':
+            continue
+        for item in getattr(bpy.data, prop.identifier, ()):
+            if isinstance(item, bpy.types.ID) and item.library == lib:
+                yield item
+
+
+def _iterLinkedIds():
+    """ Yield every linked datablock, of any library. """
+    for prop in bpy.data.bl_rna.properties:
+        if prop.type != 'COLLECTION':
+            continue
+        for item in getattr(bpy.data, prop.identifier, ()):
+            if isinstance(item, bpy.types.ID) and item.library:
+                yield item
+
+
+def _linkedIdUids() -> set:
+    """ session_uid of every linked datablock, taken before a source file is read so that the
+        read removes only what it linked itself.
+    """
+    return {item.session_uid for item in _iterLinkedIds()}
+
+
+def _removeLinkedOrphans(lib: bpy.types.Library, keep: set):
+    """ Remove the datablocks of 'lib' that nothing references any more.
+
+        Linking a scene also brings in everything it referenced, and that stays behind after the
+        append, carrying static ids that cannot be corrected in linked data. Scoped to this one
+        library and to datablocks with no users at all (a fake user counts as one), which is what
+        Blender itself drops on save - it never writes unused linked data. Datablocks in 'keep'
+        were linked before the read, e.g. a material the user just linked and has not assigned yet.
+    """
+    while orphans := [id for id in _iterLibraryIds(lib) if id.users == 0 and id.session_uid not in keep]:
+        bpy.data.batch_remove(orphans)
+
+
+def _removeLinkedIds(ids: list, keep: set):
+    """ Remove datablocks linked only to be read, what they pulled in, and their library
+        (kept if a real link operation still references it). Datablocks in 'keep' stay: the read
+        reuses a scene the user has already linked from the same file.
+    """
+    libs = {id.library for id in ids if id.library}
+    bpy.data.batch_remove([id for id in ids if id.session_uid not in keep])
+    for lib in libs:
+        _removeLinkedOrphans(lib, keep)
+        if lib.users == 0:
+            try:
+                bpy.data.libraries.remove(lib)
+            except Exception:
+                pass
+
+
+def _readSourceBaselineVersion(sourcePath: str) -> int:
+    """ Peek the source .blend an append/link came from and return the lowest V-Ray
+        scene upgrade number found - the version the imported data was created with,
+        so already-applied upgrade scripts are not re-run (which would corrupt the
+        data). Returns 0 if it can't be read (falls back to the whole chain).
+
+        A file without scenes is a partial write from a running session - the copy buffer
+        (Ctrl+C) or bpy.data.libraries.write - so its data is already current.
+    """
+    global _readingSourceFile
+    from vray_blender import version
+
+    if not sourcePath or not os.path.exists(sourcePath):
+        return 0
+
+    nums = []
+    linkedBefore = _linkedIdUids()
+    _readingSourceFile = True
+    try:
+        try:
+            with bpy.data.libraries.load(sourcePath, link=True) as (dataFrom, dataTo):
+                if not dataFrom.scenes:
+                    return int(version.getAddonUpgradeNumber())
+                dataTo.scenes = list(dataFrom.scenes)
+        except Exception:
+            return 0
+        linkedScenes = [s for s in bpy.data.scenes
+                        if s.library and bpy.path.abspath(s.library.filepath, library=s.library.parent) == sourcePath]
+        for scene in linkedScenes:
+            nums.append(int(version.getSceneUpgradeNumber(scene)))
+        _removeLinkedIds(linkedScenes, linkedBefore)
+    finally:
+        _readingSourceFile = False
+
+    return min(nums) if nums else 0
+
+
+def readSourceCurvesData(sourcePath: str) -> dict:
+    """ Return {curves node name: encoded curve} from the hidden curves tree of the source .blend.
+
+        Files saved before the curves were stored on their nodes have them only there, and append
+        does not bring that tree along: the nodes refer to it by name, not by pointer.
+    """
+    global _readingSourceFile
+    from vray_blender.nodes.curves_node import _CURVES_NODE_TREE_NAME, encodeMapping
+
+    if not sourcePath or not os.path.exists(sourcePath):
+        return {}
+
+    linkedBefore = _linkedIdUids()
+    _readingSourceFile = True
+    try:
+        try:
+            with bpy.data.libraries.load(sourcePath, link=True) as (dataFrom, dataTo):
+                dataTo.node_groups = [name for name in dataFrom.node_groups if name == _CURVES_NODE_TREE_NAME]
+        except Exception:
+            return {}
+        if not (linked := [tree for tree in dataTo.node_groups if tree]):
+            return {}
+        curvesData = {n.name: encodeMapping(n.mapping) for n in linked[0].nodes}
+        _removeLinkedIds(linked, linkedBefore)
+    finally:
+        _readingSourceFile = False
+
+    return curvesData

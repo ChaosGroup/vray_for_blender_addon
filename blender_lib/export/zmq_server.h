@@ -51,7 +51,10 @@ public:
 
 	static const int RENDERER_INACTIVITY_INTERVAL = 5000;   //ms
 
-#ifndef __APPLE__
+#if defined(__SANITIZE_ADDRESS__)
+	// Instrumented server startup can exceed the normal timeout.
+	static const int HANDSHAKE_TIMEOUT = 120000;  //ms
+#elif !defined(__APPLE__)
 	// Creating the renderer is part of the handshake. It also carries
 	// out the second part of the license check procedure, hence the relatively big interval.
 	static const int HANDSHAKE_TIMEOUT = 15000;  //ms
@@ -125,7 +128,11 @@ private:
 	void processControlOnImportAsset(const proto::MsgControlOnImportAsset& message);
 	void processControlOnRendererStatus(const proto::MsgControlOnRendererStatus& message);
 	void processControlOnCosmosAssetsDownloaded(const proto::MsgControlOnCosmosDownloadedAssets& message);
+	void processControlOnCosmosVariantPreviews(const proto::MsgControlOnCosmosVariantPreviewsReady& message);
 	void processControlOnScannedEncodedParameters(const proto::MsgControlOnScannedEncodedParameters& message);
+
+	/// Invoke the Python 'vrayStatus' callback with the current value of vrayInitialized().
+	void notifyVRayStatus();
 
 
 private:

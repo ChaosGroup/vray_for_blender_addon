@@ -23,8 +23,9 @@ from vray_blender.ui.community_edition import drawCELimitedFeatureWarning
 from vray_blender.engine.render_engine import VRayRenderEngine
 from vray_blender.engine.renderer_ipr_viewport import VRayRendererIprViewport
 from vray_blender.engine.renderer_ipr_vfb import VRayRendererIprVfb
-from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber, checkIfSceneNeedsUpgrade
+from vray_blender.version import getSceneVersionString, getSceneUpgradeNumber, getAddonUpgradeNumber, checkIfSceneNeedsUpgrade, setSceneUpgradeNumber
 from vray_blender.ui.community_edition import getLimitedFeatureDescription, getCELimitedFeatureMsg
+from vray_blender.ui.vray_status import isVRayRunning, isServiceRunning
 
 from vray_blender.lib.mixin import VRayOperatorBase
 
@@ -436,6 +437,11 @@ class VRAY_OT_export_scene(VRayOperatorBase):
                 while vray.exportJobIsRunning(renderer):
                     time.sleep(0.1)
 
+                success, errMsg = vray.getExportJobResult(renderer)
+                if not success:
+                    self.report({'ERROR'}, f"Scene export failed: {errMsg}")
+                    return { 'CANCELLED' }
+
                 msgInfo = f"Exported scene: {exportSettings.filePath}."
                 self.report({'INFO'}, msgInfo)
                 debug.printInfo(msgInfo)
@@ -582,8 +588,7 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
         return self.forceMode
 
     def execute(self, context: bpy.types.Context):
-        if not vray.isInitialized():
-            debug.report('WARNING', "Can't start render job. V-Ray is not initialized")
+        if not isVRayRunning():
             return {'CANCELLED'}
 
         # This status message should ideally be printed right before the rendering starts but here is the last
@@ -643,7 +648,8 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
         imgFmt = int(settingsOutput.img_format)
         viewLayers = [layer for layer in context.scene.view_layers if layer.use]
-        multipleLayers = len(viewLayers) > 1
+        # Count all layers, enabled or not, as SettingsOutput does when it adds the layer suffix.
+        multipleLayers = len(context.scene.view_layers) > 1
         isAnimation = self._getAnimationMode(context.scene) == 'ANIMATION'
 
         # Reuse the expander built above for the whole job. $viewlayer is resolved
@@ -703,9 +709,12 @@ class VRAY_OT_render(VRAY_OT_message_box_base):
 
 
     def invoke(self, context, event):
-        if not _validateFramesList(context):
-            self.report({'WARNING'}, f"Invalid frames list, render aborted. See console log for details.")
-            return {'CANCELLED'}
+        # Check the frames this job renders, not the .vrscene export list.
+        if self._getAnimationMode(context.scene) == 'ANIMATION':
+            frames, err = common_settings.getAnimationFrames(context.scene)
+            if frames is None:
+                self.report({'WARNING'}, f"Invalid frames list, render aborted: {err}")
+                return {'CANCELLED'}
 
         if not self._checkOutputInfo(context):
             # Invoking props dialog that warns the user that the new render job will
@@ -793,6 +802,9 @@ class VRAY_OT_render_interactive(VRayOperatorBase):
 
     def execute(self, context):
         from vray_blender.lib.defs import UIRegionContext
+
+        if not isVRayRunning():
+            return {'CANCELLED'}
 
         # The order of the following commands to ZmqServer is important. Opening VFB
         # first might lead to an irrecoverable V-Ray Core error.
@@ -1077,6 +1089,9 @@ class VRAY_OT_cloud_submit(VRAY_OT_message_box_base):
         return {'FINISHED'}
 
     def invoke(self, context, event):
+        if not isServiceRunning("Chaos Cloud"):
+            return {'CANCELLED'}
+
         self._centerDialog(context, event)
         return context.window_manager.invoke_props_dialog(self, width=400, title="Submit to Cloud", confirm_text="Submit")
 
@@ -1158,7 +1173,7 @@ class VRAY_OT_upgrade_scene(VRAY_OT_message_box_base):
         # to be upgraded. Do a precheck and spare the user the upgrade dialog.
         if not checkIfSceneNeedsUpgrade(sceneUpgradeNum, addonUpgradeNum):
             from vray_blender import UPGRADE_NUMBER
-            context.scene.vray.Exporter.vrayAddonUpgradeNumber = UPGRADE_NUMBER
+            setSceneUpgradeNumber(UPGRADE_NUMBER)
             return {'CANCELLED'}
 
         if sceneUpgradeNum != addonUpgradeNum:
@@ -1214,7 +1229,7 @@ class VRAY_OT_FileSelect(VRayOperatorBase, ImportHelper):
     )
 
     # The type of the property holder object
-    # ['material' | 'light' | 'world' | 'object'] for shader nodes
+    # ['material' | 'light' | 'world' | 'object' | 'node_group'] for shader nodes
     # 'camera', 'settings'
     object_type: bpy.props.StringProperty(
         default = "",

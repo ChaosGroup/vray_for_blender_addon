@@ -104,6 +104,7 @@ def getRegBlenderClasses():
     return (
         properties_data_camera.DATA_PT_context_camera,
         properties_data_camera.DATA_PT_camera_display,
+        properties_data_camera.DATA_PT_camera_display_composition_guides,
         properties_data_camera.DATA_PT_camera,
         properties_data_camera.DATA_PT_lens,
         properties_data_camera.DATA_PT_camera_safe_areas,

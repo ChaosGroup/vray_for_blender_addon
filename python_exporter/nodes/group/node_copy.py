@@ -55,8 +55,12 @@ def copyNodesBetweenTrees(srcTree, srcNodes, dstTree):
 
     with DisableAutoConnect():
         for srcNode in srcNodes:
+            existing = {n.as_pointer() for n in dstTree.nodes}
             newNode = dstTree.nodes.new(srcNode.bl_idname)
             nodeMap[srcNode.name] = newNode
+
+            for helper in [n for n in dstTree.nodes if n.as_pointer() not in existing and n != newNode]:
+                dstTree.nodes.remove(helper)
 
             # Prefer original name; Blender will suffix on collision.
             try:
@@ -155,7 +159,25 @@ def _copyNodeAnimation(srcTree, dstTree, nodeMap):
 
     if srcAdt.drivers:
         dstAdt = dstTree.animation_data_create()
-        _copyFCurvesByBasepath(srcAdt.drivers, dstAdt.drivers, pathPairs)
+        for fc, newDataPath in _matchFCurvesByBasepath(srcAdt.drivers, pathPairs):
+            # Native full copy: driver settings, variables, keyframes and modifiers.
+            dstAdt.drivers.from_existing(src_driver=fc).data_path = newDataPath
+
+
+def _matchFCurvesByBasepath(srcCurves, pathPairs):
+    """ Yield (fcurve, newDataPath) for each fcurve in srcCurves whose
+        data_path begins with one of the src basepaths, with the prefix
+        rewritten to the dst basepath.
+    """
+    for fc in list(srcCurves):
+        match = next(
+            ((srcPath, dstPath) for srcPath, dstPath in pathPairs
+             if fc.data_path == srcPath or fc.data_path.startswith(srcPath + ".")),
+            None,
+        )
+        if match is not None:
+            srcPath, dstPath = match
+            yield fc, dstPath + fc.data_path[len(srcPath):]
 
 
 def _copyFCurvesByBasepath(srcCurves, dstCurves, pathPairs):
@@ -164,17 +186,7 @@ def _copyFCurvesByBasepath(srcCurves, dstCurves, pathPairs):
         prefix rewritten to the dst basepath, then copy keyframes and
         modifiers.
     """
-    for fc in list(srcCurves):
-        match = next(
-            ((srcPath, dstPath) for srcPath, dstPath in pathPairs
-             if fc.data_path == srcPath or fc.data_path.startswith(srcPath + ".")),
-            None,
-        )
-        if match is None:
-            continue
-        srcPath, dstPath = match
-        newDataPath = dstPath + fc.data_path[len(srcPath):]
-
+    for fc, newDataPath in _matchFCurvesByBasepath(srcCurves, pathPairs):
         try:
             newFc = dstCurves.new(newDataPath, index=fc.array_index)
         except (RuntimeError, TypeError):
@@ -194,6 +206,21 @@ def _copyFCurvesByBasepath(srcCurves, dstCurves, pathPairs):
                 dstKf.handle_right_type = srcKf.handle_right_type
                 dstKf.type = srcKf.type
                 dstKf.easing = srcKf.easing
+                dstKf.back = srcKf.back
+                dstKf.amplitude = srcKf.amplitude
+                dstKf.period = srcKf.period
+
+        for mod in fc.modifiers:
+            newMod = newFc.modifiers.new(mod.type)
+            for prop in mod.bl_rna.properties:
+                # 'active' is only the Graph Editor's panel highlight; new() resets it on each call.
+                if not prop.is_readonly and prop.identifier != 'active':
+                    setattr(newMod, prop.identifier, getattr(mod, prop.identifier))
+            if mod.type == 'ENVELOPE':
+                for point in mod.control_points:
+                    newPoint = newMod.control_points.add(point.frame)
+                    newPoint.min = point.min
+                    newPoint.max = point.max
 
         newFc.extrapolation = fc.extrapolation
         newFc.update()

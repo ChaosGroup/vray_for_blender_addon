@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import bpy
-from vray_blender.utils.upgrade_scene import scoped
+from vray_blender.utils.upgrade_scene import scopedForUpgrade
 
 # The Boolean `use_gpu_rtx` was replaced by the Enum `gpu_device_type` (CUDA/RTX/HIP)
 # when the HIP backend was introduced. Once the BoolProperty was removed from
@@ -18,7 +18,7 @@ def _legacyExporters():
     """ Yield (exporter, useRtx) for every scene that still carries the
         old use_gpu_rtx value as an ID property.
     """
-    for scene in scoped(bpy.data.scenes):
+    for scene in scopedForUpgrade(bpy.data.scenes):
         exporter = scene.vray.Exporter
         legacyValue = exporter.get(_LEGACY_PROP)
         if legacyValue is not None:

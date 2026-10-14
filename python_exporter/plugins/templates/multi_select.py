@@ -42,6 +42,9 @@ class TemplateMultiObjectSelect(common.VRayObjectSelector):
         if obj := getattr(context, 'active_object', None):
            obj.update_tag()
 
+        # Also update the node tree this list belongs to. It may not be the one open in the node editor.
+        self.id_data.update_tag()
+
 
     def draw(self, layout: bpy.types.UILayout, context: bpy.types.Context,
                     pluginModule, propGroup, widgetAttr: dict, text, nested=False):
@@ -143,6 +146,9 @@ class TemplateSelectGeometries(common.VRayObjectSelector):
 
         if obj := getattr(context, 'active_object', None):
             context.active_object.update_tag()
+
+        # Also update the light this list belongs to. It may not be the selected object.
+        self.id_data.update_tag()
 
 
     def draw(self, layout:bpy.types.UILayout, context: bpy.types.Context):

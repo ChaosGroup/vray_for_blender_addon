@@ -26,7 +26,7 @@ _CHANNEL_NAMES = {
 
 
 def nodeInit(node: bpy.types.Node):
-    node.assignStaticId() # The static id is needed for the name of the curves node
+    cn.assignCurvesId(node)
 
     # The current "bpy" API does not allow direct creation of a CurveMapping widget.
     # To work around this, we create a ShaderNodeRGBCurve in a hidden node tree and use its widget.
@@ -36,17 +36,6 @@ def nodeInit(node: bpy.types.Node):
 def nodeFree(node: bpy.types.Node):
     """Executes upon node deletion."""
     cn.removeCurvesNode(node)
-
-
-def nodeUpdate(node: bpy.types.Node):
-    if not cn.hasCurvesNode(node):
-        return
-
-    # Encode the curves data as a string so that it could be saved in the TexRemap node, and not
-    # just be available from the auxiliary ShaderNodeRGBCurve node. This will allow us to restore
-    # the curves state if the node is imported into another scene.
-    curvesNode = cn.getCurvesNode(node)
-    node.TexRemap['curves_data'] = cn.encodeMapping(curvesNode.mapping)
 
 
 def nodeCopy(copyNode: bpy.types.Node, origNode: bpy.types.Node):
@@ -59,13 +48,18 @@ def drawCurveTemplate(context: bpy.types.Context, layout: bpy.types.UILayout, pr
 
     if propGroup.type == '1':
         attrName = widgetAttr['name']
-        attrLabel = getAttrLabel(getPluginModule('TexRemap'), widgetAttr, propGroup, node=None)
+        # Only the property pages are property-split. On a node body this dropdown drops its
+        # label, as the others do.
+        attrLabel = getAttrLabel(getPluginModule('TexRemap'), widgetAttr, propGroup, node=None) \
+                        if layout.use_property_split else ""
         layout.prop(propGroup, attrName, text=attrLabel)
 
     layout.separator()
 
     node = getNodeOfPropGroup(propGroup)
-    curvesNode = cn.getCurvesNode(node)
+    if (curvesNode := cn.getCurvesNodeForDraw(node)) is None:
+        cn.drawMissingCurvesNode(layout)
+        return
     curveType = { "1":"COLOR", "2":"HUE" }[propGroup.type]
     layout.template_curve_mapping(curvesNode, "mapping", type=curveType)
 

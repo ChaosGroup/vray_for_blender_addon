@@ -2,7 +2,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
 import bpy
 
 from vray_blender.lib import plugin_utils, export_utils
@@ -24,24 +23,25 @@ def nodeInit(node: bpy.types.Node):
     
 
 def nodeCopy(nodeCopy: bpy.types.Node, nodeOrig: bpy.types.Node):
-    def reattachTexture(node, texAttrName, tex):
-        setattr(node, texAttrName, tex)
-    
     for attrName in _COLOR_RAMP_ATTRS:
         rampTexAttrName = _getRampTexAttrName(attrName)
-        texOrig = getattr(nodeOrig, rampTexAttrName)
-        texCopy = color_ramp.createRampTexture(nodeCopy, rampTexAttrName)
-        
-        color_ramp.copyColorRamp(texOrig.color_ramp, texCopy.color_ramp)
-        color_ramp.registerColorRamp(nodeCopy, rampTexAttrName, texCopy) 
+        origTex = getattr(nodeOrig, rampTexAttrName)
+        if (ownTex := getattr(nodeCopy, rampTexAttrName)) and ownTex != origTex:
+            color_ramp.copyColorRamp(origTex.color_ramp, ownTex.color_ramp)
+        elif bpy.app.version >= (5, 1, 0):
+            NodeUtils.copyFakeTexture(nodeCopy, rampTexAttrName, origTex)
 
-        bpy.app.timers.register(functools.partial(reattachTexture, nodeCopy, rampTexAttrName, texCopy))
+    NodeUtils.fixCopiedTexturesLater()
 
 
 def nodeFree(node: bpy.types.Node):
     for attrName in _COLOR_RAMP_ATTRS:
         attrTexName = _getRampTexAttrName(attrName)
-        color_ramp.unregisterColorRamp(node, attrTexName, getattr(node, attrTexName)) 
+        tex = getattr(node, attrTexName)
+        color_ramp.unregisterColorRamp(node, attrTexName, tex)
+        if tex and tex.users - tex.use_fake_user == 1:
+            tex.use_fake_user = False
+            bpy.data.textures.remove(tex)
 
 
 # Custom function that draws color ramp

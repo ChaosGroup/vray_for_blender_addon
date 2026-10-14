@@ -4,6 +4,9 @@
     "Parameters" : [
         {
             "attr" : "rgb_color_space",
+            "ui": {
+                "display_name": "RGB Color Space"
+            },
             "default" : "1",
             "desc" : "Selects a display color space for the rendered image.",
             "items" : 

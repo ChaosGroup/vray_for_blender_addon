@@ -176,16 +176,18 @@
                         "name": "rotate_uv"
                     },
                     {
-                        "name": "mirror_u"
+                        "layout": "ROW",
+                        "attrs": [
+                            { "name": "mirror_u" },
+                            { "name": "mirror_v" }
+                        ]
                     },
                     {
-                        "name": "mirror_v"
-                    },
-                    {
-                        "name": "wrap_u"
-                    },
-                    {
-                        "name": "wrap_v"
+                        "layout": "ROW",
+                        "attrs": [
+                            { "name": "wrap_u" },
+                            { "name": "wrap_v" }
+                        ]
                     }
                 ]
             }

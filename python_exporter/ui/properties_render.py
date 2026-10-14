@@ -16,6 +16,7 @@ from vray_blender.plugins import getPluginModule
 from vray_blender.ui import classes
 from vray_blender.ui.classes import pollEngine, RenderPanelGroups
 from vray_blender.ui.icons import getIcon, getUIIcon
+from vray_blender.ui.vray_status import getVRayStartupMsg
 from vray_blender.utils.update_checker import UpdateStatus
 from vray_blender.version import getAddonVersion, formatNumericVersion
 from vray_blender.bin import VRayBlenderLib as vray
@@ -81,7 +82,7 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
         vrayBake  = vrayScene.BakeView
 
         if not vray.isInitialized():
-            message = "V-Ray initializing..." if vray.hasLicense() else "No V-Ray license..."
+            message = getVRayStartupMsg()
             layout.label(text=message, icon="INFO")
 
         if not vrayBake.use:
@@ -92,7 +93,7 @@ class VRAY_PT_Context(classes.VRayRenderPanel):
             buttonLabel = "Render Animation" if buttonMode == 'ANIMATION' else "Render"
 
             renderGroup = row.row(align=True)
-            renderGroup.enabled = vray.isInitialized()
+            renderGroup.active = vray.isInitialized()
             opMain = renderGroup.operator(VRAY_OT_render.bl_idname, text=buttonLabel,
                                           icon_value=getUIIcon(VRAY_OT_render))
             opMain.forceMode = buttonMode
@@ -662,7 +663,7 @@ class VRAY_PT_DR(classes.VRayRenderPanel):
 
     @classmethod
     def poll_custom(cls, context):
-        return vray.withDR2 and pollEngine(context)
+        return pollEngine(context)
 
     def drawPanelCheckBox(self, context: Context):
         vrayDR = context.scene.vray.VRayDR

@@ -15,6 +15,7 @@ from math import radians, cos, pi
 from mathutils import Color
 
 from vray_blender import debug
+from vray_blender.exporting.tools import getFirstSocketLink
 from vray_blender.lib import lib_utils
 
 
@@ -82,8 +83,8 @@ def _cyclesBlackbody(kelvin: float) -> Color:
 
 def _followLink(socket):
     """ The node feeding 'socket', skipping reroutes; None if unlinked. """
-    while socket is not None and socket.is_linked:
-        node = socket.links[0].from_node
+    while socket is not None and (link := getFirstSocketLink(socket)):
+        node = link.from_node
         if node.bl_idname != 'NodeReroute':
             return node
         socket = node.inputs[0]
@@ -188,7 +189,7 @@ def exportBlenderLight(light):
     }
 
     if pluginType == 'SunLight':
-        # A Blender sun is directional, but V-Ray's is a physical sky-sun: in the default 'Filter'
+        # A Blender sun is directional, but V-Ray's is a physical sky-sun. In the default 'Filter'
         # mode it adds an atmospheric tint and falls off towards the horizon. 'Direct' drops both,
         # leaving filter_color and intensity_multiplier in full control.
         attrs['color_mode']           = '1'   # Direct
@@ -209,7 +210,7 @@ def exportBlenderLight(light):
         attrs['units']          = '3'    # Radiant power (W)
         # A radiant-power light divides its colour by the colour's MEAN, so the wattage is the
         # total regardless of tint - Cycles instead multiplies the colour straight into the
-        # strength. Without this factor a saturated light converts 1/mean too bright: measured
+        # strength. Without this factor a saturated light converts 1/mean too bright, measured at
         # 2.50x for (1, 0.15, 0.05) and 2.37x for a 2000 K blackbody. The mean is the pre-clamp
         # one, which also cancels the peak divided out of the colour above.
         power *= colMean

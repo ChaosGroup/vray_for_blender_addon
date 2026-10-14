@@ -43,8 +43,8 @@ SharedMemoryBase::SharedMemoryBase(const std::string& id, const std::string& nam
 	m_name(name),
 	m_lock(std::make_unique<NamedLock>(ipc::open_or_create, createUniqueName("l").c_str()))
 {
-	// After creation, the mutex is in locked state. Unlock to allow operation.
-	m_lock->unlock();
+	// A new named_mutex starts unlocked, so there is nothing to unlock here. An existing one may
+	// be held by a peer, and on POSIX an extra unlock() raises the semaphore count above 1.
 }
 
 

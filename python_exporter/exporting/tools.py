@@ -318,12 +318,15 @@ def _resolveNodeSocketImpl(
     toSocket: bpy.types.NodeSocket,
     groupStack: tuple = (),
     nearLink: bpy.types.NodeLink = None,
+    requireCompatibleNode: bool = True,
 ) -> tuple:
     """ Internal implementation.  Returns (resolved_socket_or_None, group_path_at_return).
 
         groupStack accumulates the VRayNodeGroup nodes entered during this recursive
         traversal.  It is separate from _groupExportStack, which reflects the group
         context established by the outer export loop.
+
+        requireCompatibleNode=False keeps traversing past nodes outside the compatible-node set.
 
         nearLink is toSocket's active incoming link when the caller has already resolved it.
         Purely an optimization: deriving it here yields the same link, at the cost of another
@@ -339,11 +342,11 @@ def _resolveNodeSocketImpl(
         fromSocket = link.from_socket
 
         if fromNode.mute:
-            _, resolvedSock, resolvedStack = resolveInternalLink(fromSocket, groupStack)
+            _, resolvedSock, resolvedStack = resolveInternalLink(fromSocket, groupStack, requireCompatibleNode)
             return resolvedSock, resolvedStack
 
         elif fromNode.bl_idname == "NodeReroute":
-            return _resolveNodeSocketImpl(fromNode.inputs[0], groupStack)
+            return _resolveNodeSocketImpl(fromNode.inputs[0], groupStack, None, requireCompatibleNode)
 
         elif fromNode.bl_idname in ("ShaderNodeGroup", "VRayNodeGroup"):
             nodeGroup = fromNode.node_tree
@@ -355,7 +358,7 @@ def _resolveNodeSocketImpl(
                 return None, groupStack
             for idx, outSocket in enumerate(fromNode.outputs):
                 if outSocket == fromSocket:
-                    return _resolveNodeSocketImpl(groupOutput.inputs[idx], groupStack + (fromNode,))
+                    return _resolveNodeSocketImpl(groupOutput.inputs[idx], groupStack + (fromNode,), None, requireCompatibleNode)
             return None, groupStack
 
         elif fromNode.bl_idname == "NodeGroupInput":
@@ -379,9 +382,9 @@ def _resolveNodeSocketImpl(
             for idx, outSocket in enumerate(fromNode.outputs):
                 if outSocket == fromSocket:
                     break
-            return _resolveNodeSocketImpl(outerGroupNode.inputs[idx], newStack)
+            return _resolveNodeSocketImpl(outerGroupNode.inputs[idx], newStack, None, requireCompatibleNode)
 
-        elif not isCompatibleNode(fromNode):
+        elif requireCompatibleNode and not isCompatibleNode(fromNode):
             from vray_blender.lib.defs import NodeContext
             NodeContext.registerError(f"Skipped export of non V-Ray node: '{fromNode.name}'.")
             return None, groupStack
@@ -402,7 +405,7 @@ def resolveNodeSocket(toSocket: bpy.types.NodeSocket) -> bpy.types.NodeSocket | 
     return socket
 
 
-def resolveInternalLink(outSocket: bpy.types.NodeSocket, groupStack: tuple = ()):
+def resolveInternalLink(outSocket: bpy.types.NodeSocket, groupStack: tuple = (), requireCompatibleNode: bool = True):
     """ Return a resolved input socket following the best-matching internal link of a muted node.
 
         Return:
@@ -455,11 +458,11 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket, groupStack: tuple = ())
                 sockNamePrefix = inSockName[:-1]
                 for inSock in node.inputs:
                     if inSock.name.startswith(sockNamePrefix):
-                        return inSock, *_resolveNodeSocketImpl(inSock, groupStack)
+                        return inSock, *_resolveNodeSocketImpl(inSock, groupStack, None, requireCompatibleNode)
             else:
                 inSock = node.inputs.get(inSockName)
                 assert inSock, f"Invalid socket '{inSockName}' in internal links list of plugin {pluginType}"
-                return inSock, *_resolveNodeSocketImpl(inSock, groupStack)
+                return inSock, *_resolveNodeSocketImpl(inSock, groupStack, None, requireCompatibleNode)
 
     else: # Cycles node
         # Walk all internal links and return the first match. The links are
@@ -468,7 +471,7 @@ def resolveInternalLink(outSocket: bpy.types.NodeSocket, groupStack: tuple = ())
             # In an internal link, to and from sockets are reversed:
             # 'from_socket' is the input socket and 'to_socket' is the output socket
             if l.to_socket == outSocket:
-                return l.to_socket, *_resolveNodeSocketImpl(l.from_socket, groupStack)
+                return l.to_socket, *_resolveNodeSocketImpl(l.from_socket, groupStack, None, requireCompatibleNode)
 
     return None, None, groupStack
 
@@ -488,7 +491,7 @@ class FarNodeLink:
         self.groupPath    = groupPath
 
 
-def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
+def getFarNodeLink(toSock: bpy.types.NodeSocket, requireCompatibleNode: bool = True) -> FarNodeLink | None:
     """ Get the link between toSock and an output socket possibly
         spanning one or more Reroute nodes, groups and muted nodes.
 
@@ -499,10 +502,10 @@ def getFarNodeLink(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
         # Some V-Ray sockets provide custom implementation in their getFarLink() method.
         return toSock.getFarLink()
     else:
-        return getFarNodeLinkImpl(toSock)
+        return getFarNodeLinkImpl(toSock, requireCompatibleNode)
 
 
-def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
+def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket, requireCompatibleNode: bool = True) -> FarNodeLink | None:
     """ Get the link between toSock and an output socket possibly
         spanning one or more Reroute nodes, groups and muted nodes.
         Only works for single-input sockets.
@@ -526,14 +529,24 @@ def getFarNodeLinkImpl(toSock: bpy.types.NodeSocket) -> FarNodeLink | None:
     # group are still associated with the correct group instance even when
     # getFarNodeLink is called fresh (not through an initial group traversal).
     initialStack = _groupExportStack[-1] if _groupExportStack else ()
-    socket, groupPath = _resolveNodeSocketImpl(toSock, initialStack, nearLink)
+    socket, groupPath = _resolveNodeSocketImpl(toSock, initialStack, nearLink, requireCompatibleNode)
     if socket is toSock:
         # Nothing to see through (no reroute, muted node or group in the way) - by far the
         # common case, and nearLink is already toSock's link.
         return FarNodeLink(nearLink.from_socket, toSock, groupPath=groupPath)
-    if socket and socket.is_linked:
-        return FarNodeLink(socket.links[0].from_socket, toSock, groupPath=groupPath)
+    if socket and (link := getFirstSocketLink(socket)):
+        return FarNodeLink(link.from_socket, toSock, groupPath=groupPath)
 
+    return None
+
+
+def getFirstSocketLink(sock: bpy.types.NodeSocket) -> bpy.types.NodeLink | None:
+    """ The first link of sock, or None if sock is unlinked or that link is invalid.
+        A reroute loop leaves one of its links invalid, and walking past it into the reroutes crashes Blender
+        as soon as something reads their socket values.
+    """
+    if sock.is_linked and (link := sock.links[0]).is_valid:
+        return link
     return None
 
 
@@ -545,6 +558,25 @@ def getNodeLinkToNode(nodeOutput, sockName, nodeType) -> FarNodeLink | None:
         if nodeLink and nodeLink.from_node.bl_idname == nodeType:
             return nodeLink
     return None
+
+
+def hasToonBRDF(node: bpy.types.Node) -> bool:
+    """ True if 'node' is a V-Ray Toon BRDF or one feeds it, through reroutes and groups. """
+    seen, pending = set(), [node]
+    while pending:
+        current = pending.pop()
+        if (key := current.as_pointer()) in seen:
+            continue
+        seen.add(key)
+
+        if current.bl_idname == 'VRayNodeBRDFToonMtl':
+            return True
+
+        for sock in current.inputs:
+            if (link := getFarNodeLink(sock)) is not None:
+                pending.append(link.from_node)
+
+    return False
 
 
 def getActiveOutputFarNodeLinks(fromSock: bpy.types.NodeSocket) -> list[FarNodeLink]:
@@ -717,6 +749,32 @@ def isObjectVisible(exporterCtx, obj: bpy.types.Object):
             return visibleInViewport(obj)
         else:
             return visibleInProd(obj)
+
+
+def isInstanceSourceVisible(exporterCtx, obj: bpy.types.Object, inViewport: bool):
+        """ Return whether the SOURCE object of a depsgraph instance object is itself
+            visible in the scene.
+
+            The monitor icon ONLY, deliberately - hiding a source with the eye icon (or by
+            excluding its collection) must leave its instances rendering, and only take the
+            source object itself out of the render.
+
+            Do NOT "fix" this into obj.visible_in_viewport_get(view3d), tempting as the exact
+            parity with Cycles is (intern/cycles/blender/object.cpp does
+            '!b_v3d || b_ob.visible_in_viewport_get(b_v3d)'). That predicate also folds in the
+            eye icon, and whether the eye reaches an instance at all turns out to depend on the
+            dupli type - measured on 5.0.1 it does for legacy VERTS/FACES parenting and does
+            not for geometry nodes. Following it would make the eye icon hide instances for
+            some setups and not others, which is not the behaviour we want.
+
+            Deliberately NOT obj.visible_get() either: that is unconditionally False for an
+            instance object regardless of the source's real state.
+        """
+        if not inViewport:
+            # This is weird behavior but its what Cycles does
+            return True
+
+        return not obj.hide_viewport
 
 
 def isModifierVisible(exporterCtx, mod: bpy.types.Modifier):

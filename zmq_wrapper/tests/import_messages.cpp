@@ -45,7 +45,6 @@ TEST_CASE("Import request/control messages round-trip") {
 		msg.frameStart = 1.0;
 		msg.frameEnd = 25.0;
 		msg.frameStep = 0.5;
-		msg.batchSizeHint = 128;
 		msg.typeFilter = "Mtl,BRDF";
 
 		const auto out = roundTrip(msg);
@@ -54,7 +53,6 @@ TEST_CASE("Import request/control messages round-trip") {
 		REQUIRE(out.frameStart == msg.frameStart);
 		REQUIRE(out.frameEnd == msg.frameEnd);
 		REQUIRE(out.frameStep == msg.frameStep);
-		REQUIRE(out.batchSizeHint == msg.batchSizeHint);
 		REQUIRE(out.typeFilter == msg.typeFilter);
 	}
 
@@ -88,7 +86,6 @@ TEST_CASE("Import request/control messages round-trip") {
 		msg.errorLine = 1234;
 		msg.pluginCount = 17;
 		msg.paramCount = 250;
-		msg.sceneBaseDir = "C:/scenes";
 
 		const auto out = roundTrip(msg);
 		REQUIRE(out.status == msg.status);
@@ -97,7 +94,6 @@ TEST_CASE("Import request/control messages round-trip") {
 		REQUIRE(out.errorLine == msg.errorLine);
 		REQUIRE(out.pluginCount == msg.pluginCount);
 		REQUIRE(out.paramCount == msg.paramCount);
-		REQUIRE(out.sceneBaseDir == msg.sceneBaseDir);
 	}
 }
 

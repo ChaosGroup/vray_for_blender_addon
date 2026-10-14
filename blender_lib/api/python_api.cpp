@@ -57,6 +57,9 @@ ExporterUPtr mainExporter;
 /// where a teardown cannot overlap with them, so they never claim the exporter.
 const SceneExporter* mainExporterJobOwner = nullptr;
 
+/// Set by discardMainRenderer() so that the next getMainRenderer() does not reuse 'mainExporter'.
+bool mainExporterDiscarded = false;
+
 /// Main exporters a teardown had to hand over to a still-running job instead of destroying them
 /// under it. Each is freed by that job's own thread, in releaseMainRenderer().
 std::list<SceneExporter*> detachedMainExporters;
@@ -154,10 +157,7 @@ void exit() {
 // Indicates that rendering job could be started
 bool isInitialized()
 {
-	// This is a temporary workaround until proper tracking of the status is implemented in
-	// the server.
-	return true;
-	// return ZmqServer::get().vrayInitialized();
+	return VRayForBlender::ZmqServer::get().vrayInitialized();
 }
 
 bool isRunning() {
@@ -168,10 +168,7 @@ bool isRunning() {
 // Indicates that V-Ray has assigned license
 bool hasLicense()
 {
-	// This is a temporary workaround until proper tracking of the status is implemented in
-	// the server.
-	return true;
-	// return ZmqServer::get().licenseAcquired();
+	return VRayForBlender::ZmqServer::get().licenseAcquired();
 }
 
 
@@ -235,9 +232,10 @@ size_t getMainRenderer(ExporterSettings& settings) {
 	{
 		std::scoped_lock lock(mainExporterMutex);
 
-		if (!mainExporter || zmqServerRestarted || mainExporter->getPluginExporter()->isStopped()) {
+		if (!mainExporter || zmqServerRestarted || mainExporterDiscarded || mainExporter->getPluginExporter()->isStopped()) {
 			staleExporter = relinquishMainExporter();
 			mainExporter.reset(new SceneExporter());
+			mainExporterDiscarded = false;
 			zmqProcessID = zmqCurrentProcessID;
 		}
 
@@ -257,6 +255,19 @@ void deleteMainRenderer()  {
 	{
 		std::scoped_lock lock(mainExporterMutex);
 		staleExporter = relinquishMainExporter();
+	}
+}
+
+
+/// Stop reusing the main renderer, e.g. because its render job did not stop in time and its late
+/// server events would otherwise reach the next session. It is replaced by the next getMainRenderer(),
+/// not destroyed here, so that a handle still held by the caller stays valid until then.
+void discardMainRenderer(const nb::object& renderer) {
+	const auto* exporter = getExporter(renderer);
+
+	std::scoped_lock lock(mainExporterMutex);
+	if (mainExporter.get() == exporter) {
+		mainExporterDiscarded = true;
 	}
 }
 
@@ -452,6 +463,61 @@ void cosmosDropImport(
 	msg.applyRealWorldScale   = applyRealWorldScale;
 	msg.forceNormalAlign      = forceNormalAlign;
 	ZmqServer::get().sendMessage(serializeMessage(msg), false);
+}
+
+/// Show a message in the Cosmos Browser notifications.
+/// 'level' is a Cosmos log level (0 critical, 1 error, 2 warning, 3 success, 4 info,
+/// 5 debug); only error, warning and success are shown. Returns immediately - the
+/// server collects the messages and posts them from a thread of its own.
+void cosmosNotify(int level, const std::string& message)
+{
+	ZmqServer::get().sendMessage(serializeMessage(proto::MsgControlOnCosmosNotify{level, message}), false);
+}
+
+/// Apply a Cosmos variant to an already-imported asset. 'packageId'/'revisionId' are the target
+/// geometry variant's own package. The result comes back through the cosmos import callback as a
+/// CosmosAssetSettings carrying the same 'variantSwapToken'; a swap that cannot produce one
+/// reports through the cosmos variant status callback instead.
+void cosmosSwapVariant(const std::string& packageId, int revisionId, int mtlVariantIndex,
+	const std::string& variantSwapToken)
+{
+	if (packageId.empty()) {
+		throw nb::value_error("packageId must not be empty");
+	}
+	// Without a token the reply is indistinguishable from a browser import and the addon would
+	// create a duplicate object instead of rewriting the one that asked.
+	if (variantSwapToken.empty()) {
+		throw nb::value_error("variantSwapToken must not be empty");
+	}
+
+	proto::MsgControlOnCosmosVariantSwap msg;
+	msg.packageId        = packageId;
+	msg.revisionId       = static_cast<uint32_t>(revisionId);
+	msg.mtlVariantIndex  = mtlVariantIndex;
+	msg.variantSwapToken = variantSwapToken;
+	ZmqServer::get().sendMessage(serializeMessage(msg), false);
+}
+
+/// Ask the server to download a Cosmos package's variant preview images into the local preview
+/// cache and report where they are. The variant grid asks for this when it finds a preview
+/// missing: the previews are cached per user and outside the .blend, so a scene that came from
+/// another machine has none of them. The resolved paths come back through the variant previews
+/// callback (setCosmosVariantPreviewsCallback).
+void cosmosFetchVariantPreviews(const nb::object& packageIds, const nb::object& revisions)
+{
+	vray::AttrListString attrPackageIds = toVector<std::string>(packageIds);
+	vray::AttrListInt attrRevisions = toVector<int>(revisions);
+
+	if (attrPackageIds.getCount() != attrRevisions.getCount()) {
+		throw nb::value_error("revisions must be the same length as packageIds");
+	}
+
+	ZmqServer::get().sendMessage(serializeMessage(
+		proto::MsgControlOnCosmosVariantPreviews{
+			std::move(attrPackageIds),
+			std::move(attrRevisions)
+		}), false
+	);
 }
 
 // Opens VFB through control connection
@@ -915,10 +981,41 @@ bool imageWasUpdated(const nb::object& renderer)
 	return exporter->imageWasUpdated();
 }
 
+/// Sample a texture plugin over [0,1)^2 UV space on the server, via AppSDK UVTextureSampler.
+/// The result reaches 'callback' asynchronously as a float32 (height, width, 4) ndarray, or None
+/// on failure. The callback may be invoked from a non-main thread.
+void sampleTexture(const nb::object& renderer, const std::string& pluginName, int width, int height, nb::callable callback)
+{
+	auto* exporter = getExporter(renderer);
+	// No gil_scoped_release here - the callable copy below needs the GIL.
+	exporter->sampleTexture(pluginName, width, height, std::move(callback));
+}
+
+/// Load a .vrscene into a renderer server-side, via VRayRenderer::load. Asynchronous and
+/// unacknowledged - the server only logs a failure.
+void loadScene(const nb::object& renderer, const std::string& fileName)
+{
+	auto* exporter = getExporter(renderer);
+	nb::gil_scoped_release release;
+	exporter->loadScene(fileName);
+}
+
 /// Sets python callback for cosmos assets importing
 void setCosmosImportCallback(nb::callable assetImportCallback)
 {
 	ZmqServer::get().setPythonCallback("assetImport", std::move(assetImportCallback));
+}
+
+/// Sets python callback for cosmos variant swap progress and failures
+void setCosmosVariantStatusCallback(nb::callable variantStatusCallback)
+{
+	ZmqServer::get().setPythonCallback("cosmosVariantStatus", std::move(variantStatusCallback));
+}
+
+/// Sets python callback for the resolved Cosmos variant previews
+void setCosmosVariantPreviewsCallback(nb::callable variantPreviewsCallback)
+{
+	ZmqServer::get().setPythonCallback("cosmosVariantPreviews", std::move(variantPreviewsCallback));
 }
 
 /// Sets python callback for cosmos assets importing
@@ -936,9 +1033,9 @@ void setCosmosDownloadAssets(nb::callable downloadAssetsCallback)
 /// Start a .vrscene import session on the server. Returns the session id.
 /// typeFilter: comma-separated plugin-type prefixes (e.g. "Mtl"); empty imports everything.
 int importVrsceneStart(const std::string& filePath, bool skipDefaults, double frameStart, double frameEnd,
-                       const std::string& typeFilter)
+                       const std::string& typeFilter, bool readKeyframes)
 {
-	return SceneImport::startImport(filePath, skipDefaults, frameStart, frameEnd, typeFilter);
+	return SceneImport::startImport(filePath, skipDefaults, frameStart, frameEnd, typeFilter, readKeyframes);
 }
 
 /// Ask the server to abort a running .vrscene import.
@@ -1133,6 +1230,14 @@ void encodeScannedParameters(int materialId, const std::string& nodeName, const 
 }
 
 /// Sets callaback executed when rendering gets stopped or aborted
+/// Sets callback executed when a rendered frame is complete
+void setImageReadyCallback(const nb::object& renderer, nb::callable imageReadyCallback)
+{
+	SceneExporter* exporter = getExporter(renderer);
+	vassert(exporter);
+	return exporter->setImageReadyCallback(std::move(imageReadyCallback));
+}
+
 void setRenderStoppedCallback(const nb::object& renderer, nb::callable renderStoppedCallback)
 {
 	auto *exporter = getExporter(renderer);
@@ -1304,6 +1409,12 @@ bool exportJobIsRunning(const nb::object& renderer)
 	return getExporter(renderer)->vrsceneExportRunning();
 }
 
+// (success, error message) of the last vrscene export job, once exportJobIsRunning() is false
+std::pair<bool, std::string> getExportJobResult(const nb::object& renderer)
+{
+	return getExporter(renderer)->getVrsceneExportResult();
+}
+
 // Returns the number of the last rendered frame
 int getLastRenderedFrame(const nb::object& renderer)
 {
@@ -1367,6 +1478,11 @@ void setSwitchLicenseToCommunityCallback(nb::callable callback)
 	ZmqServer::get().setPythonCallback("switchLicenseToCommunity", std::move(callback));
 }
 
+void setVRayStatusCallback(nb::callable callback)
+{
+	ZmqServer::get().setPythonCallback("vrayStatus", std::move(callback));
+}
+
 NB_MODULE(VRayBlenderLib, m)
 {
 	m.def(FUN(init),                    nb::arg("logFile"));
@@ -1379,6 +1495,7 @@ NB_MODULE(VRayBlenderLib, m)
 
 	m.def(FUN(getMainRenderer),         nb::arg("settings"));
 	m.def(FUN(releaseMainRenderer),     nb::arg("renderer"));
+	m.def(FUN(discardMainRenderer),     nb::arg("renderer"));
 	m.def(FUN(createPreviewRenderer),   nb::arg("settings"));
 	m.def(FUN(deletePreviewRenderer),   nb::arg("renderer"));
 	m.def(FUN(clearScene),              nb::arg("renderer"));
@@ -1389,6 +1506,8 @@ NB_MODULE(VRayBlenderLib, m)
 
 	m.def(FUN(openCosmos));
 	m.def(FUN(setCosmosImportCallback), nb::arg("assetImportCallback"));
+	m.def(FUN(setCosmosVariantStatusCallback), nb::arg("variantStatusCallback"));
+	m.def(FUN(setCosmosVariantPreviewsCallback), nb::arg("variantPreviewsCallback"));
 	m.def(FUN(setCosmosDownloadSize),   nb::arg("setCosmosDownloadSize"));
 	m.def(FUN(setCosmosDownloadAssets), nb::arg("setCosmosDownloadAssets"));
 	m.def(FUN(calculateDownloadSize),   nb::arg("packageId"), nb::arg("revisionId"), nb::arg("missingTextures"));
@@ -1404,11 +1523,16 @@ NB_MODULE(VRayBlenderLib, m)
 		nb::arg("normalX"), nb::arg("normalY"), nb::arg("normalZ"),
 		nb::arg("applyTriplanar"), nb::arg("applyRealWorldScale"),
 		nb::arg("forceNormalAlign"));
+	m.def(FUN(cosmosNotify),      nb::arg("level"), nb::arg("message"));
+	m.def(FUN(cosmosSwapVariant),
+		nb::arg("packageId"), nb::arg("revisionId"),
+		nb::arg("mtlVariantIndex"), nb::arg("variantSwapToken"));
+	m.def(FUN(cosmosFetchVariantPreviews), nb::arg("packageIds"), nb::arg("revisions"));
 	m.def(FUN(updateScenePath),   nb::arg("scenePath"));
 
 	m.def(FUN(importVrsceneStart),      nb::arg("filePath"), nb::arg("skipDefaults") = true,
 	                                    nb::arg("frameStart") = 0.0, nb::arg("frameEnd") = 0.0,
-	                                    nb::arg("typeFilter") = "");
+	                                    nb::arg("typeFilter") = "", nb::arg("readKeyframes") = false);
 	m.def(FUN(importVrsceneCancel),     nb::arg("importId"));
 	m.def(FUN(getImportedVrscene),      nb::arg("importId"), nb::arg("largeAttrs") = nb::dict());
 	m.def(FUN(importVrsceneRelease),    nb::arg("importId"));
@@ -1450,6 +1574,7 @@ NB_MODULE(VRayBlenderLib, m)
 
 	m.def(FUN(setVfbOnTopWithRenderer),      nb::arg("renderer"), nb::arg("alwaysOnTop"));
 	m.def(FUN(setRenderStoppedCallback),     nb::arg("renderer"), nb::arg("renderStoppedCallback"));
+	m.def(FUN(setImageReadyCallback),        nb::arg("renderer"), nb::arg("imageReadyCallback"));
 	m.def(FUN(setRenderStartCallback),       nb::arg("startRenderCallback"));
 	m.def(FUN(setZmqServerAbortCallback),    nb::arg("zmqServerAbortCallback"));
 	m.def(FUN(getRenderProgress),            nb::arg("renderer"));
@@ -1458,6 +1583,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(setAutoUpdateChangedCallback), nb::arg("autoUpdateChangedCallback"));
 	m.def(FUN(setAppUpdateRequestedCallback), nb::arg("appUpdateRequestedCallback"));
 	m.def(FUN(setSwitchLicenseToCommunityCallback), nb::arg("switchLicenseToCommunityCallback"));
+	m.def(FUN(setVRayStatusCallback), nb::arg("vrayStatusCallback"));
 
 	m.def(FUN(setVfbLayersUpdateCallback),   nb::arg("vfbLayersUpdateCallback"));
 	m.def(FUN(setLightMixTransferToSceneCallback), nb::arg("lightMixTransferToSceneCallback"));
@@ -1514,6 +1640,8 @@ NB_MODULE(VRayBlenderLib, m)
 
 	m.def(FUN(getImage),               nb::arg("renderer"));
 	m.def(FUN(getRenderPassImage),     nb::arg("renderer"), nb::arg("passName"));
+	m.def(FUN(sampleTexture),          nb::arg("renderer"), nb::arg("pluginName"), nb::arg("width"), nb::arg("height"), nb::arg("callback"));
+	m.def(FUN(loadScene),              nb::arg("renderer"), nb::arg("fileName"));
 	m.def(FUN(getEngineUpdateMessage), nb::arg("renderer"));
 	m.def(FUN(isRenderReady),          nb::arg("renderer"));
 	m.def(FUN(imageWasUpdated),        nb::arg("renderer"));
@@ -1531,6 +1659,7 @@ NB_MODULE(VRayBlenderLib, m)
 	m.def(FUN(renderSequenceStart),    nb::arg("renderer"), nb::arg("sequence"));
 	m.def(FUN(renderJobIsRunning),     nb::arg("renderer"));
 	m.def(FUN(exportJobIsRunning),     nb::arg("renderer"));
+	m.def(FUN(getExportJobResult),     nb::arg("renderer"));
 	m.def(FUN(getLastRenderedFrame),   nb::arg("renderer"));
 
 #ifdef WITH_PROFILING
@@ -1669,7 +1798,15 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, normalY)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, normalZ)
 		.ADD_RW_PROPERTY(CosmosAssetSettings, surfaceAttachment)
-		.ADD_RW_PROPERTY(CosmosAssetSettings, forceNormalAlign);
+		.ADD_RW_PROPERTY(CosmosAssetSettings, forceNormalAlign)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantSwapToken)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantGeomNames)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantGeomPackageIds)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantGeomRevisions)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantMtlCounts)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, variantPreviewPaths)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, currentGeomVariant)
+		.ADD_RW_PROPERTY(CosmosAssetSettings, currentMtlVariant);
 
 	nb::class_<VrsceneImportResult>(m, "VrsceneImportResult")
 		.def(nb::init<>())
@@ -1678,13 +1815,7 @@ NB_MODULE(VRayBlenderLib, m)
 		.ADD_RW_PROPERTY(VrsceneImportResult, errorFile)
 		.ADD_RW_PROPERTY(VrsceneImportResult, errorLine)
 		.ADD_RW_PROPERTY(VrsceneImportResult, pluginCount)
-		.ADD_RW_PROPERTY(VrsceneImportResult, paramCount)
-		.ADD_RW_PROPERTY(VrsceneImportResult, sceneBaseDir);
-#ifdef WITH_DR2
-    m.attr("withDR2") = true;
-#else
-    m.attr("withDR2") = false;
-#endif
+		.ADD_RW_PROPERTY(VrsceneImportResult, paramCount);
 
 #ifdef WITH_PROFILING
     m.attr("withProfiling") = true;

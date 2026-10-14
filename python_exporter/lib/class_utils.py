@@ -12,6 +12,10 @@ from vray_blender.lib import attribute_utils
 
 TYPES = {}
 
+# Every property group registered by registerPluginPropertyGroup() and every template class it
+# generated, in registration order. TYPES keeps only the last one registered under each name.
+REGISTERED_CLASSES = []
+
 def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.PropertyGroup, pluginModule, overridePropGroup = False):
     """ Creates a PropertyGroup for the plugin module and attaches it to the 
         dataPointer parameter. 
@@ -60,6 +64,7 @@ def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.Property
         bpy.utils.register_class(dynPropGroup)
 
         TYPES[typeName] = dynPropGroup
+        REGISTERED_CLASSES.append(dynPropGroup)
    
     # For some plugins, we need to just register the property group, but not attach it 
     # to an entity at this time 
@@ -70,6 +75,28 @@ def registerPluginPropertyGroup(dataPointer: bpy.types.Node | bpy.types.Property
             type        = dynPropGroup,
             description = pluginModule.DESC
         )
+
+
+def unregisterPluginPropertyGroups():
+    """ Unregister the classes registered by registerPluginPropertyGroup() and forget them, so that
+        the next registration of the add-on generates them anew.
+
+        Kept registered across a disable and enable of the add-on, they would go on pointing at the
+        template classes and list item classes the add-on unregisters and registers again, e.g.
+        VRayProxyHierarchyItem. Drawing or iterating such a property reads the freed type and
+        crashes Blender.
+    """
+    from vray_blender.lib.plugin_utils import CROSS_DEPENDENCIES, TEMPLATE_ATTRIBUTES
+
+    # A template class is registered before the property group holding it, so this unregisters
+    # the holder first.
+    for regClass in reversed(REGISTERED_CLASSES):
+        bpy.utils.unregister_class(regClass)
+
+    REGISTERED_CLASSES.clear()
+    TYPES.clear()
+    CROSS_DEPENDENCIES.clear()
+    TEMPLATE_ATTRIBUTES.clear()
 
 
 def setVRayCompatibility(uiClass, makeVRayCompatible: bool):

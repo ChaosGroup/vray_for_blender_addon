@@ -25,6 +25,10 @@ def exportCustom(ctx: ExporterContext, pluginDesc):
 
     pluginDesc.setAttribute('max_render_time', sampler.progressive_maxTime)
 
+    # V-Ray GPU renders progressive whatever the sampler type unless this is set. Nothing draws it,
+    # so a 0 stored in the scene (e.g. by an older .vrscene import) would be impossible to find.
+    pluginDesc.setAttribute('enable_bucket_sampler', 1)
+
     # Similar to other DCC when OOC is enabled force full size textures.
     pluginDesc.setAttribute('opencl_resizeTextures', settingsRTEngine.opencl_resizeTextures if not settingsRTEngine.out_of_core_textures else '0')
 

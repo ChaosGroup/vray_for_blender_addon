@@ -47,6 +47,7 @@ class Feature(Enum):
     GAUSSIAN_SPLATS  = ("gaussian_splats",  True)
     OBJECT_LISTER    = ("object_lister",    True)
     VRSCENE_IMPORTER = ("vrscene_importer", True)
+    NODE_THUMBNAILS  = ("node_thumbnails",  True)
 
     def __init__(self, featureName: str, enabled: bool):
         self.featureName = featureName

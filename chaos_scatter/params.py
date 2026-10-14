@@ -288,8 +288,8 @@ def _emitGroup(group, out: dict) -> None:
         out[name] = value
 
 
-def preservedLinearMatrix(cs, modelObj):
-    """ The model object's rotation/scale linear transform, restricted to the components the user
+def preservedLinearMatrix(cs, model):
+    """ The resolved model's rotation/scale linear transform, restricted to the components the user
         chose to preserve (transforms_rotation_preserve / transforms_scale_preserve); translation
         is always excluded. Returned as a 4x4 mathutils Matrix (identity when neither is preserved).
 
@@ -300,7 +300,7 @@ def preservedLinearMatrix(cs, modelObj):
     """
     from mathutils import Matrix
     tr = cs.transforms
-    _, quat, scale = modelObj.matrix_world.decompose()
+    _, quat, scale = model.matrix_world.decompose()
     m = Matrix.Identity(3)
     if tr.transforms_rotation_preserve:
         m = quat.to_matrix()

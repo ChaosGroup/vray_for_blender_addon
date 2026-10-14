@@ -18,6 +18,7 @@ import bpy
 from vray_blender.lib import lib_utils
 from vray_blender.lib.blender_utils import VRAY_ASSET_TYPE
 from vray_blender.lib.mixin import VRayOperatorBase
+from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.nodes.tools import isVrayLight, iterVRayNodeTreesWithOwners
 from vray_blender.ui.lister import core
 
@@ -95,10 +96,12 @@ def refreshAssetCache():
     _existsCache.clear()
 
 
-def isFileMissing(path: str) -> bool:
+def isFileMissing(path: str, library=None) -> bool:
+    """ 'library' is the library of the datablock that holds the path. A relative path in
+        linked data is relative to the library file, not to this one. """
     if not path:
         return False
-    absPath = os.path.normpath(bpy.path.abspath(path))
+    absPath = os.path.normpath(bpy.path.abspath(path, library=library))
     exists = _existsCache.get(absPath)
     if exists is None:
         exists = os.path.exists(absPath)
@@ -213,8 +216,26 @@ class AssetRef:
                 setattr(self.propGroup, self.attr, newPath)
 
     @property
+    def library(self):
+        """ The library this reference is linked from, or None if it is local. """
+        owner = self.image if self.image is not None else self.propGroup
+        return owner.id_data.library if owner is not None else None
+
+    @property
     def isMissing(self) -> bool:
-        return isFileMissing(self.path)
+        if self.image is not None:
+            if len(self.image.packed_files) > 0:
+                return False  # Rendered from the packed data.
+            if self.image.source == 'TILED':
+                return any(isFileMissing(_udimTilePath(self.path, t.number), self.library)
+                           for t in self.image.tiles)
+        return isFileMissing(self.path, self.library)
+
+
+def _udimTilePath(path: str, tile: int) -> str:
+    """ The file of one tile of a UDIM image, whose path holds a <UDIM> or <UVTILE> token. """
+    u, v = (tile - 1001) % 10 + 1, (tile - 1001) // 10 + 1
+    return path.replace('<UDIM>', str(tile)).replace('<UVTILE>', f"u{u}_v{v}")
 
 
 # Transient (runtime-only) set of selected asset locators for the Assets tab's
@@ -473,7 +494,7 @@ class VRAY_OT_relink_one(VRayOperatorBase):
         if obj is not None:
             propGroup, attr = _resolveOneAsset(obj, self.kind)
             current = getattr(propGroup, attr, "") if (propGroup is not None and attr) else ""
-            absPath = bpy.path.abspath(current) if current else ""
+            absPath = bpy.path.abspath(current, library=propGroup.id_data.library) if current else ""
             # Seeding the browser with an invalid path can crash Blender, so only
             # set it when the file actually exists.
             if absPath and os.path.exists(absPath):
@@ -513,7 +534,7 @@ class VRAY_OT_relink_asset(VRayOperatorBase):
         self.filter_glob = _globForKind(self.kind)
         rec = self._findRef(context)
         if rec is not None and rec.path:
-            absPath = bpy.path.abspath(rec.path)
+            absPath = bpy.path.abspath(rec.path, library=rec.library)
             # Seeding the browser with an invalid path can crash Blender.
             if os.path.exists(absPath):
                 self.filepath = absPath
@@ -569,7 +590,7 @@ class _AssetOpenBase(VRayOperatorBase):
         rec = next((r for r in collectAssetRefs(context) if r.locator == self.ref), None)
         if rec is None or not rec.path:
             return {'CANCELLED'}
-        absPath = os.path.normpath(bpy.path.abspath(rec.path))
+        absPath = os.path.normpath(bpy.path.abspath(rec.path, library=rec.library))
         if not os.path.exists(absPath):
             self.report({'WARNING'}, "File not found on disk")
             return {'CANCELLED'}
@@ -636,13 +657,16 @@ class VRAY_OT_assets_make_paths(VRayOperatorBase):
         skipped = 0
         for rec in refs:
             path = rec.path
-            if not path:
+            # Linked data is read from its library on every load, so a change would not stick.
+            if not path or rec.library:
                 continue
-            try:
-                newPath = bpy.path.relpath(path) if self.mode == 'RELATIVE' else bpy.path.abspath(path)
-            except (ValueError, RuntimeError):
-                skipped += 1   # e.g. a path on a different drive cannot be made relative
-                continue
+            if self.mode == 'RELATIVE':
+                newPath = tryGetRelativePath(path)
+                if newPath is None:
+                    skipped += 1   # e.g. a path on a different drive cannot be made relative
+                    continue
+            else:
+                newPath = bpy.path.abspath(path)
             if newPath and newPath != path:
                 rec.setPath(newPath)
                 changed += 1

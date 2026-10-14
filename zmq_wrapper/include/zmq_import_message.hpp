@@ -35,7 +35,8 @@ enum class ImportStatus : int {
 
 /// Per-parameter flags in ImportedPluginParam.
 enum ImportParamFlags : uint32_t {
-	ImportParamAnimated = 1 << 0   ///< The property has keyframes; value is sampled at the plugin's `time`.
+	ImportParamAnimated = 1 << 0,  ///< PropertyState::Animated. Often set on a single-key parameter.
+	ImportParamKeyed    = 1 << 1   ///< `keys` holds 2+ keyframes whose values differ.
 };
 
 /// Per-plugin flags in ImportedPluginData.
@@ -43,18 +44,59 @@ enum ImportPluginFlags : uint32_t {
 	ImportPluginPartialUpdate = 1 << 0   ///< Animation phase: `params` holds only animated values at `time`.
 };
 
+/// One keyframe of an animated parameter.
+struct ImportedParamKey {
+	double time = 0.0;       ///< V-Ray time. blenderFrame = time * SettingsOutput.frames_per_second.
+	vray::AttrValue value;
+};
+
+SERIALIZE_STRUCT(ImportedParamKey,
+	PARAM(time)
+	PARAM(value)
+);
+
+static SerializerStream& operator&& (SerializerStream& s, const std::vector<ImportedParamKey>& keys) {
+	s << static_cast<int>(keys.size());
+	for (const auto& key : keys) {
+		s && key;
+	}
+	return s;
+}
+
+static DeserializerStream& operator&& (DeserializerStream& s, std::vector<ImportedParamKey>& keys) {
+	int count = 0;
+	s >> count;
+	keys.resize(count);
+	for (auto& key : keys) {
+		s && key;
+	}
+	return s;
+}
+
 /// One (parameter, value) pair of an imported plugin.
 struct ImportedPluginParam {
 	std::string name;
 	uint32_t flags = 0;      ///< ImportParamFlags
 	vray::AttrValue value;
+	std::vector<ImportedParamKey> keys;   ///< Only when ImportParamKeyed is set.
 };
 
-SERIALIZE_STRUCT(ImportedPluginParam,
-	PARAM(name)
-	PARAM(flags)
-	PARAM(value)
-);
+/// `keys` is on the wire only when ImportParamKeyed is set.
+static SerializerStream& operator&& (SerializerStream& s, const ImportedPluginParam& msg) {
+	s && msg.name && msg.flags && msg.value;
+	if (msg.flags & ImportParamKeyed) {
+		s && msg.keys;
+	}
+	return s;
+}
+
+static DeserializerStream& operator&& (DeserializerStream& s, ImportedPluginParam& msg) {
+	s && msg.name && msg.flags && msg.value;
+	if (msg.flags & ImportParamKeyed) {
+		s && msg.keys;
+	}
+	return s;
+}
 
 /// All non-default parameters of a single plugin read from a .vrscene.
 struct ImportedPluginData {
@@ -112,19 +154,19 @@ static DeserializerStream& operator&& (DeserializerStream& s, std::vector<Import
 
 /// Request flags in MsgImportVrsceneRequest.
 enum ImportRequestFlags : uint32_t {
-	ImportRequestSkipDefaults = 1 << 0   ///< Skip properties whose state is Default (recommended).
+	ImportRequestSkipDefaults = 1 << 0,  ///< Skip properties whose state is Default (recommended).
+	ImportRequestReadKeyframes = 1 << 1  ///< Also send each animated property's keyframe list.
 };
 
 /// MsgImportVrsceneRequest - client asks the server to read a .vrscene and
-/// stream its plugin data back. frameStart == frameEnd requests a single
-/// static sample; a wider range is reserved for the animation phase.
+/// stream its plugin data back. Values are sampled at frameStart. frameEnd and frameStep are unused;
+/// keyframes are read as the file stores them.
 PROTO_MESSAGE(ImportVrsceneRequest,
 	std::string filePath;
 	uint32_t flags = ImportRequestSkipDefaults;
 	double frameStart = 0.0;
 	double frameEnd = 0.0;
 	double frameStep = 1.0;
-	int batchSizeHint = 0;   ///< Max plugins per MsgImportOnPluginData batch; 0 = server default.
 	std::string typeFilter;  ///< Comma-separated plugin-type prefixes (e.g. "Mtl"); empty = all plugins.
 );
 
@@ -134,7 +176,6 @@ SERIALIZE_MESSAGE(ImportVrsceneRequest,
 	PARAM(frameStart)
 	PARAM(frameEnd)
 	PARAM(frameStep)
-	PARAM(batchSizeHint)
 	PARAM(typeFilter)
 );
 
@@ -195,7 +236,6 @@ PROTO_MESSAGE(ImportOnResult,
 	int errorLine = 0;       ///< ParserError::fileLine.
 	int pluginCount = 0;
 	int paramCount = 0;
-	std::string sceneBaseDir;   ///< Directory of the .vrscene, for client-side path remapping.
 );
 
 SERIALIZE_MESSAGE(ImportOnResult,
@@ -205,7 +245,6 @@ SERIALIZE_MESSAGE(ImportOnResult,
 	PARAM(errorLine)
 	PARAM(pluginCount)
 	PARAM(paramCount)
-	PARAM(sceneBaseDir)
 );
 
 };  // end VrayZmqWrapper namespace

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import bpy
 
 from vray_blender.exporting.tools import getFarNodeLinkImpl, getInputSocketByAttr
+from vray_blender.lib.path_utils import tryGetRelativePath
 from vray_blender.exporting.update_tracker import UpdateTracker
 from vray_blender.nodes import utils as NodesUtils
 from vray_blender.nodes.navigation import setPanelNode
@@ -354,11 +355,8 @@ def loadImage(filepath: str, makeRelative: bool):
     if img not in existing:
         img.name = bpy.path.display_name_from_filepath(filepath)
 
-    if makeRelative and bpy.data.filepath:
-        try:
-            img.filepath = bpy.path.relpath(img.filepath)
-        except ValueError:
-            pass
+    if makeRelative and (relative := tryGetRelativePath(img.filepath)) is not None:
+        img.filepath = relative
 
     return img
 

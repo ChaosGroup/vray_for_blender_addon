@@ -27,7 +27,19 @@ def onUpdatePreviewFile(src, context, attrName):
         geomMeshFile['file'] = filePrevValue
         return
 
+    # loadVRayProxyPreviewMesh() fills the Object Hierarchy from the same dump that produced the
+    # preview, so there is nothing to rebuild here.
     if err := loadVRayProxyPreviewMesh(geomMeshFile, geomMeshFile.file, context.scene.frame_current):
+        debug.reportError(err)
+
+
+def rebuildObjectHierarchy(geomMeshFile):
+    """ Re-read the object list shown in the Object Hierarchy rollout by running the tool.
+
+        Only for the paths that set the proxy file without loading a preview - the .vrscene
+        import. Everywhere else the preview load already brings the names back with it.
+    """
+    if err := geomMeshFile.object_hierarchy.rebuild():
         debug.reportError(err)
 
 
@@ -45,7 +57,7 @@ def onUpdatePreview(src, context, attrName):
 def exportCustom(exporterCtx, pluginDesc: PluginDesc):
     geomMeshFile = pluginDesc.vrayPropGroup
 
-    pluginDesc.setAttribute('file', bpy.path.abspath(geomMeshFile.file))
+    pluginDesc.setAttribute('file', bpy.path.abspath(geomMeshFile.file, library=geomMeshFile.id_data.library))
     return export_utils.exportPluginCommon(exporterCtx, pluginDesc)
 
 

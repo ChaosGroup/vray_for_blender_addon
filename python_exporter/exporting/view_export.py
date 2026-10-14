@@ -280,6 +280,8 @@ class ViewExporter(ExporterBase):
         viewDesc.setAttribute("clipping_far", viewParams.renderView.clip_end)
         viewDesc.setAttribute("orthographic", viewParams.renderView.ortho)
         viewDesc.setAttribute("orthographicWidth", viewParams.renderView.ortho_width)
+        # Keep the orthographic view where Blender puts it.
+        viewDesc.setAttribute("ortho_adjust_to_scene", False)
 
         if blender_utils.isCamera(cameraObj):
             settingsDof = self.ctx.scene.vray.SettingsCameraDof
@@ -330,9 +332,9 @@ class ViewExporter(ExporterBase):
 
             if settingsCamera.override_camera_settings:
                 # Height is defined differently for cylindrical and spherical cameras
-                if settingsCamera.type == '3':   # Cylindrical
+                if settingsCamera.type == ct.CAM_TYPE_CYLINDRICAL_ORTHO:
                     plDesc.setAttribute('height', settingsCamera.height)
-                elif settingsCamera.type == '9': # Spherical panorama
+                elif settingsCamera.type in (ct.CAM_TYPE_SPHERICAL_PANORAMA, ct.CAM_TYPE_CYLINDRICAL_VERTICAL_FOV):
                     plDesc.setAttribute('height', math.degrees(settingsCamera.vertical_fov))
             elif not isOrthographicCamera(cameraObj.data):
                 # If camera override has been switched off, reset the type in order to return to the
@@ -944,7 +946,8 @@ class ViewExporter(ExporterBase):
         viewParams.renderView.clip_start = camera.clip_start
         viewParams.renderView.clip_end   = camera.clip_end
 
-        viewParams.renderView.tm = cameraObject.matrix_world
+        # Blender cameras ignore scale, including a scaled parent's. V-Ray would measure camera space in scaled units.
+        viewParams.renderView.tm = cameraObject.matrix_world.normalized()
         viewParams.cameraObject = cameraObject
 
 
@@ -957,7 +960,7 @@ class ViewExporter(ExporterBase):
         viewParams.cameraParams.setFromObject(obj)
         viewParams.renderView.fov = ct.fov(viewParams.cameraParams.sensorX, viewParams.cameraParams.lens)
 
-        tm = obj.matrix_world.copy()
+        tm = obj.matrix_world.normalized()
 
         if obj.type == 'LIGHT' and obj.data.type == 'AREA':
             # When looking through a V-Ray  Rect light, the camera is z-fighting with the light gizmo

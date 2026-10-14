@@ -7,7 +7,14 @@
     "Type": "OBJECT",
     "Parameters": [
         {
+            "attr": "rgb_color_space",
+            "ui": {
+                "display_name": "RGB Color Space"
+            }
+        },
+        {
             "attr": "file",
+            "subtype": "FILE_PATH",
             "update": "utils.splat_preview.onSplatFileUpdate"
         },
         {
@@ -17,6 +24,42 @@
                 [ "0", "As Is", "As Is" ],
                 [ "1", "Rotate YZ", "Rotate YZ" ]
             ]
+        },
+        {
+            "attr": "scale",
+            "ui": {
+                "min": 0.0,
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "intensity",
+            "ui": {
+                "soft_max": 2.0
+            }
+        },
+        {
+            "attr": "velocity_multiplier",
+            "ui": {
+                "min": 0.0,
+                "soft_max": 10.0
+            }
+        },
+        {
+            "attr": "lighting_blend",
+            "default": 0.9
+        },
+        {
+            "attr": "lighting_shadow_blur",
+            "default": 2.0,
+            "ui": {
+                "soft_max": 10.0,
+                "spin_step": 0.01
+            }
+        },
+        {
+            "attr": "lighting_shadow_offset",
+            "default": 1.0
         },
         {
             "attr": "preview_type",
@@ -29,7 +72,7 @@
                 [ "2", "Limited Point Cloud", "Draw a limited number of preview points" ],
                 [ "3", "Unlimited Point Cloud", "Draw all available preview points" ]
             ],
-            "options": { "derived": true },
+            "options": { "derived": true, "animatable": false },
             "update": "utils.splat_preview.onPreviewTypeUpdate"
         },
         {
@@ -37,23 +80,26 @@
             "default": true,
             "desc": "Automatically size the preview points from the on-screen extent and point count",
             "type": "BOOL",
-            "options": { "derived": true }
+            "options": { "derived": true, "animatable": false }
         },
         {
             "attr": "preview_point_radius",
             "default": 1.0,
             "desc": "Size multiplier for the preview points",
             "type": "FLOAT",
-            "ui": { "min": 0.0, "soft_max": 4.0 },
-            "options": { "derived": true }
+            "ui": {
+                "min": 0.0,
+                "soft_max": 2.0
+            },
+            "options": { "derived": true, "animatable": false }
         },
         {
             "attr": "preview_point_count",
             "default": 100000,
             "desc": "Maximum number of preview points to draw in Limited Point Cloud mode",
             "type": "INT",
-            "ui": { "min": 5000, "soft_max": 1000000 },
-            "options": { "derived": true }
+            "ui": { "min": 5000, "soft_max": 1000000, "spin_step": 5000 },
+            "options": { "derived": true, "animatable": false }
         },
         {
             "attr": "clip_object",
@@ -121,7 +167,7 @@
                 "default_closed": false,
                 "attrs": [
                     { "name": "anim_offset" },
-                    { "name": "velocity_multiplier" }
+                    { "name": "velocity_multiplier", "slider": true }
                 ]
             },
             {
@@ -142,8 +188,9 @@
                 "attrs": [
                     { "name": "preview_type", "label": "Type" },
                     { "name": "preview_auto_radius", "active": { "cond": "::preview_type>=2" } },
-                    { "name": "preview_point_radius", "active": { "cond": "::preview_type>=2" } },
-                    { "name": "preview_point_count", "active": { "cond": "::preview_type=2" } }
+                    { "name": "preview_point_radius", "slider": true, "active": { "cond": "::preview_type>=2" } },
+                    { "name": "preview_point_count", "slider": true, "active": { "cond": "::preview_type=2" } },
+                    { "layout": "CUSTOM", "custom_draw": "utils.splat_preview.widgetDrawPrimitiveCount" }
                 ]
             }
         ],

@@ -52,7 +52,7 @@ def nodeDraw(context, layout, node):
     outSock = getOutputSocketByAttr(node, selectedSampler)
 
     row = layout.row()
-    row.prop(propGroup, 'samplers', text="Samplers")
+    row.prop(propGroup, 'samplers', text="")
 
     if outSock.enabled:
         row.operator('vray.node_texsampler_sockets', icon="REMOVE", text="").isAdd = False
@@ -64,7 +64,8 @@ def widgetDrawUVSetName(context: bpy.types.Context, layout: bpy.types.UILayout, 
     attrName = widgetAttr['name']
 
     if obj := context.active_object:
-        layout.prop_search(propGroup, 'uv_set_name', obj.data, 'uv_layers', text=widgetAttr.get('label', attrName))
+        layout.prop_search(propGroup, 'uv_set_name', obj.data, 'uv_layers',
+                           icon='GROUP_UVS', text=widgetAttr.get('label', attrName))
 
 
 def getRegClasses():
